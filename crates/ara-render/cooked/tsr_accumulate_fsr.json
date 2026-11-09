@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_accumulate_fsr/tsrAccumulateFsrMain.dxil",
-      "dxil_hash": "c8be0570c4aa8d27e2cabaff000a39b5e9413ffd11e5e7187b4e8c1de493c943",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/tsr_accumulate_fsr/tsrAccumulateFsrMain.dxil",
+      "dxil_hash": "8e4178baf34338b32a8176a9cf41e83f1d52919862697714424167f1a93bced6",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_accumulate_fsr/tsrAccumulateFsrMain.metallib",
-        "metallib_hash": "d203c606ed49454ca3d4145faf688eb6ce5038f68fee7dfdbfe0eef739808f85",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_accumulate_fsr/tsrAccumulateFsrMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/tsr_accumulate_fsr/tsrAccumulateFsrMain.metallib",
+        "metallib_hash": "21d5416277ac1c5ef2eadcdcbc74e6307f4d17049727fb6545c10f434df0e8b8",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/tsr_accumulate_fsr/tsrAccumulateFsrMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "tsrAccumulateFsrMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_accumulate_fsr/tsrAccumulateFsrMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/tsr_accumulate_fsr/tsrAccumulateFsrMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "c8d9666faa8fee5762b2eb994f233bef1800e2f32da17fc25ed004cc4dbf81ed",
+      "spirv_hash": "30d70e3d6de18285ecd8f010dddac68a680e9ec7cf8da26316a469fb1a3cfcdd",
       "stage": "compute"
     }
   ],

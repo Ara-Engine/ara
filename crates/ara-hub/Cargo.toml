@@ -27,6 +27,7 @@ ara-crash = { path = "../ara-crash" }
 ara-diag.workspace = true
 ara-editor-gpu = { path = "../ara-editor-gpu" }
 ara-gpu = { path = "../ara-gpu" }
+ara-agents = { path = "../ara-agents" }
 ara-hub-service = { path = "../ara-hub-service" }
 ara-json.workspace = true
 ara-platform = { path = "../ara-platform" }

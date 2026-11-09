@@ -86,8 +86,8 @@ impl Scene {
                             .all(|v| v.is_finite())
                         && Vec3::from_array(vertex.normal).length_squared() > 1e-8
                         && Vec3::from_slice(&vertex.tangent).length_squared() > 1e-8
-                        && vertex.reserved == 0,
-                    "invalid native vertex or culling bounds"
+                        && (geometry.vertex_colors || vertex.color == Vertex::WHITE),
+                    "invalid native vertex, culling bounds or undeclared vertex colours"
                 );
             }
             let mut previous_error = 0.0;
@@ -117,8 +117,11 @@ impl Scene {
             ensure!(
                 entities.insert(instance.entity)
                     && instance.geometry < self.geometry.len()
-                    && instance.material < self.materials.len(),
-                "invalid or duplicated native instance"
+                    && instance.material < self.materials.len()
+                    && instance.paint.as_ref().is_none_or(|paint| {
+                        paint.len() == self.geometry[instance.geometry].vertices.len()
+                    }),
+                "invalid or duplicated native instance, or paint not one colour per vertex"
             );
             for world in [instance.world, instance.previous_world] {
                 ensure!(
@@ -131,7 +134,42 @@ impl Scene {
                 );
             }
         }
+        self.validate_decals()?;
         self.validate_parameters()
+    }
+
+    /// Checks decal boxes and parameters (also on every streamed decal edit).
+    pub fn validate_decals(&self) -> Result<()> {
+        for decal in &self.decals {
+            let w = decal.world;
+            ensure!(
+                w.is_finite()
+                    && w.x_axis.w.abs() < 1e-6
+                    && w.y_axis.w.abs() < 1e-6
+                    && w.z_axis.w.abs() < 1e-6
+                    && (w.w_axis.w - 1.0).abs() < 1e-6
+                    && w.determinant().abs() > 1e-12,
+                "native decal `{}` box must be finite, affine and invertible",
+                decal.name
+            );
+            ensure!(
+                decal.material < self.materials.len()
+                    && decal.opacity.iter().all(|o| (0.0..=1.0).contains(o))
+                    && decal.opacity_channel <= 4
+                    && decal.occlusion[1] <= 4.0
+                    && decal.occlusion[0].is_finite()
+                    && decal.specular.is_finite()
+                    && decal
+                        .fade_distance
+                        .iter()
+                        .all(|d| d.is_finite() && *d >= 0.0)
+                    && decal.fade_angle.iter().all(|a| (0.0..=180.0).contains(a))
+                    && (0.0..=1.0).contains(&decal.fade_screen_size),
+                "invalid native decal `{}`",
+                decal.name
+            );
+        }
+        Ok(())
     }
 
     /// Checks mutable surface/light parameters without rewalking immutable vertex,
@@ -204,27 +242,7 @@ impl Scene {
             }
         }
         for light in &self.lights {
-            ensure!(
-                light
-                    .position_range
-                    .iter()
-                    .chain(&light.color_lumens)
-                    .chain(&light.direction_outer)
-                    .chain(&light.parameters)
-                    .all(|v| v.is_finite())
-                    && light.position_range[3] > 0.0
-                    && light.color_lumens.iter().all(|v| *v >= 0.0)
-                    && (light.parameters[0] == 0.0 || light.parameters[0] == 1.0),
-                "invalid native light"
-            );
-            if light.parameters[0] == 1.0 {
-                ensure!(
-                    Vec3::from_slice(&light.direction_outer).length_squared() > 1e-8
-                        && (-1.0..=1.0).contains(&light.direction_outer[3])
-                        && (light.direction_outer[3]..=1.0).contains(&light.parameters[1]),
-                    "invalid native spot cone"
-                );
-            }
+            ensure!(light.is_valid(), "invalid native light");
         }
         Ok(())
     }

@@ -6,7 +6,7 @@ use crate::output::select_format;
 use crate::window::{Window, error};
 use anyhow::{Context, Result, ensure};
 use ara_color::{OutputMode, OutputSettings};
-use ara_gpu::vk::Handle;
+use ara_gpu::vk::{Handle, TaggedStructure};
 use ara_gpu::{
     GpuDevice, Image, vk,
     vulkan::{Context as Gpu, image_barrier},
@@ -43,6 +43,16 @@ pub struct Present {
     surface_loader: ash::khr::surface::Instance,
     output: OutputSettings,
     format: vk::SurfaceFormatKHR,
+    /// The min and max image extents this surface presents 1:1 at the top left
+    /// (`VK_EXT_swapchain_maintenance1`), when supported: a swapchain of another
+    /// size is then cropped or padded, never stretched.
+    scaling: Option<[vk::Extent2D; 2]>,
+    /// This swapchain is a live-resize one (`resize` with a reach): larger than the
+    /// window and presented 1:1. Others match the window and stretch the source.
+    oversized: bool,
+    /// Present mode wish (`set_vsync`) and the one the current swapchain was built with.
+    vsync: bool,
+    built_vsync: bool,
 }
 
 impl Present {
@@ -102,73 +112,24 @@ impl Present {
                 )?,
                 "Graphics queue cannot present"
             );
-            let caps =
-                surface_loader.get_physical_device_surface_capabilities(gpu.physical, surface)?;
-            ensure!(
-                caps.supported_usage_flags
-                    .contains(vk::ImageUsageFlags::TRANSFER_DST),
-                "Swapchain must support transfer destination"
-            );
-            let formats =
-                surface_loader.get_physical_device_surface_formats(gpu.physical, surface)?;
-            let format = select_format(&formats, output.mode)
-                .with_context(|| format!("Requested {:?} output unavailable; enable Windows HDR and use an HDR display. Advertised formats: {formats:?}", output.mode))?;
-            let extent = if caps.current_extent.width == u32::MAX {
-                vk::Extent2D {
-                    width: window.size()?[0],
-                    height: window.size()?[1],
-                }
-            } else {
-                caps.current_extent
-            };
-            let image_count = if caps.max_image_count == 0 {
-                caps.min_image_count + 1
-            } else {
-                (caps.min_image_count + 1).min(caps.max_image_count)
-            };
-            let alpha = [
-                vk::CompositeAlphaFlagsKHR::OPAQUE,
-                vk::CompositeAlphaFlagsKHR::INHERIT,
-                vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
-                vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
-            ]
-            .into_iter()
-            .find(|a| caps.supported_composite_alpha.contains(*a))
-            .context("No surface composite alpha")?;
             let loader = ash::khr::swapchain::Device::load(&gpu.instance, &gpu.device);
-            let swapchain = loader.create_swapchain(
-                &vk::SwapchainCreateInfoKHR::default()
-                    .surface(surface)
-                    .min_image_count(image_count)
-                    .image_format(format.format)
-                    .image_color_space(format.color_space)
-                    .image_extent(extent)
-                    .image_array_layers(1)
-                    .image_usage(vk::ImageUsageFlags::TRANSFER_DST)
-                    .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                    .pre_transform(caps.current_transform)
-                    .composite_alpha(alpha)
-                    .present_mode(vk::PresentModeKHR::FIFO)
-                    .clipped(true),
-                None,
+            let scaling = one_to_one(gpu, surface)?;
+            let shape = Shape {
+                output,
+                scaling,
+                request: None,
+                vsync: true,
+            };
+            let (swapchain, extent, format) = build_swapchain(
+                gpu,
+                &loader,
+                &surface_loader,
+                surface,
+                window,
+                vk::SwapchainKHR::null(),
+                &shape,
             )?;
             guard.swapchain = swapchain;
-            if output.mode == OutputMode::Hdr10 && gpu.info.hdr_metadata {
-                let metadata = vk::HdrMetadataEXT::default()
-                    .display_primary_red(vk::XYColorEXT { x: 0.708, y: 0.292 })
-                    .display_primary_green(vk::XYColorEXT { x: 0.170, y: 0.797 })
-                    .display_primary_blue(vk::XYColorEXT { x: 0.131, y: 0.046 })
-                    .white_point(vk::XYColorEXT {
-                        x: 0.3127,
-                        y: 0.3290,
-                    })
-                    .max_luminance(output.peak_nits)
-                    .min_luminance(0.001)
-                    .max_content_light_level(output.peak_nits)
-                    .max_frame_average_light_level(output.paper_white);
-                ash::ext::hdr_metadata::Device::load(&gpu.instance, &gpu.device)
-                    .set_hdr_metadata(&[swapchain], &[metadata]);
-            }
             let images = loader.get_swapchain_images(swapchain)?;
             let mut slot = || -> Result<Slot> {
                 let acquire = gpu
@@ -211,8 +172,126 @@ impl Present {
                 surface_loader,
                 output,
                 format,
+                scaling,
+                oversized: false,
+                vsync: true,
+                built_vsync: true,
             })
         }
+    }
+    /// Match the swapchain to the window's current size, in place: the surface, slots
+    /// and semaphores stay and the old swapchain hands over through `oldSwapchain`.
+    /// Waits only this presentation's blits and the graphics queue (which retires
+    /// presents waiting on the per-image semaphores), never the whole device.
+    ///
+    /// Creating a swapchain costs the driver ~8 ms (NVIDIA, Windows), too much for
+    /// every frame of a live window resize. With `reach` (the largest size the
+    /// resize can reach, in pixels; the window may still be smaller or larger) and
+    /// present scaling, a swapchain that covers it is kept and presented 1:1 at the
+    /// top left, cropped to the window; one that does not is recreated at `reach`.
+    /// Without `reach`, or without present scaling, it is recreated at exactly the
+    /// window's size. False (nothing changed) while a blit is still pending.
+    /// # Safety
+    /// `gpu` created this presentation; this thread owns its graphics queue, and
+    /// `window` is the one it was created for.
+    pub unsafe fn resize(
+        &mut self,
+        gpu: &Gpu,
+        window: &Window,
+        reach: Option<[u32; 2]>,
+    ) -> Result<bool> {
+        ara_gpu::cpu_scope!("Platform.resize");
+        let size = window.size()?;
+        let reach = reach
+            .filter(|_| self.scaling.is_some())
+            .map(|r| [r[0].max(size[0]), r[1].max(size[1])]);
+        if self.oversized
+            && self.vsync == self.built_vsync
+            && reach.is_some_and(|r| self.extent.width >= r[0] && self.extent.height >= r[1])
+        {
+            return Ok(true);
+        }
+        // Without vsync there is no 1:1 present scaling (`build_swapchain`).
+        let reach = reach.filter(|_| self.vsync);
+        let shape = Shape {
+            output: self.output,
+            scaling: self.scaling,
+            request: reach,
+            vsync: self.vsync,
+        };
+        for slot in 0..SLOTS {
+            // SAFETY: forwarded caller contract.
+            if !unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? } {
+                return Ok(false);
+            }
+        }
+        // SAFETY: forwarded caller contract; the queue is idle afterwards, so no
+        // present still waits on a per-image semaphore and no blit uses an image.
+        unsafe {
+            gpu.measure_host_wait(|| gpu.device.queue_wait_idle(gpu.graphics))?;
+            let old = self.swapchain;
+            let built = build_swapchain(
+                gpu,
+                &self.loader,
+                &self.surface_loader,
+                self.surface,
+                window,
+                old,
+                &shape,
+            );
+            // The old swapchain is retired even when creation fails.
+            self.loader.destroy_swapchain(old, None);
+            self.swapchain = vk::SwapchainKHR::null();
+            let (swapchain, extent, format) = built?;
+            self.swapchain = swapchain;
+            self.images = self.loader.get_swapchain_images(swapchain)?;
+            while self.rendered.len() < self.images.len() {
+                self.rendered.push(
+                    gpu.device
+                        .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?,
+                );
+            }
+            self.initialized = vec![false; self.images.len()];
+            self.extent = extent;
+            self.format = format;
+            self.oversized = shape.request.is_some();
+            self.built_vsync = shape.vsync;
+        }
+        Ok(true)
+    }
+    /// Turns waiting for vertical blank on (FIFO, the default) or off (mailbox where
+    /// supported, else immediate). A change rebuilds the swapchain like `resize`; false
+    /// while a blit is pending, so call it again on a later frame.
+    /// # Safety
+    /// As `resize`.
+    pub unsafe fn set_vsync(&mut self, gpu: &Gpu, window: &Window, vsync: bool) -> Result<bool> {
+        self.vsync = vsync;
+        if self.built_vsync == vsync {
+            return Ok(true);
+        }
+        // SAFETY: forwarded caller contract.
+        unsafe { self.resize(gpu, window, None) }
+    }
+    /// Whether presentation waits for vertical blank (`set_vsync`).
+    pub fn vsync(&self) -> bool {
+        self.vsync
+    }
+
+    /// Portable device form of `set_vsync`, used by game settings on either backend.
+    /// # Safety
+    /// The caller retains this presentation's device and window on their owner thread.
+    pub unsafe fn set_vsync_device(
+        &mut self,
+        gpu: &ara_gpu::GpuDevice,
+        window: &Window,
+        enabled: bool,
+    ) -> Result<bool> {
+        // SAFETY: the forwarded contract retains the same native owners.
+        unsafe { self.set_vsync(gpu.context(), window, enabled) }
+    }
+    /// The swapchain's pixel extent.
+    pub fn extent(&self) -> [u32; 2] {
+        [self.extent.width, self.extent.height]
     }
     /// Acquire the next image, signalling `semaphore`; OUT_OF_DATE is returned for
     /// caller recreation.
@@ -338,22 +417,33 @@ impl Present {
             let layers = vk::ImageSubresourceLayers::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .layer_count(1);
+            // A live-resize swapchain (presented 1:1) takes the source unscaled at its
+            // top left; otherwise the source is stretched over the whole image.
+            let (from, to) = if self.oversized {
+                let fit = [
+                    size[0].min(self.extent.width),
+                    size[1].min(self.extent.height),
+                ];
+                (fit, fit)
+            } else {
+                (size, [self.extent.width, self.extent.height])
+            };
             let region = vk::ImageBlit::default()
                 .src_subresource(layers)
                 .dst_subresource(layers)
                 .src_offsets([
                     vk::Offset3D::default(),
                     vk::Offset3D {
-                        x: size[0] as i32,
-                        y: size[1] as i32,
+                        x: from[0] as i32,
+                        y: from[1] as i32,
                         z: 1,
                     },
                 ])
                 .dst_offsets([
                     vk::Offset3D::default(),
                     vk::Offset3D {
-                        x: self.extent.width as i32,
-                        y: self.extent.height as i32,
+                        x: to[0] as i32,
+                        y: to[1] as i32,
                         z: 1,
                     },
                 ]);
@@ -526,6 +616,176 @@ impl Present {
         // SAFETY: this presentation was created on `gpu`.
         unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? };
         result
+    }
+}
+
+/// What `build_swapchain` creates.
+struct Shape {
+    output: OutputSettings,
+    /// `Present::scaling`: a requested extent then presents 1:1 at the top left.
+    scaling: Option<[vk::Extent2D; 2]>,
+    /// An extent other than the window's, honoured only with `scaling`.
+    request: Option<[u32; 2]>,
+    /// Wait for vertical blank (FIFO). Off: mailbox, else immediate, else FIFO.
+    vsync: bool,
+}
+
+/// FIFO with `vsync`; otherwise mailbox (no tearing, no wait), else immediate, else FIFO.
+/// # Safety
+/// `surface` belongs to `gpu`'s instance.
+unsafe fn present_mode(
+    surface_loader: &ash::khr::surface::Instance,
+    gpu: &Gpu,
+    surface: vk::SurfaceKHR,
+    vsync: bool,
+) -> Result<vk::PresentModeKHR> {
+    if vsync {
+        return Ok(vk::PresentModeKHR::FIFO);
+    }
+    // SAFETY: forwarded caller contract; the query reads this live surface.
+    let modes =
+        unsafe { surface_loader.get_physical_device_surface_present_modes(gpu.physical, surface)? };
+    Ok([vk::PresentModeKHR::MAILBOX, vk::PresentModeKHR::IMMEDIATE]
+        .into_iter()
+        .find(|mode| modes.contains(mode))
+        .unwrap_or(vk::PresentModeKHR::FIFO))
+}
+
+/// The image extents `surface` presents 1:1 at the top left (FIFO), if it can.
+/// # Safety
+/// `surface` belongs to `gpu`'s instance.
+unsafe fn one_to_one(gpu: &Gpu, surface: vk::SurfaceKHR) -> Result<Option<[vk::Extent2D; 2]>> {
+    if !gpu.info.present_scaling {
+        return Ok(None);
+    }
+    let loader = ash::khr::get_surface_capabilities2::Instance::load(&gpu._entry, &gpu.instance);
+    let mut mode = vk::SurfacePresentModeEXT::default().present_mode(vk::PresentModeKHR::FIFO);
+    let info = vk::PhysicalDeviceSurfaceInfo2KHR::default()
+        .surface(surface)
+        .push(&mut mode);
+    let mut scaling = vk::SurfacePresentScalingCapabilitiesEXT::default();
+    let mut caps = vk::SurfaceCapabilities2KHR::default().push(&mut scaling);
+    // SAFETY: forwarded caller contract; the query only fills `caps`.
+    unsafe { loader.get_physical_device_surface_capabilities2(gpu.physical, &info, &mut caps)? };
+    let top_left = scaling
+        .supported_present_scaling
+        .contains(vk::PresentScalingFlagsEXT::ONE_TO_ONE)
+        && scaling
+            .supported_present_gravity_x
+            .contains(vk::PresentGravityFlagsEXT::MIN)
+        && scaling
+            .supported_present_gravity_y
+            .contains(vk::PresentGravityFlagsEXT::MIN);
+    Ok(top_left.then_some([
+        scaling.min_scaled_image_extent,
+        scaling.max_scaled_image_extent,
+    ]))
+}
+
+/// Create a swapchain for `surface`, at its current extent or `shape.request`,
+/// retiring `old` (null for the first one) and applying HDR10 metadata when requested.
+/// # Safety
+/// `surface` belongs to `gpu`'s instance and `window`; `old` is this surface's live
+/// swapchain or null.
+unsafe fn build_swapchain(
+    gpu: &Gpu,
+    loader: &ash::khr::swapchain::Device,
+    surface_loader: &ash::khr::surface::Instance,
+    surface: vk::SurfaceKHR,
+    window: &Window,
+    old: vk::SwapchainKHR,
+    shape: &Shape,
+) -> Result<(vk::SwapchainKHR, vk::Extent2D, vk::SurfaceFormatKHR)> {
+    let output = shape.output;
+    ara_gpu::cpu_scope!("Platform.create_swapchain");
+    // SAFETY: forwarded caller contract; every query reads this live surface.
+    unsafe {
+        let caps =
+            surface_loader.get_physical_device_surface_capabilities(gpu.physical, surface)?;
+        ensure!(
+            caps.supported_usage_flags
+                .contains(vk::ImageUsageFlags::TRANSFER_DST),
+            "Swapchain must support transfer destination"
+        );
+        let formats = surface_loader.get_physical_device_surface_formats(gpu.physical, surface)?;
+        let format = select_format(&formats, output.mode)
+            .with_context(|| format!("Requested {:?} output unavailable; enable Windows HDR and use an HDR display. Advertised formats: {formats:?}", output.mode))?;
+        let extent = if caps.current_extent.width == u32::MAX {
+            let size = window.size()?;
+            vk::Extent2D {
+                width: size[0],
+                height: size[1],
+            }
+        } else {
+            caps.current_extent
+        };
+        // Present scaling was queried for FIFO; without vsync the swapchain matches
+        // the window instead of presenting a larger one 1:1.
+        let scaled = shape.scaling.filter(|_| shape.vsync);
+        let extent = match (scaled, shape.request) {
+            (Some([min, max]), Some(request)) => vk::Extent2D {
+                width: request[0]
+                    .min(gpu.info.max_image_dimension)
+                    .clamp(min.width, max.width),
+                height: request[1]
+                    .min(gpu.info.max_image_dimension)
+                    .clamp(min.height, max.height),
+            },
+            _ => extent,
+        };
+        let mut scaling = vk::SwapchainPresentScalingCreateInfoEXT::default()
+            .scaling_behavior(vk::PresentScalingFlagsEXT::ONE_TO_ONE)
+            .present_gravity_x(vk::PresentGravityFlagsEXT::MIN)
+            .present_gravity_y(vk::PresentGravityFlagsEXT::MIN);
+        let image_count = if caps.max_image_count == 0 {
+            caps.min_image_count + 1
+        } else {
+            (caps.min_image_count + 1).min(caps.max_image_count)
+        };
+        let alpha = [
+            vk::CompositeAlphaFlagsKHR::OPAQUE,
+            vk::CompositeAlphaFlagsKHR::INHERIT,
+            vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+            vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
+        ]
+        .into_iter()
+        .find(|a| caps.supported_composite_alpha.contains(*a))
+        .context("No surface composite alpha")?;
+        let mut info = vk::SwapchainCreateInfoKHR::default()
+            .surface(surface)
+            .min_image_count(image_count)
+            .image_format(format.format)
+            .image_color_space(format.color_space)
+            .image_extent(extent)
+            .image_array_layers(1)
+            .image_usage(vk::ImageUsageFlags::TRANSFER_DST)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(caps.current_transform)
+            .composite_alpha(alpha)
+            .present_mode(present_mode(surface_loader, gpu, surface, shape.vsync)?)
+            .clipped(true)
+            .old_swapchain(old);
+        if scaled.is_some() && shape.request.is_some() {
+            info = info.push(&mut scaling);
+        }
+        let swapchain = loader.create_swapchain(&info, None)?;
+        if output.mode == OutputMode::Hdr10 && gpu.info.hdr_metadata {
+            let metadata = vk::HdrMetadataEXT::default()
+                .display_primary_red(vk::XYColorEXT { x: 0.708, y: 0.292 })
+                .display_primary_green(vk::XYColorEXT { x: 0.170, y: 0.797 })
+                .display_primary_blue(vk::XYColorEXT { x: 0.131, y: 0.046 })
+                .white_point(vk::XYColorEXT {
+                    x: 0.3127,
+                    y: 0.3290,
+                })
+                .max_luminance(output.peak_nits)
+                .min_luminance(0.001)
+                .max_content_light_level(output.peak_nits)
+                .max_frame_average_light_level(output.paper_white);
+            ash::ext::hdr_metadata::Device::load(&gpu.instance, &gpu.device)
+                .set_hdr_metadata(&[swapchain], &[metadata]);
+        }
+        Ok((swapchain, extent, format))
     }
 }
 

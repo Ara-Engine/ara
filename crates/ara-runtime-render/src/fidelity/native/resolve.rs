@@ -93,6 +93,8 @@ impl Content {
                         texture_generations: Vec::new(),
                         base_color_decode_srgb: false,
                         emissive_decode_srgb: false,
+                        paint_layers: Vec::new(),
+                        decal: None,
                     })
                 }),
                 None => Arc::new(MaterialAsset::compile(workspace, source, id)?),

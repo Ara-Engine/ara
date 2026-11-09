@@ -18,12 +18,12 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
-  current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
-  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume packed by `instanced::Volume`:
-  refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
-  `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
+  current/previous instance transforms, deforming revisions, 64-byte UV0/UV1 (+ linear RGBA8 `Vertex::color`; `Geometry::vertex_colors` declares non-white, validated; per-instance paint `Instance::paint` lives in one host buffer range per instance, addressed by row meta.y bits 1../meta.z, streamed by `Changes::paint`; adding/removing paint regroups)
+  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume by `instanced::Volume`; one glass model in all renderers, `look-glass.slangh`:
+  refractive PSOs over `look::refract`'s copies, re-copied where glass overlaps transparent draws behind it (`culling::Layering`); films draw back then front faces; both
+  cast coloured `look::translucent` sun shadows (optical depth) on High/Epic) and terrain layer IDs. u32::MAX textures are neutral.
   Validate only at content publication; do not hash/traverse static vertices
-  when moving instances. Culling bounds handle mirrored/nonuniform transforms.
+  when moving instances. Culling bounds handle mirrored/nonuniform transforms. `Instance::casts_shadows` false skips every shadow pass and shadow ray (`RAY_*_SHADOWLESS` masks) but still draws, reflects and bounces light.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
   provider on a raster-only device. `ara-texture-stream::NativeResidency` implements
   the provider without reversing its dependency on ara-render. Native fill uses
@@ -57,32 +57,32 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `update_materials` replaces parameters in their existing order and remaps scene texture slots without uploading
   geometry. `rename` updates an entity's capture label. Invalid edits retain the previous content.
 - `submit_scene_frame` / `poll_scene_frame` keep one Scene frame in flight and two retained color/ID pairs; `output_size()` may lag a resize. UI reads only the completed pair; a new chain starts from the last synchronous frame (no frame without an image).
-  `entity_at` copies one texel on the UI queue; picks/outlines follow the displayed frame, while authored gizmo poses can lead by one Scene frame. `wait_scene_frame` is for capture/shutdown.
+  `entity_at` copies one texel on the UI queue; picks follow the displayed frame; hosts tag frames (`set_frame_tag`, `shown_frame_tag`) to draw overlays with the frame on screen. `set_outlines` (`renderer::outline`): editor selection outlines in live primary frames (selected rows into a mask without, then with, the depth test; composited after post, hidden parts faint). `wait_scene_frame` is for capture/shutdown.
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
-- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
-  CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
-  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve,
+- `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky (`look::atmosphere`: Unreal SkyAtmosphere parameters in SI units, two atmosphere lights, the GPU record and `shaders/atmosphere-model.slangh`, shared with ara-render-fidelity) LUTs and their IBL,
+  fog and aerial perspective (a coarse 64x36x46 grid, 32 slices to 4 km and 14 more to 111 km, `Fog.Froxels`; the volumetric near volume, `look::volumetric`: per-preset
+  froxels to `VolumetricFog::distance`, ambient/inject/integrate passes, reprojected history, B-spline composite, `set_fog_volumes`; local lights per pixel in `Fog.Lights`, look-fog-lights.slang: equiangular, analytically clipped, deterministic, half-res resolved by depth with edges re-integrated at full res (`Fog.Lights.Resolve`/`.Edges`, indirect), `VolumetricFogQuality::light_samples` 0 puts them back in the froxels), histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
+  `exposure`/`seed_exposure` carry a converged exposure across views; `exposure_settled` reads whether it reached its meter), bloom, grading and the display curve,
   plus volume lens effects (`look::lens`): display lift/gamma/gain and chromatic aberration in the post pass,
   half-res gather DoF before TAA (TAA reads `DOF_COMPOSITE`), McGuire motion blur as the `look_post_motion`
-  variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit.
-  Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
+  variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit. Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
   far map, cascades and horizon sun map rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
-- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI over a `ProbeLayout` pool (up to four lattices, finest first, blended front to back by coverage so a fine lattice never seams into the next; `giPoolLobes`). One-time 8x8 oct surface caches;
-  `GI.Relight` relights a budget per frame (sun via CSM, local lights, sky, emissive, last frame's probes) into 6x6
+- `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI over a `ProbeLayout` pool (up to four lattices, finest first, blended front to back by coverage so a fine lattice never seams into the next; `giPoolLobes`). One-time 8x8 oct surface caches (each texel relit at one real bake hit) and 16x16 packed visibility moments (`pack_moments`; never blend moments, only per-tap visibility: mixtures leak through thin walls);
+  `GI.Relight` relights a budget per frame (each texel over its footprint on its relit plane, only the bake mask's on-plane hits: local lights at a 2x2 or 4x4 grid, sun at 2x2 points, VSM pages else the first cascade whose map holds the hit; off-plane hits take the lesser of the texel's and its neighbour texel's direct light; sky, emissive, last frame's probes; solid-angle weighted) into 6x6
   irradiance, DDGI-style, without rays or noise; ping-pong atlases, so it copies only last frame's window forward (`GiGpu::relit`; cost follows the budget, not the pool). Capture resets relight all for `gi::CONVERGE_FRAMES` (exposure
   re-meters); live initial convergence uses bounded 4096-probe windows, then the preset budget; `Renderer::set_unseen` (frames nobody sees, a Play entry) relights whole bounces and skips fades. `preallocate_probe_volume` reserves/clears from `ProbeLayout` behind loading, including two staging slots; captures drain a partial clear. A new lattice fades in after convergence; `GI.Scatter` applies record uploads. A pool is ready on its coarsest lattice (`GiGpu::landed`): finer lattices may land later, converge at the preset budget and cross-fade in (`giParams.y`) without unsetting readiness.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
-  distance; stable light space, practical splits, gather PCF, cascade blend; one
+  distance; stable light space, practical splits, soft PCSS, cascade blend; one
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
   patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
-  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO (High/Epic: visibility bitmask plus one-bounce near-field light, `LookGpu::bitmask_ao`) and SSR (cone footprint into
-  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
-  heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
+  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO (High/Epic: visibility bitmask plus one-bounce near-field light, `LookGpu::bitmask_ao`) and SSR (Hi-Z traced, `look-screen.slangh`; `SSR.Resolve` spreads its confidence over each lobe's mirrored footprint, colour stays the hit's own cone, never blurred twice; hits drop promoted emission; cone footprint into
+  last frame's colour pyramid), screen probe GI (`look::screen_gi`, D32, High/Epic: 16 px probes, 64 Hi-Z rays, misses from the probe volume, 3x3 gather; `RenderDebug::screen_gi`), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
+  heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, only past 200 m sunward where a sun map shades the pixel, since a heightfield cannot see through wall openings; and sky visibility
   outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
-  completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc), into a mask lighting reads, GI relight
-  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles), relit per frame by an ambient ratio, read by High/Epic `ibl` under SSR. Authored probes (explicit specs) bake only on request (`request_reflection_capture`, `cancel_reflection_capture`, `reflection_capture_status`), read back without waits (`take_reflection_capture_images`; `reread_reflection_capture` reads a published column again) and restore through `load_reflection_capture`; `reflection_capture_inputs` hashes their scene inputs portably. Automatic placement needs `ReflectionCaptures::automatic` (`ARA_REFLECTION_CAPTURES=1`). `capabilities()` / `view_mode_unavailable` report what can render, with reasons. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
+  completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc; past its 4-texel tent the sun maps' penumbrae), into a mask lighting reads, GI relight
+  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages; opt-in render-v3 sun page service `Renderer::set_sun_pages` (`look::vsm::sun`: ground-grid pages under a conservative moving-sun bound, `sun_page_counters`, bench example `sun_pages_bench`)). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles; bake frames read the volume without relighting it, `GiGpu::frozen`), relit per frame by an ambient ratio, new ones fading in over 48 relights (at once for bakes of every step, restores and unseen frames), read by High/Epic `ibl` under SSR; faces drop emission promoted to emitter lights (`screenParams[1].x`). Authored probes (explicit specs) bake only on request (`request_reflection_capture`, `cancel_reflection_capture`, `reflection_capture_status`), read back without waits (`take_reflection_capture_images`; `reread_reflection_capture` reads a published column again) and restore through `load_reflection_capture`; `reflection_capture_inputs` hashes their scene inputs portably. Automatic placement (`ReflectionCaptures::automatic`, on unless `ARA_REFLECTION_CAPTURES=0`) comes from the probe volume (`look::placement::place_from_probes`: enclosed open probes, greedy room cover; bounds-based `auto_place` until probes arrive). Captures store radial distance in the atlas alpha, so traced reflections continue through them off screen (`look-captures.slangh` `captureTrace`, called from `look-ssr.slang`). `RenderDebug::reflections` selects the reflection debug views (`lighting_refl` PSOs). `capabilities()` / `view_mode_unavailable` report what can render, with reasons. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post; TAA reprojects with native motion
   (Frame.look.w). HDR is RGBA16F, pre-exposed (`hdr_exposure`, look.slangh `exposeHdr`): writers multiply, readers divide.
@@ -105,15 +105,15 @@ Frames use reversed-Z, metres and linear HDR: sun in lux, point/spot flux in
 lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone mapper,
 GPU numbers). Only the TAA history is RGBA16F and pre-exposed (`look.slangh`
 exposureState); look passes learn from root word 7 whether input is history.
-The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
+Vertex colours: `VERTEX_COLOR_TINT` (glTF COLOR_0 multiplies base/alpha) and `VERTEX_PAINT_LAYERS` (layer materials weighted by `PaintWeight` bytes in flags[2]) draw only through the `gbuffer_paint`/`shadow_paint` PSO variants (`Batch::paint`, set per pass from `Group::paint`/`paint_shadow`), so other pixels pay nothing; forward/refract PSOs always read colours; `ViewMode::VertexColor*` (11-15) draw colours as albedo (`native_vertex_color`). Tests: `native/tests/paint.rs`. Decals (`instanced::Decal`, `Scene::decals`; G-buffer decals, not DBuffer: Ara has no depth prepass and lights fully deferred, so blending into the G-buffer before AO/SSR/GI/lighting lets every term see them): `native/decals.rs` culls, fades (distance, screen size) and sorts up to 1,024 visible per frame on the CPU; `shaders/decals.slang` (`native_decals`) bins them per 16x16 tile (one bit each, draw order kept) and blends base colour, tangent-frame normal, roughness, metal, emissive and AO in registers, writing the G-buffer once through storage views (albedo via its UNORM alias); footprints come from neighbour rays on the surface plane (no depth-edge LOD breaks); `Instance::receives_decals` false sets row meta.y bit 31; `ViewMode::DecalCoverage` (16); `Changes::decals` streams edits; specular waits for a G-buffer channel. Tests: `native/tests/decals.rs`, `--example native_timings`. The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
 RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Material AO (glTF occlusion maps) scales ambient light only without screen AO + probe GI (Low, or either off): `dynamicOcclusion`.
-Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
-first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
-(cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
-the path tracer; `Light::parameters.z` softens the near field, `w` = 1 keeps it out of fog.
+Local lights: 112-byte `scene::Light` records, read only through `look-lights.slangh` (points, spots,
+sphere/tube sources, rects with barn doors, discs; areas by LTC, `look::ltc`, refit by `examples/ltc_fit.rs`;
+profiles via `set_light_tables`). Tiles 16x16 (256 per scene, 128 per tile); `look::local` shadows the brightest few. `colorLumens.w` = 4 pi x axial candela; `parameters.w` scales its fog scattering (0: none).
+Soft shadows (every map, fog included): `look::moments` RGBA32F pyramids (mean, variance, farthest depth; rebuilt per drawn tile) and `shaders/look-shadow.slangh` (receiver-plane test, two-pass blocker search, per-texel kernels of the source's shape at any width); `ViewMode::ShadowPenumbra`, `RenderDebug::soft_shadows`; widths vs the path tracer: ara-runtime-render `tests/soft_shadows.rs`.
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or
@@ -137,14 +137,14 @@ and an empty implicit-layer directory to its process and restores the environmen
 by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`, `cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
+GPU tests hold a queue busy only through `ara_gpu::vulkan::QueueGate` (`live/tests.rs` `block_queue`), and must open it before dropping any device: device teardown waits until no gate is held. NVIDIA's Windows driver spins in `vkDestroyDevice` under its process-wide lock while another device's queue waits on the host, and the gate owner's next driver call then blocks forever (once 20-50% of parallel `--lib` runs; reproduced on `ara-gpu` alone; idle device and clean validation, with or without third-party layers).
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking, and odd-resolution bounds framing. Update only deliberately with process-local
 `ARA_UPDATE_GOLDENS=1 cargo test -p ara-render --test golden` (PowerShell: set the
 environment variable before the command). Normal checks never update goldens.
 
 `run.ps1 -Mode Capture` writes every debug view, marks, JSON and render IDs.
-`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
-`cargo run -p ara-render --example timings` records 120 warm pass samples.
+`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes. `cargo run -p ara-render --example timings` records 120 warm pass samples.
 
 The glTF importer is example-only; production import belongs to the asset pipeline. Example media are CC0; source/licence notices accompany assets.
 M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer lighting. Metal's native implementation is the cfg-gated ara-gpu stub.

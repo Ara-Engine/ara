@@ -106,6 +106,8 @@ impl Renderer {
             previous_vp: Mat4::IDENTITY,
             frame_number: 0,
             jitter_override: None,
+            debug: super::RenderDebug::default(),
+            requested_quality: None,
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
@@ -114,10 +116,15 @@ impl Renderer {
             native: None,
             native_pipelines: Default::default(),
             rays: Default::default(),
+            software_reflections: None,
+            patch_transport: None,
+            sun_pages: None,
             views: views::Views::default(),
             secondary_active: false,
             live: None,
             entity_epoch: 0,
+            outlines: outline::Outlines::default(),
+            frame_tag: 0,
             tsr: crate::tsr::Tsr::from_env(),
         })
     }
@@ -208,12 +215,7 @@ impl Renderer {
             lights.len() <= MAX_LIGHTS,
             "Too many local lights for the tiled light list"
         );
-        ensure!(
-            bytemuck::cast_slice::<Light, f32>(lights)
-                .iter()
-                .all(|v| v.is_finite()),
-            "Non-finite light"
-        );
+        ensure!(lights.iter().all(Light::is_valid), "Invalid local light");
         write_lights(
             &mut self.gpu,
             [self.content.light_buffer, self.content.compute_lights],
@@ -316,12 +318,7 @@ pub(super) fn upload_geometry(
         "Too many local lights for the tiled light list"
     );
     ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
-    ensure!(
-        bytemuck::cast_slice::<Light, f32>(&lights)
-            .iter()
-            .all(|v| v.is_finite()),
-        "Non-finite light"
-    );
+    ensure!(lights.iter().all(Light::is_valid), "Invalid local light");
     let mut seen = std::collections::BTreeSet::new();
     for mesh in &meshes {
         ensure!(seen.insert(mesh.entity), "Duplicate entity ID");

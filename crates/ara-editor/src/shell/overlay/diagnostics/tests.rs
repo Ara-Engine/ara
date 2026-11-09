@@ -65,6 +65,7 @@ fn scene(world: Mat4) -> ara_render::instanced::Scene {
             lods: Vec::new(),
             bounds: [Vec3::new(-1., -0.5, -0.25), Vec3::new(1., 0.5, 0.25)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![Instance {
@@ -74,6 +75,9 @@ fn scene(world: Mat4) -> ara_render::instanced::Scene {
             material: 0,
             world,
             previous_world: world,
+            casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         }],
         materials: vec![Material::default()],
         textures: 0,
@@ -82,6 +86,7 @@ fn scene(world: Mat4) -> ara_render::instanced::Scene {
         sun_lux: Vec3::ZERO,
         environment: Vec::new(),
         environment_size: [0, 0],
+        decals: Vec::new(),
     }
 }
 fn source(scene: &ara_render::instanced::Scene, key: SourceKey) -> Source<'_> {
@@ -302,6 +307,9 @@ fn loading_model_shapes_and_stale_native_content_never_claim_real_model_bounds()
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     });
     let mut wires = Vec::new();
     let mut counts = Counts::default();

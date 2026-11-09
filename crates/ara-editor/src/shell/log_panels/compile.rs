@@ -2,6 +2,7 @@
 use super::*;
 mod metadata;
 mod model;
+mod recovery;
 use metadata::{Key, Metadata, Order, Phase, compile_kind, known_compile_kind};
 use model::Scope;
 #[cfg(test)]
@@ -20,6 +21,7 @@ pub(crate) struct CompilationView {
     scopes: BTreeMap<Key, Scope>,
     rows: BTreeMap<RowKey, Entry>,
     protected: BTreeMap<u64, Entry>,
+    recovery: recovery::Recovery,
     records: BTreeMap<u64, (u64, u64)>,
     possible_gaps: u64,
     unknown_history: bool,
@@ -136,6 +138,12 @@ impl CompilationView {
     }
 
     fn observe(&mut self, entry: Entry, gap: bool) {
+        if self.recovery.observe(&entry, gap) {
+            self.protected
+                .retain(|_, fault| !self.recovery.retired(fault));
+            self.version += 1;
+            return;
+        }
         let owned_fault = !compile_kind(&entry.diagnostic)
             && entry.diagnostic.code != ara_script::codes::COMPILE_RESULT
             && entry.diagnostic.data.as_deref().is_some_and(|data| {
@@ -224,6 +232,9 @@ impl CompilationView {
     /// Unscoped/invalid provenance stays visible. Accepted or historical scoped
     /// records belong to the projection, avoiding duplicates from the bus tail.
     pub(super) fn fallback(&self, entry: &Entry) -> bool {
+        if self.recovery.retired(entry) {
+            return false;
+        }
         if self.protected.contains_key(&entry.first) && entry.seq <= self.cursor {
             return false;
         }
@@ -246,6 +257,13 @@ impl CompilationView {
     }
 
     pub(super) fn notice(&self) -> Option<String> {
+        match (self.compile_notice(), self.recovery.notice()) {
+            (Some(compile), Some(recovery)) => Some(format!("{compile} {recovery}")),
+            (compile, recovery) => compile.or(recovery),
+        }
+    }
+
+    fn compile_notice(&self) -> Option<String> {
         let pending = self.scopes.values().filter(|scope| scope.pending()).count();
         let incomplete = self
             .scopes
@@ -289,7 +307,7 @@ impl CompilationView {
         json!({"schema":1,"projectionRevision":self.version,"polledPanelRevision":self.polled_revision,"cursor":self.cursor,"cachedRows":self.rows.len()+self.protected.len(),"scopeCount":self.scopes.len(),"possibleGaps":self.possible_gaps,
             "unknownEarlierScopes":self.unknown_history,"invalidMetadata":self.invalid_metadata,"omittedScopeEvents":self.omitted_scopes,
             "omittedRows":self.omitted_rows,"omittedProtectedRows":self.omitted_protected,
-            "protectedRuntimeFaultSeqs":self.protected.values().map(|entry|entry.seq).collect::<Vec<_>>(),
+            "protectedRuntimeFaultSeqs":self.protected.values().map(|entry|entry.seq).collect::<Vec<_>>(),"recovery":self.recovery.report(),
             "readError":self.read_error,"notice":self.notice(),"scopes":scopes})
     }
 }

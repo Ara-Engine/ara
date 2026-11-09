@@ -10,12 +10,14 @@ impl Presenter {
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<()> {
         let look = self.frame_look(frame);
+        let (resident_bytes, foliage_percent) = self.user_content_budget();
         if self.raster.is_none() {
             let mut raster = RasterView::new(&self.cache);
             bind_probes(&mut raster, self.probe_scene.as_ref(), &self.cache);
             self.raster = Some(raster);
         }
         let raster = self.raster.as_mut().context("raster view")?;
+        raster.set_content_budget(resident_bytes, foliage_percent);
         raster.set_probe_gi(self.probe_gi);
         let update = raster.prepare(
             self.renderer.as_mut().context("raster device")?,

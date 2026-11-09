@@ -1,0 +1,1398 @@
+diff --git a/crates/ara-editor/src/actions.rs b/crates/ara-editor/src/actions.rs
+index eb139c8..3667f0b 100644
+--- a/crates/ara-editor/src/actions.rs
++++ b/crates/ara-editor/src/actions.rs
+@@ -348,6 +348,7 @@ impl EditorService {
+                 probe_cancel_blocker: Some(
+                     "Capture cancellation requires the owning editor window",
+                 ),
++                script_recovery_blocker: Some("C# reload availability is reported by the active editor window"),
+                 // The window's build job is not visible here; the project's state is.
+                 build: crate::shell::commands::BuildState {
+                     running: false,
+diff --git a/crates/ara-editor/src/editor.rs b/crates/ara-editor/src/editor.rs
+index 36c4ea2..6164764 100644
+--- a/crates/ara-editor/src/editor.rs
++++ b/crates/ara-editor/src/editor.rs
+@@ -73,6 +73,8 @@ pub struct Editor {
+     pub activity: crate::activity::Activity,
+     /// Embedded Play surfaces for the Game view (taken from the play service).
+     pub(crate) play_surfaces: Option<ara_play_host::embed::Surfaces>,
++    /// Owned nonblocking C# recovery channel; results remain scoped to their Play incarnation.
++    pub(crate) script_recovery: ara_play_host::ScriptRecoveryHandle,
+     /// The Play world this window started (`play:3`).
+     pub(crate) play_world: Option<String>,
+     /// The Game view's size in physical pixels: the size embedded Play starts at.
+@@ -204,6 +206,7 @@ impl Editor {
+         let mut play = ara_play_host::PlayService::new(root, play).with_headless_run();
+         // The Game view shows embedded players through shared GPU surfaces (D19).
+         let play_surfaces = Some(play.surfaces());
++        let script_recovery = play.script_recovery();
+         host.register(Box::new(play))
+             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+         let (tasks, captures) = mpsc::channel();
+@@ -265,6 +268,7 @@ impl Editor {
+             extensions: Default::default(),
+             activity,
+             play_surfaces,
++            script_recovery,
+             play_world: None,
+             game_size: [1280, 720],
+             game_scale: 1.,
+diff --git a/crates/ara-editor/src/shell/commands/mod.rs b/crates/ara-editor/src/shell/commands/mod.rs
+index 44dd4b4..56059bb 100644
+--- a/crates/ara-editor/src/shell/commands/mod.rs
++++ b/crates/ara-editor/src/shell/commands/mod.rs
+@@ -86,6 +86,8 @@ pub(crate) struct Ctx<'a> {
+     pub probe_capture_blocker: Option<&'a str>,
+     /// Cached reason why no owned capture request can be cancelled.
+     pub probe_cancel_blocker: Option<&'a str>,
++    /// Owner-channel availability for explicit live C# reload.
++    pub script_recovery_blocker: Option<&'a str>,
+     /// Build menu state.
+     pub build: BuildState,
+ }
+@@ -250,6 +252,7 @@ impl Shell {
+             pilot: self.pilot_active(),
+             probe_capture_blocker: self.probe_capture_blocker(editor, target),
+             probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
++            script_recovery_blocker: self.script_recovery_blocker(editor),
+             starting: editor.state.playing.is_none()
+                 && (self.game_start.is_some() || editor.play_world.is_some()),
+             build: BuildState {
+diff --git a/crates/ara-editor/src/shell/commands/table.rs b/crates/ara-editor/src/shell/commands/table.rs
+index 59c769b..a92d0f5 100644
+--- a/crates/ara-editor/src/shell/commands/table.rs
++++ b/crates/ara-editor/src/shell/commands/table.rs
+@@ -1476,7 +1476,8 @@ fn build() -> Vec<Spec> {
+         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
+         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
+         cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Discover modules in the background, then choose which one to open in the configured IDE.", |s, e, _|s.open_script_solution(e)).when(|_| Avail::Ready),
+-        later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
++        cmd("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "Reload the current Play world's C# modules without restarting; inspect each player's authoritative result.", |s,e,_|s.reload_scripts(e))
++            .when(|c|c.script_recovery_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
+         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
+             let Target::Text(agent) = t else { return Err("choose an agent".into()) };
+diff --git a/crates/ara-editor/src/shell/log_panels/compile/metadata.rs b/crates/ara-editor/src/shell/log_panels/compile/metadata.rs
+index 5195719..2f7c0c3 100644
+--- a/crates/ara-editor/src/shell/log_panels/compile/metadata.rs
++++ b/crates/ara-editor/src/shell/log_panels/compile/metadata.rs
+@@ -167,7 +167,7 @@ impl Completion {
+ 
+ /// C# source/analyzer/compiler and dependency diagnostics, excluding runtime faults.
+ pub(super) fn compile_kind(diagnostic: &ara_diag::Diagnostic) -> bool {
+-    !matches!(diagnostic.code.0,906|910..=912|920..=922|926..=927|930..=934|950..=953|960..=969)
++    !matches!(diagnostic.code.0,906|910..=912|920..=922|926..=927|930..=935|950..=953|960..=969)
+ }
+ 
+ /// Unknown tagged families remain visible with incomplete coverage until their owner is confirmed.
+diff --git a/crates/ara-editor/src/shell/log_panels/compile/recovery/tests.rs b/crates/ara-editor/src/shell/log_panels/compile/recovery/tests.rs
+new file mode 100644
+index 0000000..3095b3a
+--- /dev/null
++++ b/crates/ara-editor/src/shell/log_panels/compile/recovery/tests.rs
+@@ -0,0 +1,366 @@
++//! Real Store sequence/dedup replay; Status values never enter this projection.
++#![allow(clippy::unwrap_used)]
++use super::*;
++use ara_diag::{
++    Diagnostic, Severity, Subject,
++    bus::Meta,
++    store::{Filter, Retention, Store},
++};
++
++#[derive(Clone, Copy)]
++struct Scope {
++    world: &'static str,
++    player: u32,
++    source: &'static str,
++    binding: u64,
++}
++const LIVE: Scope = Scope {
++    world: "play:one",
++    player: 0,
++    source: "opaque-player",
++    binding: 1,
++};
++impl Scope {
++    fn value(self) -> Value {
++        json!({"world":self.world,"player":self.player,"source":self.source,"binding":self.binding})
++    }
++    fn fault(self, module: &str, code: u16, message: &str) -> Diagnostic {
++        Diagnostic::error(ara_diag::Code(code), message)
++            .subject(Subject::module(module))
++            .subject(Subject::system(format!(
++                "play/{}/{}/{}/{}",
++                self.world, self.player, self.binding, self.source
++            )))
++            .data(json!({"module":module,"play":self.value()}))
++    }
++    fn marker(self, ticket: u64, outcome: &str, modules: &[&str]) -> Diagnostic {
++        Diagnostic::info(ara_diag::Code(935), "C# recovery finished")
++            .subject(Subject::system(format!("script-recovery/{ticket}")))
++            .data(json!({"play":self.value(),"recovery":{"schema":1,"ticket":ticket,"outcome":outcome,"modules":modules}}))
++    }
++}
++fn store() -> Store {
++    Store::new(Retention::default())
++}
++fn emit(store: &mut Store, diagnostic: Diagnostic) {
++    store.push(diagnostic, Meta::default());
++}
++fn poll(view: &mut CompilationView, store: &Store) {
++    let entries = store.query(&Filter {
++        since: view.cursor,
++        ..Default::default()
++    });
++    view.ingest(&json!({"cursor":store.cursor(),"total":entries.len(),"entries":&entries[entries.len().saturating_sub(PAGE)..]}));
++}
++fn active(view: &CompilationView, store: &Store) -> Vec<String> {
++    let fresh = store.query(&Filter {
++        severity: Some(Severity::Warning),
++        limit: PAGE,
++        ..Default::default()
++    });
++    fresh
++        .iter()
++        .filter_map(|row| entry(&json!(row)))
++        .filter(|row| view.fallback(row))
++        .map(|row| row.diagnostic.message)
++        .chain(view.entries().map(|row| row.diagnostic.message.clone()))
++        .collect()
++}
++
++#[test]
++fn reloaded_retires_only_older_runtime_faults_in_exact_incarnation_and_module_and_keeps_console() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    for code in [910, 911, 912] {
++        emit(
++            &mut store,
++            LIVE.fault("Gameplay", code, &format!("fault-{code}")),
++        );
++    }
++    emit(&mut store, LIVE.fault("Other", 910, "other module"));
++    emit(
++        &mut store,
++        Scope {
++            world: "play:two",
++            ..LIVE
++        }
++        .fault("Gameplay", 910, "other world"),
++    );
++    emit(
++        &mut store,
++        Scope { player: 1, ..LIVE }.fault("Gameplay", 910, "other player"),
++    );
++    emit(
++        &mut store,
++        Scope {
++            source: "replaced-source",
++            ..LIVE
++        }
++        .fault("Gameplay", 910, "other source"),
++    );
++    emit(
++        &mut store,
++        Scope { binding: 2, ..LIVE }.fault("Gameplay", 910, "other binding"),
++    );
++    emit(&mut store, LIVE.fault("Gameplay", 900, "compile error"));
++    poll(&mut view, &store);
++    emit(&mut store, LIVE.marker(1, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    let active = active(&view, &store);
++    for code in [910, 911, 912] {
++        assert!(!active.contains(&format!("fault-{code}")));
++    }
++    for message in [
++        "other module",
++        "other world",
++        "other player",
++        "other source",
++        "other binding",
++        "compile error",
++    ] {
++        assert!(
++            active.contains(&message.into()),
++            "{message} must remain visible"
++        );
++    }
++    assert_eq!(
++        store.query(&Filter::default()).len(),
++        10,
++        "Console retains every original row"
++    );
++    assert_eq!(view.report()["recovery"]["moduleRetirementRecords"], 1);
++}
++
++#[test]
++fn unchanged_failed_refused_and_compile_success_never_retire_runtime_faults() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    emit(&mut store, LIVE.fault("Gameplay", 910, "still faulted"));
++    poll(&mut view, &store);
++    for (ticket, outcome) in [(1, "unchanged"), (2, "failed"), (3, "refused")] {
++        emit(&mut store, LIVE.marker(ticket, outcome, &["Gameplay"]));
++        poll(&mut view, &store);
++        assert!(active(&view, &store).contains(&"still faulted".into()));
++    }
++    let scope = metadata::Key {
++        producer: "warm".into(),
++        module: "Gameplay".into(),
++        profile: "gameplay".into(),
++        world: Some(LIVE.world.into()),
++        player: Some(0),
++    };
++    view.retire_errors(
++        &scope,
++        metadata::Order {
++            play_binding: 1,
++            compile_binding: 4,
++            attempt: 100,
++        },
++    );
++    assert!(
++        active(&view, &store).contains(&"still faulted".into()),
++        "compile retirement does not own runtime faults"
++    );
++}
++
++#[test]
++fn repeated_fault_after_reload_uses_latest_store_sequence_and_becomes_active_again() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    let fault = LIVE.fault("Gameplay", 912, "repeat command fault");
++    emit(&mut store, fault.clone());
++    poll(&mut view, &store);
++    emit(&mut store, LIVE.marker(1, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    assert!(active(&view, &store).is_empty());
++    emit(&mut store, fault);
++    poll(&mut view, &store);
++    assert_eq!(active(&view, &store), ["repeat command fault"]);
++    let rows = store.query(&Filter::default());
++    let row = rows
++        .iter()
++        .find(|row| row.diagnostic.code == ara_diag::Code(912))
++        .unwrap();
++    assert_eq!(row.first, 1);
++    assert_eq!(row.count, 2);
++    assert!(row.seq > 2);
++}
++
++#[test]
++fn incomplete_page_marker_does_not_clear_but_later_clean_exact_marker_can() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    emit(
++        &mut store,
++        LIVE.fault("Gameplay", 911, "retained across gap"),
++    );
++    poll(&mut view, &store);
++    for index in 0..600 {
++        emit(
++            &mut store,
++            Diagnostic::info(
++                ara_diag::codes::INVALID_PARAMS,
++                format!("unrelated {index}"),
++            ),
++        );
++    }
++    emit(&mut store, LIVE.marker(1, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    assert!(active(&view, &store).contains(&"retained across gap".into()));
++    assert_eq!(view.report()["recovery"]["gapMarkers"], 1);
++    assert!(
++        view.notice()
++            .unwrap()
++            .contains("incomplete diagnostic pages")
++    );
++    emit(&mut store, LIVE.marker(2, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    assert!(!active(&view, &store).contains(&"retained across gap".into()));
++    assert!(
++        store
++            .query(&Filter::default())
++            .iter()
++            .any(|row| row.diagnostic.message == "retained across gap")
++    );
++}
++
++#[test]
++fn malformed_or_unscoped_markers_and_unowned_fault_families_cannot_clear_problems() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    emit(&mut store, LIVE.fault("Gameplay", 910, "scoped fault"));
++    emit(
++        &mut store,
++        Diagnostic::error(ara_diag::Code(910), "legacy fault").data(json!({"module":"Gameplay"})),
++    );
++    emit(&mut store, LIVE.fault("Gameplay", 913, "future fault"));
++    emit(
++        &mut store,
++        Diagnostic::error(ara_diag::Code(910), "missing module").data(json!({"play":LIVE.value()})),
++    );
++    emit(
++        &mut store,
++        Diagnostic::warning(ara_diag::Code(910), "warning contribution")
++            .data(json!({"module":"Gameplay","play":LIVE.value()})),
++    );
++    poll(&mut view, &store);
++    for index in 0..4 {
++        let mut marker = LIVE.marker(index + 1, "reloaded", &["Gameplay"]);
++        match index {
++            0 => marker.data.as_mut().unwrap()["recovery"]["schema"] = json!(2),
++            1 => marker.data.as_mut().unwrap()["recovery"]["modules"] = json!(["Gameplay", null]),
++            2 => {
++                marker
++                    .data
++                    .as_mut()
++                    .unwrap()
++                    .as_object_mut()
++                    .unwrap()
++                    .remove("play");
++            }
++            _ => marker.data.as_mut().unwrap()["play"]["binding"] = json!(0),
++        }
++        emit(&mut store, marker);
++        poll(&mut view, &store);
++        assert!(active(&view, &store).contains(&"scoped fault".into()));
++    }
++    emit(&mut store, LIVE.marker(10, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    let active = active(&view, &store);
++    assert!(!active.contains(&"scoped fault".into()));
++    for message in [
++        "legacy fault",
++        "future fault",
++        "missing module",
++        "warning contribution",
++    ] {
++        assert!(active.contains(&message.into()));
++    }
++    assert_eq!(view.report()["recovery"]["invalidMarkers"], 4);
++}
++
++#[test]
++fn retired_faults_stay_out_of_tail_fallback_without_clearing_console_records() {
++    let mut store = store();
++    let mut view = CompilationView::default();
++    emit(
++        &mut store,
++        LIVE.fault("Gameplay", 910, "historical runtime fault"),
++    );
++    poll(&mut view, &store);
++    let old = entry(&json!(store.query(&Filter::default())[0])).unwrap();
++    emit(&mut store, LIVE.marker(1, "reloaded", &["Gameplay"]));
++    poll(&mut view, &store);
++    assert!(
++        !view.fallback(&old),
++        "cached retirement must also own ordinary bus-tail fallback"
++    );
++    assert!(
++        store.get(old.seq).is_some(),
++        "Console still owns the record"
++    );
++}
++
++#[test]
++fn bounded_ledger_rejects_extra_modules_without_falsely_retiring_them() {
++    let mut recovery = Recovery::default();
++    let modules = (0..MAX_MODULES)
++        .map(|index| format!("Module{index}"))
++        .collect::<Vec<_>>();
++    let refs = modules.iter().map(String::as_str).collect::<Vec<_>>();
++    let as_entry = |seq, diagnostic| {
++        entry(&json!({"seq":seq,"first":seq,"count":1,"diagnostic":diagnostic})).unwrap()
++    };
++    assert!(recovery.observe(&as_entry(2, LIVE.marker(1, "reloaded", &refs)), false));
++    assert_eq!(recovery.modules, MAX_MODULES);
++    assert!(recovery.observe(
++        &as_entry(4, LIVE.marker(2, "reloaded", &["Overflow"])),
++        false
++    ));
++    assert_eq!(recovery.modules, MAX_MODULES);
++    assert_eq!(recovery.omitted, 1);
++    assert!(!recovery.retired(&as_entry(
++        1,
++        LIVE.fault("Overflow", 910, "cannot evict this fault")
++    )));
++    assert!(recovery.retired(&as_entry(
++        1,
++        LIVE.fault("Module0", 910, "known covered fault")
++    )));
++}
++
++#[test]
++fn bounded_incarnation_ledger_keeps_new_unknown_incarnation_faults_visible() {
++    let mut recovery = Recovery::default();
++    let as_entry = |seq, diagnostic| {
++        entry(&json!({"seq":seq,"first":seq,"count":1,"diagnostic":diagnostic})).unwrap()
++    };
++    for binding in 1..=MAX_INCARNATIONS as u64 {
++        let scope = Scope { binding, ..LIVE };
++        recovery.observe(
++            &as_entry(
++                binding * 2,
++                scope.marker(binding, "reloaded", &["Gameplay"]),
++            ),
++            false,
++        );
++    }
++    let extra = Scope {
++        binding: MAX_INCARNATIONS as u64 + 1,
++        ..LIVE
++    };
++    recovery.observe(
++        &as_entry(1000, extra.marker(1000, "reloaded", &["Gameplay"])),
++        false,
++    );
++    assert_eq!(recovery.incarnations, MAX_INCARNATIONS);
++    assert_eq!(recovery.omitted, 1);
++    assert!(!recovery.retired(&as_entry(
++        1,
++        extra.fault("Gameplay", 910, "new incarnation must remain faulted")
++    )));
++    assert!(recovery.retired(&as_entry(
++        1,
++        LIVE.fault("Gameplay", 910, "known retired incarnation")
++    )));
++}
+diff --git a/crates/ara-editor/src/shell/log_panels/compile/recovery.rs b/crates/ara-editor/src/shell/log_panels/compile/recovery.rs
+new file mode 100644
+index 0000000..6aaee4c
+--- /dev/null
++++ b/crates/ara-editor/src/shell/log_panels/compile/recovery.rs
+@@ -0,0 +1,180 @@
++//! Trusted reload markers retire runtime faults, never compiler errors or Console history.
++use super::*;
++const MAX_MODULES: usize = 4096;
++const MAX_INCARNATIONS: usize = 128;
++type Modules = BTreeMap<String, u64>;
++type Bindings = BTreeMap<u64, Modules>;
++type Sources = BTreeMap<String, Bindings>;
++type Players = BTreeMap<u32, Sources>;
++
++#[derive(Clone, Copy)]
++struct Incarnation<'a> {
++    world: &'a str,
++    player: u32,
++    source: &'a str,
++    binding: u64,
++}
++impl<'a> Incarnation<'a> {
++    fn parse(data: &'a Value) -> Option<Self> {
++        let play = data.get("play")?;
++        let binding = play["binding"].as_u64()?;
++        (binding > 0).then_some(Self {
++            world: token(&play["world"])?,
++            player: u32::try_from(play["player"].as_u64()?).ok()?,
++            source: token(&play["source"])?,
++            binding,
++        })
++    }
++    fn value(self) -> Value {
++        json!({"world":self.world,"player":self.player,"source":self.source,"binding":self.binding})
++    }
++}
++fn token(value: &Value) -> Option<&str> {
++    let text = value.as_str()?;
++    (!text.is_empty() && text.len() <= 4096).then_some(text)
++}
++
++struct Marker<'a> {
++    scope: Incarnation<'a>,
++    ticket: u64,
++    outcome: &'a str,
++    modules: Vec<&'a str>,
++}
++impl<'a> Marker<'a> {
++    fn parse(diagnostic: &'a ara_diag::Diagnostic) -> Option<Self> {
++        if diagnostic.code != ara_diag::Code(935) {
++            return None;
++        }
++        let data = diagnostic.data.as_deref()?;
++        let recovery = data.get("recovery")?;
++        if recovery["schema"].as_u64() != Some(1) {
++            return None;
++        }
++        let outcome = recovery["outcome"].as_str()?;
++        if !matches!(outcome, "reloaded" | "unchanged" | "failed" | "refused") {
++            return None;
++        }
++        let raw = recovery["modules"].as_array()?;
++        if raw.len() > MAX_MODULES {
++            return None;
++        }
++        // Validate the entire declaration before accepting any module's retirement.
++        let modules = raw.iter().map(token).collect::<Option<Vec<_>>>()?;
++        Some(Self {
++            scope: Incarnation::parse(data)?,
++            ticket: recovery["ticket"].as_u64()?,
++            outcome,
++            modules,
++        })
++    }
++}
++
++/// A bounded retirement ledger also filters the ordinary 500-row tail fallback.
++/// Nested borrowed-key lookups avoid allocating scope/module strings per row.
++#[derive(Default)]
++pub(super) struct Recovery {
++    ledger: BTreeMap<String, Players>,
++    incarnations: usize,
++    modules: usize,
++    invalid: u64,
++    omitted: u64,
++    gap_markers: u64,
++    observed: u64,
++    last: Option<Value>,
++}
++impl Recovery {
++    fn modules(&self, scope: Incarnation<'_>) -> Option<&Modules> {
++        self.ledger
++            .get(scope.world)?
++            .get(&scope.player)?
++            .get(scope.source)?
++            .get(&scope.binding)
++    }
++
++    /// Only broker-stamped data.play is trusted; subject string encodings are not an API.
++    pub(super) fn observe(&mut self, entry: &Entry, gap: bool) -> bool {
++        if entry.diagnostic.code != ara_diag::Code(935) {
++            return false;
++        }
++        let Some(marker) = Marker::parse(&entry.diagnostic) else {
++            self.invalid = self.invalid.saturating_add(1);
++            return true;
++        };
++        self.observed = self.observed.saturating_add(1);
++        let mut updated = 0usize;
++        // A cursor gap may conceal a later occurrence collapsed into an older
++        // row. Retain it until a later clean marker proves this exact scope.
++        if marker.outcome == "reloaded" && gap {
++            self.gap_markers = self.gap_markers.saturating_add(1);
++        }
++        if marker.outcome == "reloaded" && !gap {
++            for module in &marker.modules {
++                let known = self.modules(marker.scope);
++                let new_incarnation = known.is_none();
++                let new_module = known.is_none_or(|modules| !modules.contains_key(*module));
++                if (new_incarnation && self.incarnations >= MAX_INCARNATIONS)
++                    || (new_module && self.modules >= MAX_MODULES)
++                {
++                    self.omitted = self.omitted.saturating_add(1);
++                    continue;
++                }
++                let modules = self
++                    .ledger
++                    .entry(marker.scope.world.to_owned())
++                    .or_default()
++                    .entry(marker.scope.player)
++                    .or_default()
++                    .entry(marker.scope.source.to_owned())
++                    .or_default()
++                    .entry(marker.scope.binding)
++                    .or_default();
++                let seq = modules.entry((*module).to_owned()).or_default();
++                if entry.seq > *seq {
++                    *seq = entry.seq;
++                    updated += 1;
++                }
++                self.incarnations += usize::from(new_incarnation);
++                self.modules += usize::from(new_module);
++            }
++        }
++        self.last = Some(
++            json!({"seq":entry.seq,"ticket":marker.ticket,"outcome":marker.outcome,"scope":marker.scope.value(),
++            "modules":marker.modules.iter().take(32).collect::<Vec<_>>(),"moduleCount":marker.modules.len(),"modulesInReportOmitted":marker.modules.len().saturating_sub(32),
++            "ledgerModulesUpdated":updated,"pageHadPossibleGap":gap}),
++        );
++        true
++    }
++
++    /// New occurrences move to a new Store seq, even when first/count deduplicate.
++    /// Such a repeated fault is newer than the marker and becomes active again.
++    pub(super) fn retired(&self, entry: &Entry) -> bool {
++        if !entry.diagnostic.is_error() || !matches!(entry.diagnostic.code.0, 910..=912) {
++            return false;
++        }
++        let Some(data) = entry.diagnostic.data.as_deref() else {
++            return false;
++        };
++        let Some(scope) = Incarnation::parse(data) else {
++            return false;
++        };
++        let Some(module) = token(&data["module"]) else {
++            return false;
++        };
++        self.modules(scope)
++            .and_then(|modules| modules.get(module))
++            .is_some_and(|seq| entry.seq < *seq)
++    }
++
++    pub(super) fn notice(&self) -> Option<String> {
++        (self.invalid>0 || self.omitted>0 || self.gap_markers>0).then(||format!(
++            "C# reload history includes {} invalid markers, {} records outside the bounded cache and {} reload results on incomplete diagnostic pages. Those results cannot clear runtime faults; a later clean reload clears only its matching player incarnation and modules.",self.invalid,self.omitted,self.gap_markers))
++    }
++    pub(super) fn report(&self) -> Value {
++        json!({"observedMarkers":self.observed,"incarnations":self.incarnations,"moduleRetirementRecords":self.modules,
++            "maxIncarnations":MAX_INCARNATIONS,"maxModuleRetirementRecords":MAX_MODULES,
++            "invalidMarkers":self.invalid,"omittedRecords":self.omitted,"gapMarkers":self.gap_markers,"lastMarker":self.last})
++    }
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/ara-editor/src/shell/log_panels/compile.rs b/crates/ara-editor/src/shell/log_panels/compile.rs
+index 84158a4..0677e2a 100644
+--- a/crates/ara-editor/src/shell/log_panels/compile.rs
++++ b/crates/ara-editor/src/shell/log_panels/compile.rs
+@@ -2,6 +2,7 @@
+ use super::*;
+ mod metadata;
+ mod model;
++mod recovery;
+ use metadata::{Key, Metadata, Order, Phase, compile_kind, known_compile_kind};
+ use model::Scope;
+ #[cfg(test)]
+@@ -20,6 +21,7 @@ pub(crate) struct CompilationView {
+     scopes: BTreeMap<Key, Scope>,
+     rows: BTreeMap<RowKey, Entry>,
+     protected: BTreeMap<u64, Entry>,
++    recovery: recovery::Recovery,
+     records: BTreeMap<u64, (u64, u64)>,
+     possible_gaps: u64,
+     unknown_history: bool,
+@@ -136,6 +138,11 @@ impl CompilationView {
+     }
+ 
+     fn observe(&mut self, entry: Entry, gap: bool) {
++        if self.recovery.observe(&entry, gap) {
++            self.protected.retain(|_, fault| !self.recovery.retired(fault));
++            self.version += 1;
++            return;
++        }
+         let owned_fault = !compile_kind(&entry.diagnostic)
+             && entry.diagnostic.code != ara_script::codes::COMPILE_RESULT
+             && entry.diagnostic.data.as_deref().is_some_and(|data| {
+@@ -224,6 +231,9 @@ impl CompilationView {
+     /// Unscoped/invalid provenance stays visible. Accepted or historical scoped
+     /// records belong to the projection, avoiding duplicates from the bus tail.
+     pub(super) fn fallback(&self, entry: &Entry) -> bool {
++        if self.recovery.retired(entry) {
++            return false;
++        }
+         if self.protected.contains_key(&entry.first) && entry.seq <= self.cursor {
+             return false;
+         }
+@@ -246,6 +256,13 @@ impl CompilationView {
+     }
+ 
+     pub(super) fn notice(&self) -> Option<String> {
++        match (self.compile_notice(), self.recovery.notice()) {
++            (Some(compile), Some(recovery)) => Some(format!("{compile} {recovery}")),
++            (compile, recovery) => compile.or(recovery),
++        }
++    }
++
++    fn compile_notice(&self) -> Option<String> {
+         let pending = self.scopes.values().filter(|scope| scope.pending()).count();
+         let incomplete = self
+             .scopes
+@@ -289,7 +306,7 @@ impl CompilationView {
+         json!({"schema":1,"projectionRevision":self.version,"polledPanelRevision":self.polled_revision,"cursor":self.cursor,"cachedRows":self.rows.len()+self.protected.len(),"scopeCount":self.scopes.len(),"possibleGaps":self.possible_gaps,
+             "unknownEarlierScopes":self.unknown_history,"invalidMetadata":self.invalid_metadata,"omittedScopeEvents":self.omitted_scopes,
+             "omittedRows":self.omitted_rows,"omittedProtectedRows":self.omitted_protected,
+-            "protectedRuntimeFaultSeqs":self.protected.values().map(|entry|entry.seq).collect::<Vec<_>>(),
++            "protectedRuntimeFaultSeqs":self.protected.values().map(|entry|entry.seq).collect::<Vec<_>>(),"recovery":self.recovery.report(),
+             "readError":self.read_error,"notice":self.notice(),"scopes":scopes})
+     }
+ }
+diff --git a/crates/ara-editor/src/shell/log_panels.rs b/crates/ara-editor/src/shell/log_panels.rs
+index 39227cb..7ccf285 100644
+--- a/crates/ara-editor/src/shell/log_panels.rs
++++ b/crates/ara-editor/src/shell/log_panels.rs
+@@ -558,6 +558,7 @@ impl Shell {
+         }
+         self.search(out, "problems", editor);
+         out.push_str("</panel>");
++        self.script_recovery_markup(editor, out);
+         let notice = compilation.notice();
+         if let Some(notice) = &notice {
+             out.push_str(&format!("<text id='problems-compile-status' class='caption wrap-text' style='flex-shrink:0;padding:6px' text='{}' />",escape(notice)));
+diff --git a/crates/ara-editor/src/shell/mod.rs b/crates/ara-editor/src/shell/mod.rs
+index 858fc58..ebd94ac 100644
+--- a/crates/ara-editor/src/shell/mod.rs
++++ b/crates/ara-editor/src/shell/mod.rs
+@@ -35,6 +35,7 @@ mod polish;
+ #[cfg(test)]
+ mod quality_tests;
+ pub(crate) mod scripts;
++mod script_recovery_ui;
+ mod scroll;
+ mod scrub;
+ mod selection;
+@@ -302,6 +303,7 @@ pub struct Shell {
+     asset_folder_click: Option<(String, std::time::Instant)>,
+     asset_rename: Option<scripts::Rename>,
+     script_job: Option<(String, std::time::Instant)>,
++    script_recovery_ui: script_recovery_ui::State,
+     script_modules: scripts::ModuleList,
+     ide_request: Option<scripts::IdeRequest>,
+     compile_problems: log_panels::CompilationView,
+@@ -640,6 +642,7 @@ impl Shell {
+             asset_folder_click: None,
+             asset_rename: None,
+             script_job: None,
++            script_recovery_ui: Default::default(),
+             script_modules: Default::default(),
+             ide_request: None,
+             compile_problems: Default::default(),
+@@ -840,6 +843,7 @@ impl Shell {
+     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
+     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+         let compiled = self.poll_script_job(editor)?;
++        let recovery_changed = self.poll_script_recovery(editor);
+         let modules_changed = self.poll_script_modules(editor)?;
+         let probes_changed = self.poll_probes(editor)?;
+         let play_changed = match self.poll_play_job(editor) {
+@@ -850,6 +854,7 @@ impl Shell {
+             }
+         };
+         if !compiled
++            && !recovery_changed
+             && !modules_changed
+             && !probes_changed
+             && !play_changed
+diff --git a/crates/ara-editor/src/shell/monkey_support.rs b/crates/ara-editor/src/shell/monkey_support.rs
+index e213038..440cf57 100644
+--- a/crates/ara-editor/src/shell/monkey_support.rs
++++ b/crates/ara-editor/src/shell/monkey_support.rs
+@@ -12,7 +12,7 @@ impl Shell {
+             json!({"job":job,"ageMs":last.elapsed().as_millis()/1000*1000,"ageResolutionMs":1000,
+                 "ageScope":"Since handle assignment or last status poll; not task lifetime"})
+         });
+-        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),
+-            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy()})
++        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),"scriptRecovery":self.script_recovery_resource_report(),
++            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy() || self.script_recovery_busy()})
+     }
+ }
+diff --git a/crates/ara-editor/src/shell/script_recovery_ui/state.rs b/crates/ara-editor/src/shell/script_recovery_ui/state.rs
+new file mode 100644
+index 0000000..86bd1b7
+--- /dev/null
++++ b/crates/ara-editor/src/shell/script_recovery_ui/state.rs
+@@ -0,0 +1,202 @@
++use super::*;
++const CADENCE: Duration = Duration::from_millis(250);
++const POLL_BUDGET: usize = 8;
++const MAX_PENDING: usize = 64;
++const TERMINAL_HISTORY: usize = 8;
++
++pub(super) struct Pending {
++    pub session: String,
++    pub world: String,
++    pub started: Instant,
++    pub latest: Option<ScriptRecoveryStatus>,
++    pub invalid_reply: bool,
++}
++
++/// Only this editor's tickets, never a global player/world completion flag.
++#[derive(Default)]
++pub(crate) struct State {
++    pub(super) pending: BTreeMap<u64, Pending>,
++    order: VecDeque<u64>,
++    pub(super) terminal: VecDeque<ScriptRecoveryStatus>,
++    pub(super) request_error: Option<(String, Vec<ara_diag::Diagnostic>)>,
++    next_poll: Option<Instant>,
++}
++
++impl State {
++    pub(super) fn full(&self) -> bool {
++        self.pending.len() >= MAX_PENDING
++    }
++    pub(super) fn busy(&self) -> bool {
++        !self.pending.is_empty()
++    }
++    pub(super) fn pending_world(&self, world: &str) -> bool {
++        self.pending.values().any(|pending| pending.world == world)
++    }
++    pub(super) fn start(
++        &mut self,
++        request: ScriptRecoveryRequest,
++        submit: impl FnOnce(
++            ScriptRecoveryRequest,
++        ) -> Result<ScriptRecoveryTicket, Vec<ara_diag::Diagnostic>>,
++    ) -> bool {
++        if self.full() || self.pending_world(&request.world) {
++            return false;
++        }
++        let world = request.world.clone();
++        let session = request.session.clone();
++        match submit(request) {
++            Ok(ticket) if !self.pending.contains_key(&ticket.0) => {
++                self.pending.insert(
++                    ticket.0,
++                    Pending {
++                        session,
++                        world,
++                        started: Instant::now(),
++                        latest: None,
++                        invalid_reply: false,
++                    },
++                );
++                self.order.push_back(ticket.0);
++                self.next_poll = None;
++                self.request_error = None;
++            }
++            Ok(_) => {
++                // Never overwrite or release an earlier subscription on a bad reply.
++                self.request_error = Some((
++                    world,
++                    vec![ara_diag::Diagnostic::error(
++                        crate::codes::ACTION,
++                        "C# recovery returned a duplicate owned ticket; the earlier request remains pending",
++                    )],
++                ));
++            }
++            Err(diagnostics) => {
++                self.request_error = Some((world, diagnostics));
++            }
++        }
++        true
++    }
++
++    pub(super) fn poll(
++        &mut self,
++        now: Instant,
++        mut read: impl FnMut(ScriptRecoveryTicket) -> Option<ScriptRecoveryStatus>,
++    ) -> bool {
++        if self.pending.is_empty() || self.next_poll.is_some_and(|next| now < next) {
++            return false;
++        }
++        self.next_poll = Some(now + CADENCE);
++        let mut changed = false;
++        for _ in 0..self.order.len().min(POLL_BUDGET) {
++            let Some(ticket) = self.order.pop_front() else {
++                break;
++            };
++            let Some(pending) = self.pending.get_mut(&ticket) else {
++                continue;
++            };
++            match read(ScriptRecoveryTicket(ticket)) {
++                None => self.order.push_back(ticket),
++                Some(status) if status.ticket.0 != ticket || status.world != pending.world => {
++                    // Preserve ownership until an actual matching terminal reply.
++                    changed |= !pending.invalid_reply;
++                    pending.invalid_reply = true;
++                    self.order.push_back(ticket);
++                }
++                Some(status) if status.finished => {
++                    self.pending.remove(&ticket);
++                    self.terminal.push_front(status);
++                    self.terminal.truncate(TERMINAL_HISTORY);
++                    changed = true;
++                }
++                Some(status) => {
++                    pending.latest = Some(status);
++                    pending.invalid_reply = false;
++                    self.order.push_back(ticket);
++                    changed = true;
++                }
++            }
++        }
++        changed
++    }
++
++    pub(super) fn note(&self, current_world: Option<&str>) -> Option<String> {
++        if let Some((world, diagnostics)) = &self.request_error {
++            let detail = diagnostics
++                .iter()
++                .find(|diagnostic| diagnostic.is_error())
++                .or_else(|| diagnostics.first())
++                .map(|diagnostic| diagnostic.message.as_str())
++                .unwrap_or("The backend did not provide a diagnostic");
++            return Some(format!(
++                "C# reload request for {world} was not queued: {detail}"
++            ));
++        }
++        let current = self
++            .pending
++            .iter()
++            .find(|(_, pending)| Some(pending.world.as_str()) == current_world);
++        if let Some((ticket, pending)) = current.or_else(|| self.pending.iter().next()) {
++            return Some(format!(
++                "C# reload #{ticket} pending for {}{}",
++                pending.world,
++                if Some(pending.world.as_str()) == current_world {
++                    ""
++                } else {
++                    " (previous world; still owned)"
++                }
++            ));
++        }
++        self.terminal
++            .iter()
++            .find(|status| Some(status.world.as_str()) == current_world)
++            .or_else(|| self.terminal.front())
++            .map(summary)
++    }
++
++    pub(super) fn report(&self) -> Value {
++        json!({"busy":self.busy(),"pollBudget":POLL_BUDGET,"pollMilliseconds":250,"ageResolutionSeconds":1,
++            "pending":self.pending.iter().map(|(ticket,pending)|json!({"ticket":ticket,"session":pending.session,"world":pending.world,
++                "ageSeconds":pending.started.elapsed().as_secs(),"invalidReply":pending.invalid_reply,"finished":false})).collect::<Vec<_>>(),
++            "terminalHistory":self.terminal.iter().map(|status|json!({"ticket":status.ticket.0,"world":status.world,"finished":status.finished})).collect::<Vec<_>>()})
++    }
++}
++
++pub(super) fn outcome(outcome: &ScriptRecoveryOutcome) -> &'static str {
++    match outcome {
++        ScriptRecoveryOutcome::Reloaded => "Reloaded",
++        ScriptRecoveryOutcome::Unchanged => "Unchanged",
++        ScriptRecoveryOutcome::Failed => "Failed",
++        ScriptRecoveryOutcome::Refused => "Refused",
++    }
++}
++pub(super) fn summary(status: &ScriptRecoveryStatus) -> String {
++    if !status.finished {
++        return format!(
++            "C# reload #{} pending for {}",
++            status.ticket.0, status.world
++        );
++    }
++    if status.players.is_empty() {
++        return format!(
++            "C# reload #{} finished for {}; no player result was reported",
++            status.ticket.0, status.world
++        );
++    }
++    let players = status
++        .players
++        .iter()
++        .take(16)
++        .map(|player| format!("player {} {}", player.player, outcome(&player.outcome)))
++        .collect::<Vec<_>>()
++        .join(", ");
++    format!(
++        "C# reload #{} for {}: {players}{}",
++        status.ticket.0,
++        status.world,
++        if status.players.len() > 16 {
++            " (additional player results in Console)"
++        } else {
++            ""
++        }
++    )
++}
+diff --git a/crates/ara-editor/src/shell/script_recovery_ui/tests.rs b/crates/ara-editor/src/shell/script_recovery_ui/tests.rs
+new file mode 100644
+index 0000000..9d3b9e2
+--- /dev/null
++++ b/crates/ara-editor/src/shell/script_recovery_ui/tests.rs
+@@ -0,0 +1,199 @@
++//! Controlled owned-channel completions; these tests neither start players nor emit diagnostics.
++#![allow(clippy::unwrap_used)]
++use super::*;
++use ara_play_host::ScriptRecoveryPlayerResult;
++
++fn request(world: &str) -> ScriptRecoveryRequest {
++    ScriptRecoveryRequest {
++        session: "editor-session".into(),
++        world: world.into(),
++        player: None,
++        why: Some("Editor: Reload Scripts".into()),
++    }
++}
++fn status(ticket: u64, world: &str, finished: bool) -> ScriptRecoveryStatus {
++    ScriptRecoveryStatus {
++        ticket: ScriptRecoveryTicket(ticket),
++        world: world.into(),
++        finished,
++        players: Vec::new(),
++        diagnostics: Vec::new(),
++    }
++}
++
++#[test]
++fn coalesces_only_same_world_and_keeps_previous_world_ticket_owned() {
++    let mut state = State::default();
++    assert!(state.start(request("play:one"), |_| Ok(ScriptRecoveryTicket(1))));
++    assert!(!state.start(request("play:one"), |_| panic!(
++        "same-world duplicate must not submit"
++    )));
++    assert!(state.start(request("play:two"), |_| Ok(ScriptRecoveryTicket(2))));
++    assert_eq!(state.pending.len(), 2);
++    assert!(state.note(Some("play:one")).unwrap().contains("play:one"));
++    assert!(state.note(None).unwrap().contains("previous world"));
++    let now = Instant::now();
++    assert!(state.poll(now, |ticket| {
++        (ticket.0 == 1).then(|| status(1, "play:one", true))
++    }));
++    assert!(!state.pending_world("play:one"));
++    assert!(state.pending_world("play:two"));
++    assert_eq!(state.terminal.front().unwrap().world, "play:one");
++}
++
++#[test]
++fn mismatch_and_missing_reply_cannot_release_or_retarget_a_request() {
++    let mut state = State::default();
++    state.start(request("play:one"), |_| Ok(ScriptRecoveryTicket(1)));
++    let now = Instant::now();
++    assert!(!state.poll(now, |_| None));
++    assert!(state.busy());
++    assert!(
++        state.poll(now + Duration::from_millis(250), |_| Some(status(
++            1,
++            "play:replacement",
++            true
++        )))
++    );
++    assert!(state.pending[&1].invalid_reply);
++    assert!(state.busy());
++    assert!(
++        !state.poll(now + Duration::from_millis(500), |_| Some(status(
++            99, "play:one", true
++        )))
++    );
++    assert!(state.busy());
++    assert!(
++        state.poll(now + Duration::from_millis(750), |_| Some(status(
++            1, "play:one", true
++        )))
++    );
++    assert!(!state.busy());
++    assert_eq!(state.terminal.front().unwrap().world, "play:one");
++}
++
++#[test]
++fn slow_recovery_polls_are_bounded_coalesced_and_round_robin_without_releasing_tickets() {
++    let mut state = State::default();
++    for ticket in 1..=12 {
++        state.start(request(&format!("play:{ticket}")), |_| {
++            Ok(ScriptRecoveryTicket(ticket))
++        });
++    }
++    let now = Instant::now();
++    let mut read = Vec::new();
++    assert!(!state.poll(now, |ticket| {
++        read.push(ticket.0);
++        None
++    }));
++    assert_eq!(read, (1..=8).collect::<Vec<_>>());
++    assert!(!state.poll(now + Duration::from_millis(249), |_| panic!(
++        "poll cadence must preserve event-pump budget"
++    )));
++    read.clear();
++    assert!(!state.poll(now + Duration::from_millis(250), |ticket| {
++        read.push(ticket.0);
++        None
++    }));
++    assert_eq!(read, [9, 10, 11, 12, 1, 2, 3, 4]);
++    assert_eq!(state.pending.len(), 12);
++    assert!(state.report()["busy"].as_bool().unwrap());
++}
++
++#[test]
++fn diagnostics_are_kept_for_display_and_terminal_result_keeps_exact_outcome_and_modules() {
++    let mut state = State::default();
++    state.start(request("play:one"), |_| Ok(ScriptRecoveryTicket(1)));
++    let diagnostic=ara_diag::Diagnostic::error(ara_diag::Code(912),"original rich command fault")
++        .data(json!({"module":"Gameplay","play":{"world":"play:one","player":0,"source":"incarnation","binding":1},
++            "exception":{"schema":1,"type":"Outer","message":"original","frames":[],"inners":[],"truncated":false}}));
++    let mut done = status(1, "play:one", true);
++    done.diagnostics.push(diagnostic.clone());
++    done.players.push(ScriptRecoveryPlayerResult {
++        player: 0,
++        source: "incarnation".into(),
++        binding: 1,
++        outcome: ScriptRecoveryOutcome::Reloaded,
++        modules: vec!["Gameplay".into()],
++        diagnostics: vec![diagnostic.clone()],
++    });
++    let mut reply = Some(done);
++    assert!(state.poll(Instant::now(), |_| reply.take()));
++    let retained = state.terminal.front().unwrap();
++    assert_eq!(retained.diagnostics, [diagnostic.clone()]);
++    assert_eq!(retained.players[0].diagnostics, [diagnostic]);
++    assert_eq!(retained.players[0].modules, ["Gameplay"]);
++    assert!(matches!(
++        retained.players[0].outcome,
++        ScriptRecoveryOutcome::Reloaded
++    ));
++    // State has no Host/bus handle. Presentation consumes the original diagnostic,
++    // and the integration poll must never call report_failure/Cx::log for Status.
++    assert!(state::summary(retained).contains("Reloaded"));
++}
++
++#[test]
++fn duplicate_backend_ticket_and_transport_refusal_do_not_replace_earlier_ownership() {
++    let mut state = State::default();
++    state.start(request("play:one"), |_| Ok(ScriptRecoveryTicket(1)));
++    state.start(request("play:two"), |_| Ok(ScriptRecoveryTicket(1)));
++    assert_eq!(state.pending[&1].world, "play:one");
++    assert_eq!(state.pending.len(), 1);
++    assert!(
++        state
++            .note(Some("play:two"))
++            .unwrap()
++            .contains("duplicate owned ticket")
++    );
++    let diagnostic =
++        ara_diag::Diagnostic::error(crate::codes::ACTION, "owned recovery channel closed");
++    state.start(request("play:three"), |_| Err(vec![diagnostic.clone()]));
++    assert_eq!(state.request_error.as_ref().unwrap().1, [diagnostic]);
++    assert_eq!(state.pending.len(), 1);
++}
++
++#[test]
++fn pending_and_terminal_storage_are_bounded_without_evicting_live_tickets() {
++    let mut state = State::default();
++    for ticket in 1..=64 {
++        assert!(state.start(request(&format!("play:{ticket}")), |_| Ok(
++            ScriptRecoveryTicket(ticket)
++        )));
++    }
++    assert!(state.full());
++    assert!(!state.start(request("play:overflow"), |_| panic!(
++        "do not submit beyond owned ticket capacity"
++    )));
++    let now = Instant::now();
++    for round in 0..8 {
++        assert!(
++            state.poll(now + Duration::from_millis(round * 250), |ticket| Some(
++                status(ticket.0, &format!("play:{}", ticket.0), true)
++            ))
++        );
++    }
++    assert!(!state.busy());
++    assert_eq!(state.terminal.len(), 8);
++    assert_eq!(state.report()["pending"], json!([]));
++}
++
++#[test]
++fn retained_status_view_escapes_messages_and_bounds_visible_diagnostic_rows() {
++    let mut status = status(1, "play:<&>", true);
++    for index in 0..40 {
++        status.diagnostics.push(ara_diag::Diagnostic::error(
++            crate::codes::ACTION,
++            format!("failure <&> '{index}'"),
++        ));
++    }
++    let mut markup = String::new();
++    view::status_markup(&status, &mut markup);
++    assert_eq!(
++        markup
++            .matches("id='script-recovery-result-1-diagnostic-")
++            .count(),
++        16
++    );
++    assert!(markup.contains("24 additional diagnostics"));
++    assert!(!markup.contains("failure <&>"));
++}
+diff --git a/crates/ara-editor/src/shell/script_recovery_ui/view.rs b/crates/ara-editor/src/shell/script_recovery_ui/view.rs
+new file mode 100644
+index 0000000..2502dac
+--- /dev/null
++++ b/crates/ara-editor/src/shell/script_recovery_ui/view.rs
+@@ -0,0 +1,112 @@
++use super::*;
++
++impl Shell {
++    /// Compact optional content for the existing Play/Problems area; no new page or modal.
++    pub(crate) fn script_recovery_markup(&mut self, editor: &Editor, out: &mut String) {
++        self.bind_command(
++            "script-recovery-reload",
++            "tools.cs.reload",
++            commands::Target::None,
++        );
++        self.bind_command(
++            "script-recovery-console",
++            "window.console",
++            commands::Target::None,
++        );
++        let state = &self.script_recovery_ui;
++        let reason = self.script_recovery_blocker(editor);
++        out.push_str(&format!("<panel id='script-recovery' style='flex-direction:column;height:auto;min-height:0px;max-height:180px;flex-basis:auto;flex-shrink:1;gap:4px;padding:6px'><panel id='script-recovery-actions' class='row' style='height:auto;min-height:24px;flex-shrink:0;flex-wrap:wrap;gap:4px'><button id='script-recovery-reload' style='height:auto;min-height:24px;min-width:0px;white-space:normal' text='Reload scripts' description='{}' disabled='{}' action='Dispatch' /><button id='script-recovery-console' class='ghost' text='Console' description='View full diagnostic history, including managed exception stacks' action='Dispatch' /></panel>",escape(reason.unwrap_or("Reload C# in every player of the current running world; do not restart Play")),reason.is_some()));
++        if let Some(reason) = reason {
++            out.push_str(&format!(
++                "<text id='script-recovery-reason' class='caption wrap-text' text='{}' />",
++                escape(reason)
++            ));
++        }
++        out.push_str("<scroll id='script-recovery-scroll' style='height:auto;min-height:0px;max-height:120px;flex-basis:auto;flex-shrink:1'><panel id='script-recovery-body' style='height:auto;flex-direction:column;gap:4px'>");
++        for (ticket, pending) in state.pending.iter().take(8) {
++            out.push_str(&format!("<panel id='script-recovery-pending-{ticket}' style='height:auto;flex-direction:column;flex-shrink:0;gap:2px'><text id='script-recovery-pending-{ticket}-label' class='caption wrap-text' text='Reload #{ticket} · {} · pending{}' />",escape(&pending.world),if editor.play_world.as_deref()==Some(pending.world.as_str()){""}else{" (previous world; request remains owned)"}));
++            if pending.invalid_reply {
++                out.push_str(&format!("<text id='script-recovery-pending-{ticket}-invalid' class='caption wrap-text' text='Waiting for this Play session to report its result. An unrelated reply was ignored.' />"));
++            }
++            if let Some(status) = &pending.latest {
++                status_markup(status, out);
++            }
++            out.push_str("</panel>");
++        }
++        if state.pending.len() > 8 {
++            out.push_str(&format!("<text id='script-recovery-more-pending' class='caption wrap-text' text='{} additional reload requests remain owned and are polled in turn.' />",state.pending.len()-8));
++        }
++        if let Some((world, diagnostics)) = &state.request_error {
++            out.push_str(&format!("<text id='script-recovery-request-error' class='caption wrap-text' text='Reload was not queued for {}' />",escape(world)));
++            diagnostic_markup("script-recovery-request", diagnostics, &mut 16, out);
++        }
++        for status in &state.terminal {
++            status_markup(status, out);
++        }
++        if state.pending.is_empty() && state.terminal.is_empty() && state.request_error.is_none() {
++            out.push_str("<text id='script-recovery-empty' class='caption wrap-text' text='Source compilation remains automatic. Manual reload reports each player and module; Unchanged or Refused does not clear runtime faults.' />");
++        }
++        out.push_str("</panel></scroll></panel>");
++    }
++}
++
++pub(super) fn status_markup(status: &ScriptRecoveryStatus, out: &mut String) {
++    let id = format!("script-recovery-result-{}", status.ticket.0);
++    out.push_str(&format!("<panel id='{id}' style='height:auto;flex-direction:column;flex-shrink:0;gap:2px'><text id='{id}-summary' class='caption wrap-text' text='{}' />",escape(&state::summary(status))));
++    let mut budget = 16;
++    diagnostic_markup(&id, &status.diagnostics, &mut budget, out);
++    for (index, player) in status.players.iter().take(16).enumerate() {
++        let prefix = format!("{id}-player-{index}");
++        let modules = player
++            .modules
++            .iter()
++            .take(16)
++            .map(String::as_str)
++            .collect::<Vec<_>>()
++            .join(", ");
++        out.push_str(&format!("<text id='{prefix}-scope' class='caption wrap-text' text='Player {} · source {} · binding {} · {} · modules: {}{}' />",player.player,escape(&player.source),player.binding,state::outcome(&player.outcome),escape(&modules),if player.modules.len()>16 { " (additional modules retained in Console)" } else { "" }));
++        diagnostic_markup(&prefix, &player.diagnostics, &mut budget, out);
++    }
++    if status.players.len() > 16 {
++        out.push_str(&format!("<text id='{id}-more-players' class='caption wrap-text' text='{} additional player results are retained in Console.' />",status.players.len()-16));
++    }
++    out.push_str("</panel>");
++}
++
++fn diagnostic_markup(
++    id: &str,
++    diagnostics: &[ara_diag::Diagnostic],
++    budget: &mut usize,
++    out: &mut String,
++) {
++    // Bound mounted rows while preserving all severities and prioritizing actual
++    // errors. Full diagnostics are retained in Status and already in Console.
++    let ordered = diagnostics
++        .iter()
++        .enumerate()
++        .filter(|(_, d)| d.is_error())
++        .chain(
++            diagnostics
++                .iter()
++                .enumerate()
++                .filter(|(_, d)| d.severity == ara_diag::Severity::Warning),
++        )
++        .chain(
++            diagnostics
++                .iter()
++                .enumerate()
++                .filter(|(_, d)| d.severity == ara_diag::Severity::Info),
++        );
++    let shown = diagnostics.len().min(*budget);
++    *budget -= shown;
++    for (index, diagnostic) in ordered.take(shown) {
++        out.push_str(&format!(
++            "<text id='{id}-diagnostic-{index}' class='caption wrap-text' text='{}: {}' />",
++            diagnostic.code,
++            escape(&diagnostic.message)
++        ));
++    }
++    if diagnostics.len() > shown {
++        out.push_str(&format!("<text id='{id}-more' class='caption wrap-text' text='{} additional diagnostics are retained in Console.' />",diagnostics.len()-shown));
++    }
++}
+diff --git a/crates/ara-editor/src/shell/script_recovery_ui.rs b/crates/ara-editor/src/shell/script_recovery_ui.rs
+new file mode 100644
+index 0000000..288f298
+--- /dev/null
++++ b/crates/ara-editor/src/shell/script_recovery_ui.rs
+@@ -0,0 +1,79 @@
++//! Retained presentation of owned C# reload requests. Player work stays in PlayService.
++use super::*;
++use ara_play_host::{
++    ScriptRecoveryOutcome, ScriptRecoveryRequest, ScriptRecoveryStatus, ScriptRecoveryTicket,
++};
++use std::{
++    collections::VecDeque,
++    time::{Duration, Instant},
++};
++mod state;
++mod view;
++pub(crate) use state::State;
++#[cfg(test)]
++mod tests;
++
++impl Shell {
++    /// Explicit reload of the current running world, all players. No restart fallback.
++    pub(crate) fn reload_scripts(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        if let Some(reason) = self.script_recovery_blocker(editor) {
++            return Err(reason.into());
++        }
++        let world = editor
++            .play_world
++            .as_ref()
++            .ok_or("Start Play before reloading C# scripts")?;
++        let request = ScriptRecoveryRequest {
++            session: editor.session.clone(),
++            world: world.clone(),
++            player: None,
++            why: Some("Editor: Reload Scripts".into()),
++        };
++        self.script_recovery_ui
++            .start(request, |request| editor.script_recovery.request(request));
++        if let Some(note) = self.script_recovery_ui.note(editor.play_world.as_deref()) {
++            self.status_note = Some(note);
++        }
++        self.rebuild(editor)
++    }
++
++    /// One bounded owner poll at 4 Hz; old-world tickets remain owned until finished.
++    pub(crate) fn poll_script_recovery(&mut self, editor: &mut Editor) -> bool {
++        let changed = self
++            .script_recovery_ui
++            .poll(Instant::now(), |ticket| editor.script_recovery.poll(ticket));
++        if changed && let Some(note) = self.script_recovery_ui.note(editor.play_world.as_deref()) {
++            self.status_note = Some(note);
++        }
++        // Status diagnostics are already on the bus before finished. Never emit
++        // them again: that would create new seqs and resurrect retired faults.
++        changed
++    }
++
++    pub(crate) fn script_recovery_blocker(&self, editor: &Editor) -> Option<&'static str> {
++        let Some(world) = editor.play_world.as_deref() else {
++            return Some(
++                "Start Play to reload scripts; automatic source compilation remains active",
++            );
++        };
++        if self.game_start.is_some() || editor.state.playing.is_none() {
++            return Some("Wait for Play to finish starting or restarting before reloading scripts");
++        }
++        if self.script_recovery_ui.pending_world(world) {
++            Some("A C# reload is already pending for this Play world")
++        } else if self.script_recovery_ui.full() {
++            Some("Wait for this editor's pending C# reload requests to finish")
++        } else {
++            None
++        }
++    }
++
++    pub(crate) fn script_recovery_busy(&self) -> bool {
++        self.script_recovery_ui.busy()
++    }
++
++    /// Tickets remain visible to resource draining even after navigation/world changes.
++    pub(crate) fn script_recovery_resource_report(&self) -> Value {
++        self.script_recovery_ui.report()
++    }
++}

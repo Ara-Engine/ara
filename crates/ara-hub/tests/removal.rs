@@ -15,7 +15,7 @@ fn setup() -> (App, Hub) {
     let mut hub = Hub::new(Prefs::default(), "target/hub-removal-tests".into(), None);
     capture::seed(&mut hub);
     hub.view = View::Installs;
-    let mut app = App::new([1280., 720.], vec![]).expect("UI");
+    let mut app = App::new([1280., 720.]).expect("UI");
     app.rebuild(&mut hub, capture::NOW).expect("installs");
     app.input
         .focus(&mut app.ui, stable_id("engine-remove-1"))

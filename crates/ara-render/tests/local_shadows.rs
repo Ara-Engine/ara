@@ -43,7 +43,7 @@ fn scene() -> Scene {
         uv: [0.; 2],
         uv1: [0.; 2],
         terrain_weights: 0,
-        reserved: 0,
+        color: u32::MAX,
     });
     let mut material = Material::default();
     material.pbr.textures = [u32::MAX; 4];
@@ -54,6 +54,9 @@ fn scene() -> Scene {
         material: 0,
         world,
         previous_world: world,
+        casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     };
     Scene {
         geometry: vec![Geometry {
@@ -65,6 +68,7 @@ fn scene() -> Scene {
             }],
             bounds: [Vec3::new(-0.5, 0., -0.5), Vec3::new(0.5, 0., 0.5)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![
@@ -80,12 +84,14 @@ fn scene() -> Scene {
             position_range: [0., 2.5, 0., 20.],
             color_lumens: [1., 1., 1., 2000.],
             direction_outer: [0., -1., 0., 0.],
-            parameters: [0., 1., 0., 0.],
+            parameters: [0., 1., 0., 1.],
+            ..ara_render::scene::Light::ZERO
         }],
         sun_direction: Vec3::Y,
         sun_lux: Vec3::ZERO,
         environment: vec![[0.01, 0.01, 0.01, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

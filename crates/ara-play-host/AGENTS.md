@@ -68,6 +68,8 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   `DeviceEvent`, `method` (wire names mirrored by ara-player; its unit test checks).
 
 ## Methods
+`play.graphics {world?,player?,request?}` forwards typed local user preference
+operations to one player (never broadcasts), exposed as `ara_play` action `graphics`.
 
 `run {scene?,ticks?|duration?,seed?,tickHz?}` runs a fresh headless world and returns
 tick/hash, logs, events and diagnostics. `capture {scene?,camera?,path?,width?,height?,preset?,ticks?,seed?,marks?}`

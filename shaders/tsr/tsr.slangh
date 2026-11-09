@@ -111,6 +111,7 @@ struct TsrConstants {
     uint4 external;         // x the host's reactive coverage (sampled, render size; Renderer::finish_reactive)
     float4 kernel;          // Ara upsampling: x Gaussian spread of converged pixels, y of new or moving ones (display px^-2), z weight gain, w still-transparency current-frame weight
     uint4 options;          // x TSR_OPTION_* flags, y last frame's display history (sampled; Ara path)
+    float4 still;           // x the share of a still pixel's history kept against rectification (tsr-signals.slangh)
 };
 // TsrConstants.options.x: prepare inputs computes masks; accumulate reads luma
 // instability; prepare reactivity reads the shading change pyramid; the entity-ID

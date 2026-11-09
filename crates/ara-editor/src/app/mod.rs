@@ -17,6 +17,7 @@ mod game;
 #[cfg(test)]
 mod game_input_tests;
 mod game_preview;
+mod game_view_verify;
 mod hierarchy_verify;
 mod history_verify;
 mod import_drops;
@@ -24,6 +25,7 @@ mod import_verify;
 mod input_verify;
 mod journey;
 mod lighting_verify;
+mod live_resize;
 mod monkey;
 mod monkey_route;
 mod navigation_verify;
@@ -33,7 +35,9 @@ mod pilot;
 mod pilot_verify;
 mod play_verify;
 mod prefab_verify;
+mod probe_verify;
 mod probes;
+mod profiler_verify;
 mod qa;
 mod reachability_verify;
 mod responsiveness;
@@ -90,7 +94,7 @@ pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 /// False means Cancel; bounded runs report ARA1914 without showing a window.
 pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
     // This route replaces the supplied project with a fresh checked fixture in run.
-    if options.verify_behaviours {
+    if options.verify_behaviours || options.verify_profiler {
         return Ok(true);
     }
     open_project::before_open(options)
@@ -98,6 +102,29 @@ pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
 
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(mut options: Options) -> ara_ui::Result<()> {
+    if options.verify_profiler {
+        if options.verify_behaviours
+            || options.verify_monkey
+            || options.verify_journey
+            || options.verify_assets
+            || options.verify
+            || options.verify_panels
+            || options.verify_ux
+            || options.verify_docking
+            || options.verify_first_hour
+            || options.verify_responsiveness
+            || options.verify_unpresentable
+            || options.verify_scene_quality
+            || options.verify_game_view
+            || options.verify_loading
+            || options.headless
+        {
+            return Err(
+                "Run --verify-profiler independently from other verification/headless modes".into(),
+            );
+        }
+        profiler_verify::prepare(&mut options)?;
+    }
     if options.verify_behaviours {
         content_drags::fixture(&mut options)?;
         hierarchy_verify::prepare(&options)?;
@@ -186,11 +213,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || options.verify_ux
         || options.verify_docking
         || options.verify_behaviours
+        || options.verify_profiler
         || options.screenshot
     {
         native.verification_extent(options.size)?;
     }
     window.enable_custom_chrome()?;
+    if let Some(chrome) = window.chrome_mut() {
+        chrome.client_resize = live_resize::EdgeResize::ENABLED && !offscreen;
+    }
+    let mut edge_resize = live_resize::EdgeResize::default();
     let mut caption = window_chrome::SnapCaption::new(&window)?;
     let mut clipboard = crate::native::SessionClipboard::new(offscreen);
     crate::native::frame::style(window.raw(), editor.state.light);
@@ -203,6 +235,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || options.verify_ux
         || options.verify_docking
         || options.verify_behaviours
+        || options.verify_profiler
     {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
@@ -378,6 +411,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut game_view_check = options
+        .verify_game_view
+        .then(|| game_view_verify::GameViewCheck::new(&options.output));
+    if game_view_check.is_some() {
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -407,6 +448,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     if let (Some(runner), Some(seed)) = (&mut monkey, host_seed) {
         runner.record_host_seed(seed)?;
     }
+    let mut profiler_check = if options.verify_profiler {
+        Some(profiler_verify::ProfilerCheck::new(
+            &mut editor,
+            &mut shell,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
     let mut content_drags = if options.verify_behaviours {
         Some(content_drags::ContentDrags::new(
             &mut editor,
@@ -424,6 +474,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut bookmarks_check = None;
     let mut lighting_check = None;
     let mut pilot_check = None;
+    let mut probe_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -440,6 +491,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || first_hour.is_some()
         || probe.is_some()
         || scene_quality.is_some()
+        || game_view_check.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -457,9 +509,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         let mut scene_sync =
             scene_sync::SceneSync::new(models_at_open, editor.host.store().revision());
         let mut last_physical = physical;
+        // The reach the main swapchain was last sized for (a border drag), if any.
+        let mut present_reach: Option<[u32; 2]> = None;
         let mut last_dpi = dpi;
         let mut dirty = true;
         let mut scene_dirty = true;
+        // The Scene panel's physical extent last seen: a panel resize renders at once.
+        let mut scene_extent: Option<[u32; 2]> = None;
+        // A Scene change whose frame is still in flight: collect and show it at once.
+        let mut scene_followup = false;
+        // New selection outlines went to the renderer: show them in one more frame.
+        let mut outline_frame = false;
         let mut frames = 0u64;
         let mut exit_requested = false;
         let mut controller = controller::Controller::default();
@@ -537,6 +597,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     scale,
                     &mut events,
                 )?;
+            }
+            if let Some(check) = &mut profiler_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events, ready)?;
             }
             if let Some(check) = &mut content_drags {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
@@ -743,6 +809,23 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if pilot_check
                 .as_ref()
                 .is_some_and(pilot_verify::PilotCheck::finished)
+                && probe_check.is_none()
+            {
+                probe_check = Some(probe_verify::ProbeCheck::new(
+                    &mut editor,
+                    &mut shell,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut probe_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events, ready)?;
+            }
+            if probe_check
+                .as_ref()
+                .is_some_and(probe_verify::ProbeCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -885,6 +968,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
+                if sdl == main_id && edge_resize.event(&window, &event) {
+                    dirty = true;
+                    continue;
+                }
                 let pilot_before =
                     pilot::before_event(&event, &mut controller, &mut editor, &mut shell);
                 dirty |= pilot_before;
@@ -901,6 +988,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
+                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
@@ -956,7 +1045,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if shell.content_dragging() {
                 if offscreen && shell.desktop_pointer.is_none() {
-                    dirty |= shell.content_drag_over(&editor, dt)?;
+                    dirty |= shell.advance_content_drag(dt)?;
                 } else {
                     track_content_drag(
                         desktop_pointer(&shell),
@@ -1122,6 +1211,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
+                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
                 } else {
@@ -1169,6 +1260,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
+            if let Some(route) = &mut game_view_check
+                && route.step(&mut editor, &mut shell)?
+            {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+            }
             if let Some(route) = &mut scene_quality
                 && route.step(&mut editor)?
             {
@@ -1191,6 +1288,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             server.pump(&mut editor);
             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
+            // Cancellation reaches the retained bake before the next Scene GPU unit.
+            scene_dirty |=
+                probe_owner.poll_cancellations(&mut editor, &mut scene_view, &mut renderer);
             let pilot_changed = pilot::update(&controller, &mut editor, &mut shell, false);
             dirty |= pilot_changed;
             scene_dirty |= pilot_changed;
@@ -1207,6 +1307,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     shell.poll_asset_imports(editor),
                     shell.poll_asset_operations(editor),
                     shell.poll_build_options(editor),
+                    shell.poll_agents(editor),
                 ] {
                     match result {
                         Ok(updated) => changed |= updated,
@@ -1536,7 +1637,35 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )?;
             }
             drop(authority_scope);
-            let physical = window.size()?;
+            // The size a border drag moves the window to: this frame lays out and
+            // presents at it, then `edge_resize.apply` moves the window.
+            let resizing_to = edge_resize.step();
+            // Without present scaling a swapchain must match the window: move it first.
+            let present_first = renderer.gpu().info().present_scaling && present.is_some();
+            if !present_first {
+                edge_resize.apply(&window);
+            }
+            let resizing_to = resizing_to.filter(|_| present_first);
+            // A border drag freezes the Scene image at its last size (shown unscaled,
+            // cropped): re-allocating and re-rendering the Scene at every intermediate
+            // size made resizing stutter. It renders once at the final size.
+            let frozen = if edge_resize.active() {
+                shell
+                    .scene_frozen
+                    .or_else(|| Some(renderer.size().map(|v| v as f32 / main_dpi)))
+            } else {
+                None
+            };
+            if frozen != shell.scene_frozen {
+                shell.scene_frozen = frozen;
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+                scene_dirty = true;
+            }
+            let physical = match resizing_to {
+                Some(size) => size,
+                None => window.size()?,
+            };
             let main_drawable = !physical.contains(&0);
             if !main_drawable && floats.windows.is_empty() {
                 drop(profile_scope);
@@ -1555,16 +1684,29 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 last_physical
             };
             let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
-            if main_drawable && (physical != last_physical || dpi != last_dpi) {
-                if let Some(present) = &mut present {
-                    // SAFETY: Wait before replacing a live native swapchain.
-                    unsafe {
-                        renderer.gpu().wait_idle()?;
-                        gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
-                        *present =
-                            gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)?;
-                    }
+            // A border drag keeps one oversized swapchain, presented 1:1, for the
+            // whole gesture (creating one costs the driver ~8 ms); the size it ends at
+            // gets an exact one.
+            let reach = edge_resize.reach().filter(|_| present_first);
+            let settle_present = present_reach.is_some() && reach.is_none();
+            if main_drawable
+                && (physical != last_physical || settle_present)
+                && let Some(present) = &mut present
+            {
+                let live = reach.map(|r| [r[0].max(physical[0]), r[1].max(physical[1])]);
+                // SAFETY: The presentation belongs to this window and device; this
+                // thread owns the graphics queue.
+                unsafe {
+                    gpu.resize_present(
+                        crate::gpu::ui_device(renderer.gpu()),
+                        present,
+                        &window,
+                        live,
+                    )?;
                 }
+                present_reach = live;
+            }
+            if main_drawable && (physical != last_physical || dpi != last_dpi) {
                 last_physical = physical;
                 last_dpi = dpi;
                 gpu.set_dpi(dpi)?;
@@ -1595,6 +1737,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 shell.rebuild(&mut editor)?;
             }
             let mut work = shell.frame()?;
+            // The Game frame is sized from the last layout: one just shown or resized
+            // rebuilds at its laid-out size before this frame draws it.
+            if shell.game_frame_stale() {
+                shell.rebuild(&mut editor)?;
+                work += shell.frame()?;
+            }
             if shell.file_drag_pending() {
                 shell.refresh_file_drag_feedback(&editor);
                 work += shell.frame()?;
@@ -1623,8 +1771,21 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut shell,
                     controller.gizmo_state(),
                 )?;
+                if let Some(cursor) = edge_resize.cursor() {
+                    window.set_cursor(cursor)?;
+                }
             }
             let scene_host = windows::resolve_scene_host(&editor, &shell, &floats, dpi);
+            let scene_dpi = scene_host.as_ref().map(|host| host.dpi);
+            // A splitter drag changes the Scene's extent every frame: render each new
+            // size now rather than after the input pause, so the view follows the drag.
+            if let Some(host) = &scene_host {
+                let extent = extent_scaled(host.viewport, host.dpi);
+                if scene_extent.replace(extent) != Some(extent) {
+                    dirty = true;
+                    scene_dirty = true;
+                }
+            }
             if let Some(crate::shell::ViewportRequest::DropToSurface { doc, selection }) =
                 shell.viewport_request.take()
             {
@@ -1685,9 +1846,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let converging = renderer.scene_frame_async()
                 && !scene_view.preview_needs_frame()
                 && last_navigation.is_some_and(|t| t.elapsed() < INTERACTION_PAUSE);
+            // An edit (undo, a slider, a field) whose frame had to wait behind one
+            // still on the GPU, or behind content preparation, is not progressive
+            // work: it keeps polling every frame until shown, input or not.
+            // A Rendering Debug switch changes the Scene image, not its input.
+            scene_dirty |= renderer.debug() != editor.state.render_debug;
+            scene_dirty |= std::mem::take(&mut outline_frame);
+            let scene_changed = scene_dirty;
             if scene_host.is_some()
                 && scene_view.needs_frame(editor.state.quality)
                 && (scene_dirty
+                    || scene_followup
                     || converging
                     || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
             {
@@ -1698,16 +1867,21 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             // Typing and committing present the UI first: the Scene follows on the next
             // frame without such input, so a keystroke or Enter never waits for a Scene
             // render. Gestures and camera moves render at once.
-            let defer_scene = scene_dirty
-                && (interaction_start.is_some() || probe.as_ref().is_some_and(|p| p.acted()))
-                && editor.gesture.is_none()
-                && editor.state.camera == edit_before.2
-                && (editor.host.store().revision() != edit_before.0
-                    || shell.drafts() != &edit_before.1);
+            let defer_scene = scene_dirty && edge_resize.active()
+                || scene_dirty
+                    && (interaction_start.is_some() || probe.as_ref().is_some_and(|p| p.acted()))
+                    && editor.gesture.is_none()
+                    && editor.state.camera == edit_before.2
+                    && (editor.host.store().revision() != edit_before.0
+                        || shell.drafts() != &edit_before.1);
             dirty |= scene_dirty;
             let mut scene_overlays = None;
             let mut probe_blocked_scene = false;
             let mut gpu_surface_submissions = 0;
+            let mut main_ui_submitted_this_frame = false;
+            dirty |= profiler_check
+                .as_ref()
+                .is_some_and(profiler_verify::ProfilerCheck::wants_frame);
             let mut native_presentations = 0;
             // A window that cannot show anything (minimized, occluded; the probe's
             // unpresentable scenario) renders and presents nothing: a driver's present
@@ -1744,7 +1918,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let scene_at = Instant::now();
                 if let Some(host) = &scene_host {
                     let rect = host.viewport;
-                    renderer.resize(extent_scaled(rect, host.dpi))?;
+                    if !edge_resize.active() {
+                        renderer.resize(extent_scaled(rect, host.dpi))?;
+                    }
                     // A Scene that cannot render yet (models still publishing, a missing
                     // source) keeps its last frame and is reported; the next change or
                     // publication retries. It never closes the editor.
@@ -1760,6 +1936,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         {
                             safe = probe_owner.prepare_replacement(&mut editor);
                         }
+                        // Frames carry the drag pose they show (`SceneView::shown_frame`).
+                        scene_view.gizmo_offset = controller.gizmo_state().offset;
                         if safe
                             && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
                         {
@@ -1777,25 +1955,49 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                             changed.insert(crate::world::render_id(id), "destructive-foreground");
                         }
                         let mut overlays = Vec::new();
-                        let diagnostic_markup_changed = shell.viewport_diagnostics.append(
-                            &mut overlays,
-                            &view,
-                            &editor.state,
-                            rect,
-                            scene_view.diagnostic_source(&editor),
-                            &shell.ui.sheet,
-                        )?;
-                        overlays.extend(overlay::build(
-                            &view,
-                            &editor.state,
-                            rect,
-                            &renderer,
-                            &changed,
-                            controller.gizmo_state(),
-                            &mut shell.outlines,
-                            editor.host.store().revision(),
-                            &shell.ui.sheet,
-                        )?);
+                        // Overlays draw with the camera and drag pose of the frame on
+                        // screen, as Unreal draws them inside its viewport frame: a Scene
+                        // frame that lags the camera carries its gizmos with it.
+                        let mut gizmo = controller.gizmo_state();
+                        let live_camera = editor.state.camera;
+                        if let Some(shown) = scene_view.shown_frame(&renderer) {
+                            editor.state.camera = shown.camera;
+                            gizmo.offset = if shown.revision == editor.host.store().revision() {
+                                shown.offset
+                            } else {
+                                glam::Mat4::IDENTITY
+                            };
+                        }
+                        shell.outlines.in_scene = scene_view.draws_outlines();
+                        let built = (|| -> ara_ui::Result<bool> {
+                            let diagnostic_markup_changed = shell.viewport_diagnostics.append(
+                                &mut overlays,
+                                &view,
+                                &editor.state,
+                                rect,
+                                scene_view.diagnostic_source(&editor),
+                                &shell.ui.sheet,
+                            )?;
+                            overlays.extend(overlay::build(
+                                &view,
+                                &editor.state,
+                                rect,
+                                &renderer,
+                                &changed,
+                                gizmo,
+                                &mut shell.outlines,
+                                editor.host.store().revision(),
+                                &shell.ui.sheet,
+                            )?);
+                            Ok(diagnostic_markup_changed)
+                        })();
+                        editor.state.camera = live_camera;
+                        let diagnostic_markup_changed = built?;
+                        if let Some(outlines) = shell.outlines.take_scene_outlines() {
+                            renderer.set_outlines(outlines);
+                            scene_view.redraw();
+                            outline_frame = true;
+                        }
                         shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette
@@ -1849,6 +2051,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     icon_dpi = Some(dpi);
                     icons_ms = icons_at.elapsed().as_secs_f64() * 1000.;
                 }
+                // Late diagnostics/Game-preview rebuilds have also settled.
+                // Resolve once without another scroll step before native paint.
+                work += shell.settle_content_feedback(&mut editor)?;
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
                 if scene_overlays
@@ -1864,6 +2069,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let render_at = Instant::now();
                 {
                     ara_gpu::cpu_scope!("UI.render");
+                    place_view_images(&mut shell, &renderer, scene_dpi, None);
+                    // Exactly the drawable: a one-pixel miss rescales the whole UI.
+                    gpu.pin_target_size(physical);
                     ui_renderer.render(
                         &mut gpu,
                         &shell.ui.display,
@@ -1872,16 +2080,28 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         TextMode::Raster,
                     )?;
                     gpu_surface_submissions += 1;
+                    main_ui_submitted_this_frame = true;
                 }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let present_at = Instant::now();
+                editor.display_hz = window.refresh_rate().unwrap_or(60.);
                 if main_showable && let Some(present) = &mut present {
                     // SAFETY: UI submission is complete or GPU-ordered before the blit
                     // (one queue), image is CopySource and all native owners are live.
                     unsafe {
-                        gpu.present(crate::gpu::ui_device(renderer.gpu()), present)?;
-                        native_presentations += 1;
+                        let device = crate::gpu::ui_device(renderer.gpu());
+                        // A pending blit defers a VSync change to a later frame.
+                        gpu.set_vsync(device, present, &window, editor.vsync())?;
+                        match gpu.present(device, present) {
+                            Ok(()) => native_presentations += 1,
+                            // A resize raced the frame: rebuild; the next frame presents.
+                            Err(error) if ara_platform::out_of_date(&error) => {
+                                gpu.resize_present(device, present, &window, None)?;
+                                present_reach = None;
+                            }
+                            Err(error) => return Err(error.into()),
+                        }
                     }
                 }
                 present_ms = present_at.elapsed().as_secs_f64() * 1000.;
@@ -1929,6 +2149,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 profile_triangles = ui_renderer.instances.len() as u64 * 2;
                 dirty = false;
                 scene_dirty = defer_scene || probe_blocked_scene;
+                scene_followup = (scene_followup || scene_changed) && scene_view.frame_in_flight();
                 if let Some(start) = interaction_start {
                     interaction_samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }
@@ -1938,12 +2159,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     wall_samples.push(interval);
                 }
             }
+            // A border drag moves the window only now, after presenting its new size.
+            edge_resize.apply(&window);
             // Floating windows render after the main window, each into its own target.
             for float in &mut floats.windows {
                 if float.window.size()?.contains(&0) {
                     continue;
                 }
-                let work = shell.frame_surface(&float.id)?;
+                let work = shell.frame_surface_with_content_feedback(&float.id, &mut editor)?;
                 if !(float.dirty || work.paint_nodes > 0 || work.layout_passes > 0) {
                     continue;
                 }
@@ -1961,6 +2184,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 let float_dpi = options.dpi.unwrap_or_else(|| float.window.display_scale())
                     * windows::ui_scale(&editor);
+                place_view_images(&mut shell, &renderer, scene_dpi, Some(&float.id));
                 let Some(surface) = shell.surface(&float.id) else {
                     continue;
                 };
@@ -1976,6 +2200,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
+                gpu.pin_target_size(float.physical);
                 ui_renderer.render(
                     &mut gpu,
                     &surface.ui.display,
@@ -1987,9 +2212,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 if let Some(present) = &mut float.present {
                     // SAFETY: UI output and both native owners remain live.
                     unsafe {
-                        gpu.present(crate::gpu::ui_device(renderer.gpu()), present)?;
+                        let device = crate::gpu::ui_device(renderer.gpu());
+                        gpu.set_vsync(device, present, &float.window, editor.vsync())?;
+                        match gpu.present(device, present) {
+                            Ok(()) => native_presentations += 1,
+                            Err(error) if ara_platform::out_of_date(&error) => {
+                                gpu.resize_present(device, present, &float.window, None)?;
+                            }
+                            Err(error) => return Err(error.into()),
+                        }
                     }
-                    native_presentations += 1;
                 }
                 if focused_float.as_deref() == Some(float.id.as_str()) {
                     native.text_input(
@@ -2127,6 +2359,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     view_ms,
                 );
             }
+            if let Some(route) = &mut game_view_check {
+                route.end(&mut editor, &shell, &mut gpu, presented)?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(renderer.gpu().info())?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
+            }
             if let Some(route) = &mut scene_quality {
                 route.end(
                     &editor,
@@ -2198,6 +2438,36 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let ready =
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
                 check.end(&editor, &mut shell, &mut gpu, ready)?;
+            }
+            if let Some(check) = &mut probe_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                if let Some(mode) = check.view_mode_observation_needed()
+                    && let Some(observation) = scene_view.completed_debug_view_observation(
+                        &mut renderer,
+                        &editor,
+                        mode,
+                        ready,
+                    )?
+                {
+                    check.observe_view_mode(observation)?;
+                }
+                check.end(&mut editor, &mut shell, &mut gpu, ready)?;
+            }
+            if let Some(check) = &mut profiler_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.end(
+                    &editor,
+                    &mut shell,
+                    &mut gpu,
+                    ready,
+                    main_ui_submitted_this_frame,
+                )?;
+                if check.finished() {
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
             }
             if let Some(check) = &mut bookmarks_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
@@ -2288,6 +2558,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         }
         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("UX verification did not finish".into());
+        }
+        if let Some(check) = &profiler_check {
+            check.write()?;
+            check.validate()?;
         }
         if let Some(check) = &drag_check {
             check.write()?;
@@ -2416,6 +2690,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let check = pilot_check
                 .as_ref()
                 .ok_or("The native Pilot journey did not start")?;
+            check.write()?;
+            check.validate()?;
+            let check = probe_check
+                .as_ref()
+                .ok_or("The native probe/debug-view journey did not start")?;
             check.write()?;
             check.validate()?;
             let check = input_check
@@ -2604,7 +2883,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
             Renderer::new
         } else {
-            // D29: ray queries where the GPU has them (High/Epic hybrid reflections).
+            // Ray queries where the GPU has them, unused without the opt-in.
             Renderer::new_hybrid
         };
     let mut renderer = create_renderer(
@@ -2661,6 +2940,43 @@ fn set_camera(
     editor.action("editor.camera",json!({"target":camera.target.to_array(),"yaw":camera.yaw,"pitch":camera.pitch,"distance":camera.distance,"fovYDegrees":camera.fov_y_degrees,"projection":camera.projection,"orthographicHeight":camera.orthographic_height}))?;
     Ok(())
 }
+/// Show the Scene, Game preview and live Game images of one window (`float`, or the
+/// main window): 1:1 when rendered for their node, scaled to cover it while a
+/// resized frame is in flight (`viewport::draw_view_image`).
+fn place_view_images(
+    shell: &mut crate::shell::Shell,
+    renderer: &Renderer,
+    scene_dpi: Option<f32>,
+    float: Option<&str>,
+) {
+    let display = match float {
+        None => &mut shell.ui.display,
+        Some(id) => match shell.floats.iter_mut().find(|s| s.id == id) {
+            Some(surface) => &mut surface.ui.display,
+            None => return,
+        },
+    };
+    if let Some(dpi) = scene_dpi {
+        viewport::draw_view_image(
+            display,
+            overlay::viewport_image(),
+            renderer.output_size(),
+            dpi,
+        );
+    }
+    if let Some(size) = shell.game_preview {
+        viewport::draw_view_image(display, game_preview::texture(), size, shell.game_scale);
+    }
+    for (player, info) in &shell.play_controls.players {
+        viewport::draw_view_image(
+            display,
+            game::player_texture(*player),
+            info.size,
+            shell.game_scale,
+        );
+    }
+}
+
 fn attach(gpu: &mut NativeUi, renderer: &Renderer) -> anyhow::Result<()> {
     // SAFETY: Both views belong to the shared live renderer, stay valid through UI submission, and finish CopySource.
     unsafe {
@@ -2940,12 +3256,15 @@ fn route_event(
             }
             float.physical = size;
             if let Some(present) = &mut float.present {
-                // SAFETY: Wait before replacing a live native swapchain.
+                // SAFETY: The presentation belongs to this window and device; this
+                // thread owns the graphics queue.
                 unsafe {
-                    renderer.gpu().wait_idle()?;
-                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
-                    *present =
-                        gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &float.window)?;
+                    gpu.resize_present(
+                        crate::gpu::ui_device(renderer.gpu()),
+                        present,
+                        &float.window,
+                        None,
+                    )?;
                 }
             }
             shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi))?;
@@ -3022,7 +3341,8 @@ fn track_content_drag(
     };
     shell.content_drag_pointer(desktop);
     if on_surface {
-        shell.content_drag_over(editor, seconds)?;
+        shell.advance_content_drag(seconds)?;
+        shell.clear_content_surface_pick();
         if shell.content_asset_dragging()
             && let Some(rect) = shell.viewport()
             && let Some(hit) = scene_view.surface_hit(&editor.state.camera, rect, shell.pointer)

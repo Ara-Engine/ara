@@ -48,15 +48,18 @@ pub mod assets;
 pub mod components;
 pub mod control;
 pub mod controller;
+pub mod decal;
 pub mod engine;
 pub mod extract;
 pub mod follow;
+pub mod light_profile;
 pub mod live;
 pub mod lut;
 pub mod material;
 pub mod math;
 pub mod model;
 pub mod navigation;
+pub mod paint;
 pub mod physics;
 pub mod plugin;
 mod preload;
@@ -206,10 +209,13 @@ pub fn register_components(registry: &mut SimRegistry) -> std::result::Result<()
     registry.register_component::<ara_perception::Stimulus>()?;
     registry.register_component::<components::StreamedWorld>()?;
     registry.register_component::<MeshRenderer>()?;
+    registry.register_component::<paint::VertexPaint>()?;
+    registry.register_component::<decal::Decal>()?;
     registry.register_component::<Light>()?;
     registry.register_component::<Environment>()?;
     registry.register_component::<ara_components::render::SkyAtmosphere>()?;
     registry.register_component::<ara_components::render::HeightFog>()?;
+    registry.register_component::<ara_components::render::LocalFogVolume>()?;
     registry.register_component::<ara_components::render::ReflectionProbe>()?;
     registry.register_component::<ara_components::post::PostProcessVolume>()?;
     registry.register_component::<Camera>()?;
@@ -398,6 +404,13 @@ impl Runtime {
             if let Err(error) = library.luts.load(assets.as_ref(), &lut) {
                 asset_errors.push(format!(
                     "ARA7310: {error}; the volume grades without its lookup table"
+                ));
+            }
+        }
+        for profile in light_profile::references(world)? {
+            if let Err(error) = library.light_profiles.load(assets.as_ref(), &profile) {
+                asset_errors.push(format!(
+                    "ARA7310: {error}; the light shines without its profile"
                 ));
             }
         }
@@ -939,6 +952,20 @@ impl Runtime {
             let result = world
                 .resource_mut::<Library>()
                 .luts
+                .load(self.assets.as_ref(), &id)
+                .map_err(|error| error.0);
+            results.push((id, result));
+        }
+        let profiles: Vec<_> = world
+            .resource::<Library>()
+            .light_profiles
+            .ids()
+            .map(str::to_owned)
+            .collect();
+        for id in profiles {
+            let result = world
+                .resource_mut::<Library>()
+                .light_profiles
                 .load(self.assets.as_ref(), &id)
                 .map_err(|error| error.0);
             results.push((id, result));

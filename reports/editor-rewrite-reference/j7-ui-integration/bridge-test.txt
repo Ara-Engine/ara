@@ -1,0 +1,13 @@
+
+#[test]
+fn cancellation_intent_is_visible_before_the_owner_pops_its_cancel_request() {
+    let mut f = Fixture::new();
+    let task = f.queue("e_probe");
+    f.started(&task, 91);
+    assert_eq!(f.cancel(&task)["cancelRequested"], true);
+    // The pre-render cancellation owner has not pumped try_recv yet.
+    assert_eq!(f.bridge.cancel_target(&task.job).map(|job| job.0), Some(91));
+    assert!(matches!(f.bridge.try_recv(), Some(Request::Cancel {job,..}) if job == task.job));
+    f.status(&task, 91, true, false, 1.0);
+    assert!(!f.bridge.busy());
+}

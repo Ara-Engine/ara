@@ -6,6 +6,7 @@ pub mod commands;
 mod fbx;
 mod geometry_memo;
 mod gltf;
+pub mod ies;
 mod mesh;
 mod texture;
 mod texture_codec;
@@ -14,6 +15,7 @@ mod virtual_geometry;
 pub use fbx::FbxImporter;
 pub use gltf::GltfImporter;
 pub use mesh::{MeshSettings, Vertex, cook_mesh};
+pub use mesh::{PatchCache, load_patch_charts};
 pub use texture::{
     TextureImporter, TextureSettings, TextureUsage, cook_texture, cook_texture_with_preset,
 };
@@ -26,6 +28,7 @@ pub fn registry() -> Result<ImporterRegistry> {
     registry.register(FbxImporter)?;
     registry.register(TextureImporter)?;
     registry.register(audio::AudioAsset::default())?;
+    registry.register(ies::IesImporter)?;
     registry.register(ara_geo::GeoImporter)?;
     Ok(registry)
 }

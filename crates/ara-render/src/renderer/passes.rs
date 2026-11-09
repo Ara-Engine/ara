@@ -26,18 +26,30 @@ enum Recipe {
     LocalShadow,
     /// The horizon's heightfield capture (`look::horizon`) from native pass `.0`.
     HorizonCapture(usize),
-    /// This frame's virtual shadow pages (`look::vsm`).
-    VsmPages,
-    GBuffer,
+    /// This frame's virtual shadow pages (`look::vsm`) in `range` of its page draws (the
+    /// sun page service records its static and dynamic layers as two passes).
+    VsmPages([usize; 2]),
+    /// One level of the shadow moment pyramids of this frame's drawn maps
+    /// (`look::moments`).
+    Moments(u32),
+    /// The G-buffer fill; `true`: the vertex-colour views (`ViewMode::vertex_color`).
+    GBuffer(bool),
+    /// Deferred decals blended into the G-buffer (`native/decals.rs`); `true`: the
+    /// decal coverage view (`ViewMode::DecalCoverage`).
+    Decals(bool),
     Tile,
     /// Deferred lighting; `true`: the gi_diffuse view's variant (`ViewMode::GiDiffuse`).
     Lighting(bool),
     /// Blended and transmissive draws; `lit` through the native lit PSO, which
     /// leaves the G-buffer alone (only the debug views read it afterwards). Without
     /// `draws` (the gi_diffuse view, opaque surfaces only) the pass draws nothing.
+    /// `range`: the native transparent draws of this layer (`look::refract` copies
+    /// the lit scene again between layers); `last` also draws legacy content.
     Forward {
         lit: bool,
         draws: bool,
+        range: [usize; 2],
+        last: bool,
     },
     Taa,
     /// One Ara TSR dispatch (`crate::tsr`), declared instead of `Taa` when selected.
@@ -51,9 +63,15 @@ enum Recipe {
     /// The wire mask over the display output; `true` over the lit image (one
     /// colour), `false` over the wireframe view's background (per-entity colours).
     WireComposite(bool),
+    /// The selected rows into the outline mask (`renderer::outline`).
+    OutlineMask,
+    /// The selection outlines over the display output.
+    OutlineComposite,
     Look(LookPass),
     /// A hybrid ray-query pass (`renderer::rt`).
     Rays(super::rt::RtPass),
+    /// Opt-in software secondary transport stage.
+    SoftwareReflect(u32),
     /// The refraction copy (0) or a blurred level (1..4) of `look::refract`.
     Refract(u32),
     /// Blended casters' depth and film opacity from the sun (`look::translucent`).
@@ -104,6 +122,16 @@ impl Renderer {
         capture: bool,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Raster.render_frame");
+        // Software secondary transport is evaluated at native pixel centres and
+        // presented without temporal accumulation, including the final resolve.
+        // Capture/planar bakes retain the control path and its prefiltered data.
+        let software_reflections = self.software_reflections.is_some() && !self.secondary_active;
+        if software_reflections {
+            ensure!(
+                self.render == self.size,
+                "software secondary transport requires native resolution"
+            );
+        }
         self.exposure = exposure;
         self.collect_view_resources()?;
         // Reflection captures bake off the hot path (look::captures; never per
@@ -119,10 +147,35 @@ impl Renderer {
         } else {
             HISTORY0
         };
-        let mut frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        let mut frame = self.frame_data(
+            &camera,
+            exposure,
+            deterministic || software_reflections,
+            mode,
+            output_history,
+        );
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
+        // Deferred decals: this frame's visible, faded and ordered list, written with
+        // the G-buffer storage views the tile pass blends through. The coverage view
+        // runs the pass without decals too (it shows where none land).
+        let decal_coverage = mode == ViewMode::DecalCoverage;
+        let decals = match &self.native {
+            // The vertex-colour views show colours alone.
+            Some(native)
+                if (native.has_decals() && mode.vertex_color().is_none()) || decal_coverage =>
+            {
+                let mut storage = [0; 4];
+                for (slot, target) in storage.iter_mut().zip([ALBEDO, NORMAL, MATERIAL, EMISSIVE]) {
+                    *slot = self.gpu.storage_image(self.targets.images[target])?.index;
+                }
+                let native = self.native.as_mut().expect("matched native content");
+                native.prepare_decals(&mut self.gpu, &camera, self.render, storage)? > 0
+                    || decal_coverage
+            }
+            _ => false,
+        };
         self.rays.prepare(
             &mut self.gpu,
             self.native.as_ref(),
@@ -133,6 +186,13 @@ impl Renderer {
             &self.artifacts,
             &self.shader_metadata.content_key,
         )?;
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
+            ensure!(
+                self.look.quality.ray_queries.is_none() && self.patch_transport.is_none(),
+                "software secondary transport requires the probe GI control and no hardware ray queries"
+            );
+            reflections.prepare(&mut self.gpu, self.render)?;
+        }
         // Transmissive forward draws in view refract a copy of the lit scene
         // (look::refract); other frames declare and allocate nothing for it.
         let refract_rect = self
@@ -301,6 +361,55 @@ impl Renderer {
             self.look.local = Some(local);
             result?;
         }
+        // Moment pyramids (look::moments) of the maps drawn this frame.
+        let moment_plan = {
+            use crate::look::moments::{MapDrawn, MapsDrawn};
+            let defined = |state: State| state.access != Access::Undefined;
+            let faces: Vec<usize> = local_draws.iter().map(|(draw, _)| draw.face).collect();
+            let cascades_drawn: Vec<usize> = cascade_draw.iter().map(|draw| draw.cascade).collect();
+            let far_drawn: Vec<usize> = far_draw.iter().map(|_| 0).collect();
+            let local_held = [self.look.local.as_ref().is_some_and(|l| defined(l.state))];
+            let far_held = [self.look.far.as_ref().is_some_and(|f| defined(f.state))];
+            let cascades_held: Vec<bool> = self
+                .look
+                .cascades
+                .as_ref()
+                .map_or_else(Vec::new, |c| c.states.iter().map(|&s| defined(s)).collect());
+            let local_depth: Vec<u32> = self.look.local.iter().map(|l| l.sampled).collect();
+            let far_depth: Vec<u32> = self.look.far.iter().map(|f| f.sampled).collect();
+            let maps = MapsDrawn {
+                local: self
+                    .look
+                    .local
+                    .as_ref()
+                    .filter(|_| self.native.is_some())
+                    .map(|l| MapDrawn {
+                        mirror: l.size,
+                        tile: l.settings.resolution,
+                        shared: true,
+                        depths: &local_depth,
+                        drawn: &faces,
+                        held: &local_held,
+                    }),
+                cascades: self.look.cascades.as_ref().map(|c| MapDrawn {
+                    mirror: [c.resolution * 2; 2],
+                    tile: c.resolution,
+                    shared: false,
+                    depths: &c.sampled,
+                    drawn: &cascades_drawn,
+                    held: &cascades_held,
+                }),
+                far: self.look.far.as_ref().map(|f| MapDrawn {
+                    mirror: [f.settings.resolution; 2],
+                    tile: f.settings.resolution,
+                    shared: true,
+                    depths: &far_depth,
+                    drawn: &far_drawn,
+                    held: &far_held,
+                }),
+            };
+            self.look.moments.plan(&mut self.gpu, &maps)?
+        };
         // Heightfield horizon (look::horizon): the capture once per content, culled
         // into the last shadow slot; the sun visibility when the sun moves, the sky
         // visibility once per capture. All of it lands only with a completed frame.
@@ -360,13 +469,33 @@ impl Renderer {
         // Focus blur needs a perspective lens (an orthographic projection has no w).
         self.look.frame_dof = dof && lit && camera.projection.z_axis.w != 0.;
         self.look.frame_motion = motion && lit;
+        // The near fog volume needs a perspective view (froxels follow view depth).
+        self.look.begin_volumetric(
+            lit && camera.projection.z_axis.w != 0.,
+            self.targets.history.is_none(),
+        );
         // Edges come from the native draws (legacy content has none).
         self.look.frame_wire = mode.wire() && self.native.is_some();
         self.look.frame_overdraw = mode == ViewMode::Overdraw && self.native.is_some();
+        // Editor selection outlines: the primary view's live frames only (not
+        // captures, reflection-capture bakes or secondary views).
+        self.look.frame_outline = false;
+        if !capture
+            && !deterministic
+            && !self.secondary_active
+            && self.outlines.any()
+            && let Some(native) = &mut self.native
+        {
+            native.outline_rows(&mut self.gpu, &self.outlines)?;
+            self.look.frame_outline = true;
+        }
         let (sampled, storage) = self.look.indices();
-        // Exposure snaps to its meter on a reset unless a host seeded it, and
-        // while new probe GI converges or fades in (no adaptation swing as the
-        // scene brightens under it).
+        self.look
+            .begin_screen_traces(self.targets.history.is_some());
+        // Exposure snaps to its meter on a reset unless a host seeded it, while new
+        // probe GI converges or fades in (no adaptation swing as the scene brightens
+        // under it), and on frames nobody sees (`set_unseen`, a Play entry): the
+        // first frame shown is metered, not a second of adaptation from a guess.
         let reset = self.targets.history.is_none() || self.look.settle > 0;
         let seeded = std::mem::take(&mut self.look.seeded);
         let arriving = self.look.gi.as_ref().is_some_and(|gi| gi.arriving());
@@ -374,9 +503,11 @@ impl Renderer {
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
+                sun_direction: self.content.sun_direction,
+                sun_radius: self.look.sun_radius,
                 exposure,
                 reset,
-                snap: (reset && !seeded) || arriving,
+                snap: (reset && !seeded) || arriving || self.look.unseen,
                 frame_number: self.frame_number,
                 sampled,
                 storage,
@@ -384,6 +515,12 @@ impl Renderer {
             },
         );
         let mut look_frame = look_frame;
+        look_frame.light_info[0] = [
+            self.look.ltc.sampled[0],
+            self.look.ltc.sampled[1],
+            self.look.light_tables.map_or(0, |(_, index, _)| index),
+            0,
+        ];
         if let Some(cascades) = &self.look.cascades {
             for (slot, &index) in look_frame.cascade_maps.iter_mut().zip(&cascades.sampled) {
                 *slot = index;
@@ -400,6 +537,10 @@ impl Renderer {
         }
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
+            // RenderDebug::global_illumination: probes keep relighting, shading ignores them.
+            if !self.debug.global_illumination {
+                look_frame.gi_update[3] = 0f32.to_bits();
+            }
             look_frame.gi_gather = self.look.gather_indices();
         }
         look_frame.terrain[0] = self.look.quality.terrain_detail;
@@ -460,6 +601,9 @@ impl Renderer {
             && self.targets.history.is_some()
         {
             look_frame.flags[1] |= crate::look::frame::REFLECTIONS;
+            if self.debug.reflections == super::ReflectionView::Sources {
+                look_frame.flags[1] |= crate::look::frame::REFLECTION_SOURCES;
+            }
             let ssr = self.look.look.ssr;
             look_frame.ssr = [
                 r.max_roughness,
@@ -468,7 +612,13 @@ impl Renderer {
                 ssr.intensity,
             ];
             look_frame.ssr_images = self.look.ssr_indices();
+            look_frame.ssr_resolve = self.look.ssr_resolve_indices();
         }
+        // Screen probe GI shades its hits from the reflection pyramid.
+        if self.look.frame_screen {
+            look_frame.ssr_images = self.look.ssr_indices();
+        }
+        self.look.screen_gi_rows(&mut look_frame);
         self.rays.write_rows(
             &mut look_frame,
             &self.look.quality,
@@ -476,6 +626,16 @@ impl Renderer {
             self.render,
             self.look.look.ssr.intensity,
         );
+        if software_reflections
+            && let (Some(reflections), Some(native)) = (&self.software_reflections, &self.native)
+        {
+            reflections.rows(
+                &mut look_frame,
+                native,
+                camera.projection.y_axis.y,
+                self.render,
+            );
+        }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
             let tuning = self.look.look.ao;
@@ -488,6 +648,19 @@ impl Renderer {
             look_frame.ao_images = self.look.ao_indices();
             self.look.ambient_rows(&mut look_frame);
         }
+        // Soft shadows (look-shadow.slangh): the pyramids, and points only without them.
+        let [local_moments, cascade_moments, far_moments] = self.look.moments.indices();
+        look_frame.shadow_info[1] = [
+            if look_frame.local_shadows[1] != 0 {
+                local_moments
+            } else {
+                0
+            },
+            cascade_moments,
+            far_moments,
+            u32::from(!self.debug.soft_shadows),
+        ];
+        self.look.volumetric_rows(&mut look_frame);
         let contribution = self.look.look.grading.lut_contribution;
         if self.look.lut_size > 0 && contribution > 0. {
             look_frame.lut = [
@@ -527,8 +700,8 @@ impl Renderer {
         if let Some(rect) = refract_rect {
             self.look.refraction(&mut self.gpu, &mut look_frame, rect)?;
         }
-        // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
-        // and virtual page projection alone compile the lookup.
+        // Blended and transmissive casters' coloured sun shadows (look::translucent)
+        // on High/Epic, whose shading alone compiles the lookup.
         // Only casters within the cascades' reach shadow anything they show.
         let translucent_casters = self
             .native_translucent_casters(camera.position, self.look.quality.shadows.distance)
@@ -617,6 +790,28 @@ impl Renderer {
                 };
                 graphics.push((id, read));
             });
+        }
+        // Host-written light tables (profiles), read by lighting and fog.
+        if let Some((buffer, _, _)) = self.look.light_tables {
+            let id = graph.import(
+                Resource::Buffer(buffer),
+                State {
+                    access: Access::HostWrite,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
+        }
+        // The area-light tables stay in ShaderRead for the renderer's lifetime.
+        for resource in self.look.ltc.resources() {
+            let id = graph.import(
+                resource,
+                State {
+                    access: Access::ShaderRead,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
         }
         let mut frame_input = None;
         for buffer in [self.frame, self.display_frame] {
@@ -719,10 +914,21 @@ impl Renderer {
         // Virtual shadow pages draw with the other sun maps; the atlas joins the
         // sun-map reads once it holds a page.
         if let Some(atlas) = look.vsm.filter(|_| self.native.is_some()) {
-            if !vsm_draws.is_empty() {
-                let pass = graph.pass("VSM.Pages", Queue::Graphics, [(atlas, Access::Depth)]);
-                declare(pass, Recipe::VsmPages);
-                shadow_passes.push(pass);
+            let split = self
+                .look
+                .vsm
+                .as_ref()
+                .and_then(|v| v.service_layers())
+                .map_or(vsm_draws.len(), |[s, _]| s.min(vsm_draws.len()));
+            for (label, range) in [
+                ("VSM.Pages", [0, split]),
+                ("VSM.Pages.Dynamic", [split, vsm_draws.len()]),
+            ] {
+                if range[0] < range[1] {
+                    let pass = graph.pass(label, Queue::Graphics, [(atlas, Access::Depth)]);
+                    declare(pass, Recipe::VsmPages(range));
+                    shadow_passes.push(pass);
+                }
             }
             if vsm_sampled {
                 cascade_reads.push((atlas, Access::ShaderRead));
@@ -758,6 +964,50 @@ impl Renderer {
             declare(pass, Recipe::TranslucentSun);
             shadow_passes.push(pass);
         }
+        // The pyramids of this frame's drawn maps, level by level, then every pass that
+        // reads the maps reads them (once they hold a tile).
+        let pyramids = self.look.moments.pyramids();
+        let moment_targets: Vec<_> = look
+            .moments
+            .iter()
+            .zip(&moment_plan.reads)
+            .filter_map(|(id, reads)| {
+                id.filter(|_| !reads.is_empty())
+                    .map(|id| (id, Access::Storage))
+            })
+            .collect();
+        for level in 0..moment_plan.levels() {
+            const NAMES: [&str; crate::look::moments::MAX_LEVELS as usize] = [
+                "ShadowMoments.0",
+                "ShadowMoments.1",
+                "ShadowMoments.2",
+                "ShadowMoments.3",
+                "ShadowMoments.4",
+                "ShadowMoments.5",
+                "ShadowMoments.6",
+                "ShadowMoments.7",
+                "ShadowMoments.8",
+            ];
+            let mut uses = moment_targets.clone();
+            if level == 0 {
+                let [local, cascades, far] = &moment_plan.reads;
+                let depth = cascades
+                    .iter()
+                    .map(|&c| look.cascades[c])
+                    .chain(look.far.filter(|_| !far.is_empty()))
+                    .chain(look.local.filter(|_| !local.is_empty()));
+                uses.extend(depth.map(|id| (id, Access::ShaderRead)));
+            }
+            let pass = graph.pass(NAMES[level as usize], Queue::Graphics, uses);
+            declare(pass, Recipe::Moments(level));
+        }
+        for ((id, pyramid), reads) in look.moments.iter().zip(pyramids).zip(&moment_plan.reads) {
+            if let (Some(id), Some(pyramid)) = (id, pyramid)
+                && (!reads.is_empty() || pyramid.state.access != Access::Undefined)
+            {
+                cascade_reads.push((*id, Access::ShaderRead));
+            }
+        }
         let translucent_reads: Vec<_> = translucent
             .into_iter()
             .flatten()
@@ -777,7 +1027,25 @@ impl Renderer {
             .into_iter()
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
-        declare(gbuffer, Recipe::GBuffer);
+        declare(gbuffer, Recipe::GBuffer(mode.vertex_color().is_some()));
+        // Decals land on the G-buffer before anything reads it (AO, SSR, GI, lighting).
+        if decals {
+            let pass = graph.pass(
+                "Decals",
+                Queue::Graphics,
+                [
+                    (ids[ALBEDO], Access::Storage),
+                    (ids[NORMAL], Access::Storage),
+                    (ids[MATERIAL], Access::Storage),
+                    (ids[EMISSIVE], Access::Storage),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (ids[ID], Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(graphics.iter().copied()),
+            );
+            declare(pass, Recipe::Decals(decal_coverage));
+        }
         // Page visibility for lighting and the pages this frame's pixels sample
         // (look::vsm), read back once the frame completes.
         let mut vsm_mask = None;
@@ -818,6 +1086,9 @@ impl Renderer {
                 ]
                 .into_iter()
                 .chain(vsm_sampled.then_some((atlas, Access::ShaderRead)))
+                // Wide penumbrae come from the sun maps and their pyramids.
+                .chain(cascade_reads.iter().copied().filter(|(id, _)| *id != atlas))
+                .chain(far_read)
                 .chain(translucent_reads.iter().copied())
                 .chain(graphics.iter().copied()),
             );
@@ -855,6 +1126,9 @@ impl Renderer {
         for (id, pass) in self.look.sky_passes(&mut graph, &look, &sky_shared, sun) {
             declare(id, Recipe::Look(pass));
         }
+        if let Some((id, pass)) = self.look.fog_pass(&mut graph, &look, &sky_shared) {
+            declare(id, Recipe::Look(pass));
+        }
         let mut gather_reads = sky_shared.clone();
         gather_reads.extend([
             (ids[DEPTH], Access::ShaderRead),
@@ -862,6 +1136,16 @@ impl Renderer {
         ]);
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
+        }
+        // Screen probe GI after the relight (misses read the probe volume) and the
+        // reflection pyramid (hits read last frame's colour), before every pass that
+        // reads what lighting reads (its gather images start undefined on a new view).
+        if self.look.frame_screen {
+            let mut screen_reads = gather_reads.clone();
+            screen_reads.extend([MATERIAL, EMISSIVE].map(|t| (ids[t], Access::ShaderRead)));
+            for (id, pass) in self.look.screen_gi_passes(&mut graph, &look, &screen_reads) {
+                declare(id, Recipe::Look(pass));
+            }
         }
         // Hybrid ray-traced reflections (renderer::rt) read what lighting reads, and
         // the exposure state (the rough lobes' radiance ceiling).
@@ -881,6 +1165,17 @@ impl Renderer {
         // between graphics/compute submissions and a final ownership handoff.
         let culling = graph.pass("TiledLightCull", Queue::Graphics, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
+        // The near fog volume (look::volumetric) before lighting samples it.
+        let mut fog_reads = sky_shared.clone();
+        fog_reads.extend(self.look.fog_light_reads(&look));
+        // Its per-pixel local-light scatter follows the light lists and reads depth.
+        let fog_pixels = [(tile, Access::ShaderRead), (ids[DEPTH], Access::ShaderRead)];
+        for (id, pass) in self
+            .look
+            .volumetric_passes(&mut graph, &look, &fog_reads, &fog_pixels)
+        {
+            declare(id, Recipe::Look(pass));
+        }
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
         let look_reads = self.look.lighting_reads(&look, reflected);
         // Reflection captures relight against their bakes; then shading reads them.
@@ -899,7 +1194,15 @@ impl Renderer {
                 self.views.captures.refit_masks(),
                 self.views.captures.copy_records(),
             );
-            declare(refit, Recipe::Look(LookPass::CaptureRefit { masks, copy }));
+            let instant = self.views.captures.instant_mask();
+            declare(
+                refit,
+                Recipe::Look(LookPass::CaptureRefit {
+                    masks,
+                    copy,
+                    instant,
+                }),
+            );
             // Each 16x16 tile's captures, from the G-buffer depth.
             let tiles = graph.pass(
                 "Captures.Tiles",
@@ -915,6 +1218,17 @@ impl Renderer {
             declare(tiles, Recipe::Look(LookPass::CaptureTiles));
             capture_reads = vec![(c.atlas, Access::ShaderRead), (c.frame, Access::ShaderRead)];
         }
+        let patch_read = self.patch_transport.as_mut().map(|p| p.import(&mut graph));
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
+            let mut reads = gather_reads.clone();
+            reads.extend([ALBEDO, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::ShaderRead)));
+            reads.extend(self.look.lighting_reads(&look, false));
+            reads.extend(translucent_reads.iter().copied());
+            reads.extend(capture_reads.iter().copied());
+            for (id, stage) in reflections.declare(&mut graph, &reads) {
+                declare(id, Recipe::SoftwareReflect(stage));
+            }
+        }
         let lighting = graph.pass(
             "DeferredLighting",
             Queue::Graphics,
@@ -924,6 +1238,7 @@ impl Renderer {
                 (ids[MATERIAL], Access::ShaderRead),
                 (ids[EMISSIVE], Access::ShaderRead),
                 (ids[DEPTH], Access::ShaderRead),
+                (ids[ID], Access::ShaderRead),
                 (tile, Access::ShaderRead),
                 (ids[HDR], Access::Color),
             ]
@@ -935,19 +1250,30 @@ impl Renderer {
             .chain(look_reads.iter().copied())
             .chain(capture_reads.iter().copied())
             .chain(translucent_reads.iter().copied())
-            .chain(self.rays.lighting_reads()),
+            .chain(self.rays.lighting_reads())
+            .chain(
+                self.software_reflections
+                    .as_ref()
+                    .filter(|_| software_reflections)
+                    .and_then(|r| r.lighting_read()),
+            )
+            .chain(patch_read),
         );
         let gi_diffuse = mode == ViewMode::GiDiffuse;
         declare(lighting, Recipe::Lighting(gi_diffuse));
-        let refract_atlas = refract_rect.and_then(|_| {
-            let (atlas, passes) = self
-                .look
-                .refract_passes(&mut graph, look.frame, ids[HDR], ids[DEPTH], &graphics)?;
-            for (id, level) in passes {
-                declare(id, Recipe::Refract(level));
-            }
-            Some(atlas)
-        });
+        let refract_atlas = refract_rect.and_then(|_| self.look.refract_atlas(&mut graph));
+        // The forward draws, split where glass overlaps transparent draws behind it
+        // (each later layer reads a fresh copy holding the layers before it).
+        let forward_draws = self.native.as_ref().map_or(0, |n| n.forward_draws());
+        let splits = match (refract_atlas, self.native.as_ref()) {
+            (Some(_), Some(native)) => native.refraction_layers(),
+            _ => &[],
+        };
+        let layers: Vec<[usize; 2]> = std::iter::once(0)
+            .chain(splits.iter().copied())
+            .zip(splits.iter().copied().chain(std::iter::once(forward_draws)))
+            .map(|(start, end)| [start, end])
+            .collect();
         // Lit native frames blend colour, ids and motion only, so the G-buffer's
         // last use (and its discard) is lighting; the debug views (and the
         // baseline PSO) also blend into the G-buffer they display.
@@ -956,37 +1282,58 @@ impl Renderer {
             .then_some([ALBEDO, NORMAL, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::Color)))
             .into_iter()
             .flatten();
-        let forward = graph.pass(
-            "ForwardTransparency",
-            Queue::Graphics,
-            [
-                (ids[HDR], Access::Color),
-                (ids[DEPTH], Access::Depth),
-                (ids[ID], Access::Color),
-                (tile, Access::ShaderRead),
-            ]
-            .into_iter()
-            .chain(forward_gbuffer)
-            .chain(cascade_reads.iter().copied())
-            .chain(far_read)
-            .chain(local_read)
-            .chain(look_reads.iter().copied())
-            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
-            .chain(capture_reads.iter().copied())
-            .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
-            .chain(translucent_reads.iter().copied())
-            // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
-            .chain(self.rays.tlas_read()),
-        );
-        declare(
-            forward,
-            Recipe::Forward {
-                lit: forward_lit,
-                draws: !gi_diffuse,
-            },
-        );
+        let forward_uses: Vec<_> = [
+            (ids[HDR], Access::Color),
+            (ids[DEPTH], Access::Depth),
+            (ids[ID], Access::Color),
+            (tile, Access::ShaderRead),
+        ]
+        .into_iter()
+        .chain(forward_gbuffer)
+        .chain(cascade_reads.iter().copied())
+        .chain(far_read)
+        .chain(local_read)
+        .chain(look_reads.iter().copied())
+        .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
+        .chain(capture_reads.iter().copied())
+        .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
+        .chain(translucent_reads.iter().copied())
+        // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
+        .chain(self.rays.tlas_read())
+        .chain(
+            self.software_reflections
+                .iter()
+                .filter(|_| software_reflections)
+                .flat_map(|r| r.reads()),
+        )
+        .collect();
         let mut shaded = shadow_passes;
-        shaded.extend([gbuffer, lighting, forward]);
+        shaded.extend([gbuffer, lighting]);
+        for (layer, &range) in layers.iter().enumerate() {
+            if let Some(atlas) = refract_atlas {
+                for (id, level) in self.look.refract_passes(
+                    &mut graph, atlas, layer, look.frame, ids[HDR], ids[DEPTH], &graphics,
+                ) {
+                    declare(id, Recipe::Refract(level));
+                }
+            }
+            let name = if layer == 0 {
+                "ForwardTransparency"
+            } else {
+                "ForwardTransparency.Layer"
+            };
+            let forward = graph.pass(name, Queue::Graphics, forward_uses.iter().copied());
+            declare(
+                forward,
+                Recipe::Forward {
+                    lit: forward_lit,
+                    draws: !gi_diffuse && mode.vertex_color().is_none(),
+                    range,
+                    last: layer + 1 == layers.len(),
+                },
+            );
+            shaded.push(forward);
+        }
         if self.look.frame_wire {
             // Depth-tested against the frame's own depth, without writing it.
             let wire = graph.pass(
@@ -996,6 +1343,16 @@ impl Renderer {
             );
             declare(wire, Recipe::Wire);
             shaded.push(wire);
+        }
+        if self.look.frame_outline {
+            // Hidden parts without the depth test, then the parts in view with it.
+            let mask = graph.pass(
+                "Outline.Mask",
+                Queue::Graphics,
+                [(ids[OUTLINE], Access::Color), (ids[DEPTH], Access::Depth)],
+            );
+            declare(mask, Recipe::OutlineMask);
+            shaded.push(mask);
         }
         if self.look.frame_overdraw {
             // Every submitted fragment, before depth rejection: no depth attachment.
@@ -1017,6 +1374,7 @@ impl Renderer {
         // Secondary views (editor Game previews) keep TAAU: each TSR view holds eight
         // of the device's 64 bindless storage images.
         let tsr = self.tsr.upscaler == crate::tsr::Upscaler::Tsr
+            && !software_reflections
             && !self.secondary_active
             && camera.projection.z_axis.w != 0.;
         if tsr {
@@ -1044,7 +1402,7 @@ impl Renderer {
                 opaque: refract_atlas
                     .and(refract_rect)
                     .map(|rect| (look_frame.refract_info[0][0], rect)),
-                reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_TRACE]),
+                reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_RESOLVED]),
             })?;
         } else if !self.secondary_active {
             self.tsr.invalidate();
@@ -1098,7 +1456,7 @@ impl Renderer {
                 let signals = refract_atlas
                     .into_iter()
                     .chain(dof.then_some(ids[HDR]))
-                    .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                    .chain(reflected.then(|| look.image(crate::look::gpu::SSR_RESOLVED)))
                     .collect();
                 let io = crate::tsr::Io {
                     colour: if dof {
@@ -1174,6 +1532,18 @@ impl Renderer {
                 ],
             );
             declare(composite, Recipe::WireComposite(mode.lit()));
+            shaded.push(composite);
+        }
+        if self.look.frame_outline && !deferred {
+            let composite = graph.pass(
+                "Outline.Composite",
+                Queue::Graphics,
+                [
+                    (ids[OUTLINE], Access::ShaderRead),
+                    (ids[OUTPUT], Access::Storage),
+                ],
+            );
+            declare(composite, Recipe::OutlineComposite);
             shaded.push(composite);
         }
         // A deferred frame has no output yet; `finish` produces it.
@@ -1390,7 +1760,7 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::VsmPages => {
+                    Recipe::VsmPages(range) => {
                         let (vsm, native) = (
                             self.look
                                 .vsm
@@ -1411,7 +1781,8 @@ impl Renderer {
                         // Each page clears its square, then draws its casters through
                         // its light view (look::vsm PAGE_DRAWS + i).
                         let page = [ara_vsm::PAGE_SIZE; 2];
-                        for (i, draw) in vsm_draws.iter().enumerate() {
+                        for (i, draw) in vsm_draws.iter().enumerate().take(range[1]).skip(range[0])
+                        {
                             let origin = vsm.origin(draw.page.slot);
                             recorder.push(Command::Viewport { origin, size: page });
                             recorder.push(Command::ClearDepth {
@@ -1424,6 +1795,13 @@ impl Renderer {
                             native.record_page(&mut recorder, constants, vsm.page_rows_index, i);
                         }
                         recorder.push(Command::EndRendering);
+                    }
+                    Recipe::Moments(level) => {
+                        recorder.push(Command::Pipeline(self.look.pipelines.shadow_moments));
+                        for build in moment_plan.builds.iter().filter(|b| b.level == level) {
+                            recorder.push(Command::Constants(RootConstants { words: build.words }));
+                            recorder.push(Command::Dispatch(build.groups));
+                        }
                     }
                     Recipe::LocalShadow => {
                         let local = self
@@ -1464,7 +1842,7 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::GBuffer => {
+                    Recipe::GBuffer(vertex_colors) => {
                         recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                         recorder.push(Command::BeginRendering {
                             colors: [ALBEDO, NORMAL, MATERIAL, EMISSIVE, ID]
@@ -1483,7 +1861,7 @@ impl Renderer {
                         });
                         if let Some(native) = &self.native {
                             let detail = self.look.quality.terrain_detail;
-                            native.record_gbuffer(&mut recorder, footprint, detail);
+                            native.record_gbuffer(&mut recorder, footprint, detail, vertex_colors);
                         }
                         for (index, mesh) in self
                             .content
@@ -1500,6 +1878,11 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::Decals(coverage) => {
+                        if let Some(native) = &self.native {
+                            native.record_decals(&mut recorder, root, self.render, coverage);
+                        }
+                    }
                     Recipe::Tile => {
                         recorder.push(Command::Pipeline(self.pipelines.tile));
                         recorder.push(Command::Constants(root));
@@ -1514,15 +1897,34 @@ impl Renderer {
                         // Frames that trace bind the variant reading their reflections;
                         // the gi_diffuse view reads none.
                         let high = self.look.quality.high_tier;
+                        let reflections = self.debug.reflections != super::ReflectionView::Lit;
                         let lighting = match self.rays.lighting() {
+                            _ if self.patch_transport.is_some() && !reflections => {
+                                let patch = self
+                                    .patch_transport
+                                    .as_ref()
+                                    .expect("enabled patch readout");
+                                if gi_diffuse { patch.diffuse } else { patch.lit }
+                            }
                             _ if gi_diffuse && high => self.pipelines.lighting_high_gi,
                             _ if gi_diffuse => self.pipelines.lighting_gi,
+                            _ if reflections && high => self.pipelines.lighting_high_refl,
+                            _ if reflections => self.pipelines.lighting_refl,
+                            _ if software_reflections => self
+                                .software_reflections
+                                .as_ref()
+                                .expect("enabled software reflections")
+                                .lighting(),
                             Some(rays) => rays,
                             None if high => self.pipelines.lighting_high,
                             None => self.pipelines.lighting,
                         };
                         recorder.push(Command::Pipeline(lighting));
-                        recorder.push(Command::Constants(root));
+                        let mut lighting_root = root;
+                        if let Some(patch) = &self.patch_transport {
+                            lighting_root.words[3] = patch.record;
+                        }
+                        recorder.push(Command::Constants(lighting_root));
                         recorder.push(Command::BeginRendering {
                             colors: vec![Attachment {
                                 image: self.targets.images[HDR],
@@ -1534,7 +1936,12 @@ impl Renderer {
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::Forward { lit, draws } => {
+                    Recipe::Forward {
+                        lit,
+                        draws,
+                        range,
+                        last,
+                    } => {
                         recorder.push(Command::Pipeline(self.pipelines.forward));
                         // Attachment order matches the PSOs' targets: colour, id,
                         // then the G-buffer (unless lit), then motion (native).
@@ -1567,7 +1974,12 @@ impl Renderer {
                                 footprint,
                                 lit,
                                 self.look.quality.high_tier,
-                                self.rays.refract(),
+                                self.software_reflections
+                                    .as_ref()
+                                    .filter(|_| software_reflections)
+                                    .map(|r| r.glass())
+                                    .or_else(|| self.rays.refract()),
+                                range[0]..range[1],
                             );
                         }
                         let mut transparent = self
@@ -1575,7 +1987,9 @@ impl Renderer {
                             .meshes
                             .iter()
                             .enumerate()
-                            .filter(|(_, m)| draws && self.native.is_none() && m.transparent)
+                            .filter(|(_, m)| {
+                                draws && last && self.native.is_none() && m.transparent
+                            })
                             .collect::<Vec<_>>();
                         transparent.sort_by(|(_, a), (_, b)| {
                             b.centre
@@ -1623,6 +2037,8 @@ impl Renderer {
                         recorder.push(Command::EndRendering);
                     }
                     Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
+                    Recipe::OutlineMask => self.record_outline_mask(&mut recorder, footprint),
+                    Recipe::OutlineComposite => self.record_outline_composite(&mut recorder),
                     Recipe::Tsr(tsr_pass) => self.tsr.record(&mut recorder, tsr_pass),
                     Recipe::Taa | Recipe::Tonemap => {
                         let taa = matches!(recipes[pass.id.0], Recipe::Taa);
@@ -1653,10 +2069,11 @@ impl Renderer {
                         &mut recorder,
                         look_pass,
                         self.frames(),
-                        // The reflection pyramid reads last frame's history; post passes
-                        // read this frame's.
+                        // The reflection pyramid and trace read last frame's history (the
+                        // trace samples it as the sharpest level); post passes read this
+                        // frame's.
                         match look_pass {
-                            LookPass::SsrPyramid(_) => {
+                            LookPass::SsrPyramid(_) | LookPass::SsrTrace => {
                                 self.targets.history.map_or(0, |h| self.targets.sampled[h])
                             }
                             LookPass::Dof(_) => self.targets.sampled[HDR],
@@ -1674,7 +2091,8 @@ impl Renderer {
                         let mut constants = root;
                         constants.words[0] = map.frame_index;
                         constants.words[4] = 0;
-                        // Nearest film depth, then every film's opacity over a clear of one.
+                        // Nearest caster depth, then every face's optical depth over a
+                        // clear of zero.
                         for (transmittance, colors, depth) in [
                             (false, Vec::new(), Some(map.depth)),
                             (true, vec![map.transmittance], None),
@@ -1684,7 +2102,7 @@ impl Renderer {
                                     .into_iter()
                                     .map(|image| Attachment {
                                         image,
-                                        clear: Some([1.; 4]),
+                                        clear: Some([0.; 4]),
                                     })
                                     .collect(),
                                 depth: depth.map(|image| Attachment {
@@ -1714,6 +2132,11 @@ impl Renderer {
                         self.rays
                             .record(&mut recorder, ray_pass, self.frame_index, self.render)
                     }
+                    Recipe::SoftwareReflect(stage) => {
+                        if let Some(reflections) = &self.software_reflections {
+                            reflections.record(&mut recorder, stage, self.frame_index, self.render);
+                        }
+                    }
                     Recipe::Empty => {}
                 }
                 recorder.barriers(pass.after.iter().copied());
@@ -1738,6 +2161,9 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         self.rays.finish(&compiled.final_states);
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
+            reflections.finish(&compiled.final_states);
+        }
         if let Some(chain) = &tsr_ids {
             self.tsr.complete(chain, &compiled.final_states);
         }
@@ -1783,7 +2209,9 @@ impl Renderer {
                 cascades.drawn(draw, frame.shadows[draw.cascade]);
             }
         }
-        if let Some(gi) = &mut self.look.gi {
+        if let Some(gi) = &mut self.look.gi
+            && !gi.frozen
+        {
             gi.advance(self.look.quality.gi_budget);
         }
         self.probe_writes_scattered()?;
@@ -1868,6 +2296,7 @@ impl Renderer {
         let wire_inputs = entity_ids
             .filter(|_| self.look.frame_wire)
             .map(|ids| (import(&mut graph, WIRE), ids));
+        let outline_mask = self.look.frame_outline.then(|| import(&mut graph, OUTLINE));
         let reactive = reactive
             .filter(|_| tsr)
             .map(|(image, index, state)| (graph.import(Resource::Image(image), state), index));
@@ -1942,7 +2371,7 @@ impl Renderer {
                     let signals = dof
                         .then_some(input)
                         .into_iter()
-                        .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                        .chain(reflected.then(|| look.image(crate::look::gpu::SSR_RESOLVED)))
                         .chain(reactive.map(|(id, _)| id))
                         .collect();
                     let io = crate::tsr::Io {
@@ -2010,6 +2439,17 @@ impl Renderer {
                 ],
             )
         });
+        let outline = outline_mask.map(|mask| {
+            graph.pass(
+                "Outline.Composite",
+                Queue::Graphics,
+                [
+                    (mask, Access::ShaderRead),
+                    (output, Access::Storage),
+                    (frame, Access::ShaderRead),
+                ],
+            )
+        });
         // Entity IDs end ready for picks and capture readbacks, as after a frame's
         // PresentationReady, when TSR or the wire composite read them here.
         graph.pass(
@@ -2044,6 +2484,8 @@ impl Renderer {
                     );
                 } else if wire == Some(pass.id) {
                     self.record_wire_composite(&mut recorder, true);
+                } else if outline == Some(pass.id) {
+                    self.record_outline_composite(&mut recorder);
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
                     let taa_input = if dof {
                         self.look.sampled[DOF_COMPOSITE]

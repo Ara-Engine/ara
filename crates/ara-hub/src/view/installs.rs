@@ -69,7 +69,10 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     );
                 }
             });
-            let excerpt: String = release.notes.chars().take(260).collect();
+            let excerpt: String = super::markdown::plain(&release.notes)
+                .chars()
+                .take(260)
+                .collect();
             if let Some(job) = hub.releases.running("engine", &release.version) {
                 super::dialogs::transfer(p, job);
             }

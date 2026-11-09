@@ -10,7 +10,7 @@ ConstantBuffer<Root> root : register(b0,space0);
 BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
-BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
+BIND(3) RWTexture2D<float4> images[128] : register(u0,space3);
 struct Frame {
     float4x4 vp; float4x4 lightVp; float4x4 inverseVp;
     float4 camera; float4 sun; float4 sunColor;

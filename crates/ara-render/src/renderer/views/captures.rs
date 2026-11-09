@@ -143,6 +143,11 @@ impl Renderer {
         }
         ready
     }
+    /// Whether an automatic reflection capture still waits for its bake (captures
+    /// render frames until none does, so they show baked captures).
+    pub fn reflection_captures_baking(&self) -> bool {
+        self.look.quality.reflection_captures.is_some() && self.views.captures.awaiting_bake()
+    }
     /// Authored probe `key`'s bake state, if the renderer holds its record.
     pub fn reflection_capture_status(&self, key: u64) -> Option<BakeStatus> {
         self.views.captures.status(key)
@@ -358,10 +363,12 @@ impl Renderer {
         };
         // The surroundings as shaded (with screen-space occlusion, without its bounce),
         // minus effects that need history or several frames to land (screen-space
-        // reflections, virtual shadow pages), the horizon or ray queries: probes and
-        // cascades light the bake, which is the raster path's own reflection source.
+        // reflections, virtual shadow pages, the near fog volume), the horizon or ray
+        // queries: probes and cascades light the bake, which is the raster path's own
+        // reflection source.
         let quality = crate::look::Quality {
             reflections: None,
+            volumetric_fog: None,
             ray_queries: None,
             horizon: None,
             virtual_shadows: None,
@@ -399,6 +406,10 @@ impl Renderer {
         let mut writes = std::mem::take(&mut self.look.probe_writes);
         state.swap(self);
         self.look.gi = gi.take();
+        // The bake reads the view's volume as it is (GiGpu::frozen).
+        if let Some(gi) = &mut self.look.gi {
+            gi.frozen = true;
+        }
         self.look.probe_staging = std::mem::take(&mut staging);
         self.look.probe_writes = std::mem::take(&mut writes);
         self.secondary_active = true;
@@ -417,6 +428,9 @@ impl Renderer {
         staging = std::mem::take(&mut self.look.probe_staging);
         writes = std::mem::take(&mut self.look.probe_writes);
         state.swap(self);
+        if let Some(gi) = &mut gi {
+            gi.frozen = false;
+        }
         self.look.gi = gi;
         self.look.probe_staging = staging;
         self.look.probe_writes = writes;

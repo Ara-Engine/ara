@@ -87,6 +87,15 @@ pub struct MeshRenderer {
     /// Source material names or numeric indices affected by `emissiveFactor`.
     /// Empty targets all; `name:3` disambiguates a numeric material name.
     pub emissive_materials: Vec<String>,
+    /// Whether this geometry blocks light: off, it is still drawn, reflected and
+    /// bounces light, but casts no shadow. Model nodes whose glTF `extras` set
+    /// `castShadows: false` never cast, whatever this says.
+    #[ara(default = true)]
+    pub cast_shadows: bool,
+    /// Whether decals project onto this geometry (Unreal's bReceivesDecals). Off for
+    /// characters or moving props a level's decals should not stick to.
+    #[ara(default = true)]
+    pub receives_decals: bool,
 }
 impl Default for MeshRenderer {
     fn default() -> Self {
@@ -105,6 +114,8 @@ impl Default for MeshRenderer {
             emissive_strength: 1.0,
             emissive_factor: None,
             emissive_materials: Vec::new(),
+            cast_shadows: true,
+            receives_decals: true,
         }
     }
 }
@@ -135,30 +146,59 @@ pub(crate) fn matches_emissive_material(selector: &str, index: usize, name: &str
 #[ara(module = "render")]
 #[serde(rename_all = "camelCase")]
 pub enum LightKind {
-    /// Omnidirectional point light.
+    /// Omnidirectional point light; a source radius makes it a sphere, and a source
+    /// length a tube along the entity's local X axis.
     #[default]
     Point,
-    /// Cone light aimed along the entity's local -Z axis.
+    /// Cone light aimed along the entity's local -Z axis; a source radius or length
+    /// sizes its emitter as for a point.
     Spot,
     /// Sun-like light shining along the entity's local -Z axis; casts cascaded shadows.
     Directional,
+    /// One-sided rectangle emitting along the entity's local -Z axis: `sourceWidth`
+    /// along local X, `sourceHeight` along local Y, with optional barn doors.
+    Rect,
+    /// One-sided disc of radius `sourceRadius` emitting along the entity's local -Z axis.
+    Disc,
+}
+
+/// The unit of a local light's `intensity` (directional lights always take lux).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase")]
+pub enum LightUnits {
+    /// Luminous flux in lumens: everything a point emits (a spot's cone masks a point
+    /// of that flux, as Unreal's spot lumens), or a rect's or disc's over its front
+    /// hemisphere.
+    #[default]
+    Lumens,
+    /// Luminous intensity in candela: in every direction for points and spots, along
+    /// the normal for rects and discs.
+    Candela,
+    /// Luminance of the emitting surface in nits (candela per square metre); a light
+    /// without a source size emits nothing.
+    Nits,
 }
 
 /// A light at the entity's world position. Edits apply live in play.
-#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Light {
-    /// Point, spot or directional.
+    /// Point, spot, directional, rect or disc.
     pub kind: LightKind,
     /// Linear RGB tint (alpha is ignored).
     #[ara(editor(temperature))]
     pub color: Color,
-    /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
+    /// Brightness: illuminance in lux for a directional light, otherwise in `units`.
     #[ara(default = 800, range(min = 0))]
     pub intensity: f32,
-    /// Influence radius of point and spot lights.
-    #[ara(default = 10, unit = Meters, range(min = 0.01), editor(show_if(field = "kind", one_of = ["point", "spot"])))]
+    /// What a local light's `intensity` measures: lumens, candela or nits.
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect", "disc"])))]
+    pub units: LightUnits,
+    /// Influence radius of local lights, from the light's centre; their light fades
+    /// to zero there.
+    #[ara(default = 10, unit = Meters, range(min = 0.01), editor(show_if(field = "kind", one_of = ["point", "spot", "rect", "disc"])))]
     pub range: f32,
     /// Spot inner cone half-angle.
     #[ara(default = 20, unit = Degrees, range(min = 0, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
@@ -166,6 +206,64 @@ pub struct Light {
     /// Spot outer cone half-angle.
     #[ara(default = 30, unit = Degrees, range(min = 0.1, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
     pub outer_angle: f32,
+    /// How strongly the light scatters in volumetric fog (Unreal's volumetric scattering
+    /// intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its
+    /// shafts and glow. Surfaces are lit the same either way.
+    #[ara(default = 1, range(min = 0, max = 16))]
+    pub volumetric_scattering: f32,
+    /// Radius of the emitter: a point's or spot's sphere (or tube, with
+    /// `sourceLength`) or the disc. Larger sources give broader highlights and softer
+    /// shadows; zero is an ideal point (Unreal's Source Radius).
+    #[ara(unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["point", "spot", "disc"])))]
+    pub source_radius: f32,
+    /// Length of a point's or spot's tube along the entity's local X axis, capped by
+    /// `sourceRadius`; zero is a sphere (Unreal's Source Length).
+    #[ara(unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["point", "spot"])))]
+    pub source_length: f32,
+    /// Rect width along the entity's local X axis (Unreal's Source Width).
+    #[ara(default = 0.64, unit = Meters, range(min = 0.001), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub source_width: f32,
+    /// Rect height along the entity's local Y axis (Unreal's Source Height).
+    #[ara(default = 0.64, unit = Meters, range(min = 0.001), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub source_height: f32,
+    /// Angle of the rect's four barn doors from its normal: 0 points them straight
+    /// ahead (the narrowest beam), 90 folds them flat (no effect).
+    #[ara(default = 88, unit = Degrees, range(min = 0, max = 90), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub barn_door_angle: f32,
+    /// Length of the rect's barn doors; zero has none.
+    #[ara(default = 0.2, unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub barn_door_length: f32,
+    /// Photometric light profile (an imported IES file) shaping a point's, spot's or
+    /// rect's intensity by direction, about the entity's local -Z axis.
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect"])))]
+    pub profile: Option<AssetRef>,
+    /// Take the brightness from the profile's own candela instead of `intensity`
+    /// (Unreal's Use IES Intensity); `intensity` then scales it (one is as measured).
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect"])))]
+    pub profile_intensity: bool,
+    /// Angular diameter of a directional light's disc: wider suns cast softer shadow
+    /// edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).
+    #[ara(default = 0.5357, unit = Degrees, range(min = 0, max = 20), editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub source_angle: f32,
+    /// Whether a directional light lights the sky atmosphere: scatters in it (the sky's
+    /// colour), draws its disc and is tinted by the air on the way to surfaces
+    /// (Unreal's Atmosphere Sun Light).
+    #[ara(default = true, editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_light: bool,
+    /// Which of the two atmosphere lights this is: 0 the sun (it casts the shadows),
+    /// 1 a second light such as a moon, which lights the sky, the aerial perspective
+    /// and the sky light but not surfaces directly (Unreal's Atmosphere Sun Light Index).
+    #[ara(range(min = 0, max = 1), editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_light_index: u32,
+    /// Multiplies the luminance of the light's disc in the sky (linear; Unreal's
+    /// Atmosphere Sun Disk Color Scale); black hides the disc.
+    #[ara(default = [1, 1, 1], range(min = 0), editor(color, hdr, show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_disk_color_scale: [f32; 3],
+    /// Tint the light on each surface by the air above that surface, with the planet's
+    /// shadow at sunset (Unreal's Per Pixel Atmosphere Transmittance); off, one
+    /// transmittance 500 m above the ground applies everywhere, as Unreal's default.
+    #[ara(editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub per_pixel_atmosphere_transmittance: bool,
 }
 impl Default for Light {
     fn default() -> Self {
@@ -173,14 +271,32 @@ impl Default for Light {
             kind: LightKind::Point,
             color: Color([1.0; 4]),
             intensity: 800.0,
+            units: LightUnits::Lumens,
             range: 10.0,
             inner_angle: 20.0,
             outer_angle: 30.0,
+            volumetric_scattering: 1.0,
+            source_radius: 0.0,
+            source_length: 0.0,
+            source_width: 0.64,
+            source_height: 0.64,
+            barn_door_angle: 88.0,
+            barn_door_length: 0.2,
+            profile: None,
+            profile_intensity: false,
+            source_angle: 0.5357,
+            atmosphere_sun_light: true,
+            atmosphere_sun_light_index: 0,
+            atmosphere_sun_disk_color_scale: [1.0; 3],
+            per_pixel_atmosphere_transmittance: false,
         }
     }
 }
 
 /// Procedural sky radiance and camera exposure. The first in stable-ID order wins.
+/// Above the horizon the sky is `lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff`
+/// with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it
+/// fades to `ground` within 15°.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -188,15 +304,32 @@ pub struct Environment {
     /// Zenith sky color (linear).
     #[ara(default = [0.22, 0.32, 0.6, 1])]
     pub sky: Color,
-    /// Horizon sky color (linear).
+    /// Sky color at the horizon (linear).
     #[ara(default = [0.95, 0.62, 0.4, 1])]
     pub horizon: Color,
+    /// How quickly the zenith color gives way to the horizon color toward the horizon:
+    /// higher keeps the zenith color lower down.
+    #[ara(default = 3, range(min = 0.1, max = 64))]
+    pub sky_falloff: f32,
+    /// Extra light added in a band just above the horizon (linear; black for none),
+    /// such as a sunset glow.
+    #[ara(default = [0, 0, 0, 1])]
+    pub glow: Color,
+    /// Narrowness of the `glow` band: higher hugs the horizon more tightly.
+    #[ara(default = 10, range(min = 0.1, max = 64))]
+    pub glow_falloff: f32,
     /// Ground color seen below the horizon (linear).
     #[ara(default = [0.18, 0.16, 0.14, 1])]
     pub ground: Color,
     /// Sky radiance scale in candela per square metre.
     #[ara(default = 900, unit = Candela, range(min = 0))]
     pub intensity: f32,
+    /// How strongly the sky lights the scene (ambient light, reflections, bounce
+    /// and fog) relative to how bright it looks; 1 is physical. Lower it to calm
+    /// sky fill indoors without dimming the sky itself (Unreal's sky light
+    /// intensity).
+    #[ara(default = 1, range(min = 0, max = 16))]
+    pub sky_light: f32,
     /// Linear camera exposure multiplier, applied before tone mapping.
     #[ara(default = 0.0015, range(min = 0.0000001))]
     pub exposure: f32,
@@ -206,8 +339,12 @@ impl Default for Environment {
         Self {
             sky: Color([0.22, 0.32, 0.6, 1.0]),
             horizon: Color([0.95, 0.62, 0.4, 1.0]),
+            sky_falloff: 3.0,
+            glow: Color([0.0, 0.0, 0.0, 1.0]),
+            glow_falloff: 10.0,
             ground: Color([0.18, 0.16, 0.14, 1.0]),
             intensity: 900.0,
+            sky_light: 1.0,
             exposure: 0.0015,
         }
     }
@@ -502,6 +639,9 @@ pub fn register_schemas(db: &mut SchemaDb) {
     ara_nav::register(db);
     db.register::<PrimitiveMaterialOverride>()
         .register::<MeshRenderer>()
+        .register::<crate::paint::PaintedPrimitive>()
+        .register::<crate::paint::VertexPaint>()
+        .register::<crate::decal::Decal>()
         .register::<Light>()
         .register::<Environment>()
         .register::<Camera>()

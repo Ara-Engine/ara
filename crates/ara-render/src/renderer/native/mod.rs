@@ -11,6 +11,7 @@ use glam::Vec4;
 
 mod batches;
 mod culling;
+pub(in crate::renderer) mod decals;
 mod environment;
 pub(in crate::renderer) mod pipelines;
 mod prepared;
@@ -58,6 +59,12 @@ pub(super) struct Native {
     instance_index: u32,
     visible: Buffer,
     visible_index: u32,
+    /// Selection outlines (`renderer::outline`): the colour table, then one row per
+    /// instance at most, sized with the content so selecting allocates nothing.
+    outline: Buffer,
+    outline_index: u32,
+    /// The selected rows' draws by outline group (`outline_rows`).
+    outline_batches: Vec<(u8, Batch)>,
     /// Passes `visible` holds rows for; reservations up to it allocate nothing.
     capacity: usize,
     rows: Vec<InstanceRow>,
@@ -67,6 +74,8 @@ pub(super) struct Native {
     groups: Groups,
     culling: Culling,
     changes: updates::Updates,
+    /// Opt-in render-v3 event source; absent for today's A/B path.
+    transport: Option<crate::instanced::transport::NativeChangeFeed>,
     pipelines: pipelines::NativePipelines,
     upload: TextureStats,
     material_dirty: bool,
@@ -74,6 +83,20 @@ pub(super) struct Native {
     /// Advances whenever a blended caster moves, deforms or changes material, or a
     /// material becomes or stops being blended: the translucent sun map's cache key.
     translucent_revision: u64,
+    /// Per-instance vertex colours (`Instance::paint`), one word per vertex, each
+    /// painted instance in its own range (`paint_offsets`).
+    paint: Buffer,
+    paint_index: u32,
+    /// Per instance, its first word in `paint`; `u32::MAX` without paint.
+    paint_offsets: Vec<u32>,
+    /// Per instance, the paint last written (snapshot updates find edits by it).
+    paint_sources: Vec<Option<std::sync::Arc<[u32]>>>,
+    /// Whether `paint` was written since the consuming frame.
+    paint_dirty: bool,
+    /// Published paint content and every update since (capture provenance).
+    paint_digest: [u8; 32],
+    /// Deferred decals (`decals.rs`): records and this frame's visible list.
+    decals: decals::Decals,
 }
 
 impl Renderer {
@@ -223,7 +246,19 @@ impl Renderer {
             }
             return Err(error);
         }
-        let old = self.native.replace(next);
+        let mut old = self.native.replace(next);
+        // Capture follows successful publication, retaining stamps across replaced row layouts.
+        let transport_result =
+            if let Some(mut feed) = old.as_mut().and_then(|old| old.transport.take()) {
+                let result = feed.replace(scene);
+                self.native
+                    .as_mut()
+                    .expect("native content was just published")
+                    .transport = Some(feed);
+                result
+            } else {
+                Ok(())
+            };
         self.entity_epoch = self.entity_epoch.wrapping_add(1);
         let previous_content = content.map(|content| std::mem::replace(&mut self.content, content));
         self.content.base_hash = base_hash;
@@ -236,6 +271,8 @@ impl Renderer {
         if let Some(old) = old {
             old.destroy(&mut self.gpu)?;
         }
+        transport_result?;
+        self.update_software_reflections(scene)?;
         Ok(())
     }
 
@@ -278,6 +315,9 @@ impl Renderer {
             .native
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
+        if let Some(feed) = &native.transport {
+            feed.validate(scene, changes)?;
+        }
         native.update(&mut self.gpu, scene, changes)?;
         if bytemuck::cast_slice::<_, u8>(&self.content.lights)
             != bytemuck::cast_slice::<_, u8>(&scene.lights)
@@ -301,7 +341,95 @@ impl Renderer {
             self.set_sun(scene.sun_direction, scene.sun_lux)?;
         }
         self.content.revision += 1;
+        if let Some(feed) = self
+            .native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+        {
+            feed.update(scene, changes)?;
+        }
+        self.update_software_reflections(scene)?;
         Ok(())
+    }
+
+    /// Enable render-v3 event capture from the currently published native scene. This produces
+    /// a full reset snapshot at `frame`; it changes no GPU bytes or rendering defaults.
+    pub fn enable_native_change_feed(&mut self, scene: &NativeScene, frame: u64) -> Result<()> {
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        ensure!(
+            native.rows.len() == scene.instances.len()
+                && native.geometry_revisions.len() == scene.geometry.len()
+                && native.material_data.len() == scene.materials.len(),
+            "change feed must start from published content"
+        );
+        native.transport = Some(crate::instanced::transport::NativeChangeFeed::new(
+            scene, frame,
+        )?);
+        Ok(())
+    }
+
+    /// Disable event capture and release its CPU storage; the legacy renderer is unchanged.
+    pub fn disable_native_change_feed(&mut self) {
+        if let Some(native) = &mut self.native {
+            native.transport = None;
+        }
+    }
+
+    /// Group all uploads for one render frame, including idle frames. Call before any updates;
+    /// consume `native_transport_changes` afterwards. Frame numbers must strictly increase.
+    pub fn begin_native_change_frame(&mut self, frame: u64) -> Result<()> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+            .context("Enable native change feed first")?
+            .begin_frame(frame)
+    }
+
+    /// Seal and borrow the ordered change stream; repeated reads preserve it until the next frame.
+    /// Without explicit begin calls, the first upload after sealing starts the next frame.
+    pub fn native_transport_changes(
+        &mut self,
+    ) -> Option<&crate::instanced::transport::TransportChanges> {
+        self.native
+            .as_mut()?
+            .transport
+            .as_mut()
+            .map(|feed| feed.finish())
+    }
+
+    /// Narrow A1 lookup: publication-local instance ID -> transform, bounds and generation.
+    pub fn native_transport_instance(
+        &self,
+        id: u64,
+    ) -> Option<crate::instanced::transport::Stamped<crate::instanced::transport::InstanceState>>
+    {
+        self.native.as_ref()?.transport.as_ref()?.instance(id)
+    }
+
+    /// Current render-v3 cache stamps for every identity domain, absent while capture is disabled.
+    pub fn native_transport_state(&self) -> Option<&crate::instanced::transport::ChangeFeed> {
+        self.native
+            .as_ref()?
+            .transport
+            .as_ref()
+            .map(|feed| feed.state())
+    }
+
+    /// Replay exact events into cache-facing renderer state. The first frame must be a reset.
+    /// Subsequent native uploads can restore scene payloads without resynthesizing feed events.
+    /// Disable/re-enable the feed to resume live capture.
+    pub fn replay_native_transport_frame(
+        &mut self,
+        frame: &crate::instanced::transport::TransportChanges,
+    ) -> Result<()> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+            .context("Enable native change feed first")?
+            .apply_replay(frame)
     }
 
     /// Dirty caster bounds from the most recently prepared native frame. New
@@ -399,7 +527,7 @@ impl Renderer {
             .groups
             .groups
             .iter()
-            .filter(|group| group.translucent)
+            .filter(|group| group.translucent && group.casts)
             .flat_map(|group| &group.instances)
             .map(|&i| native.bounds[i])
             .filter(|&[lo, hi]| {
@@ -601,12 +729,46 @@ impl Renderer {
         else {
             return Ok(Vec::new());
         };
-        let changes = (native.changes.caster_all, &native.changes.caster_bounds[..]);
+        // The sun page service bounds rigid movers' displacement (today's map needs none).
+        let displacement: Vec<Option<f32>> = if vsm.service.is_some() {
+            let changes = &native.changes;
+            changes
+                .caster_rows
+                .iter()
+                .zip(&changes.caster_moved_from)
+                .map(|(&row, from)| {
+                    from.map(|old| {
+                        crate::look::vsm::sun::rigid_displacement(
+                            old,
+                            native.rows[row].world,
+                            native.bounds[row],
+                        )
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let casters = crate::look::vsm::Casters {
+            all: native.changes.caster_all,
+            moved: &native.changes.caster_bounds,
+            displacement: &displacement,
+            instances: &native.bounds,
+        };
+        // The sun page service learns per-page cost from the completed page passes.
+        let pass_ms = ["VSM.Pages", "VSM.Pages.Dynamic"].map(|label| {
+            self.last_timings
+                .iter()
+                .filter(|t| t.pass == label)
+                .map(|t| t.milliseconds)
+                .reduce(|a, b| a + b)
+        });
         let mut draws = vsm.plan(
             &mut self.gpu,
             self.content.sun_direction,
             content,
-            changes,
+            casters,
+            pass_ms,
             settle,
         )?;
         let rotation = vsm
@@ -795,6 +957,29 @@ impl Native {
                 }
             }
         };
+        // Each painted instance owns one range of the paint buffer (no sharing, so a
+        // live edit of one instance never shows on another).
+        let (paint_words, paint_offsets, paint_digest) = {
+            ara_gpu::cpu_scope!("RasterNative.publish_paint");
+            use sha2::Digest;
+            let mut words = Vec::new();
+            let mut digest = sha2::Sha256::new();
+            let offsets: Vec<u32> = scene
+                .instances
+                .iter()
+                .map(|instance| match &instance.paint {
+                    Some(paint) => {
+                        let offset = words.len() as u32;
+                        words.extend_from_slice(paint);
+                        digest.update(offset.to_le_bytes());
+                        digest.update(bytemuck::cast_slice::<u32, u8>(paint));
+                        offset
+                    }
+                    None => u32::MAX,
+                })
+                .collect();
+            (words, offsets, <[u8; 32]>::from(digest.finalize()))
+        };
         let mut owned = Vec::new();
         let prepared = (|| {
             let materials = host_buffer(
@@ -809,6 +994,20 @@ impl Native {
                 &mut owned,
             )?;
             let visible = host_buffer(gpu, visible_bytes, &mut owned)?;
+            let outline = host_buffer(
+                gpu,
+                crate::renderer::outline::COLOURS + scene.instances.len() * 8,
+                &mut owned,
+            )?;
+            // Shaders address paint in u32 bytes.
+            ensure!(
+                paint_words.len() < (u32::MAX / 4) as usize,
+                "Native per-instance paint exceeds the 4 GiB shader address range"
+            );
+            let paint = host_buffer(gpu, (paint_words.len() * 4).max(16), &mut owned)?;
+            if !paint_words.is_empty() {
+                gpu.upload(paint, bytemuck::cast_slice(&paint_words))?;
+            }
             Ok((
                 materials,
                 gpu.storage_buffer(materials)?.index,
@@ -816,22 +1015,39 @@ impl Native {
                 gpu.storage_buffer(instances)?.index,
                 visible,
                 gpu.storage_buffer(visible)?.index,
+                (outline, gpu.storage_buffer(outline)?.index),
+                (paint, gpu.storage_buffer(paint)?.index),
+                decals::Decals::new(gpu, &scene.decals, &mut owned)?,
             ))
         })();
-        let (materials, material_index, instances, instance_index, visible, visible_index) =
-            match prepared {
-                Ok(result) => result,
-                Err(error) => {
-                    pool.destroy(gpu)?;
-                    textures.destroy(gpu)?;
-                    for resource in owned {
-                        gpu.retire(resource)?;
-                    }
-                    gpu.collect()?;
-                    return Err(error);
+        let (
+            materials,
+            material_index,
+            instances,
+            instance_index,
+            visible,
+            visible_index,
+            (outline, outline_index),
+            (paint, paint_index),
+            decals,
+        ) = match prepared {
+            Ok(result) => result,
+            Err(error) => {
+                pool.destroy(gpu)?;
+                textures.destroy(gpu)?;
+                for resource in owned {
+                    gpu.retire(resource)?;
                 }
-            };
-        let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
+                gpu.collect()?;
+                return Err(error);
+            }
+        };
+        let rows = scene
+            .instances
+            .iter()
+            .zip(&paint_offsets)
+            .map(|(i, &offset)| row(i, i.world, paint_index, offset))
+            .collect();
         let groups = Groups::new(scene, &pool)?;
         let mut culling = Culling::new(&groups, scene);
         culling.reserve(&groups, passes);
@@ -852,6 +1068,9 @@ impl Native {
             materials,
             instances,
             visible,
+            outline,
+            outline_index,
+            outline_batches: Vec::new(),
             capacity,
             rows,
             material_data: scene.materials.to_vec(),
@@ -864,11 +1083,19 @@ impl Native {
                 .collect(),
             culling,
             changes: updates::Updates::new(scene.instances.len()),
+            transport: None,
             pipelines,
             upload,
             material_dirty: true,
             update_gpu_ms: 0.,
             translucent_revision: 0,
+            paint,
+            paint_index,
+            paint_offsets,
+            paint_sources: scene.instances.iter().map(|i| i.paint.clone()).collect(),
+            paint_dirty: true,
+            paint_digest,
+            decals,
         };
         Ok(result)
     }
@@ -888,15 +1115,105 @@ impl Native {
         );
         visit(Resource::Buffer(self.instances), Access::HostWrite);
         visit(Resource::Buffer(self.visible), Access::HostWrite);
+        visit(Resource::Buffer(self.outline), Access::HostWrite);
+        for buffer in [self.decals.records, self.decals.visible] {
+            visit(Resource::Buffer(buffer), Access::HostWrite);
+        }
+        visit(
+            Resource::Buffer(self.paint),
+            if self.paint_dirty {
+                Access::HostWrite
+            } else {
+                Access::ShaderRead
+            },
+        );
+    }
+
+    /// Uploads the outline colour table and the selected instances' rows (LOD 0, one
+    /// per instance) and keeps their draws for `record_outlines`. Channels outside
+    /// this content or groups past 127 are skipped.
+    pub(super) fn outline_rows(
+        &mut self,
+        gpu: &mut GpuDevice,
+        outlines: &crate::renderer::Outlines,
+    ) -> Result<()> {
+        use crate::renderer::outline::COLOURS;
+        self.outline_batches.clear();
+        let mut entries: Vec<(u8, usize, usize)> = outlines
+            .channels
+            .iter()
+            .filter_map(|&(channel, group)| {
+                let index = (channel as usize).checked_sub(1)?;
+                (index < self.rows.len() && (1..=127).contains(&group)).then(|| {
+                    let slot = self.groups.groups[self.groups.instance_group[index]].slot;
+                    (group, slot, index)
+                })
+            })
+            .collect();
+        entries.sort_unstable();
+        entries.dedup_by_key(|entry| entry.2);
+        let base = (COLOURS / 8) as u32;
+        let mut rows: Vec<[u32; 2]> = Vec::with_capacity(entries.len());
+        for chunk in entries.chunk_by(|a, b| a.0 == b.0 && a.1 == b.1) {
+            let group = &self.groups.groups[self.groups.instance_group[chunk[0].2]];
+            self.outline_batches.push((
+                chunk[0].0,
+                Batch {
+                    first: base + rows.len() as u32,
+                    count: chunk.len() as u32,
+                    vertices: group.counts[0],
+                    first_index: group.first_indices[0],
+                    paint: false,
+                },
+            ));
+            rows.extend(chunk.iter().map(|&(_, _, i)| [i as u32, group.first]));
+        }
+        let mut colours = [[0f32; 4]; 128];
+        for (slot, colour) in colours.iter_mut().zip(&outlines.colours) {
+            *slot = *colour;
+        }
+        gpu.upload_queued_range(self.outline, 0, bytemuck::cast_slice(&colours))?;
+        if !rows.is_empty() {
+            gpu.upload_queued_range(self.outline, COLOURS as u64, bytemuck::cast_slice(&rows))?;
+        }
+        Ok(())
+    }
+
+    /// Bindless index of the outline buffer (colour table first).
+    pub(in crate::renderer) fn outline_index(&self) -> u32 {
+        self.outline_index
+    }
+
+    /// Records the outline mask's draws (`renderer::outline`): every selected row
+    /// writing its group without the depth test, then again, plus 128, with it.
+    pub(super) fn record_outlines(&self, recorder: &mut Recorder, root: RootConstants) {
+        for (pipeline, seen) in [
+            (self.pipelines.outline_hidden, 0),
+            (self.pipelines.outline_visible, 128),
+        ] {
+            recorder.push(Command::Pipeline(pipeline));
+            for (group, batch) in &self.outline_batches {
+                let mut constants = root;
+                constants.words[1] = self.material_index;
+                constants.words[2] = self.instance_index;
+                constants.words[3] = batch.first;
+                constants.words[4] = u32::from(*group) + seen;
+                constants.words[5] = self.pool.table_index().unwrap_or(0);
+                constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
+                constants.words[7] = self.outline_index;
+                recorder.push(Command::Constants(constants));
+                recorder.push(self.draw(batch, pipeline));
+            }
+        }
     }
 
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
-        let pipeline = match pass {
-            4 => self.pipelines.gbuffer,
-            5 => self.pipelines.forward,
-            _ => self.pipelines.shadow,
-        };
-        self.record_with(recorder, root, pass, pipeline);
+        let p = &self.pipelines;
+        match pass {
+            4 => self.record_with(recorder, root, pass, p.gbuffer, Some(p.gbuffer_paint)),
+            5 => self.record_with(recorder, root, pass, p.forward, None),
+            _ => self.record_with(recorder, root, pass, p.shadow, Some(p.shadow_paint)),
+        }
     }
 
     /// Records the translucent sun casters (`look::translucent`): their nearest depth
@@ -912,14 +1229,14 @@ impl Native {
         } else {
             self.pipelines.shadow
         };
-        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline);
+        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline, None);
     }
 
     /// Records the camera's opaque and forward draws (passes 4 and 5) again through
     /// the wire PSO: the wireframe view modes' edge mask.
     pub(super) fn record_wire(&self, recorder: &mut Recorder, root: RootConstants) {
         for pass in [4, 5] {
-            self.record_with(recorder, root, pass, self.pipelines.wire);
+            self.record_with(recorder, root, pass, self.pipelines.wire, None);
         }
     }
 
@@ -927,7 +1244,7 @@ impl Native {
     /// overdraw count (`ViewMode::Overdraw`).
     pub(super) fn record_overdraw(&self, recorder: &mut Recorder, root: RootConstants) {
         for pass in [4, 5] {
-            self.record_with(recorder, root, pass, self.pipelines.overdraw);
+            self.record_with(recorder, root, pass, self.pipelines.overdraw, None);
         }
     }
 
@@ -945,6 +1262,7 @@ impl Native {
         lit: bool,
         high: bool,
         traced: Option<Pipeline>,
+        range: std::ops::Range<usize>,
     ) {
         let p = &self.pipelines;
         // One pass over both sides, the back- and front-face passes of double-sided
@@ -964,7 +1282,8 @@ impl Native {
         };
         let mut bound = None;
         let kinds = self.culling.refract.iter().zip(&self.culling.two_pass);
-        for (batch, (&refractive, &two_pass)) in self.culling.draws[5].iter().zip(kinds) {
+        let draws = self.culling.draws[5].iter().zip(kinds);
+        for (batch, (&refractive, &two_pass)) in draws.skip(range.start).take(range.len()) {
             let passes = match (refractive, two_pass, sides) {
                 (true, _, _) => [Some(refract), None],
                 (false, true, Some([back, front])) => [Some(back), Some(front)],
@@ -978,6 +1297,17 @@ impl Native {
                 self.record_batch(recorder, root, batch, pipeline);
             }
         }
+    }
+
+    /// The forward draws (into the transparent list) before which `look::refract`
+    /// copies the lit scene again, so glass behind glass shows through it.
+    pub(super) fn refraction_layers(&self) -> &[usize] {
+        &self.culling.refract_layers
+    }
+
+    /// The number of this frame's forward draws.
+    pub(super) fn forward_draws(&self) -> usize {
+        self.culling.draws[5].len()
     }
 
     /// The render-pixel rect (x0, y0, x1, y1) this frame's refractive forward draws
@@ -995,15 +1325,31 @@ impl Native {
     }
 
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
-    /// `terrain_detail` (`NativePipelines::gbuffer_for`).
+    /// `terrain_detail` (`NativePipelines::gbuffer_for`), and draws that read vertex
+    /// colours through `gbuffer_paint`. The vertex-colour views (`vertex_colors`)
+    /// draw the opaque and forward lists (passes 4 and 5) through `vertex_color`,
+    /// so blended surfaces show their colours too; their forward pass draws nothing.
     pub(super) fn record_gbuffer(
         &self,
         recorder: &mut Recorder,
         root: RootConstants,
         terrain_detail: f32,
+        vertex_colors: bool,
     ) {
+        if vertex_colors {
+            for pass in [4, 5] {
+                self.record_with(recorder, root, pass, self.pipelines.vertex_color, None);
+            }
+            return;
+        }
         let pipeline = self.pipelines.gbuffer_for(terrain_detail);
-        self.record_with(recorder, root, 4, pipeline);
+        self.record_with(
+            recorder,
+            root,
+            4,
+            pipeline,
+            Some(self.pipelines.gbuffer_paint),
+        );
     }
 
     /// One draw of `batch`: indexed, so shared vertices are shaded once, except
@@ -1026,17 +1372,26 @@ impl Native {
         }
     }
 
+    /// Records pass `pass` through `pipeline`, and its `Batch::paint` draws through
+    /// `paint` when given, binding each PSO only when the draws switch.
     fn record_with(
         &self,
         recorder: &mut Recorder,
         root: RootConstants,
         pass: usize,
         pipeline: Pipeline,
+        paint: Option<Pipeline>,
     ) {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(pipeline));
+        let mut bound = pipeline;
         for batch in &self.culling.draws[pass] {
-            self.record_batch(recorder, root, batch, pipeline);
+            let wanted = paint.filter(|_| batch.paint).unwrap_or(pipeline);
+            if batch.count > 0 && wanted != bound {
+                recorder.push(Command::Pipeline(wanted));
+                bound = wanted;
+            }
+            self.record_batch(recorder, root, batch, wanted);
         }
     }
 
@@ -1070,8 +1425,19 @@ impl Native {
         rows: u32,
         page: usize,
     ) {
-        recorder.push(Command::Pipeline(self.pipelines.shadow));
+        let plain = self.pipelines.shadow;
+        recorder.push(Command::Pipeline(plain));
+        let mut bound = plain;
         for batch in self.culling.page_batches.get(page).into_iter().flatten() {
+            let wanted = if batch.paint {
+                self.pipelines.shadow_paint
+            } else {
+                plain
+            };
+            if wanted != bound {
+                recorder.push(Command::Pipeline(wanted));
+                bound = wanted;
+            }
             let mut constants = root;
             constants.words[1] = self.material_index;
             constants.words[2] = self.instance_index;
@@ -1096,13 +1462,28 @@ impl Native {
         hash.update(bytemuck::cast_slice(&self.geometry_revisions));
         hash.update(bytemuck::cast_slice(&self.material_data));
         hash.update(self.texture_digest);
+        hash.update(self.paint_digest);
+        for decal in &self.decals.decals {
+            hash.update(decal.entity.to_le_bytes());
+            hash.update(bytemuck::bytes_of(&decal.world));
+            hash.update((decal.material as u64).to_le_bytes());
+            hash.update(bytemuck::cast_slice(&decal.opacity));
+        }
     }
 
     fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.retire_content");
         self.pool.destroy(gpu)?;
         self.textures.destroy(gpu)?;
-        for buffer in [self.materials, self.instances, self.visible] {
+        for buffer in [
+            self.materials,
+            self.instances,
+            self.visible,
+            self.outline,
+            self.paint,
+            self.decals.records,
+            self.decals.visible,
+        ] {
             gpu.retire(Resource::Buffer(buffer))?;
         }
         gpu.collect()?;
@@ -1116,13 +1497,24 @@ fn host_buffer(gpu: &mut GpuDevice, size: usize, owned: &mut Vec<Resource>) -> R
     Ok(buffer)
 }
 
-fn row(instance: &crate::instanced::Instance, previous: Mat4) -> InstanceRow {
+/// An instance's GPU row. `meta`: material, skin-history bit 0, the paint buffer's
+/// bindless index in bits 1..31 and bit 31 set when it receives no decals (the decal
+/// pass reads it by the pixel's ID), one plus its first paint word (zero without
+/// paint: `offset` `u32::MAX`), and the transform's determinant sign.
+fn row(
+    instance: &crate::instanced::Instance,
+    previous: Mat4,
+    paint_index: u32,
+    offset: u32,
+) -> InstanceRow {
     let normal = instance.world.inverse().transpose();
+    let painted = offset != u32::MAX;
     InstanceRow {
         meta: [
             instance.material as u32,
-            0,
-            0,
+            (if painted { paint_index << 1 } else { 0 })
+                | (u32::from(!instance.receives_decals) << 31),
+            if painted { offset + 1 } else { 0 },
             instance.world.determinant().signum().to_bits(),
         ],
         world: instance.world,

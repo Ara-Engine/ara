@@ -25,6 +25,7 @@ impl NativeUi {
                     .or_else(|| self.external.get(&id).copied())
             })
             .map_or(0., |slot| (slot + 1) as f32 * 2.);
+        let start = self.draws.len();
         for overlay in &self.overlays {
             if let Overlay::Grid {
                 camera,
@@ -59,6 +60,13 @@ impl NativeUi {
                     color: [0.; 4],
                     params: [0.; 4],
                 });
+                continue;
+            }
+            // Icons install with the UI images; none yet, none drawn.
+            if let Overlay::Icon { image, .. } = overlay
+                && !self.textures.contains_key(image)
+                && !self.external.contains_key(image)
+            {
                 continue;
             }
             let (instance, mode, texture) = match overlay {
@@ -105,6 +113,17 @@ impl NativeUi {
                         0,
                     )
                 }
+                // Mode 2 multiplies the tint's alpha by the image's.
+                Overlay::Icon { rect, image, color } => (
+                    Instance {
+                        rect: *rect,
+                        uv: [0., 0., 1., 1.],
+                        color: *color,
+                        params: [0.; 4],
+                    },
+                    2,
+                    *image,
+                ),
                 Overlay::Hover { uv, color } => (
                     Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],
@@ -134,15 +153,30 @@ impl NativeUi {
                 .copied()
                 .or_else(|| self.textures.get(&texture).map(|t| t.slot))
                 .ok_or_else(|| anyhow::anyhow!("overlay texture not uploaded"))?;
-            self.draws.push(Draw {
-                first: self.instances.len() as u32,
-                count: 1,
-                texture,
-                mode,
-                scissor,
-                mask_offset: 0,
-                mask_count: 0,
-            });
+            // Consecutive lines, quads and icons of one image share a draw: a dense
+            // gizmo wireframe is thousands of segments.
+            let first = self.instances.len() as u32;
+            let batched = self.draws.len() > start;
+            match self.draws.last_mut() {
+                Some(last)
+                    if batched
+                        && matches!(mode, 2 | 6 | 8)
+                        && last.mode == mode
+                        && last.texture == texture
+                        && last.first + last.count == first =>
+                {
+                    last.count += 1
+                }
+                _ => self.draws.push(Draw {
+                    first,
+                    count: 1,
+                    texture,
+                    mode,
+                    scissor,
+                    mask_offset: 0,
+                    mask_count: 0,
+                }),
+            }
             self.instances.push(instance);
         }
         Ok(())

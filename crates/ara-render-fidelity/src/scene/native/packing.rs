@@ -95,12 +95,10 @@ pub(super) fn pack_motion(
         materials,
         lights,
         scene.lights.len() as u32,
-        u32::from(
-            scene
-                .instances
-                .iter()
-                .all(|i| scene.materials[i.material].pbr.flags[0] == 0),
-        ),
+        u32::from(scene.instances.iter().all(|i| {
+            let m = &scene.materials[i.material];
+            m.pbr.flags[0] == 0 && !transmissive(m)
+        })),
         emitters,
         count,
         power.to_bits(),
@@ -111,11 +109,23 @@ pub(super) fn pack_motion(
         192,
         64,
         320,
-        0,
+        // Byte 60: any transmissive instance (shadow rays look for glass).
+        u32::from(
+            scene
+                .instances
+                .iter()
+                .any(|i| transmissive(&scene.materials[i.material])),
+        ),
     ];
     out[..64].copy_from_slice(bytemuck::cast_slice(&header));
     u32::try_from(out.len())?;
     Ok(out)
+}
+
+/// Glass and other transmissive materials (KHR_materials_transmission): ray queries
+/// resolve them in the non-opaque traversal, and shadow rays pass through them.
+fn transmissive(material: &ara_render::instanced::Material) -> bool {
+    material.extras.transmission_factor > 0.
 }
 
 pub(super) fn instances(
@@ -140,10 +150,20 @@ pub(super) fn instances(
             Ok(AccelerationInstance {
                 geometry,
                 custom_index: id as u32,
-                mask: if scene.materials[instance.material].pbr.flags[0] == 0 {
-                    1
-                } else {
-                    2
+                // shaders/common.slangh traceImpl: opaque 1, alpha-tested 2, transmissive
+                // 16 (glass: shadow rays take its transmittance, shadowTransmittance);
+                // geometry that casts no shadow takes 4, 8 or 32, which shadow rays skip.
+                mask: match (
+                    transmissive(&scene.materials[instance.material]),
+                    scene.materials[instance.material].pbr.flags[0] == 0,
+                    instance.casts_shadows,
+                ) {
+                    (true, _, true) => 16,
+                    (true, _, false) => 32,
+                    (false, true, true) => 1,
+                    (false, false, true) => 2,
+                    (false, true, false) => 4,
+                    (false, false, false) => 8,
                 },
                 transform: [
                     w[0][0], w[1][0], w[2][0], w[3][0], w[0][1], w[1][1], w[2][1], w[3][1],

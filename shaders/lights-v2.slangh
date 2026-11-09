@@ -1,0 +1,526 @@
+// Finite-range many-light shading V2 (ara_render look::lights; council-v3 architecture D6,
+// section 3.2, gate G1): records, the per-source-sample visibility every V2 pass and
+// its exact control share, and the conservative capsule test that classifies a
+// (receiver tile, light) pair against trace()'s TLAS and BLASes.
+// Include after raster.slangh, look.slangh, look-shading.slangh and trace.slangh.
+//
+// Visibility is exact geometry through trace(): each source sample is one segment
+// query that sees every occluder at once, so occluders combine per source sample before
+// the samples are averaged (two blockers hiding the same half of a source give 0.5, not
+// 0.25). The sample pattern is fixed (no per-pixel rotation, no history, no noise).
+#pragma once
+
+// Pixels per fine tile side; fine tiles per coarse tile side.
+static const uint LIGHTS_TILE=16,LIGHTS_COARSE=4;
+// Tile entry word x: the light index and its visibility class.
+static const uint LIGHTS_INDEX=0x00ffffffu,LIGHTS_PARTIAL=1u<<31,LIGHTS_ALL=1u<<30;
+// LightsRecord.trace.w flags: omission past the energy bound (lights sorted by bound);
+// per-pixel counters into the stats image; no visibility (unshadowed lighting); no
+// classification (every pair partial through the whole TLAS: the A/B of select's lever);
+// no sample masks (named instances traced per sample: their A/B).
+static const uint LIGHTS_OMIT=1,LIGHTS_STATS=2,LIGHTS_UNSHADOWED=4,LIGHTS_NOCLASSIFY=8,LIGHTS_NOMASK=16,LIGHTS_DEBUG=32;
+// LIGHTS_DEBUG: the first light whose sample masks disagree with per-sample rays at a
+// pixel (index, mask bits, ray bits, 1), written over the stats image (bench only).
+static uint4 lightsDebug=uint4(0,0,0,0);
+static bool lightsDebugOn=false;
+static float3 lightsDebugOrigin=float3(0,0,0);
+// The sample whose blocking triangle a debug re-walk records (word address + 1, instance).
+static uint lightsDebugK=0xffffffffu,lightsDebugTri=0,lightsDebugSlot=0;
+// 1: the fast mask path records culprits too (diagnostics only; costs a compare per sample).
+#ifndef LIGHTS_DEBUG_HOOKS
+#define LIGHTS_DEBUG_HOOKS 0
+#endif
+// Records the first light at this pixel whose sample masks (`masks`) differ from per-sample
+// rays (`traced`), with the ray origin (LIGHTS_DEBUG).
+void lightsDebugRecord(uint index,uint masks,uint traced,float3 origin){
+    if(lightsDebug.w==0&&masks!=traced){lightsDebug=uint4(index,masks,traced,1);lightsDebugOrigin=origin;}
+}
+// Stats buffer words (look/lights/gpu.rs Stats).
+static const uint LIGHTS_STAT_POOL=0,LIGHTS_STAT_COARSE=1,LIGHTS_STAT_STAGE=2,LIGHTS_STAT_ENTRIES=3,
+    LIGHTS_STAT_PARTIAL=4,LIGHTS_STAT_ALL=5,LIGHTS_STAT_BUDGET=6;
+// Most instances a partial pair names; more traces the whole TLAS.
+static const uint LIGHTS_PAIR_INSTANCES=2;
+// Node and triangle tests one pair's classification may spend per instance before it
+// stops and calls that instance partial (conservative).
+static const uint LIGHTS_BEAM_BUDGET=128;
+// Node and triangle tests one pixel's sample-mask walk of one instance may spend before
+// that pair traces rays instead.
+static const uint LIGHTS_MASK_BUDGET=192;
+// The per-pixel counter step of one pair resolved by sample masks (lightsVisibility).
+static const uint LIGHTS_MASKED=4096;
+
+// The pass record (look/lights/gpu.rs Record), root word 1.
+struct LightsRecord {
+    uint4 counts;  // x lights, y fine tiles per row, z fine tile rows, w coarse tiles per row
+    uint4 buffers; // x light bounds, y coarse lists, z tile bounds, w tile heads
+    uint4 output;  // x radiance (storage), y stats buffer, z coarse list capacity, w entry pool capacity
+    uint4 trace;   // x trace scene record (TRACE_NONE: unshadowed), y source samples, z instance mask, w LIGHTS_* flags
+    float4 params; // x omitted-energy fraction, y bias in pixel footprints, z footprint per metre, w minimum bias (m)
+    uint4 extra;   // x entry pool, y stats image (storage; LIGHTS_STATS), z coarse tile rows
+};
+LightsRecord lightsRecord(){return buffers[root.materials].Load<LightsRecord>(0);}
+
+// The normal offset of receiver `p` (both the classification and every ray use it).
+float lightsBias(Frame f,LightsRecord r,float3 p){
+    return max(r.params.w,r.params.y*r.params.z*length(p-f.camera.xyz));
+}
+
+// The radius of a sphere around a light's centre that holds its emitting shape (zero
+// for an ideal point or spot).
+float lightsSourceRadius(Light light,LightShape shape){
+    uint kind=lightKind(light);
+    if(kind==LIGHT_RECT)return length(max(shape.rect.xy,0.001));
+    if(kind==LIGHT_DISC)return max(light.parameters.z,0.001);
+    if(light.parameters.z<=0)return 0;
+    return light.parameters.z+shape.tangentLength.w*0.5;
+}
+// The silhouette scale of a sphere of radius `r` seen from distance `d` (lightsSample's
+// disc radius over r); at most 22.4, where the sample disc stops growing.
+float lightsSilhouette(float r,float d){return d>r*1.001?d*rsqrt(d*d-r*r):1;}
+// The radius around a light's centre that holds every lightsSample point seen from any
+// receiver at least `near` metres from the centre.
+float lightsSampleRadius(Light light,LightShape shape,float near){
+    uint kind=lightKind(light);
+    if(kind>=LIGHT_RECT||light.parameters.z<=0)return lightsSourceRadius(light,shape);
+    float r=light.parameters.z,scale=near>r*1.001?lightsSilhouette(r,near):22.4;
+    return r*scale+shape.tangentLength.w*0.5;
+}
+
+// The source samples of a light seen from a receiver: sample k is c + u x + w y for
+// lightsSample2D's (x, y) in [-1, 1]^2 (u, w carry the extent), plus, for a tube, an
+// offset along its axis. `count` samples; `grid` the side of a rect's sample grid.
+// Every sample of a planar frame lies in the plane through c spanned by u and w.
+struct LightsFrame{float3 c;float3 u;float3 w;uint count;uint grid;float span;float3 axis;};
+
+// The frame of `light` (`shape`) from `p` for `n` requested samples: a fixed
+// golden-angle spiral, uniform in area, over the disc a sphere presents to `p` (its
+// silhouette) or a disc light's disc, a stratified grid over a rect's face (n rounded
+// to a square), a tube's broadside outline (also spread along its length). Ideal points
+// and spots have one sample, their centre.
+LightsFrame lightsFrame(Light light,LightShape shape,float3 p,uint n){
+    LightsFrame f;f.c=light.positionRange.xyz;f.u=0;f.w=0;f.count=1;f.grid=0;f.span=0;f.axis=0;
+    uint kind=lightKind(light);n=max(n,1u);
+    if(kind==LIGHT_RECT){
+        uint side=max(uint(sqrt(float(n))+0.5),1u);float2 e=max(shape.rect.xy,0.001);
+        f.u=shape.tangentLength.xyz*e.x;f.w=cross(shape.tangentLength.xyz,light.directionOuter.xyz)*e.y;
+        f.count=side*side;f.grid=side;return f;
+    }
+    float radius=kind==LIGHT_DISC?max(light.parameters.z,0.001):light.parameters.z;
+    if(radius<=0||n<=1)return f;
+    float3 axis,u,w;
+    if(kind==LIGHT_DISC){axis=light.directionOuter.xyz;u=shape.tangentLength.xyz;w=cross(axis,u);}
+    else{
+        axis=normalize(p-f.c);
+        // Duff et al. 2017's continuous basis around the axis.
+        float s=axis.z>=0?1.:-1.,a=-1/(s+axis.z),b=axis.x*axis.y*a;
+        u=float3(1+s*axis.x*axis.x*a,s*b,-s*axis.x);w=float3(b,s+axis.y*axis.y*a,-axis.y);
+        radius*=lightsSilhouette(radius,length(p-f.c));
+        f.span=shape.tangentLength.w;f.axis=shape.tangentLength.xyz;
+    }
+    f.u=u*radius;f.w=w*radius;f.count=n;return f;
+}
+// Sample `k`'s in-plane coordinates in [-1, 1]^2.
+float2 lightsSample2D(LightsFrame f,uint k){
+    if(f.count<=1)return 0;
+    if(f.grid>0)return (float2(k%f.grid,k/f.grid)+0.5)/float(f.grid)*2-1;
+    float r=sqrt((float(k)+0.5)/float(f.count)),phi=float(k)*2.39996323;
+    return float2(cos(phi),sin(phi))*r;
+}
+// Sample `k` of frame `f`, in world space.
+float3 lightsSampleAt(LightsFrame f,uint k){
+    float2 xy=lightsSample2D(f,k);float3 q=f.c+f.u*xy.x+f.w*xy.y;
+    // A tube: the samples spread along its axis over its length too.
+    if(f.span>0)q+=f.axis*((frac(float(k)*0.61803399+0.5)-0.5)*f.span);
+    return q;
+}
+// Source sample `k` of `n` on `light` as seen from `p` (lightsFrame).
+float3 lightsSample(Light light,LightShape shape,float3 p,uint k,uint n){
+    return lightsSampleAt(lightsFrame(light,shape,p,n),k);
+}
+
+// The object-space ray of instance record `inst` for the world ray (o, d).
+void lightsObjectRay(TraceInstanceRecord inst,float3 o,float3 d,out float3 oo,out float3 dd){
+    oo=float3(dot(inst.r0.xyz,o)+inst.r0.w,dot(inst.r1.xyz,o)+inst.r1.w,dot(inst.r2.xyz,o)+inst.r2.w);
+    dd=float3(dot(inst.r0.xyz,d),dot(inst.r1.xyz,d),dot(inst.r2.xyz,d));
+}
+
+// Whether segment a + t (b - a), t in [0, 1], meets box lo..hi grown by `grow` per axis.
+bool lightsSegmentBox(float3 a,float3 b,float3 lo,float3 hi,float3 grow){
+    float3 d=b-a,inv=select(abs(d)<1e-20,float3(1e20),1/d);
+    float3 t0=(lo-grow-a)*inv,t1=(hi+grow-a)*inv;
+    float3 near=min(t0,t1),far=max(t0,t1);
+    return max(max(max(near.x,near.y),near.z),0.)<=min(min(min(far.x,far.y),far.z),1.);
+}
+
+// Whether box lo..hi meets the cone from `a` (apex, radius 0) to `b` (radius `g` per axis):
+// the bundle of segments from a receiver to every source sample. Conservative: any
+// intersection lies at a t no later than where the segment leaves the box grown by the
+// full `g`, so the box grown by g t_exit is tested again, much tighter near the apex.
+bool lightsConeBox(float3 a,float3 b,float3 lo,float3 hi,float3 g){
+    float3 d=b-a,inv=select(abs(d)<1e-20,float3(1e20),1/d);
+    float3 t0=(lo-g-a)*inv,t1=(hi+g-a)*inv,mn=min(t0,t1),mx=max(t0,t1);
+    float near=max(max(max(mn.x,mn.y),mn.z),0.),far=min(min(min(mx.x,mx.y),mx.z),1.);
+    if(near>far)return false;
+    float3 gf=g*far;t0=(lo-gf-a)*inv;t1=(hi+gf-a)*inv;mn=min(t0,t1);mx=max(t0,t1);
+    return max(max(max(mn.x,mn.y),mn.z),0.)<=min(min(min(mx.x,mx.y),mx.z),1.);
+}
+
+// Whether the segment from `origin` to source sample `q` is blocked inside instance
+// `slot`: its object-space BLAS, first hit, alpha tested through trace's tables.
+bool lightsBlockedIn(TraceScene s,uint slot,float3 origin,float3 q){
+    TraceInstanceRecord inst=traceInstance(s,slot);
+    float3 oo,dd;lightsObjectRay(inst,origin,q-origin,oo,dd);
+    float tMax=0.9999;TraceHit hit=(TraceHit)0;hit.instance=TRACE_NONE;TraceAlphaTables alpha;
+    return traceBlas(s,alpha,slot,inst.a,oo,dd,0.,tMax,TRACE_ACCEPT_FIRST_HIT,0.,hit);
+}
+
+// The world-space form of object-space row `t` (dot(xyz, p) + w) of instance `inst`.
+float4 lightsWorldRow(TraceInstanceRecord inst,float4 t){
+    return float4(inst.r0.xyz*t.x+inst.r1.xyz*t.y+inst.r2.xyz*t.z,t.x*inst.r0.w+t.y*inst.r1.w+t.z*inst.r2.w+t.w);
+}
+
+// Bit k set: source sample k's segment from `o` (planar frame `f`, its first 32
+// samples) meets one of instance `slot`'s triangles. The BLAS is walked once with the
+// capsule from o to the frame's centre of world radius `grow` (instead of once per
+// sample); each candidate triangle whose plane may separate o from some sample is then
+// tested against every sample with traceBlas's own object-space triangle test (same
+// object ray as lightsBlockedIn, t in (0, 0.9999), the same edge slack), so a sample is
+// blocked here exactly when its trace() segment through this instance is. (A
+// homogeneous world-space form was cheaper but disagreed with f64 on grazing
+// segments: bench test masks_against_f64_brute_force.) The default 16 samples take the
+// same object-space test in its affine form (no per-sample ray, sample point or division;
+// the slack bounded over all samples, so never tighter than trace's): V2 and the exact
+// control share it, and the bench compares both with per-sample trace() rays. y: one
+// when the walk ran out of LIGHTS_MASK_BUDGET (the caller traces rays instead).
+// `blocked` carries other instances' bits in.
+uint2 lightsMaskInstance(TraceScene s,uint slot,float3 o,LightsFrame f,float grow,uint blocked){
+    TraceInstanceRecord inst=traceInstance(s,slot);
+    // Alpha-tested triangles need their texture: rays.
+    if((inst.a.z&TRACE_INSTANCE_ALPHA)!=0)return uint2(blocked,1);
+    float3x3 m=float3x3(inst.r0.xyz,inst.r1.xyz,inst.r2.xyz);
+    float3 offset=float3(inst.r0.w,inst.r1.w,inst.r2.w);
+    float3 a=mul(m,o)+offset,b=mul(m,f.c)+offset;
+    // The origin, sample centre and sample axes in object space (lightsObjectRay's form).
+    float3 oo=float3(dot(inst.r0.xyz,o)+inst.r0.w,dot(inst.r1.xyz,o)+inst.r1.w,dot(inst.r2.xyz,o)+inst.r2.w);
+    float3 co=float3(dot(inst.r0.xyz,f.c)+inst.r0.w,dot(inst.r1.xyz,f.c)+inst.r1.w,dot(inst.r2.xyz,f.c)+inst.r2.w);
+    float3 uo=float3(dot(inst.r0.xyz,f.u),dot(inst.r1.xyz,f.u),dot(inst.r2.xyz,f.u)),wo=float3(dot(inst.r0.xyz,f.w),dot(inst.r1.xyz,f.w),dot(inst.r2.xyz,f.w));
+    float3 go=grow*float3(length(inst.r0.xyz),length(inst.r1.xyz),length(inst.r2.xyz));
+    uint full=f.count>=32?0xffffffffu:(1u<<f.count)-1;
+    // The default 16 samples: their coordinates once per pixel and instance, in
+    // registers (constant indices only), and the per-triangle affine test below. `reach3`
+    // bounds every sample's |dd| = |q - o| in object space, per axis.
+    bool fast=f.count==16;
+    float2 xy[16];
+    [unroll]for(uint k=0;k<16;k++)xy[k]=f.grid>0?(float2(k%4,k/4)+0.5)/4*2-1:float2(cos(float(k)*2.39996323),sin(float(k)*2.39996323))*sqrt((float(k)+0.5)/16);
+    float3 reach3=abs(co-oo)+abs(uo)+abs(wo);
+    uint root=inst.a.x,triBase=inst.a.y,spent=0;
+    uint2 stack[TRACE_STACK];uint sp=0;
+    uint2 ng=uint2(root,0x80000000u);
+    for(;;){
+        uint2 tg=uint2(0,0);
+        if(ng.y>0x00ffffffu){
+            uint imask=ng.y;uint bit=firstbithigh(ng.y);uint base=ng.x;
+            ng.y&=~(1u<<bit);
+            if(ng.y>0x00ffffffu){if(sp>=TRACE_STACK)return uint2(blocked,1);stack[sp]=ng;sp++;}
+            uint childSlot=bit-24;
+            uint rel=countbits(imask&~(0xffffffffu<<childSlot));
+            uint ix=(base+rel)*5;
+            if(++spent>LIGHTS_MASK_BUDGET)return uint2(blocked,1);
+            uint4 n0=traceWord(s.nodes,ix),n1=traceWord(s.nodes,ix+1),n2=traceWord(s.nodes,ix+2);
+            uint4 n3=traceWord(s.nodes,ix+3),n4=traceWord(s.nodes,ix+4);
+            uint e=n0.w;
+            float3 sc=asfloat(uint3((e&255)<<23,((e>>8)&255)<<23,((e>>16)&255)<<23)),orig=asfloat(n0.xyz);
+            uint hits=0;
+            [unroll]for(uint part=0;part<2;part++){
+                uint meta=part==0?n1.z:n1.w;
+                uint lx=part==0?n2.x:n2.y,hx=part==0?n3.z:n3.w,ly=part==0?n2.z:n2.w,hy=part==0?n4.x:n4.y,lz=part==0?n3.x:n3.y,hz=part==0?n4.z:n4.w;
+                uint children=(meta>>5)&0x07070707u,bits=meta&0x1f1f1f1fu;
+                [unroll]for(uint k=0;k<4;k++){
+                    uint sh=k*8;uint count=(children>>sh)&255;if(count==0)continue;
+                    float3 bl=float3(float((lx>>sh)&255),float((ly>>sh)&255),float((lz>>sh)&255))*sc+orig;
+                    float3 bh=float3(float((hx>>sh)&255),float((hy>>sh)&255),float((hz>>sh)&255))*sc+orig;
+                    if(lightsConeBox(a,b,bl,bh,go))hits|=count<<((bits>>sh)&31);
+                }
+            }
+            ng=uint2(n1.x+root,(hits&0xff000000u)|(e>>24));tg=uint2(n1.y+triBase,hits&0x00ffffffu);
+        }else{tg=ng;ng=uint2(0,0);}
+        while(tg.y!=0){
+            uint bit=firstbithigh(tg.y);uint addr=tg.x+bit*4;tg.y&=~(1u<<bit);
+            if(++spent>LIGHTS_MASK_BUDGET)return uint2(blocked,1);
+            // Object space, as trace() tests the triangle.
+            float4 t2=asfloat(traceWord(s.triangles,addr+2));
+            float po=dot(t2.xyz,oo)+t2.w,pc=dot(t2.xyz,co)+t2.w,pu=dot(t2.xyz,uo),pw=dot(t2.xyz,wo);
+            // Every sample on the origin's side of the plane: no segment crosses it.
+            float reach=abs(pu)+abs(pw);
+            if((po>0&&pc-reach>0)||(po<0&&pc+reach<0))continue;
+            float4 t0=asfloat(traceWord(s.triangles,addr)),t1=asfloat(traceWord(s.triangles,addr+1));
+            if(fast){
+                // The same test in its affine form: the plane and barycentric rows are
+                // affine along o + t (q - o), so at t = P(o) / (P(o) - P(q)) the hit's
+                // barycentrics scaled by |P(o) - P(q)| need no division. Edge slack: trace's
+                // eps (|row| . (|o| + t |dd|) + |w|) times |den|, where t |den| = |P(o)| and |dd|
+                // is bounded by the frame's extent `reach3` (never smaller than trace's).
+                float uo0=dot(t0.xyz,oo)+t0.w,uc=dot(t0.xyz,co)+t0.w,uu=dot(t0.xyz,uo),uw=dot(t0.xyz,wo);
+                float vo0=dot(t1.xyz,oo)+t1.w,vc=dot(t1.xyz,co)+t1.w,vu=dot(t1.xyz,uo),vw=dot(t1.xyz,wo);
+                float au=TRACE_EDGE_EPS*(dot(abs(t0.xyz),abs(oo))+abs(t0.w)),bu=TRACE_EDGE_EPS*dot(abs(t0.xyz),reach3);
+                float av=TRACE_EDGE_EPS*(dot(abs(t1.xyz),abs(oo))+abs(t1.w)),bv=TRACE_EDGE_EPS*dot(abs(t1.xyz),reach3);
+                [unroll]for(uint k=0;k<16;k++){
+                    float ps=pc+pu*xy[k].x+pw*xy[k].y,den=po-ps,ad=abs(den);
+                    // 0 < t < 0.9999 (trace's segment end).
+                    bool crosses=po*den>0&&abs(po)<0.9999*ad;
+                    float sg=den>0?1.:-1.;
+                    float hu=(uo0*den+po*(uc+uu*xy[k].x+uw*xy[k].y-uo0))*sg,hv=(vo0*den+po*(vc+vu*xy[k].x+vw*xy[k].y-vo0))*sg;
+                    float su=au*ad+bu*abs(po),sv=av*ad+bv*abs(po);
+                    if(crosses&&hu>=-su&&hv>=-sv&&hu+hv<=ad+su+sv){
+#if LIGHTS_DEBUG_HOOKS
+                        if(k==lightsDebugK&&lightsDebugTri==0){lightsDebugTri=addr+1;lightsDebugSlot=slot;}
+#endif
+                        blocked|=1u<<k;
+                    }
+                }
+                if((blocked&full)==full)return uint2(blocked,0);
+                continue;
+            }
+            for(uint k=0;k<min(f.count,32u);k++){
+                if((blocked>>k&1)!=0)continue;
+                // trace.slangh traceBlas's triangle test on lightsBlockedIn's object ray.
+                float2 xy=lightsSample2D(f,k);float3 q=f.c+f.u*xy.x+f.w*xy.y;
+                float3 ro,dd;lightsObjectRay(inst,o,q-o,ro,dd);
+                float transD=dot(t2.xyz,dd);if(transD==0)continue;
+                float t=-(dot(t2.xyz,ro)+t2.w)/transD;if(!(t>0&&t<0.9999))continue;
+                float3 hit=ro+t*dd;
+                float u=dot(t0.xyz,hit)+t0.w,v=dot(t1.xyz,hit)+t1.w;
+                float3 size=abs(ro)+abs(t*dd);
+                float eu=TRACE_EDGE_EPS*(dot(abs(t0.xyz),size)+abs(t0.w)),ev=TRACE_EDGE_EPS*(dot(abs(t1.xyz),size)+abs(t1.w));
+                if(u>=-eu&&v>=-ev&&u+v<=1+eu+ev){
+                    if(k==lightsDebugK&&lightsDebugTri==0){lightsDebugTri=addr+1;lightsDebugSlot=slot;}
+                    blocked|=1u<<k;
+                }
+            }
+            if((blocked&full)==full)return uint2(blocked,0);
+        }
+        if(ng.y>0x00ffffffu)continue;
+        if(sp==0)break;
+        sp--;ng=stack[sp];
+    }
+    return uint2(blocked,0);
+}
+
+// Bits of the samples instance `slot` blocks, added to `blocked`: its sample masks
+// (lightsMaskInstance), or, when its walk needs rays (budget, alpha), the bits it found
+// plus one trace() segment through it per remaining sample. Per instance, so the union
+// over instances does not depend on the order the TLAS visits them in.
+uint lightsInstanceBits(TraceScene s,uint slot,float3 o,LightsFrame f,float grow,uint blocked,inout uint rays){
+    uint2 b=lightsMaskInstance(s,slot,o,f,grow,blocked);
+    if(b.y==0)return b.x;
+    blocked=b.x;
+    for(uint k=0;k<min(f.count,32u);k++){
+        if((blocked>>k&1)!=0)continue;
+        if(lightsBlockedIn(s,slot,o,lightsSampleAt(f,k)))blocked|=1u<<k;
+        rays++;
+    }
+    return blocked;
+}
+
+// Sample bits over every instance under `mask` whose TLAS leaf the capsule from `o` to
+// the frame's centre (radius `grow`) meets (lightsInstanceBits each): the exact
+// control's visibility and V2's for pairs naming more than two instances.
+uint lightsMaskAll(TraceScene s,float3 o,LightsFrame f,float grow,uint mask,inout uint rays){
+    if((s.flags&TRACE_SCENE_NONEMPTY)==0)return 0;
+    uint blocked=0,node=0,full=f.count>=32?0xffffffffu:(1u<<f.count)-1;
+    for(;;){
+        uint4 na=traceWord(s.tlas,node*2),nb=traceWord(s.tlas,node*2+1);
+        if(lightsConeBox(o,f.c,asfloat(na.xyz),asfloat(nb.xyz),float3(grow,grow,grow))){
+            if((na.w&0x80000000u)==0){node=na.w;continue;}
+            uint i=na.w&0x7fffffffu;
+            if((traceWord(s.instances,i*5+3).z&mask&0xffu)!=0){
+                blocked=lightsInstanceBits(s,i,o,f,grow,blocked,rays);
+                if((blocked&full)==full)return blocked;
+            }
+        }
+        node=nb.w;if(node==TRACE_NONE)break;
+    }
+    return blocked;
+}
+
+// Visibility of `light` (`shape`) from `origin`: the share of its `n` fixed source
+// samples whose segments no occluder blocks (a rect rounds `n` to a square grid).
+// `entry` names the instances a partial pair may meet (TLAS leaf nodes; LIGHTS_ALL:
+// every instance under `mask` through the TLAS). Planar frames of at most 32 samples are
+// tested per triangle against every sample at once (lightsInstanceBits, lightsMaskAll);
+// otherwise, or with `masks` off, one trace() segment per sample. `rays` counts the
+// segments traced plus LIGHTS_MASKED per pair the masks resolved.
+float lightsVisibility(TraceScene s,float3 origin,Light light,LightShape shape,uint4 entry,uint n,uint mask,bool masks,inout uint rays){
+    bool all=(entry.x&LIGHTS_ALL)!=0;
+    LightsFrame f=lightsFrame(light,shape,origin,n);
+    // Instances whose leaf box the whole sample cone from this pixel misses cannot
+    // block any sample: drop them before tracing.
+    float source=lightsSampleRadius(light,shape,length(light.positionRange.xyz-origin));
+    uint first=TRACE_NONE,second=TRACE_NONE;
+    if(!all){
+        if(entry.y!=TRACE_NONE){
+            uint4 a=traceWord(s.tlas,entry.y*2),b=traceWord(s.tlas,entry.y*2+1);
+            if(lightsConeBox(origin,light.positionRange.xyz,asfloat(a.xyz),asfloat(b.xyz),float3(source,source,source)))first=a.w&0x7fffffffu;
+        }
+        if(entry.z!=TRACE_NONE){
+            uint4 a=traceWord(s.tlas,entry.z*2),b=traceWord(s.tlas,entry.z*2+1);
+            if(lightsConeBox(origin,light.positionRange.xyz,asfloat(a.xyz),asfloat(b.xyz),float3(source,source,source)))second=a.w&0x7fffffffu;
+        }
+        if(first==TRACE_NONE&&second==TRACE_NONE)return 1;
+    }
+    if(masks&&f.span<=0&&f.count<=32){
+        uint bits=0;
+        if(all)bits=lightsMaskAll(s,origin,f,source,mask,rays);
+        else{
+            if(first!=TRACE_NONE)bits=lightsInstanceBits(s,first,origin,f,source,bits,rays);
+            if(second!=TRACE_NONE)bits=lightsInstanceBits(s,second,origin,f,source,bits,rays);
+        }
+        if(lightsDebugOn&&lightsDebug.w==0){
+            // Diagnostics: per-sample trace() rays over the same instances.
+            uint traced=0;
+            for(uint k=0;k<f.count;k++){
+                float3 q=lightsSampleAt(f,k);
+                bool hit=all?traceAny(s,traceRay(origin,q-origin,0.,0.9999,0,mask))
+                    :(first!=TRACE_NONE&&lightsBlockedIn(s,first,origin,q))||(second!=TRACE_NONE&&lightsBlockedIn(s,second,origin,q));
+                if(hit)traced|=1u<<k;
+            }
+            if(!all&&traced!=bits){
+                // Re-walk for the first sample the masks block and the rays do not.
+                lightsDebugK=firstbitlow(bits&~traced);lightsDebugTri=0;
+                if(first!=TRACE_NONE)lightsMaskInstance(s,first,origin,f,source,0);
+                if(lightsDebugTri==0&&second!=TRACE_NONE)lightsMaskInstance(s,second,origin,f,source,0);
+                lightsDebugK=0xffffffffu;
+            }
+            lightsDebugRecord((entry.x&LIGHTS_INDEX)|(lightsDebugSlot<<12),bits,traced,origin);
+        }
+        rays+=LIGHTS_MASKED;
+        return float(f.count-countbits(bits))/float(f.count);
+    }
+    uint visible=0;
+    for(uint k=0;k<f.count;k++){
+        float3 q=lightsSampleAt(f,k);
+        bool blocked;
+        if(all)blocked=traceAny(s,traceRay(origin,q-origin,0.,0.9999,0,mask));
+        else blocked=(first!=TRACE_NONE&&lightsBlockedIn(s,first,origin,q))||(second!=TRACE_NONE&&lightsBlockedIn(s,second,origin,q));
+        rays++;
+        visible+=blocked?0u:1u;
+    }
+    return float(visible)/float(f.count);
+}
+
+// The hull of a pair: the tile's ray-origin box lo..hi and the light's sample sphere
+// (centre c, radius rs), in world space. Whether the world plane `plane` (dot(xyz, p)
+// + w) leaves the whole hull strictly on one side (by 10 um).
+bool lightsPlaneSeparates(float4 plane,float3 lo,float3 hi,float3 c,float rs){
+    float len=length(plane.xyz);if(len<=0)return false;
+    float side=dot(plane.xyz,c)+plane.w,eps=1e-5*len;
+    if(abs(side)<=rs*len+eps)return false;
+    float sign=side>0?1.:-1.;
+    // The box corner nearest the plane on the sphere's side.
+    float3 n=plane.xyz*sign,corner=float3(n.x>0?lo.x:hi.x,n.y>0?lo.y:hi.y,n.z>0?lo.z:hi.z);
+    return dot(n,corner)+plane.w*sign>eps;
+}
+
+// Whether instance `slot`'s triangles may touch the hull of the tile's origin box
+// lo..hi and the light's sample sphere (c, rs): its BLAS walked in object space with
+// the capsule from the box centre to c of world radius `grow` (which holds the hull;
+// grown per object axis by the instance's row norms, the exact box of the mapped
+// ball), each candidate triangle cleared only when its world plane separates the
+// hull. Past LIGHTS_BEAM_BUDGET tests it answers yes.
+bool lightsBeamInstance(TraceScene s,uint slot,float3 lo,float3 hi,float3 c,float rs,float grow,inout uint spent){
+    TraceInstanceRecord inst=traceInstance(s,slot);
+    float3x3 m=float3x3(inst.r0.xyz,inst.r1.xyz,inst.r2.xyz);
+    float3 offset=float3(inst.r0.w,inst.r1.w,inst.r2.w);
+    float3 a=mul(m,(lo+hi)*0.5)+offset,b=mul(m,c)+offset;
+    float3 go=grow*float3(length(inst.r0.xyz),length(inst.r1.xyz),length(inst.r2.xyz));
+    uint root=inst.a.x,triBase=inst.a.y;
+    uint2 stack[TRACE_STACK];uint sp=0;
+    uint2 ng=uint2(root,0x80000000u);
+    for(;;){
+        uint2 tg=uint2(0,0);
+        if(ng.y>0x00ffffffu){
+            uint imask=ng.y;uint bit=firstbithigh(ng.y);uint base=ng.x;
+            ng.y&=~(1u<<bit);
+            if(ng.y>0x00ffffffu){if(sp>=TRACE_STACK)return true;stack[sp]=ng;sp++;}
+            uint childSlot=bit-24;
+            uint rel=countbits(imask&~(0xffffffffu<<childSlot));
+            uint ix=(base+rel)*5;
+            if(++spent>LIGHTS_BEAM_BUDGET)return true;
+            uint4 n0=traceWord(s.nodes,ix),n1=traceWord(s.nodes,ix+1),n2=traceWord(s.nodes,ix+2);
+            uint4 n3=traceWord(s.nodes,ix+3),n4=traceWord(s.nodes,ix+4);
+            uint e=n0.w;
+            float3 sc=asfloat(uint3((e&255)<<23,((e>>8)&255)<<23,((e>>16)&255)<<23)),orig=asfloat(n0.xyz);
+            uint mask=0;
+            [unroll]for(uint part=0;part<2;part++){
+                uint meta=part==0?n1.z:n1.w;
+                uint lx=part==0?n2.x:n2.y,hx=part==0?n3.z:n3.w,ly=part==0?n2.z:n2.w,hy=part==0?n4.x:n4.y,lz=part==0?n3.x:n3.y,hz=part==0?n4.z:n4.w;
+                uint children=(meta>>5)&0x07070707u,bits=meta&0x1f1f1f1fu;
+                [unroll]for(uint k=0;k<4;k++){
+                    uint sh=k*8;uint count=(children>>sh)&255;if(count==0)continue;
+                    float3 bl=float3(float((lx>>sh)&255),float((ly>>sh)&255),float((lz>>sh)&255))*sc+orig;
+                    float3 bh=float3(float((hx>>sh)&255),float((hy>>sh)&255),float((hz>>sh)&255))*sc+orig;
+                    if(lightsSegmentBox(a,b,bl,bh,go))mask|=count<<((bits>>sh)&31);
+                }
+            }
+            ng=uint2(n1.x+root,(mask&0xff000000u)|(e>>24));tg=uint2(n1.y+triBase,mask&0x00ffffffu);
+        }else{tg=ng;ng=uint2(0,0);}
+        while(tg.y!=0){
+            uint bit=firstbithigh(tg.y);uint addr=tg.x+bit*4;tg.y&=~(1u<<bit);
+            if(++spent>LIGHTS_BEAM_BUDGET)return true;
+            // The object plane (n, w) in world space: (M^T n, n.t + w).
+            float4 plane=asfloat(traceWord(s.triangles,addr+2));
+            float4 world=float4(inst.r0.xyz*plane.x+inst.r1.xyz*plane.y+inst.r2.xyz*plane.z,dot(plane.xyz,offset)+plane.w);
+            if(!lightsPlaneSeparates(world,lo,hi,c,rs))return true;
+        }
+        if(ng.y>0x00ffffffu)continue;
+        if(sp==0)break;
+        sp--;ng=stack[sp];
+    }
+    return false;
+}
+
+// Classifies the pair (tile box lo..hi, light sphere c / rs) against every instance
+// under `mask`: x LIGHTS_PARTIAL (some instance may block a sample segment) and
+// LIGHTS_ALL (more than LIGHTS_PAIR_INSTANCES do); y, z the TLAS leaf nodes of the
+// first two (TRACE_NONE unused). Zero x: every segment from the tile is clear.
+uint3 lightsClassify(TraceScene s,float3 lo,float3 hi,float3 c,float rs,uint mask,inout uint spent){
+    uint3 result=uint3(0,TRACE_NONE,TRACE_NONE);
+    if((s.flags&TRACE_SCENE_NONEMPTY)==0)return result;
+    float3 a=(lo+hi)*0.5;float grow=max(length(hi-lo)*0.5,rs);
+    uint node=0;uint found=0;
+    for(;;){
+        uint4 na=traceWord(s.tlas,node*2),nb=traceWord(s.tlas,node*2+1);
+        if(lightsSegmentBox(a,c,asfloat(na.xyz),asfloat(nb.xyz),float3(grow,grow,grow))){
+            if((na.w&0x80000000u)==0){node=na.w;continue;}
+            uint i=na.w&0x7fffffffu;
+            TraceInstanceRecord inst=traceInstance(s,i);
+            uint local=0;
+            if((inst.a.z&mask&0xffu)!=0 && lightsBeamInstance(s,i,lo,hi,c,rs,grow,local)){
+                result.x|=LIGHTS_PARTIAL;
+                if(found==0)result.y=node;else if(found==1)result.z=node;else{result.x|=LIGHTS_ALL;spent+=local;return result;}
+                found++;
+            }
+            spent+=local;
+        }
+        node=nb.w;
+        if(node==TRACE_NONE)break;
+    }
+    return result;
+}
+
+// An upper bound on the luminance any receiver of a tile takes from a light, with
+// visibility one: candela `intensity`, the window at the nearest receiver distance
+// `near` (m) of a source of radius `rs`, and the tile's BRDF bound `brdfMax` (per
+// unit illuminance; look-shading.slangh brdf with its maxima: D <= 1 / (pi a^2),
+// n.l V <= 1 / (2 alpha), the multiple-scattering scale <= 3, Fresnel <= 1, plus the
+// Lambert base).
+// Area sources (rs > 0) divide by the squared distance to their nearest point, and
+// receivers within 2 rs of the centre get no bound (infinity: never omitted). Ideal
+// points divide as localLight does, by max(d^2, 0.01).
+float lightsBound(float intensity,float range,float near,float rs,float brdfMax){
+    if(near>=range)return 0;
+    if(rs>0&&near<=2*rs)return 1e30;
+    float fade=pow(saturate(1-pow(near/range,4)),2);
+    float den=rs>0?(near-rs)*(near-rs):max(near*near,0.01);
+    return intensity*fade*brdfMax/den;
+}

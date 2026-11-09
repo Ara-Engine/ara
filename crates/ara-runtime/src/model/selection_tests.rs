@@ -182,3 +182,13 @@ fn mirrored_source_parts_preserve_front_faces_and_tangent_handedness() {
         -mirrored.vertices[0].tangent[3]
     );
 }
+
+#[test]
+fn cast_shadows_false_in_node_extras_holds_for_its_subtree() {
+    let mut source = scene();
+    source["nodes"][1]["extras"] = json!({"castShadows": false});
+    let model = cook(source);
+    let casts: Vec<_> = model.primitives.iter().map(|p| p.casts_shadows).collect();
+    // PieceA and its child Bolt cast nothing; PieceB still does.
+    assert_eq!(casts, [false, false, true]);
+}

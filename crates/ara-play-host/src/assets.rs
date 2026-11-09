@@ -60,7 +60,7 @@ pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, Str
         .collect()
 }
 
-fn project_preset(imports: &[ImportDoc]) -> Result<ara_asset::CookPreset, String> {
+fn project_policy(imports: &[ImportDoc]) -> Result<ara_asset::ProjectImportSettings, String> {
     imports
         .iter()
         .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
@@ -73,7 +73,6 @@ fn project_preset(imports: &[ImportDoc]) -> Result<ara_asset::CookPreset, String
             serde_json::from_value::<ara_asset::ProjectImportSettings>(serde_json::Value::Object(
                 record.clone(),
             ))
-            .map(|settings| settings.preset)
         })
         .transpose()
         .map_err(|error| error.to_string())
@@ -166,6 +165,9 @@ impl Assets {
     /// Registers every sidecar under `root` and requests imports in the background.
     /// `worker` is the import worker executable (`ara-import-worker`).
     pub fn new(root: &Path, worker: &Path) -> Result<Self, String> {
+        // A stale or missing worker must fail loudly here: later errors from it (the
+        // version query below falls back to "older worker") leave models as placeholders.
+        ara_companion::verify(worker).map_err(|refusal| format!("ARA7308: {refusal}"))?;
         let mut schema = ara_schema::SchemaDb::new();
         ara_doc::register(&mut schema);
         ara_asset::register_schema(&mut schema);
@@ -300,10 +302,10 @@ impl Assets {
         imports: Vec<ImportDoc>,
         revision: u64,
     ) -> Result<(), String> {
-        let project_preset = project_preset(&imports)?;
+        let project_policy = project_policy(&imports)?;
         let project_changed = self
             .pipeline
-            .configure_project(project_preset)
+            .configure_project_settings(project_policy)
             .map_err(|error| error.to_string())?;
         self.progress_stale |= project_changed;
         let mut current = BTreeMap::new();
@@ -578,11 +580,15 @@ mod tests {
             ),
         ];
         assert_eq!(
-            super::project_preset(&imports).expect("scoped policy"),
+            super::project_policy(&imports)
+                .expect("scoped policy")
+                .preset,
             ara_asset::CookPreset::Balanced
         );
         assert_eq!(
-            super::project_preset(&imports[..1]).expect("legacy policy"),
+            super::project_policy(&imports[..1])
+                .expect("legacy policy")
+                .preset,
             ara_asset::CookPreset::HighQuality
         );
     }
@@ -632,6 +638,7 @@ mod tests {
         std::fs::create_dir_all(root.path().join("settings")).expect("settings");
         let policy = ara_asset::ProjectImportSettings {
             preset: ara_asset::CookPreset::HighQuality,
+            ..Default::default()
         };
         std::fs::write(
             root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),

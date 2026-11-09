@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "9b250df16a9614cd34fa966dae58f1a5ca00e44d1ef39a11c348839224086cf3",
+  "key": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d",
   "stages": [
     {
-      "dxil": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.dxil",
+      "dxil": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteFragment.dxil",
       "dxil_hash": "2eb75eafa19545031d3ad71e7a656e2bc1943d11166f222359469543403a420e",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.metallib",
+        "metallib": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteFragment.metallib",
         "metallib_hash": "c9c0c52b572c67b84d8fffc8b004d6e44ab0fe15c6ac666ea236f279d85b5c11",
-        "reflection": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "spriteFragment",
-      "spirv": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.spv",
+      "spirv": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "dd28617335d9b6deddf76159d276ba5fa4e2b2a1c889c966d6aa18a3078d76b6",
       "stage": "fragment"
     },
     {
-      "dxil": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.dxil",
+      "dxil": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteVertex.dxil",
       "dxil_hash": "3abcc867fb70eda923ee182fe67965509d087a0937890116c78df078defe7e95",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.metallib",
+        "metallib": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteVertex.metallib",
         "metallib_hash": "b7802c0d0e21729f90cd7a6120f9f21a56857ca77fb4dc64c400ddec8dd118cd",
-        "reflection": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "spriteVertex",
-      "spirv": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.spv",
+      "spirv": "0c36689ac9cdb2080c2b18f28da9b92b094cc4cf627a65eb94d290919f29690d/sprites/spriteVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "affa30a79bccb20640cd6631d78befd93906b5a9cd113f4c0df49a11886a5746",
       "stage": "vertex"

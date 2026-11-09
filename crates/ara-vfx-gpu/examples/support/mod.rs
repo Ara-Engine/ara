@@ -161,7 +161,8 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
         position_range: [-2., 3., 2., 8.],
         color_lumens: [0.5, 0.65, 1., 180.],
         direction_outer: [0.; 4],
-        parameters: [0.; 4],
+        parameters: [0., 0., 0., 1.],
+        ..ara_render::scene::Light::ZERO
     }];
     let flicker = 0.85 + 0.1 * (tick as f32 * 0.73).sin() + 0.05 * (tick as f32 * 1.37).sin();
     for e in &effect.emitters {
@@ -193,7 +194,8 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
                             },
                     ],
                     direction_outer: [0.; 4],
-                    parameters: [0.; 4],
+                    parameters: [0., 0., 0., 1.],
+                    ..ara_render::scene::Light::ZERO
                 });
             }
         }

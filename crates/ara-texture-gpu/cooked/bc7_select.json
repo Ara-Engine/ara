@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc",
+  "key": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738",
   "stages": [
     {
-      "dxil": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc7_select/selectBc7Finalists.dxil",
+      "dxil": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc7_select/selectBc7Finalists.dxil",
       "dxil_hash": "c6fa09aaee6a19a3dd854ec2d28322642c12f13b0a39a052aa0adb92bacab9b3",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc7_select/selectBc7Finalists.metallib",
+        "metallib": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc7_select/selectBc7Finalists.metallib",
         "metallib_hash": "6a9a05d54249013c8cf5dfb4f61d04bc11f0de443be4eeae8ef53ea1af78d5ba",
-        "reflection": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc7_select/selectBc7Finalists.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc7_select/selectBc7Finalists.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "selectBc7Finalists",
-      "spirv": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc7_select/selectBc7Finalists.spv",
+      "spirv": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc7_select/selectBc7Finalists.spv",
       "spirv_entry": "main",
       "spirv_hash": "19d96288e4bff99e40f4424f3ad6ac958a11c474ea967171777882fd8ff5c825",
       "stage": "compute"

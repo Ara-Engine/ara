@@ -1,11 +1,16 @@
 //! Keep the native editor and its pooled player in one Cargo feature/profile build.
 use std::ffi::OsString;
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, ensure};
+
+/// Executables the editor starts from beside itself, built in the editor's Cargo
+/// invocation: the pooled player, the asset import worker, and the `ara` CLI that
+/// its Connect AI agents dialog registers.
+const COMPANIONS: [&str; 3] = ["ara-player", "ara-import-worker", "ara"];
 
 struct Plan {
     build: Vec<OsString>,
@@ -87,26 +92,31 @@ fn plan(args: &[OsString], workspace_editor: bool) -> Result<Option<Plan>> {
         !launch || packages.iter().any(|name| package(name, "ara-editor")),
         "select the editor explicitly so companion feature roots are preserved: ara-dev cargo -- run -p ara-editor [Cargo options] -- [editor arguments]"
     );
-    ensure!(
-        !excluded.contains(&"ara-player"),
-        "cannot exclude the editor's companion ara-player; remove --exclude ara-player and build both together"
-    );
+    for companion in COMPANIONS {
+        ensure!(
+            !excluded.contains(&companion),
+            "cannot exclude the editor's companion {companion}; remove --exclude {companion} and build them together"
+        );
+    }
     ensure!(
         !(0..cargo.len()).any(|i| value(cargo, i, "--message-format", "").is_some()),
         "editor companion builds collect Cargo JSON artifacts internally; omit --message-format (logs are under target/ara-dev/editor-*)"
     );
     let mut build = cargo.to_vec();
     build[0] = "build".into();
-    if !packages.is_empty()
-        && !workspace
-        && !packages.iter().any(|name| package(name, "ara-player"))
-    {
-        build.extend(["--package".into(), "ara-player".into()]);
+    for companion in COMPANIONS {
+        if !packages.is_empty()
+            && !workspace
+            && !packages.iter().any(|name| package(name, companion))
+        {
+            build.extend(["--package".into(), companion.into()]);
+        }
+        if !bins.is_empty() && !bins.contains(&companion) {
+            build.extend(["--bin".into(), companion.into()]);
+        }
     }
     if bins.is_empty() {
         build.push("--bins".into());
-    } else if !bins.contains(&"ara-player") {
-        build.extend(["--bin".into(), "ara-player".into()]);
     }
     build.push("--message-format=json-render-diagnostics".into());
     Ok(Some(Plan {
@@ -122,6 +132,36 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
     let Some(plan) = plan(args, root.join("crates/ara-editor/Cargo.toml").is_file())? else {
         return Ok(None);
     };
+    // A workspace's default members may deliberately omit the editor.
+    let Some(pair) = build(root, &plan)? else {
+        return Ok(Some(true));
+    };
+    if !plan.launch {
+        return Ok(Some(true));
+    }
+    let artifacts = pair.editor.parent().context("editor artifact directory")?;
+    let mut command = launch(root, &pair.editor, &pair.player, artifacts, plan.arguments)?;
+    Ok(Some(crate::process::run(&mut command, None)?.success()))
+}
+
+/// A verified editor and its matching companions from one Cargo resolution.
+pub(crate) struct Pair {
+    pub(crate) editor: PathBuf,
+    pub(crate) player: PathBuf,
+    /// `ara-import-worker` and `ara`, which the editor finds beside itself.
+    pub(crate) siblings: Vec<PathBuf>,
+}
+
+/// Build and verify the default dev-profile pair (`ara-dev live editor`).
+pub(crate) fn build_pair(root: &Path) -> Result<Pair> {
+    let args = ["build", "-p", "ara-editor"].map(OsString::from);
+    let plan = plan(&args, true)?.context("editor build plan")?;
+    build(root, &plan)?.context("Cargo did not produce ara-editor")
+}
+
+/// Build the planned pair and probe the companion's `--ray-tracing` support. None
+/// when a non-launching build omits the editor.
+fn build(root: &Path, plan: &Plan) -> Result<Option<Pair>> {
     let directories = crate::build_paths::Directories::from_env(root)?;
     crate::build_paths::validate_output(root, &root.join("target"))?;
     for i in 0..plan.build.len() {
@@ -145,7 +185,7 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
     directories.apply(&mut build);
     crate::compile_cache::configure(&mut build);
     eprintln!(
-        "Building editor + matching player with one feature/profile resolution: {:?}",
+        "Building editor + matching player, import worker and CLI with one feature/profile resolution: {:?}",
         plan.build
     );
     ensure!(
@@ -155,9 +195,8 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
     );
     let binaries = crate::binaries::artifacts(&fs::read_to_string(&artifacts)?)?;
     let editor = binaries.get("ara-editor");
-    // A workspace's default members may deliberately omit the editor.
     if editor.is_none() && !plan.launch {
-        return Ok(Some(true));
+        return Ok(None);
     }
     let editor = editor
         .context("Cargo did not produce ara-editor; select -p ara-editor --bin ara-editor")?;
@@ -174,6 +213,18 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
         editor.display(),
         player.display()
     );
+    let siblings = COMPANIONS[1..]
+        .iter()
+        .map(|name| {
+            let path = binaries
+                .get(*name)
+                .filter(|path| path.is_file() && path.parent() == editor.parent())
+                .with_context(|| {
+                    format!("Cargo did not produce the editor's companion {name} beside it")
+                })?;
+            Ok(path.clone())
+        })
+        .collect::<Result<_>>()?;
     if let Some(override_path) = std::env::var_os("ARA_PLAYER").filter(|path| !path.is_empty()) {
         let override_path = root.join(override_path);
         ensure!(
@@ -221,13 +272,26 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
     // Final executables are worktree-local; a live editor need not hold the
     // shared intermediate compilation lane while other worktrees build.
     drop(lease);
-    if !plan.launch {
-        return Ok(Some(true));
-    }
+    Ok(Some(Pair {
+        editor: editor.clone(),
+        player: player.clone(),
+        siblings,
+    }))
+}
+
+/// The editor command with its matching player, scratch-profile fallbacks and the
+/// Cargo `artifacts` directory (plus `deps`) on PATH for runtime DLLs.
+pub(crate) fn launch(
+    root: &Path,
+    editor: &Path,
+    player: &Path,
+    artifacts: &Path,
+    arguments: Vec<OsString>,
+) -> Result<Command> {
     let mut command = Command::new(editor);
     command
         .current_dir(root)
-        .args(plan.arguments)
+        .args(arguments)
         .env("ARA_PLAYER", player);
     for (variable, fallback) in [
         ("ARA_CONFIG_DIR", "target/ara-config"),
@@ -237,13 +301,12 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<Option<bool>> {
             command.env(variable, root.join(fallback));
         }
     }
-    let parent = editor.parent().context("editor artifact directory")?;
-    let mut paths = vec![parent.to_owned(), parent.join("deps")];
+    let mut paths = vec![artifacts.to_owned(), artifacts.join("deps")];
     paths.extend(std::env::split_paths(
         &std::env::var_os("PATH").unwrap_or_default(),
     ));
     command.env("PATH", std::env::join_paths(paths)?);
-    Ok(Some(crate::process::run(&mut command, None)?.success()))
+    Ok(command)
 }
 
 #[cfg(test)]
@@ -277,16 +340,18 @@ mod tests {
         let plan = plan(&input, true).unwrap().unwrap();
         let end = input.iter().position(|arg| arg == "--").unwrap();
         assert_eq!(&plan.build[1..end], &input[1..end]);
-        assert!(
-            plan.build
-                .windows(2)
-                .any(|pair| pair == args(&["--package", "ara-player"]))
-        );
-        assert!(
-            plan.build
-                .windows(2)
-                .any(|pair| pair == args(&["--bin", "ara-player"]))
-        );
+        for companion in COMPANIONS {
+            assert!(
+                plan.build
+                    .windows(2)
+                    .any(|pair| pair == args(&["--package", companion]))
+            );
+            assert!(
+                plan.build
+                    .windows(2)
+                    .any(|pair| pair == args(&["--bin", companion]))
+            );
+        }
         assert_eq!(
             plan.arguments,
             args(&["project with spaces", "--frames", "3"])

@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_emissive/primaryEmissiveMain.dxil",
-      "dxil_hash": "71d5f0141a13f9f5f657d5bd04d9f50023413bf3e05b1d64d0fd16f55f5efbcc",
+      "dxil": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/primary_emissive/primaryEmissiveMain.dxil",
+      "dxil_hash": "fe74437f3986eed117ff944392accb17f05d74d6eefee904a2a9d172861ee729",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_emissive/primaryEmissiveMain.metallib",
-        "metallib_hash": "bd4c8c1ff6c781b90d4513807b2c836578d791e15472a33551b3240bbb65d5ee",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_emissive/primaryEmissiveMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/primary_emissive/primaryEmissiveMain.metallib",
+        "metallib_hash": "3de81d33b394a3ca0d6e7f2a1a5fab48a38a1cececcd8a1df3a9c1bdb224d4ad",
+        "reflection": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/primary_emissive/primaryEmissiveMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "primaryEmissiveMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_emissive/primaryEmissiveMain.spv",
+      "spirv": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/primary_emissive/primaryEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "a71b55d2a6704c94ffd0ced1cd2ff007ac4d12f360a20d1f662ab50ce6f3a5e3",
+      "spirv_hash": "ed41e49eb80f06c28caf37ac3310c73732e2052f7a14a21612d725c23d8382d9",
       "stage": "compute"
     }
   ],

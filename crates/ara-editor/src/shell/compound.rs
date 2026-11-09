@@ -715,16 +715,38 @@ impl Shell {
         label: f32,
         out: &mut String,
     ) {
+        self.items_except(editor, field, ty, value, pointer, depth, label, None, out);
+    }
+    /// [`Self::items`] without the struct field named `skip` (an item's title,
+    /// already shown by its header row).
+    #[allow(clippy::too_many_arguments)]
+    fn items_except(
+        &mut self,
+        editor: &Editor,
+        field: &Field,
+        ty: &ValueType,
+        value: &Value,
+        pointer: &str,
+        depth: usize,
+        label: f32,
+        skip: Option<&str>,
+        out: &mut String,
+    ) {
         let db = editor.host.store().schema();
         match ty {
             ValueType::Option(inner) if !value.is_null() => {
-                self.items(editor, field, inner, value, pointer, depth, label, out);
+                self.items_except(
+                    editor, field, inner, value, pointer, depth, label, skip, out,
+                );
             }
             ValueType::Named(name) => {
                 let Some(Shape::Struct { fields, .. }) = db.get(name).map(|t| &t.shape) else {
                     return;
                 };
-                let shown = |f: &&FieldDesc| crate::inspector::shows(db, fields, f, Some(value));
+                let shown = |f: &&FieldDesc| {
+                    Some(f.name.as_str()) != skip
+                        && crate::inspector::shows(db, fields, f, Some(value))
+                };
                 for desc in fields.iter().filter(shown) {
                     let child = value
                         .get(&desc.name)
@@ -781,14 +803,26 @@ impl Shell {
             && !inactive
             && !field.read_only
             && !row.desc.is_some_and(|desc| desc.editor.read_only);
-        let indent = 6. + 12. * depth as f32;
+        // Item headers sit at their card's edge; fields indent by depth.
+        let indent = if compound && row.item && matches!(inner(row.ty), ValueType::Named(_)) {
+            4.
+        } else {
+            6. + 12. * depth as f32
+        };
         if let Some(select) = &row.select {
             self.bindings.insert(
                 ara_ui::source::stable_id(&format!("nest-{rid}")),
                 Binding::Collection(select.clone()),
             );
         }
-        out.push_str(&format!("<panel id='nest-{rid}' class='prop-row'><panel id='nest-label-{rid}' class='prop-label' style='width:{label}px;padding-left:{indent}px'>"));
+        // An item that opens into fields is a header: its title spans the row.
+        let header = compound && row.item && matches!(inner(row.ty), ValueType::Named(_));
+        let label_size = if header {
+            "flex-grow:1;flex-basis:0px;min-width:0px".to_owned()
+        } else {
+            format!("width:{label}px")
+        };
+        out.push_str(&format!("<panel id='nest-{rid}' class='prop-row'><panel id='nest-label-{rid}' class='prop-label' style='{label_size};padding-left:{indent}px'>"));
         if row.item
             && let Some(select) = &row.select
         {
@@ -797,7 +831,7 @@ impl Shell {
                 ara_ui::source::stable_id(&grip),
                 Binding::Collection(select.clone()),
             );
-            out.push_str(&format!("<button id='{grip}' class='ghost icon-button' cursor='grab' label='Move item' description='Drag to reorder, or use Move up and Move down' action='Dispatch'>{}</button>",icons::icon_in(&grip,"grip-vertical","icon-sm")));
+            out.push_str(&format!("<button id='{grip}' class='ghost icon-button' cursor='grab' label='Move item' description='Drag to reorder' action='Dispatch'>{}</button>",icons::icon_in(&grip,"grip-vertical","icon-sm")));
         }
         if optional {
             let id = format!("override-{rid}");
@@ -878,7 +912,8 @@ impl Shell {
             }
         }
         out.push_str(&format!(
-            "</panel><panel id='nest-value-{rid}' class='prop-value'>"
+            "</panel><panel id='nest-value-{rid}' class='prop-value'{}>",
+            if header { " style='flex-grow:0'" } else { "" }
         ));
         let value_start = out.len();
         if compound {
@@ -896,9 +931,9 @@ impl Shell {
             out.push_str(&disabled);
         }
         out.push_str("</panel>");
-        // Items keep a fixed action column (Move up, Remove) so their values align;
-        // struct fields keep the reset column's width.
-        let width = if row.item { 64. } else { 18. };
+        // Items keep a fixed action column (Remove) so their values align; struct
+        // fields keep the reset column's width.
+        let width = if row.item { 24. } else { 18. };
         out.push_str(&format!("<panel id='nest-actions-{rid}' class='row' style='width:{width}px;flex-shrink:0;justify-content:end;gap:0px'>"));
         for (what, icon, label_text, action) in row.actions {
             let button = format!("{what}-{rid}");

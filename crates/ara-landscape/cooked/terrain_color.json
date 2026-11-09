@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3c4d33e423249527704e05ae7e1237c039c797723ad68c955c2f769445ea78f1",
+  "key": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195",
   "stages": [
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainColor.dxil",
       "dxil_hash": "8379a150f798eee63ecc96b27688e4ca6000e6dcf9feaeed354526907c181d64",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainColor.metallib",
         "metallib_hash": "bdf0a3ded0ed8616190c396393b4127d3b6ec71ff5ef770e92b32c03497a8df9",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainColor.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "terrainColor",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainColor.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainColor.spv",
       "spirv_entry": "main",
       "spirv_hash": "3ab9c9158cc0aeaed352e0927e805e9d718449a3abbfecb1aa0129fc8662d56e",
       "stage": "fragment"
     },
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainVertex.dxil",
       "dxil_hash": "10e6872a14e82c7acade1fee026dcc912ea019694f4a6cb79c758bb4f3ac6553",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainVertex.metallib",
         "metallib_hash": "0b461e349ef9d29bb4b5427b393be53f8097db68dc378b136fa427936c1d04b8",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "terrainVertex",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainVertex.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/terrain_color/terrainVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "094a892274da23abb7b5871d38d9c43c9caa7fcafe1f0c71d76b1352d81176b1",
       "stage": "vertex"

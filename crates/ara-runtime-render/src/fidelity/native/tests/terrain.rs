@@ -168,9 +168,22 @@ fn signed_terrain_splats_and_rule_prefab_parts_use_runtime_placements_once() {
                 texture_generations: Vec::new(),
                 base_color_decode_srgb: false,
                 emissive_decode_srgb: false,
+                paint_layers: Vec::new(),
+                decal: None,
             }),
         );
     }
+    let reduced = prepare_with_foliage(&frame, content.clone(), config(), 0).unwrap();
+    assert_eq!(
+        reduced.scene.instances.len(),
+        1,
+        "density only removes visual foliage, retaining terrain"
+    );
+    assert_eq!(
+        frame.terrain.as_ref().unwrap().data.foliage.len(),
+        1,
+        "authored/runtime scatter is unchanged"
+    );
     let prepared = prepare(&frame, content, config()).unwrap();
     assert_eq!(
         prepared.scene.geometry.len(),

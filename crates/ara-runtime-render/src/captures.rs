@@ -1,9 +1,12 @@
 //! Reflection captures for the raster renderer (`ara_render::look::captures`): the
 //! frame's enabled authored `ReflectionProbe` components in world space, or, without
-//! any and when the quality opts in, automatic placement over the published content
-//! (computed once per generation).
+//! any and when the quality opts in, automatic placement: from what the probe volume
+//! saw once its probes arrive (`ara_render::look::placement`), over the published
+//! content's bounds until then (computed once per generation and probe delivery).
 use ara_render::instanced::Scene;
 use ara_render::look::captures::{CaptureSpec, auto_place};
+use ara_render::look::gi::{ProbeLayout, ProbeUpdate};
+use ara_render::look::placement::{ProbeSight, place_from_probes};
 use ara_runtime::extract::{ProbeView, RenderFrame};
 use glam30::{Quat, Vec3};
 
@@ -12,9 +15,38 @@ use glam30::{Quat, Vec3};
 pub(crate) struct Placement {
     key: Option<(u64, usize)>,
     automatic: Vec<CaptureSpec>,
+    /// What the delivered probes saw, by id, for the current probe layout.
+    sights: Option<(ProbeLayout, Vec<Option<ProbeSight>>)>,
+    /// Probes arrived since the last placement.
+    sighted: bool,
+    /// The last [`Self::specs`] placed automatically, with this limit.
+    placing: Option<usize>,
 }
 
 impl Placement {
+    /// Notes a probe delivery: its sights replace those of the same probes (a new
+    /// layout starts over), and the next [`Self::specs`] places again.
+    pub(crate) fn observe(&mut self, update: &ProbeUpdate) {
+        let layout = update.layout();
+        if self.sights.as_ref().is_none_or(|(l, _)| *l != layout) {
+            self.sights = Some((layout, vec![None; layout.probe_count()]));
+        }
+        if let Some((_, sights)) = &mut self.sights {
+            let ids: Vec<u32> = update.ids(0..update.len()).collect();
+            for &id in &ids {
+                if let Some(s) = sights.get_mut(id as usize) {
+                    *s = None;
+                }
+            }
+            for (id, sight) in update.sights() {
+                if let Some(s) = sights.get_mut(id as usize) {
+                    *s = Some(sight);
+                }
+            }
+            self.sighted = true;
+        }
+    }
+
     /// The captures the renderer should bake for `frame` over content `scene`
     /// (generation `key`): authored ones when the frame has any, else at most
     /// `limit` automatic ones when `automatic` (zero: the quality bakes none).
@@ -26,6 +58,7 @@ impl Placement {
         limit: usize,
         automatic: bool,
     ) -> Vec<CaptureSpec> {
+        self.placing = None;
         if limit == 0 {
             return Vec::new();
         }
@@ -40,9 +73,50 @@ impl Placement {
         if !automatic {
             return Vec::new();
         }
-        if self.key != Some((key, limit)) {
-            self.automatic = auto_place(scene, limit);
+        self.placing = Some(limit);
+        self.specs_automatic(scene, key, limit)
+    }
+
+    /// The automatic placement again when probes arrived after the last
+    /// [`Self::specs`] placed automatically (a capture boundary waits for the probe
+    /// volume after preparing its frame); `None` otherwise.
+    pub(crate) fn after_probes(&mut self, scene: &Scene, key: u64) -> Option<Vec<CaptureSpec>> {
+        let limit = self.placing?;
+        self.sighted.then(|| {
+            self.key = None;
+            self.specs_automatic(scene, key, limit)
+        })
+    }
+
+    fn specs_automatic(&mut self, scene: &Scene, key: u64, limit: usize) -> Vec<CaptureSpec> {
+        if self.key != Some((key, limit)) || self.sighted {
+            self.automatic = match &self.sights {
+                Some((layout, sights)) if sights.iter().any(Option::is_some) => {
+                    let specs = place_from_probes(layout, sights, limit);
+                    eprintln!(
+                        "ara-runtime-render: placed {} reflection captures where the probes saw open space: {:?}",
+                        specs.len(),
+                        specs
+                            .iter()
+                            .map(|c| (
+                                c.capture_point()
+                                    .to_array()
+                                    .map(|v| (v * 10.).round() / 10.),
+                                (c.position - c.influence)
+                                    .to_array()
+                                    .map(|v| (v * 10.).round() / 10.),
+                                (c.position + c.influence)
+                                    .to_array()
+                                    .map(|v| (v * 10.).round() / 10.)
+                            ))
+                            .collect::<Vec<_>>()
+                    );
+                    specs
+                }
+                _ => auto_place(scene, limit),
+            };
             self.key = Some((key, limit));
+            self.sighted = false;
         }
         self.automatic.clone()
     }

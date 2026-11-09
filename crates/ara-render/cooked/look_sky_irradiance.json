@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_irradiance/skyIrradianceMain.dxil",
-      "dxil_hash": "8c8b457485403cea27bd2409e36b244b7a64125c1a22dd87afd93a60cd052fa5",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_irradiance/skyIrradianceMain.dxil",
+      "dxil_hash": "9fb036a632660bf5b9016fd2cd04bf014ade0d6ce4f2fe81d6fd7506301f66be",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_irradiance/skyIrradianceMain.metallib",
-        "metallib_hash": "2de9e24dc952507fc554767a38558a755ab3988e53226b9737f52b559d0b7cce",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_irradiance/skyIrradianceMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_irradiance/skyIrradianceMain.metallib",
+        "metallib_hash": "cfc0216de936f846876cf757bec183853d2e3b6a44d6c239053e1bc7ffc9e7dc",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_irradiance/skyIrradianceMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "skyIrradianceMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_irradiance/skyIrradianceMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_irradiance/skyIrradianceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ff2916d6e67022dc9dd62275b47a86baa94fb753637fa93bd8b7d76eeccd6d3c",
+      "spirv_hash": "52a3f03a7f289091e6592ff52bb128a74935db29d50d6c5f49b171c4b8ea3b07",
       "stage": "compute"
     }
   ],

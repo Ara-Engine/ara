@@ -37,6 +37,7 @@ mod ops;
 mod polish;
 #[cfg(test)]
 mod quality_tests;
+mod script_recovery_ui;
 pub(crate) mod scripts;
 mod scroll;
 mod scrub;
@@ -48,6 +49,7 @@ pub(crate) mod toolkit_verify;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
+mod agents_connect;
 mod agents_panel;
 mod animation_panel;
 mod assets_panel;
@@ -61,6 +63,7 @@ mod hierarchy;
 mod hierarchy_actions;
 mod hierarchy_filters;
 mod history_panel;
+mod import_batch;
 mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
@@ -73,9 +76,13 @@ mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+pub(crate) use names::is_texture;
+mod mesh_paint_panel;
 mod probes;
 mod project_actions;
+mod render_debug_panel;
 mod scene_panel;
+mod scene_toolbars;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
@@ -88,6 +95,7 @@ mod panels;
 pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
+pub(crate) mod profiler_targets;
 pub(crate) mod reachability;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
@@ -153,6 +161,10 @@ pub struct Shell {
     current: Option<String>,
     /// The OS maximize state, reflected by the custom caption's restore button.
     pub(crate) native_maximized: bool,
+    /// While the window border is dragged: the Scene image's last rendered logical
+    /// size. The image shows unscaled and cropped until the drag ends, rather than
+    /// stretched or re-rendered at every intermediate size.
+    pub(crate) scene_frozen: Option<[f32; 2]>,
     /// Active schema field models keyed by widget identity.
     pub fields: BTreeMap<String, Field>,
     /// Pointer location in logical pixels of the current surface.
@@ -228,6 +240,7 @@ pub struct Shell {
     pub(crate) build: Option<build::BuildJob>,
     /// The last finished build's game folder (Build > Run Build, Open Build Folder).
     pub(crate) last_build: Option<std::path::PathBuf>,
+    last_packages: Vec<build::PackageArtifact>,
     /// A running headless Run Build (offscreen runs).
     pub(crate) run: Option<std::sync::mpsc::Receiver<build::RunResult>>,
     /// The capture the last headless Run Build wrote.
@@ -303,14 +316,18 @@ pub struct Shell {
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
     asset_folder_click: Option<(String, std::time::Instant)>,
+    /// The last tab click, for double-click to maximize.
+    tab_click: Option<(String, std::time::Instant)>,
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
+    script_recovery_ui: script_recovery_ui::State,
     script_modules: scripts::ModuleList,
     ide_request: Option<scripts::IdeRequest>,
     compile_problems: log_panels::CompilationView,
     lighting: lighting::View,
     probe_ui: probes::State,
     project_request: Option<project_actions::LaunchRequest>,
+    profiler_targets: profiler_targets::State,
     pilot: pilot::Pilot,
     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
@@ -345,6 +362,7 @@ pub struct Shell {
     resolver: crate::world::SceneResolver,
     /// The import settings `document_view` shares across revisions.
     import_settings: crate::world::ImportsCache,
+    import_batch: import_batch::State,
     /// The (document, store revision, workspace generation) `resolved` last answered.
     resolved_key: Option<(String, u64, u64)>,
     tooltip_text: Option<String>,
@@ -384,6 +402,8 @@ pub struct Shell {
     alt_tap: bool,
     /// Modal information or input dialog.
     pub(crate) dialog: Option<Dialog>,
+    /// Agent client detection and setup for the Connect an agent dialog.
+    pub(crate) agents: agents_connect::AgentSetups,
     /// OS window work for the window owner (full screen, raise, import dialog, quit).
     pub window_request: Option<WindowRequest>,
     pub(crate) status_note: Option<String>,
@@ -397,6 +417,9 @@ pub struct Shell {
     pub(crate) recording: Option<String>,
     key_search: bool,
     label_width: f32,
+    /// The inspector is too narrow for a label and a vector side by side: vector
+    /// rows put their fields under the label (set with each label width).
+    stacked_rows: bool,
     keymap: commands::keys::Keymap,
     /// Bumped whenever `keymap` is rebuilt (memoized panels show shortcuts).
     keymap_revision: u64,
@@ -453,6 +476,7 @@ pub(crate) enum Binding {
     AssetRenameValue,
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
+    ImportBatchField(String, String),
     ResourceText(String, String),
     ResourceApply,
     PreviewShape(bool),
@@ -503,6 +527,8 @@ pub(crate) enum Binding {
     KeySearch,
     DialogText,
     DialogAction(&'static str),
+    /// A Connect an agent row's button.
+    Agent(ara_agents::Client, agents_connect::AgentAction),
 }
 /// The editor's fonts: Inter (UI), JetBrains Mono (code, timings) and Noto Naskh
 /// Arabic (right-to-left text). The shell and the loading window share them.
@@ -520,7 +546,7 @@ impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
     pub fn new(editor: &mut Editor, size: [f32; 2]) -> ara_ui::Result<Self> {
         let text = text_system()?;
-        let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
+        let ui = Ui::editor("<ui id='editor' />", live_styles::embedded::EDITOR, size)?;
         let mut shell = Self {
             reachability: Default::default(),
             history_view: Default::default(),
@@ -543,6 +569,7 @@ impl Shell {
             floats: Vec::new(),
             current: None,
             native_maximized: false,
+            scene_frozen: None,
             fields: BTreeMap::new(),
             pointer: [0.; 2],
             modifiers: [false; 3],
@@ -570,6 +597,7 @@ impl Shell {
             assets_show_all: false,
             build: None,
             last_build: None,
+            last_packages: Vec::new(),
             run: None,
             last_run: None,
             offscreen: false,
@@ -641,14 +669,17 @@ impl Shell {
             pick_field: None,
             rename: false,
             asset_folder_click: None,
+            tab_click: None,
             asset_rename: None,
             script_job: None,
+            script_recovery_ui: Default::default(),
             script_modules: Default::default(),
             ide_request: None,
             compile_problems: Default::default(),
             lighting: Default::default(),
             probe_ui: Default::default(),
             project_request: None,
+            profiler_targets: Default::default(),
             pilot: Default::default(),
             viewport_diagnostics: Default::default(),
             drag: None,
@@ -675,6 +706,7 @@ impl Shell {
             built: (u64::MAX, u64::MAX),
             resolver: Default::default(),
             import_settings: Default::default(),
+            import_batch: Default::default(),
             resolved_key: None,
             tooltip_text: None,
             tooltip_target: None,
@@ -705,6 +737,7 @@ impl Shell {
             mnemonics: false,
             alt_tap: false,
             dialog: None,
+            agents: Default::default(),
             window_request: None,
             status_note: None,
             device_info: String::new(),
@@ -715,6 +748,7 @@ impl Shell {
             recording: None,
             key_search: false,
             label_width: 0.38,
+            stacked_rows: false,
             keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
@@ -777,6 +811,11 @@ impl Shell {
         if let Some(id) = returning {
             self.enter(&id);
         }
+        // Prefab tiles the markup asked for extract here, where the store lives.
+        let slots = &self.thumbnail_slots;
+        crate::asset_tools::prefab_preview::extract(&mut self.thumbnails, editor, |key| {
+            slots.contains_key(key)
+        });
         self.stats.rebuilds += 1;
         self.stats.rebuild_ms += started.elapsed().as_secs_f64() * 1000.;
         result
@@ -843,8 +882,10 @@ impl Shell {
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let compiled = self.poll_script_job(editor)?;
+        let recovery_changed = self.poll_script_recovery(editor);
         let modules_changed = self.poll_script_modules(editor)?;
         let probes_changed = self.poll_probes(editor)?;
+        let profiler_changed = self.poll_profiler_target_state(editor)?;
         let play_changed = match self.poll_play_job(editor) {
             Ok(changed) => changed,
             Err(error) => {
@@ -853,8 +894,10 @@ impl Shell {
             }
         };
         if !compiled
+            && !recovery_changed
             && !modules_changed
             && !probes_changed
+            && !profiler_changed
             && !play_changed
             && self.built == (editor.panels_revision, editor.host.store().revision())
         {
@@ -873,6 +916,7 @@ impl Shell {
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.poll_compile_problems(editor)?;
         self.poll_probes(editor)?;
+        self.poll_profiler_target_state(editor)?;
         self.built = (editor.panels_revision, editor.host.store().revision());
         // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
@@ -910,7 +954,7 @@ impl Shell {
                 ];
                 self.floats.push(Surface {
                     id: window.id.clone(),
-                    ui: Ui::editor("<ui id='float' />", include_str!("editor.css"), size)?,
+                    ui: Ui::editor("<ui id='float' />", live_styles::embedded::EDITOR, size)?,
                     input: InputState::default(),
                     native_input: Default::default(),
                     pointer: [0.; 2],
@@ -949,31 +993,36 @@ impl Shell {
     fn stylesheet(&self, editor: &Editor) -> String {
         let mut css = self
             .styles
-            .css("editor.css", include_str!("editor.css"))
+            .css("editor.css", live_styles::embedded::EDITOR)
             .to_owned();
         css.push_str(
             self.styles
-                .css("viewport.css", include_str!("viewport.css")),
+                .css("viewport.css", live_styles::embedded::VIEWPORT),
         );
         css.push_str(
             self.styles
-                .css("inspector.css", include_str!("inspector.css")),
+                .css("inspector.css", live_styles::embedded::INSPECTOR),
         );
         if editor.state.comfortable() {
-            css.push_str(self.styles.css(
-                "editor-comfortable.css",
-                include_str!("editor-comfortable.css"),
-            ));
+            css.push_str(
+                self.styles
+                    .css("editor-comfortable.css", live_styles::embedded::COMFORTABLE),
+            );
         }
         css.push_str(
             self.styles
-                .css("editor-titlebar.css", include_str!("editor-titlebar.css")),
+                .css("editor-titlebar.css", live_styles::embedded::TITLEBAR),
         );
-        css.push_str(ara_ui::dialogs::CSS);
-        css.push_str(ara_ui::select::CSS);
-        css.push_str(history_panel::CSS);
-        css.push_str(lighting::CSS);
-        css.push_str(probes::CSS);
+        for (name, embedded) in [
+            ("dialogs.css", ara_ui::dialogs::CSS),
+            ("select.css", ara_ui::select::CSS),
+            ("history.css", history_panel::CSS),
+            ("lighting.css", lighting::CSS),
+            ("probes.css", probes::CSS),
+        ] {
+            css.push_str(self.styles.css(name, embedded));
+        }
+        css.push_str(profiler_targets::CSS);
         css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);
@@ -1523,6 +1572,10 @@ impl Shell {
             }
         }
         let mut work = self.ui.frame(&mut self.text)?;
+        // Layout moved under a still pointer: hover follows now, not on the next move.
+        if work.layout_passes > 0 && self.input.rehover(&mut self.ui) {
+            work += self.ui.frame(&mut self.text)?;
+        }
         if self.fit_game_frames()? {
             work.layout_passes += 1;
             work.paint_nodes = work.paint_nodes.max(1);
@@ -1712,7 +1765,7 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"packageResult":self.package_result(),"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
     }
     /// Cached authoring prefix; empty identifies a still-readable legacy project.
     pub(crate) fn asset_reference_root(&self) -> &str {

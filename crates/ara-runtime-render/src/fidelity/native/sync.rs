@@ -3,6 +3,10 @@ use super::*;
 use crate::material::Source;
 use ara_runtime::{components::Environment, extract::Geometry, model::ModelVertex};
 
+#[cfg(test)]
+#[path = "changes.rs"]
+mod change_feed_tests;
+
 /// Whether the live frame fits the currently prepared content generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameChange {
@@ -32,6 +36,8 @@ pub(super) struct Bindings {
     tiles: Vec<ara_terrain::TileCoord>,
     environment: Environment,
     lights: Vec<ara_runtime::extract::LightView>,
+    /// Decal identities (`decals::identity`) and whether each drew.
+    decals: Vec<(super::decals::Identity, bool)>,
     scratch: Vec<ara_render::scene::Vertex>,
     live: bool,
 }
@@ -78,6 +84,11 @@ impl Bindings {
                 .map_or_else(Vec::new, |t| t.tiles.to_vec()),
             environment: frame.environment,
             lights: frame.lights.to_vec(),
+            decals: frame
+                .decals
+                .iter()
+                .map(|view| (super::decals::identity(view), view.material.is_some()))
+                .collect(),
             scratch: Vec::new(),
             live: false,
         })
@@ -97,6 +108,15 @@ impl Prepared {
     /// these without rescanning static foliage, geometry or material blocks.
     pub fn changes(&self) -> &render::Changes {
         &self.changes
+    }
+    /// Fill missing render-v3 metadata after `update_frame` and before GPU upload.
+    /// RenderFrame currently carries no PhysicsBody awake state, stable light IDs or optical
+    /// portals. Hosts must supply actual body classes (Jolt BodyState::active plus MotionType),
+    /// stable light IDs and portal openness here when available; do not infer sleep from a pose.
+    /// Declared wind bounds are world-space absolute amplitudes. Skin displacement is filled
+    /// automatically. The renderer retains body/wind metadata until scene replacement.
+    pub fn transport_hints_mut(&mut self) -> &mut render::transport::TransportHints {
+        &mut self.changes.transport
     }
     /// Reserves independent root material slots and skin scratch at a content
     /// boundary, before GPU upload. Static capture snapshots retain material sharing.
@@ -159,6 +179,9 @@ impl Prepared {
         if frame.draws.len() != bindings.links.len()
             || frame.environment.sky != bindings.environment.sky
             || frame.environment.horizon != bindings.environment.horizon
+            || frame.environment.sky_falloff != bindings.environment.sky_falloff
+            || frame.environment.glow != bindings.environment.glow
+            || frame.environment.glow_falloff != bindings.environment.glow_falloff
             || frame.environment.ground != bindings.environment.ground
             || frame.environment.intensity != bindings.environment.intensity
         {
@@ -188,7 +211,26 @@ impl Prepared {
                 poses += 1;
                 self.changes.instances.push(index);
             }
+            let vertices = self.scene.geometry[instance.geometry].vertices.len();
+            match (super::paint(draw, vertices), &instance.paint) {
+                (None, None) => {}
+                (Some(next), Some(known)) => {
+                    if !Arc::ptr_eq(&next, known) && next != *known {
+                        instance.paint = Some(next);
+                        self.changes.paint.push(index);
+                    }
+                }
+                // Adding or removing paint changes how draws group.
+                _ => return Ok(FrameChange::Rebuild),
+            }
             let current = source(draw);
+            // Paint layers are their own material rows: a new source or a factor
+            // edit rebuilds them with the parent.
+            let layered = Source::of(draw)
+                .is_some_and(|s| matches!(s, Source::Native(m) if !m.paint_layers.is_empty()));
+            if layered && current != link.source {
+                return Ok(FrameChange::Rebuild);
+            }
             let material = &mut self.scene.materials[instance.material];
             let previous = *material;
             if current != link.source {
@@ -203,6 +245,9 @@ impl Prepared {
             }
             material::apply_draw(material, draw, Source::of(draw));
             if bytemuck::bytes_of(material) != bytemuck::bytes_of(&previous) {
+                if layered {
+                    return Ok(FrameChange::Rebuild);
+                }
                 self.changes.materials.push(instance.material);
             }
             if let Some(range) = &draw.skin {
@@ -222,7 +267,7 @@ impl Prepared {
                             anyhow::bail!("procedural geometry cannot own a skin palette")
                         }
                     };
-                    update_skin(
+                    let displacement = update_skin(
                         &mut self.scene.geometry[instance.geometry],
                         vertices,
                         palette,
@@ -231,10 +276,61 @@ impl Prepared {
                     link.palette.copy_from_slice(palette);
                     skins += 1;
                     self.changes.geometries.push(instance.geometry);
+                    self.changes
+                        .transport
+                        .deformations
+                        .push((instance.geometry, displacement));
+                }
+            }
+        }
+        // Decals stream poses and parameters; new, removed or re-materialled ones rebuild.
+        if frame.decals.len() != bindings.decals.len()
+            || frame
+                .decals
+                .iter()
+                .zip(&bindings.decals)
+                .any(|(view, (known, _))| super::decals::identity(view) != *known)
+        {
+            return Ok(FrameChange::Rebuild);
+        }
+        let mut drawn = self.scene.decals.iter_mut();
+        for (view, (_, draws)) in frame.decals.iter().zip(&bindings.decals) {
+            if *draws && let Some(decal) = drawn.next() {
+                let before = (
+                    decal.world,
+                    decal.opacity,
+                    decal.fade_distance,
+                    decal.fade_angle,
+                    decal.sort_order,
+                    decal.fade_screen_size.to_bits(),
+                );
+                super::decals::update(decal, view);
+                if before
+                    != (
+                        decal.world,
+                        decal.opacity,
+                        decal.fade_distance,
+                        decal.fade_angle,
+                        decal.sort_order,
+                        decal.fade_screen_size.to_bits(),
+                    )
+                {
+                    self.changes.decals = true;
                 }
             }
         }
         if frame.lights != bindings.lights {
+            for (row, (old, new)) in bindings
+                .lights
+                .iter()
+                .zip(&frame.lights)
+                .take(self.scene.lights.len())
+                .enumerate()
+            {
+                if old.profile != new.profile {
+                    self.changes.transport.reshaped_lights.push(row);
+                }
+            }
             self.scene.lights = super::super::lights(frame);
             bindings.lights.clear();
             bindings.lights.extend_from_slice(&frame.lights);
@@ -251,13 +347,17 @@ fn update_skin(
     source: &[ModelVertex],
     palette: &[glam::Mat4],
     scratch: &mut Vec<ara_render::scene::Vertex>,
-) {
+) -> f32 {
     crate::geometry::transform(source, glam::Mat4::IDENTITY, Some(palette), scratch);
     let mut bounds = [
         glam30::Vec3::splat(f32::INFINITY),
         glam30::Vec3::splat(f32::NEG_INFINITY),
     ];
+    let mut displacement_squared = 0.0f32;
     for (vertex, posed) in geometry.vertices.iter_mut().zip(scratch) {
+        let old = glam30::Vec3::from_array(vertex.position);
+        let current = glam30::Vec3::from_array(posed.position);
+        displacement_squared = displacement_squared.max(old.distance_squared(current));
         vertex.position = posed.position;
         vertex.normal = posed.normal;
         vertex.tangent = posed.tangent;
@@ -267,4 +367,9 @@ fn update_skin(
     }
     geometry.bounds = bounds;
     geometry.revision = geometry.revision.wrapping_add(1);
+    if displacement_squared == 0. {
+        0.
+    } else {
+        displacement_squared.sqrt().next_up()
+    }
 }

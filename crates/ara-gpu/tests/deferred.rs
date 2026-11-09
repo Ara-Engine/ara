@@ -1,15 +1,8 @@
 //! A deliberately blocked Scene must not block the native UI queue or the CPU.
-use ara_gpu::vk::TaggedStructure;
 use ara_gpu::{
     Access, Barrier, Device, Queue, Resource, vk,
-    vulkan::{Command, VulkanDevice},
+    vulkan::{Command, QueueGate, VulkanDevice},
 };
-
-struct Gate {
-    device: ash::Device,
-    semaphore: vk::Semaphore,
-    opened: bool,
-}
 
 #[test]
 #[cfg_attr(
@@ -58,33 +51,6 @@ fn current_queue_scope_preserves_phase_timings_and_waits_only_at_its_tail() -> a
     gpu.assert_clean()?;
     Ok(())
 }
-impl Gate {
-    fn open(&mut self) -> anyhow::Result<()> {
-        if !self.opened {
-            // SAFETY: This test owns the only host signal for this timeline.
-            unsafe {
-                self.device.signal_semaphore(
-                    &vk::SemaphoreSignalInfo::default()
-                        .semaphore(self.semaphore)
-                        .value(1),
-                )?;
-            }
-            self.opened = true;
-        }
-        Ok(())
-    }
-}
-impl Drop for Gate {
-    fn drop(&mut self) {
-        let _ = self.open();
-        // SAFETY: Signalling releases the test's blocked queues, including on an
-        // early assertion failure; idle precedes destruction of their wait object.
-        unsafe {
-            let _ = self.device.device_wait_idle();
-            self.device.destroy_semaphore(self.semaphore, None);
-        }
-    }
-}
 
 #[test]
 #[cfg_attr(
@@ -103,36 +69,10 @@ fn deferred_frame_polls_without_waiting_and_orders_constant_writes() -> anyhow::
     gpu.upload(source, &[1; 16])?;
     gpu.upload(before, &[0; 16])?;
     gpu.upload(after, &[0; 16])?;
-    // SAFETY: The new semaphore belongs to this device. Gate owns its lifetime
-    // through all pending waits, and always signals it before teardown.
-    let mut gate = unsafe {
-        let mut kind =
-            vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-        Gate {
-            device: gpu.context().device.clone(),
-            semaphore: gpu
-                .context()
-                .device
-                .create_semaphore(&vk::SemaphoreCreateInfo::default().push(&mut kind), None)?,
-            opened: false,
-        }
-    };
     gpu.begin_deferred_completion()?;
     assert!(gpu.begin_deferred_completion().is_err());
-    // SAFETY: Only this owner thread submits to these queues. The host-signalled
-    // gate deliberately stops compute until after the nonblocking assertions.
-    unsafe {
-        gpu.context().device.queue_submit2(
-            gpu.context().compute,
-            &[vk::SubmitInfo2::default().wait_semaphore_infos(&[
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(gate.semaphore)
-                    .value(1)
-                    .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS),
-            ])],
-            vk::Fence::null(),
-        )?;
-    }
+    // The gate deliberately stops compute until after the nonblocking assertions.
+    let mut gate = QueueGate::new(gpu.context(), gpu.context().compute)?;
     let mut compute = gpu.begin(Queue::Compute);
     compute.push(Command::BeginPass("Deferred.Gate".into()));
     compute.push(Command::EndPass);

@@ -63,6 +63,7 @@ pub struct Select<T> {
     control: String,
     label: String,
     search_hint: String,
+    empty: String,
     options: Vec<SelectOption<T>>,
     selected: Option<T>,
     changed: Option<T>,
@@ -87,6 +88,7 @@ impl<T: Clone + PartialEq> Select<T> {
             id,
             label: label.into(),
             search_hint: "Search…".into(),
+            empty: "Select…".into(),
             options,
             selected,
             changed: None,
@@ -108,6 +110,12 @@ impl<T: Clone + PartialEq> Select<T> {
     /// Localize or clarify the empty search hint without changing the filter value.
     pub fn with_search_hint(mut self, hint: impl Into<String>) -> Self {
         self.search_hint = hint.into();
+        self
+    }
+    /// Text the closed control shows while no option is chosen (an action
+    /// picker reads "Add…"), instead of "Select…".
+    pub fn with_empty_text(mut self, text: impl Into<String>) -> Self {
+        self.empty = text.into();
         self
     }
 

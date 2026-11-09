@@ -1,5 +1,6 @@
 ---
 source: crates/ara/tests/cli.rs
+assertion_line: 121
 expression: out
 ---
 {
@@ -2539,6 +2540,111 @@ expression: out
         }
       }
     },
+    "Decal": {
+      "kind": "component",
+      "doc": "Projects a decal-domain material onto the opaque surfaces inside a box: the box is `size` metres around the entity, projecting along its local -Z (surfaces facing +Z receive it). Writes base colour, normal, roughness, metallic, emissive and ambient occlusion with per-channel opacity before lighting, so every light, shadow, reflection and GI term sees it. Translucent surfaces and renderers whose `MeshRenderer.receivesDecals` is off do not receive.",
+      "module": "render",
+      "fields": {
+        "material": {
+          "type": "option<asset>",
+          "doc": "Decal-domain material graph or material instance (`@path#id`); without one the decal draws nothing.",
+          "default": null
+        },
+        "size": {
+          "type": "vec3",
+          "doc": "Box size in metres: width (local X), height (local Y) and projection depth (local Z), centred on the entity. Entity scale multiplies it.",
+          "default": [1, 1, 1],
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "color": {
+          "type": "color",
+          "doc": "Linear multiplier on the material's base colour; alpha scales every channel's opacity (Unreal's DecalColor).",
+          "default": [1, 1, 1, 1]
+        },
+        "baseColorOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces the surface's base colour.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "normalOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's normal (blended in the surface's tangent frame) replaces the surface normal.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "roughnessOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces roughness.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "metallicOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces metalness.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "specularOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's specular level applies. The G-buffer has no specular channel yet (dielectric F0 is fixed at 4%); the value is kept for it.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "emissiveOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's emission replaces the surface's.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "occlusionOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces material ambient occlusion.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "fadeStartDistance": {
+          "type": "f32",
+          "doc": "Camera distance where the decal starts fading out (metres; with `fadeEndDistance` zero it never fades by distance).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "fadeEndDistance": {
+          "type": "f32",
+          "doc": "Camera distance where the decal has faded out and is no longer drawn.",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "fadeAngleStart": {
+          "type": "f32",
+          "doc": "Surfaces turned more than this many degrees from the projection axis start fading (stretching along steep sides stays hidden).",
+          "default": 60,
+          "unit": "deg",
+          "range": [0, 180]
+        },
+        "fadeAngleEnd": {
+          "type": "f32",
+          "doc": "Surfaces turned this many degrees or more no longer receive the decal.",
+          "default": 80,
+          "unit": "deg",
+          "range": [0, 180]
+        },
+        "sortOrder": {
+          "type": "i32",
+          "doc": "Draw order among overlapping decals: higher draws on top (Unreal's SortOrder).",
+          "default": 0
+        },
+        "fadeScreenSize": {
+          "type": "f32",
+          "doc": "Below this share of the screen height the decal fades out and is skipped (Unreal's FadeScreenSize); zero always draws.",
+          "default": 0.002,
+          "range": [0, 1]
+        }
+      }
+    },
     "DocCreateParams": {
       "kind": "params",
       "doc": "Parameters of `doc.create`.",
@@ -2687,7 +2793,7 @@ expression: out
     },
     "Environment": {
       "kind": "component",
-      "doc": "Procedural sky radiance and camera exposure. The first in stable-ID order wins.",
+      "doc": "Procedural sky radiance and camera exposure. The first in stable-ID order wins. Above the horizon the sky is `lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff` with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it fades to `ground` within 15°.",
       "module": "render",
       "fields": {
         "sky": {
@@ -2697,8 +2803,25 @@ expression: out
         },
         "horizon": {
           "type": "color",
-          "doc": "Horizon sky color (linear).",
+          "doc": "Sky color at the horizon (linear).",
           "default": [0.95, 0.62, 0.4, 1]
+        },
+        "skyFalloff": {
+          "type": "f32",
+          "doc": "How quickly the zenith color gives way to the horizon color toward the horizon: higher keeps the zenith color lower down.",
+          "default": 3,
+          "range": [0.1, 64]
+        },
+        "glow": {
+          "type": "color",
+          "doc": "Extra light added in a band just above the horizon (linear; black for none), such as a sunset glow.",
+          "default": [0, 0, 0, 1]
+        },
+        "glowFalloff": {
+          "type": "f32",
+          "doc": "Narrowness of the `glow` band: higher hugs the horizon more tightly.",
+          "default": 10,
+          "range": [0.1, 64]
         },
         "ground": {
           "type": "color",
@@ -2712,11 +2835,38 @@ expression: out
           "unit": "cd",
           "range": [0, null]
         },
+        "skyLight": {
+          "type": "f32",
+          "doc": "How strongly the sky lights the scene (ambient light, reflections, bounce and fog) relative to how bright it looks; 1 is physical. Lower it to calm sky fill indoors without dimming the sky itself (Unreal's sky light intensity).",
+          "default": 1,
+          "range": [0, 16]
+        },
         "exposure": {
           "type": "f32",
           "doc": "Linear camera exposure multiplier, applied before tone mapping.",
           "default": 0.0015,
           "range": [1e-7, null]
+        }
+      }
+    },
+    "ExposureKey": {
+      "kind": "struct",
+      "doc": "One key of an exposure compensation curve: at scene brightness `ev100` (the metered EV100), add `stops` of compensation.",
+      "module": "render",
+      "fields": {
+        "ev100": {
+          "type": "f32",
+          "doc": "Metered scene brightness (EV100) this key applies at.",
+          "default": 0,
+          "range": [-10, 24],
+          "examples": [0]
+        },
+        "stops": {
+          "type": "f32",
+          "doc": "Compensation in stops at that brightness; +1 doubles the image brightness.",
+          "default": 0,
+          "range": [-8, 8],
+          "examples": [0.5]
         }
       }
     },
@@ -2784,6 +2934,19 @@ expression: out
           "type": "Flipbook",
           "doc": "Complete typed component; omitted fields use schema defaults.",
           "required": true
+        }
+      }
+    },
+    "FogVolumeShape": {
+      "kind": "enum",
+      "doc": "The shape of a [`LocalFogVolume`].",
+      "module": "render",
+      "variants": {
+        "sphere": {
+          "doc": "An ellipsoid filling `size`."
+        },
+        "box": {
+          "doc": "A box of `size`."
         }
       }
     },
@@ -3335,7 +3498,7 @@ expression: out
     },
     "HeightFog": {
       "kind": "component",
-      "doc": "Exponential height fog lit by the sun, the sky and local lights (volumetric shafts where shadows cut the beams). Density halves every `falloff × ln 2` metres above `baseHeight`. The first entity in ID order wins.",
+      "doc": "Exponential height fog lit by the sun, the sky and local lights. Volumetric fog (the default) casts shafts where shadows cut the beams, lets lamps glow in it and renders the near field at screen-tile detail from the Medium preset up (Unreal's volumetric fog). Density halves every `falloff × ln 2` metres above `baseHeight`. The first entity in ID order wins.",
       "module": "render",
       "fields": {
         "density": {
@@ -3368,6 +3531,34 @@ expression: out
           "doc": "Forward-scattering bias: 0 is uniform, toward 1 the fog glows around the sun and lamps.",
           "default": 0.3,
           "range": [0, 0.9]
+        },
+        "volumetric": {
+          "type": "bool",
+          "doc": "Volumetric fog: shadows cut sun shafts and lamp cones into the fog (and into local fog volumes) and local lights scatter in it. Off, the fog is plain height fog: unshadowed sun glow and sky light only.",
+          "default": true
+        },
+        "volumetricDistance": {
+          "type": "f32",
+          "doc": "How far from the camera the detailed (froxel) volumetric fog reaches; beyond it a coarser grid carries the fog. Larger distances spread the same slices thinner.",
+          "default": 60,
+          "unit": "m",
+          "range": [1, 1000]
+        },
+        "volumetricEmissive": {
+          "type": "vec3",
+          "doc": "Light the fog itself emits (linear radiance per metre of fog at `density`, following the height falloff), for glowing haze. Black emits none.",
+          "default": [0, 0, 0],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "volumetricExtinctionScale": {
+          "type": "f32",
+          "doc": "Scales how much light the fog absorbs (not how much it scatters): above 1 the fog darkens what lies behind it more for the same glow.",
+          "default": 1,
+          "range": [0.1, 10]
         }
       }
     },
@@ -3450,6 +3641,25 @@ expression: out
         }
       }
     },
+    "ImportDefaultsType": {
+      "kind": "enum",
+      "doc": "Built-in importer policies which can return to their engine defaults.",
+      "module": "asset",
+      "variants": {
+        "texture": {
+          "doc": "PNG/JPEG/HDR/EXR textures."
+        },
+        "gltf": {
+          "doc": "glTF models and their embedded texture policy."
+        },
+        "fbx": {
+          "doc": "FBX models and their embedded texture policy."
+        },
+        "audio": {
+          "doc": "Resident and streamed audio."
+        }
+      }
+    },
     "ImportInitializeParams": {
       "kind": "params",
       "doc": "Parameters of `import.initialize`.",
@@ -3493,13 +3703,44 @@ expression: out
       "module": "asset",
       "fields": {
         "preset": {
-          "type": "CookPreset",
+          "type": "option<CookPreset>",
           "doc": "Default texture quality for sources and model textures without an override.",
-          "required": true,
+          "default": null,
           "options": [
             "balanced",
             "highQuality",
             "fast"
+          ]
+        },
+        "texture": {
+          "type": "option<TextureSettings>",
+          "doc": "Texture defaults, using the exact installed texture settings schema.",
+          "default": null
+        },
+        "gltf": {
+          "type": "option<MeshSettings>",
+          "doc": "glTF model defaults, overridden independently by explicit source keys.",
+          "default": null
+        },
+        "fbx": {
+          "type": "option<MeshSettings>",
+          "doc": "FBX model defaults; glTF-only opacity maps are rejected.",
+          "default": null
+        },
+        "audio": {
+          "type": "option<AudioImportSettings>",
+          "doc": "Audio defaults, using the exact installed audio settings schema.",
+          "default": null
+        },
+        "resetType": {
+          "type": "option<ImportDefaultsType>",
+          "doc": "Remove one importer policy and return that type to built-in defaults.",
+          "default": null,
+          "options": [
+            "texture",
+            "gltf",
+            "fbx",
+            "audio"
           ]
         }
       }
@@ -3539,6 +3780,33 @@ expression: out
           "type": "list<asset>",
           "doc": "Referenced authoring assets, using authored-root-relative `@path#id` syntax.",
           "default": []
+        }
+      }
+    },
+    "ImporterDefaults": {
+      "kind": "struct",
+      "doc": "Optional policies use the exact settings schemas consumed by installed workers.",
+      "module": "asset",
+      "fields": {
+        "texture": {
+          "type": "option<TextureSettings>",
+          "doc": "PNG/JPEG/HDR/EXR texture import defaults; absent inherits built-in policy.",
+          "default": null
+        },
+        "gltf": {
+          "type": "option<MeshSettings>",
+          "doc": "glTF model import defaults, including embedded texture policy.",
+          "default": null
+        },
+        "fbx": {
+          "type": "option<MeshSettings>",
+          "doc": "FBX model import defaults; glTF-only opacity maps are not supported.",
+          "default": null
+        },
+        "audio": {
+          "type": "option<AudioImportSettings>",
+          "doc": "Audio use, codec, streaming bitrate and decoded-memory budget defaults.",
+          "default": null
         }
       }
     },
@@ -4010,12 +4278,14 @@ expression: out
       "fields": {
         "kind": {
           "type": "LightKind",
-          "doc": "Point, spot or directional.",
+          "doc": "Point, spot, directional, rect or disc.",
           "default": "point",
           "options": [
             "point",
             "spot",
-            "directional"
+            "directional",
+            "rect",
+            "disc"
           ]
         },
         "color": {
@@ -4028,13 +4298,36 @@ expression: out
         },
         "intensity": {
           "type": "f32",
-          "doc": "Luminous flux in lumens (point/spot) or illuminance in lux (directional).",
+          "doc": "Brightness: illuminance in lux for a directional light, otherwise in `units`.",
           "default": 800,
           "range": [0, null]
         },
+        "units": {
+          "type": "LightUnits",
+          "doc": "What a local light's `intensity` measures: lumens, candela or nits.",
+          "default": "lumens",
+          "options": [
+            "lumens",
+            "candela",
+            "nits"
+          ],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect",
+                  "disc"
+                ]
+              }
+            }
+          }
+        },
         "range": {
           "type": "f32",
-          "doc": "Influence radius of point and spot lights.",
+          "doc": "Influence radius of local lights, from the light's centre; their light fades to zero there.",
           "default": 10,
           "unit": "m",
           "range": [0.01, null],
@@ -4044,7 +4337,9 @@ expression: out
               "when": {
                 "oneOf": [
                   "point",
-                  "spot"
+                  "spot",
+                  "rect",
+                  "disc"
                 ]
               }
             }
@@ -4079,6 +4374,232 @@ expression: out
               "when": {
                 "oneOf": [
                   "spot"
+                ]
+              }
+            }
+          }
+        },
+        "volumetricScattering": {
+          "type": "f32",
+          "doc": "How strongly the light scatters in volumetric fog (Unreal's volumetric scattering intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its shafts and glow. Surfaces are lit the same either way.",
+          "default": 1,
+          "range": [0, 16]
+        },
+        "sourceRadius": {
+          "type": "f32",
+          "doc": "Radius of the emitter: a point's or spot's sphere (or tube, with `sourceLength`) or the disc. Larger sources give broader highlights and softer shadows; zero is an ideal point (Unreal's Source Radius).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "disc"
+                ]
+              }
+            }
+          }
+        },
+        "sourceLength": {
+          "type": "f32",
+          "doc": "Length of a point's or spot's tube along the entity's local X axis, capped by `sourceRadius`; zero is a sphere (Unreal's Source Length).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot"
+                ]
+              }
+            }
+          }
+        },
+        "sourceWidth": {
+          "type": "f32",
+          "doc": "Rect width along the entity's local X axis (Unreal's Source Width).",
+          "default": 0.64,
+          "unit": "m",
+          "range": [0.001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "sourceHeight": {
+          "type": "f32",
+          "doc": "Rect height along the entity's local Y axis (Unreal's Source Height).",
+          "default": 0.64,
+          "unit": "m",
+          "range": [0.001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "barnDoorAngle": {
+          "type": "f32",
+          "doc": "Angle of the rect's four barn doors from its normal: 0 points them straight ahead (the narrowest beam), 90 folds them flat (no effect).",
+          "default": 88,
+          "unit": "deg",
+          "range": [0, 90],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "barnDoorLength": {
+          "type": "f32",
+          "doc": "Length of the rect's barn doors; zero has none.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "profile": {
+          "type": "option<asset>",
+          "doc": "Photometric light profile (an imported IES file) shaping a point's, spot's or rect's intensity by direction, about the entity's local -Z axis.",
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "profileIntensity": {
+          "type": "bool",
+          "doc": "Take the brightness from the profile's own candela instead of `intensity` (Unreal's Use IES Intensity); `intensity` then scales it (one is as measured).",
+          "default": false,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "sourceAngle": {
+          "type": "f32",
+          "doc": "Angular diameter of a directional light's disc: wider suns cast softer shadow edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).",
+          "default": 0.5357,
+          "unit": "deg",
+          "range": [0, 20],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "atmosphereSunLight": {
+          "type": "bool",
+          "doc": "Whether a directional light lights the sky atmosphere: scatters in it (the sky's colour), draws its disc and is tinted by the air on the way to surfaces (Unreal's Atmosphere Sun Light).",
+          "default": true,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "atmosphereSunLightIndex": {
+          "type": "u32",
+          "doc": "Which of the two atmosphere lights this is: 0 the sun (it casts the shadows), 1 a second light such as a moon, which lights the sky, the aerial perspective and the sky light but not surfaces directly (Unreal's Atmosphere Sun Light Index).",
+          "default": 0,
+          "range": [0, 1],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "atmosphereSunDiskColorScale": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the light's disc in the sky (linear; Unreal's Atmosphere Sun Disk Color Scale); black hides the disc.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true,
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "perPixelAtmosphereTransmittance": {
+          "type": "bool",
+          "doc": "Tint the light on each surface by the air above that surface, with the planet's shadow at sunset (Unreal's Per Pixel Atmosphere Transmittance); off, one transmittance 500 m above the ground applies everywhere, as Unreal's default.",
+          "default": false,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
                 ]
               }
             }
@@ -4136,13 +4657,35 @@ expression: out
       "module": "render",
       "variants": {
         "point": {
-          "doc": "Omnidirectional point light."
+          "doc": "Omnidirectional point light; a source radius makes it a sphere, and a source length a tube along the entity's local X axis."
         },
         "spot": {
-          "doc": "Cone light aimed along the entity's local -Z axis."
+          "doc": "Cone light aimed along the entity's local -Z axis; a source radius or length sizes its emitter as for a point."
         },
         "directional": {
           "doc": "Sun-like light shining along the entity's local -Z axis; casts cascaded shadows."
+        },
+        "rect": {
+          "doc": "One-sided rectangle emitting along the entity's local -Z axis: `sourceWidth` along local X, `sourceHeight` along local Y, with optional barn doors."
+        },
+        "disc": {
+          "doc": "One-sided disc of radius `sourceRadius` emitting along the entity's local -Z axis."
+        }
+      }
+    },
+    "LightUnits": {
+      "kind": "enum",
+      "doc": "The unit of a local light's `intensity` (directional lights always take lux).",
+      "module": "render",
+      "variants": {
+        "lumens": {
+          "doc": "Luminous flux in lumens: everything a point emits (a spot's cone masks a point of that flux, as Unreal's spot lumens), or a rect's or disc's over its front hemisphere."
+        },
+        "candela": {
+          "doc": "Luminous intensity in candela: in every direction for points and spots, along the normal for rects and discs."
+        },
+        "nits": {
+          "doc": "Luminance of the emitting surface in nits (candela per square metre); a light without a source size emits nothing."
         }
       }
     },
@@ -4184,6 +4727,74 @@ expression: out
         },
         "teleport": {
           "doc": "Instant relocation (portals, spawn tubes)."
+        }
+      }
+    },
+    "LocalFogVolume": {
+      "kind": "component",
+      "doc": "A local volume of fog, mist or smoke placed by the entity's transform (Unreal's Local Fog Volume). It is lit like height fog (sun shafts, lamps, the sky or probe GI) and rendered in the volumetric fog; overlapping volumes add up. At most 16 render at once: the highest priority first, then the nearest to the camera.",
+      "module": "render",
+      "fields": {
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether the volume renders.",
+          "default": true
+        },
+        "shape": {
+          "type": "FogVolumeShape",
+          "doc": "Sphere (an ellipsoid filling `size`) or box.",
+          "default": "sphere",
+          "options": [
+            "sphere",
+            "box"
+          ]
+        },
+        "size": {
+          "type": "vec3",
+          "doc": "Full size along the entity's axes, centred on its origin and scaled by its transform.",
+          "default": [10, 10, 10],
+          "unit": "m",
+          "range": [0.02, 100000]
+        },
+        "density": {
+          "type": "f32",
+          "doc": "Extinction at the centre, per metre: 0.05 is a light mist (visibility about 60 m), 1 a thick smoke (about 3 m).",
+          "default": 0.1,
+          "range": [0, 10],
+          "examples": [0.2]
+        },
+        "radialFalloff": {
+          "type": "f32",
+          "doc": "Share of the radius, from the edge inwards, over which the fog thins to nothing: 0 is a hard edge, 1 fades all the way from the centre.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "heightFalloff": {
+          "type": "f32",
+          "doc": "How fast density falls with height above the centre (and rises below it), per metre: 0 is uniform; around 0.5 the fog pools near the bottom.",
+          "default": 0,
+          "range": [0, 10]
+        },
+        "albedo": {
+          "type": "color",
+          "doc": "Scattering colour (single-scattering albedo, linear).",
+          "default": [0.9, 0.9, 0.9, 1]
+        },
+        "emissive": {
+          "type": "vec3",
+          "doc": "Light the fog emits (linear radiance per metre at the centre's density), for glowing haze. Black emits none.",
+          "default": [0, 0, 0],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Which volumes render when more than 16 are in view: higher first, then nearer the camera.",
+          "default": 0,
+          "range": [-1000, 1000]
         }
       }
     },
@@ -4624,6 +5235,16 @@ expression: out
           "type": "list<string>",
           "doc": "Source material names or numeric indices affected by `emissiveFactor`. Empty targets all; `name:3` disambiguates a numeric material name.",
           "default": []
+        },
+        "castShadows": {
+          "type": "bool",
+          "doc": "Whether this geometry blocks light: off, it is still drawn, reflected and bounces light, but casts no shadow. Model nodes whose glTF `extras` set `castShadows: false` never cast, whatever this says.",
+          "default": true
+        },
+        "receivesDecals": {
+          "type": "bool",
+          "doc": "Whether decals project onto this geometry (Unreal's bReceivesDecals). Off for characters or moving props a level's decals should not stick to.",
+          "default": true
         }
       }
     },
@@ -5493,6 +6114,55 @@ expression: out
         }
       }
     },
+    "PaintChannels": {
+      "kind": "struct",
+      "doc": "Which RGBA channels a fill writes (Unreal's paint channel mask).",
+      "module": "render",
+      "fields": {
+        "r": {
+          "type": "bool",
+          "doc": "Write red.",
+          "default": true
+        },
+        "g": {
+          "type": "bool",
+          "doc": "Write green.",
+          "default": true
+        },
+        "b": {
+          "type": "bool",
+          "doc": "Write blue.",
+          "default": true
+        },
+        "a": {
+          "type": "bool",
+          "doc": "Write alpha.",
+          "default": true
+        }
+      }
+    },
+    "PaintedPrimitive": {
+      "kind": "struct",
+      "doc": "One primitive's painted colours.",
+      "module": "render",
+      "fields": {
+        "primitive": {
+          "type": "u32",
+          "doc": "Zero-based primitive within the selected subtree, before `primitive` filtering.",
+          "default": 0
+        },
+        "vertices": {
+          "type": "u32",
+          "doc": "Source vertices the colours cover (the imported primitive's vertex count). A re-import that changes it leaves the primitive unpainted until repainted.",
+          "default": 0
+        },
+        "colors": {
+          "type": "string",
+          "doc": "Linear RGBA8 per source vertex: zlib-compressed, then standard base64.",
+          "default": ""
+        }
+      }
+    },
     "Perceiver": {
       "kind": "component",
       "doc": "An AI's senses: a sight cone with peripheral vision, hearing and memory.",
@@ -5937,6 +6607,21 @@ expression: out
           "default": null,
           "range": [0.1, 20],
           "examples": [2],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
+        },
+        "compensationCurve": {
+          "type": "option<list<ExposureKey>>",
+          "doc": "Extra compensation that follows the metered scene brightness (automatic exposure), as Unreal's exposure compensation curve: keys of scene EV100 and stops, linear between them and flat beyond the ends (at most eight). Lifting dark scenes more than bright ones keeps interiors readable without washing out daylight.",
+          "default": null,
           "editor": {
             "showIf": {
               "field": "module",
@@ -6489,6 +7174,11 @@ expression: out
             "highQuality",
             "fast"
           ]
+        },
+        "defaults": {
+          "type": "ImporterDefaults",
+          "doc": "Typed importer-wide defaults. Explicit source settings take priority.",
+          "default": {}
         }
       }
     },
@@ -6631,7 +7321,7 @@ expression: out
     },
     "ReflectionProbe": {
       "kind": "component",
-      "doc": "An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under `.ara/cache/probes`), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any gets automatic captures over its content only with the look-development opt-in `ARA_REFLECTION_CAPTURES=1`.",
+      "doc": "An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under `.ara/cache/probes`), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any places captures itself where its probe volume saw enclosed open space (`ARA_REFLECTION_CAPTURES=0` turns that off).",
       "module": "render",
       "fields": {
         "enabled": {
@@ -6711,7 +7401,7 @@ expression: out
         },
         "rayTracing": {
           "type": "bool",
-          "doc": "Opt in to experimental hardware ray tracing for supported presets. False keeps every preset on raster and creates no ray-tracing presentation device. Takes effect when the player or editor GPU device is opened.",
+          "doc": "Opt in to hardware ray tracing on GPUs that support it: the ray-traced renderer for Medium and above. Off (the default), every preset is raster and traces no rays, whatever the GPU, as in Unreal.",
           "default": false
         }
       }
@@ -7058,21 +7748,197 @@ expression: out
     },
     "SkyAtmosphere": {
       "kind": "component",
-      "doc": "A physical sky and aerial perspective lit by the scene's directional light. The sun's elevation sets the time of day; without this component the scene uses its `Environment` gradient. The first entity in ID order wins.",
+      "doc": "A physical sky and aerial perspective (Unreal's SkyAtmosphere, value for value: the same parameters, units and defaults). Lit by the directional lights marked as atmosphere lights (the sun, and a second light such as a moon); the sun's elevation sets the time of day. Without this component the scene uses its `Environment` gradient. The first entity in ID order wins. Distances are in kilometres and coefficients per kilometre, as in Unreal; colours are linear.",
       "module": "render",
+      "version": 2,
       "fields": {
         "seaLevel": {
           "type": "f32",
-          "doc": "World altitude of the planet surface (sea level); the sky and fog measure height from here.",
+          "doc": "World altitude of the planet's surface (sea level); the sky and fog measure height from here (Unreal's planet top at the absolute world origin or at the component).",
           "default": 0,
           "unit": "m",
           "examples": [0]
         },
-        "aerosols": {
+        "bottomRadius": {
           "type": "f32",
-          "doc": "Aerosol (haze, dust) density relative to clear Earth air. Raise it for dusty or humid skies: a whiter horizon, a wider sun glow and stronger aerial perspective.",
+          "doc": "Radius from the planet's centre to the ground (Unreal's Ground Radius).",
+          "default": 6360,
+          "unit": "km",
+          "range": [0.1, 10000]
+        },
+        "groundAlbedo": {
+          "type": "vec3",
+          "doc": "Colour of the ground lighting the atmosphere from below through multiple scattering, and of the planet seen below the horizon (linear; Unreal's sRGB 170 grey).",
+          "default": [0.401978, 0.401978, 0.401978],
+          "range": [0, 1],
+          "editor": {
+            "color": true
+          }
+        },
+        "atmosphereHeight": {
+          "type": "f32",
+          "doc": "Thickness of the atmosphere above the ground.",
+          "default": 60,
+          "unit": "km",
+          "range": [0.1, 10000]
+        },
+        "multiScattering": {
+          "type": "f32",
+          "doc": "How much light scatters more than once: 0 is single scattering only (a darker, more saturated sky), 1 physical.",
           "default": 1,
+          "range": [0, 100]
+        },
+        "traceSampleCountScale": {
+          "type": "f32",
+          "doc": "Scales the number of samples the sky's ray marches take: more removes banding in thick or tall atmospheres at a higher LUT cost.",
+          "default": 1,
+          "range": [0.25, 8]
+        },
+        "rayleighScatteringScale": {
+          "type": "f32",
+          "doc": "Rayleigh (air molecule) scattering at the ground, per kilometre, times `rayleighScattering`: the blue of the sky.",
+          "default": 0.0331,
+          "range": [0, 2]
+        },
+        "rayleighScattering": {
+          "type": "vec3",
+          "doc": "Rayleigh scattering colour (linear), times `rayleighScatteringScale`.",
+          "default": [0.175287, 0.409607, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "rayleighExponentialDistribution": {
+          "type": "f32",
+          "doc": "Altitude over which Rayleigh density falls by a factor of e.",
+          "default": 8,
+          "unit": "km",
+          "range": [0.001, 20]
+        },
+        "mieScatteringScale": {
+          "type": "f32",
+          "doc": "Mie (aerosol: haze, dust, pollution) scattering at the ground, per kilometre, times `mieScattering`: a whiter horizon and a wider glow around the sun.",
+          "default": 0.003996,
+          "range": [0, 5]
+        },
+        "mieScattering": {
+          "type": "vec3",
+          "doc": "Mie scattering colour (linear), times `mieScatteringScale`.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "mieAbsorptionScale": {
+          "type": "f32",
+          "doc": "Mie absorption at the ground, per kilometre, times `mieAbsorption`: darker, browner haze.",
+          "default": 0.000444,
+          "range": [0, 5]
+        },
+        "mieAbsorption": {
+          "type": "vec3",
+          "doc": "Mie absorption colour (linear), times `mieAbsorptionScale`.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "mieAnisotropy": {
+          "type": "f32",
+          "doc": "How strongly aerosols scatter forward: 0 evenly in all directions, towards 1 a tight bright halo around the sun.",
+          "default": 0.8,
+          "range": [0, 0.999]
+        },
+        "mieExponentialDistribution": {
+          "type": "f32",
+          "doc": "Altitude over which Mie density falls by a factor of e.",
+          "default": 1.2,
+          "unit": "km",
+          "range": [0.001, 10]
+        },
+        "absorptionScale": {
+          "type": "f32",
+          "doc": "Absorption of a layer such as ozone, per kilometre at its peak, times `absorption`: deepens the twilight blue (Unreal's Absorption Scale).",
+          "default": 0.001881,
+          "range": [0, 0.2]
+        },
+        "absorption": {
+          "type": "vec3",
+          "doc": "Absorption colour (linear), times `absorptionScale`.",
+          "default": [0.345561, 1, 0.045189],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "absorptionTipAltitude": {
+          "type": "f32",
+          "doc": "Altitude of the absorbing layer's peak (Unreal's tent distribution tip altitude).",
+          "default": 25,
+          "unit": "km",
+          "range": [0, 60]
+        },
+        "absorptionTipValue": {
+          "type": "f32",
+          "doc": "Density at the absorbing layer's peak (Unreal's tent tip value).",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "absorptionWidth": {
+          "type": "f32",
+          "doc": "Altitude over which the layer's density falls from its peak to zero, above and below it (Unreal's tent width); 0 removes the layer.",
+          "default": 15,
+          "unit": "km",
           "range": [0, 20]
+        },
+        "skyLuminanceFactor": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the sky itself (and so the sky light it casts), not the aerial perspective (linear).",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "skyAndAerialPerspectiveLuminanceFactor": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the sky and of the aerial perspective (linear).",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "aerialPerspectiveViewDistanceScale": {
+          "type": "f32",
+          "doc": "Makes the aerial perspective look thicker by scaling distances from the camera to surfaces (not to the sky).",
+          "default": 1,
+          "range": [0, 3]
+        },
+        "heightFogContribution": {
+          "type": "f32",
+          "doc": "Scales the sun and sky light the height fog scatters beyond the volumetric fog (Unreal's sky atmosphere contribution to exponential height fog).",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "transmittanceMinLightElevationAngle": {
+          "type": "f32",
+          "doc": "The lowest sun elevation used for the sunlight on surfaces: keeps a setting sun lighting and shadowing the scene. -90 is physical. The sky is unaffected.",
+          "default": -90,
+          "unit": "deg",
+          "range": [-90, 90]
+        },
+        "aerialPerspectiveStartDepth": {
+          "type": "f32",
+          "doc": "Distance from the camera where the aerial perspective starts.",
+          "default": 0.1,
+          "unit": "km",
+          "range": [0.001, 10]
         },
         "cloudCoverage": {
           "type": "f32",
@@ -7700,6 +8566,11 @@ expression: out
           "doc": "Maximum permitted source dimension (decode limits are also enforced).",
           "default": 16384,
           "range": [1, 16384]
+        },
+        "alphaCoverage": {
+          "type": "option<f32>",
+          "doc": "Alpha-test cutoff whose coverage every mip keeps: a level whose averaged alpha would pass fewer (or more) texels than the full-size image has its partial alpha remapped until it passes as many, so masked fences and foliage stay as solid at a distance as up close, and a grate's holes stay open instead of averaging shut (Unity's \"preserve coverage\", Unreal's \"preserve alpha coverage\"). Model importers set it for the base colour of alpha-masked materials. Absent: alpha mips are plain averages.",
+          "default": null
         }
       }
     },
@@ -8543,6 +9414,94 @@ expression: out
         }
       }
     },
+    "VertexPaint": {
+      "kind": "component",
+      "doc": "Vertex colours painted onto this entity's `MeshRenderer` (its instance only; the shared model stays untouched). Materials read them as `vertexColor()`: glTF materials multiply base colour by them, graph materials blend layers by them.",
+      "module": "render",
+      "fields": {
+        "primitives": {
+          "type": "list<PaintedPrimitive>",
+          "doc": "Painted primitives by subtree-local slot (as `MeshRenderer.materialOverrides`); unlisted primitives keep their imported colours.",
+          "default": []
+        }
+      }
+    },
+    "VertexPaintClearParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.clear`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity.",
+          "required": true
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Slot to clear; absent removes the whole `VertexPaint` component.",
+          "default": null
+        }
+      }
+    },
+    "VertexPaintFillParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.fill`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity (its MeshRenderer).",
+          "required": true
+        },
+        "primitive": {
+          "type": "u32",
+          "doc": "Subtree-local primitive slot.",
+          "default": 0
+        },
+        "color": {
+          "type": "color",
+          "doc": "Linear colour written to every vertex's selected channels.",
+          "required": true
+        },
+        "channels": {
+          "type": "option<PaintChannels>",
+          "doc": "Channels written (absent: all); the others keep their painted (or white) values.",
+          "default": null
+        },
+        "vertices": {
+          "type": "option<u32>",
+          "doc": "Source vertex count; required when the slot has no paint yet (the editor and `ara inspect` of the model report it).",
+          "default": null
+        }
+      }
+    },
+    "VertexPaintSetParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.set`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity (its MeshRenderer); may be inside a prefab instance.",
+          "required": true
+        },
+        "primitive": {
+          "type": "u32",
+          "doc": "Subtree-local primitive slot.",
+          "default": 0
+        },
+        "vertices": {
+          "type": "u32",
+          "doc": "Source vertex count the colours cover.",
+          "required": true
+        },
+        "colors": {
+          "type": "string",
+          "doc": "Linear RGBA8 per source vertex, zlib-compressed and base64 (`VertexPaint` format).",
+          "required": true
+        }
+      }
+    },
     "VfxEnableParams": {
       "kind": "params",
       "doc": "Turn one module on or off without removing it.",
@@ -8836,7 +9795,7 @@ expression: out
       ]
     },
     "imports": {
-      "doc": "Project texture import defaults, overridden by individual sources/textures.",
+      "doc": "Typed per-importer project defaults and global texture quality, overridden by explicit source settings.",
       "schema": "ara://schema/imports/1",
       "idPrefix": "ip",
       "extension": "imports",
@@ -9734,7 +10693,7 @@ expression: out
     },
     "import.project.configure": {
       "kind": "command",
-      "summary": "Set the project's default texture import quality.",
+      "summary": "Configure global texture quality and typed per-importer project defaults.",
       "params": "ImportProjectConfigureParams",
       "hints": {
         "idempotent": false,
@@ -10728,6 +11687,70 @@ expression: out
       "examples": [
         {
           "source": "<ui id=\"hud\"><text id=\"title\" text=\"Hello\" /></ui>\n"
+        }
+      ]
+    },
+    "vertexPaint.clear": {
+      "kind": "command",
+      "summary": "Remove per-instance vertex paint from one primitive slot or the whole entity.",
+      "params": "VertexPaintClearParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor"
+        },
+        {
+          "entity": "e_floor",
+          "primitive": 2
+        }
+      ]
+    },
+    "vertexPaint.fill": {
+      "kind": "command",
+      "summary": "Fill selected colour channels of one primitive's per-instance vertex colours.",
+      "params": "VertexPaintFillParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor",
+          "color": [0, 0, 0, 1],
+          "vertices": 4096
+        },
+        {
+          "entity": "e_floor",
+          "primitive": 1,
+          "color": [1, 0, 0, 1],
+          "channels": {
+            "g": false,
+            "b": false,
+            "a": false
+          }
+        }
+      ]
+    },
+    "vertexPaint.set": {
+      "kind": "command",
+      "summary": "Replace one primitive's per-instance vertex colours (a whole paint stroke).",
+      "params": "VertexPaintSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor",
+          "primitive": 0,
+          "vertices": 3,
+          "colors": "eJz7z8Dw/z8UAwAm5QX7"
         }
       ]
     },

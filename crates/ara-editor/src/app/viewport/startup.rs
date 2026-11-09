@@ -17,8 +17,8 @@ pub(in crate::app) fn prepare_renderer(
         .name("ara-scene-startup".into())
         .spawn(move || {
             ara_gpu::cpu_scope!("SceneView.renderer_startup_worker");
-            // D29: the raster renderer's device enables hardware ray queries where
-            // the GPU has them, so High/Epic add ray-traced reflections.
+            // The raster renderer's device enables hardware ray queries where the
+            // GPU has them; presets trace none without the ray-tracing opt-in.
             let create = if ray_tracing {
                 Renderer::new
             } else {

@@ -23,6 +23,112 @@ fn only_declared_canonical_and_indexed_legacy_profile_paths_are_accepted() {
         assert!(profile_name(path).is_none(), "{path}");
     }
 }
+
+#[test]
+fn package_form_uses_all_real_formats_and_a_distinct_confirm_command() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1120., 780.]).unwrap();
+    shell.offscreen = true;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while shell.browser.revision == 0
+        && shell.browser.files.is_empty()
+        && shell.browser.error.is_none()
+        && std::time::Instant::now() < deadline
+    {
+        shell.browser.poll();
+        std::thread::yield_now();
+    }
+    assert!(shell.browser.revision > 0 || !shell.browser.files.is_empty());
+    shell.browser.files = vec![AuthoredFile {
+        path: "settings/builds/windows.export.json".into(),
+        storage_path: "settings/builds/windows.export.json".into(),
+        scope: AuthoredScope::Project,
+        role: AuthoredRole::BuildPreset,
+    }];
+    shell.browser.revision += 1;
+    let revision = editor.host.store().revision();
+    shell.open_package_options(&mut editor).unwrap();
+    shell.frame().unwrap();
+    visible(&shell, "package-format-select");
+    visible(&shell, "package-options-build");
+    bounded(&shell, "build-options-body");
+    let formats = package_formats();
+    assert_eq!(formats.len(), 6);
+    let mut clipboard = crate::native::SessionClipboard::new(true);
+    let click = |shell: &mut Shell,
+                 editor: &mut Editor,
+                 id: &str,
+                 clipboard: &mut crate::native::SessionClipboard| {
+        let rect = visible(shell, id);
+        let point = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
+        shell
+            .event(InputEvent::PointerDown(point), clipboard)
+            .unwrap();
+        shell
+            .event(InputEvent::PointerUp(point), clipboard)
+            .unwrap();
+        shell.dispatch(editor).unwrap();
+        shell.frame().unwrap();
+    };
+    click(
+        &mut shell,
+        &mut editor,
+        "package-format-select",
+        &mut clipboard,
+    );
+    assert!(shell.choice_open());
+    for (_, label) in formats {
+        assert!(
+            shell.ui.nodes.iter().any(|node| node
+                .element
+                .id
+                .starts_with("choice-package-format-select-option-")
+                && node
+                    .element
+                    .attrs
+                    .get("label")
+                    .is_some_and(|shown| shown == label)),
+            "missing format {label}"
+        );
+    }
+    let option = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|node| {
+            node.element
+                .id
+                .starts_with("choice-package-format-select-option-")
+                && node
+                    .element
+                    .attrs
+                    .get("label")
+                    .is_some_and(|label| label == "Linux tar.gz")
+        })
+        .unwrap()
+        .element
+        .id
+        .clone();
+    click(&mut shell, &mut editor, &option, &mut clipboard);
+    assert_eq!(json!(shell.build_options.format), "linuxTar");
+    assert!(!shell.choice_open());
+    assert!(
+        shell.build.is_none(),
+        "choosing the format does not start an export"
+    );
+    assert_eq!(editor.host.store().revision(), revision);
+    assert!(!project.0.join("builds").exists());
+    shell.close_build_options(&mut editor).unwrap();
+    shell.open_build_options(&mut editor).unwrap();
+    shell.frame().unwrap();
+    assert!(
+        !shell.build_options.package,
+        "normal Build must not inherit Package intent"
+    );
+    visible(&shell, "build-options-build");
+    assert!(shell.shown_node("package-options-build").is_none());
+}
 #[test]
 fn a_removed_explicit_profile_never_builds_a_different_first_profile() {
     let names = vec!["mobile".into(), build::DEFAULT_PROFILE.into()];

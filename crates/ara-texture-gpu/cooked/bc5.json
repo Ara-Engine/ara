@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc",
+  "key": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738",
   "stages": [
     {
-      "dxil": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc5/encodeBc5.dxil",
+      "dxil": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc5/encodeBc5.dxil",
       "dxil_hash": "5d22603fe24a550fc28791d7449f983f70f8fe172aa6ad41eb547d8257dc6526",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc5/encodeBc5.metallib",
+        "metallib": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc5/encodeBc5.metallib",
         "metallib_hash": "0c89536e7a88a5c96b87320a8d8731fdc1e0d2bb1da8d502c155e03be75ae6e7",
-        "reflection": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc5/encodeBc5.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc5/encodeBc5.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "encodeBc5",
-      "spirv": "ec93c8b489bc7318e70938a61537a9df0475254ea77290f3f05ae16fd97eb6dc/bc5/encodeBc5.spv",
+      "spirv": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc5/encodeBc5.spv",
       "spirv_entry": "main",
       "spirv_hash": "f2435d8e5d5265cd36afce8875ca64c535f21aa3afb560e8ce6c972edbe55727",
       "stage": "compute"

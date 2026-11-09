@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_view/skyViewMain.dxil",
-      "dxil_hash": "8cb7e6abf2a3a51518d5fcfcb784f59ce3b323cdf75db1b37bc8b13a3f4cea15",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_view/skyViewMain.dxil",
+      "dxil_hash": "b782d80de93ec7a618efca20dbfc4af5d1638f952d349b802bc199262cd93882",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_view/skyViewMain.metallib",
-        "metallib_hash": "4ebb8116f52bbfc7315ca5dbe2a98831eddf17badd3eaea5e87ca5646ad4fcfd",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_view/skyViewMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_view/skyViewMain.metallib",
+        "metallib_hash": "5cdeb68e10f9325993dfdb4b7bc9dfb16fcf499731e37af971976ffb37c18468",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_view/skyViewMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "skyViewMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_sky_view/skyViewMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_sky_view/skyViewMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "9ba12257750596d35a3af5e401144fc2d19f5641be79f180934f95e1780a2f35",
+      "spirv_hash": "843964d43bad3c22c2afd5d408ef3f7b8b666b77ddbaf09fbd575bcb1365c1d6",
       "stage": "compute"
     }
   ],

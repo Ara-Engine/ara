@@ -28,7 +28,9 @@ void ddgiMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
             float3 weight;pathDirection=sampleBrdf(s,-pathDirection,rng,weight);throughput*=weight;
             if(max(max(throughput.x,throughput.y),throughput.z)<0.001)break;
             Hit next;if(!trace(f,rayOrigin(s,pathDirection),pathDirection,50,rng,next)){incoming+=throughput*environment(f,pathDirection);break;}
-            s=surface(f,next.id,next.primitive,next.bary);if(dot(s.normal,-pathDirection)<0)s.normal=-s.normal;
+            s=surface(f,next.id,next.primitive,next.bary);
+            if(s.transmission>0 && !s.thin && dot(s.geometricNormal,pathDirection)>0)throughput*=exp(-s.absorption*next.distance);
+            if(dot(s.normal,-pathDirection)<0)s.normal=-s.normal;
         }
     }else incoming=environment(f,dir);}
     radiance[lane]=incoming;distances[lane]=distance;directions[lane]=dir;backs[lane]=back;GroupMemoryBarrierWithGroupSync();

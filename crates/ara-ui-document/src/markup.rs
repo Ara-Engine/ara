@@ -66,6 +66,7 @@ pub const ATTRIBUTES: &[&str] = &[
     "at",
     "placement",
     "offset",
+    "match-anchor",
 ];
 /// Parse the strict XML-shaped authoring subset without altering original bytes.
 pub fn parse(source: &str) -> Result<Vec<Element>> {

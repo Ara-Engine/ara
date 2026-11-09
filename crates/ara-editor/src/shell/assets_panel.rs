@@ -7,7 +7,7 @@
 //! context menu's Import.
 use super::*;
 #[path = "assets_panel/types.rs"]
-mod types;
+pub(in crate::shell) mod types;
 impl Shell {
     /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
     /// the folder, search, view mode and selection, density, thumbnails, import progress,
@@ -97,6 +97,8 @@ impl Shell {
             out.push_str("</panel>");
         }
         self.search(out, "assets", editor);
+        // Type and Bookmarks sit in the one toolbar row as compact dropdowns.
+        self.asset_types_markup(editor, out);
         for (id, label, icon, grid) in [
             ("assets-grid", "Grid", "layout-grid", true),
             ("assets-list", "List", "list-tree", false),
@@ -133,7 +135,6 @@ impl Shell {
             out.push_str(&jobs);
             out.push_str("</panel></scroll>");
         }
-        self.asset_types_markup(editor, out);
         out.push_str("<panel id='assets-content' class='asset-browser-content'>");
         if side > 0. {
             self.asset_tree(editor, out, side / (content - side - 5.).max(1.));
@@ -448,19 +449,7 @@ impl Shell {
             true
         } else {
             if !asset.path.starts_with("live:")
-                && matches!(
-                    asset.kind.as_str(),
-                    "png"
-                        | "jpg"
-                        | "jpeg"
-                        | "hdr"
-                        | "exr"
-                        | "glb"
-                        | "gltf"
-                        | "fbx"
-                        | "material"
-                        | "graph"
-                )
+                && crate::asset_tools::thumbnails::has_thumbnail(&asset.path)
             {
                 self.thumbnails.request(&asset.path);
             }
@@ -498,7 +487,7 @@ impl Shell {
 /// One icon per asset concept.
 pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
     match asset.kind.as_str() {
-        "png" | "jpg" | "jpeg" | "hdr" | "exr" => "image",
+        kind if names::is_texture(kind) => "image",
         "glb" | "gltf" | "fbx" => "package",
         "scene" => "clapperboard",
         "prefab" => "box",
@@ -548,10 +537,7 @@ fn matches_query(asset: &assets::Asset, query: &str) -> bool {
         if let Some(kind) = term.strip_prefix("type:") {
             match kind {
                 "mesh" => matches!(asset.kind.as_str(), "gltf" | "glb" | "fbx"),
-                "texture" => matches!(
-                    asset.kind.as_str(),
-                    "png" | "jpg" | "jpeg" | "hdr" | "exr" | "ktx2"
-                ),
+                "texture" => names::is_texture(&asset.kind),
                 "audio" => matches!(asset.kind.as_str(), "wav" | "ogg" | "mp3" | "flac"),
                 "script" => asset.kind == "cs",
                 "material" => {

@@ -14,7 +14,6 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
         size,
         thumbnail: &|_| None,
         anchor: Some([1000., 300., 32., 32.]),
-        docs: &[],
         dialog_close_hint: false,
     };
     let page = view::page(hub, &ctx);
@@ -30,8 +29,12 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
 }
 
 #[test]
-fn agent_setup_copy_commands_use_the_verified_path_with_shell_quoting() {
-    use ara_hub::{connection::Event, model::AgentClient, view::Binding};
+fn agent_manual_steps_appear_on_request_and_quote_the_verified_path() {
+    use ara_hub::{
+        connection::Event,
+        model::{AgentClient, AgentSetup},
+        view::Binding,
+    };
     let mut hub = Hub::new(Prefs::default(), "target/hub-tests".into(), None);
     let executable =
         std::path::absolute("target/Ara's installed build/ara.exe").expect("absolute CLI");
@@ -39,37 +42,44 @@ fn agent_setup_copy_commands_use_the_verified_path_with_shell_quoting() {
         executable: executable.clone(),
     });
     hub.view = View::Agents;
+    hub.agent_setup
+        .insert(AgentClient::Claude, AgentSetup::Missing);
+    hub.agent_setup
+        .insert(AgentClient::Codex, AgentSetup::Available);
     let ctx = Ctx {
         now_ms: capture::NOW,
         size: [1440., 900.],
         thumbnail: &|_| None,
         anchor: None,
-        docs: &[],
         dialog_close_hint: false,
     };
+    let binding = |hub: &Hub, id: &str| {
+        view::page(hub, &ctx)
+            .bindings
+            .get(&ara_ui::source::stable_id(id))
+            .cloned()
+    };
+    // A detected client connects in one click; no steps are shown by default.
+    assert!(matches!(
+        binding(&hub, "agent-codex-connect"),
+        Some(Binding::Intent(Intent::SetupAgent(AgentClient::Codex)))
+    ));
+    assert!(binding(&hub, "copy-claude-add").is_none());
+    assert!(binding(&hub, "agent-codex-manual").is_none());
+    hub.intent(Intent::ManualAgent(Some(AgentClient::Claude)));
     let path = executable.to_string_lossy();
     let quoted = if cfg!(windows) {
         format!("'{}'", path.replace('\'', "''"))
     } else {
-        format!("'{}'", path.replace('\'', "'\\''"))
+        format!("'{}'", path.replace('\'', "'\''"))
     };
-    let page = view::page(&hub, &ctx);
-    let command = page
-        .bindings
-        .get(&ara_ui::source::stable_id("copy-claude-add"))
-        .expect("Claude copy");
     assert!(
-        matches!(command,Binding::Intent(Intent::Copy(text)) if text==&format!("claude mcp add --scope user ara -- {quoted} mcp"))
+        matches!(binding(&hub, "copy-claude-add"), Some(Binding::Intent(Intent::Copy(text))) if text==format!("claude mcp add --scope user ara -- {quoted} mcp"))
     );
-    hub.prefs.agent = AgentClient::Codex;
-    let page = view::page(&hub, &ctx);
-    let command = page
-        .bindings
-        .get(&ara_ui::source::stable_id("copy-codex-install"))
-        .expect("Codex copy");
+    // Until the CLI prints the config, the step copies the command that prints it.
     let prefix = if cfg!(windows) { "& " } else { "" };
     assert!(
-        matches!(command,Binding::Intent(Intent::Copy(text)) if text==&format!("{prefix}{quoted} hub install-mcp --client codex"))
+        matches!(binding(&hub, "copy-claude-config"), Some(Binding::Intent(Intent::Copy(text))) if text==format!("{prefix}{quoted} hub install-mcp --client claude"))
     );
 }
 
@@ -99,7 +109,6 @@ fn first_run_has_no_demo_update_or_missing_art_and_template_titles_are_complete(
                 size,
                 thumbnail: &|_| None,
                 anchor: None,
-                docs: &[],
                 dialog_close_hint: false,
             },
         );

@@ -1,0 +1,39 @@
+diff --git a/crates/ara-editor/src/app/setup.rs b/crates/ara-editor/src/app/setup.rs
+--- a/crates/ara-editor/src/app/setup.rs
++++ b/crates/ara-editor/src/app/setup.rs
+@@ -32,6 +32,8 @@
+     pub verify_docking: bool,
+     /// Run native content drag/drop, reference, component and OS-import behaviour journeys.
+     pub verify_behaviours: bool,
++    /// Verify real Play-client Profiler selection and captures through raw SDL.
++    pub verify_profiler: bool,
+     /// Include extended import and filesystem lifecycle checks in the behaviour run.
+     pub behaviour_asset_ops: bool,
+     /// Right-click Create → C# Script → rename → compile → attach, offscreen.
+@@ -96,6 +98,7 @@
+             || self.verify_ux
+             || self.verify_docking
+             || self.verify_behaviours
++            || self.verify_profiler
+             || self.verify_assets
+             || self.verify_journey
+             || self.verify_monkey
+@@ -147,6 +150,7 @@
+             verify_ux: false,
+             verify_docking: false,
+             verify_behaviours: false,
++            verify_profiler: false,
+             behaviour_asset_ops: true,
+             verify_assets: false,
+             scene: None,
+diff --git a/crates/ara-editor/src/main.rs b/crates/ara-editor/src/main.rs
+--- a/crates/ara-editor/src/main.rs
++++ b/crates/ara-editor/src/main.rs
+@@ -47,6 +47,7 @@
+                 options.verify_behaviours = true;
+                 options.behaviour_asset_ops = false;
+             }
++            "--verify-profiler" => options.verify_profiler = true,
+             "--verify-assets" => options.verify_assets = true,
+             "--verify-journey" => options.verify_journey = true,
+             "--verify-monkey" => options.verify_monkey = true,

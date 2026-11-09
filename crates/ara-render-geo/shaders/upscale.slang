@@ -7,7 +7,7 @@ struct Root{uint source;uint output;uint inputWidth;uint inputHeight;uint width;
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[]:register(t0,space1);
-BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
+BIND(3) RWTexture2D<float4> images[128]:register(u0,space3);
 float3 sample(int2 p){p=clamp(p,0,int2(root.inputWidth,root.inputHeight)-1);return pow(textures[NonUniformResourceIndex(root.source)].Load(int3(p,0)).rgb,float3(2.2));}
 [shader("compute")][numthreads(8,8,1)]
 void upscaleMain(uint3 id:SV_DispatchThreadID){if(id.x>=root.width||id.y>=root.height)return;

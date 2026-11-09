@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93",
+  "key": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a",
   "stages": [
     {
-      "dxil": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.dxil",
+      "dxil": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.dxil",
       "dxil_hash": "1e90b762c385b744a89085a216a870706dd420fd7be334862313ac2867411e74",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.metallib",
+        "metallib": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.metallib",
         "metallib_hash": "8a68de83ab8378d4d379b6ed345df201415420db612545c26f7393a66c8727a7",
-        "reflection": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "rangeProbe",
-      "spirv": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.spv",
+      "spirv": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.spv",
       "spirv_entry": "main",
       "spirv_hash": "85dee2dce28d44d1c4692a6b2733d7f634f32a70bea08f80a01c36a291848b15",
       "stage": "compute"

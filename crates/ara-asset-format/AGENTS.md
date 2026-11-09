@@ -1,7 +1,7 @@
 # ara-asset-format
 
 Small cooked-file readers and deterministic writers; no renderer/animation or
-source-importer dependency. FORMAT.md is the wire contract, version 1.
+source-importer dependency. FORMAT.md is the wire contract, version 1 (VERT already carries linear RGBA8 COLOR_0, which the runtime now reads: no layout change, no version bump).
 
 Public API: Container/Builder, Mesh, Skeleton, Clip, Texture/write_ktx2.
 All payload views borrow original bytes, suitable for mapped files and uploads.

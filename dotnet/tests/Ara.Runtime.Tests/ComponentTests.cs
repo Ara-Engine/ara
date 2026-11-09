@@ -60,7 +60,7 @@ public sealed class ComponentTests(ITestOutputHelper output)
             EngineAccess.Flush();
         }
         finally { Host.ExitExclusive(previous); s_transform = null; }
-        Assert.Equal(EngineComponents.Names.Length - 1, Written.Count);
+        Assert.Equal(EngineComponents.Names.Skip(1), Written.Order().Select(index => EngineComponents.Names[index]));
         Assert.True(transform.Position.Y > 0);
         foreach (var (index, value) in Values)
             Assert.False(JsonNode.DeepEquals(before[index], JsonNode.Parse(value)), $"{EngineComponents.Names[index]} did not change");

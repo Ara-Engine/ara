@@ -106,7 +106,7 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool, curr
         if !release.notes.is_empty() {
             p.markup
                 .push_str("<scroll id='install-notes-scroll' class='install-notes-scroll'>");
-            p.text("dialog-copy muted", &release.notes);
+            super::super::markdown::render(p, &release.notes);
             p.markup.push_str("</scroll>");
         }
     } else if let Some(channel) = plan.and_then(|plan| plan.channel) {

@@ -9,7 +9,7 @@ mod interactions;
 mod migration;
 use crate::{
     connection::Event,
-    model::{AgentClient, Call, Hub, Intent, Layout, View},
+    model::{AgentClient, AgentSetup, Call, Hub, Intent, Layout, View},
     native::Offscreen,
 };
 use serde_json::{Value, json};
@@ -202,6 +202,13 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
             json!(cli)
         ),
     );
+    hub.install.insert(
+        AgentClient::OpenCode,
+        ara_json::to_canonical_string(&json!({
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {"ara": {"type": "local", "command": [cli, "mcp"], "enabled": true}}
+        })),
+    );
     // Releases and incomplete samples are separate demonstration states, not
     // the default state of a newly installed current build.
     if !with_projects {
@@ -279,7 +286,27 @@ const STEPS: &[Step] = &[
     }),
     ("installs", |hub| hub.view = View::Installs),
     ("update-banner", |hub| hub.view = View::Settings),
-    ("agents", |hub| hub.view = View::Agents),
+    ("agents", |hub| {
+        hub.view = View::Agents;
+        for (client, state) in [
+            (AgentClient::Claude, AgentSetup::Available),
+            (AgentClient::Codex, AgentSetup::Available),
+            (AgentClient::Cursor, AgentSetup::Missing),
+            (AgentClient::OpenCode, AgentSetup::Missing),
+        ] {
+            hub.agent_setup.insert(client, state);
+        }
+    }),
+    ("agents-manual", |hub| {
+        hub.intent(Intent::ManualAgent(Some(AgentClient::OpenCode)));
+    }),
+    ("agents-connected", |hub| {
+        hub.intent(Intent::ManualAgent(None));
+        hub.agent_setup
+            .insert(AgentClient::Claude, AgentSetup::Connected);
+        hub.agent_setup
+            .insert(AgentClient::Codex, AgentSetup::Connected);
+    }),
     ("learn", |hub| hub.view = View::Learn),
 ];
 

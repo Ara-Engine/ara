@@ -4,11 +4,16 @@
 use super::gi::DISPATCH_PROBES;
 use super::gpu::{
     AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, DOF_COMPOSITE, DOF_GATHERED, DOF_PREPARED,
-    FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES,
-    MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
-    TRANSMITTANCE,
+    GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES, MULTISCATTER,
+    SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_FOOTPRINT, SSR_PYRAMID, SSR_RESOLVED, SSR_TRACE,
+    SkyKey, TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
+
+/// Levels of the reflection colour pyramid (look-ssr.slang SSR_LEVELS): level k
+/// texels span 2^k render pixels, so moderately rough lobes stay screen-traced instead
+/// of fading to probes beyond a 16-pixel footprint.
+const SSR_LEVELS: u32 = 6;
 use ara_gpu::{
     Access, Queue, RootConstants,
     vulkan::{Command, Recorder},
@@ -23,6 +28,17 @@ pub(crate) enum LookPass {
     SkyIrradiance,
     SkyPrefilter,
     Fog,
+    /// The near fog volume's ambient light, froxel injection and column integration
+    /// (`look::volumetric`).
+    FogAmbient,
+    FogInject,
+    FogIntegrate,
+    /// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang).
+    FogLights,
+    /// Its render-size resolve, which lists the edge pixels.
+    FogLightsResolve,
+    /// The resolve's edge pixels at full resolution (an indirect dispatch).
+    FogLightsEdges,
     /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
     Exposure(u32),
     Bloom(u32),
@@ -42,6 +58,16 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+    /// Spreads the trace's confidence over each reflection's footprint.
+    SsrResolve,
+    /// Hi-Z pyramid level (1..) of the frame's depth (`look::screen_gi`).
+    Hiz(u32),
+    /// The screen probes' trace and filter (`look::screen_gi`).
+    ScreenProbes,
+    /// The half-resolution screen probe gather lighting reads.
+    ScreenGather,
+    /// Level (1..) of this frame's promoted-emission pyramid (`look::screen_gi`).
+    EmissionPyramid(u32),
     /// Measures the ambient light at each reflection capture against its bake
     /// (`look::captures`): `masks` marks bakes that landed since the last one (low
     /// half) and baselines it clears (high half); `copy` first copies the changed
@@ -49,6 +75,8 @@ pub(crate) enum LookPass {
     CaptureRefit {
         masks: u32,
         copy: bool,
+        /// Records whose new bake shows at once (`Captures::instant_mask`).
+        instant: u32,
     },
     /// Lists the captures each 16x16 render tile can need (`look::captures`).
     CaptureTiles,
@@ -79,8 +107,9 @@ impl LookGpu {
     pub(crate) fn record_probe_clear(&self, recorder: &mut Recorder) {
         self.record_scatter(recorder, LookPass::GiClear);
     }
-    /// Declares the sky and fog passes. LUTs are rebuilt when the aerosols change,
-    /// the sky IBL when the sun or sky changes, the sky view and froxels per frame.
+    /// Declares the sky passes and probe GI relight. LUTs are rebuilt when the
+    /// atmosphere's media change, the sky IBL (a real-time sky light recapture) when
+    /// the sun or anything else in the sky changes, the sky view per frame.
     /// `shared` is the frame's conservative bindless reachability.
     pub(crate) fn sky_passes(
         &mut self,
@@ -104,11 +133,11 @@ impl LookGpu {
         };
         if let Some(sky) = self.look.sky {
             let key = SkyKey {
-                aerosols: sky.aerosols,
+                luts: sky.atmosphere.lut_key(),
                 sun,
-                clouds: [sky.cloud_coverage, sky.cloud_height],
+                sky,
             };
-            if self.sky.is_none_or(|k| k.aerosols != key.aerosols) {
+            if self.sky.is_none_or(|k| k.luts != key.luts) {
                 add(
                     graph,
                     "Sky.Transmittance",
@@ -157,22 +186,7 @@ impl LookGpu {
             }
             self.sky = Some(key);
         }
-        if physical || self.look.fog.is_some() {
-            add(
-                graph,
-                "Fog.Froxels",
-                LookPass::Fog,
-                if physical {
-                    vec![
-                        (TRANSMITTANCE, Access::ShaderRead),
-                        (MULTISCATTER, Access::ShaderRead),
-                        (FROXELS, Access::Storage),
-                    ]
-                } else {
-                    vec![(FROXELS, Access::Storage)]
-                },
-            );
-        }
+        // The coarse fog grid follows (`fog_pass`): its ambient reads the relit probes.
         if let Some(gi) = ids.gi {
             // New probe records land before the relight reads them.
             if self.gi.as_ref().is_some_and(|g| g.fresh) {
@@ -200,7 +214,11 @@ impl LookGpu {
                 );
                 passes.push((id, LookPass::GiScatter(n as u32)));
             }
-            if self.gi.as_ref().is_some_and(|g| g.clearing_in_slices()) {
+            if self
+                .gi
+                .as_ref()
+                .is_some_and(|g| g.clearing_in_slices() || g.frozen)
+            {
                 return passes;
             }
             let id = graph.pass(
@@ -212,6 +230,7 @@ impl LookGpu {
                     (gi[2], Access::ShaderRead),
                     (gi[3], Access::ShaderRead),
                     (gi[4], Access::Storage),
+                    (gi[5], Access::Storage),
                     (ids.frame, Access::ShaderRead),
                 ]
                 .into_iter()
@@ -230,7 +249,8 @@ impl LookGpu {
 
     /// Screen-space reflections before lighting: a colour pyramid of the previous
     /// resolved frame (`history`; none on the first frame) and the half-resolution
-    /// trace. `reads` must cover depth, normals, world positions and the frame.
+    /// trace. The pyramid also runs for screen probe GI alone (its hits shade from it).
+    /// `reads` must cover depth, normals, world positions and the frame.
     pub(crate) fn ssr_passes(
         &self,
         graph: &mut Graph,
@@ -238,16 +258,21 @@ impl LookGpu {
         history: Option<ResourceId>,
         reads: &[(ResourceId, Access)],
     ) -> Vec<(PassId, LookPass)> {
-        let (Some(_), Some(history)) = (self.quality.reflections, history) else {
+        let Some(history) = history else {
             return Vec::new();
         };
+        if self.quality.reflections.is_none() && !self.frame_screen {
+            return Vec::new();
+        }
         let mut passes = Vec::new();
-        for level in 1..=4u32 {
-            const NAMES: [&str; 4] = [
+        for level in 1..=SSR_LEVELS {
+            const NAMES: [&str; SSR_LEVELS as usize] = [
                 "SSR.Pyramid1",
                 "SSR.Pyramid2",
                 "SSR.Pyramid3",
                 "SSR.Pyramid4",
+                "SSR.Pyramid5",
+                "SSR.Pyramid6",
             ];
             let id = graph.pass(
                 NAMES[level as usize - 1],
@@ -263,18 +288,41 @@ impl LookGpu {
             );
             passes.push((id, LookPass::SsrPyramid(level)));
         }
+        if self.frame_hiz {
+            passes.extend(self.hiz_passes(graph, ids, reads));
+        }
+        if self.quality.reflections.is_none() {
+            return passes;
+        }
         let id = graph.pass(
             "SSR.Trace",
             Queue::Graphics,
             [
+                (ids.image(super::gpu::HIZ), Access::ShaderRead),
+                (history, Access::ShaderRead),
+                (ids.state, Access::ShaderRead),
                 (ids.image(SSR_PYRAMID), Access::ShaderRead),
                 (ids.image(SSR_TRACE), Access::Storage),
+                (ids.image(SSR_FOOTPRINT), Access::Storage),
                 (ids.frame, Access::ShaderRead),
             ]
             .into_iter()
             .chain(reads.iter().copied()),
         );
         passes.push((id, LookPass::SsrTrace));
+        let id = graph.pass(
+            "SSR.Resolve",
+            Queue::Graphics,
+            [
+                (ids.image(SSR_TRACE), Access::ShaderRead),
+                (ids.image(SSR_FOOTPRINT), Access::ShaderRead),
+                (ids.image(SSR_RESOLVED), Access::Storage),
+                (ids.frame, Access::ShaderRead),
+            ]
+            .into_iter()
+            .chain(reads.iter().copied()),
+        );
+        passes.push((id, LookPass::SsrResolve));
         passes
     }
 
@@ -296,6 +344,7 @@ impl LookGpu {
                 (gi[1], Access::ShaderRead),
                 (gi[2], Access::ShaderRead),
                 (gi[4], Access::ShaderRead),
+                (gi[5], Access::ShaderRead),
                 (ids.image(GI_DIFFUSE), Access::Storage),
                 (ids.image(GI_SPECULAR), Access::Storage),
                 (ids.frame, Access::ShaderRead),
@@ -362,18 +411,19 @@ impl LookGpu {
                     .map(|i| (ids.image(i), Access::ShaderRead)),
             );
         }
-        if self.look.sky.is_some() || self.look.fog.is_some() {
-            reads.push((ids.image(FROXELS), Access::ShaderRead));
-        }
+        reads.extend(self.fog_reads(ids));
         if let Some(gi) = ids.gi {
-            reads.extend([1, 2, 4].map(|i| (gi[i], Access::ShaderRead)));
+            reads.extend([1, 2, 4, 5].map(|i| (gi[i], Access::ShaderRead)));
             reads.extend([GI_DIFFUSE, GI_SPECULAR].map(|i| (ids.image(i), Access::ShaderRead)));
         }
         if self.quality.ambient_occlusion.is_some() {
             reads.push((ids.image(AO_DENOISED), Access::ShaderRead));
         }
         if reflected {
-            reads.push((ids.image(SSR_TRACE), Access::ShaderRead));
+            reads.push((ids.image(SSR_RESOLVED), Access::ShaderRead));
+        }
+        if self.frame_screen {
+            reads.extend(self.screen_gi_reads(ids));
         }
         reads
     }
@@ -542,6 +592,20 @@ impl LookGpu {
             self.record_scatter(recorder, pass);
             return;
         }
+        // The fog lights' edges: as many groups as the resolve listed (its header).
+        if pass == LookPass::FogLightsEdges {
+            if let Some(edges) = &self.fog_edges {
+                recorder.push(Command::Pipeline(p.fog_lights_edges));
+                recorder.push(Command::Constants(RootConstants {
+                    words: [frame_index, 0, 0, 0, 0, 0, 0, 0],
+                }));
+                recorder.push(Command::DispatchIndirect {
+                    arguments: edges.buffer,
+                    offset: 0,
+                });
+            }
+            return;
+        }
         let groups = |[w, h]: [u32; 2]| [w.div_ceil(8), h.div_ceil(8), 1];
         let (pipeline, argument, dispatch) = match pass {
             LookPass::Transmittance => (p.transmittance, 0, groups([256, 64])),
@@ -549,7 +613,14 @@ impl LookGpu {
             LookPass::SkyView => (p.sky_view, 0, groups([192, 108])),
             LookPass::SkyIrradiance => (p.sky_irradiance, 0, groups([32, 16])),
             LookPass::SkyPrefilter => (p.sky_prefilter, 0, groups([256, 640])),
-            LookPass::Fog => (p.fog, 0, groups([64, 36])),
+            // One group of FOG_SLICES slices per column (look-sky.slang fogMain).
+            LookPass::Fog => (p.fog, 0, [64, 36, 1]),
+            LookPass::FogAmbient => (p.fog_ambient, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogInject => (p.fog_inject, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogIntegrate => (p.fog_integrate, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLights => (p.fog_lights, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLightsResolve => (p.fog_lights_resolve, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLightsEdges => return,
             // One grid sample per thread (128x72), then one metering group.
             LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {
@@ -602,6 +673,15 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::SsrResolve => (p.ssr_resolve, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::Hiz(level) => (p.hiz, level, groups(size.map(|v| v.div_ceil(1 << level)))),
+            LookPass::ScreenProbes => (p.screen_probes, 0, self.screen_probe_groups()),
+            LookPass::EmissionPyramid(level) => (
+                p.emission_pyramid,
+                level,
+                groups(size.map(|v| (v >> level).max(1))),
+            ),
+            LookPass::ScreenGather => (p.screen_gather, 0, groups(size.map(|v| v.div_ceil(2)))),
             // One thread per capture and axis (look::captures::MAX_CAPTURES x 6).
             LookPass::CaptureRefit { masks, .. } => (p.capture_refit, masks, [1, 1, 1]),
             LookPass::CaptureTiles => (
@@ -609,9 +689,11 @@ impl LookGpu {
                 0,
                 [size[0].div_ceil(16), size[1].div_ceil(16), 1],
             ),
-            // With virtual shadow maps, hits compare against their pages first.
+            // With virtual shadow maps, hits compare against their pages first (today's
+            // pages only: the sun page service's sheared pages have no relight variant yet,
+            // so its relight reads the cascades).
             LookPass::GiRelight => (
-                if self.vsm.is_some() {
+                if self.vsm.as_ref().is_some_and(|v| v.service.is_none()) {
                     p.gi_relight_vsm
                 } else {
                     p.gi_relight
@@ -635,12 +717,33 @@ impl LookGpu {
                 0,
                 groups([self.horizon.as_ref().map_or(0, |h| h.sky_resolution()); 2]),
             ),
-            LookPass::VsmMark => (p.vsm_mark, 0, groups(size.map(|v| v.div_ceil(4)))),
-            LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
+            // The sun page service (look::vsm::sun) brings its own mark and projection.
+            LookPass::VsmMark => (
+                self.vsm
+                    .as_ref()
+                    .and_then(|v| v.service_pipelines())
+                    .map_or(p.vsm_mark, |s| s.mark),
+                0,
+                groups(size.map(|v| v.div_ceil(4))),
+            ),
+            LookPass::VsmProject => (
+                self.vsm
+                    .as_ref()
+                    .and_then(|v| v.service_pipelines())
+                    .map_or(p.vsm_project, |s| s.project),
+                0,
+                groups(size),
+            ),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
-        // Root word 3: the relight's record copy.
+        // Root words 3 and 4: the relight's record copy, and the captures that show at
+        // once instead of fading in (every one in unseen frames).
         let copy = matches!(pass, LookPass::CaptureRefit { copy: true, .. });
+        let instant = match pass {
+            LookPass::CaptureRefit { .. } if self.unseen => u32::MAX,
+            LookPass::CaptureRefit { instant, .. } => instant,
+            _ => 0,
+        };
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
             words: [
@@ -648,7 +751,7 @@ impl LookGpu {
                 input,
                 argument,
                 u32::from(copy),
-                0,
+                instant,
                 0,
                 0,
                 u32::from(exposed),

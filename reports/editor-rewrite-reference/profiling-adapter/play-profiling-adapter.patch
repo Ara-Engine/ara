@@ -1,0 +1,327 @@
+diff --git a/crates/ara-editor/src/shell/profiler_targets/backend.rs b/crates/ara-editor/src/shell/profiler_targets/backend.rs
+index e1ed31d30..8dab7558f 100644
+--- a/crates/ara-editor/src/shell/profiler_targets/backend.rs
++++ b/crates/ara-editor/src/shell/profiler_targets/backend.rs
+@@ -1,4 +1,7 @@
+ //! Private UI port. The real PlayProfilingHandle adapter is required before player closure.
++mod play;
++pub(crate) use play::attach as attach_play;
++
+ use ara_diag::Diagnostic;
+ use serde::{Deserialize, Serialize};
+ 
+diff --git a/crates/ara-editor/src/shell/profiler_targets/backend/play.rs b/crates/ara-editor/src/shell/profiler_targets/backend/play.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/backend/play.rs
+@@ -0,0 +1,119 @@
++//! The real Play mailbox behind the private UI port; no RPC, file or codec work.
++use super::{Action, Backend, Outcome, Request, Row, Scope, Status, Ticket};
++use ara_diag::Diagnostic;
++use ara_play_host::{
++    PlayProfileAction, PlayProfileOutcome, PlayProfileRequest, PlayProfileStatus,
++    PlayProfileTarget, PlayProfileTargetRow, PlayProfileTicket, PlayProfilingHandle,
++};
++
++/// Attach the owned mailbox before its PlayService moves into the project Host.
++pub(crate) fn attach(handle: PlayProfilingHandle) -> Box<dyn Backend> {
++    Box::new(Play { handle, rows: Vec::new() })
++}
++
++struct Play {
++    handle: PlayProfilingHandle,
++    rows: Vec<Row>,
++}
++
++impl Backend for Play {
++    fn refresh_targets(&mut self) -> Result<(), Vec<Diagnostic>> {
++        self.handle.refresh_targets()?;
++        let current = self.handle.targets();
++        // Shell polls at 4 Hz; an unchanged owned inventory needs no new strings.
++        if current.len() != self.rows.len()
++            || self.rows.iter().zip(current).any(|(cached, live)| !same_row(cached, live))
++        {
++            self.rows = current.iter().map(row).collect();
++        }
++        Ok(())
++    }
++
++    fn targets(&self) -> &[Row] {
++        &self.rows
++    }
++
++    fn request(&mut self, request: Request) -> Result<Ticket, Vec<Diagnostic>> {
++        self.handle.request(request_to_play(request)).map(|ticket| Ticket(ticket.0))
++    }
++
++    fn poll(&mut self, ticket: Ticket) -> Option<Status> {
++        // Preserve the returned token and scope for State::accept to verify;
++        // never replace them with the selected target or the requested token.
++        self.handle.poll(PlayProfileTicket(ticket.0)).map(status)
++    }
++}
++
++fn same_row(cached: &Row, live: &PlayProfileTargetRow) -> bool {
++    cached.target.world == live.target.world
++        && cached.target.player == live.target.player
++        && cached.target.source == live.target.source
++        && cached.target.binding == live.target.binding
++        && cached.name == live.name
++        && cached.process_id == Some(live.process_id)
++        && cached.recording == live.recording
++        && cached.available == live.available
++        && cached.reason == live.reason
++}
++
++fn row(value: &PlayProfileTargetRow) -> Row {
++    Row {
++        target: Scope {
++            world: value.target.world.clone(),
++            player: value.target.player,
++            source: value.target.source.clone(),
++            binding: value.target.binding,
++        },
++        name: value.name.clone(),
++        process_id: Some(value.process_id),
++        recording: value.recording,
++        available: value.available,
++        reason: value.reason.clone(),
++    }
++}
++
++fn scope(value: PlayProfileTarget) -> Scope {
++    Scope { world: value.world, player: value.player, source: value.source, binding: value.binding }
++}
++
++fn request_to_play(value: Request) -> PlayProfileRequest {
++    PlayProfileRequest {
++        session: value.session,
++        target: PlayProfileTarget {
++            world: value.target.world,
++            player: value.target.player,
++            source: value.target.source,
++            binding: value.target.binding,
++        },
++        action: match value.action {
++            Action::Start => PlayProfileAction::Start,
++            Action::Stop => PlayProfileAction::Stop,
++            Action::Snapshot => PlayProfileAction::Snapshot,
++            Action::Freeze => PlayProfileAction::Freeze,
++        },
++        why: value.why,
++    }
++}
++
++fn status(value: PlayProfileStatus) -> Status {
++    Status {
++        ticket: Ticket(value.ticket.0),
++        target: scope(value.target),
++        finished: value.finished,
++        outcome: value.outcome.map(|value| match value {
++            PlayProfileOutcome::Completed => Outcome::Completed,
++            PlayProfileOutcome::Unchanged => Outcome::Unchanged,
++            PlayProfileOutcome::Failed => Outcome::Failed,
++            PlayProfileOutcome::Refused => Outcome::Refused,
++        }),
++        recording: value.recording,
++        // The backend validates schema/capacity and decodes on its worker. Move
++        // its <=120 closed-frame capture and already-published diagnostics once.
++        profile: value.profile,
++        diagnostics: value.diagnostics,
++    }
++}
++
++#[cfg(test)]
++#[path = "play_tests.rs"]
++mod tests;
+diff --git a/crates/ara-editor/src/shell/profiler_targets/backend/play_tests.rs b/crates/ara-editor/src/shell/profiler_targets/backend/play_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/backend/play_tests.rs
+@@ -0,0 +1,104 @@
++use super::*;
++
++fn target() -> PlayProfileTarget {
++    PlayProfileTarget { world: "play:3".into(), player: 2, source: "opaque-old-incarnation".into(), binding: 41 }
++}
++
++#[test]
++fn requests_preserve_session_incarnation_and_all_real_actions() {
++    for (ui, backend) in [
++        (Action::Start, PlayProfileAction::Start),
++        (Action::Stop, PlayProfileAction::Stop),
++        (Action::Snapshot, PlayProfileAction::Snapshot),
++        (Action::Freeze, PlayProfileAction::Freeze),
++    ] {
++        let value = request_to_play(Request {
++            session: "original-editor-session".into(), target: scope(target()), action: ui,
++            why: Some("Inspect exact client frame history".into()),
++        });
++        assert_eq!(value.session, "original-editor-session");
++        assert_eq!(value.target, target());
++        assert_eq!(value.action, backend);
++        assert_eq!(value.why.as_deref(), Some("Inspect exact client frame history"));
++    }
++}
++
++#[test]
++fn roster_retains_exited_incarnations_and_exact_pid_without_fallback() {
++    let mut source = PlayProfileTargetRow {
++        target: target(), name: "Client two · levels/test.scene".into(), process_id: 9227,
++        recording: false, available: false, reason: Some("The selected player incarnation exited".into()),
++    };
++    let converted = row(&source);
++    assert!(same_row(&converted, &source));
++    assert_eq!(converted.target, scope(target()));
++    assert_eq!(converted.process_id, Some(9227));
++    assert!(!converted.available);
++    assert_eq!(converted.reason, source.reason);
++    source.target.source = "replacement-incarnation".into();
++    source.target.binding += 1;
++    assert!(!same_row(&converted, &source));
++    assert_eq!(converted.target.source, "opaque-old-incarnation");
++    source.target = target();
++    source.process_id += 1;
++    assert!(!same_row(&converted, &source));
++}
++
++#[test]
++fn completed_status_moves_120_frames_and_published_diagnostics_without_reencoding() {
++    let profile = ara_profile::Profile {
++        version: 1,
++        budget_ns: 16_666_667,
++        labels: vec!["Player.Update".into()],
++        threads: vec![ara_profile::ThreadInfo { id: 1, name: "Player main".into() }],
++        frames: (1..=120).map(|id| ara_profile::Frame {
++            id, duration_ns: 10_000_000,
++            spans: vec![ara_profile::CpuSpan {
++                label: 0, thread: 1, id, parent: 0, start_ns: 0,
++                duration_ns: 4_000, self_ns: 4_000, allocated_bytes: 0, self_allocated_bytes: 0,
++            }],
++            ..Default::default()
++        }).collect(),
++        ..Default::default()
++    };
++    let frames = profile.frames.as_slices().0.as_ptr();
++    let spans = profile.frames[0].spans.as_ptr();
++    let diagnostics = vec![ara_diag::Diagnostic::warning(ara_play_host::codes::PLAY, "GPU timestamps unavailable on this target")
++        .data(serde_json::json!({"play":{"world":"play:3","player":2,"source":"opaque-old-incarnation","binding":41}}))];
++    let diagnostic_rows = diagnostics.as_ptr();
++    let value = status(PlayProfileStatus {
++        ticket: PlayProfileTicket(771), target: target(), finished: true,
++        outcome: Some(PlayProfileOutcome::Completed), recording: false,
++        profile: Some(profile), diagnostics,
++    });
++    assert_eq!(value.ticket, Ticket(771));
++    assert_eq!(value.target, scope(target()));
++    assert_eq!(value.outcome, Some(Outcome::Completed));
++    let profile = value.profile.expect("completed profile");
++    assert_eq!(profile.frames.len(), 120);
++    assert_eq!(profile.frames.as_slices().0.as_ptr(), frames);
++    assert_eq!(profile.frames[0].spans.as_ptr(), spans);
++    assert!(profile.frames.iter().all(|frame| frame.gpu.is_empty()), "absent GPU data is preserved, never synthesized");
++    assert_eq!(value.diagnostics.as_ptr(), diagnostic_rows);
++    assert_eq!(value.diagnostics[0].data.as_deref().expect("scope")["play"]["binding"], 41);
++}
++
++#[test]
++fn pending_refused_and_failed_statuses_preserve_their_original_tokens_and_scope() {
++    for (backend, ui) in [
++        (None, None),
++        (Some(PlayProfileOutcome::Unchanged), Some(Outcome::Unchanged)),
++        (Some(PlayProfileOutcome::Failed), Some(Outcome::Failed)),
++        (Some(PlayProfileOutcome::Refused), Some(Outcome::Refused)),
++    ] {
++        let value = status(PlayProfileStatus {
++            ticket: PlayProfileTicket(113), target: target(), finished: backend.is_some(),
++            outcome: backend, recording: false, profile: None, diagnostics: Vec::new(),
++        });
++        assert_eq!(value.ticket, Ticket(113));
++        assert_eq!(value.target, scope(target()));
++        assert_eq!(value.finished, backend.is_some());
++        assert_eq!(value.outcome, ui);
++        assert!(value.profile.is_none());
++    }
++}
+diff --git a/crates/ara-editor/src/editor.rs b/crates/ara-editor/src/editor.rs
+index 083613617..4207da162 100644
+--- a/crates/ara-editor/src/editor.rs
++++ b/crates/ara-editor/src/editor.rs
+@@ -209,6 +209,7 @@ impl Editor {
+         // The Game view shows embedded players through shared GPU surfaces (D19).
+         let play_surfaces = Some(play.surfaces());
+         let script_recovery = play.script_recovery();
++        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(play.profiling()));
+         host.register(Box::new(play))
+             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+         let (tasks, captures) = mpsc::channel();
+@@ -255,7 +256,7 @@ impl Editor {
+             active_fields: BTreeSet::new(),
+             profile_current: None,
+             profile_baseline: None,
+-            play_profiling: None,
++            play_profiling,
+             captures,
+             completed,
+             probe_captures,
+diff --git a/crates/ara-editor/src/shell/profiler_targets/tests.rs b/crates/ara-editor/src/shell/profiler_targets/tests.rs
+index 816dead64..aeb527eaf 100644
+--- a/crates/ara-editor/src/shell/profiler_targets/tests.rs
++++ b/crates/ara-editor/src/shell/profiler_targets/tests.rs
+@@ -254,3 +254,56 @@ fn comparison_labels_both_incarnations_and_unknown_target_actions_stay_disabled(
+         pointer
+     );
+ }
++
++#[test]
++fn another_ticket_keeps_the_original_profile_request_owned_and_pending() {
++    let original = scope(1, "original-incarnation", 7);
++    let mut state = State {
++        selected: Target::Editor,
++        pending: Some(Pending {
++            ticket: Ticket(18), target: original.clone(), purpose: Purpose::Snapshot,
++            session: "original-session".into(),
++        }),
++        ..State::default()
++    };
++    assert!(state.accept(Status {
++        ticket: Ticket(19), target: original.clone(), finished: true,
++        outcome: Some(Outcome::Completed), recording: false, profile: Some(profile()),
++        diagnostics: Vec::new(),
++    }));
++    let pending = state.pending.as_ref().expect("original ownership retained");
++    assert_eq!(pending.ticket, Ticket(18));
++    assert_eq!(pending.target, original);
++    assert_eq!(pending.session, "original-session");
++    assert!(state.current.is_none());
++    assert!(state.selected == Target::Editor, "late player data never substitutes for the selected Editor target");
++    assert!(state.accept(Status {
++        ticket: Ticket(18), target: original, finished: true,
++        outcome: Some(Outcome::Refused), recording: false, profile: None,
++        diagnostics: Vec::new(),
++    }));
++    assert!(state.pending.is_none());
++    assert!(state.selected == Target::Editor);
++}
++
++#[test]
++fn matching_ticket_from_another_incarnation_never_adopts_the_profile() {
++    let original = scope(2, "original-incarnation", 7);
++    let mut state = State {
++        selected: Target::Player(original.clone()),
++        pending: Some(Pending {
++            ticket: Ticket(18), target: original.clone(), purpose: Purpose::Snapshot,
++            session: "original-session".into(),
++        }),
++        ..State::default()
++    };
++    assert!(state.accept(Status {
++        ticket: Ticket(18), target: scope(2, "replacement-incarnation", 8), finished: true,
++        outcome: Some(Outcome::Completed), recording: false, profile: Some(profile()),
++        diagnostics: Vec::new(),
++    }));
++    assert!(state.pending.is_none());
++    assert!(state.current.is_none());
++    assert!(state.selected == Target::Player(original));
++    assert!(state.error.as_deref().expect("scope mismatch").contains("did not match"));
++}

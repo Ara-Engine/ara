@@ -12,7 +12,9 @@ use std::{
     marker::PhantomData,
 };
 mod game;
+mod graphics;
 pub use game::GameWindowMode;
+pub use graphics::MonitorMode;
 
 /// Normalized native events. The simulation host maps input into tick actions.
 #[derive(Debug)]
@@ -357,6 +359,17 @@ impl Window {
     pub fn display_scale(&self) -> f32 {
         // SAFETY: Live window on its owning thread.
         unsafe { SDL_GetWindowDisplayScale(self.handle).max(0.25) }
+    }
+    /// Refresh rate (Hz) of the monitor showing this window; None when SDL cannot tell.
+    pub fn refresh_rate(&self) -> Option<f32> {
+        // SAFETY: Live window on its owning thread; SDL owns the returned mode.
+        unsafe {
+            let display = sdl3_sys::video::SDL_GetDisplayForWindow(self.handle);
+            let mode = sdl3_sys::video::SDL_GetCurrentDisplayMode(display);
+            mode.as_ref()
+                .map(|mode| mode.refresh_rate)
+                .filter(|hz| *hz > 1.)
+        }
     }
     /// Usable bounds (x, y, width, height) of every connected display.
     pub fn displays() -> Vec<[i32; 4]> {

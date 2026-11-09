@@ -12,7 +12,7 @@ use std::time::Instant;
 fn setup() -> (App, Hub) {
     let mut hub = Hub::new(Prefs::default(), "target/hub-tests".into(), None);
     capture::seed(&mut hub);
-    let mut app = App::new([1440., 900.], Vec::new()).expect("app");
+    let mut app = App::new([1440., 900.]).expect("app");
     app.rebuild(&mut hub, capture::NOW).expect("initial frame");
     (app, hub)
 }
@@ -178,7 +178,7 @@ fn dismissed_banners_release_their_layout_space() {
         "banner space must collapse: {before} -> {after}"
     );
 
-    let mut fresh = App::new(app.size, Vec::new()).expect("fresh app");
+    let mut fresh = App::new(app.size).expect("fresh app");
     fresh
         .rebuild(&mut hub, capture::NOW)
         .expect("same final model");

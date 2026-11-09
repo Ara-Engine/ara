@@ -60,7 +60,15 @@ pub(crate) fn validate_image(
             vk::ImageType::TYPE_2D,
             vk::ImageTiling::OPTIMAL,
             usage,
-            vk::ImageCreateFlags::empty(),
+            // An sRGB storage image is created mutable with extended usage: its
+            // UNORM alias view takes the storage writes (`storage_alias`).
+            if usage.contains(vk::ImageUsageFlags::STORAGE)
+                && super::image::storage_alias(format).is_some()
+            {
+                super::image::storage_alias_flags()
+            } else {
+                vk::ImageCreateFlags::empty()
+            },
         )
     }
     .map_err(anyhow::Error::from)?;

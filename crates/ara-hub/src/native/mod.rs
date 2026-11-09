@@ -1,10 +1,13 @@
 //! The native Hub window: SDL3 through ara-platform, the editor's Vulkan UI
 //! adapter (`ara-editor-gpu`) on a plain device (no scene renderer), and one
 //! retained `Ui` reconciled from the view-model whenever it changes.
+
 mod app;
 mod frame;
 mod images;
 mod input;
+#[cfg(debug_assertions)]
+mod live_styles;
 pub(crate) mod os;
 mod prefs;
 #[cfg(feature = "rehearsal")]
@@ -17,7 +20,7 @@ mod wake;
 use crate::{
     capture,
     connection::Connection,
-    model::{Effect, Hub, Prefs, engines},
+    model::{AgentClient, Effect, Hub, Prefs, engines},
 };
 use anyhow::Context as _;
 pub use app::App;
@@ -89,6 +92,8 @@ struct Host {
     dpi: f32,
     fixed_dpi: Option<f32>,
     physical: [u32; 2],
+    /// The swapchain is oversized for a live resize (`track`).
+    live: bool,
 }
 impl Host {
     fn new(options: &Options, light: bool) -> anyhow::Result<Self> {
@@ -117,6 +122,7 @@ impl Host {
             builtins: images::Builtins::new(dpi),
             dpi,
             fixed_dpi: options.dpi,
+            live: false,
         };
         host.ui_gpu.set_dpi(dpi)?;
         Ok(host)
@@ -126,18 +132,28 @@ impl Host {
         self.physical.map(|v| v as f32 / self.dpi)
     }
     /// Follow window resizes and monitor scale changes; true when the UI must relayout.
-    fn track(&mut self) -> anyhow::Result<bool> {
+    /// During a `live` resize (the OS modal sizing loop) the swapchain is sized once
+    /// for the largest display and presented 1:1 (creating one per step costs the
+    /// driver ~8 ms); the first regular frame after it sizes it exactly.
+    fn track(&mut self, live: bool) -> anyhow::Result<bool> {
         let physical = self.window.size()?;
         let dpi = self.fixed_dpi.unwrap_or_else(|| self.input.dpi());
-        if physical == self.physical && dpi == self.dpi || physical.contains(&0) {
+        if physical.contains(&0) {
             return Ok(false);
         }
-        // SAFETY: Wait before destroying a swapchain the presentation queue references.
-        unsafe {
-            self.ui_gpu.wait_idle(&self.gpu)?;
-            self.ui_gpu.retire_present(&self.gpu, &mut self.present);
-            self.present = self.ui_gpu.create_present(&self.gpu, &self.window)?;
+        if physical == self.physical && dpi == self.dpi {
+            if self.live && !live {
+                self.resize(None)?;
+            }
+            return Ok(false);
         }
+        let density = self.window.pixel_density();
+        let reach = live.then(|| {
+            Window::displays().iter().fold(physical, |reach, d| {
+                [0, 1].map(|i| reach[i].max((d[i + 2].max(0) as f32 * density) as u32))
+            })
+        });
+        self.resize(reach)?;
         if dpi != self.dpi {
             self.builtins = images::Builtins::new(dpi);
         }
@@ -147,6 +163,8 @@ impl Host {
         Ok(true)
     }
     fn render(&mut self, app: &App) -> anyhow::Result<()> {
+        // Exactly the drawable: a one-pixel miss rescales the whole UI.
+        self.ui_gpu.pin_target_size(self.physical);
         draw(
             &mut self.renderer,
             &mut self.ui_gpu,
@@ -154,7 +172,21 @@ impl Host {
             app,
         )?;
         // SAFETY: The UI submission completed; the image is CopySource; owners are live.
-        unsafe { self.ui_gpu.present(&self.gpu, &mut self.present) }
+        match unsafe { self.ui_gpu.present(&self.gpu, &mut self.present) } {
+            // A resize raced this frame: rebuild the swapchain; the next frame presents.
+            Err(error) if ara_platform::out_of_date(&error) => self.resize(None),
+            result => result,
+        }
+    }
+    fn resize(&mut self, reach: Option<[u32; 2]>) -> anyhow::Result<()> {
+        // SAFETY: The presentation belongs to this window and device; this thread owns
+        // its queue.
+        unsafe {
+            self.ui_gpu
+                .resize_present(&self.gpu, &mut self.present, &self.window, reach)?;
+        }
+        self.live = reach.is_some();
+        Ok(())
     }
 }
 impl Drop for Host {
@@ -260,10 +292,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     };
     let mut hub = Hub::new(prefs, home(), engines::installed(&exe_dir));
     initial_view(&mut hub, &options);
-    let docs = os::docs(&exe_dir);
     if let Some(directory) = options.capture.clone() {
         let mut offscreen = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
-        let mut app = App::new(offscreen.logical(), docs).map_err(err)?;
+        let mut app = App::new(offscreen.logical()).map_err(err)?;
         return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
     let connection = updates::connect(
@@ -276,7 +307,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut host = Host::new(&options, hub.prefs.light)?;
     ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
-    let mut app = App::new(host.logical(), docs).map_err(err)?;
+    let mut app = App::new(host.logical()).map_err(err)?;
     interactive(
         &mut host,
         &mut app,
@@ -351,13 +382,15 @@ fn interactive(
 ) -> anyhow::Result<()> {
     let prefs = prefs::Writer::new(config.to_owned())?;
     let picks = os::picks();
-    let (send, snippets) = std::sync::mpsc::channel();
+    let (send_setup, setups) = std::sync::mpsc::channel();
     let mut ara = None;
     let mut snippets_requested = false;
     let mut saved = hub.prefs.clone();
     let mut dirty = false;
     let mut last_minute = 0;
     let mut last_check = std::time::Instant::now();
+    #[cfg(debug_assertions)]
+    let live = live_styles::LiveStyles::start()?;
     hub.intent(crate::model::Intent::CheckUpdates);
     app.rebuild(hub, now_ms()).map_err(err)?;
     loop {
@@ -368,7 +401,12 @@ fn interactive(
         }
         let mut intents = Vec::new();
         let scale = host.input.points_per_logical(host.dpi);
-        for event in host.window.poll()? {
+        // The Windows modal resize loop blocks inside the pump; repaint from there.
+        let events = ara_platform::with_live_repaint(
+            &mut || repaint_live(host, app, hub),
+            Window::poll_tagged,
+        )?;
+        for event in events.into_iter().map(|(_, event)| event) {
             match event {
                 Event::Quit => return Ok(()),
                 Event::Resize(_) => dirty = true,
@@ -457,9 +495,15 @@ fn interactive(
         for (pick, path) in picks.try_iter() {
             intents.push(crate::model::Intent::Picked(pick, path));
         }
-        for (client, text) in snippets.try_iter() {
-            hub.install.insert(client, text);
+        for (client, state) in setups.try_iter() {
+            hub.agent_setup.insert(client, state);
             dirty = true;
+        }
+        #[cfg(debug_assertions)]
+        match live.poll() {
+            Some(Ok(styles)) => app.apply_styles(styles).map_err(err)?,
+            Some(Err(error)) => eprintln!("ara-hub live styles: {error}"),
+            None => {}
         }
         for event in connection.poll() {
             if let crate::connection::Event::Prepared { executable } = &event {
@@ -473,18 +517,21 @@ fn interactive(
             dirty = true;
         }
         connection.send(hub.take_calls());
-        if !snippets_requested
-            && hub.view == crate::model::View::Agents
-            && let Some(snippet_ara) = ara.clone()
-        {
+        if !snippets_requested && let Some(snippet_ara) = ara.clone() {
             snippets_requested = true;
-            let send = send.clone();
-            std::thread::spawn(move || {
-                for snippet in os::install_snippets(&snippet_ara) {
-                    let _ = send.send(snippet);
+            // Which agent clients are installed and already have Ara (the
+            // sidebar hides its setup card once one is), after bootstrap; one
+            // thread each, since every probe waits on child processes.
+            for client in AgentClient::ALL {
+                hub.install
+                    .insert(client, ara_agents::snippet(&snippet_ara, client));
+                let send_setup = send_setup.clone();
+                std::thread::spawn(move || {
+                    let _ = send_setup.send((client, ara_agents::detect(client)));
                     wake::wake();
-                }
-            });
+                });
+            }
+            dirty = true;
         }
         for effect in hub.take_effects() {
             match effect {
@@ -514,9 +561,28 @@ fn interactive(
                 }
                 Effect::Reveal(path) => os::reveal(&path),
                 Effect::Open(path) => os::open(&path),
+                Effect::OpenUrl(url) => os::open_url(&url),
                 Effect::Copy(text) => {
                     let _ = input::recover(OsClipboard.write(&text));
                 }
+                Effect::SetupAgent(client) => match ara.clone() {
+                    Some(ara) => {
+                        let send_setup = send_setup.clone();
+                        std::thread::spawn(move || {
+                            let _ = send_setup.send((client, ara_agents::setup(client, &ara)));
+                            wake::wake();
+                        });
+                    }
+                    None => {
+                        hub.agent_setup.insert(
+                            client,
+                            crate::model::AgentSetup::Failed(
+                                "The Hub service is still connecting; retry in a moment".into(),
+                            ),
+                        );
+                        dirty = true;
+                    }
+                },
             }
         }
         if hub.prefs != saved {
@@ -535,7 +601,7 @@ fn interactive(
             host.physical = host.window.size()?;
             continue;
         }
-        if host.track()? {
+        if host.track(false)? {
             app.size = host.logical();
             dirty = true;
         }
@@ -569,9 +635,20 @@ fn interactive(
             (Duration::from_secs(4 * 3600).saturating_sub(last_check.elapsed())).as_millis() as u64,
         );
         // SAFETY: Main-thread SDL pump; a null event leaves input queued for poll().
-        unsafe {
-            sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), wait_ms.max(1) as i32);
-        }
+        ara_platform::with_live_repaint(&mut || repaint_live(host, app, hub), || unsafe {
+            sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), wait_ms.max(1) as i32)
+        });
+    }
+}
+
+/// One frame at the window's current size, from inside a live resize. Errors are
+/// left to the next regular frame.
+fn repaint_live(host: &mut Host, app: &mut App, hub: &mut Hub) {
+    if host.track(true).unwrap_or(false) {
+        app.size = host.logical();
+    }
+    if app.rebuild(hub, now_ms()).is_ok() && app.frame().unwrap_or(false) {
+        let _ = host.render(app);
     }
 }
 

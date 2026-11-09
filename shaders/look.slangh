@@ -1,11 +1,12 @@
 // Raster look constants and the physical atmosphere (look/frame.rs LookFrame).
-// Include after raster.slangh. Spherical Earth in metres: an independent
-// implementation of Hillaire (EGSR 2020), matching ara-render-fidelity's sky.
+// Include after raster.slangh. The atmosphere is shared with ara-render-fidelity
+// (atmosphere-model.slangh): Hillaire's LUT model with Unreal's SkyAtmosphere parameters.
+#include "atmosphere-model.slangh"
 struct Look {
     float4 sunLux;     // rgb top-of-atmosphere sun illuminance (lux), w angular radius (rad)
     float4 atmosphere; // x sea level (m), y fog extinction at base (1/m), z fog scale height (m), w fog albedo
     float4 fog;        // rgb fog tint, w Henyey-Greenstein anisotropy
-    float4 look;       // x contrast, y vignette, z fog base altitude (m), w aerosols
+    float4 look;       // x contrast, y vignette, z fog base altitude (m)
     float4 grading;    // rgb white-balance gain, w saturation
     float4 exposure;   // x manual multiplier (0: automatic), y compensation gain, z adaptation (1/s), w frame seconds
     float4 metering;   // x,y EV100 range, z,w trimmed histogram fractions
@@ -26,7 +27,7 @@ struct Look {
     uint4 giGather;    // diffuse, specular (sampled), diffuse, specular (storage); half resolution
     float4 ssr;        // x max roughness, y max distance (m), z march steps, w intensity (scales hit confidence)
     uint4 ssrImages;   // pyramid, trace (sampled), pyramid, trace (storage)
-    float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m)
+    float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m), z sky light scale
     float4x4 farShadow; // light view-projection of the far shadow map
     uint4 farInfo;     // x far map (sampled), y texels per side, z drawn (0: none)
     uint4 cascadeMaps; // sampled cascade maps, in cascade order
@@ -66,8 +67,47 @@ struct Look {
     // shadowParams[0]: visibility-bitmask ambient light (look-ao.slang aoBitmaskMain), x
     // sample thickness (m), y bounce intensity; shadowInfo[0].x bit 0: last frame's colour
     // pyramid feeds the bounce. The soft sun shadows read sunLux.w; [1] is spare.
+    float4 exposureCurve[4]; // automatic exposure's compensation curve: (EV100, stops) keys xy, zw in rising EV
+    uint4 giRadiance;        // probe radiance atlas (look-gi.slangh giSampleRadiance): x sampled, y storage
+    // Volumetric fog (look/volumetric.rs; look-fog.slangh, look-volumetric.slang). Local fog
+    // volume records follow the struct at byte volumetricAtlas.w (look-fog.slangh).
+    float4 volumetric;         // x near volume distance (m), y slice scale (m), z history weight (0: none), w height fog extinction scale
+    float4 volumetricEmissive; // rgb height fog emission (radiance per metre at base density), w the sun's scattering scale in fog
+    uint4 volumetricGrid;      // x, y froxels, z slices, w render pixels per froxel side
+    uint4 volumetricAtlas;     // x slices per atlas row, y frames since the history reset, z fog volumes, w their byte offset
+    uint4 volumetricImages;    // injection history, injection, integrated (sampled), injection (storage)
+    uint4 volumetricStorage;   // x integrated (storage), y ambient (storage), z ambient (sampled)
+    uint4 volumetricAmbient;   // ambient light grid: xyz cells (froxels / 4, 4, 2), w slices per atlas row
+    // Local lights (look-lights.slangh): lightInfo[0] x LTC inverse matrices, y LTC sphere
+    // integral (sampled), z light tables (storage; 0 none); lightParams reserved.
+    float4 lightParams[2];   uint4 lightInfo[2];
+    // The sky atmosphere (look/atmosphere.rs record): planet, media, art direction and
+    // both atmosphere lights; meaningful under LOOK_PHYSICAL_SKY only.
+    AtmosphereModel sky;
+    // Screen traces and screen probe GI (look/screen_gi.rs; rows in look-screen.slangh).
+    float4 screenParams[2];  uint4 screenInfo[4];
+    // Per-pixel local-light scattering in fog (look/volumetric.rs; look-fog-lights.slang),
+    // composited by applyFog (fogLightsAt). Zero rows: local lights scatter in the froxels.
+    float4 fogLightsParams;  // x angular bins per half circle (one equiangular sample each)
+    uint4 fogLightsInfo;     // x render-size scatter the composite reads (sampled), y the pass's target (storage), z render pixels per texel side (0: off)
+    // The reflection resolve (look-ssr.slang ssrResolveMain): x trace, y footprints
+    // (sampled), z footprints, w resolved reflections (storage); ssrImages.y reads the latter.
+    uint4 ssrResolve;
+    uint4 fogLightsResolve;  // half resolution: x the pass's target (sampled), y the render-size scatter (storage)
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512,LOOK_SCREEN_GI=1024;
+// Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:
+// linear between the curve's keys, flat beyond its ends. Constant row indices only.
+float exposureCurve(Look l,float ev){
+    float2 a=l.exposureCurve[0].xy;float stops=a.y;bool done=ev<=a.x;
+    [unroll]for(uint i=0;i<8;i++){
+        float4 row=l.exposureCurve[i/2];float2 b=(i&1)==0?row.xy:row.zw;
+        if(!done && ev<=b.x){stops=lerp(a.y,b.y,saturate((ev-a.x)/max(b.x-a.x,1e-6)));done=true;}
+        if(!done)stops=b.y;
+        a=b;
+    }
+    return stops;
+}
 // The look record (a frame record row: uniform, so no NonUniformResourceIndex).
 Look look(Frame f){return buffers[f.look.x].Load<Look>(0);}
 // Exposure state (look-post.slang exposureMain): applied multiplier, the previous
@@ -92,6 +132,9 @@ float exposureScale(Frame f,float s){
 float hdrExposure(Frame f,Look l){return exposureScale(f,exposureState(l).x);}
 float3 exposeHdr(Frame f,Look l,float3 radiance){return min(radiance*hdrExposure(f,l),60000);}
 bool physicalSky(Look l){return (l.flags.y&LOOK_PHYSICAL_SKY)!=0;}
+// Scale of the light the sky casts (ambient, reflections, probe bounce, fog ambient)
+// over the sky drawn in the background (Look::sky_light; Unreal's sky light intensity).
+float skyLight(Look l){return l.weather.z;}
 float4 lut(uint index,float2 uv){return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
 float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
 
@@ -143,36 +186,9 @@ float3 agxCurve(float3 c,uint look){
     s=pow(max(float3(dot(float3(0.977084882,0.019273491,0.003641627),s),dot(float3(0.017531670,1.012742383,-0.030274053),s),dot(float3(0.012019836,0.012047557,0.975932607),s)),0),2.4);
     return saturate(float3(dot(float3(1.807087207,-0.635807619,-0.171279588),s),dot(float3(-0.224544003,1.237837193,-0.013293189),s),dot(float3(-0.184566066,-0.281406333,1.465972400),s)));
 }
-static const float PLANET=6360000,TOP=6460000;
-// Aerosols scale Mie density relative to clear Earth air.
-float3 extinction(float height,float aerosols,out float3 scatteringR,out float scatteringM){
-    height=max(height,0);scatteringR=float3(5.802e-6,13.558e-6,33.1e-6)*exp(-height/8000);
-    scatteringM=3.996e-6*exp(-height/1200)*aerosols;
-    float ozone=max(0,1-abs(height-25000)/15000);
-    return scatteringR+scatteringM/0.9+float3(0.650e-6,1.881e-6,0.085e-6)*ozone;
-}
-float sphereExit(float3 p,float3 d,float radius){float b=dot(p,d),q=b*b-dot(p,p)+radius*radius;return q<0?0:max(0,-b+sqrt(q));}
-float atmosphereLength(float3 p,float3 d){
-    float top=sphereExit(p,d,TOP),b=dot(p,d),q=b*b-dot(p,p)+PLANET*PLANET;
-    if(q>0 && -b-sqrt(q)>0)return min(top,-b-sqrt(q));return top;
-}
-float3 transmittance(Look l,float height,float cosine){return lut(l.sampled0.x,float2(cosine*0.5+0.5,sqrt(saturate(height/100000)))).rgb;}
-float3 multiScattering(Look l,float height,float cosine){return lut(l.sampled0.y,float2(cosine*0.5+0.5,sqrt(saturate(height/100000)))).rgb;}
-float phaseR(float cosine){return 3*(1+cosine*cosine)/(16*PI);}
-float phaseM(float cosine,float g){return (1-g*g)/(4*PI*pow(max(1+g*g-2*g*cosine,0.001),1.5));}
-// Single scattering towards `p` along `d` over `distance`, with optional multiple
-// scattering from the LUT. `sun` points towards the sun; result is per lux.
-float3 integrateSky(Look l,float3 sun,float3 p,float3 d,float distance,uint steps,bool multiple,out float3 throughput){
-    float3 sum=0;throughput=1;float previous=0;
-    for(uint i=0;i<steps;i++){
-        float end=distance*pow(float(i+1)/steps,2),ds=end-previous;
-        float3 at=p+d*(previous+ds*0.5);previous=end;float height=max(length(at)-PLANET,0),mu=dot(normalize(at),sun);
-        float3 sr;float sm;float3 e=extinction(height,l.look.w,sr,sm),segment=exp(-e*ds);
-        float3 source=transmittance(l,height,mu)*(sr*phaseR(dot(d,sun))+sm*phaseM(dot(d,sun),0.8));
-        if(multiple)source+=(sr+sm)*multiScattering(l,height,mu);
-        sum+=throughput*source*(1-segment)/max(e,float3(1e-9));throughput*=segment;
-    }return sum;
-}
+// The physical sky (atmosphere-model.slangh; l.sky, look/atmosphere.rs): the
+// transmittance (sampled0.x), multiple-scattering (y) and sky-view (z) LUTs.
+float phaseM(float cosine,float g){return atmospherePhaseMie(cosine,g);}
 // Planar clouds (as the fidelity sky): five octaves of value noise thresholded
 // by the coverage, at the layer altitude.
 uint lookHash(uint x){x^=x>>16;x*=0x7feb352d;x^=x>>15;x*=0x846ca68b;x^=x>>16;return x;}
@@ -183,22 +199,24 @@ float noise2(float2 p){
     return lerp(lerp(n00,n10,a.x),lerp(n01,n11,a.x),a.y);
 }
 float cloudDensity(Look l,float2 p){float n=0,m=0.5;for(uint i=0;i<5;i++){n+=noise2(p)*m;p=p*2.03+17.7;m*=0.5;}return smoothstep(1-l.weather.x,1-l.weather.x+0.18,n);}
-// Sun illuminance reaching `position` through the physical sky and the cloud
-// layer's shadow (lux).
+// The cloud layer's shadow on the sun at `position` (1 without clouds).
+float cloudShadow(Frame f,Look l,float3 position){
+    if(l.weather.x<=0 || f.sunDirection.y<=0.01)return 1;
+    float2 p=position.xz+f.sunDirection.xz*((l.weather.y-position.y)/f.sunDirection.y);
+    return exp(-cloudDensity(l,p*0.00025)*3/max(f.sunDirection.y,0.2));
+}
+// Sun illuminance reaching surfaces at `position` (lux): through the atmosphere
+// (Unreal's global transmittance, or per-pixel at the surface's altitude with the
+// planet's shadow; atmosphereSurfaceLight) and the cloud layer's shadow.
 float3 sunAt(Frame f,Look l,float3 position){
     float3 lux=f.sunColorExposure.rgb;if(!physicalSky(l))return lux;
-    lux*=transmittance(l,max(position.y-l.atmosphere.x,0),f.sunDirection.y);
-    if(l.weather.x>0 && f.sunDirection.y>0.01){float2 p=position.xz+f.sunDirection.xz*((l.weather.y-position.y)/f.sunDirection.y);lux*=exp(-cloudDensity(l,p*0.00025)*3/max(f.sunDirection.y,0.2));}
-    return lux;
+    lux*=atmosphereSunSurface(l.sky,l.sampled0.x,l.sunLux.w,position.y-l.sky.apFactor.w,f.sunDirection.y);
+    return lux*cloudShadow(f,l,position);
 }
-// Sky radiance along `d` (cd/m²): the sky-view LUT plus an analytic sun disk.
+// Sky radiance along `d` (cd/m²): the sky-view LUT times the sky luminance factor,
+// plus the atmosphere lights' analytic discs (`disk`) and the cloud layer.
 float3 skyRadiance(Frame f,Look l,float3 d,bool disk){
-    float3 c=lut(l.sampled0.z,environmentUv(d)).rgb;
-    float radius=l.sunLux.w,angle=acos(clamp(dot(d,f.sunDirection.xyz),-1.,1.));
-    if(disk && angle<radius && d.y>0){
-        float mu=sqrt(saturate(1-angle*angle/(radius*radius)));float limb=1-0.6*(1-mu);
-        c+=l.sunLux.rgb*transmittance(l,max(f.camera.y-l.atmosphere.x,2),d.y)*limb/(PI*radius*radius*0.8);
-    }
+    float3 c=atmosphereSky(l.sky,l.sampled0.x,l.sampled0.z,f.camera.xyz,d,disk);
     if(l.weather.x>0 && d.y>0.01){
         float2 at=f.camera.xz+d.xz*((l.weather.y-f.camera.y)/d.y);
         float density=cloudDensity(l,at*0.00025),shade=cloudDensity(l,(at+f.sunDirection.xz*250)*0.00025);
@@ -206,23 +224,108 @@ float3 skyRadiance(Frame f,Look l,float3 d,bool disk){
         c=c*t+light*(1-t);
     }return c;
 }
-// Froxel fog: 64x36 columns, 32 logarithmic slices to 4 km; per slice the
-// cumulative in-scatter (x 0..63) and transmittance (x 64..127) of a 4096x36 atlas.
+// Froxel fog: 64x36 columns, FOG_SLICES logarithmic slices (the first 32 to FOG_RANGE,
+// 4 km, the rest carrying the aerial perspective to 111 km); per slice the cumulative
+// in-scatter (x 0..63) and transmittance (x 64..127) of a FOG_SLICES*128 x 36 atlas
+// (look/gpu.rs FOG_SLICES).
 static const float FOG_RANGE=4000;
+static const uint FOG_SLICES=46;
 float froxelSlice(float distance){return log2(1+distance/2)/log2(1+FOG_RANGE/2)*32;}
+// Far end of slice `z` (0-based) in metres.
+float froxelEnd(uint z){return 2*(exp2(log2(1+FOG_RANGE/2)*float(z+1)/32)-1);}
 float3 sampleFroxel(Look l,float2 uv,float distance,out float3 trans){
-    float slice=froxelSlice(distance),z=clamp(slice-1,0.,31.);uint lo=uint(z),hi=min(lo+1,31);
-    float2 a=clamp(uv,float2(0.5/64,0.5/36),float2(63.5/64,35.5/36))*float2(64,36);
-    float3 x=lut(l.sampled0.w,float2((lo*128+a.x)/4096,a.y/36)).rgb,y=lut(l.sampled0.w,float2((hi*128+a.x)/4096,a.y/36)).rgb;
-    float3 tx=lut(l.sampled0.w,float2((lo*128+64+a.x)/4096,a.y/36)).rgb,ty=lut(l.sampled0.w,float2((hi*128+64+a.x)/4096,a.y/36)).rgb;
+    float slice=froxelSlice(distance),z=clamp(slice-1,0.,float(FOG_SLICES-1));uint lo=uint(z),hi=min(lo+1,FOG_SLICES-1);
+    float2 a=clamp(uv,float2(0.5/64,0.5/36),float2(63.5/64,35.5/36))*float2(64,36);const float width=FOG_SLICES*128;
+    float3 x=lut(l.sampled0.w,float2((lo*128+a.x)/width,a.y/36)).rgb,y=lut(l.sampled0.w,float2((hi*128+a.x)/width,a.y/36)).rgb;
+    float3 tx=lut(l.sampled0.w,float2((lo*128+64+a.x)/width,a.y/36)).rgb,ty=lut(l.sampled0.w,float2((hi*128+64+a.x)/width,a.y/36)).rgb;
     trans=lerp(tx,ty,frac(z));float3 light=lerp(x,y,frac(z));
     if(slice<1){trans=lerp(float3(1),trans,slice);light*=slice;}
     return light;
 }
-// Aerial perspective and height fog between the camera and `world`.
-float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv){
-    if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0)return colour;
-    float3 trans;float3 light=sampleFroxel(l,uv,length(world-f.camera.xyz),trans);return colour*trans+light;
+// The near fog volume (look/volumetric.rs): slices on an exponential view-depth
+// distribution, depth = c (2^(t log2(1 + D/c)) - 1) for t in 0..1 (c volumetric.y, D
+// volumetric.x), tiled volumetricAtlas.x per atlas row.
+float nearDepth(Look l,float t){float c=l.volumetric.y;return c*(exp2(t*log2(1+l.volumetric.x/c))-1);}
+float nearSlice(Look l,float depth){float c=l.volumetric.y;return log2(1+max(depth,0)/c)/log2(1+l.volumetric.x/c);}
+// Texel origin of slice `z` in a near volume atlas.
+uint2 nearTile(Look l,uint z){uint columns=l.volumetricAtlas.x;return uint2(z%columns,z/columns)*l.volumetricGrid.xy;}
+// Bilinear tap of slice `z` at froxel coordinates `xy` (texel units), clamped inside the
+// slice's tile so neighbouring slices never bleed in.
+float4 nearTap(Look l,uint image,uint z,float2 xy){
+    uint3 grid=l.volumetricGrid.xyz;uint columns=l.volumetricAtlas.x;
+    float2 size=float2(grid.xy)*float2(columns,(grid.z+columns-1)/columns);
+    return lut(image,(float2(nearTile(l,z))+clamp(xy,0.5,float2(grid.xy)-0.5))/size);
+}
+// Cubic B-spline tap of slice `z` at froxel coordinates `xy` (texel units) in four
+// bilinear taps (Sigg and Hadwiger 2005), each clamped inside the slice's tile. The
+// B-spline is C2 smooth: froxel boundaries leave neither steps nor bilinear's Mach bands
+// along sun shafts and fog volume edges.
+float4 nearTapSmooth(Look l,uint image,uint z,float2 xy){
+    float2 c=xy-0.5,i=floor(c),t=c-i,t2=t*t,t3=t2*t;
+    float2 w0=(1-3*t+3*t2-t3)/6,w1=(4-6*t2+3*t3)/6,w2=(1+3*t+3*t2-3*t3)/6,w3=t3/6,g0=w0+w1,g1=w2+w3;
+    float2 a=i-0.5+w1/g0,b=i+1.5+w3/g1;
+    return (nearTap(l,image,z,a)*g0.x+nearTap(l,image,z,float2(b.x,a.y))*g1.x)*g0.y
+        +(nearTap(l,image,z,float2(a.x,b.y))*g0.x+nearTap(l,image,z,b)*g1.x)*g1.y;
+}
+// Integrated in-scatter (rgb) and transmittance (a) from the camera to view depth
+// `depth` (at most the volume's distance) through render uv `uv`. Slices store their
+// far ends; between them the value interpolates linearly; across them, a cubic
+// B-spline (`smooth`: composites) or bilinear (cheap, for smooth transmittance).
+float4 sampleNear(Frame f,Look l,float2 uv,float depth,bool smooth=true){
+    float2 xy=uv*float2(f.extent.xy)/float(l.volumetricGrid.w);uint slices=l.volumetricGrid.z,image=l.volumetricImages.z;
+    float s=nearSlice(l,depth)*slices;
+    if(s<1)return lerp(float4(0,0,0,1),smooth?nearTapSmooth(l,image,0,xy):nearTap(l,image,0,xy),s);
+    float z=min(s-1,float(slices-1));uint lo=uint(z),hi=min(lo+1,slices-1);
+    if(!smooth)return lerp(nearTap(l,image,lo,xy),nearTap(l,image,hi,xy),frac(z));
+    return lerp(nearTapSmooth(l,image,lo,xy),nearTapSmooth(l,image,hi,xy),frac(z));
+}
+// Transmittance from the camera to `t` metres along the ray through render uv `uv` (view
+// depth `depth`) on near volume frames: the near volume's to its distance, then the coarse
+// grid's behind it (which starts there).
+float3 fogTransmittance(Frame f,Look l,float2 uv,float t,float depth){
+    float3 trans=sampleNear(f,l,uv,min(depth,l.volumetric.x),false).a;
+    if(depth>l.volumetric.x){float3 far;sampleFroxel(l,uv,t,far);trans*=far;}
+    return trans;
+}
+// Whether this frame scatters local lights per pixel (look-fog-lights.slang) rather than
+// in the froxels: then neither froxel volume carries them.
+bool fogLightsOn(Look l){return l.fogLightsInfo.z!=0;}
+// The per-pixel local-light scatter at render pixel `p` (look-fog-lights.slang): in-scattered
+// radiance (rgb, transmittance applied) along its ray to its opaque surface or the
+// background, and that light's luminance-weighted mean view depth (a). Always at the
+// render size: half-resolution frames resolve it first (fogLightsResolveMain), integrating
+// the pixels whose half-resolution neighbours disagree on their own rays.
+float4 fogLightsAt(Look l,int2 p){return pixel(l.fogLightsInfo.x,p);}
+// How applyFog adds the per-pixel local-light scatter: BEHIND for the frame's opaque
+// surfaces and background (all of it), FRONT for forward surfaces, which take the share
+// lying in front of them (about the scatter's mean depth).
+static const uint FOG_LIGHTS_BEHIND=0,FOG_LIGHTS_FRONT=1;
+float3 fogLights(Frame f,Look l,float2 uv,float depth,uint mode){
+    float4 s=fogLightsAt(l,min(int2(uv*float2(f.extent.xy)),int2(f.extent.xy)-1));
+    return mode==FOG_LIGHTS_FRONT?s.rgb*saturate((depth-s.a)/max(0.5*s.a,1e-3)+0.5):s.rgb;
+}
+// Aerial perspective and fog between the camera and `world`: on near volume frames
+// the volume up to its distance, and the coarse grid's segment behind it (which it
+// integrates from there), so the two compose exactly; else the coarse grid alone. Then
+// the per-pixel local-light scatter (`lights`: FOG_LIGHTS_*).
+float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv,uint lights=FOG_LIGHTS_BEHIND){
+    bool near=(l.flags.y&LOOK_VOLUMETRIC)!=0;
+    if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0 && l.volumetricAtlas.z==0)return colour;
+    float3 offset=world-f.camera.xyz;float depth=dot(offset,f.forward.xyz);
+    if(!near||depth>l.volumetric.x){float3 trans;float3 light=sampleFroxel(l,uv,length(offset),trans);colour=colour*trans+light;}
+    if(near){float4 v=sampleNear(f,l,uv,depth);colour=colour*v.a+v.rgb;}
+    if(fogLightsOn(l))colour+=fogLights(f,l,uv,depth,lights);
+    return colour;
+}
+// Fog over background radiance `c` seen along `d`: the whole froxel range over an
+// environment map; the physical sky carries its own aerial perspective, so only the
+// near volume (height fog, fog volumes and shafts in front of the sky) and the local
+// lights' scatter lie over it.
+float3 fogBackground(Frame f,Look l,float3 c,float3 d,float2 uv,uint lights=FOG_LIGHTS_BEHIND){
+    if(!physicalSky(l))return applyFog(f,l,c,f.camera.xyz+d*FOG_RANGE,uv,lights);
+    if((l.flags.y&LOOK_VOLUMETRIC)!=0){float4 v=sampleNear(f,l,uv,l.volumetric.x);c=c*v.a+v.rgb;}
+    if(fogLightsOn(l))c+=fogLights(f,l,uv,FOG_RANGE,lights);
+    return c;
 }
 // Normal offset in texels for a surface at `nl` (cosine to the light) in the fine
 // maps (virtual sun pages, local faces): 1.5 facing the light, widening towards

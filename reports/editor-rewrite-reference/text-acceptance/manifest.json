@@ -1,0 +1,17 @@
+{
+  "base": "9b700c513",
+  "files": [
+    "crates/ara-ui-text/src/editing.rs",
+    "crates/ara-ui/src/widgets.rs",
+    "crates/ara-ui/src/native_input.rs",
+    "crates/ara-editor/src/shell/input.rs",
+    "crates/ara-editor/src/shell/graph_input.rs",
+    "crates/ara-ui-text/tests/acceptance.rs",
+    "crates/ara-ui/tests/text_acceptance.rs",
+    "crates/ara-editor/src/shell/input/text_acceptance_tests.rs"
+  ],
+  "codeTestsRun": false,
+  "nativeRun": false,
+  "patchApplication": "PASS; exact LF file bytes reconstructed with core.autocrlf=false in plain scratch tree",
+  "formatting": "PASS"
+}

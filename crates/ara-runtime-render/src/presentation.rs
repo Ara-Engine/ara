@@ -106,7 +106,18 @@ impl Presenter {
     /// Selects a user override, or the project's setting when no override exists.
     /// Auto chooses a raster tier; experimental RT also requires RenderOptions.
     pub fn set_quality(&mut self, quality: QualityChoice) {
+        self.graphics_plan_key = None;
         self.choice = quality;
+        if let Some(settings) = &mut self.graphics {
+            use ara_graphics_settings::Preset;
+            settings.preset = match quality {
+                QualityChoice::Auto => Preset::Auto,
+                QualityChoice::Preset(QualityPreset::Low) => Preset::Low,
+                QualityChoice::Preset(QualityPreset::Medium) => Preset::Medium,
+                QualityChoice::Preset(QualityPreset::High) => Preset::High,
+                QualityChoice::Preset(QualityPreset::Epic) => Preset::Epic,
+            };
+        }
     }
 
     /// Replaces the frame's authored look on the raster path (look development and
@@ -119,13 +130,40 @@ impl Presenter {
     /// upscaler studies and ground truth at native resolution); `None` keeps the
     /// preset's `raster_scale`. The ray-traced tiers keep their own scales.
     pub fn set_render_scale(&mut self, scale: Option<f32>) {
+        self.graphics_plan_key = None;
         self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
     }
 
-    /// Enables (the default) or disables D29's hybrid ray queries on High/Epic: off,
-    /// an RT device renders those presets' raster path, as a GPU without ray queries
-    /// would (A/B measurements). Applies from the next prepared frame.
+    /// Renders an editor Game view: below 2560x1440 the raster plan renders the
+    /// preset's 1440p pixel count, up to native (`QualityPreset::raster_scale_for`),
+    /// instead of its scale, so a Game view panel is sharp at no more than a 1440p
+    /// frame's cost. Standalone games keep the preset scale; an explicit render scale,
+    /// Play's full-resolution switch or the user's resolution scale win.
+    pub fn set_pixel_budget(&mut self, enabled: bool) {
+        self.graphics_plan_key = None;
+        self.pixel_budget = enabled;
+    }
+
+    /// Turns effects off for diagnosis (the editor's View > Rendering debug, sent
+    /// with each Play); `full_resolution` renders at the display size.
+    pub fn set_debug(&mut self, debug: ara_render::RenderDebug) {
+        if self.debug != debug {
+            self.graphics_plan_key = None;
+        }
+        self.debug = debug;
+    }
+
+    /// The diagnosis switches in force, including the debug view captures draw.
+    pub fn debug(&self) -> ara_render::RenderDebug {
+        self.debug
+    }
+
+    /// Enables (the default) or disables D29's hybrid ray queries where a plan has
+    /// them (only under the ray-tracing opt-in): off, an RT device renders the raster
+    /// path, as a GPU without ray queries would (A/B measurements). Applies from the
+    /// next prepared frame.
     pub fn set_ray_queries(&mut self, enabled: bool) {
+        self.graphics_plan_key = None;
         self.ray_queries = enabled;
     }
 
@@ -237,14 +275,17 @@ impl Presenter {
             emissive_factor: None,
             material: None,
             skin: None,
+            casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         });
         let scene = self.scene(&warm, &[])?;
         let renderer = if let Some(gpu) = self.initial_device.take() {
             Renderer::with_device(scene, [64, 64], gpu)?
         } else {
-            // D29: one device with hardware ray queries where the GPU has them, so
-            // High/Epic add ray-traced reflections (and the opt-in fidelity renderer
-            // runs) without recreating the device when the preset changes.
+            // One device with hardware ray queries where the GPU has them, so the
+            // ray-tracing opt-in (the fidelity renderer) can switch on without
+            // recreating it. Nothing traces rays unless the options opt in.
             Renderer::new_hybrid(scene, [64, 64], &self.extensions, &self.cache)?
         };
         self.renderer = Some(renderer);
@@ -281,13 +322,56 @@ impl Presenter {
             .context("presentation device initialized")?;
         renderer.gpu_mut().set_pass_timing(self.pass_timing);
         renderer.gpu_mut().reset_timing_window();
-        let mut plan = Plan::resolve(
-            self.choice,
-            &Capabilities::of(renderer.gpu()),
+        let caps = Capabilities::of(renderer.gpu());
+        let graphics_key = (
             self.size,
-            self.options,
-        )?;
-        if let (Some(scale), RenderPath::Raster(raster)) = (self.render_scale, &mut plan.path) {
+            self.options.ray_tracing,
+            caps.ray_tracing,
+            caps.device_local_mib,
+        );
+        // The path-traced reference (RenderDebug::reference) is ground truth: the
+        // ray-traced plan in reference mode at full resolution, whatever the preset,
+        // the user's graphics settings and the project's ray-tracing opt-in, and no
+        // raster fallback.
+        let reference = self.debug.reference;
+        if reference.is_some() && !caps.ray_tracing {
+            anyhow::bail!(
+                "ARA6009: the path-traced reference needs hardware ray tracing, which this GPU does not have"
+            );
+        }
+        let mut plan = match &self.graphics {
+            _ if reference.is_some() => Plan::resolve(
+                QualityChoice::Preset(QualityPreset::Epic),
+                &caps,
+                self.size,
+                RenderOptions { ray_tracing: true },
+            )?,
+            Some(_) if self.graphics_plan_key == Some(graphics_key) && self.plan.is_some() => {
+                self.plan.context("cached user graphics plan")?
+            }
+            Some(settings) => crate::graphics::plan(settings, &caps, self.size, self.options)?,
+            None => Plan::resolve(self.choice, &caps, self.size, self.options)?,
+        };
+        if let (Some(trace), RenderPath::Fidelity(fidelity)) = (reference, &mut plan.path) {
+            fidelity.reference = Some((trace.samples, trace.bounces));
+            fidelity.render_size = fidelity.display_size;
+        }
+        renderer.set_debug(self.debug)?;
+        // Explicit scales win: the host's, Play's full-resolution debug switch, then the
+        // user's resolution scale (already in a graphics plan); else the pixel budget.
+        let user_scale = self
+            .graphics
+            .as_ref()
+            .is_some_and(|g| g.resolution_scale.is_some());
+        let budget = (self.pixel_budget && !user_scale).then(|| match &plan.path {
+            RenderPath::Raster(raster) => plan.preset.raster_scale_for(raster.display_size),
+            RenderPath::Fidelity(_) => 1.,
+        });
+        let scale = self
+            .render_scale
+            .or(self.debug.full_resolution.then_some(1.))
+            .or(budget);
+        if let (Some(scale), RenderPath::Raster(raster)) = (scale, &mut plan.path) {
             raster.render_size = raster
                 .display_size
                 .map(|v| ((v as f32 * scale).round() as u32).clamp(1, v));
@@ -327,7 +411,7 @@ impl Presenter {
                     let mut prepared = native::prepare(frame, resolve()?, texture_config())?;
                     prepared.enable_motion();
                     let bank = prepared.textures.fork_sources(texture_config())?;
-                    let look = crate::environment(frame);
+                    let look = crate::environment_locked(frame, self.debug.exposure);
                     match &mut self.live {
                         Some(live) => {
                             live.view.replace_native_scene(
@@ -396,11 +480,16 @@ impl Presenter {
                     )?;
                     live.plan = settings;
                 }
-                let look = crate::environment(frame);
+                let look = crate::environment_locked(frame, self.debug.exposure);
                 if live.look != look || live.tick.is_none() {
                     live.view.set_environment(&look)?;
                     live.look = look;
                 }
+                live.view.set_sun_radius(frame.sun_radius)?;
+                live.view.set_light_tables(
+                    renderer.gpu_mut(),
+                    &crate::lights::tables(&frame.lights).0,
+                )?;
                 settings.configure(renderer.gpu_mut(), &mut live.view)?;
                 live.view.prepare_transport(renderer.gpu_mut())?;
                 let update = live
@@ -415,6 +504,7 @@ impl Presenter {
             }
         }
         self.plan = Some(plan);
+        self.graphics_plan_key = Some(graphics_key);
         self.stats.prepare = started.elapsed();
         Ok(())
     }
@@ -547,7 +637,7 @@ impl Presenter {
             renderer,
             frame,
             &camera,
-            ViewMode::Lit,
+            self.debug.view,
             opened,
             |renderer| {
                 let source = renderer.output();
@@ -630,7 +720,7 @@ impl Presenter {
                     renderer,
                     frame,
                     &camera(frame)?,
-                    ViewMode::Lit,
+                    self.debug.view,
                     |renderer| {
                         let source = renderer.output();
                         Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
@@ -658,7 +748,7 @@ impl Presenter {
             } else {
                 let source = if let Some(live) = &mut self.live {
                     let renderer = self.renderer.as_mut().context("presentation device")?;
-                    let mut costs = live.render(renderer.gpu_mut(), frame)?;
+                    let mut costs = live.render(renderer.gpu_mut(), frame, self.debug.exposure)?;
                     costs.scene_update_ms = self.stats.gpu_ms;
                     self.stats.gpu_ms = costs.accounted_ms();
                     self.stats.gpu = Some(costs);

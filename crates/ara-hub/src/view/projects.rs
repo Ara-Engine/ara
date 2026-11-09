@@ -1,6 +1,6 @@
 //! Projects: search/sort/layout toolbar, cards or rows, and the overflow menu.
 use super::{Ctx, Page, columns, tracks};
-use crate::model::{Hub, Intent, Layout, Project, Sort, State, text};
+use crate::model::{Hub, Intent, Layout, Project, Sort, State, View, text};
 
 /// Sidebar 236 + edge 1 + content padding 2×40.
 const CHROME: f32 = 317.;
@@ -75,18 +75,29 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     }
 }
 
-/// First run: the call to action, then the templates themselves.
+/// First run: a welcome with the two ways in, then the templates at their usual size.
 fn empty(p: &mut Page, hub: &Hub, ctx: &Ctx) {
-    // The header already offers New project and Add existing; the first run gets one
-    // welcoming line and the templates, not a second pair of buttons in a large box.
     p.panel("welcome", |p| {
-        p.panel("empty-icon", |p| p.icon("folder-plus", "icon-lg accent"));
-        p.panel("col fill", |p| {
-            p.text("empty-title", "No projects yet");
+        p.panel("welcome-head", |p| {
+            p.text("welcome-title", "Welcome to Ara");
             p.text(
-                "empty-copy",
-                "Start from a template below, add a project folder you already have, or drop one onto this window.",
+                "welcome-copy",
+                "Create your first project, or add a project folder you already have. You can also drop a folder onto this window.",
             );
+        });
+        p.panel("welcome-actions", |p| {
+            for (id, class, icon, title, copy, intent) in [
+                ("welcome-new", "start-icon start-icon-primary", "plus", "New project", "A blank scene or one of the templates below", Intent::Navigate(View::Create)),
+                ("welcome-add", "start-icon", "folder-open", "Add existing", "Open a project folder from disk", Intent::AddExisting),
+            ] {
+                p.button(id, "start-card", title, Some(intent), |p| {
+                    p.panel(class, |p| p.icon(icon, "inherit"));
+                    p.panel("start-text", |p| {
+                        p.text("start-title", title);
+                        p.text("start-copy", copy);
+                    });
+                });
+            }
         });
     });
     if hub.templates.is_empty() {
@@ -99,8 +110,10 @@ fn empty(p: &mut Page, hub: &Hub, ctx: &Ctx) {
             "Outpost and Showcase are real-art samples: open one to see what Ara renders today.",
         );
     });
+    // Columns follow the width, not the template count: one template is one normal
+    // tile, never a full-width banner.
     let width = (ctx.size[0] - CHROME).max(260.);
-    let cols = columns(width, 230., 20.).min(hub.templates.len().max(1));
+    let cols = columns(width, 230., 20.);
     let tile = (width - 20. * (cols - 1) as f32) / cols as f32;
     let thumb = ((tile - 14.) * 9. / 16.).round().min(240.);
     p.panel_styled(

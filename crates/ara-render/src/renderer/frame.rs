@@ -54,7 +54,7 @@ impl Renderer {
         // (`set_jitter_override`) applies to every frame.
         let jitter = if let Some(fixed) = self.jitter_override {
             Some(glam::Vec2::from_array(fixed))
-        } else if !deterministic && !mode.wire() {
+        } else if !deterministic && !mode.wire() && self.debug.temporal_jitter {
             // Halton(2,3) phases grow with the upscale (eight times the display
             // pixels per render pixel), so samples land near every display pixel.
             let phases = temporal_phases(self.render, self.size);
@@ -145,7 +145,13 @@ impl Renderer {
             look: [
                 self.look.frame_index,
                 shadows.resolution,
-                shadows.cascades,
+                // A debug view without shadows samples no cascade (the far map,
+                // pages and horizon are already off in its quality).
+                if self.debug.shadows {
+                    shadows.cascades
+                } else {
+                    0
+                },
                 if self.native.is_some() {
                     self.targets.sampled[MOTION]
                 } else {
@@ -233,7 +239,8 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
         let snap = |v: f32| (v / step).round() * step;
         let (x, y) = (snap(c.x), snap(c.y));
         // Light-space z grows towards the sun: casters up to 200 m sunward of the
-        // cascade still shadow it. Coarse cascades snap their depth range too.
+        // cascade still shadow it (the horizon, look-horizon.slangh HORIZON_NEAR,
+        // relies on it). Coarse cascades snap their depth range too.
         let z = if i == 0 { c.z } else { snap(c.z) };
         let away = z - radius - 10. - (step - texel);
         let sunward = z + radius + 200.;

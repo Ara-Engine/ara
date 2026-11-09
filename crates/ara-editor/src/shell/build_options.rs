@@ -1,6 +1,7 @@
 //! Native build-profile selection and optional output-envelope prompt.
 //! The worker's semantic file index supplies profiles; build.rs owns exporting.
 use super::*;
+use ara_export::preset::PackageFormat;
 use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
 use ara_ui::{
     dialogs::{DialogFuture, DialogOptions},
@@ -15,6 +16,7 @@ const CONTROL: &str = "build-profile-select";
 
 struct Pending {
     profile: String,
+    format: Option<PackageFormat>,
     response: DialogFuture<Option<String>>,
 }
 
@@ -22,6 +24,8 @@ struct Pending {
 #[derive(Default)]
 pub(crate) struct State {
     open: bool,
+    package: bool,
+    format: Option<PackageFormat>,
     pending: Option<Pending>,
 }
 
@@ -97,6 +101,15 @@ impl Shell {
 
     /// Open an input-trapping shared-kit modal without inspecting project files.
     pub(crate) fn open_build_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.open_export_options(editor, false)
+    }
+
+    /// Choose a real export package format, using the existing profile/output form.
+    pub(crate) fn open_package_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.open_export_options(editor, true)
+    }
+
+    fn open_export_options(&mut self, editor: &mut Editor, package: bool) -> ara_ui::Result<()> {
         if self.dialog.is_some() || self.confirmations.is_open() {
             return Err(
                 "Finish or close the current dialog, then open Build Profiles again".into(),
@@ -111,6 +124,32 @@ impl Shell {
         self.leave();
         self.menu = None;
         self.build_options.open = true;
+        self.build_options.package = package;
+        self.rebuild(editor)
+    }
+
+    pub(super) fn choose_package_format(&mut self, value: Value) -> ara_ui::Result<()> {
+        if !self.build_options.open || !self.build_options.package {
+            return Err("The package form is no longer open".into());
+        }
+        let format = serde_json::from_value(value)
+            .map_err(|error| format!("Choose a supported package format: {error}"))?;
+        self.build_options.format = Some(format);
+        Ok(())
+    }
+
+    /// Lower the reviewed profile and format to the existing nonblocking worker.
+    pub(crate) fn package_selected(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        if !self.build_options.open || !self.build_options.package {
+            return self.open_package_options(editor);
+        }
+        let profile = self.selected_build_profile(editor)?;
+        let format = self
+            .build_options
+            .format
+            .unwrap_or(PackageFormat::WindowsPortable);
+        self.package_profile(editor, &profile, None, format)?;
+        self.build_options.open = false;
         self.rebuild(editor)
     }
 
@@ -149,13 +188,25 @@ impl Shell {
             return Ok(());
         }
         let profile = self.selected_build_profile(editor)?;
+        let format = (self.build_options.open && self.build_options.package).then(|| {
+            self.build_options
+                .format
+                .unwrap_or(PackageFormat::WindowsPortable)
+        });
         let mut options = DialogOptions::new(
-            format!("Build {profile}"),
+            format!(
+                "{} {profile}",
+                if format.is_some() { "Package" } else { "Build" }
+            ),
             "Enter a new output folder. Leave this empty to let Ara generate a fresh folder under builds for this profile. Existing build folders are preserved.",
         );
-        options.accept_label = "Build".into();
+        options.accept_label = if format.is_some() { "Package" } else { "Build" }.into();
         let response = self.confirmations.prompt(options, String::new());
-        self.build_options.pending = Some(Pending { profile, response });
+        self.build_options.pending = Some(Pending {
+            profile,
+            format,
+            response,
+        });
         self.build_options.open = false;
         self.menu = None;
         self.rebuild(editor)
@@ -190,7 +241,12 @@ impl Shell {
                 }
                 let destination = destination.trim();
                 let destination = (!destination.is_empty()).then(|| PathBuf::from(destination));
-                self.build_profile(editor, &pending.profile, destination)
+                match pending.format {
+                    Some(format) => {
+                        self.package_profile(editor, &pending.profile, destination, format)
+                    }
+                    None => self.build_profile(editor, &pending.profile, destination),
+                }
             })();
             match result {
                 Ok(()) => self.build_options.open = false,
@@ -214,7 +270,14 @@ impl Shell {
         let current = selected
             .as_ref()
             .map_or(Value::Null, |profile| json!(profile));
-        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='Build options' default-action='build-options-build'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-width:100%;max-height:{height}px;min-height:0px'><text id='build-options-title' class='kit-dialog-title' style='flex-shrink:0' text='Build options' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px'><panel id='build-options-profile' style='min-width:0px;flex-shrink:0;gap:4px'><text id='build-profile-label' text='Build profile' />"));
+        let package = self.build_options.package;
+        let title = if package { "Package" } else { "Build options" };
+        let confirm = if package {
+            "package-options-build"
+        } else {
+            "build-options-build"
+        };
+        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='{title}' default-action='{confirm}'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-width:100%;max-height:{height}px;min-height:0px'><text id='build-options-title' class='kit-dialog-title' style='flex-shrink:0' text='{title}' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px'><panel id='build-options-profile' style='min-width:0px;flex-shrink:0;gap:4px'><text id='build-profile-label' text='Build profile' />"));
         self.choice_button(
             CONTROL,
             "Build profile",
@@ -229,6 +292,27 @@ impl Shell {
             out,
         );
         out.push_str("</panel>");
+        if package {
+            out.push_str("<panel id='package-format-field' style='min-width:0px;flex-shrink:0;gap:4px'><text id='package-format-label' text='Package format' />");
+            self.choice_button(
+                "package-format-select",
+                "Package format",
+                choices::Select {
+                    destination: choices::Destination::PackageFormat,
+                    options: package_formats()
+                        .into_iter()
+                        .map(|(format, label)| (json!(format), label.into()))
+                        .collect(),
+                    current: json!(
+                        self.build_options
+                            .format
+                            .unwrap_or(PackageFormat::WindowsPortable)
+                    ),
+                },
+                out,
+            );
+            out.push_str("</panel><text id='package-format-help' class='caption' style='white-space:normal;flex-shrink:0' text='The format must match the profile platform. Installers and AppImages require their pinned tooling; Android distribution requires release signing. Ara checks these before starting.' />");
+        }
         if let Err(error) = &selected {
             out.push_str(&format!("<text id='build-profile-problem' class='caption' style='white-space:normal;flex-shrink:0' text='{}' />", escape(&error.to_string())));
         }
@@ -240,7 +324,26 @@ impl Shell {
             );
             out.push_str("<button id='build-profile-create' class='kit-dialog-button ghost' text='Create default profile' action='Dispatch' />");
         }
-        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' /></scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap;flex-shrink:0;min-width:0px'>");
+        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' />");
+        if let Some(game) = &self.last_build {
+            out.push_str(&format!("<text id='package-result-player-title' class='caption' style='flex-shrink:0' text='Last completed player folder' /><text id='package-result-player-path' class='mono caption' style='white-space:normal;flex-shrink:0' text='{}' />",escape(&game.to_string_lossy())));
+        }
+        if !self.last_packages.is_empty() {
+            out.push_str("<text id='package-result-title' class='caption' text='Last completed package files' style='flex-shrink:0' />");
+            for index in 0..self.last_packages.len() {
+                let artifact = &self.last_packages[index];
+                let path = artifact.path.to_string_lossy().into_owned();
+                let bytes = artifact.bytes;
+                let id = format!("package-result-{:016x}", ara_ui::source::stable_id(&path));
+                self.bind_command(
+                    &id,
+                    "build.package.reveal",
+                    commands::Target::Text(path.clone()),
+                );
+                out.push_str(&format!("<text id='{id}-path' class='mono caption' style='white-space:normal;flex-shrink:0' text='{}' /><button id='{id}' class='kit-dialog-button ghost' text='Reveal ({} bytes)' action='Dispatch' style='flex-shrink:0' />",escape(&path),bytes));
+            }
+        }
+        out.push_str("</scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap;flex-shrink:0;min-width:0px'>");
         for (id, command, label, primary) in [
             ("build-options-close", "build.options.close", "Close", false),
             (
@@ -249,7 +352,16 @@ impl Shell {
                 "Choose output…",
                 false,
             ),
-            ("build-options-build", "build.current", "Build", true),
+            (
+                confirm,
+                if package {
+                    "build.package.confirm"
+                } else {
+                    "build.current"
+                },
+                if package { "Package" } else { "Build" },
+                true,
+            ),
         ] {
             self.bind_command(id, command, commands::Target::None);
             let disabled = command != "build.options.close" && selected.is_err();
@@ -275,6 +387,17 @@ impl Shell {
         }
         Ok(true)
     }
+}
+
+fn package_formats() -> [(PackageFormat, &'static str); 6] {
+    [
+        (PackageFormat::Folder, "Plain folder"),
+        (PackageFormat::WindowsPortable, "Windows portable ZIP"),
+        (PackageFormat::WindowsInstaller, "Windows installer + ZIP"),
+        (PackageFormat::LinuxAppimage, "Linux AppImage"),
+        (PackageFormat::LinuxTar, "Linux tar.gz"),
+        (PackageFormat::AndroidPlay, "Android APK + AAB"),
+    ]
 }
 
 fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&'a str> {

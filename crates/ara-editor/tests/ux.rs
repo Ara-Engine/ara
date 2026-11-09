@@ -712,11 +712,11 @@ fn tinted_icons_take_their_state_color() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
-    // The active tool's icon sits on the selection fill, so it uses the selection text color.
+    // The active tool's icon sits on its raised satin key in the foreground colour.
     let icon = shell.ui.find("tool-Translate-icon").unwrap();
     assert_eq!(
         Some(shell.ui.nodes[icon].computed.color),
-        shell.ui.sheet.color_token("--selection-foreground")
+        shell.ui.sheet.color_token("--foreground")
     );
 }
 
@@ -736,8 +736,8 @@ fn viewport_toolbar_overlays_the_image_and_first_click_selects_each_tool() {
     ] {
         let i = shell.ui.find(id).unwrap();
         let node = &shell.ui.nodes[i];
-        assert_eq!(node.rect.w, 24.);
-        assert_eq!(node.rect.h, 24.);
+        assert_eq!(node.rect.w, 22.);
+        assert_eq!(node.rect.h, 22.);
         assert!(node.rect.y >= viewport.y && node.rect.y + node.rect.h <= viewport.y + 40.);
         assert!(node.element.attrs["description"].contains(key));
         shell.click(id, &mut clipboard).unwrap();
@@ -2402,10 +2402,10 @@ fn titlebar_controls_stay_in_one_row_and_logo_opens_about() {
         shell.click("brand", &mut clip).unwrap();
         shell.dispatch(&mut editor).unwrap();
         shell.rebuild(&mut editor).unwrap();
-        let version = &shell.ui.nodes[shell.ui.find("dialog-line-0").unwrap()];
+        let version = &shell.ui.nodes[shell.ui.find("about-value-0").unwrap()];
         assert_eq!(
             version.text.as_ref().unwrap().value,
-            format!("Ara {}", env!("CARGO_PKG_VERSION"))
+            env!("CARGO_PKG_VERSION")
         );
         shell.click("dialog-close", &mut clip).unwrap();
         shell.dispatch(&mut editor).unwrap();

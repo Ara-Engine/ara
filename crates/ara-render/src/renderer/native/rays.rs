@@ -3,10 +3,14 @@ use super::*;
 
 /// Ray-query instance masks (shaders/look-rt.slangh `RT_*`): opaque geometry,
 /// alpha-tested cutouts (resolved in a non-opaque query) and blended or
-/// transmissive surfaces, which reflection rays skip.
+/// transmissive surfaces, which reflection rays skip. Geometry that casts no
+/// shadow (`Instance::casts_shadows`) takes the `*_SHADOWLESS` twins, which every
+/// query but a shadow ray sees.
 pub(in crate::renderer) const RAY_OPAQUE: u8 = 1;
 pub(in crate::renderer) const RAY_MASKED: u8 = 2;
 pub(in crate::renderer) const RAY_TRANSPARENT: u8 = 4;
+pub(in crate::renderer) const RAY_OPAQUE_SHADOWLESS: u8 = 8;
+pub(in crate::renderer) const RAY_MASKED_SHADOWLESS: u8 = 16;
 
 /// The native content's bindless tables as hit shading reads them (`Look.rtInfo`).
 #[derive(Clone, Copy)]
@@ -46,12 +50,13 @@ impl Native {
     /// always see LOD 0) and ray mask.
     pub(in crate::renderer) fn ray_instance(&self, index: usize) -> (&Mat4, u32, u8) {
         let group = &self.groups.groups[self.groups.instance_group[index]];
-        let mask = if group.transparent {
-            RAY_TRANSPARENT
-        } else if self.material_data[group.material].pbr.flags[0] == 1 {
-            RAY_MASKED
-        } else {
-            RAY_OPAQUE
+        let masked = self.material_data[group.material].pbr.flags[0] == 1;
+        let mask = match (group.transparent, masked, group.casts) {
+            (true, _, _) => RAY_TRANSPARENT,
+            (false, true, true) => RAY_MASKED,
+            (false, true, false) => RAY_MASKED_SHADOWLESS,
+            (false, false, true) => RAY_OPAQUE,
+            (false, false, false) => RAY_OPAQUE_SHADOWLESS,
         };
         (&self.rows[index].world, group.first, mask)
     }

@@ -84,6 +84,7 @@ fn lookup_preserves_complete_color_ktx2_mips_and_cancellation() {
             format: TextureFormat::Bc7Srgb,
             pixels,
             mipmaps: true,
+            alpha_coverage: None,
         },
         &cancellation,
     )

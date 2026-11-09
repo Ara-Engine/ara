@@ -35,6 +35,11 @@ pub(crate) struct Tuning {
     /// `ARA_TSR_VELOCITY`, `_REACTIVENESS`, `_SHADING_CHANGE` (FSR's factor and
     /// scales; a shading change scale of 0 skips its pyramid pass).
     pub factors: [f32; 3],
+    /// `ARA_TSR_STILL_KEEP`: on still pixels (camera and surface under half a 4K
+    /// pixel of motion), the share of history kept where rectification would clip
+    /// it. Rectifying against a box that follows the jitter flickered every thin
+    /// edge, even at full resolution; keeping all of it smears light changes.
+    pub still: f32,
     /// `ARA_TSR_LUMA_INSTABILITY` (0 skips the pass).
     pub luma_instability: bool,
     /// `ARA_TSR_IDS` (0 drops the entity-ID signal and its scratch traffic).
@@ -56,6 +61,11 @@ impl Default for Tuning {
             // gave equal fidelity and steadier frames in the Showcase sweep.
             accumulation: [1. / 3., -1. / 3.],
             factors: [1., 1., 0.],
+            // On a 1440p street scene at 0.6 scale: pixels changing over 8 levels
+            // between still frames 0.40% -> 0.07%, over 4 levels 1.13% -> 0.55%,
+            // detail unchanged; a sun change's residual after 8 frames 41% -> 54%.
+            // A 4x accumulation gain on top reached 0.04% / 0.23% but softened detail.
+            still: 0.75,
             luma_instability: true,
             ids: true,
         }
@@ -113,6 +123,7 @@ impl Tuning {
                 number("ARA_TSR_REACTIVENESS", d.factors[1]).max(0.),
                 number("ARA_TSR_SHADING_CHANGE", d.factors[2]).max(0.),
             ],
+            still: number("ARA_TSR_STILL_KEEP", d.still).clamp(0., 1.),
             luma_instability: number("ARA_TSR_LUMA_INSTABILITY", 1.) > 0.,
             ids: number("ARA_TSR_IDS", 1.) > 0.,
         }

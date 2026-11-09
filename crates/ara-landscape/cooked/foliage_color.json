@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3c4d33e423249527704e05ae7e1237c039c797723ad68c955c2f769445ea78f1",
+  "key": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195",
   "stages": [
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageColor.dxil",
       "dxil_hash": "be5fc7ca95a3f5b6703f1496325aa65c5f9fd5d20845a44ce4e85236aab105d8",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageColor.metallib",
         "metallib_hash": "a13c752a702a272bcab38a474cdf60dfebc64459491004297267695a7a3de98a",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageColor.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "foliageColor",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageColor.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageColor.spv",
       "spirv_entry": "main",
       "spirv_hash": "c554718353c65fc3ac8aa4435d7e2aa4852c56e84f7d27f4af23ca18dc8556a8",
       "stage": "fragment"
     },
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageVertex.dxil",
       "dxil_hash": "b0f6adad07889106f4a2857db92b03dfb70908b531e69ea4c167e4471452bfbd",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageVertex.metallib",
         "metallib_hash": "1c3d2730eade76091a08719fdfb42097c862736b8feffb16ec4bd423fb5434c0",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "foliageVertex",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/foliage_color/foliageVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "2cc97a3d1a3dadc41f074fd0fe7afae40a2470ff5f0e0857820b6f9a535da24c",
       "stage": "vertex"

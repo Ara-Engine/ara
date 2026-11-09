@@ -154,6 +154,8 @@ pub struct DeviceInfo {
     pub unified_device_local: bool,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
+    /// Physical adapter ray-query support, independent of logical-device enablement.
+    pub ray_tracing_supported: bool,
     /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
     pub texture_compression_bc: bool,
     /// Allocated variable-count sampled-image slots at binding 5, capped at 65,536
@@ -171,6 +173,9 @@ pub struct DeviceInfo {
     pub geometry_shader: bool,
     /// VK_EXT_hdr_metadata enabled for native window presentation.
     pub hdr_metadata: bool,
+    /// VK_EXT_swapchain_maintenance1 present scaling enabled: a window can present a
+    /// swapchain of another size 1:1, unstretched (live window resizes).
+    pub present_scaling: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics (Metal: unsigned
     /// 64-bit min/max only, Apple9 and later).
     pub buffer_int64_atomics: bool,
@@ -377,6 +382,9 @@ impl Drop for Gpu {
             }
             for image in &self.images {
                 self.device.destroy_image_view(image.view, None);
+                if let Some(storage) = image.storage_view {
+                    self.device.destroy_image_view(storage, None);
+                }
                 self.device.destroy_image(image.handle, None);
                 self.device.free_memory(image.memory, None);
             }
@@ -395,15 +403,19 @@ impl Drop for Gpu {
 
 impl Drop for NativeDevice {
     fn drop(&mut self) {
-        // SAFETY: Every recording/allocation owner and its workers have gone;
-        // their queues completed before their pools and resources were released.
-        unsafe {
-            let _ = self.device.device_wait_idle();
-            self.device.destroy_device(None);
-            self.debug
-                .destroy_debug_utils_messenger(self.messenger, None);
-            self.instance.destroy_instance(None);
-        }
+        // Never while another device in the process holds a queue on the host
+        // (queue_gate::without_held_queues: a driver deadlock).
+        super::queue_gate::without_held_queues(|| {
+            // SAFETY: Every recording/allocation owner and its workers have gone;
+            // their queues completed before their pools and resources were released.
+            unsafe {
+                let _ = self.device.device_wait_idle();
+                self.device.destroy_device(None);
+                self.debug
+                    .destroy_debug_utils_messenger(self.messenger, None);
+                self.instance.destroy_instance(None);
+            }
+        });
     }
 }
 
@@ -418,6 +430,7 @@ pub(crate) fn test_info() -> DeviceInfo {
         task_dispatch: [0; 4],
         geometry_shader: false,
         hdr_metadata: false,
+        present_scaling: false,
         buffer_int64_atomics: false,
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
@@ -428,6 +441,7 @@ pub(crate) fn test_info() -> DeviceInfo {
         device_local_mib: 0,
         unified_device_local: false,
         ray_tracing: false,
+        ray_tracing_supported: false,
         texture_compression_bc: false,
         sampled_image_capacity: 65_536,
         storage_buffer_capacity: 128,

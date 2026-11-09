@@ -73,7 +73,8 @@ impl NativeUi {
             16384,
         )?;
         let target = self.target.as_ref().context("UI target")?;
-        let (target_image, size) = (target.image, target.size);
+        let (target_image, size, target_slot) = (target.image, target.size, target.slot.index);
+        let scratch = self.scratch.as_ref().map(|s| s.image);
         let mut rec = self.device.begin(Queue::Graphics);
         // This frame's texture uploads first, ahead of everything that samples them.
         for upload in &self.pending {
@@ -115,13 +116,20 @@ impl NativeUi {
             size,
         });
         rec.push(Command::Pipeline(self.pipeline));
-        for draw in &self.draws {
-            let [x, y, width, height] = draw.clip;
+        // One instanced draw in a clip viewport; false when the clip is empty.
+        let draw_in = |rec: &mut ara_gpu::commands::Recorder,
+                       clip: [u32; 4],
+                       first: u32,
+                       count: u32,
+                       texture: u32,
+                       mode: u32,
+                       masks_at: [u32; 2]| {
+            let [x, y, width, height] = clip;
             // Clips are clamped to the target, so the viewport stays inside it.
             let width = width.min(size[0].saturating_sub(x));
             let height = height.min(size[1].saturating_sub(y));
-            if width == 0 || height == 0 || draw.count == 0 {
-                continue;
+            if width == 0 || height == 0 || count == 0 {
+                return false;
             }
             rec.push(Command::Viewport {
                 origin: [x, y],
@@ -131,9 +139,9 @@ impl NativeUi {
                 words: [
                     instances.slot.index,
                     masks.slot.index,
-                    draw.first,
-                    draw.texture | draw.mode << 16,
-                    draw.mask_offset | draw.mask_count << 24,
+                    first,
+                    texture | mode << 16,
+                    masks_at[0] | masks_at[1] << 24,
                     x | y << 16,
                     width | height << 16,
                     self.dpi.to_bits(),
@@ -141,8 +149,60 @@ impl NativeUi {
             }));
             rec.push(Command::DrawProcedural {
                 vertices: 6,
-                instances: draw.count,
+                instances: count,
             });
+            true
+        };
+        let mut passes = self.backdrops.iter().peekable();
+        for (index, draw) in self.draws.iter().enumerate() {
+            if let (Some(pass), Some(scratch)) =
+                (passes.next_if(|pass| pass.index == index), scratch)
+            {
+                // Glass: pause the target, blur it horizontally into scratch, then
+                // resume the target (loaded) for the vertical pass.
+                rec.push(Command::EndRendering);
+                rec.push(transition(target_image, Access::Color, Access::ShaderRead));
+                rec.push(transition(scratch, Access::Undefined, Access::Color));
+                rec.push(Command::BeginRendering {
+                    colors: vec![Attachment {
+                        image: scratch,
+                        clear: Some([0.; 4]),
+                    }],
+                    depth: None,
+                    size,
+                });
+                rec.push(Command::Pipeline(self.pipeline));
+                draw_in(
+                    &mut rec,
+                    pass.clip,
+                    pass.first,
+                    1,
+                    target_slot,
+                    draw.mode,
+                    [0, 0],
+                );
+                rec.push(Command::EndRendering);
+                rec.push(transition(scratch, Access::Color, Access::ShaderRead));
+                rec.push(transition(target_image, Access::ShaderRead, Access::Color));
+                rec.push(Command::BeginRendering {
+                    colors: vec![Attachment {
+                        image: target_image,
+                        clear: None,
+                    }],
+                    depth: None,
+                    size,
+                });
+                rec.push(Command::Pipeline(self.pipeline));
+            }
+            draw_in(
+                &mut rec,
+                draw.clip,
+                draw.first,
+                draw.count,
+                draw.texture,
+                draw.mode,
+                [draw.mask_offset, draw.mask_count],
+            );
         }
         rec.push(Command::EndRendering);
         rec.push(transition(target_image, Access::Color, Access::CopySource));

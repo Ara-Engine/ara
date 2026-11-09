@@ -156,3 +156,55 @@ fn explicit_append_after_a_background_insert_reveals_item_102_in_a_bounded_pool_
     editor.action("history.undo", json!({})).unwrap();
     assert_eq!(slots(&editor), before_local);
 }
+
+#[test]
+fn explicit_append_to_a_short_inline_collection_reveals_without_a_scroll_view() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let material = editor
+        .action(
+            "editor.resource.create",
+            json!({"path":"materials/steel.graph","domain":"material"}),
+        )
+        .unwrap();
+    let reference = format!(
+        "@materials/steel.graph#{}",
+        material["doc"].as_str().unwrap()
+    );
+    let initial: Vec<_> = (0..3)
+        .map(|primitive| json!({"primitive":primitive,"material":reference}))
+        .collect();
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_append001","path":"MeshRenderer.materialOverrides","value":initial}})],"Initial collection",None).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_append001"]}))
+        .unwrap();
+    // A short dock: the Inspector scrolls, the three-item collection renders inline.
+    let mut shell = Shell::new(&mut editor, [1100., 420.]).unwrap();
+    let field = "MeshRenderer.materialOverrides";
+    let container = shell.shown_node(&id(field, "")).unwrap();
+    assert!(
+        shell.ui.scroll_position(container).is_none(),
+        "short collections render inline"
+    );
+    let target = format!("{field}#/-/material");
+    assert!(shell.appends(&target));
+    let local = shell
+        .field_commands(&editor, &editor.state.selection, &target, json!(reference))
+        .unwrap();
+    editor.apply(local, "Explicit picker Add", None).unwrap();
+    assert!(
+        shell
+            .reveal_appended_collection(&editor, field, "")
+            .unwrap()
+    );
+    shell.rebuild(&mut editor).unwrap();
+    // Revealing an inline collection's new item used to fail the frame with
+    // "ARA4044: not a scroll view", which closed the editor.
+    shell.reveal_collection_appends(&editor).unwrap();
+    shell.frame().unwrap();
+    assert_eq!(slots(&editor).as_array().unwrap().len(), 4);
+    assert_eq!(
+        shell.collections[&id(field, "")].selected,
+        Some(ItemKey::Index(3))
+    );
+}

@@ -1,0 +1,762 @@
+diff --git a/crates/ara-editor/src/shell/build.rs b/crates/ara-editor/src/shell/build.rs
+--- a/crates/ara-editor/src/shell/build.rs
++++ b/crates/ara-editor/src/shell/build.rs
+@@ -40,6 +40,22 @@
+     pub seconds: f64,
+     /// The export's own verification ran the game (not only static checks).
+     pub executed: bool,
++    /// Actual package files listed by the completed distribution manifest.
++    pub packages: Vec<PackageArtifact>,
++}
++
++/// One package emitted by the exporter, with its authoritative content identity.
++#[derive(Clone, serde::Serialize)]
++#[serde(rename_all = "camelCase")]
++pub(crate) struct PackageArtifact {
++    /// Full path after the staged export has reached its final envelope.
++    pub path: PathBuf,
++    /// BLAKE3 declared by the completed distribution manifest.
++    pub hash: String,
++    /// Complete package byte length.
++    pub bytes: u64,
++    /// Whether delivery must preserve executable permission.
++    pub executable: bool,
+ }
+ 
+ /// A running export.
+@@ -323,7 +339,48 @@
+         game: output.join("build"),
+         seconds: started.elapsed().as_secs_f64(),
+         executed: summary.verify.runtime_executed,
++        packages: package_artifacts(&output)?,
+     })
++}
++
++/// Runs on the export worker. Package names come from its manifest, never guesses
++/// based on a format or application name; canonical containment also rejects escapes.
++fn package_artifacts(output: &Path) -> anyhow::Result<Vec<PackageArtifact>> {
++    let manifest: ara_export::distribution::DistributionManifest =
++        serde_json::from_slice(&std::fs::read(output.join("distribution.json"))?)?;
++    anyhow::ensure!(
++        manifest.format == "ara.distribution/1",
++        "unsupported distribution manifest"
++    );
++    manifest
++        .packages
++        .into_iter()
++        .map(|(name, identity)| {
++            let path = ara_export::tools::project_path(output, &name)?;
++            let metadata = std::fs::metadata(&path)?;
++            anyhow::ensure!(
++                metadata.is_file() && metadata.len() == identity.bytes,
++                "the completed package {name} is missing or has a different byte length"
++            );
++            Ok(PackageArtifact {
++                path,
++                hash: identity.hash,
++                bytes: identity.bytes,
++                executable: identity.executable,
++            })
++        })
++        .collect()
++}
++
++fn package_preset(
++    mut preset: ara_export::ExportPreset,
++    format: ara_export::preset::PackageFormat,
++) -> anyhow::Result<ara_export::ExportPreset> {
++    preset.packaging = format;
++    // Runtime pins are supplied by this engine on the existing export worker.
++    // All platform/package/tooling rules still apply to the authored profile.
++    preset.to_unpinned_text()?;
++    Ok(preset)
+ }
+ 
+ /// Claim a new content-identified developer folder; an existing build is preserved.
+@@ -429,8 +486,31 @@
+         profile: &str,
+         destination: Option<PathBuf>,
+     ) -> ara_ui::Result<()> {
++        self.start_profile(editor, profile, destination, None)
++    }
++
++    /// Package a profile through the same saved-file boundary and export worker.
++    /// The selected format belongs to this job; authored profiles stay unchanged.
++    pub(crate) fn package_profile(
++        &mut self,
++        editor: &mut Editor,
++        profile: &str,
++        destination: Option<PathBuf>,
++        format: ara_export::preset::PackageFormat,
++    ) -> ara_ui::Result<()> {
++        self.start_profile(editor, profile, destination, Some(format))
++    }
++
++    fn start_profile(
++        &mut self,
++        editor: &mut Editor,
++        profile: &str,
++        destination: Option<PathBuf>,
++        package: Option<ara_export::preset::PackageFormat>,
++    ) -> ara_ui::Result<()> {
+         if let Some(job) = &mut self.build {
+             if job.preset == profile
++                && package.is_none()
+                 && let Some(creation) = &mut job.profile_creation
+             {
+                 creation.build_after = true;
+@@ -452,6 +532,10 @@
+         let text = std::fs::read_to_string(profile_path(&root, &preset))?;
+         let parsed =
+             ara_export::ExportPreset::from_unpinned_text(&text).map_err(|e| format!("{e:#}"))?;
++        let parsed = match package {
++            Some(format) => package_preset(parsed, format).map_err(|error| format!("{error:#}"))?,
++            None => parsed,
++        };
+         let stamp = std::time::SystemTime::now()
+             .duration_since(std::time::UNIX_EPOCH)
+             .map(|d| d.as_nanos())
+@@ -721,8 +805,21 @@
+                     } else {
+                         ""
+                     };
++                    let packages = if built.packages.is_empty() {
++                        String::new()
++                    } else {
++                        format!(
++                            "; packages: {}",
++                            built
++                                .packages
++                                .iter()
++                                .map(|artifact| artifact.path.display().to_string())
++                                .collect::<Vec<_>>()
++                                .join(", ")
++                        )
++                    };
+                     self.status_note = Some(format!(
+-                        "Built {preset} in {:.0} s{ran}: {}",
++                        "Built {preset} in {:.0} s{ran}: {}{packages}",
+                         built.seconds,
+                         built.game.display()
+                     ));
+@@ -731,12 +828,14 @@
+                         ara_diag::Diagnostic::info(
+                             crate::codes::BUILD,
+                             format!(
+-                                "Built {preset} in {:.0} s{ran}: {}",
++                                "Built {preset} in {:.0} s{ran}: {}{packages}",
+                                 built.seconds,
+                                 built.game.display()
+                             ),
+-                        ),
++                        )
++                        .data(json!({"packages":built.packages})),
+                     );
++                    self.last_packages = built.packages;
+                     self.last_build = Some(built.game);
+                 }
+                 Err(error) => {
+@@ -752,6 +851,32 @@
+             }
+         }
+         changed
++    }
++
++    /// Read-only artifact proof for the last successfully completed build/package.
++    pub(crate) fn package_result(&self) -> Value {
++        json!({"game":self.last_build,"packages":self.last_packages})
++    }
++
++    /// Reveal only a path present in the last actual package receipt.
++    pub(crate) fn reveal_package(&mut self, target: &commands::Target) -> ara_ui::Result<()> {
++        let commands::Target::Text(path) = target else {
++            return Err("Choose a completed package file".into());
++        };
++        let artifact = self
++            .last_packages
++            .iter()
++            .find(|artifact| artifact.path.to_str() == Some(path.as_str()))
++            .ok_or("That package is no longer the current build result")?;
++        let directory = artifact
++            .path
++            .parent()
++            .ok_or("The package has no output folder")?;
++        if !self.offscreen {
++            open_external(directory)?;
++        }
++        self.status_note = Some(format!("Package: {}", artifact.path.display()));
++        Ok(())
+     }
+ }
+ 
+@@ -926,6 +1051,165 @@
+     }
+ 
+     #[test]
++    fn completed_package_receipt_reaches_the_retained_shell_without_authoring_changes()
++    -> anyhow::Result<()> {
++        let scratch = Scratch::new()?;
++        std::fs::create_dir_all(scratch.0.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
++        std::fs::write(
++            scratch.0.join("ara.project.json"),
++            ara_json::to_canonical_string(&json!({
++                "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Package receipt","main":"levels/main.scene"
++            })),
++        )?;
++        std::fs::write(
++            scratch
++                .0
++                .join(ara_doc::AUTHORING_ROOT)
++                .join("levels/main.scene"),
++            ara_json::to_canonical_string(&json!({
++                "$schema":"ara://schema/scene/1","id":"sc_packagereceipt","records":{}
++            })),
++        )?;
++        let mut editor =
++            Editor::open_with(&scratch.0, Some(scratch.0.join(".ara/test-settings.json")))
++                .map_err(|error| anyhow::anyhow!("{error}"))?;
++        let mut shell =
++            Shell::new(&mut editor, [900., 650.]).map_err(|error| anyhow::anyhow!("{error}"))?;
++        shell.offscreen = true;
++        let revision = editor.host.store().revision();
++        let package = PackageArtifact {
++            path: scratch.0.join("Custom result.zip"),
++            hash: "b".repeat(64),
++            bytes: 47,
++            executable: false,
++        };
++        let (send, events) = channel();
++        shell.build = Some(BuildJob {
++            events,
++            profile_creation: None,
++            saving: None,
++            preset: "windows".into(),
++            stage: "packaging".into(),
++            cooking: None,
++        });
++        send.send(BuildEvent::Finished(Ok(Built {
++            game: scratch.0.join("build"),
++            seconds: 2.,
++            executed: false,
++            packages: vec![package.clone()],
++        })))?;
++        assert!(shell.poll_build(&mut editor));
++        assert!(shell.build.is_none());
++        assert_eq!(shell.package_result()["packages"], json!([package]));
++        assert_eq!(editor.host.store().revision(), revision);
++        assert!(
++            shell
++                .status_note
++                .as_deref()
++                .is_some_and(|note| note.contains("Custom result.zip"))
++        );
++        shell
++            .reveal_package(&commands::Target::Text(
++                package
++                    .path
++                    .to_str()
++                    .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
++                    .into(),
++            ))
++            .map_err(|error| anyhow::anyhow!("{error}"))?;
++        assert!(
++            shell
++                .reveal_package(&commands::Target::Text("unrelated.zip".into()))
++                .is_err()
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn package_override_validates_real_formats_without_requiring_runtime_pins_early()
++    -> anyhow::Result<()> {
++        use ara_export::preset::{AndroidSigning, ArtifactPin, Configuration, PackageFormat};
++        let scratch = Scratch::new()?;
++        let original = default_profile(&scratch.0)?;
++        for format in [
++            PackageFormat::Folder,
++            PackageFormat::WindowsPortable,
++            PackageFormat::WindowsInstaller,
++            PackageFormat::LinuxAppimage,
++            PackageFormat::LinuxTar,
++            PackageFormat::AndroidPlay,
++        ] {
++            let mut profile = original.clone();
++            let pin = ArtifactPin {
++                hash: "a".repeat(64),
++                source: "tools/package-runtime".into(),
++            };
++            match format {
++                PackageFormat::WindowsInstaller => profile.installer_stub = Some(pin),
++                PackageFormat::LinuxAppimage => {
++                    profile.platform = ara_export::Platform::Linux;
++                    profile.appimage_runtime = Some(pin);
++                }
++                PackageFormat::LinuxTar => profile.platform = ara_export::Platform::Linux,
++                PackageFormat::AndroidPlay => {
++                    profile.platform = ara_export::Platform::Android;
++                    profile.config = Configuration::Release;
++                    profile.signing = Some(AndroidSigning {
++                        keystore: "release.keystore".into(),
++                        alias: "game".into(),
++                        store_password_env: "TEST_STORE_PASSWORD".into(),
++                        key_password_env: "TEST_KEY_PASSWORD".into(),
++                    });
++                }
++                _ => {}
++            }
++            let lowered = package_preset(profile, format)?;
++            assert_eq!(
++                serde_json::to_value(lowered.packaging)?,
++                serde_json::to_value(format)?
++            );
++            assert!(
++                lowered.templates.is_empty(),
++                "the worker still owns engine runtime pinning"
++            );
++        }
++        assert_eq!(serde_json::to_value(original.packaging)?, "folder");
++        assert!(package_preset(original.clone(), PackageFormat::LinuxTar).is_err());
++        assert!(package_preset(original.clone(), PackageFormat::WindowsInstaller).is_err());
++        assert!(package_preset(original, PackageFormat::AndroidPlay).is_err());
++        Ok(())
++    }
++
++    #[test]
++    fn completed_packages_use_manifest_paths_and_reject_missing_or_escaping_artifacts()
++    -> anyhow::Result<()> {
++        let scratch = Scratch::new()?;
++        let name = "Localized package 玩家.zip";
++        let bytes = b"complete package";
++        std::fs::write(scratch.0.join(name), bytes)?;
++        let hash = blake3::hash(bytes).to_string();
++        let mut manifest = json!({"format":"ara.distribution/1","buildId":"fixture","platform":"windows",
++            "entryPoint":"Game.exe","files":{},"packages":{name:{"hash":hash,"bytes":bytes.len(),"executable":false}},
++            "symbols":"symbols/fixture.zip","signing":"unsigned"});
++        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
++        let artifacts = package_artifacts(&scratch.0)?;
++        assert_eq!(artifacts.len(), 1);
++        assert_eq!(
++            artifacts[0].path,
++            dunce::canonicalize(scratch.0.join(name))?
++        );
++        assert_eq!(artifacts[0].hash, hash);
++        assert_eq!(artifacts[0].bytes, bytes.len() as u64);
++        manifest["packages"][name]["bytes"] = json!(bytes.len() + 1);
++        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
++        assert!(package_artifacts(&scratch.0).is_err());
++        manifest["packages"] = json!({"../outside.zip":{"hash":hash,"bytes":0,"executable":false}});
++        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
++        assert!(package_artifacts(&scratch.0).is_err());
++        Ok(())
++    }
++
++    #[test]
+     fn content_identified_builds_preserve_an_existing_result() -> anyhow::Result<()> {
+         let scratch = Scratch::new()?;
+         let parent = scratch.0.join("builds/windows");
+diff --git a/crates/ara-editor/src/shell/build_options.rs b/crates/ara-editor/src/shell/build_options.rs
+--- a/crates/ara-editor/src/shell/build_options.rs
++++ b/crates/ara-editor/src/shell/build_options.rs
+@@ -1,6 +1,7 @@
+ //! Native build-profile selection and optional output-envelope prompt.
+ //! The worker's semantic file index supplies profiles; build.rs owns exporting.
+ use super::*;
++use ara_export::preset::PackageFormat;
+ use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
+ use ara_ui::{
+     dialogs::{DialogFuture, DialogOptions},
+@@ -15,6 +16,7 @@
+ 
+ struct Pending {
+     profile: String,
++    format: Option<PackageFormat>,
+     response: DialogFuture<Option<String>>,
+ }
+ 
+@@ -22,6 +24,8 @@
+ #[derive(Default)]
+ pub(crate) struct State {
+     open: bool,
++    package: bool,
++    format: Option<PackageFormat>,
+     pending: Option<Pending>,
+ }
+ 
+@@ -97,6 +101,15 @@
+ 
+     /// Open an input-trapping shared-kit modal without inspecting project files.
+     pub(crate) fn open_build_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.open_export_options(editor, false)
++    }
++
++    /// Choose a real export package format, using the existing profile/output form.
++    pub(crate) fn open_package_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.open_export_options(editor, true)
++    }
++
++    fn open_export_options(&mut self, editor: &mut Editor, package: bool) -> ara_ui::Result<()> {
+         if self.dialog.is_some() || self.confirmations.is_open() {
+             return Err(
+                 "Finish or close the current dialog, then open Build Profiles again".into(),
+@@ -111,6 +124,32 @@
+         self.leave();
+         self.menu = None;
+         self.build_options.open = true;
++        self.build_options.package = package;
++        self.rebuild(editor)
++    }
++
++    pub(super) fn choose_package_format(&mut self, value: Value) -> ara_ui::Result<()> {
++        if !self.build_options.open || !self.build_options.package {
++            return Err("The package form is no longer open".into());
++        }
++        let format = serde_json::from_value(value)
++            .map_err(|error| format!("Choose a supported package format: {error}"))?;
++        self.build_options.format = Some(format);
++        Ok(())
++    }
++
++    /// Lower the reviewed profile and format to the existing nonblocking worker.
++    pub(crate) fn package_selected(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        if !self.build_options.open || !self.build_options.package {
++            return self.open_package_options(editor);
++        }
++        let profile = self.selected_build_profile(editor)?;
++        let format = self
++            .build_options
++            .format
++            .unwrap_or(PackageFormat::WindowsPortable);
++        self.package_profile(editor, &profile, None, format)?;
++        self.build_options.open = false;
+         self.rebuild(editor)
+     }
+ 
+@@ -149,13 +188,25 @@
+             return Ok(());
+         }
+         let profile = self.selected_build_profile(editor)?;
++        let format = (self.build_options.open && self.build_options.package).then(|| {
++            self.build_options
++                .format
++                .unwrap_or(PackageFormat::WindowsPortable)
++        });
+         let mut options = DialogOptions::new(
+-            format!("Build {profile}"),
++            format!(
++                "{} {profile}",
++                if format.is_some() { "Package" } else { "Build" }
++            ),
+             "Enter a new output folder. Leave this empty to let Ara generate a fresh folder under builds for this profile. Existing build folders are preserved.",
+         );
+-        options.accept_label = "Build".into();
++        options.accept_label = if format.is_some() { "Package" } else { "Build" }.into();
+         let response = self.confirmations.prompt(options, String::new());
+-        self.build_options.pending = Some(Pending { profile, response });
++        self.build_options.pending = Some(Pending {
++            profile,
++            format,
++            response,
++        });
+         self.build_options.open = false;
+         self.menu = None;
+         self.rebuild(editor)
+@@ -190,7 +241,12 @@
+                 }
+                 let destination = destination.trim();
+                 let destination = (!destination.is_empty()).then(|| PathBuf::from(destination));
+-                self.build_profile(editor, &pending.profile, destination)
++                match pending.format {
++                    Some(format) => {
++                        self.package_profile(editor, &pending.profile, destination, format)
++                    }
++                    None => self.build_profile(editor, &pending.profile, destination),
++                }
+             })();
+             match result {
+                 Ok(()) => self.build_options.open = false,
+@@ -214,7 +270,14 @@
+         let current = selected
+             .as_ref()
+             .map_or(Value::Null, |profile| json!(profile));
+-        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='Build options' default-action='build-options-build'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-width:100%;max-height:{height}px;min-height:0px'><text id='build-options-title' class='kit-dialog-title' style='flex-shrink:0' text='Build options' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px'><panel id='build-options-profile' style='min-width:0px;flex-shrink:0;gap:4px'><text id='build-profile-label' text='Build profile' />"));
++        let package = self.build_options.package;
++        let title = if package { "Package" } else { "Build options" };
++        let confirm = if package {
++            "package-options-build"
++        } else {
++            "build-options-build"
++        };
++        out.push_str(&format!("<modal id='{ROOT}' class='kit-dialog-layer' label='{title}' default-action='{confirm}'><panel id='build-options-backdrop' class='kit-dialog-backdrop' /><panel id='build-options-body' class='kit-dialog' style='width:{width}px;max-width:100%;max-height:{height}px;min-height:0px'><text id='build-options-title' class='kit-dialog-title' style='flex-shrink:0' text='{title}' /><scroll id='build-options-scroll' class='kit-dialog-body' style='min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px'><panel id='build-options-profile' style='min-width:0px;flex-shrink:0;gap:4px'><text id='build-profile-label' text='Build profile' />"));
+         self.choice_button(
+             CONTROL,
+             "Build profile",
+@@ -229,6 +292,27 @@
+             out,
+         );
+         out.push_str("</panel>");
++        if package {
++            out.push_str("<panel id='package-format-field' style='min-width:0px;flex-shrink:0;gap:4px'><text id='package-format-label' text='Package format' />");
++            self.choice_button(
++                "package-format-select",
++                "Package format",
++                choices::Select {
++                    destination: choices::Destination::PackageFormat,
++                    options: package_formats()
++                        .into_iter()
++                        .map(|(format, label)| (json!(format), label.into()))
++                        .collect(),
++                    current: json!(
++                        self.build_options
++                            .format
++                            .unwrap_or(PackageFormat::WindowsPortable)
++                    ),
++                },
++                out,
++            );
++            out.push_str("</panel><text id='package-format-help' class='caption' style='white-space:normal;flex-shrink:0' text='The format must match the profile platform. Installers and AppImages require their pinned tooling; Android distribution requires release signing. Ara checks these before starting.' />");
++        }
+         if let Err(error) = &selected {
+             out.push_str(&format!("<text id='build-profile-problem' class='caption' style='white-space:normal;flex-shrink:0' text='{}' />", escape(&error.to_string())));
+         }
+@@ -240,7 +324,26 @@
+             );
+             out.push_str("<button id='build-profile-create' class='kit-dialog-button ghost' text='Create default profile' action='Dispatch' />");
+         }
+-        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' /></scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap;flex-shrink:0;min-width:0px'>");
++        out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' />");
++        if let Some(game) = &self.last_build {
++            out.push_str(&format!("<text id='package-result-player-title' class='caption' style='flex-shrink:0' text='Last completed player folder' /><text id='package-result-player-path' class='mono caption' style='white-space:normal;flex-shrink:0' text='{}' />",escape(&game.to_string_lossy())));
++        }
++        if !self.last_packages.is_empty() {
++            out.push_str("<text id='package-result-title' class='caption' text='Last completed package files' style='flex-shrink:0' />");
++            for index in 0..self.last_packages.len() {
++                let artifact = &self.last_packages[index];
++                let path = artifact.path.to_string_lossy().into_owned();
++                let bytes = artifact.bytes;
++                let id = format!("package-result-{:016x}", ara_ui::source::stable_id(&path));
++                self.bind_command(
++                    &id,
++                    "build.package.reveal",
++                    commands::Target::Text(path.clone()),
++                );
++                out.push_str(&format!("<text id='{id}-path' class='mono caption' style='white-space:normal;flex-shrink:0' text='{}' /><button id='{id}' class='kit-dialog-button ghost' text='Reveal ({} bytes)' action='Dispatch' style='flex-shrink:0' />",escape(&path),bytes));
++            }
++        }
++        out.push_str("</scroll><panel id='build-options-actions' class='kit-dialog-actions' style='flex-wrap:wrap;flex-shrink:0;min-width:0px'>");
+         for (id, command, label, primary) in [
+             ("build-options-close", "build.options.close", "Close", false),
+             (
+@@ -249,7 +352,16 @@
+                 "Choose output…",
+                 false,
+             ),
+-            ("build-options-build", "build.current", "Build", true),
++            (
++                confirm,
++                if package {
++                    "build.package.confirm"
++                } else {
++                    "build.current"
++                },
++                if package { "Package" } else { "Build" },
++                true,
++            ),
+         ] {
+             self.bind_command(id, command, commands::Target::None);
+             let disabled = command != "build.options.close" && selected.is_err();
+@@ -275,6 +387,17 @@
+         }
+         Ok(true)
+     }
++}
++
++fn package_formats() -> [(PackageFormat, &'static str); 6] {
++    [
++        (PackageFormat::Folder, "Plain folder"),
++        (PackageFormat::WindowsPortable, "Windows portable ZIP"),
++        (PackageFormat::WindowsInstaller, "Windows installer + ZIP"),
++        (PackageFormat::LinuxAppimage, "Linux AppImage"),
++        (PackageFormat::LinuxTar, "Linux tar.gz"),
++        (PackageFormat::AndroidPlay, "Android APK + AAB"),
++    ]
+ }
+ 
+ fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&'a str> {
+diff --git a/crates/ara-editor/src/shell/build_options/tests.rs b/crates/ara-editor/src/shell/build_options/tests.rs
+--- a/crates/ara-editor/src/shell/build_options/tests.rs
++++ b/crates/ara-editor/src/shell/build_options/tests.rs
+@@ -22,6 +22,112 @@
+     ] {
+         assert!(profile_name(path).is_none(), "{path}");
+     }
++}
++
++#[test]
++fn package_form_uses_all_real_formats_and_a_distinct_confirm_command() {
++    let project = Project::new();
++    let mut editor = Editor::open(&project.0).unwrap();
++    let mut shell = Shell::new(&mut editor, [1120., 780.]).unwrap();
++    shell.offscreen = true;
++    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++    while shell.browser.revision == 0
++        && shell.browser.files.is_empty()
++        && shell.browser.error.is_none()
++        && std::time::Instant::now() < deadline
++    {
++        shell.browser.poll();
++        std::thread::yield_now();
++    }
++    assert!(shell.browser.revision > 0 || !shell.browser.files.is_empty());
++    shell.browser.files = vec![AuthoredFile {
++        path: "settings/builds/windows.export.json".into(),
++        storage_path: "settings/builds/windows.export.json".into(),
++        scope: AuthoredScope::Project,
++        role: AuthoredRole::BuildPreset,
++    }];
++    shell.browser.revision += 1;
++    let revision = editor.host.store().revision();
++    shell.open_package_options(&mut editor).unwrap();
++    shell.frame().unwrap();
++    visible(&shell, "package-format-select");
++    visible(&shell, "package-options-build");
++    bounded(&shell, "build-options-body");
++    let formats = package_formats();
++    assert_eq!(formats.len(), 6);
++    let mut clipboard = crate::native::SessionClipboard::new(true);
++    let click = |shell: &mut Shell,
++                 editor: &mut Editor,
++                 id: &str,
++                 clipboard: &mut crate::native::SessionClipboard| {
++        let rect = visible(shell, id);
++        let point = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
++        shell
++            .event(InputEvent::PointerDown(point), clipboard)
++            .unwrap();
++        shell
++            .event(InputEvent::PointerUp(point), clipboard)
++            .unwrap();
++        shell.dispatch(editor).unwrap();
++        shell.frame().unwrap();
++    };
++    click(
++        &mut shell,
++        &mut editor,
++        "package-format-select",
++        &mut clipboard,
++    );
++    assert!(shell.choice_open());
++    for (_, label) in formats {
++        assert!(
++            shell.ui.nodes.iter().any(|node| node
++                .element
++                .id
++                .starts_with("choice-package-format-select-option-")
++                && node
++                    .element
++                    .attrs
++                    .get("label")
++                    .is_some_and(|shown| shown == label)),
++            "missing format {label}"
++        );
++    }
++    let option = shell
++        .ui
++        .nodes
++        .iter()
++        .find(|node| {
++            node.element
++                .id
++                .starts_with("choice-package-format-select-option-")
++                && node
++                    .element
++                    .attrs
++                    .get("label")
++                    .is_some_and(|label| label == "Linux tar.gz")
++        })
++        .unwrap()
++        .element
++        .id
++        .clone();
++    click(&mut shell, &mut editor, &option, &mut clipboard);
++    assert_eq!(json!(shell.build_options.format), "linuxTar");
++    assert!(!shell.choice_open());
++    assert!(
++        shell.build.is_none(),
++        "choosing the format does not start an export"
++    );
++    assert_eq!(editor.host.store().revision(), revision);
++    assert!(!project.0.join("builds").exists());
++    shell.close_build_options(&mut editor).unwrap();
++    shell.open_build_options(&mut editor).unwrap();
++    shell.frame().unwrap();
++    assert!(
++        !shell.build_options.package,
++        "normal Build must not inherit Package intent"
++    );
++    visible(&shell, "build-options-build");
++    assert!(shell.shown_node("package-options-build").is_none());
+ }
+ #[test]
+ fn a_removed_explicit_profile_never_builds_a_different_first_profile() {
+diff --git a/crates/ara-editor/src/shell/choices.rs b/crates/ara-editor/src/shell/choices.rs
+--- a/crates/ara-editor/src/shell/choices.rs
++++ b/crates/ara-editor/src/shell/choices.rs
+@@ -22,6 +22,7 @@
+         key: String,
+     },
+     ImportGroup,
++    PackageFormat,
+     Field(String),
+     Append {
+         field: String,
+@@ -198,6 +199,7 @@
+                 self.commit_import_fields(editor)?;
+                 self.choose_import_group(value)?;
+             }
++            Destination::PackageFormat => self.choose_package_format(value)?,
+             Destination::Field(path) => {
+                 editor.apply(
+                     self.field_commands(editor, &editor.state.selection, path, value)?,
+diff --git a/crates/ara-editor/src/shell/commands/table.rs b/crates/ara-editor/src/shell/commands/table.rs
+--- a/crates/ara-editor/src/shell/commands/table.rs
++++ b/crates/ara-editor/src/shell/commands/table.rs
+@@ -599,7 +599,9 @@
+             BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
+             _ => Avail::Ready,
+         }),
+-        later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
++        cmd("build.package", "Package…", "package", "", "Choose an export profile, package format and output envelope.", |s,e,_|s.open_package_options(e)),
++        cmd("build.package.confirm", "Create Package", "package", "", "Save the authored project, then export the selected package format.", |s,e,_|s.package_selected(e)).when(|c|if c.build.running {Avail::Blocked("A build is running".into())} else {Avail::Ready}),
++        cmd("build.package.reveal", "Reveal Package", "folder", "", "Reveal an actual artifact from the completed export manifest.", |s,_,t|s.reveal_package(t)),
+         cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
+             let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
+             std::fs::create_dir_all(&folder)?;
+diff --git a/crates/ara-editor/src/shell/mod.rs b/crates/ara-editor/src/shell/mod.rs
+--- a/crates/ara-editor/src/shell/mod.rs
++++ b/crates/ara-editor/src/shell/mod.rs
+@@ -226,6 +226,7 @@
+     pub(crate) build: Option<build::BuildJob>,
+     /// The last finished build's game folder (Build > Run Build, Open Build Folder).
+     pub(crate) last_build: Option<std::path::PathBuf>,
++    last_packages: Vec<build::PackageArtifact>,
+     /// A running headless Run Build (offscreen runs).
+     pub(crate) run: Option<std::sync::mpsc::Receiver<build::RunResult>>,
+     /// The capture the last headless Run Build wrote.
+@@ -570,6 +571,7 @@
+             assets_show_all: false,
+             build: None,
+             last_build: None,
++            last_packages: Vec::new(),
+             run: None,
+             last_run: None,
+             offscreen: false,
+@@ -1713,7 +1715,7 @@
+     }
+     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
+     pub fn layout_report(&self) -> Value {
+-        json!({"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
++        json!({"packageResult":self.package_result(),"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+     }
+     /// Cached authoring prefix; empty identifies a still-readable legacy project.
+     pub(crate) fn asset_reference_root(&self) -> &str {

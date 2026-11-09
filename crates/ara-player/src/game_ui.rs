@@ -230,6 +230,10 @@ impl Surface {
         let gpu = self.gpu.as_mut().context("native UI allocated")?;
         // Lay out in window points; draw and rasterize text at physical pixels.
         gpu.set_dpi(self.scale)?;
+        // Composite at exactly the scene's pixels: the whole-point layout extent times
+        // a fractional scale (1.25, 1.5) misses them by a pixel, and the published or
+        // presented composite would then be resampled (scene and HUD a pixel soft).
+        gpu.pin_target_size(presenter.size());
         self.renderer
             .set_raster_scale(self.scale)
             .map_err(ui_error)?;

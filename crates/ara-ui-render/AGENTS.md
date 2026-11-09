@@ -20,7 +20,7 @@ ara-gpu/editor-shell adapter checklist:
 2. Upload RGBA8 texture pages by opaque ID; copy upload bytes before returning.
 3. Map `Instance` to a 64-byte, 16-aligned structured-buffer stride (four float4 records).
 4. Bind instances at binding 0, bindless sampled images at 1, linear-clamp sampler at 2, set 0.
-5. Supply the 32-byte push constants: first instance, texture index, mode, reserved, viewport, padding.
+5. Supply the 32-byte push constants: first instance, texture index, mode, reserved, viewport, dpi, padding.
 6. Draw six vertices per instance, preserving batch/painter order. Do not sort transparent batches.
 7. Intersect rectangular clip ancestors into a scissor; rounded ancestors intersect stencil/masks.
 8. UI output is premultiplied RGBA8 UNORM in sRGB numeric space, ONE / ONE_MINUS_SRC_ALPHA blending.
@@ -56,3 +56,10 @@ instance ABI: UV stores local endpoints and parameters.x stores the half width.
 
 `Draw::Image.tint` becomes the instance color: white leaves images unchanged, a text
 color tints white icons (both backends multiply color by the sampled texel).
+
+Satin materials (D31): `Draw::Shadow` is `Pipeline::Shadow` (mode 10: analytic Gaussian
+box-shadow; outer cut out under the box, inset kept inside; `shadow_margin` sizes the
+quad). `Draw::Backdrop` is `Pipeline::Backdrop` (mode 11, one instance per batch): the
+adapter blurs its target horizontally into a same-size scratch (`backdrop_band`), then
+vertically back inside the shape with saturation. `CpuGpu` runs the same math
+(`tests/materials.rs`); keep shader and CPU twins in step.

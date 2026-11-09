@@ -225,6 +225,15 @@ impl HotReload {
                             if let Some(staged) = self.ready.insert(asset.clone(), cached) {
                                 let _ = self.retired.send(staged);
                             }
+                            if terminal {
+                                // Retires this asset's earlier import failures on the bus.
+                                ara_diag::Diagnostic::info(
+                                    ara_diag::codes::ASSET_IMPORTED,
+                                    format!("`{asset}` imported"),
+                                )
+                                .subject(ara_diag::Subject::asset(format!("@{asset}")))
+                                .emit();
+                            }
                             events.push(ReloadEvent::Ready {
                                 asset,
                                 cache_hit,

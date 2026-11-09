@@ -46,6 +46,35 @@ pub enum ViewMode {
     /// per legend band ([`OverdrawStats`]). Only where [`RenderCapabilities::overdraw`]
     /// holds.
     Overdraw = 10,
+    /// Each surface's linear vertex colour RGB (imported `COLOR_0` or per-instance
+    /// paint; white without), unlit, as stored: 0.5 shows mid-grey. Blended surfaces
+    /// draw opaque. Only where [`RenderCapabilities::vertex_colors`] holds.
+    VertexColor = 11,
+    /// The vertex colour's red channel alone, as grey.
+    VertexColorRed = 12,
+    /// The vertex colour's green channel alone, as grey.
+    VertexColorGreen = 13,
+    /// The vertex colour's blue channel alone, as grey.
+    VertexColorBlue = 14,
+    /// The vertex colour's alpha channel alone, as grey.
+    VertexColorAlpha = 15,
+    /// Deferred decals per pixel on the overdraw heat legend (1 blue, 2 green, 4
+    /// yellow, 8 orange, 16 or more red) over the dimmed scene albedo: where decals
+    /// land, how many stack, and which surfaces refuse them. Only where
+    /// [`RenderCapabilities::decals`] holds.
+    DecalCoverage = 16,
+    /// Local-light shading cost per pixel (Unreal's light complexity) on the
+    /// [`Overdraw`](Self::Overdraw) heat legend: each light reaching the opaque surface
+    /// (in range, in front of a rect or disc, within a spot's cone) counts one, an
+    /// area light (sphere, tube, rect or disc) three, and one more when it has a local
+    /// shadow this frame. Black where none reach; the background is black.
+    LightComplexity = 17,
+    /// Soft-shadow penumbra widths (`shaders/look-shadow.slangh`): the widest
+    /// kernel half-width of the sun and the shadowed local lights reaching each opaque
+    /// surface, on the [`Overdraw`](Self::Overdraw) legend as sqrt(width / 1 cm): 1 cm
+    /// blue, 4 cm green, 16 cm yellow, 64 cm orange, 2.56 m or more red; grey where
+    /// no blocker is near; darker where shadowed. The background is black.
+    ShadowPenumbra = 18,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -72,6 +101,14 @@ impl ViewMode {
             Self::LitWireframe => "lit_wireframe",
             Self::GiDiffuse => "gi_diffuse",
             Self::Overdraw => "overdraw",
+            Self::VertexColor => "vertex_color",
+            Self::VertexColorRed => "vertex_color_red",
+            Self::VertexColorGreen => "vertex_color_green",
+            Self::VertexColorBlue => "vertex_color_blue",
+            Self::VertexColorAlpha => "vertex_color_alpha",
+            Self::DecalCoverage => "decal_coverage",
+            Self::LightComplexity => "light_complexity",
+            Self::ShadowPenumbra => "shadow_penumbra",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).
@@ -81,6 +118,17 @@ impl ViewMode {
     /// Draws triangle edges over the image.
     pub fn wire(self) -> bool {
         matches!(self, Self::Wireframe | Self::LitWireframe)
+    }
+    /// The vertex-colour views' channel: 0 RGB, then 1-4 for R, G, B and A alone.
+    pub fn vertex_color(self) -> Option<u32> {
+        match self {
+            Self::VertexColor => Some(0),
+            Self::VertexColorRed => Some(1),
+            Self::VertexColorGreen => Some(2),
+            Self::VertexColorBlue => Some(3),
+            Self::VertexColorAlpha => Some(4),
+            _ => None,
+        }
     }
     /// The debug view ID shaders read (`Frame.temporal.z`): lit modes are 0.
     pub(crate) fn shader_mode(self) -> u32 {
@@ -100,8 +148,14 @@ pub struct RenderCapabilities {
     pub gi_diffuse: bool,
     /// [`ViewMode::Overdraw`] is available.
     pub overdraw: bool,
+    /// The vertex-colour views ([`ViewMode::vertex_color`]) are available.
+    #[serde(default)]
+    pub vertex_colors: bool,
+    /// Deferred decals draw and [`ViewMode::DecalCoverage`] is available.
+    #[serde(default)]
+    pub decals: bool,
     /// For each capability that is `false`, why (keys `reflectionProbes`,
-    /// `giDiffuse`, `overdraw`).
+    /// `giDiffuse`, `overdraw`, `vertexColors`, `decals`).
     pub reasons: std::collections::BTreeMap<String, String>,
 }
 /// Agent-visible capture contract; no wall-clock values enter rendering.

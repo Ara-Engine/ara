@@ -17,6 +17,7 @@ mod hotpatch;
 mod hygiene;
 mod known;
 mod lab;
+mod live;
 mod manifest;
 mod merge;
 mod perf;
@@ -65,6 +66,8 @@ enum Command {
     Lab(lab::Options),
     /// Run a development player/editor under the optional Rust patch driver.
     Hotpatch(hotpatch::Options),
+    /// Keep a dev Hub/editor open: CSS saves apply live, Rust saves rebuild and relaunch.
+    Live(live::Options),
     /// Prepare signed local Hub/engine previews; --publish explicitly uploads them.
     Preview(preview::Options),
     /// Measure every D26/D27 release target; writes target/d26/<timestamp>/report.html.
@@ -177,6 +180,7 @@ fn run() -> Result<bool> {
         Command::Perf(options) => perf::run(&root, options),
         Command::Lab(options) => lab::run(&root, options),
         Command::Hotpatch(options) => hotpatch::run(&root, options),
+        Command::Live(options) => live::run(&root, options),
         Command::Preview(options) => preview::run(&root, options),
         Command::D26(options) => d26::run(&root, options),
         Command::Check {

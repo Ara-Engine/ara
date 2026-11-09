@@ -15,6 +15,50 @@ pub const MODEL_BOUNDS: u32 = 1 << 27;
 /// own side (its normal reversed, as glTF requires); single-sided materials keep
 /// their normals.
 pub const DOUBLE_SIDED: u32 = 1 << 28;
+/// `Material.flags[1]`: base colour and opacity multiply by the vertex colour
+/// (glTF `COLOR_0`, per-instance paint). Without it vertex colours stay data
+/// that only vertex-paint layers and debug views read.
+pub const VERTEX_COLOR_TINT: u32 = 1 << 29;
+/// `Material.flags[1]`: a vertex-paint layered material (Unreal's VertexColor
+/// lerps between material layers). Native `MaterialExtras::terrain_layers` counts
+/// its layers and `layer_materials` names them, as for terrain splats, but each
+/// layer's weight comes from the vertex colour: `flags[2]` holds one byte per
+/// layer (layer `i` in bits `8i..8i+8`), two bits per channel R, G, B, A
+/// ([`PaintWeight`]); the weight is the product of the used channels' terms.
+pub const VERTEX_PAINT_LAYERS: u32 = 1 << 30;
+
+/// How one vertex-colour channel scales a paint layer's weight
+/// ([`VERTEX_PAINT_LAYERS`]): the material graph's lerp tree, flattened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(u8)]
+pub enum PaintWeight {
+    /// The channel does not affect this layer.
+    #[default]
+    Unused = 0,
+    /// Weight times the channel value `c` (the lerp's second input).
+    Channel = 1,
+    /// Weight times `1 - c` (the lerp's first input).
+    Inverse = 2,
+}
+
+impl PaintWeight {
+    /// Packs one layer's four channel terms (R, G, B, A) into its `flags[2]` byte.
+    pub fn pack(channels: [Self; 4]) -> u8 {
+        channels
+            .iter()
+            .enumerate()
+            .fold(0, |byte, (i, term)| byte | ((*term as u8) << (2 * i)))
+    }
+    /// The weight of a layer byte at linear vertex colour `rgba`, as the shader
+    /// evaluates it.
+    pub fn weight(byte: u8, rgba: [f32; 4]) -> f32 {
+        (0..4).fold(1.0, |w, i| match (byte >> (2 * i)) & 3 {
+            1 => w * rgba[i],
+            2 => w * (1.0 - rgba[i]),
+            _ => w,
+        })
+    }
+}
 
 /// Interleaved position/normal/UV/tangent vertex ABI, 48 bytes.
 #[repr(C)]
@@ -42,8 +86,9 @@ pub struct Material {
     /// Scene texture indices: base color (sRGB), normal, metallic/roughness (G/B), emissive (sRGB).
     pub textures: [u32; 4],
     /// Word 0: alpha mode (opaque/mask/blend). Word 1: layer/AO bits 0..24 and
-    /// decode-after-sampling bits 25/26, unpublished model bounds bit 27 and
-    /// double-sided bit 28.
+    /// decode-after-sampling bits 25/26, unpublished model bounds bit 27,
+    /// double-sided bit 28, vertex-colour tint bit 29 and paint layers bit 30.
+    /// Word 2: paint layer weights ([`VERTEX_PAINT_LAYERS`]) on native content.
     /// Word 3 is reserved for the fidelity tag.
     pub flags: [u32; 4],
 }
@@ -71,21 +116,108 @@ pub struct Mesh {
     /// Index into the scene material list.
     pub material: usize,
 }
-/// Point/spot light with physical output units.
+/// A local light with physical output units (`LIGHT_BYTES`; shaders/look-lights.slangh):
+/// an ideal point or spot, a sphere or tube source (a point or spot with a source
+/// radius, and a length), a rect with barn doors or a disc. Area sources emit uniform
+/// luminance: the intensity along their axis over their projected area. Fields beyond
+/// the first four default to zero (`..Light::zeroed()`): no shape, no tables.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Light {
-    /// World position in metres and finite influence radius in metres.
+    /// World position (a shape's centre) in metres and finite influence radius in
+    /// metres, measured from it.
     pub position_range: [f32; 4],
-    /// Linear RGB tint and luminous flux in lumens.
+    /// Linear RGB tint and point-equivalent lumens: 4 pi times the luminous intensity
+    /// in candela, along `direction_outer` for rects and discs, in every direction for
+    /// points and spots (their luminous flux; a spot's cone masks it, as in the path
+    /// tracer). Far-field consumers treat every kind as a point of this flux.
     pub color_lumens: [f32; 4],
-    /// Spot forward direction xyz and cosine of outer cone half-angle.
+    /// Emission axis xyz (a spot's cone, a rect's or disc's normal, a light profile's
+    /// nadir) and the cosine of a spot's outer cone half-angle (zero for other kinds).
     pub direction_outer: [f32; 4],
-    /// Type (0 point, 1 spot), inner cone cosine, source radius in metres (the
-    /// near field softens inside it; zero for an ideal point), and w: one keeps
-    /// the light out of fog in-scattering (emitter lights), zero includes it.
+    /// x the kind ([`LIGHT_POINT`], [`LIGHT_SPOT`], [`LIGHT_RECT`], [`LIGHT_DISC`]),
+    /// plus [`LIGHT_SHAPED`] when a point or spot has a light profile; y a spot's inner
+    /// cone cosine; z the source radius in metres (sphere or tube radius, disc radius;
+    /// zero for an ideal point); w its volumetric fog scattering intensity (Unreal's;
+    /// 1 physical, 0 keeps it out of fog, as emitter lights are).
     pub parameters: [f32; 4],
+    /// Unit width axis xyz (a rect's width, a tube's axis, a profile's zero azimuth)
+    /// and the tube's length in metres (zero: a sphere).
+    pub tangent_length: [f32; 4],
+    /// A rect's half width and half height in metres, then where its barn doors' tips
+    /// lie: outward of the edges and along the normal, in metres (zero: no doors).
+    pub rect: [f32; 4],
+    /// Light-table offsets in words (`Renderer::set_light_tables`; zero none): x the
+    /// light profile; y, z, w reserved.
+    pub tables: [u32; 4],
 }
+
+impl Light {
+    /// Every field zero: an ideal point light, no shape and no tables. Literals spell
+    /// the fields they use and take the rest from it (`..Light::ZERO`).
+    pub const ZERO: Self = Self {
+        position_range: [0.; 4],
+        color_lumens: [0.; 4],
+        direction_outer: [0.; 4],
+        parameters: [0.; 4],
+        tangent_length: [0.; 4],
+        rect: [0.; 4],
+        tables: [0; 4],
+    };
+
+    /// Whether the record is well formed: finite, a positive range and non-negative
+    /// output, a known kind, unit axes where the kind uses them (a spot's cone, a
+    /// rect's or disc's normal and width axis; a spot's axis is any non-zero vector),
+    /// a valid cone, non-negative sizes and fog scattering intensity.
+    pub fn is_valid(&self) -> bool {
+        let unit = |v: &[f32]| (glam::Vec3::from_slice(v).length() - 1.).abs() < 1e-3;
+        let kind = self.parameters[0];
+        let base = kind % LIGHT_SHAPED;
+        let finite = self
+            .position_range
+            .iter()
+            .chain(&self.color_lumens)
+            .chain(&self.direction_outer)
+            .chain(&self.parameters)
+            .chain(&self.tangent_length)
+            .chain(&self.rect)
+            .all(|v| v.is_finite());
+        let cone = || {
+            glam::Vec3::from_slice(&self.direction_outer[..3]).length_squared() > 1e-8
+                && (-1.0..=1.0).contains(&self.direction_outer[3])
+                && (self.direction_outer[3]..=1.0).contains(&self.parameters[1])
+        };
+        finite
+            && self.position_range[3] > 0.
+            && self.color_lumens.iter().all(|v| *v >= 0.)
+            && kind.fract() == 0.
+            && (0. ..LIGHT_SHAPED * 2.).contains(&kind)
+            && (kind < LIGHT_SHAPED || base <= LIGHT_SPOT)
+            && self.parameters[2] >= 0.
+            && self.parameters[3] >= 0.
+            && self.tangent_length[3] >= 0.
+            && self.rect.iter().all(|v| *v >= 0.)
+            && if base == LIGHT_SPOT {
+                cone()
+            } else if base >= LIGHT_RECT {
+                unit(&self.direction_outer[..3]) && unit(&self.tangent_length[..3])
+            } else {
+                self.tangent_length[3] == 0. || unit(&self.tangent_length[..3])
+            }
+    }
+}
+const _: () = assert!(std::mem::size_of::<Light>() == 112);
+
+/// [`Light::parameters`] x for an ideal or sphere/tube point light.
+pub const LIGHT_POINT: f32 = 0.;
+/// A spot light (its cone in `direction_outer` and `parameters.y`).
+pub const LIGHT_SPOT: f32 = 1.;
+/// A one-sided rect light (half extents and barn doors in `rect`).
+pub const LIGHT_RECT: f32 = 2.;
+/// A one-sided disc light (radius in `parameters.z`).
+pub const LIGHT_DISC: f32 = 3.;
+/// Added to a point's or spot's kind when its shape row matters to shading (a profile).
+pub const LIGHT_SHAPED: f32 = 4.;
 
 /// Local lights a scene may hold (analytic lights plus emissive surfaces as
 /// lights); each 16x16 screen tile shades at most [`TILE_LIGHTS`] of them.

@@ -2,8 +2,7 @@
 
 Composes the merged subsystems into one playable world: `ara-sim` session + input
 actions + Jolt physics + ara-anim animation + Recast navigation + cooked assets, with a
-renderer-neutral presentation extraction. No GPU, window or process code (see
-`ara-runtime-render`, `ara-player`).
+renderer-neutral presentation extraction. No GPU, window or process code (`ara-runtime-render`, `ara-player`).
 
 ## Public API
 
@@ -54,13 +53,13 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   diagnostic; the first generation replaces that cooked placeholder at a tick boundary.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
-  ModelVertex retains UV0/UV1; ModelMaterial retains independent slot transforms,
+  ModelVertex retains UV0/UV1 and linear RGBA8 `color` (Primitive keeps `source_vertices` from VSRC and `vertex_colors`); `paint::VertexPaint` stores per-instance colours per source vertex (zlib + base64, `vertexPaint.set/fill/clear` typed commands), mapped onto cooked vertices into `Draw.paint` through `paint::PaintCache` (O(1) per unchanged draw); a changed source vertex count draws unpainted. `decal::Decal` (box `size` around the entity projecting along local -Z, per-channel opacities, distance/angle/screen-size fades, sort order) extracts into `RenderFrame::decals` with its decal-domain `MaterialAsset` (`material::DecalSurface`: opacity/AO channel, specular); `MeshRenderer.receivesDecals` reaches `Draw::receives_decals`. ModelMaterial (glTF `vertex_color_tint`) retains independent slot transforms,
   emissive strength (folded once), transmission and occlusion factors/textures.
   `Model::select` resolves source node names/indices and subtree-local primitives,
   restoring the selected pivot while retaining rotation/scale. Geometry stays shared.
   `MeshRenderer` emission defaults to the imported factor, with explicit enable,
   strength, optional factor and material selectors; `Draw.emissive_factor` replaces
-  the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance.
+  the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance. `castShadows` (and a glTF node's `extras.castShadows: false`, for its subtree: `Primitive::casts_shadows`) gives `Draw.casts_shadows`.
   `MeshRenderer.material_overrides` resolves graph/instance assets into immutable
   `material::MaterialAsset` data at content boundaries; `Draw.material` replaces one
   subtree-local primitive slot. Texture generation metadata stays aligned with bytes.
@@ -76,10 +75,12 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   `AnimAsset` record by `@path#record`; several clips/controllers per file), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
   `MatchState` (trajectory predictor + feature query, predictor snapshotted).
-- `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
+- `extract::RenderFrame`: camera, sun (`sun_atmosphere`: disc scale, per-pixel transmittance; `moon`: the
+  second atmosphere light, `Light::atmosphere_sun_light_index` 1, sky/aerial perspective only), lights, environment, draws (shape or model
   primitive, interpolated world matrix), skin-order palettes and the look (`SceneLook`: sky,
-  fog, every post-process volume, and the volumes' LUTs shared from `Library::luts`, which
-  `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`).
+  fog, enabled `LocalFogVolume`s, every post-process volume, and the volumes' LUTs shared from `Library::luts`, which
+  `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`; lights' IES
+  profiles load alike via `light_profile`, and `LightUnits` resolve to point-equivalent lumens).
 - `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
 - `follow::FollowView::new(rig, target, walls)`: a follow rig's aim, view direction
   and boom, which stops 0.25 m before static solid box colliders (`follow::Wall`).
@@ -91,8 +92,7 @@ Documented in `lib.rs`. Boundary (inputs, patches, commands, streamed arrivals) 
 input → plugin Gameplay → wander → adoption → `navigation.stream` → obstacles → AI
 (`sync → perceive → think → bridge`) → navigation (exclusive) → `ai.locomotion` →
 `animation ∥ navigation.follow` (parallel group) → root motion → terrain chunks /
-physics adoption → physics.push → physics (exclusive) → physics.pull → camera.place →
-plugin Late → poses.resolve.
+physics adoption → physics.push → physics (exclusive) → physics.pull → camera.place → plugin Late → poses.resolve.
 
 ## State and determinism
 

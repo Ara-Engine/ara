@@ -47,6 +47,7 @@ fn main() -> ara_ui::Result<()> {
                 options.verify_behaviours = true;
                 options.behaviour_asset_ops = false;
             }
+            "--verify-profiler" => options.verify_profiler = true,
             "--verify-assets" => options.verify_assets = true,
             "--verify-journey" => options.verify_journey = true,
             "--verify-monkey" => options.verify_monkey = true,
@@ -83,6 +84,7 @@ fn main() -> ara_ui::Result<()> {
             }
             "--verify-first-hour" => options.verify_first_hour = true,
             "--verify-scene-quality" => options.verify_scene_quality = true,
+            "--verify-game-view" => options.verify_game_view = true,
             "--verify-loading" => options.verify_loading = true,
             "--verify-responsiveness" => options.verify_responsiveness = true,
             "--verify-unpresentable" => options.verify_unpresentable = true,

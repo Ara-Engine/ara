@@ -242,6 +242,8 @@ enum Command {
     Run(commands::headless::RunArgs),
     /// Render a scene or camera offscreen into a PNG; never opens a window.
     Capture(commands::headless::CaptureArgs),
+    /// Query or change local user graphics preferences in a running player.
+    Graphics(commands::graphics::GraphicsArgs),
     /// List agent changes awaiting review.
     Review,
     /// Accept agent changes: a transaction, an entity's changes, or `--all`.
@@ -396,6 +398,10 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
         Command::Run(args) => args.call(),
         Command::Fix(args) => args.call(),
         Command::Capture(args) => args.call(),
+        Command::Graphics(args) => match args.call() {
+            Ok(call) => call,
+            Err(diagnostics) => return Some(Err(diagnostics)),
+        },
         _ => return None,
     }))
 }
@@ -560,6 +566,9 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     }
+    // Play, capture and imports spawn the sibling player and import worker; refuse
+    // ones built before their sources changed (`ara_companion`, ARA7308).
+    ara_companion::enforce();
     let cli = Cli::parse();
     let _capture = if matches!(
         &cli.command,

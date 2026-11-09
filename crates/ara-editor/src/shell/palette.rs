@@ -101,7 +101,9 @@ impl Shell {
                         Avail::Blocked(r) => Some(r),
                         _ => None,
                     },
-                    group: if term.is_empty() && recent.is_some() {
+                    group: if spec.id.eq_ignore_ascii_case(&term) {
+                        "Exact command"
+                    } else if term.is_empty() && recent.is_some() {
                         "Recent"
                     } else {
                         "Commands"
@@ -129,8 +131,16 @@ impl Shell {
                         binding: Binding::Palette(name.to_owned()),
                         keys: Vec::new(),
                         reason: None,
-                        group: "Engine commands",
-                        score: s + 5000,
+                        group: if name.eq_ignore_ascii_case(&term) {
+                            "Exact command"
+                        } else {
+                            "Engine commands"
+                        },
+                        score: if name.eq_ignore_ascii_case(&term) {
+                            0
+                        } else {
+                            s + 5000
+                        },
                     });
                 }
             }
@@ -225,12 +235,13 @@ impl Shell {
             }
         }
         let order = |g: &str| match g {
-            "Recent" => 0,
-            "Entities" => 1,
-            "Commands" => 2,
-            "Scenes" => 3,
-            "Assets" => 4,
-            _ => 5,
+            "Exact command" => 0,
+            "Recent" => 1,
+            "Entities" => 2,
+            "Commands" => 3,
+            "Scenes" => 4,
+            "Assets" => 5,
+            _ => 6,
         };
         items.sort_by(|a, b| {
             order(a.group)

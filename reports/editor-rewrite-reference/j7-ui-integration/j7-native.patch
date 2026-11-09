@@ -1,0 +1,419 @@
+diff --git a/crates/ara-editor/src/app/probe_verify.rs b/crates/ara-editor/src/app/probe_verify.rs
+index f7997fcad..f8628c809 100644
+--- a/crates/ara-editor/src/app/probe_verify.rs
++++ b/crates/ara-editor/src/app/probe_verify.rs
+@@ -1,4 +1,5 @@
+ //! Native J7 probe authoring, derived capture receipts and completed debug views.
++mod cache;
+ mod capture;
+ mod fixture;
+ mod input;
+@@ -66,6 +67,8 @@ pub(super) struct ProbeCheck {
+     previous_receipt: Value,
+     active_generation: Option<u64>,
+     renderer: Value,
++    cache_publication: Option<cache::Publication>,
++    view_observation_serial: u64,
+     trace: Vec<Value>,
+     results: Vec<Value>,
+     native_events: usize,
+@@ -91,6 +94,7 @@ impl ProbeCheck {
+             pending_capture: None, job_baseline: BTreeSet::new(), job: None,
+             job_status: Value::Null, snapshot: None, next_query: Instant::now(),
+             previous_receipt: Value::Null, active_generation: None, renderer: Value::Null,
++            cache_publication: None, view_observation_serial: 0,
+             trace: Vec::new(), results: Vec::new(), native_events: 0, case_events: 0,
+             restored: false, error: None,
+         };
+@@ -115,11 +119,19 @@ impl ProbeCheck {
+         }
+         match self.index {6=>Some("gi_diffuse"),7=>Some("overdraw"),_=>None}
+     }
+-    /// `{mode,generation,completed,overdraw}` from capture_completed on a current,
++    /// `{mode,completed,current,overdraw}` from capture_completed on a current,
+     /// ready image whose actual retained raster mode matches `mode`. Request
+     /// metadata alone cannot establish this; missing evidence cannot pass.
+-    pub fn observe_view_mode(&mut self, value: Value) {
++    pub fn observe_view_mode(&mut self, mut value: Value) -> ara_ui::Result<()> {
++        if value["completed"] != true || value["current"] != true {
++            return Err("Native debug observation was not a current completed image".into());
++        }
++        self.view_observation_serial = self.view_observation_serial.checked_add(1)
++            .ok_or("Native debug observation serial exhausted")?;
++        value["observationSerial"] = self.view_observation_serial.into();
++        value["generationScope"] = "completed-image observation serial; not a renderer frame ID".into();
+         self.renderer = value;
++        Ok(())
+     }
+     #[allow(clippy::too_many_arguments, reason = "native owners and actual Scene readiness")]
+     pub fn inject(
+diff --git a/crates/ara-editor/src/app/probe_verify/fixture.rs b/crates/ara-editor/src/app/probe_verify/fixture.rs
+index fdc552467..74f8a96e3 100644
+--- a/crates/ara-editor/src/app/probe_verify/fixture.rs
++++ b/crates/ara-editor/src/app/probe_verify/fixture.rs
+@@ -61,6 +61,7 @@ impl ProbeCheck {
+         self.job_status = Value::Null;
+         self.active_generation = None;
+         self.renderer = Value::Null;
++        self.cache_publication = None;
+         self.next_query = Instant::now();
+         self.pending_capture = Some("before");
+         self.phase = 1;
+diff --git a/crates/ara-editor/src/app/probe_verify/proof.rs b/crates/ara-editor/src/app/probe_verify/proof.rs
+index 3a217242b..1b874e6a4 100644
+--- a/crates/ara-editor/src/app/probe_verify/proof.rs
++++ b/crates/ara-editor/src/app/probe_verify/proof.rs
+@@ -26,7 +26,7 @@ pub(super) fn unchanged(before:&Value,after:&Value)->ara_ui::Result<()> {
+ fn hash(value:&str)->bool {
+     value.len()==64 && value.bytes().all(|byte|byte.is_ascii_hexdigit())
+ }
+-pub(super) fn published_receipt(root:&Path,row:&ProbeRow,receipt:&ProbeReceipt)->ara_ui::Result<Value> {
++pub(super) fn published_receipt(row:&ProbeRow,receipt:&ProbeReceipt)->ara_ui::Result<Value> {
+     if receipt.doc!=SCENE || receipt.entity!=row.entity || receipt.faces!=6 || receipt.resolution!=128
+         || !receipt.published || receipt.generation!=row.generation || receipt.source_revision!=row.scene_revision
+         || receipt.source_hash!=row.source_hash || row.stale || !hash(&receipt.source_hash) || !hash(&receipt.capture_hash) {
+@@ -37,17 +37,16 @@ pub(super) fn published_receipt(root:&Path,row:&ProbeRow,receipt:&ProbeReceipt)-
+         || path.components().any(|part|!matches!(part,std::path::Component::Normal(_))) {
+         return Err("Probe receipt cache path leaves the private project cache".into());
+     }
+-    let cache=root.join(path);
+-    let metadata=std::fs::metadata(&cache)?;
+-    if !metadata.is_file() || metadata.len()==0 {return Err("Published probe cache is absent or empty".into());}
+-    Ok(json!({"path":receipt.cache_path,"absolutePath":cache,"bytes":metadata.len(),"exists":true}))
++    // Done attests publication plus the image hash. Cache IO completes afterward;
++    // the native harness observes its actual file on a separate bounded worker.
++    Ok(json!({"path":receipt.cache_path,"publishedImageHashed":true,"cachePublication":"asynchronous"}))
+ }
+ /// Pending adapters return null. Missing completed-image provenance or actual
+ /// overdraw data never becomes a navigation-only pass.
+ pub(super) fn debug_view(value:&Value,mode:&str)->ara_ui::Result<Value> {
+-    if value.is_null() || value["mode"]!=mode || value["completed"]!=true || value["current"]==false {return Ok(Value::Null)}
+-    if value["generation"].as_u64().is_none_or(|generation|generation==0) {
+-        return Err("Debug view lacks a completed native generation".into());
++    if value.is_null() || value["mode"]!=mode || value["completed"]!=true || value["current"]!=true {return Ok(Value::Null)}
++    if value["observationSerial"].as_u64().is_none_or(|generation|generation==0) {
++        return Err("Debug view lacks a completed-image observation serial".into());
+     }
+     if mode=="overdraw" {
+         let stats=&value["overdraw"];
+diff --git a/crates/ara-editor/src/app/probe_verify/capture.rs b/crates/ara-editor/src/app/probe_verify/capture.rs
+index 5af3c5775..07275beae 100644
+--- a/crates/ara-editor/src/app/probe_verify/capture.rs
++++ b/crates/ara-editor/src/app/probe_verify/capture.rs
+@@ -97,9 +97,15 @@ impl ProbeCheck {
+         if !self.job_status["result"]["receipts"].as_array().is_some_and(|receipts|receipts.iter().any(|item|item==&receipt_json)) {
+             return Err("Renderer receipt was not the native gesture's Host job receipt".into());
+         }
+-        let cache=proof::published_receipt(editor.host.root(),row,receipt)?;
++        let validated=proof::published_receipt(row,receipt)?;
++        let cache_path=receipt.cache_path.clone();
++        let row=serde_json::to_value(row)?;
++        if self.cache_publication.is_none() {
++            self.cache_publication=Some(cache::Publication::start(editor.host.root().to_path_buf(),cache_path)?);
++        }
++        let Some(cache)=self.cache_publication.as_ref().ok_or("Cache observation missing")?.poll()? else {return Ok(())};
+         proof::unchanged(&self.before,&fixture::snapshot(editor)?)?;
+-        self.complete=Some(json!({"nativeRecapture":true,"job":self.job_status,"row":row,"cache":cache,
++        self.complete=Some(json!({"nativeRecapture":true,"job":self.job_status,"row":row,"receiptValidation":validated,"cache":cache,
+             "captureDoesNotAuthor":true,"cacheHashScope":"CaptureHash identifies filtered capture data; file byte length/path are observed separately"}));
+         Ok(())
+     }
+diff --git a/crates/ara-editor/src/app/probe_verify/proof/tests.rs b/crates/ara-editor/src/app/probe_verify/proof/tests.rs
+index fb71632d1..0517bd18d 100644
+--- a/crates/ara-editor/src/app/probe_verify/proof/tests.rs
++++ b/crates/ara-editor/src/app/probe_verify/proof/tests.rs
+@@ -2,18 +2,18 @@
+ #![allow(clippy::unwrap_used)]
+ use super::*;
+ use ara_runtime_render::probes::ProbeState;
+-use std::sync::atomic::{AtomicU64,Ordering};
++
+ 
+ #[test]
+ fn requested_or_stale_debug_modes_cannot_stand_in_for_completed_renderer_output() {
+     for value in [Value::Null,json!({"mode":"gi_diffuse"}),
+-        json!({"mode":"gi_diffuse","generation":1,"completed":true,"current":false}),
+-        json!({"mode":"lit","generation":1,"completed":true,"current":true})] {
++        json!({"mode":"gi_diffuse","observationSerial":1,"completed":true,"current":false}),
++        json!({"mode":"lit","observationSerial":1,"completed":true,"current":true})] {
+         assert!(debug_view(&value,"gi_diffuse").unwrap().is_null());
+     }
+-    assert!(debug_view(&json!({"mode":"gi_diffuse","generation":0,"completed":true,"current":true}),"gi_diffuse").is_err());
+-    assert!(debug_view(&json!({"mode":"overdraw","generation":2,"completed":true,"current":true}),"overdraw").is_err());
+-    let completed=json!({"mode":"overdraw","generation":2,"completed":true,"overdraw":{"max":3,"pixels":10,"bands":[2,4,4,0,0,0]}});
++    assert!(debug_view(&json!({"mode":"gi_diffuse","observationSerial":0,"completed":true,"current":true}),"gi_diffuse").is_err());
++    assert!(debug_view(&json!({"mode":"overdraw","observationSerial":2,"completed":true,"current":true}),"overdraw").is_err());
++    let completed=json!({"mode":"overdraw","observationSerial":2,"completed":true,"current":true,"overdraw":{"max":3,"pixels":10,"bands":[2,4,4,0,0,0]}});
+     assert_eq!(debug_view(&completed,"overdraw").unwrap(),completed);
+     let mut incomplete=completed.clone();
+     incomplete["overdraw"]["pixels"]=11.into();
+@@ -24,33 +24,20 @@ fn requested_or_stale_debug_modes_cannot_stand_in_for_completed_renderer_output(
+ }
+ 
+ #[test]
+-fn published_receipt_requires_six_source_matching_faces_and_real_nonempty_private_cache() {
+-    static NEXT:AtomicU64=AtomicU64::new(0);
+-    let root=std::path::absolute(crate::test_target()).unwrap().join("native-probe-receipt").join(format!("{}-{}",std::process::id(),NEXT.fetch_add(1,Ordering::Relaxed)));
+-    let path=".ara/cache/probes/validation-only.bin";
+-    std::fs::create_dir_all(root.join(".ara/cache/probes")).unwrap();
+-    std::fs::write(root.join(path),b"receipt validator fixture, not a captured cubemap").unwrap();
++fn published_receipt_requires_six_source_matching_faces_and_a_private_cache_destination() {
++    let path=".ara/cache/probes/validation-only.capture";
+     let receipt=ProbeReceipt {doc:SCENE.into(),entity:"e_testprobe".into(),generation:7,source_revision:4,
+         source_hash:"a".repeat(64),capture_hash:"b".repeat(64),resolution:128,faces:6,cache_path:path.into(),published:true};
+     let row=ProbeRow {doc:SCENE.into(),entity:receipt.entity.clone(),enabled:true,generation:7,state:ProbeState::Done,
+         stage:None,progress:Some(1.),completed_work:Some(6),total_work:Some(6),cancellable:false,scene_revision:4,
+         source_hash:receipt.source_hash.clone(),stale:false,retained_previous:false,last_receipt:Some(receipt.clone()),diagnostics:Vec::new()};
+-    assert_eq!(published_receipt(&root,&row,&receipt).unwrap()["exists"],true);
+-    let mut incomplete=receipt.clone();
+-    incomplete.faces=5;
+-    assert!(published_receipt(&root,&row,&incomplete).is_err());
+-    let mut wrong_source=receipt.clone();
+-    wrong_source.source_hash="c".repeat(64);
+-    assert!(published_receipt(&root,&row,&wrong_source).is_err());
+-    let mut stale=row.clone();
+-    stale.stale=true;
+-    assert!(published_receipt(&root,&stale,&receipt).is_err());
+-    let mut outside=receipt.clone();
+-    outside.cache_path=".ara/cache/../../../outside.bin".into();
+-    assert!(published_receipt(&root,&row,&outside).is_err());
+-    std::fs::write(root.join(path),[]).unwrap();
+-    assert!(published_receipt(&root,&row,&receipt).is_err());
+-    std::fs::remove_file(root.join(path)).unwrap();
+-    assert!(published_receipt(&root,&row,&receipt).is_err());
+-    std::fs::remove_dir_all(root).unwrap();
+-}
++    assert_eq!(published_receipt(&row,&receipt).unwrap()["publishedImageHashed"],true);
++    let mut incomplete=receipt.clone(); incomplete.faces=5;
++    assert!(published_receipt(&row,&incomplete).is_err());
++    let mut wrong_source=receipt.clone(); wrong_source.source_hash="c".repeat(64);
++    assert!(published_receipt(&row,&wrong_source).is_err());
++    let mut stale=row.clone(); stale.stale=true;
++    assert!(published_receipt(&stale,&receipt).is_err());
++    let mut outside=receipt; outside.cache_path=".ara/cache/../../../outside.capture".into();
++    assert!(published_receipt(&row,&outside).is_err());
++}
+\ No newline at end of file
+diff --git a/crates/ara-editor/src/app/probe_verify/cache.rs b/crates/ara-editor/src/app/probe_verify/cache.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/probe_verify/cache.rs
+@@ -0,0 +1,102 @@
++//! Native proof observes post-receipt cache publication without editor-thread I/O.
++use super::*;
++use std::sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, TryRecvError}};
++
++const PUBLICATION_WAIT: Duration = Duration::from_secs(30);
++const RETRY: Duration = Duration::from_millis(25);
++
++pub(super) struct Publication {
++    result: Receiver<Result<Value, String>>,
++    cancelled: Arc<AtomicBool>,
++    started: Instant,
++}
++impl Publication {
++    pub(super) fn start(root: PathBuf, logical: String) -> ara_ui::Result<Self> {
++        Self::with_wait(root, logical, PUBLICATION_WAIT)
++    }
++    fn with_wait(root: PathBuf, logical: String, limit: Duration) -> ara_ui::Result<Self> {
++        let (sender, result) = mpsc::sync_channel(1);
++        let cancelled = Arc::new(AtomicBool::new(false));
++        let stop = Arc::clone(&cancelled);
++        let started = Instant::now();
++        std::thread::Builder::new().name("ara-editor-probe-cache-proof".into()).spawn(move || {
++            let path = root.join(&logical);
++            let observed = loop {
++                if stop.load(Ordering::Relaxed) { return; }
++                match std::fs::metadata(&path) {
++                    Ok(metadata) if metadata.is_file() && metadata.len() > 0 => {
++                        break Ok(json!({"path":logical,"absolutePath":path,"bytes":metadata.len(),
++                            "exists":true,"observedAfterReceipt":true,"worker":"ara-editor-probe-cache-proof",
++                            "publicationWaitSeconds":started.elapsed().as_secs_f64()}));
++                    }
++                    Ok(_) => {}
++                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
++                    Err(error) => break Err(format!("Probe image is published, but cache metadata could not be read: {error}")),
++                }
++                if started.elapsed() >= limit {
++                    break Err(format!("Probe image was published and hashed, but cache `{logical}` was not published as a nonempty file within {} seconds", limit.as_secs_f64()));
++                }
++                std::thread::sleep(RETRY.min(limit.saturating_sub(started.elapsed())));
++            };
++            let _ = sender.send(observed);
++        })?;
++        Ok(Self { result, cancelled, started })
++    }
++    /// Mailbox-only polling; a missing file is pending until the worker's deadline.
++    pub(super) fn poll(&self) -> ara_ui::Result<Option<Value>> {
++        match self.result.try_recv() {
++            Ok(Ok(value)) => Ok(Some(value)),
++            Ok(Err(error)) => Err(error.into()),
++            Err(TryRecvError::Empty) => Ok(None),
++            Err(TryRecvError::Disconnected) => Err(format!("Probe cache observation worker stopped after {:.3}s without a result", self.started.elapsed().as_secs_f64()).into()),
++        }
++    }
++}
++impl Drop for Publication {
++    fn drop(&mut self) {
++        self.cancelled.store(true, Ordering::Relaxed);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn receipt_can_precede_the_actual_cache_file_without_synchronous_failure() -> ara_ui::Result<()> {
++        let root = std::path::absolute(crate::test_target())?.join("probe-cache-publication").join(format!("{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()));
++        std::fs::create_dir_all(&root)?;
++        let observation = Publication::with_wait(root.clone(), "later.capture".into(), Duration::from_secs(2))?;
++        assert!(observation.poll()?.is_none());
++        std::fs::write(root.join("later.capture"), [])?;
++        assert!(observation.poll()?.is_none(), "an empty cache file is not publication proof");
++        std::fs::write(root.join("later.capture"), b"cache metadata fixture; not GPU evidence")?;
++        let deadline = Instant::now() + Duration::from_secs(3);
++        loop {
++            if let Some(value) = observation.poll()? {
++                assert_eq!(value["exists"], true);
++                assert_eq!(value["observedAfterReceipt"], true);
++                break;
++            }
++            assert!(Instant::now() < deadline, "cache observer did not finish");
++            std::thread::yield_now();
++        }
++        std::fs::remove_dir_all(root)?;
++        Ok(())
++    }
++    #[test]
++    fn missing_cache_publication_has_a_bounded_failure() -> ara_ui::Result<()> {
++        let root = std::path::absolute(crate::test_target())?.join("absent-native-probe-cache").join(format!("{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()));
++        let observation = Publication::with_wait(root, "missing.capture".into(), Duration::from_millis(20))?;
++        let deadline = Instant::now() + Duration::from_secs(2);
++        loop {
++            match observation.poll() {
++                Err(error) => { assert!(error.to_string().contains("published and hashed")); break; }
++                Ok(Some(_)) => return Err("Missing cache unexpectedly existed".into()),
++                Ok(None) => {}
++            }
++            assert!(Instant::now() < deadline, "missing cache observer did not fail");
++            std::thread::yield_now();
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/probe_verify/observe.rs b/crates/ara-editor/src/app/probe_verify/observe.rs
+index b13f8b91e..1412acb0e 100644
+--- a/crates/ara-editor/src/app/probe_verify/observe.rs
++++ b/crates/ara-editor/src/app/probe_verify/observe.rs
+@@ -53,11 +53,11 @@ impl ProbeCheck {
+                 "job":self.job,"jobStatus":self.job_status,"snapshot":self.snapshot,"renderer":self.renderer},
+             "scope":{"fixture":"Typed isolated Scene/procedural mesh/light creation, High quality and explicit baseline/navigation setup",
+                 "measured":"Actual SDL pointer/keyboard through Window::poll_tagged and production dispatch",
+-                "captureObservations":"Read-only render.probes.query/jobs.status; cache file metadata only after real published receipt",
++                "captureObservations":"Read-only render.probes.query/jobs.status; bounded worker observes cache metadata after the real published-image/hash receipt",
+                 "viewModes":"Requires caller-supplied current completed renderer provenance; state flags alone never pass"},
+             "timingLabel":"informal (shared GPU)","timingAcceptance":false,"boundedWaitSeconds":PATIENCE.as_secs(),
+             "rendererMetadataAdapter":{"observed":!self.renderer.is_null(),"contract":"Caller-supplied actual current completed view-mode/overdraw metadata; null is not evidence"},
+-            "limits":["No proof is established until this unlinked leaf runs on its matching VQ build.",
++            "limits":["No proof is established until this leaf runs on its matching VQ build.",
+                 "Cancellation and stale-source cases require an actually observed queued/active generation; finishing too early is a failed proof, not a pass.",
+                 "Published sourceHash/captureHash are renderer receipts; cache existence and byte count do not independently prove every cubemap texel."]
+         })))?;
+diff --git a/crates/ara-editor/src/shell/probes/view.rs b/crates/ara-editor/src/shell/probes/view.rs
+index 7d9fba870..2279ecf60 100644
+--- a/crates/ara-editor/src/shell/probes/view.rs
++++ b/crates/ara-editor/src/shell/probes/view.rs
+@@ -115,7 +115,7 @@ impl Shell {
+                 if row.retained_previous {" · previous valid capture retained"} else {""},
+                 if !row.enabled {" · disabled contribution"} else {""}));
+             if let Some(receipt) = &row.last_receipt {
+-                out.push_str(&format!("<text id='{id}-receipt' class='lighting-help' text='Last receipt: {} px × {} faces · generation {} · renderer revision {} · {}' /><text id='{id}-cache' class='probe-identity' text='{}' /><text id='{id}-hash' class='probe-identity' text='Capture {} · source {}' />",receipt.resolution,receipt.faces,receipt.generation,receipt.source_revision,if receipt.published {"published"}else{"not published"},escape(&receipt.cache_path),escape(&receipt.capture_hash),escape(&receipt.source_hash)));
++                out.push_str(&format!("<text id='{id}-receipt' class='lighting-help' text='Last receipt: {} px × {} faces · generation {} · renderer revision {} · {}' /><text id='{id}-cache' class='probe-identity' text='Cache destination (written asynchronously): {}' /><text id='{id}-hash' class='probe-identity' text='Capture {} · source {}' />",receipt.resolution,receipt.faces,receipt.generation,receipt.source_revision,if receipt.published {"published"}else{"not published"},escape(&receipt.cache_path),escape(&receipt.capture_hash),escape(&receipt.source_hash)));
+             } else {
+                 out.push_str(&format!("<text id='{id}-no-receipt' class='lighting-help' text='No published capture receipt has been reported.' />"));
+             }
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+index 525c389e4..f8ce61868 100644
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -34,6 +34,7 @@ mod pilot_verify;
+ mod play_verify;
+ mod prefab_verify;
+ mod probes;
++mod probe_verify;
+ mod qa;
+ mod reachability_verify;
+ mod responsiveness;
+@@ -424,6 +425,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+     let mut bookmarks_check = None;
+     let mut lighting_check = None;
+     let mut pilot_check = None;
++    let mut probe_check = None;
+     let mut snapping_check = None;
+     let mut input_check = None;
+     let mut boundary_check = None;
+@@ -740,9 +742,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     ready,
+                 )?;
+             }
+-            if pilot_check
+-                .as_ref()
+-                .is_some_and(pilot_verify::PilotCheck::finished)
++            if pilot_check.as_ref().is_some_and(pilot_verify::PilotCheck::finished)
++                && probe_check.is_none()
++            {
++                probe_check = Some(probe_verify::ProbeCheck::new(&mut editor,&mut shell,&options.output)?);
++            }
++            if let Some(check) = &mut probe_check {
++                let scale = crate::native::points_to_logical(window.raw(),main_dpi);
++                let ready = verification_scene_ready(&renderer,&scene_view,&editor,last_revision);
++                check.inject(&mut editor,&mut shell,&window,scale,&mut events,ready)?;
++            }
++            if probe_check.as_ref().is_some_and(probe_verify::ProbeCheck::finished)
+                 && input_check.is_none()
+             {
+                 input_check = Some(input_verify::InputCheck::new(&options.output));
+@@ -902,6 +912,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
++                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else {
+@@ -1122,6 +1134,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
++                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else {
+@@ -2201,6 +2215,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                 check.end(&editor, &mut shell, &mut gpu, ready)?;
+             }
++            if let Some(check) = &mut probe_check {
++                let ready = verification_scene_ready(&renderer,&scene_view,&editor,last_revision);
++                if let Some(mode) = check.view_mode_observation_needed() {
++                    if let Some(observation) = scene_view.completed_debug_view_observation(&mut renderer,&editor,mode,ready)? {
++                        check.observe_view_mode(observation)?;
++                    }
++                }
++                check.end(&mut editor,&mut shell,&mut gpu,ready)?;
++            }
+             if let Some(check) = &mut bookmarks_check {
+                 check.end(&editor, &mut shell, &mut gpu)?;
+             }
+@@ -2420,6 +2443,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 .ok_or("The native Pilot journey did not start")?;
+             check.write()?;
+             check.validate()?;
++            let check = probe_check.as_ref().ok_or("The native probe/debug-view journey did not start")?;
++            check.write()?;
++            check.validate()?;
+             let check = input_check
+                 .as_ref()
+                 .ok_or("The native input journey did not start")?;

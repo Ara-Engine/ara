@@ -1,0 +1,377 @@
+//! Volumetric fog (look::volumetric) on the native path: a sun shaft through a narrow
+//! gap in a roof stays a sharp shaft in the near froxel volume, captures of it are
+//! deterministic, a local fog volume glows only where it is, and a spot light's beam,
+//! scattered per pixel, casts its occluder's shaft and agrees with the froxels' beam.
+use anyhow::{Result, ensure};
+use ara_gpu::{Access, GpuDevice, Resource};
+use ara_render::{
+    Renderer,
+    capture::{Capture, CaptureRequest, ViewMode},
+    instanced::{
+        Geometry, Instance, Lod, Material, Scene, TextureBinding, TextureStats, Textures, Vertex,
+    },
+    look::{Fog, FogVolume, LocalShadows, Look, Quality, VolumetricFog, VolumetricFogQuality},
+    scene::{CameraSpec, LIGHT_SPOT, Light},
+};
+use glam::{Mat4, Quat, Vec3};
+
+struct NoTextures;
+impl Textures for NoTextures {
+    fn content_digest(&self) -> [u8; 32] {
+        [0; 32]
+    }
+    fn initialize(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
+        Ok(TextureStats::default())
+    }
+    fn refine(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
+        Ok(TextureStats::default())
+    }
+    fn binding(&self) -> Option<TextureBinding> {
+        None
+    }
+    fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
+    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
+        Ok(())
+    }
+}
+
+/// Width of the gap in the roof the sun shines through, in metres.
+const GAP: f32 = 0.25;
+
+/// A 40 m ground, a roof 4 m up with a 2 m long, `GAP`-wide slot along z above the
+/// origin, a wall 8 m behind it, and the sun high above, tilted along the slot away
+/// from the wall (which it leaves unlit).
+fn scene() -> Scene {
+    let quad = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)].map(|(x, z)| Vertex {
+        position: [x, 0., z],
+        normal: [0., 1., 0.],
+        tangent: [1., 0., 0., 1.],
+        uv: [0.; 2],
+        uv1: [0.; 2],
+        terrain_weights: 0,
+        color: u32::MAX,
+    });
+    let mut material = Material::default();
+    material.pbr.textures = [u32::MAX; 4];
+    let instance = |entity: u64, world: Mat4| Instance {
+        entity,
+        name: format!("quad-{entity}"),
+        geometry: 0,
+        material: 0,
+        world,
+        previous_world: world,
+        casts_shadows: true,
+        paint: None,
+        receives_decals: true,
+    };
+    // The roof (faces up and down, both casting shadows): two halves either side of
+    // the slot over 2 m of z, and full-width pieces in front and behind it.
+    let roof = |centre: Vec3, size: Vec3, flip: f32| {
+        Mat4::from_translation(centre)
+            * Mat4::from_quat(Quat::from_rotation_x(flip))
+            * Mat4::from_scale(size)
+    };
+    let pieces = [
+        (
+            Vec3::new(-(GAP * 0.5 + 10.), 4., 0.),
+            Vec3::new(20., 1., 2.),
+        ),
+        (Vec3::new(GAP * 0.5 + 10., 4., 0.), Vec3::new(20., 1., 2.)),
+        (Vec3::new(0., 4., 11.), Vec3::new(41., 1., 20.)),
+        (Vec3::new(0., 4., -11.), Vec3::new(41., 1., 20.)),
+    ];
+    let down = std::f32::consts::PI;
+    let wall = Mat4::from_translation(Vec3::new(0., 2., -8.))
+        * Mat4::from_quat(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
+        * Mat4::from_scale(Vec3::new(40., 1., 8.));
+    Scene {
+        geometry: vec![Geometry {
+            key: [7; 32],
+            vertices: quad.to_vec(),
+            lods: vec![Lod {
+                indices: vec![0, 2, 1, 0, 3, 2],
+                error: 0.,
+            }],
+            bounds: [Vec3::new(-0.5, 0., -0.5), Vec3::new(0.5, 0., 0.5)],
+            deforming: false,
+            revision: 0,
+            vertex_colors: false,
+        }],
+        instances: [Mat4::from_scale(Vec3::splat(40.)), wall]
+            .into_iter()
+            .chain(
+                pieces
+                    .iter()
+                    .flat_map(|&(c, s)| [roof(c, s, 0.), roof(c - Vec3::Y * 0.01, s, down)]),
+            )
+            .enumerate()
+            .map(|(i, world)| instance(i as u64 + 1, world))
+            .collect(),
+        materials: vec![material],
+        textures: 0,
+        decals: Vec::new(),
+        lights: Vec::new(),
+        // Tilted along the slot, so the shaft stays a vertical bar across the view.
+        sun_direction: Vec3::new(0., 1., -0.2).normalize(),
+        sun_lux: Vec3::splat(20000.),
+        environment: vec![[0.01, 0.01, 0.01, 1.]],
+        environment_size: [1, 1],
+    }
+}
+
+const SIZE: [u32; 2] = [640, 360];
+
+/// A capture along the slot, level with the middle of the shaft: a vertical bar 8 m
+/// away through the image centre, the fog beside it in shadow.
+fn capture(renderer: &mut Renderer, name: &str) -> Result<Capture> {
+    let capture = renderer.capture(&CaptureRequest {
+        camera: CameraSpec::LookAt {
+            position: Vec3::new(0., 2., 8.),
+            target: Vec3::new(0., 2., 0.),
+            vertical_fov: 0.8,
+        },
+        size: SIZE,
+        mode: ViewMode::Lit,
+        deterministic: true,
+        exposure: 0.004,
+        settle_frames: 8,
+        tick: 0,
+        seed: 0,
+        marks: None,
+    })?;
+    capture.write(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-render/volumetric-fog")
+            .join(std::process::id().to_string())
+            .join(format!("{name}.png")),
+    )?;
+    Ok(capture)
+}
+
+/// Mean luminance (8-bit display values) of the 9x9 pixels around (`x`, `y`).
+fn luminance(capture: &Capture, x: u32, y: u32) -> f32 {
+    let mut sum = 0.;
+    for j in y - 4..=y + 4 {
+        for i in x - 4..=x + 4 {
+            let p = capture.image.get_pixel(i, j).0;
+            sum += 0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]);
+        }
+    }
+    sum / 81.
+}
+
+fn renderer(name: &str) -> Result<Renderer> {
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/volumetric-fog")
+        .join(format!("{}-{name}", std::process::id()));
+    Renderer::new_native(&scene(), Box::new(NoTextures), SIZE, &[], cache)
+}
+
+fn fog() -> Look {
+    Look {
+        fog: Some(Fog {
+            extinction: 0.04,
+            height: 1000.,
+            albedo: 1.,
+            anisotropy: 0.,
+            volumetric: Some(VolumetricFog::default()),
+            ..Fog::default()
+        }),
+        ..Look::default()
+    }
+}
+
+/// The default budgets with a near volume of 4-pixel froxels.
+fn near() -> Quality {
+    Quality {
+        volumetric_fog: Some(VolumetricFogQuality {
+            tile: 4,
+            slices: 64,
+            ..VolumetricFogQuality::default()
+        }),
+        ..Quality::default()
+    }
+}
+
+#[test]
+fn a_narrow_sun_shaft_stays_sharp_in_the_near_volume() -> Result<()> {
+    let mut renderer = renderer("shaft")?;
+    renderer.set_look(fog())?;
+    let [cx, cy] = SIZE.map(|v| v / 2);
+    // The shaft against the shadowed fog 60 pixels either side.
+    let contrast = |c: &Capture| {
+        let side = luminance(c, cx - 60, cy).max(luminance(c, cx + 60, cy));
+        (luminance(c, cx, cy), side)
+    };
+    renderer.set_quality(Quality::default())?;
+    let (coarse, coarse_side) = contrast(&capture(&mut renderer, "coarse")?);
+    renderer.set_quality(near())?;
+    let near = capture(&mut renderer, "near")?;
+    let (shaft, side) = contrast(&near);
+    eprintln!("shaft {shaft} over {side} (coarse grid alone: {coarse} over {coarse_side})");
+    ensure!(
+        shaft > side + 20. && shaft > 2. * side.max(1.),
+        "the shaft stands out of the shadowed fog: {shaft} vs {side}"
+    );
+    // Deterministic: the same capture again is the same image.
+    let again = capture(&mut renderer, "near-again")?;
+    ensure!(
+        again.image.as_raw() == near.image.as_raw(),
+        "volumetric fog captures repeat exactly"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn a_local_fog_volume_glows_only_where_it_is() -> Result<()> {
+    let mut renderer = renderer("volume")?;
+    renderer.set_quality(near())?;
+    renderer.set_look(Look::default())?;
+    let [cx, cy] = SIZE.map(|v| v / 2);
+    let glow = FogVolume {
+        centre: [0., 2., 2.],
+        half_extent: [1.; 3],
+        density: 0.5,
+        emissive: [400.; 3],
+        ..FogVolume::default()
+    };
+    renderer.set_fog_volumes(&[glow])?;
+    let lit = capture(&mut renderer, "volume")?;
+    let (inside, outside) = (luminance(&lit, cx, cy), luminance(&lit, cx + 200, cy));
+    renderer.set_fog_volumes(&[])?;
+    let none = luminance(&capture(&mut renderer, "no-volume")?, cx, cy);
+    eprintln!("fog volume: {inside} inside, {outside} beside it, {none} without it");
+    ensure!(
+        inside > none + 40. && outside < none + 5.,
+        "the volume glows inside its sphere alone: {inside}, {outside}, {none}"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+/// The roofed scene without the sun: a spot light under the roof at (2, 3.5, 0) shining
+/// down (outer cone 20 degrees, inner 14), and a shadow-casting 0.4 m square 1.2 m below
+/// it inside the cone.
+fn spot_scene() -> Scene {
+    let mut scene = scene();
+    scene.sun_lux = Vec3::ZERO;
+    let blocker = |flip: f32| {
+        Mat4::from_translation(Vec3::new(2., 2.3, 0.))
+            * Mat4::from_quat(Quat::from_rotation_x(flip))
+            * Mat4::from_scale(Vec3::splat(0.4))
+    };
+    let first = scene.instances.len() as u64 + 1;
+    for (i, flip) in [0., std::f32::consts::PI].into_iter().enumerate() {
+        let world = blocker(flip);
+        scene.instances.push(Instance {
+            entity: first + i as u64,
+            name: format!("blocker-{i}"),
+            geometry: 0,
+            material: 0,
+            world,
+            previous_world: world,
+            casts_shadows: true,
+            paint: None,
+            receives_decals: true,
+        });
+    }
+    scene.lights = vec![Light {
+        position_range: [2., 3.5, 0., 8.],
+        color_lumens: [1., 1., 1., 400000.],
+        direction_outer: [0., -1., 0., 20f32.to_radians().cos()],
+        parameters: [LIGHT_SPOT, 14f32.to_radians().cos(), 0., 1.],
+        ..Light::ZERO
+    }];
+    scene
+}
+
+/// `near` with the spot's shadow sampled by fog, and its local lights scattered per pixel
+/// (`light_samples`; zero: in the froxels).
+fn spot_quality(light_samples: u32) -> Quality {
+    let mut quality = near();
+    quality.local_shadows = Some(LocalShadows {
+        lights: 1,
+        resolution: 512,
+        redraws: 6,
+        in_gi_and_fog: true,
+    });
+    if let Some(fog) = &mut quality.volumetric_fog {
+        fog.light_samples = light_samples;
+    }
+    quality
+}
+
+/// Along the view the beam is a vertical cone at image x 426 (2 m right of the centre, 8 m
+/// away); the blocker's shaft darkens it below the blocker (image y 206, 1.5 m up) against
+/// the same light unshadowed; above the blocker (y 132) it stands out of the fog beside
+/// the cone and carries the light the froxels scatter.
+#[test]
+fn a_spot_beam_scattered_per_pixel_casts_its_blocker_shaft() -> Result<()> {
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/volumetric-fog")
+        .join(format!("{}-spot", std::process::id()));
+    let mut renderer = Renderer::new_native(&spot_scene(), Box::new(NoTextures), SIZE, &[], cache)?;
+    renderer.set_look(fog())?;
+    renderer.set_quality(spot_quality(16))?;
+    let pixel = capture(&mut renderer, "spot-pixel")?;
+    let (shaft, beam, outside) = (
+        luminance(&pixel, 426, 206),
+        luminance(&pixel, 426, 132),
+        luminance(&pixel, 470, 132),
+    );
+    renderer.set_quality(spot_quality(0))?;
+    let froxels = luminance(&capture(&mut renderer, "spot-froxels")?, 426, 132);
+    renderer.set_quality(Quality {
+        local_shadows: None,
+        ..spot_quality(16)
+    })?;
+    let unshadowed = luminance(&capture(&mut renderer, "spot-unshadowed")?, 426, 206);
+    eprintln!(
+        "spot: shaft {shaft} (unshadowed {unshadowed}); beam {beam} (froxels {froxels}), outside {outside}"
+    );
+    ensure!(
+        beam > outside + 20.,
+        "the beam stands out of the fog beside it: {beam} vs {outside}"
+    );
+    ensure!(
+        shaft < 0.85 * unshadowed,
+        "the blocker's shaft darkens the beam below it: {shaft} vs {unshadowed} unshadowed"
+    );
+    // The froxels under-resolve this narrow beam (slices there are wider than it), so
+    // they only bound it: the same light, in the same units.
+    ensure!(
+        beam > 0.5 * froxels && beam < 2. * froxels,
+        "per-pixel scattering carries the froxels' light: {beam} vs {froxels}"
+    );
+    renderer.set_quality(spot_quality(16))?;
+    let again = capture(&mut renderer, "spot-pixel-again")?;
+    ensure!(
+        again.image.as_raw() == pixel.image.as_raw(),
+        "per-pixel fog captures repeat exactly"
+    );
+    // Half resolution (the default) re-integrates the cone's edges and apex at full
+    // resolution: across the beam it matches a full-resolution capture, with no
+    // two-pixel steps.
+    let mut quality = spot_quality(16);
+    if let Some(fog) = &mut quality.volumetric_fog {
+        fog.light_scale = 1;
+    }
+    renderer.set_quality(quality)?;
+    let full = capture(&mut renderer, "spot-full")?;
+    let worst = (380..480)
+        .flat_map(|x| (90..300).map(move |y| (x, y)))
+        .map(|(x, y)| {
+            let (a, b) = (pixel.image.get_pixel(x, y).0, full.image.get_pixel(x, y).0);
+            (0..3).map(|c| a[c].abs_diff(b[c])).max().unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+    eprintln!("spot: half against full resolution, worst {worst}/255 across the beam");
+    ensure!(
+        worst <= 3,
+        "half resolution keeps the beam's edges crisp: worst {worst}/255 against full"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}

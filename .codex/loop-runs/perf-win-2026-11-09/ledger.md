@@ -60,3 +60,49 @@ Commit/push verified improvements as they pass. Do not stop simply because a fix
 - Pushed9c7a42779productiongraphfix anddb8a5589cprivatefixturetempisolation. VerifiedHotdirectdffcandidateall16fresh1m+3rowprocesses/8pairs accepted, identical48,000,144bytedumps/perfield/IDs. NativeISA+unalignedbyteI/O+inlinefloattranspose improvesHotSIMD1.80-1.97xwithbettertails; stillfarabovecoldlane, notUnitywin. Actualquality12smokes/L1enabled+HWdisabled/CoreCLR10.0.14 traces; perfidentityhash-boundonly. Quad24/32indirectcallsremainunresolved, nocall-freeclaim. Independentstage/evidenceauditpasses. CommitVERIFIEDdff4filesfromimmutablepacketindex; workingkernel-moduleexperimenteditsretaineduntouched.
 - Cachednine-spanplan09passesqualitybut20kneutral/50k~2%gainwithextra288KB; simplerlookup-only666candidateusesalreadycached12bitcellkey, noextraallocation,20k .596/.597->.587/.586ms,50kroughlyneutral. All8internalparallelpairs andfullstate/IDs/plane+newdiagonalradiusgatespass; sourcegates/checkpointpending. AvoidoverengineeringrangeplanbeforefreshUnityW2.
 - Optionaltwo-moduleHotGame/coldKernelprototype sourceprepared(publicborrowed-spanBatchonceperchunk, existingmathunchanged, GameactualL1mustremain); notcompiledyet. Bufferprototypebaselinequalitypassed, contiguous/SIMDgatesrunningundertargetonly. Unitynew-ownedcache-isolationdiagnosticpreparedbutnotlaunched;24remainingfeaturetimingspending. FurtherunusedCmdBufelisionauditprovespurequeriesdon'temitops, buthas_deferredMUSTstay(unrelatedstructuralvisibility); noimplementationyet.
+
+
+## Main integration, 2026-11-09
+
+User reported substantial newly pushed main work. Fetched `origin/main` at
+`1e04fe5dd9d04ede28592597dace9c0c06a15f9a`: 277 commits beyond the common
+base, including host ABI 5, graphics preferences and published watched-assembly
+reuse at Play start. Merge this history; do not cherry-pick or discard it.
+
+- Pushed `b474d043c`: cached boid cell lookup, exact diagonal boundary gates;
+  all-target Clippy and focused correctness pass. Fresh Unity W2 comparisons remain open.
+- Pushed `e15734bba`: optional explicit cold Kernel + editable Game wrapper example;
+  same borrowed ECS columns/math, no SDK flags or reload-policy bypass. Independent
+  review passes; 32 small actual-CLR cases across span/SIMD/direct and real Game L1
+  tests pass. Editing Kernel still follows its cold-module reload policy.
+- Two timing attempts stopped before launch because unrelated compilers appeared.
+  A third completed 9/16 accepted internal cases before explicit cancellation for
+  main integration. Incomplete reversed rounds, no Unity claim. Frozen raw proof:
+  `target/ecs-hot-kernel-module-20261109-cbe087-r03/partial-summary.json`.
+- Buffer prototype: 12 accepted internal fixed4 processes, original baseline retained,
+  full 420-step outputs and capacity/spill equal the independent oracle. Contiguous
+  and exact NEON candidates improve both budgets; tick cells checked separately over
+  six serial steps only. No fresh Unity comparison. Publication packet under
+  `target/feature-buffer-candidate/proof/buffer_fixed4_internal_mac_2026-11-09.json`.
+- Unverified tracked buffer promotion and AOT span sample safely saved in stash
+  `4adca42d2c99e20c9ec92e7dd15cad563fb5227d`. Apply after the merge; do not drop it.
+- Conflict resolutions retain both `dependencies` and `graphics` modules; player
+  initializes graphics revision and moves scene UI. Incoming shader sources/cooked
+  cohorts remain byte-identical to main; no shader-source conflict or mixed cohort.
+  Mac is not a canonical DXIL cook host; Windows remains untouched.
+- Canonical generation: all 6 ABI/schema tests pass with no generated-file changes.
+  Fresh .NET solution build passes. Runtime codec test exposed three new component
+  recipes missing from the older example set (Decal, LocalFogVolume, VertexPaint);
+  added them without weakening coverage. All 28 Runtime and 124 CompileServer tests
+  pass. All 22 real-host tests across 11 suites pass, including every-component
+  write/undo and module L1. Simulation/Play/runtime library gates and all-target
+  Clippy for scripting, simulation, Play, runtime and player pass. All 55 selected
+  library tests pass. Formatter passes for 114 packages; four inherited main Rust
+  files needed formatting only. Shader sources and cooked cohorts remain unchanged.
+- Preserved the pre-merge .NET output and hashes under
+  `target/perf-main-integration-20261109/pre-merge-dotnet-bin`. Earlier timings remain
+  bound to their immutable revisions/binaries; rebuild before combined-engine claims.
+
+The performance objective remains active: remaining feature losses, actual fresh
+boids and editable-wrapper Unity comparisons, AOT span validation and the fresh-cache
+Unity diagnostic are unfinished. Main integration is not a completion claim.

@@ -13,3 +13,17 @@ mod vulkan;
 pub use metal::Present;
 #[cfg(not(target_os = "macos"))]
 pub use vulkan::Present;
+
+/// Whether a presentation error means the swapchain no longer matches its window
+/// (a resize raced the frame). Callers recreate the presentation and skip the frame.
+pub fn out_of_date(error: &anyhow::Error) -> bool {
+    #[cfg(not(target_os = "macos"))]
+    {
+        error.downcast_ref::<ash::vk::Result>() == Some(&ash::vk::Result::ERROR_OUT_OF_DATE_KHR)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = error;
+        false
+    }
+}

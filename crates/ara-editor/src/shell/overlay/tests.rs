@@ -168,7 +168,7 @@ fn paint_uses_the_same_finite_noncollapsed_plane_geometry_as_hit_testing() {
             malformed,
             GizmoState {
                 active: Some(Handle::Axis(0)),
-                hover: None,
+                ..Default::default()
             },
         ),
     ] {

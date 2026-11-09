@@ -1,0 +1,1558 @@
+{
+    "version":  1,
+    "fps":  60,
+    "cases":  [
+                  {
+                      "id":  "wall-breach",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "wall",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "building-collapse",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "collapse",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  300,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "avalanche-108",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "avalanche",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  4000,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "avalanche-1000",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "avalanche",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  4000,
+                      "triangles":  1000,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "door-opening",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "door",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "wall-recolour",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "recolour",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "light-switch-off",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "switch_off",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-low-1m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  1,
+                      "target_lpp":  2.4,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-dense-1m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  1,
+                      "target_lpp":  27,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-low-4m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  2.4,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-dense-4m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  27,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-low-8m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  8,
+                      "target_lpp":  2.4,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "lpp-dense-8m",
+                      "gates":  [
+                                    1
+                                ],
+                      "recipe":  "lights",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  8,
+                      "target_lpp":  27,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "moving-200-lights",
+                      "gates":  [
+                                    1,
+                                    3
+                                ],
+                      "recipe":  "moving_lights",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  2.4,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sealed-200-flicker",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "sealed_flicker",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "open-plan-flicker",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "open_flicker",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "repeated-invalidation",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "invalidation",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-0.25deg-60elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0.25,
+                      "elevation_deg":  60,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-0.25deg-30elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0.25,
+                      "elevation_deg":  30,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-0.25deg-10elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0.25,
+                      "elevation_deg":  10,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-0.25deg-5elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0.25,
+                      "elevation_deg":  5,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-1deg-60elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  1,
+                      "elevation_deg":  60,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-1deg-30elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  1,
+                      "elevation_deg":  30,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-1deg-10elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  1,
+                      "elevation_deg":  10,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-1deg-5elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  1,
+                      "elevation_deg":  5,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-10deg-60elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  60,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-10deg-30elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  30,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-10deg-10elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  10,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "sun-10deg-5elev",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "sun",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  5,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "foliage-wind",
+                      "gates":  [
+                                    2
+                                ],
+                      "recipe":  "wind",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  1200,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "whip-pan",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "whip_pan",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "flythrough-300kmh",
+                      "gates":  [
+                                    2,
+                                    3
+                                ],
+                      "recipe":  "flythrough",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "camera-cut",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "camera_cut",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "camera-cold-cut",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "cold_cut",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "body-sleep-wake",
+                      "gates":  [
+                                    3
+                                ],
+                      "recipe":  "sleep_wake",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  64,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-overlap",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "overlap",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-crate-gap",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "crate_gap",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-hand",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "hand",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-stained-glass",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "stained_glass",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-rect-orientation",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "rect_orientation",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-0.1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-0.1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-0.3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-0.3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "roughness-gradient",
+                      "gates":  [
+                                    6
+                                ],
+                      "recipe":  "roughness",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "polar-floor",
+                      "gates":  [
+                                    6
+                                ],
+                      "recipe":  "polar",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  4,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "ordered-glass",
+                      "gates":  [
+                                    6
+                                ],
+                      "recipe":  "ordered_glass",
+                      "frames":  90,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               88,
+                                               89
+                                           ]
+                  },
+                  {
+                      "id":  "combined-stress",
+                      "gates":  [
+                                    5
+                                ],
+                      "recipe":  "combined",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  300,
+                      "triangles":  1000,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  27,
+                      "sun_deg_s":  1,
+                      "elevation_deg":  10,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "steady-frame",
+                      "gates":  [
+                                    5
+                                ],
+                      "recipe":  "steady",
+                      "frames":  308,
+                      "event_frame":  8,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  200,
+                      "range_m":  4,
+                      "target_lpp":  2.4,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               7,
+                                               8,
+                                               9,
+                                               10,
+                                               11,
+                                               12,
+                                               306,
+                                               307
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-10",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  10,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  10,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  14,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-10",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  28,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  10,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-pole-sweep",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "pole_sweep",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-eight-lights",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "eight_lights",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  8,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  }
+              ]
+}

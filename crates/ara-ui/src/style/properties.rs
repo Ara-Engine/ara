@@ -1,5 +1,5 @@
 //! Typed native property values, intentionally separate from cascade evaluation.
-use super::{Color, Computed};
+use super::{Backdrop, Color, Computed, Shadow};
 use crate::Result;
 use taffy::prelude::*;
 fn scalar(value: &str) -> Result<f32> {
@@ -26,6 +26,72 @@ fn limit(v: &str) -> Result<LengthPercentageAuto> {
     } else {
         LengthPercentageAuto::length(scalar(v)?)
     })
+}
+/// A signed length (`-1px`, `0`); offsets and spread may be negative.
+fn signed(value: &str) -> Result<f32> {
+    let n: f32 = value.strip_suffix("px").unwrap_or(value).parse()?;
+    if !n.is_finite() {
+        return Err("length must be finite".into());
+    }
+    Ok(n)
+}
+/// `none` or comma-separated layers of `[inset] <x> <y> [<blur> [<spread>]] <color>`
+/// (colors already resolved from tokens).
+fn shadows(v: &str) -> Result<Vec<Shadow>> {
+    if v == "none" {
+        return Ok(Vec::new());
+    }
+    v.split(',')
+        .map(|layer| {
+            let mut inset = false;
+            let mut color = None;
+            let mut lengths = Vec::new();
+            for part in layer.split_whitespace() {
+                if part == "inset" {
+                    inset = true;
+                } else if part.starts_with('#') || part == "transparent" {
+                    color = Some(Color::parse(part)?);
+                } else {
+                    lengths.push(signed(part)?);
+                }
+            }
+            let color = color.ok_or("box-shadow layer needs a color token")?;
+            let (offset, blur, spread) = match lengths[..] {
+                [x, y] => ([x, y], 0., 0.),
+                [x, y, blur] => ([x, y], blur, 0.),
+                [x, y, blur, spread] => ([x, y], blur, spread),
+                _ => return Err("box-shadow layer needs 2-4 lengths: x y [blur [spread]]".into()),
+            };
+            if blur < 0. {
+                return Err("box-shadow blur must be nonnegative".into());
+            }
+            Ok(Shadow {
+                inset,
+                offset,
+                blur,
+                spread,
+                color,
+            })
+        })
+        .collect()
+}
+/// `none` or `blur(<length>)` with an optional `saturate(<number>)`, in either order.
+fn backdrop(v: &str) -> Result<Option<Backdrop>> {
+    if v == "none" {
+        return Ok(None);
+    }
+    let mut out = Backdrop {
+        blur: 0.,
+        saturate: 1.,
+    };
+    for function in v.split(')').map(str::trim).filter(|f| !f.is_empty()) {
+        match function.split_once('(') {
+            Some(("blur", n)) => out.blur = scalar(n.trim())?,
+            Some(("saturate", n)) => out.saturate = scalar(n.trim())?,
+            _ => return Err("backdrop-filter supports blur(<px>) and saturate(<n>)".into()),
+        }
+    }
+    Ok(Some(out))
 }
 pub(super) fn declarations(body: &str) -> Result<Vec<(String, String)>> {
     Ok(ara_ui_document::stylesheet::declarations(body, 0)?
@@ -60,6 +126,8 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
             }
         }
         "border-radius" => c.radius = scalar(v)?,
+        "box-shadow" => c.shadows = shadows(v)?,
+        "backdrop-filter" => c.backdrop = backdrop(v)?,
         "border-width" => {
             c.border = scalar(v)?;
             c.layout.border = Rect::length(c.border);

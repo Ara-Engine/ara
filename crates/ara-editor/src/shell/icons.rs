@@ -15,10 +15,17 @@ pub(super) fn icon_in(id: &str, name: &str, class: &str) -> String {
 pub(super) fn exists(name: &str) -> bool {
     ASSETS.iter().any(|(n, _)| *n == name)
 }
-/// Rasterize every icon (white, tinted at draw time) and the brand logo for `dpi`.
+/// Rasterize every icon (white, tinted at draw time), the agent client marks
+/// (`icon-agent-<id>`; Claude keeps its brand colour) and the brand logo for `dpi`.
 pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
     let size = (16. * dpi.max(2.)).ceil() as u32;
-    for (name, svg) in ASSETS {
+    let agents =
+        ara_agents::Client::ALL.map(|client| (format!("agent-{}", client.id()), client.logo()));
+    for (name, svg) in ASSETS
+        .iter()
+        .map(|(name, svg)| (name.to_string(), *svg))
+        .chain(agents)
+    {
         let svg = svg.replace("currentColor", "#ffffff");
         let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default())?;
         let mut pixels = resvg::tiny_skia::Pixmap::new(size, size).ok_or("icon extent")?;
@@ -46,8 +53,14 @@ pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
         )?;
     }
     // The menu bar's app logo keeps its own colours (not a tinted icon).
-    let logo = (22. * dpi.max(2.)).ceil() as u32;
-    let tree = resvg::usvg::Tree::from_str(BRAND, &resvg::usvg::Options::default())?;
+    let logo = (64. * dpi.max(1.)).ceil() as u32; // menu bar (22 px) and About (56 px)
+    // The chrome shows the mark alone: drop the app icon's dark tile and its rim.
+    let mark = BRAND
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("<rect"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tree = resvg::usvg::Tree::from_str(&mark, &resvg::usvg::Options::default())?;
     let mut pixels = resvg::tiny_skia::Pixmap::new(logo, logo).ok_or("logo extent")?;
     resvg::render(
         &tree,
@@ -70,12 +83,60 @@ pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
             rgba,
         },
     )?;
+    super::overlay::gizmos::install(renderer, dpi)?;
     renderer.set_raster_scale(dpi)?;
     Ok(())
+}
+/// A bundled Lucide icon's SVG source (Scene gizmo glyphs rasterize their own size).
+pub(crate) fn svg(name: &str) -> Option<&'static str> {
+    ASSETS.iter().find(|(n, _)| *n == name).map(|(_, svg)| *svg)
 }
 /// The engine's small-size icon, authored for compact native chrome (64-unit view box).
 const BRAND: &str = include_str!("../../../../assets/brand/icons/engine/ara-engine-small.svg");
 const ASSETS: &[(&str, &str)] = &[
+    // Scene gizmo glyphs.
+    (
+        "cloud-fog",
+        include_str!("../../assets/icons/cloud-fog.svg"),
+    ),
+    (
+        "audio-lines",
+        include_str!("../../assets/icons/audio-lines.svg"),
+    ),
+    // View modes.
+    ("sun-dim", include_str!("../../assets/icons/sun-dim.svg")),
+    ("hash", include_str!("../../assets/icons/hash.svg")),
+    ("layers-2", include_str!("../../assets/icons/layers-2.svg")),
+    ("flame", include_str!("../../assets/icons/flame.svg")),
+    (
+        "arrow-up-from-dot",
+        include_str!("../../assets/icons/arrow-up-from-dot.svg"),
+    ),
+    (
+        "wireframe",
+        include_str!("../../assets/icons/wireframe.svg"),
+    ),
+    (
+        "lit-wireframe",
+        include_str!("../../assets/icons/lit-wireframe.svg"),
+    ),
+    // Windows 11 caption glyphs: 10 px, 1 px strokes at 16 logical px.
+    (
+        "caption-minimize",
+        include_str!("../../assets/icons/caption-minimize.svg"),
+    ),
+    (
+        "caption-maximize",
+        include_str!("../../assets/icons/caption-maximize.svg"),
+    ),
+    (
+        "caption-restore",
+        include_str!("../../assets/icons/caption-restore.svg"),
+    ),
+    (
+        "caption-close",
+        include_str!("../../assets/icons/caption-close.svg"),
+    ),
     ("star", include_str!("../../assets/icons/star.svg")),
     ("bookmark", include_str!("../../assets/icons/bookmark.svg")),
     ("activity", include_str!("../../assets/icons/activity.svg")),
@@ -171,6 +232,10 @@ const ASSETS: &[(&str, &str)] = &[
     ),
     ("file", include_str!("../../assets/icons/file.svg")),
     ("flag", include_str!("../../assets/icons/flag.svg")),
+    (
+        "flashlight",
+        include_str!("../../assets/icons/flashlight.svg"),
+    ),
     ("focus", include_str!("../../assets/icons/focus.svg")),
     (
         "folder-open",
@@ -266,6 +331,7 @@ const ASSETS: &[(&str, &str)] = &[
     ("pin", include_str!("../../assets/icons/pin.svg")),
     ("pipette", include_str!("../../assets/icons/pipette.svg")),
     ("play", include_str!("../../assets/icons/play.svg")),
+    ("plug", include_str!("../../assets/icons/plug.svg")),
     ("plus", include_str!("../../assets/icons/plus.svg")),
     ("redo-2", include_str!("../../assets/icons/redo-2.svg")),
     (

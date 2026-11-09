@@ -1,0 +1,66 @@
+// Ordered specular interfaces. Explicit depth-first branches retain reflected
+// and refracted energy; budget exhaustion is counted, never called convergence.
+#pragma once
+#include "reflect-trace.slangh"
+struct GlassPath {
+    float3 origin;float3 direction;float3 weight;
+    uint depth;uint count;uint4 materials;uint4 objects;
+};
+float glassMediumIor(Look l,GlassPath p){return p.count==0?1:glassIor(asuint(reflectMaterial(l,p.materials[p.count-1]).factors.z));}
+float3 glassMediumAbsorption(Look l,GlassPath p){return p.count==0?float3(0):glassAbsorption(asuint(reflectMaterial(l,p.materials[p.count-1]).factors.w));}
+float3 glassPathRadiance(Frame f,Look l,float3 origin,float3 direction,float footprint){
+    // Two extra siblings per depth when a partially covered solid also has an
+    // uncovered straight-through branch: 2*16+1 live entries at most.
+    GlassPath stack[33];GlassPath first=(GlassPath)0;first.origin=origin;first.direction=direction;first.weight=1;
+    stack[0]=first;uint pending=1;float3 result=0;
+    [loop]while(pending>0){
+        GlassPath p=stack[--pending];TraceHit hit;
+        if(!reflectClosest(l,p.origin,p.direction,l.rtParams[0].y,REFLECT_ALL,hit)){
+            if(p.count!=0)reflectCount(l,6);
+            result+=p.weight*reflectMiss(f,l,p.direction);continue;
+        }
+        p.weight*=exp(-glassMediumAbsorption(l,p)*hit.t);
+        float3 at,n,outward;Surface s=reflectSurface(l,hit,p.direction,footprint+hit.t*l.rtParams[0].z,at,n,outward);
+        uint material=reflectTriangle(l,hit.user,hit.primitive,hit.barycentrics).material;
+        ReflectMaterial m=reflectMaterial(l,material);
+        if(m.pbr.flags.x!=2 && s.transmission<=0){result+=p.weight*reflectShade(f,l,s,at,n,-p.direction);continue;}
+        reflectCount(l,4);
+        if(p.depth>=uint(l.rtParams[1].y)){reflectCount(l,5);continue;}
+        float coverage=m.pbr.flags.x==2?saturate(s.alpha):1;
+        // Non-transmissive coating/film light uses the same BRDF and hit lighting.
+        Surface coat=s;coat.transmission=0;
+        result+=p.weight*coverage*(1-s.transmission)*reflectShade(f,l,coat,at,n,-p.direction);
+        bool volume=(asuint(m.factors.z)&65535)!=0,entering=dot(outward,p.direction)<0;
+        if(volume && coverage<1){
+            GlassPath uncovered=p;uncovered.depth++;
+            uncovered.origin=at+p.direction*l.rtParams[1].x;
+            uncovered.weight*=1-coverage;
+            stack[pending++]=uncovered;
+        }
+        GlassPath transmitted=p;transmitted.depth++;
+        float etaBefore=glassMediumIor(l,p),etaAfter=glassIor(asuint(m.factors.z));
+        if(volume){
+            if(entering){
+                if(p.count>=4){reflectCount(l,6);continue;}
+                transmitted.materials[p.count]=material;transmitted.objects[p.count]=hit.user;transmitted.count++;
+            }else{
+                if(p.count==0 || p.objects[p.count-1]!=hit.user){reflectCount(l,6);continue;}
+                transmitted.count--;etaAfter=glassMediumIor(l,transmitted);
+            }
+        }
+        float fresnel=glassFresnel(abs(dot(s.normal,p.direction)),etaAfter/etaBefore);
+        float3 bent=volume?refract(p.direction,s.normal,etaBefore/etaAfter):p.direction;
+        if(dot(bent,bent)<1e-12)fresnel=1;
+        // Covered glass reflects Fresnel energy; an uncovered film passes straight.
+        GlassPath reflected=p;reflected.depth++;
+        reflected.direction=normalize(reflect(p.direction,s.normal));
+        reflected.origin=at+n*l.rtParams[1].x;
+        reflected.weight*=coverage*s.transmission*fresnel;
+        if(any(reflected.weight>0))stack[pending++]=reflected;
+        transmitted.direction=dot(bent,bent)>1e-12?normalize(bent):p.direction;
+        transmitted.origin=at+transmitted.direction*l.rtParams[1].x;
+        transmitted.weight*=(volume?0:1-coverage)+coverage*s.transmission*(1-fresnel)*s.albedo;
+        if(any(transmitted.weight>0))stack[pending++]=transmitted;
+    }
+    return result;
+}

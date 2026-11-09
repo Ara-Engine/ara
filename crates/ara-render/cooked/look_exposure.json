@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_exposure/exposureMain.dxil",
-      "dxil_hash": "d950fcb2e7094ee73f9d7694d6f45119e3bc8ed1ca7395dfd1fa7faf4738775e",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_exposure/exposureMain.dxil",
+      "dxil_hash": "07a92b27748c7a93f34318bdcfc626cf7db6d25d5db3d2bfe3677a7481ed2aed",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_exposure/exposureMain.metallib",
-        "metallib_hash": "b336bf6b3d250236a78222875e6d553ea048eef2c8ea3c6f52ea848d746e5e27",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_exposure/exposureMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_exposure/exposureMain.metallib",
+        "metallib_hash": "72e9ade200eb4f5b947928a8765b318f60e30f317af12cf4f6f5412a36e828ec",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_exposure/exposureMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "exposureMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_exposure/exposureMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_exposure/exposureMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b16b3098d8bb48710354830089dbfc1296f956ad5800aba3e3ec4bb74f0492e1",
+      "spirv_hash": "73f62409a36876ad26d6767437a9239bcdeb67da3bf067b2b691174c7ce79981",
       "stage": "compute"
     }
   ],

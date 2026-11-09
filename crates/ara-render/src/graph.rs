@@ -173,11 +173,12 @@ impl Graph {
             for (p, _) in uses.iter().copied().filter(|(_, a)| !a.writes()) {
                 let previous = writers.iter().copied().take_while(|w| *w < p).last();
                 let producer = if previous.is_none() && resource.state.access == Access::Undefined {
-                    Some(
-                        *writers
-                            .first()
-                            .ok_or_else(|| anyhow::anyhow!("Resource {r} read with no producer"))?,
-                    )
+                    Some(*writers.first().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Resource {r} read by {} with no producer",
+                            self.passes[p].name
+                        )
+                    })?)
                 } else {
                     previous
                 };

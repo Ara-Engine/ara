@@ -1,0 +1,97 @@
+J7 EDITOR INTEGRATION DRAFT — D-ONLY, NOT APPLIED OR COMPILED
+
+Apply in order after review:
+1. Real-merge VQ 2dcdb0877 AND its outstanding-cache-write retirement fix.
+2. Real-merge the editor-owned unlinked eight-file proof checkpoint 1b2d8f06d.
+3. Apply j7-production.patch, then j7-native.patch. app/mod.rs appears in both:
+   the native patch is based on the production patch's small pre-render hook.
+   Do not apply either patch twice. Do not copy the full *-after scratch files.
+4. Root integrates hardfile hunks serially, preserving current Recovery/Profile
+   fields/calls and all newer main integrations. Stable baseline for production
+   hunks is 96e73f91d; proof hunks use 1b2d8f06d.
+
+BLOCKER: COMMITTED VQ RETIREMENT DOES NOT YET ATTEST CACHE-WRITE COMPLETION
+2dcdb0877 probes.rs sends Io::Hashed before write_cache, Io::Cached afterward.
+published() clears probe.flight when Hashed lands. is_busy() checks flight/loading;
+retire() returns only flight.writing. A cache write can still be running when
+poll_probe_retirement returns false. Root has routed this to VQ. The Editor must
+not replace that contract with production filesystem polling or claim retirement
+is safe on that SHA alone. The draft calls the agreed API and retains ownership
+until it returns false, assuming the VQ follow-up fixes pending-IO accounting.
+
+Exact production hooks (11 files):
+- app/viewport/probes.rs::probe_retirement_pending calls the real retained
+  RasterView::poll_probe_retirement(&mut Renderer), preserving errors/lost-owner
+  state instead of manufacturing completion. The same file adds one verification-
+  only completed_debug_view_observation and a pure mode-mapping regression.
+- app/probes.rs::Owner::poll dispatches cancels and polls retirement every tick,
+  independently of the 250 ms progress/snapshot cadence. poll_cancellations runs
+  before Scene GPU preparation, so the next bake unit sees the intent in time.
+  bind refuses replacing an owner while jobs OR retirement remain pending.
+- probe_capture/bridge.rs::cancel_target now takes &mut self and collects bounded
+  queued intents before evaluating shared-subscriber cancellation ownership. It
+  does not consume those requests or bypass attribution/coalescing safeguards.
+- app/viewport.rs consults RasterView::needs_frame for pending probe/cache work
+  and does not skip prepare merely because TAA convergence ended. Explicit mode
+  names gi_diffuse/overdraw map to actual ViewMode variants, never Lit.
+- shell/probes.rs adds cached current-document capability access and exactly
+  probe_report {available,error,snapshot,jobs:[{job,doc,entities,status,error}]}.
+  It does not query IO, mutate jobs or re-log diagnostics.
+- shell/commands/mod.rs adds one private Ctx capability borrow and its live Shell
+  constructor field. actions.rs's headless export context supplies None honestly.
+- shell/commands/table.rs replaces Later on existing view.mode.gi_debug and
+  view.mode.overdraw IDs with real native view actions and capability reasons.
+  Existing menus, palette and Scene context menus already contain both IDs;
+  no menus.rs hunk or public command/API registration is introduced.
+- app/mod.rs's production hunk only calls poll_cancellations after Host tick
+  and before Scene render. No submission/fence/wait path is edited.
+- shell/probes/tests.rs checks capability reasons/current-scene isolation.
+  probe_capture/tests.rs checks cancellation seen before ordinary request pumping.
+
+Native patch hooks (9 files; 19 distinct files across both patches):
+- Link mod probe_verify and the already committed ProbeCheck after Pilot, before
+  native Input. Wire both isolated clipboard paths, before-frame inject, after-
+  frame completion/readback observation and final write/validate.
+- Readback happens only when ProbeCheck requests a missing mode observation AND
+  verification_scene_ready is true, actual retained raster_presentation mode
+  matches, current source validation succeeds, Renderer is native/presentation-
+  ready, and both Scene and Renderer report no pending frame.
+- Renderer::capture_completed(CaptureRequest{mode,size:renderer.size(),...}) reads
+  that completed image. It never invokes capture/render for another image. The
+  result contains actual overdraw statistics, source Scene hash and output size.
+  No per-frame readback or new wait is added.
+- Renderer has no exposed completed Scene frame serial. Per Root's agreement,
+  ProbeCheck stamps observationSerial only after a successful completed-image
+  observation. generationScope explicitly says this is an observation serial,
+  NOT a renderer frame ID. It never presents a requested mode or Store revision
+  as proof of a completed native image. The pure proof now requires current:true.
+- ProbeReceipt Done means the published image has been HASHED. Native receipt
+  validation remains strict on source/generation/six faces/resolution/path, but
+  no longer performs synchronous file existence IO or treats immediate absence
+  as a failed image publication.
+- New probe_verify/cache.rs starts one bounded metadata-observation worker after
+  the real receipt, retries missing/empty final cache files for at most 30 seconds,
+  and returns actual nonempty-file evidence. UI polls its mailbox only. Drop
+  requests cancellation; no worker join blocks input. No production UI or jobs
+  use this proof worker. Cache failure preserves published-image truth while
+  failing the proof's required cache-publication evidence explicitly.
+- UI receipt text calls the path an asynchronously written cache destination;
+  no file-existence or successful-reopen claim is inferred from Done alone.
+
+Verification proposed for Root (not run by this writer):
+- Focused editor probe_capture, app::probes, shell::probes, mode-mapping and native
+  proof/cache-worker units; exact strict editor clippy, formatting and editor lib.
+- Existing diagnostic coverage if integration adds any new diagnostic code
+  (this draft adds no code).
+- Matching Windows editor/player build, then all eight actual SDL J7 stories.
+  Keep native GPU captures outside main prepared-harness test phases and inside
+  ara-dev gpu admission. The committed proof is not evidence until it actually runs.
+- Recheck source replacement/close while hashing AND while writing cache, and
+  cancel between preparation units. Ordinary Host cancelled status alone is not
+  renderer retirement proof. VQ must gate its pending cache-write fix separately.
+
+Limits:
+- No builds/tests were run; source is a reviewable draft, not a merge-ready SHA.
+- No render, player, Host reconciliation, registry/public ABI, shader/cooked or
+  GPU submission/sync file was edited or copied. Real VQ merges are required.
+- New code exists only under D:/AraBuild/ux-editor-target/orchestration/j7-ui-integration/.

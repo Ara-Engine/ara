@@ -28,12 +28,43 @@ pub(super) struct Sample {
     pub normal_scale: f32,
 }
 
+/// One vertex-colour channel term per channel R, G, B, A of a paint-layer weight:
+/// 0 unused, 1 the channel `c`, 2 `1 - c` (ara_render::scene::PaintWeight).
+pub(super) type Terms = [u8; 4];
+
 #[derive(Debug, Clone)]
 pub(super) enum Signal {
     Constant(Vec<f32>),
     Coordinates(Affine),
     Texture(TextureSource),
     Sample(Sample),
+    /// Lanes of the interpolated vertex colour (`vertexColor()`), R first.
+    Vertex(Vec<usize>),
+    /// A scalar vertex-colour weight: channel `c` (or `1 - c`, inverted).
+    Mask {
+        channel: usize,
+        inverted: bool,
+    },
+    /// A paint-layer blend (`lerp` by vertex channels), flattened: each term's
+    /// signal weighted by the product of its channel terms; the weights sum to one.
+    Layered(Vec<(Terms, Signal)>),
+    /// A signal multiplied by the vertex colour (base colour and opacity only).
+    Tinted(Box<Signal>),
+}
+
+/// The product of two layer weights, or `None` when they contradict (one takes a
+/// channel, the other its complement).
+pub(super) fn merge(a: Terms, b: Terms) -> Option<Terms> {
+    let mut out = a;
+    for c in 0..4 {
+        match (a[c], b[c]) {
+            (_, 0) => {}
+            (0, term) => out[c] = term,
+            (x, y) if x == y => {}
+            _ => return None,
+        }
+    }
+    Some(out)
 }
 
 pub(super) struct Evaluator<'a> {
@@ -98,6 +129,58 @@ impl<'a> Evaluator<'a> {
     fn call(&mut self, id: &str, op: &str, args: &[String]) -> Result<Signal> {
         match (op, args) {
             ("uv", []) => Ok(Signal::Coordinates(Affine::identity())),
+            ("vertexColor", []) => Ok(Signal::Vertex(vec![0, 1, 2, 3])),
+            ("red" | "green" | "blue", [value]) => {
+                let lane = match op {
+                    "red" => 0,
+                    "green" => 1,
+                    _ => 2,
+                };
+                match self.value(value)? {
+                    Signal::Constant(values) => Ok(Signal::Constant(vec![values[lane]])),
+                    Signal::Vertex(lanes) => Ok(mask(lanes[lane])),
+                    Signal::Sample(mut sample) if sample.kind != SampleKind::Normal => {
+                        sample.channels = vec![sample.channels[lane]];
+                        sample.factors = vec![sample.factors[lane]];
+                        Ok(Signal::Sample(sample))
+                    }
+                    _ => Err(self.bad(id, "channel selection cannot be represented here")),
+                }
+            }
+            ("saturate", [value]) => match self.value(value)? {
+                // Vertex colours are already within 0..1.
+                signal @ (Signal::Vertex(_) | Signal::Mask { .. }) => Ok(signal),
+                Signal::Constant(values) => Ok(Signal::Constant(
+                    values.into_iter().map(|v| v.clamp(0., 1.)).collect(),
+                )),
+                _ => Err(self.bad(id, "saturate applies to constants and vertex colours here")),
+            },
+            ("lerp", [a, b, t]) => {
+                let (a, b, t) = (self.value(a)?, self.value(b)?, self.value(t)?);
+                let (channel, inverted) = match t {
+                    Signal::Mask { channel, inverted } => (channel, inverted),
+                    Signal::Vertex(lanes) if lanes.len() == 1 => (lanes[0], false),
+                    _ => {
+                        return Err(self.bad(
+                            id,
+                            "lerp between material layers needs a vertex-colour channel weight, e.g. red(vertexColor())",
+                        ));
+                    }
+                };
+                let (weight, complement) = if inverted { (2, 1) } else { (1, 2) };
+                let mut terms = Vec::new();
+                for (side, signal) in [(complement, a), (weight, b)] {
+                    for (mut weights, leaf) in layered(signal) {
+                        if weights[channel] != 0 {
+                            return Err(self
+                                .bad(id, "a vertex channel may blend each layer path only once"));
+                        }
+                        weights[channel] = side;
+                        terms.push((weights, leaf));
+                    }
+                }
+                Ok(Signal::Layered(terms))
+            }
             ("copy" | "color" | "srgb" | "float", [value]) => self.value(value),
             ("sampleColor" | "sampleData" | "sampleNormal", [texture, uv]) => {
                 let Signal::Texture(source) = self.value(texture)? else {
@@ -139,6 +222,10 @@ impl<'a> Evaluator<'a> {
                 let value = self.value(value)?;
                 let lanes: &[usize] = if op == "rgb" { &[0, 1, 2] } else { &[3] };
                 match value {
+                    Signal::Vertex(vertex) if vertex.len() == 4 && op == "alpha" => Ok(mask(3)),
+                    Signal::Vertex(vertex) if vertex.len() == 4 => {
+                        Ok(Signal::Vertex(lanes.iter().map(|i| vertex[*i]).collect()))
+                    }
                     Signal::Constant(values) => {
                         Ok(Signal::Constant(lanes.iter().map(|i| values[*i]).collect()))
                     }
@@ -203,6 +290,23 @@ impl<'a> Evaluator<'a> {
             },
             ("dot", [a, b]) => {
                 let (a, b) = (self.value(a)?, self.value(b)?);
+                // A one-hot selector picks a vertex-colour channel.
+                if let (Signal::Vertex(lanes), Signal::Constant(values))
+                | (Signal::Constant(values), Signal::Vertex(lanes)) = (&a, &b)
+                {
+                    let picked: Vec<_> = values
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, v)| **v != 0.)
+                        .collect();
+                    return match picked.as_slice() {
+                        [(index, 1.)] if values.len() == lanes.len() => Ok(mask(lanes[*index])),
+                        _ => Err(self.bad(
+                            id,
+                            "only a one-hot selector of a vertex-colour channel is representable",
+                        )),
+                    };
+                }
                 let (mut sample, values) = match (a, b) {
                     (Signal::Sample(sample), Signal::Constant(values))
                     | (Signal::Constant(values), Signal::Sample(sample)) => (sample, values),
@@ -228,7 +332,33 @@ impl<'a> Evaluator<'a> {
             }
             ("add" | "sub" | "mul" | "div", [a, b]) => {
                 let (a, b) = (self.value(a)?, self.value(b)?);
-                self.binary(id, op, a, b)
+                match (op, a, b) {
+                    // One minus a vertex channel: the complementary weight.
+                    ("sub", Signal::Constant(one), Signal::Vertex(lanes))
+                        if one.as_slice() == [1.] && lanes.len() == 1 =>
+                    {
+                        Ok(Signal::Mask {
+                            channel: lanes[0],
+                            inverted: true,
+                        })
+                    }
+                    ("sub", Signal::Constant(one), Signal::Mask { channel, inverted })
+                        if one.as_slice() == [1.] =>
+                    {
+                        Ok(Signal::Mask {
+                            channel,
+                            inverted: !inverted,
+                        })
+                    }
+                    // Base colour times the vertex colour (glTF COLOR_0 semantics).
+                    ("mul", Signal::Vertex(lanes), other)
+                    | ("mul", other, Signal::Vertex(lanes))
+                        if lanes.len() >= 3 && lanes[..3] == [0, 1, 2] =>
+                    {
+                        Ok(Signal::Tinted(Box::new(other)))
+                    }
+                    (_, a, b) => self.binary(id, op, a, b),
+                }
             }
             _ => Err(self.bad(
                 id,
@@ -255,6 +385,18 @@ impl<'a> Evaluator<'a> {
     }
 
     fn binary(&self, id: &str, op: &str, a: Signal, b: Signal) -> Result<Signal> {
+        let vertex = |s: &Signal| {
+            matches!(
+                s,
+                Signal::Vertex(_) | Signal::Mask { .. } | Signal::Layered(_) | Signal::Tinted(_)
+            )
+        };
+        if vertex(&a) || vertex(&b) {
+            return Err(self.bad(
+                id,
+                "vertex colours lerp between layers by a channel (or its 1 - c), or multiply base colour; other arithmetic is not representable",
+            ));
+        }
         match (a, b) {
             (Signal::Constant(a), Signal::Constant(b)) => {
                 let count = a.len().max(b.len());
@@ -397,6 +539,22 @@ impl<'a> Evaluator<'a> {
         });
         self.loaded.insert(id.to_owned(), index);
         Ok(index)
+    }
+}
+
+/// A vertex channel as a scalar weight.
+fn mask(channel: usize) -> Signal {
+    Signal::Mask {
+        channel,
+        inverted: false,
+    }
+}
+
+/// A signal's paint-layer terms: itself under no weight unless already layered.
+pub(super) fn layered(signal: Signal) -> Vec<(Terms, Signal)> {
+    match signal {
+        Signal::Layered(terms) => terms,
+        signal => vec![([0; 4], signal)],
     }
 }
 

@@ -14,6 +14,7 @@ fn project_quality_defaults_round_trip_and_reject_invalid_settings() {
     );
     let settings = ProjectImportSettings {
         preset: CookPreset::HighQuality,
+        ..Default::default()
     };
     let text = settings.canonical_text().unwrap();
     let path = root.path().join(PROJECT_IMPORT_SETTINGS_FILE);
@@ -36,6 +37,7 @@ fn scoped_policy_precedes_legacy_without_rewriting_the_legacy_file() {
     assert_eq!(PROJECT_IMPORT_SETTINGS_FILE, "settings/ara.imports");
     let legacy = ProjectImportSettings {
         preset: CookPreset::Balanced,
+        ..Default::default()
     };
     std::fs::write(
         root.path().join(LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
@@ -45,6 +47,7 @@ fn scoped_policy_precedes_legacy_without_rewriting_the_legacy_file() {
     std::fs::create_dir(root.path().join("settings")).unwrap();
     let scoped = ProjectImportSettings {
         preset: CookPreset::HighQuality,
+        ..Default::default()
     };
     std::fs::write(
         root.path().join("settings/ara.imports"),

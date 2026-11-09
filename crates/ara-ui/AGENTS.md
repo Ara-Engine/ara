@@ -23,6 +23,11 @@ Public API:
   `Work` exposes actual work counters (`+=` sums frames).
 - `theme::EDITOR_CSS`, `EditorTheme::{Dark,Light}`, `Ui::switch_theme` use the canonical root
   assets; a switch swaps tokens and restyles once (no relayout/reshape); the same theme is free.
+- `box-shadow` (layers: `[inset] x y [blur [spread]] color`) and `backdrop-filter:
+  blur(px) saturate(n)` paint as `Draw::Shadow`/`Draw::Backdrop` in CSS order (D31);
+  `var()` resolves inside layered values. `examples/check_styles.rs` validates sheets.
+- `live::watch` (debug builds only): a polling worker that publishes a host's validated
+  CSS/theme snapshot after each save; the editor and Hub apply it with `set_stylesheet`/tokens.
 - `Sheet::compute` memoizes cascades by tag/class/inline style/state (and ID when an ID rule
   names it); `Sheet::set_tokens` swaps theme tokens and clears the memo.
 - `paint::DisplayList` owns renderer-neutral commands and a contiguous positioned-glyph arena.
@@ -86,6 +91,11 @@ Rendering goldens and release measurements live in ara-ui-render.
 
 Numeric editors can select an explicit font-family and text-align:right. These
 properties retain shaping correctly; focused fields keep their caret origin.
+Numeric fields (`class='number'` or min/max/step; `input/numeric.rs`) scrub when
+dragged anywhere: moves emit preview text, release emits one number (hosts commit
+numbers, draft text), Escape re-sends the original. A click edits (select all, or
+the caret when already focused). `class='slider'` with finite min/max also fills to
+its value and spans its range across its width. Selects take `with_empty_text`.
 Missing success/info surface tokens derive from the canonical palette colors.
 
 DisplayList supports analytic Line strokes and ScalableGlyphRun labels for graph

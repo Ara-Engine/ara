@@ -172,6 +172,7 @@ impl Look {
                 }],
                 None => scene.volumes,
             },
+            fog_volumes: scene.fog_volumes,
             luts: scene.luts,
         }
     }

@@ -11,7 +11,7 @@ use serde_json::json;
 fn setup() -> (App, Hub) {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
-    let mut app = App::new([1280., 720.], Vec::new()).expect("native UI");
+    let mut app = App::new([1280., 720.]).expect("native UI");
     app.rebuild(&mut hub, capture::NOW).expect("first page");
     (app, hub)
 }

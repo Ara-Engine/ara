@@ -15,7 +15,7 @@ pub(super) fn run(options: &Options, directory: &Path, config: &Path) -> Result<
         "rehearsal needs an installed standalone Hub"
     );
     if let Some(marker) = &options.update_health {
-        return health(marker, directory, config);
+        return health(marker, config);
     }
     let report = options
         .rehearse_update
@@ -165,9 +165,9 @@ fn restart_gate(config: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(gate))
 }
 
-fn health(marker: &Path, directory: &Path, config: &Path) -> Result<()> {
+fn health(marker: &Path, config: &Path) -> Result<()> {
     let mut offscreen = Offscreen::new([960, 600], 1.)?;
-    let mut app = App::new(offscreen.logical(), os::docs(directory)).map_err(err)?;
+    let mut app = App::new(offscreen.logical()).map_err(err)?;
     let mut hub = Hub::new(Prefs::default(), config.to_path_buf(), None);
     app.rebuild(&mut hub, now_ms()).map_err(err)?;
     app.frame().map_err(err)?;

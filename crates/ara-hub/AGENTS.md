@@ -6,11 +6,9 @@ on `ara_gpu::vulkan::Context` (no scene renderer), shared themes/fonts/Lucide,
 and a high-DPI DWM-styled native frame (D23).
 
 All actions use Hub JSON-RPC; its contract is `../ara-hub-service/AGENTS.md`.
-
-Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into both Hub and
-`ara-hub-updater`; the native Hub window explicitly sets the Hub 64 px PNG.
-The sidebar pairs the new Hub SVG icon with native Ara text. Engine cards and
-installation dialogs use the engine SVG family; update dialogs use the Hub icon.
+Icons: `build.rs` embeds `assets/brand/icons/hub/ara-hub.rc` into Hub and
+`ara-hub-updater`; the window sets the Hub 64 px PNG. Sidebar, update card and dialogs
+use the Hub SVG; engine cards and installs use the engine SVG family.
 
 ## Layout
 
@@ -40,12 +38,12 @@ installation dialogs use the engine SVG family; update dialogs use the Hub icon.
   settings stay under Advanced. Repair jobs retain engine pins.
   Uninstall first inspects destination/size in a cancellable read-only job; only the
   subsequent explicit confirmation can start removal.
-- `native/`: window/GPU host and loop (`mod.rs`), retained `App` (`app.rs`: rebuild,
+- `native/`: window/GPU host and loop (`mod.rs`; modal live resizes keep one display-sized swapchain, `Host::track`), retained `App` (`app.rs`: rebuild,
   input routing, keys), `input.rs` (SDL text/IME, clipboard, folder drops),
   `selects.rs` retains typed choices across replies and routes native search/IME;
   `frame.rs` (DWM colors), `images.rs` (icons and previews decoded off
-  thread, center-cropped to 16:9), `os.rs` (pickers, Explorer, install snippets,
-  local docs).
+  thread, center-cropped to 16:9), `os.rs` (pickers, Explorer, browser);
+  agent detect/connect is `ara-agents` (shared with the editor and CLI).
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
   reply paths and writes every page, dark and light, from the real GPU target.
   No window opens: a headless Vulkan device drives the same `NativeUi` adapter.
@@ -61,18 +59,21 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - Equal markup replies do no UI work. Changed markup uses `Ui::reconcile` on the
   same tree, retaining shaped text, layouts, widget state and input identity.
   Scroll offsets clamp after layout; explicit focus requests and hover update then.
-- Theme changes call `switch_theme` once to swap palette tokens. Initial inherited
-  colors resolve in the runtime; `Ui::editor` is used only for window creation.
+- Theme changes swap palette tokens once (`switch_theme`, or live palettes after a debug save);
+  inherited colors resolve in the runtime; `Ui::editor` only at window creation. Debug builds
+  hot-reload hub.css, Select CSS and themes (`native/live_styles.rs`); see `ara-dev live hub`.
 - Built-in icons, brand marks and Starter art decode/upload on first visible use,
   then stay resident across pages/themes. DPI changes invalidate that image set.
-  MCP snippet helper processes start only on opening Agents, after bootstrap is ready.
-- Agent instructions quote the verified absolute CLI path (including spaces/apostrophes).
-  Hub copies configs/commands; it does not write or own the clients' config files.
+  Agent probes (a thread per client) start once bootstrap is ready; logos: Simple
+  Icons (CC0, `ara-agents/assets`). Learn links GitHub docs. Agent steps quote the
+  verified CLI path. Connect runs `claude mcp add` or adds only the `ara` entry to
+  Codex TOML / Cursor, OpenCode JSON (commented JSON refused). Manual steps are on
+  request for missing/failed clients; once one connects, setup collapses to a row.
 - `App::frame` consumes a retained presentation request: rebuilding must present
   even if its layout work was already consumed. Pointer activations apply before
   the next queued event. Worker results wake SDL; idle waits follow clock/toast deadlines.
 - Notifications have one place each (docs/design/hub.md): errors use focused dialogs,
-  a quiet update indicator opens release notes, and successful results use toasts.
+  the sidebar update card opens release notes, and successful results use toasts.
 - Every toast/banner has Dismiss. Informational toasts expire after 8 s (Undo: 20 s);
   errors remain until dismissed. Preference writes are coalesced off the UI thread.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;
@@ -84,7 +85,7 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - First run of an installed build (an `engine.json` beside the exe) registers that
   build with `hub.engine.register` if the service lacks it. Dev builds don't.
 - Folder drops on the window register the folder (`Intent::Register`).
-- Prefs (theme, sort, layout, agent client) persist to `<config>/hub-ui.json`.
+- Prefs (theme, sort, layout) persist to `<config>/hub-ui.json`.
 - `model/updates.rs`: authenticated release metadata and jobs from the service.
   Installs shows published versions, phased progress/cancel and managed Uninstall;
   Settings configures channel/repository and checks for updates. Native checks

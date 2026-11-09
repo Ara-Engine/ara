@@ -200,6 +200,36 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
                     color: *color,
                     radius: radius * scale,
                 },
+                Draw::Shadow {
+                    node,
+                    rect,
+                    radius,
+                    shadow,
+                } => Draw::Shadow {
+                    node: *node,
+                    rect: scaled(*rect, scale),
+                    radius: radius * scale,
+                    shadow: ara_ui::style::Shadow {
+                        offset: shadow.offset.map(|v| v * scale),
+                        blur: shadow.blur * scale,
+                        spread: shadow.spread * scale,
+                        ..*shadow
+                    },
+                },
+                Draw::Backdrop {
+                    node,
+                    rect,
+                    radius,
+                    backdrop,
+                } => Draw::Backdrop {
+                    node: *node,
+                    rect: scaled(*rect, scale),
+                    radius: radius * scale,
+                    backdrop: ara_ui::style::Backdrop {
+                        blur: backdrop.blur * scale,
+                        ..*backdrop
+                    },
+                },
                 Draw::Border {
                     node,
                     rect,

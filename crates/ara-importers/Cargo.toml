@@ -19,12 +19,14 @@ rayon = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-geo = { path = "../ara-geo" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-bvh = { path = "../ara-bvh" }
 ara-json = { path = "../ara-json" }
+ara-patch-charts = { path = "../ara-patch-charts" }
 ara-schema = { path = "../ara-schema" }
 base64 = "0.22"
 bytemuck = { workspace = true, features = ["derive", "extern_crate_alloc"] }
 gltf = { workspace = true, features = ["utils", "names", "extensions", "extras", "KHR_texture_transform", "KHR_lights_punctual", "KHR_materials_unlit", "KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission"] }
-image = { workspace = true, features = ["png", "jpeg", "hdr", "exr"] }
+image = { workspace = true, features = ["png", "jpeg", "hdr", "exr", "tga", "tiff", "webp", "bmp", "dds"] }
 intel_tex_2 = "0.5.0"
 half = { workspace = true, features = ["bytemuck"] }
 meshopt = "0.7.0"

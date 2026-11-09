@@ -46,7 +46,6 @@ fn installs_settings_and_banner_bind_to_service_actions() {
         size: [1440., 900.],
         thumbnail: &|_| None,
         anchor: None,
-        docs: &[],
         dialog_close_hint: false,
     };
     hub.view = View::Installs;

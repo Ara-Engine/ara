@@ -43,11 +43,19 @@ pub struct Editor {
     pub session: String,
     /// Active provisional spatial edit.
     pub gesture: Option<Gesture>,
+    /// A Mesh Paint stroke's transient colours by Scene draw (`Draw::entity`): the
+    /// Scene shows them until the stroke commits or cancels (`paint_revision`).
+    pub paint_preview:
+        Option<std::sync::Arc<std::collections::BTreeMap<u64, std::sync::Arc<[u32]>>>>,
+    /// Advances whenever `paint_preview` changes.
+    pub paint_revision: u64,
     active_fields: BTreeSet<(String, String, String)>,
     /// Frozen trace selected for frame inspection; immutable and shared only with IO workers.
     pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
     /// Independent baseline trace for the compare view.
     pub profile_baseline: Option<std::sync::Arc<ara_profile::Profile>>,
+    /// Owned asynchronous player-profiling adapter, attached by the Play owner.
+    pub(crate) play_profiling: Option<Box<dyn crate::shell::profiler_targets::backend::Backend>>,
     /// Deferred capture jobs, consumed by the GPU/window owner.
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
@@ -73,6 +81,8 @@ pub struct Editor {
     pub activity: crate::activity::Activity,
     /// Embedded Play surfaces for the Game view (taken from the play service).
     pub(crate) play_surfaces: Option<ara_play_host::embed::Surfaces>,
+    /// Owned nonblocking C# recovery channel; results remain scoped to their Play incarnation.
+    pub(crate) script_recovery: ara_play_host::ScriptRecoveryHandle,
     /// The Play world this window started (`play:3`).
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
@@ -80,6 +90,9 @@ pub struct Editor {
     /// The Game view's UI scale (physical pixels per point): embedded Play draws its
     /// game UI at this scale, so it keeps its size in the panel.
     pub(crate) game_scale: f32,
+    /// Refresh rate (Hz) of the monitor showing the main window: embedded Play's
+    /// frame cap with VSync on.
+    pub(crate) display_hz: f32,
     /// Model sources already checked on disk, present or reported missing
     /// (`report_missing_sources`); each is checked once per session.
     sources_checked: BTreeSet<String>,
@@ -204,6 +217,10 @@ impl Editor {
         let mut play = ara_play_host::PlayService::new(root, play).with_headless_run();
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
+        let script_recovery = play.script_recovery();
+        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(
+            play.profiling(),
+        ));
         host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
@@ -247,9 +264,12 @@ impl Editor {
             state,
             session,
             gesture: None,
+            paint_preview: None,
+            paint_revision: 0,
             active_fields: BTreeSet::new(),
             profile_current: None,
             profile_baseline: None,
+            play_profiling,
             captures,
             completed,
             probe_captures,
@@ -265,9 +285,11 @@ impl Editor {
             extensions: Default::default(),
             activity,
             play_surfaces,
+            script_recovery,
             play_world: None,
             game_size: [1280, 720],
             game_scale: 1.,
+            display_hz: 60.,
             sources_checked: BTreeSet::new(),
             cameras,
         };
@@ -328,6 +350,14 @@ impl Editor {
             .and_then(Value::as_bool)
             .unwrap_or(true)
     }
+    /// Presentation waits for vertical blank (setting `view.vsync`, on by default).
+    pub fn vsync(&self) -> bool {
+        self.state
+            .settings
+            .get("view.vsync")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
     /// Play in the Game view (`plays_in_game_view`): no player window, an embedded
     /// surface at the Game view's size instead.
     pub(crate) fn embed_play(&self, params: &mut Value) {
@@ -338,6 +368,8 @@ impl Editor {
                 "width": w.clamp(64, 8192),
                 "height": h.clamp(64, 8192),
                 "scale": self.game_scale,
+                // VSync caps the Game view at the monitor's rate; off, at 1000 FPS.
+                "maxFps": if self.vsync() { self.display_hz.round().clamp(1., 1000.) as u32 } else { 1000 },
             });
         }
     }
@@ -377,6 +409,9 @@ impl Editor {
             // Otherwise every update (each camera step of an orbit, each commit) looked
             // like a panel change and rebuilt the whole shell.
             state.detected_quality = self.state.detected_quality;
+            // Rendering Debug switches are session-only (never in the navigation
+            // record), so every incoming state would otherwise turn them back on.
+            state.render_debug = self.state.render_debug;
             state.apply_settings();
             // The theme is not here: it only tints deletion ghosts (none since D24),
             // and re-extracting a large scene for it took seconds.

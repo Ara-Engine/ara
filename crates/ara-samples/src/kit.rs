@@ -24,8 +24,24 @@ pub struct Material {
     pub emissive: [f32; 3],
     /// Lock ID of a texture set (colour, normal, ARM).
     pub textures: Option<String>,
-    /// Alpha-blended (glass).
+    /// Alpha-blended (a film: coverage, no refraction).
     pub blend: bool,
+    /// Transmissive glass (KHR_materials_transmission, ior and volume): refracts,
+    /// tints by thickness and casts coloured shadows.
+    pub glass: Option<Glass>,
+}
+
+/// A transmissive kit material's medium (glTF KHR_materials_ior and volume).
+#[derive(Debug, Clone, Copy)]
+pub struct Glass {
+    /// Index of refraction.
+    pub ior: f32,
+    /// Thickness of the volume in mesh units; zero is a thin wall.
+    pub thickness: f32,
+    /// Colour white light keeps after `attenuation_distance` metres inside.
+    pub attenuation_color: [f32; 3],
+    /// Metres for `attenuation_color`.
+    pub attenuation_distance: f32,
 }
 
 impl Material {
@@ -39,6 +55,7 @@ impl Material {
             emissive: [0.0; 3],
             textures: Some(set.into()),
             blend: false,
+            glass: None,
         }
     }
     /// An untextured material.
@@ -51,6 +68,7 @@ impl Material {
             emissive: [0.0; 3],
             textures: None,
             blend: false,
+            glass: None,
         }
     }
     /// A pure emitter (light panels, bulbs); colour is the emission tint.
@@ -66,6 +84,13 @@ impl Material {
             color: [tint[0], tint[1], tint[2], opacity],
             blend: true,
             ..Self::flat(name, tint, 0.04, 0.0)
+        }
+    }
+    /// Solid transmissive glass (a ball, a lens): smooth, refracting with `glass`.
+    pub fn solid_glass(name: &str, glass: Glass) -> Self {
+        Self {
+            glass: Some(glass),
+            ..Self::flat(name, [1.0; 3], 0.0, 0.0)
         }
     }
     /// The same material with a colour multiplier.
@@ -465,11 +490,33 @@ impl Kit {
                 out["alphaMode"] = json!("BLEND");
                 out["doubleSided"] = json!(true);
             }
+            if let Some(g) = m.glass {
+                // glTF's default distance is infinite (clear), which JSON cannot hold.
+                let mut volume = json!({"thicknessFactor": g.thickness});
+                if g.attenuation_distance.is_finite() {
+                    volume["attenuationColor"] = json!(g.attenuation_color);
+                    volume["attenuationDistance"] = json!(g.attenuation_distance);
+                }
+                out["extensions"] = json!({
+                    "KHR_materials_transmission": {"transmissionFactor": 1.0},
+                    "KHR_materials_ior": {"ior": g.ior},
+                    "KHR_materials_volume": volume,
+                });
+            }
             materials.push(out);
         }
+        let used: Vec<&str> = if self.materials.iter().any(|m| m.glass.is_some()) {
+            vec![
+                "KHR_materials_transmission",
+                "KHR_materials_ior",
+                "KHR_materials_volume",
+            ]
+        } else {
+            Vec::new()
+        };
         // Textures are one per image (glTF needs a texture object per sampled image).
         let textures: Vec<Value> = (0..images.len()).map(|i| json!({"source": i})).collect();
-        let gltf = json!({
+        let mut gltf = json!({
             "asset": {"version": "2.0", "generator": "ara-samples kit"},
             "scene": 0,
             "scenes": [{"nodes": [0]}],
@@ -482,6 +529,9 @@ impl Kit {
             "bufferViews": views,
             "accessors": accessors,
         });
+        if !used.is_empty() {
+            gltf["extensionsUsed"] = json!(used);
+        }
         std::fs::write(dir.join(format!("{name}.bin")), &bin)?;
         std::fs::write(
             dir.join(format!("{name}.gltf")),

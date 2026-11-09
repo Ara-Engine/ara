@@ -1,0 +1,358 @@
+diff --git a/crates/ara-ui-document/src/markup.rs b/crates/ara-ui-document/src/markup.rs
+index 5c53130e..ed25d023 100644
+--- a/crates/ara-ui-document/src/markup.rs
++++ b/crates/ara-ui-document/src/markup.rs
+@@ -33,6 +33,7 @@ pub const ATTRIBUTES: &[&str] = &[
+     "id",
+     "class",
+     "text",
++    "placeholder",
+     "style",
+     "bind",
+     "action",
+diff --git a/crates/ara-ui/src/emit.rs b/crates/ara-ui/src/emit.rs
+index 5483b262..7f110f10 100644
+--- a/crates/ara-ui/src/emit.rs
++++ b/crates/ara-ui/src/emit.rs
+@@ -182,6 +182,40 @@ impl Ui {
+                     &mut self.display,
+                 );
+             }
++            if let Some(hint)=&node.placeholder
++                && matches!(self.widgets.get(&id),Some(crate::widgets::Widget::Input(input)) if input.value().is_empty() && input.preedit_range().is_none())
++            {
++                let origin=[rect.x+l.padding.left+l.border.left,rect.y+l.padding.top+l.border.top];
++                self.display.commands.push(Draw::PushClip{rect:Box2{
++                    x:origin[0],y:origin[1],
++                    w:(rect.w-l.padding.left-l.padding.right-l.border.left-l.border.right-grip_width).max(0.),
++                    h:(rect.h-l.padding.top-l.padding.bottom-l.border.top-l.border.bottom).max(0.),
++                }});
++                let color=self.sheet.color_token("--muted-foreground").unwrap_or(c.color);
++                for line in hint.layout.lines() {
++                    for item in line.items() {
++                        if let PositionedLayoutItem::GlyphRun(run)=item {
++                            let start=self.display.glyphs.len();
++                            self.display.glyphs.extend(run.positioned_glyphs().map(|g|Glyph{id:g.id,x:g.x,y:g.y}));
++                            self.display.commands.push(Draw::GlyphRun{node:id,font:text_system.handle(run.run().font()),size:run.run().font_size(),origin,glyphs:start..self.display.glyphs.len(),color});
++                        }
++                    }
++                }
++                self.display.commands.push(Draw::PopClip);
++            }
++            if node.element.tag=="dropdown"
++                && node.element.attrs.get("class").is_some_and(|classes|classes.split_whitespace().any(|class|class=="kit-select"))
++                && rect.w>=24. && rect.h>=16.
++            {
++                // Native geometry keeps the affordance independent of font coverage.
++                let open=matches!(self.widgets.get(&id),Some(crate::widgets::Widget::Choice{open:true,..}));
++                let x=rect.x+rect.w-14.;let y=rect.y+rect.h*0.5;
++                let direction=if open{-1.}else{1.};
++                let points=[[x-4.,y-2.*direction],[x,y+2.*direction],[x+4.,y-2.*direction]];
++                for ends in points.windows(2) {
++                    self.display.commands.push(Draw::Line{node:id,from:ends[0],to:ends[1],width:1.5,color:c.color});
++                }
++            }
+         }
+         if node.text.is_none() {
+             crate::widget_paint::decorations(
+diff --git a/crates/ara-ui/src/pipeline.rs b/crates/ara-ui/src/pipeline.rs
+index dfbd7c6b..ffd22067 100644
+--- a/crates/ara-ui/src/pipeline.rs
++++ b/crates/ara-ui/src/pipeline.rs
+@@ -81,6 +81,19 @@ impl Ui {
+         }
+         self.sync_choices()?;
+         self.prepare_popovers()?;
++        // Hints share font caches but never take part in Taffy measurement.
++        // A color-only restyle repaints their cached glyphs without reshaping.
++        for node in &mut self.nodes {
++            if let Some(hint)=&mut node.placeholder
++                && (node.dirty.paint || node.dirty.layout || hint.dirty)
++            {
++                if hint.family!=node.computed.font_family {
++                    hint.family.clone_from(&node.computed.font_family);
++                    hint.dirty=true;
++                }
++                text_system.measure(hint,None,node.computed.font_size);
++            }
++        }
+         let layout = self.nodes.iter().any(|n| n.dirty.layout);
+         let paint = layout || self.nodes.iter().any(|n| n.dirty.paint);
+         if layout {
+diff --git a/crates/ara-ui/src/reconcile.rs b/crates/ara-ui/src/reconcile.rs
+index 7b09e1a6..abfd85b4 100644
+--- a/crates/ara-ui/src/reconcile.rs
++++ b/crates/ara-ui/src/reconcile.rs
+@@ -436,10 +436,12 @@ impl Ui {
+         };
+         let live_input = keep && matches!(widget, Some(Widget::Input(_)));
+         let mut relayout = false;
+-        match (element.attrs.get("text"), &mut node.text) {
++        let display_text=element.attrs.get("text").map(String::as_str)
++            .or_else(||matches!(element.tag.as_str(),"field"|"input").then_some(""));
++        match (display_text, &mut node.text) {
+             (Some(value), Some(text)) => relayout = !live_input && text.set(value),
+             (Some(value), None) => {
+-                node.text = Some(ara_ui_text::Text::new(value.clone()));
++                node.text = Some(ara_ui_text::Text::new(value.to_owned()));
+                 relayout = true;
+             }
+             (None, Some(_)) => {
+@@ -453,6 +455,17 @@ impl Ui {
+             node.dirty.paint = true;
+             self.tree.mark_dirty(node.layout_id)?;
+         }
++        let hint=matches!(element.tag.as_str(),"field"|"input")
++            .then(||element.attrs.get("placeholder")).flatten().filter(|hint|!hint.is_empty());
++        match (hint,&mut node.placeholder) {
++            (Some(value),Some(text)) => node.dirty.paint |= text.set(value),
++            (Some(value),None) => {
++                node.placeholder=Some(ara_ui_text::Text::new(value.clone()));
++                node.dirty.paint=true;
++            }
++            (None,Some(_)) => {node.placeholder=None;node.dirty.paint=true;}
++            (None,None)=>{},
++        }
+         if let Some(widget) = widget {
+             widgets.insert(stable_id(&element.id), widget);
+         }
+diff --git a/crates/ara-ui/src/runtime.rs b/crates/ara-ui/src/runtime.rs
+index 745da368..d66ee4bf 100644
+--- a/crates/ara-ui/src/runtime.rs
++++ b/crates/ara-ui/src/runtime.rs
+@@ -36,6 +36,9 @@ pub struct Node {
+     pub layout_id: NodeId,
+     /// Cached paragraph, when this control displays text.
+     pub text: Option<Text>,
++    /// Cached, paint-only Field/Input hint; never contributes to the widget's
++    /// committed value, accessibility value or intrinsic field dimensions.
++    pub placeholder: Option<Text>,
+     /// Separate incremental work flags.
+     pub dirty: Dirty,
+     /// Computed logical viewport rectangle.
+@@ -329,7 +332,11 @@ pub(crate) fn build_node(
+         ..State::default()
+     };
+     let computed = sheet.compute(&element, state)?;
+-    let text = element.attrs.get("text").map(|v| Text::new(v.to_owned()));
++    let text = element.attrs.get("text").map(|v| Text::new(v.to_owned()))
++        .or_else(||matches!(element.tag.as_str(),"field"|"input").then(||Text::new(String::new())));
++    let placeholder = matches!(element.tag.as_str(),"field"|"input")
++        .then(||element.attrs.get("placeholder"))
++        .flatten().filter(|hint|!hint.is_empty()).map(|hint|Text::new(hint.clone()));
+     let layout_id = tree.new_leaf_with_context(computed.layout.clone(), index)?;
+     Ok(Node {
+         virtual_extent: None,
+@@ -345,6 +352,7 @@ pub(crate) fn build_node(
+         state,
+         layout_id,
+         text,
++        placeholder,
+         rect: Box2::default(),
+         clip: Box2::default(),
+     })
+diff --git a/crates/ara-ui/src/select.rs b/crates/ara-ui/src/select.rs
+index 8f7d1dd6..1e804af6 100644
+--- a/crates/ara-ui/src/select.rs
++++ b/crates/ara-ui/src/select.rs
+@@ -62,6 +62,7 @@ pub struct Select<T> {
+     id: String,
+     control: String,
+     label: String,
++    search_hint: String,
+     options: Vec<SelectOption<T>>,
+     selected: Option<T>,
+     changed: Option<T>,
+@@ -85,6 +86,7 @@ impl<T: Clone + PartialEq> Select<T> {
+             control: format!("{id}-control"),
+             id,
+             label: label.into(),
++            search_hint: "Search…".into(),
+             options,
+             selected,
+             changed: None,
+@@ -103,6 +105,11 @@ impl<T: Clone + PartialEq> Select<T> {
+         self.control = id.into();
+         self
+     }
++    /// Localize or clarify the empty search hint without changing the filter value.
++    pub fn with_search_hint(mut self, hint: impl Into<String>) -> Self {
++        self.search_hint=hint.into();
++        self
++    }
+ 
+     /// Current committed value; filtering and keyboard movement never alter it.
+     pub fn selected(&self) -> Option<&T> {
+diff --git a/crates/ara-ui/src/select/select.css b/crates/ara-ui/src/select/select.css
+index 85fa5492..a69217f8 100644
+--- a/crates/ara-ui/src/select/select.css
++++ b/crates/ara-ui/src/select/select.css
+@@ -1,8 +1,14 @@
+-.kit-select { min-width:48px; max-width:360px; min-height:24px; height:auto; padding:6px; white-space:normal; background:var(--input); color:var(--foreground); border-width:1px; border-color:var(--border); border-radius:6px; overflow:hidden; }
++.kit-select { min-width:48px; max-width:360px; min-height:24px; height:auto; padding:6px; padding-right:28px; white-space:normal; background:var(--background); color:var(--foreground); border-width:1px; border-color:var(--input); border-radius:6px; overflow:hidden; }
++.kit-select:hover { background:var(--hover-surface); border-color:var(--separator-strong); }
++.kit-select:focus { border-color:var(--ring); }
++.kit-select:active { border-color:var(--ring); }
++.kit-select:disabled { background:var(--muted); color:var(--muted-foreground); border-color:var(--border); }
+ .kit-select-popover { display:flex; min-width:140px; max-width:360px; max-height:300px; padding:4px; gap:4px; background:var(--popover); border-width:1px; border-color:var(--border); border-radius:6px; }
+-.kit-select-search { min-height:26px; padding:6px; white-space:nowrap; }
++.kit-select-search { min-height:32px; height:32px; padding:6px; white-space:nowrap; background:var(--background); color:var(--foreground); }
+ .kit-select-options { min-height:0px; max-height:240px; flex-basis:auto; flex-shrink:1; }
+ .kit-select-option { min-width:0px; min-height:26px; height:auto; padding:6px; white-space:normal; color:var(--foreground); background:transparent; }
+ .kit-select-active { background:var(--hover-surface); }
+ .kit-select-selected { color:var(--primary); }
++.kit-select-option:hover { background:var(--hover-surface); color:var(--foreground); }
++.kit-select-option:disabled { background:transparent; color:var(--muted-foreground); }
+ .kit-select-empty { padding:8px; color:var(--muted-foreground); white-space:normal; }
+diff --git a/crates/ara-ui/src/select/tests.rs b/crates/ara-ui/src/select/tests.rs
+index df1011a3..2bb0d64a 100644
+--- a/crates/ara-ui/src/select/tests.rs
++++ b/crates/ara-ui/src/select/tests.rs
+@@ -50,6 +50,109 @@ fn surface_with_styles(size: [f32; 2], host_styles: &str) -> Result<(Ui, InputSt
+ // Host panel styles must not replace a select's intrinsic list basis or wrapped row height.
+ const HOST_RESETS: &str = "button { height:22px; } dropdown { height:22px; } scroll { flex-basis:0px; min-height:0px; min-width:0px; }";
+ 
++#[test]
++fn closed_select_has_native_chevron_reserved_caption_space_and_enabled_hover_focus_disabled_states()->Result<()> {
++    use crate::{cursor::Cursor,paint::Draw,theme::EditorTheme};
++    for theme in [EditorTheme::Dark,EditorTheme::Light] {
++        let(mut ui,mut input,mut text)=surface()?;ui.switch_theme(theme)?;
++        let mut select=Select::new("affordance","Engine version",vec![SelectOption::new(0,"Preview 4 — إصدار المعاينة")],Some(0));
++        mount(&mut select,&mut ui,&mut input,&mut text)?;
++        let index=ui.find(select.control_id()).expect("native select");
++        let rect=ui.nodes[index].rect;
++        let point=[rect.x+rect.w*0.5,rect.y+rect.h*0.5];
++        assert_eq!(ui.cursor(&input,point),Cursor::Pointer);
++        assert_eq!(ui.nodes[index].computed.color,ui.sheet.color_token("--foreground").expect("foreground"));
++        assert_eq!(ui.nodes[index].computed.background,ui.sheet.color_token("--background").expect("enabled field fill"));
++        let id=stable_id(select.control_id());
++        let lines:Vec<_>=ui.display.commands.iter().filter_map(|draw|if let Draw::Line{node,from,to,color,..}=draw {(*node==id).then_some((from,to,color))}else{None}).collect();
++        assert_eq!(lines.len(),2,"chevron does not depend on font glyph coverage");
++        assert!(lines[0].0[1]<lines[0].1[1],"closed chevron points down");
++        let layout=ui.tree.layout(ui.nodes[index].layout_id)?;
++        let caption=ui.nodes[index].text.as_ref().expect("selected caption");
++        let text_right=rect.x+layout.padding.left+layout.border.left+caption.layout.width();
++        assert!(text_right<=rect.x+rect.w-layout.padding.right-layout.border.right+0.5);
++        assert!(lines[0].0[0]>rect.x+rect.w-layout.padding.right,"arrow is outside the caption area");
++        route(&mut select,&mut ui,&mut input,&mut text,InputEvent::PointerMove(point))?;
++        assert_eq!(ui.nodes[index].computed.background,ui.sheet.color_token("--hover-surface").expect("hover"));
++        input.focus(&mut ui,id)?;ui.frame(&mut text)?;
++        assert_eq!(ui.nodes[index].computed.border_color,ui.sheet.color_token("--ring").expect("focus ring"));
++        let mut unavailable=SelectOption::new(0,"Engine not installed");unavailable.disabled=Some("Install the engine first".into());
++        select.set_options(vec![unavailable]);mount(&mut select,&mut ui,&mut input,&mut text)?;
++        assert!(ui.nodes[index].state.disabled);
++        assert_eq!(ui.nodes[index].computed.color,ui.sheet.color_token("--muted-foreground").expect("disabled text"));
++        let rect=ui.nodes[index].rect;let point=[rect.x+rect.w*0.5,rect.y+rect.h*0.5];
++        assert_eq!(ui.cursor(&input,point),Cursor::NotAllowed);
++        for event in [InputEvent::PointerDown(point),InputEvent::PointerUp(point)] {route(&mut select,&mut ui,&mut input,&mut text,event)?;}
++        assert!(!select.is_open());assert_eq!(select.take_changed(),None);
++        let idle=ui.frame(&mut text)?;assert_eq!((idle.layout_passes,idle.shaped,idle.paint_nodes),(0,0,0));
++    }
++    Ok(())
++}
++
++#[test]
++fn empty_select_search_hint_is_painted_but_never_value_and_native_preedit_hides_it()->Result<()> {
++    use crate::{native_input::{Router,TextSource},paint::Draw};
++    let(mut ui,mut input,mut text)=surface()?;
++    let mut select=Select::new("hint","Engine version",vec![SelectOption::new(0,"Preview 4"),SelectOption::new(1,"Nightly")],Some(0));
++    mount(&mut select,&mut ui,&mut input,&mut text)?;
++    let rect=ui.nodes[ui.find(select.control_id()).expect("control")].rect;
++    let point=[rect.x+rect.w*0.5,rect.y+rect.h*0.5];
++    for event in [InputEvent::PointerDown(point),InputEvent::PointerUp(point)] {route(&mut select,&mut ui,&mut input,&mut text,event)?;}
++    let id=stable_id("hint-search");let index=ui.find("hint-search").expect("search");
++    assert_eq!(input.focused(),Some(id));assert_eq!(select.query(),"");
++    assert_eq!(ui.nodes[index].placeholder.as_ref().expect("real hint").value,"Search…");
++    let muted=ui.sheet.color_token("--muted-foreground").expect("hint color");
++    let hint_glyphs=|ui:&Ui|ui.display.commands.iter().filter(|draw|matches!(draw,Draw::GlyphRun{node,color,..} if *node==id && *color==muted)).count();
++    assert!(hint_glyphs(&ui)>0);
++    assert!(ui.display.glyphs.iter().all(|glyph|glyph.id!=0),"bundled Search ellipsis has coverage");
++    let bounds=ui.nodes[index].rect;
++    assert_eq!(ui.hit_test(bounds.x+bounds.w*0.5,bounds.y+bounds.h*0.5),Some(index));
++    let value=|ui:&Ui|match &ui.widgets[&id] {crate::widgets::Widget::Input(input)=>input.value().to_owned(),_=>panic!("search input")};
++    assert_eq!(value(&ui),"");
++    let accessibility=crate::accessibility::accessibility(&ui,input.focused());
++    let accessible=accessibility.nodes.iter().find(|(node,_)|node.0==id).expect("accessible search");
++    assert_eq!(accessible.1.value(),Some(""),"hint is not accessibility data");
++    // Native preedit goes straight into Ui, without changing Select::query or
++    // requiring the host to regenerate markup.
++    let mut router=Router::default();
++    router.preedit(&mut ui,&mut input,TextSource::Sdl,"pré",0,3,&mut Clip)?;
++    ui.frame(&mut text)?;
++    assert_eq!(select.query(),"");assert_eq!(value(&ui),"");assert_eq!(hint_glyphs(&ui),0);
++    router.preedit(&mut ui,&mut input,TextSource::Sdl,"",0,0,&mut Clip)?;
++    ui.frame(&mut text)?;assert!(hint_glyphs(&ui)>0);
++    route(&mut select,&mut ui,&mut input,&mut text,InputEvent::Edit(EditEvent::Insert("not present".into())))?;
++    assert_eq!(value(&ui),"not present");assert_eq!(hint_glyphs(&ui),0);
++    assert!(ui.find("hint-popover-empty").is_some());assert_eq!(select.selected(),Some(&0));
++    select.key(&mut ui,&mut input,Key::Escape)?;
++    mount(&mut select,&mut ui,&mut input,&mut text)?;
++    select.key(&mut ui,&mut input,Key::Enter)?;
++    mount(&mut select,&mut ui,&mut input,&mut text)?;
++    assert_eq!(value(&ui),"");assert!(hint_glyphs(&ui)>0);
++    Ok(())
++}
++
++#[test]
++fn placeholder_only_changes_repaint_without_layout_and_theme_switches_reuse_its_shaping()->Result<()> {
++    use crate::theme::EditorTheme;
++    let mut text=TextSystem::bundled()?;
++    let mut ui=Ui::editor("<ui id='root'><field id='field' placeholder='Search…' /></ui>",EDITOR_CSS,[300.,100.])?;
++    ui.frame(&mut text)?;
++    let index=ui.find("field").expect("empty field");let rect=ui.nodes[index].rect;
++    for theme in [EditorTheme::Light,EditorTheme::Dark] {
++        ui.switch_theme(theme)?;let work=ui.frame(&mut text)?;
++        assert_eq!((work.layout_passes,work.shaped),(0,0));assert_eq!(ui.nodes[index].rect,rect);
++        let idle=ui.frame(&mut text)?;assert_eq!((idle.layout_passes,idle.shaped,idle.paint_nodes),(0,0,0));
++    }
++    ui.reconcile("<ui id='root'><field id='field' placeholder='Filtrer les versions…' /></ui>")?;
++    let work=ui.frame(&mut text)?;assert_eq!(work.layout_passes,0);assert_eq!(work.shaped,1);
++    assert_eq!(ui.nodes[index].rect,rect);
++    let mut input=InputState::default();input.push(&mut ui,stable_id("root"),Some(stable_id("field")),false)?;
++    input.event(&mut ui,InputEvent::Edit(EditEvent::Insert("actual value".into())),&mut Clip)?;
++    ui.frame(&mut text)?;
++    assert!(matches!(&ui.widgets[&stable_id("field")],crate::widgets::Widget::Input(input) if input.value()=="actual value"));
++    Ok(())
++}
++
+ #[test]
+ fn short_select_reopens_with_a_visible_list_and_accepts_a_real_pointer_choice_under_host_resets()
+ -> Result<()> {
+diff --git a/crates/ara-ui/src/select/view.rs b/crates/ara-ui/src/select/view.rs
+index 7e5c01e3..d59eaec9 100644
+--- a/crates/ara-ui/src/select/view.rs
++++ b/crates/ara-ui/src/select/view.rs
+@@ -14,7 +14,7 @@ impl<T: Clone + PartialEq> Select<T> {
+             .and_then(|value| self.options.iter().find(|o| &o.value == value));
+         let text = selected.map_or("Select…", |o| o.label.as_str());
+         format!(
+-            "<dropdown id='{}' class='kit-select' text='{}' label='{}' description='{}' action='ara.select.toggle' disabled='{}' />",
++            "<dropdown id='{}' class='kit-select' text='{}' label='{}' description='{}' cursor='pointer' action='ara.select.toggle' disabled='{}' />",
+             escape(self.control_id(), b'\''),
+             escape(text, b'\''),
+             escape(&self.label, b'\''),
+@@ -32,10 +32,11 @@ impl<T: Clone + PartialEq> Select<T> {
+         let esc = |text: &str| escape(text, b'\'');
+         let popup = esc(&self.popup_id());
+         let mut out = format!(
+-            "<popover id='{popup}' class='kit-select-popover' anchor='{}' placement='bottom-start'><field id='{}' class='kit-select-search' text='{}' label='Filter {}' action='ara.select.query' /><scroll id='{popup}-options' class='kit-select-options'>",
++            "<popover id='{popup}' class='kit-select-popover' anchor='{}' placement='bottom-start'><field id='{}' class='kit-select-search' text='{}' placeholder='{}' label='Filter {}' action='ara.select.query' /><scroll id='{popup}-options' class='kit-select-options'>",
+             esc(self.control_id()),
+             esc(&self.search_id()),
+             esc(&self.query),
++            esc(&self.search_hint),
+             esc(&self.label)
+         );
+         let query = self.query.to_lowercase();
+diff --git a/crates/ara-ui/src/virtualize.rs b/crates/ara-ui/src/virtualize.rs
+index 146c5d9a..d0003c07 100644
+--- a/crates/ara-ui/src/virtualize.rs
++++ b/crates/ara-ui/src/virtualize.rs
+@@ -451,6 +451,7 @@ impl Ui {
+             state: State::default(),
+             layout_id,
+             text,
++            placeholder: None,
+             dirty: crate::runtime::Dirty {
+                 style: false,
+                 layout: true,

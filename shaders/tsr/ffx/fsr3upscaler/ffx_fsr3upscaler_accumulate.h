@@ -64,7 +64,7 @@ void RectifyHistory(
         const FfxFloat32x3 fFinalClampedHistoryColor = (fClampedHistoryColor * fScaledBoxVec) + data.clippingBox.boxCenter;
 
         // Scale history color using rectification info, also using accumulation mask to avoid potential invalid color protection
-        const FfxFloat32 fHistoryContribution = ffxMax(params.fLumaInstabilityFactor, data.fLockContributionThisFrame) * params.fAccumulation * (1 - params.fDisocclusion);
+        const FfxFloat32 fHistoryContribution = ffxMax(ffxMax(params.fLumaInstabilityFactor, data.fLockContributionThisFrame) * (1 - params.fDisocclusion), TsrStillHistoryKept(params.f4KVelocity, params.fDisocclusion)) * params.fAccumulation; // Ara: still pixels (tsr-signals.slangh)
         data.fHistoryColor = ffxLerp(fFinalClampedHistoryColor, data.fHistoryColor, ffxSaturate(fHistoryContribution));
     }
 }

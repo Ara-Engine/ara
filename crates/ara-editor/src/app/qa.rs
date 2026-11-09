@@ -286,6 +286,39 @@ impl FirstHour {
         shell.commit_fields(editor)?;
         Ok(())
     }
+    /// Type `hex` into a colour property through its picker: the inspector row is a
+    /// swatch that opens it.
+    fn type_colour(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        path: &str,
+        hex: &str,
+    ) -> ara_ui::Result<()> {
+        use ara_ui::input::InputEvent;
+        use ara_ui_text::EditEvent;
+        shell.rebuild(editor)?;
+        shell.reveal_field(path)?;
+        shell.frame()?;
+        let swatch = format!("swatch-{}", path.replace('.', "-"));
+        shell
+            .click(&swatch, &mut self.clip)
+            .map_err(|e| format!("{swatch}: {e}"))?;
+        shell.dispatch(editor)?;
+        shell.frame()?;
+        shell
+            .click("cp-hex", &mut self.clip)
+            .map_err(|e| format!("{path} picker hex: {e}"))?;
+        shell.event(InputEvent::Edit(EditEvent::SelectAll), &mut self.clip)?;
+        shell.event(
+            InputEvent::Edit(EditEvent::Insert(hex.into())),
+            &mut self.clip,
+        )?;
+        shell.dispatch(editor)?;
+        shell.commit_fields(editor)?;
+        shell.close_color_picker(editor, false)?;
+        Ok(())
+    }
 
     /// The open menu's rows (node ID, label).
     fn menu_rows(shell: &Shell) -> Vec<(String, String)> {
@@ -477,8 +510,8 @@ impl FirstHour {
             }
             "colours" => {
                 if first {
-                    self.type_into(editor, shell, "edit-MeshRenderer-color", "#C0392B")?;
-                    self.type_into(editor, shell, "edit-MeshRenderer-emissive", "#FF8800")?;
+                    self.type_colour(editor, shell, "MeshRenderer.color", "#C0392B")?;
+                    self.type_colour(editor, shell, "MeshRenderer.emissive", "#FF8800")?;
                     self.type_into(editor, shell, "edit-MeshRenderer-roughness", "0.25")?;
                     self.note = "typed colour #C0392B, emissive #FF8800, roughness 0.25".into();
                 }
