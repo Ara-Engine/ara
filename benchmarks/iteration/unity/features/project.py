@@ -114,7 +114,7 @@ def command(args, engine):
         root = BASE.scratch_path(args.project)
         environment.update(UPM_CACHE_ROOT=str(root / "upm-cache"),
                            UPM_GIT_LFS_CACHE_PATH=str(root / "upm-cache/git-lfs"),
-                           TMPDIR=str(ROOT / ("target/perf-scale/ufx-t" if cases.extended(args) else "target/perf-scale/uf-t")))
+                           TMPDIR=str(recovery_temp(args)))
         argv = ["/usr/bin/nice", "-n", "10", str(BASE.EDITOR), "-batchmode", "-nographics",
                 "-projectPath", str(root), "-job-worker-count", "14", "-executeMethod", "AraIteration.MacBatch.Run",
                 "-logFile", str(log), "-ara-feature", cases.name(args), str(args.count), str(args.runners),
@@ -136,7 +136,12 @@ def config_path(args):
 
 
 def recovery_temp(args):
-    return ROOT / ("target/perf-scale/ufx-t" if cases.extended(args) else "target/perf-scale/uf-t")
+    """Keep each owned project and its recovery on one short private IPC path."""
+    root = BASE.scratch_path(args.project)
+    temporary = root.with_name(root.name + "-t")
+    if temporary.is_symlink():
+        raise ValueError("Unity temporary directory must not be a symlink")
+    return BASE.scratch_path(temporary)
 
 
 def build_command(args=None):

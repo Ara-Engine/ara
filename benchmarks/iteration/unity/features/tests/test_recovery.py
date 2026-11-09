@@ -236,6 +236,29 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual(log, Path(str(checkpoint) + ".recovery-" + attempt + ".log"))
             self.assertIn(Path(environment["TMPDIR"]).name, ["uf-t", "ufx-t"])
 
+    def test_original_default_temporary_paths_are_preserved(self):
+        for root, name in [(project.PROJECT, "uf-t"), (project.EXTENDED_PROJECT, "ufx-t")]:
+            self.assertEqual(project.recovery_temp(SimpleNamespace(project=root)), root.parent / name)
+
+    def test_new_owned_project_launch_and_recovery_share_isolated_temporary_path(self):
+        root = self.make_project("ufi", "extended-v1")
+        self.args.project = root
+        self.args.checkpoint = fixture.checkpoint(root, root / "results/probe/value.json")
+        for key, value in {"case": "buffer_fixed", "count": 1003, "runners": 1, "warmup": 2,
+                "frames": 3, "batch": 4096, "run": "probe", "length": 64, "percent": 10,
+                "distribution": "spread", "topology": "chain", "trim": False, "smoke": True}.items():
+            setattr(self.args, key, value)
+        with patch.object(project, "prepared_manifest", return_value={}):
+            _, launch_environment, _, _, _ = project.command(self.args, "unity")
+            _, recovery_environment, _, _, _ = recover.command(self.args)
+        expected = root.with_name("ufi-t")
+        self.assertEqual(launch_environment["TMPDIR"], str(expected))
+        self.assertEqual(recovery_environment["TMPDIR"], str(expected))
+        self.assertNotEqual(expected, self.project.with_name("ufx-t"))
+        expected.symlink_to(self.project, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "must not be a symlink"):
+            project.recovery_temp(self.args)
+
     def test_valid_attempt_specific_receipt_resolves_checkpoint_scan(self):
         path = self.checkpoint()
         fixture.receipt(self.project, path, "explicit_recovery", attempt="a" * 32)
