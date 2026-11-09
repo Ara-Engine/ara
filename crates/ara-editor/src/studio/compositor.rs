@@ -175,14 +175,10 @@ impl Compositor {
         };
         let (present, _) = self.present.insert((present, extent));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
-        super::trace::time(
-            "scene present",
-            std::time::Duration::from_millis(3),
-            || {
-                // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
-                unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
-            },
-        )?;
+        super::trace::time("scene present", std::time::Duration::from_millis(3), || {
+            // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
+            unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
+        })?;
         Ok(true)
     }
 
