@@ -23,6 +23,7 @@ mod inspector;
 mod lighting;
 mod panels;
 mod preferences;
+mod profiler;
 mod scene;
 pub mod state;
 mod style;
@@ -172,6 +173,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
+    let (mut profile_at, mut was_recording) = (Instant::now(), false);
     rt.update(|s| {
         let store = s.editor.host.store();
         s.assets = Some(crate::shell::assets::Browser::new(
@@ -181,11 +183,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
+        // While profiling records, every pass is a frame (the Profiler panel reads them).
+        let profiling = rt.touch(|s| {
+            let profiler = s.editor.host.profiler();
+            profiler.is_recording() && profiler.begin_frame().is_ok()
+        });
         let mut pass = trace::Pass::begin();
+        pass.phase("studio.events");
         if pump(&mut rt, &mut surface, started, Some(&mut game))? {
             break;
         }
         pass.mark("events+ui");
+        pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
         let (changed, sync_changed) = rt.touch(|s| {
             server.pump(&mut s.editor);
@@ -210,6 +219,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             });
         }
         pass.mark("authority");
+        pass.phase("studio.assets");
         // Assets and the diagnostics bus.
         if rt.touch(|s| {
             s.assets
@@ -245,6 +255,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
         }
         pass.mark("assets+logs");
+        pass.phase("studio.scene_sync");
         let idle = last_frame.elapsed() >= Duration::from_millis(250);
         if rt.touch(|s| sync.refresh(&view, &mut s.editor, &mut renderer, &mut scene_view, idle)) {
             scene_dirty = true;
@@ -287,6 +298,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             scene_dirty = true;
         }
         pass.mark("scene sync");
+        pass.phase("studio.scene");
         // The Scene view: render where its element shows and present into its layer.
         let rect = rt
             .natives()
@@ -342,6 +354,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             } else {
                 "scene check"
             });
+            pass.phase("studio.composite");
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
@@ -410,6 +423,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
             // A click in the view: the entity under it through the channel map.
             pass.mark("composite");
+            pass.phase("studio.game");
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
                 let size = renderer.size();
                 let at = [
@@ -500,6 +514,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.game_captured = false);
         }
         pass.mark("game");
+        pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
         // speed setting, three times as fast with Shift.
         let flying = rt.state().local.flying && !rt.state().local.held.is_empty();
@@ -510,6 +525,31 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         last_fly = Instant::now();
         pass.end();
+        if profiling {
+            rt.touch(|s| {
+                let _ = s
+                    .editor
+                    .host
+                    .profiler()
+                    .end_frame(Default::default(), Default::default());
+            });
+        }
+        // The Profiler panel reads a copy, refreshed four times a second while recording
+        // and once when it stops.
+        let recording = rt.touch(|s| s.editor.host.profiler().is_recording());
+        if (recording && profile_at.elapsed() >= Duration::from_millis(250))
+            || (!recording && was_recording)
+        {
+            profile_at = Instant::now();
+            rt.update(|s| {
+                s.editor.host.profiler().collect();
+                s.profile = std::sync::Arc::new(s.editor.host.profiler().profile().clone());
+            });
+        }
+        if recording != was_recording {
+            rt.update(|s| s.local.profiling = recording);
+        }
+        was_recording = recording;
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
@@ -776,6 +816,7 @@ fn pump(
         // Layout feedback the view reads next time: where splits and the Scene view are.
         let mut keys = dock::rect_keys(&rt.state().editor.state.layout);
         keys.push("scene/view".into());
+        keys.push("profiler/track".into());
         let s = rt.scale();
         let rects = keys
             .into_iter()

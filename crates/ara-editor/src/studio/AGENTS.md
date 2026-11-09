@@ -23,6 +23,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   importer settings (`shell::import_batch`, one `import.configure` step each), Reimport,
   Open, Uses / Used by (`shell::import_panel::links`).
 - `lighting.rs`: everything that lights the scene (`shell::lighting::{model, authoring}`).
+- `profiler.rs`: Record/Stop (`profile.start`), a frame strip against the budget, the
+  frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
+  while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
+  Tool pages (Profiler, Material, VFX, Animation) dock in the centre: no floating windows yet.
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.

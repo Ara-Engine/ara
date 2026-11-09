@@ -261,6 +261,10 @@ pub struct Local {
     pub recent_components: Vec<String>,
     /// The Inspector shows the asset picked in Assets (until an entity is picked).
     pub inspect_asset: bool,
+    /// Whether profiling records (the host loop reports it).
+    pub profiling: bool,
+    /// The Profiler's picked frame (its id), or None for the newest.
+    pub profile_frame: Option<u64>,
     /// The Lighting panel's filter.
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
@@ -308,6 +312,9 @@ pub struct Studio {
     pub(crate) previews: Previews,
     /// The diagnostics bus so far (Console, Problems), oldest first.
     pub logs: Vec<LogRow>,
+    /// The latest profiled frames (`profile.start`), copied a few times a second while
+    /// recording for the Profiler panel.
+    pub profile: Arc<ara_profile::Profile>,
 }
 
 impl Studio {
@@ -327,6 +334,7 @@ impl Studio {
             assets: None,
             previews: Previews::default(),
             logs: Vec::new(),
+            profile: Arc::default(),
         };
         studio.resolve();
         studio

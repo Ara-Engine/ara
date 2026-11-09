@@ -210,10 +210,17 @@ fn captures() {
             rt.set_theme(theme);
             rt.set_background(Some(background));
         }
+        rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         for panel in [
-            "assets", "console", "problems", "agents", "history", "lighting",
+            "assets", "console", "problems", "agents", "history", "lighting", "profiler",
         ] {
-            rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
+            rt.update(|s| {
+                super::commands::run(
+                    s,
+                    &format!("window.{panel}"),
+                    &crate::shell::commands::Target::None,
+                )
+            });
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
@@ -317,6 +324,81 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.inspect_asset = false);
+    }
+}
+
+/// A recorded-looking profile: two threads of nested scopes, GPU passes, one slow frame.
+fn sample_profile() -> ara_profile::Profile {
+    use ara_profile::{CpuSpan, Frame, GpuPass, Profile, ThreadInfo};
+    let labels: Vec<String> = [
+        "studio.events",
+        "studio.authority",
+        "studio.scene",
+        "studio.composite",
+        "scene.render",
+        "probe.gi",
+        "Shadow pass",
+        "GBuffer",
+        "Lighting",
+        "Post",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let span = |label, thread, id, parent, start: u64, duration: u64, own: u64| CpuSpan {
+        label,
+        thread,
+        id,
+        parent,
+        start_ns: start,
+        duration_ns: duration,
+        self_ns: own,
+        allocated_bytes: 0,
+        self_allocated_bytes: 0,
+    };
+    let frames = (1..=90u64)
+        .map(|i| {
+            let start = i * 20_000_000;
+            let long = if i % 37 == 0 { 3 } else { 1 };
+            let d = (9_000_000 + (i % 7) * 900_000) * long;
+            Frame {
+                id: i,
+                start_ns: start,
+                duration_ns: d,
+                spans: vec![
+                    span(0, 0, i * 10 + 1, 0, start, d / 5, d / 5),
+                    span(1, 0, i * 10 + 2, 0, start + d / 5, d / 6, d / 6),
+                    span(2, 0, i * 10 + 3, 0, start + d / 2, d / 3, d / 12),
+                    span(4, 0, i * 10 + 4, i * 10 + 3, start + d / 2, d / 4, d / 4),
+                    span(3, 0, i * 10 + 5, 0, start + 5 * d / 6, d / 7, d / 7),
+                    span(5, 1, i * 10 + 6, 0, start + d / 10, d / 2, d / 2),
+                ],
+                gpu: [(6, 1_200_000), (7, 2_100_000), (8, 3_000_000), (9, 900_000)]
+                    .map(|(label, duration_ns)| GpuPass {
+                        label,
+                        queue: 0,
+                        duration_ns,
+                    })
+                    .to_vec(),
+                ..Default::default()
+            }
+        })
+        .collect();
+    Profile {
+        version: 1,
+        budget_ns: 16_666_667,
+        labels,
+        threads: vec![
+            ThreadInfo {
+                id: 0,
+                name: "editor".into(),
+            },
+            ThreadInfo {
+                id: 1,
+                name: "probe-gi".into(),
+            },
+        ],
+        frames,
+        orphaned_results: 0,
     }
 }
 
