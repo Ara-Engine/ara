@@ -32,9 +32,13 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `graph.rs`: the Material and Animation pages: the shared node canvas
   (`crate::graph::Canvas`) in `graph::PAGES`' layers; gestures become document commands
   (`material.connect`, `graph.node.move`; controllers through
-  `shell::animation_panel::{connect, edit}`); Add Node lists `ara_material`'s library.
-- `vfx.rs`: the VFX page: emitter stacks (module rows, inline settings, `shell::vfx_panel::
-  module_edit`), the live preview from `asset_tools::vfx_stream` (paused while hidden).
+  `shell::animation_panel::{connect, edit}`). Unreal's habits: generated input defaults
+  draw inline on their pins (`graph::is_default`; click to type), the node search opens
+  at a right-click or dropped wire and lists only what fits it, C makes a comment box,
+  ⌘D duplicates (`editor.material.node.duplicate`), Delete removes; Details on the right.
+- `vfx.rs`: the VFX page, laid out as Niagara's: preview and timeline (left), System
+  Overview cards per emitter with coloured stages (middle), the picked module's Selection
+  (right); `shell::vfx_panel::module_edit`, preview from `asset_tools::vfx_stream`.
 - `asset_create.rs`: Add / `assets.create.*`: folder, scene, material, effect, controller,
   script, at the open folder's authored path (never its storage path), opened where edited.
 - Assets (`panels.rs`): back/forward, Add, type filters across the project (Unreal's
@@ -81,9 +85,11 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 
 `studio/tests.rs` drives the runtime headless over a real `Editor` on a scratch project:
 gizmo drag (one transaction) and Escape, Hierarchy click and arrows, context menu, Create
-search + Enter. `cargo test -p ara-editor --lib studio::`.
+search + Enter, Assets menus, material search/inline values/comments/duplicate, the VFX
+Selection. `cargo test -p ara-editor --lib studio::`. `rt.touch` changes state without
+re-running the view; use `rt.update` (or settle) before finding what it should show.
 
 ## Gaps
 
-The Scene layer presents on macOS only (Windows needs the Vulkan HWND path). Material,
-VFX, animation, profiler, lighting, import and settings pages are still legacy-only.
+The Scene layer presents on macOS only (Windows needs the Vulkan HWND path). The material
+preview sphere needs slangc (the Vulkan SDK). Tool pages dock; no floating windows yet.
