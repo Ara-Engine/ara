@@ -57,6 +57,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `inspector.rs`: fields from `crate::inspector::fields`; label scrubs (8 px a step,
   Shift ×0.1, Alt ×10), typed units, vectors, enums, colours; field menu (Reset, Copy
   Value, Copy Path); component ⋯ (Fold Others, Remove); Add Component.
+- `references.rs`: asset/entity object fields (searchable picker, None first; `Asset::fits`).
+  `compound.rs`: lists, maps and nested structs fold open in place; every element edit is
+  `editor.property.nested.edit` at a JSON pointer (`path#pointer` targets).
 - `create.rs`: the Create browser over `CATALOG` (registry `create.*` ids; an entry shows
   when the schema has its components). Recent, search, Enter, Shift+A placement.
 - `panels.rs`: Assets (folder tree + grid, thumbnails from `asset_tools::thumbnails` via
