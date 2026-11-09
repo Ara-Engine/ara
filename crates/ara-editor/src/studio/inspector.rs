@@ -665,6 +665,9 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 move |x| x.on_submit(move |s: &mut Studio, t| commit(s, &p, json!(t), "Edit text")),
             )
         }
+        Widget::Asset { .. } | Widget::Entity if !f.read_only => {
+            super::references::field(s, f, commit)
+        }
         Widget::Asset { .. } | Widget::Entity | Widget::Compound { .. } => {
             let shown = match &f.value {
                 Value::String(s) => s.rsplit('/').next().unwrap_or(s).to_owned(),

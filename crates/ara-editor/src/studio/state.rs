@@ -227,6 +227,8 @@ pub struct Local {
     /// The open colour picker: its field path and the colour it holds (kept as HSV, so a
     /// grey keeps its hue while dragging).
     pub picker: Option<(String, stillkit_kit::Hsva)>,
+    /// The open reference picker (an asset or entity field): its path and the search typed.
+    pub reference: Option<(String, String)>,
     /// What the Game view shows (the host loop reports it).
     pub game: super::game::Status,
     /// The keyboard and mouse go to the game (a click in the Game view while playing).

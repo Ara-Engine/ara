@@ -75,7 +75,7 @@ mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
-mod names;
+pub(crate) mod names;
 pub(crate) use names::is_texture;
 mod mesh_paint_panel;
 mod probes;
