@@ -10,8 +10,7 @@ use ara_kit::ui::*;
 use serde_json::{Value, json};
 use stillkit::Cursor;
 use stillkit::el::{
-    Align, Axis, El, Handled, Justify, PointerPhase, col, el, icon, menu, popover, row, text,
-    text_input,
+    Align, Axis, El, Justify, PointerPhase, col, el, icon, menu, popover, row, text, text_input,
 };
 
 use super::Studio;
@@ -66,7 +65,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     for component in order {
         page = page.child(section(s, &component, &by_component[&component]));
     }
-    page = page.child(add_component(s));
+    page = page.child(super::components::button_and_picker(s));
     col()
         .grow(1.0)
         .min_h(0.0)
@@ -188,7 +187,7 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
     out
 }
 
-fn component_icon(component: &str) -> stillkit::icons::Icon {
+pub(super) fn component_icon(component: &str) -> stillkit::icons::Icon {
     match component {
         "Transform" => icons::MOVE_3D,
         "MeshRenderer" => icons::BOX,
@@ -977,183 +976,8 @@ fn component_menu(s: &Studio, component: &str) -> El<Studio> {
     b
 }
 
-/// Add Component: a full-width button that opens a search over the schema's components the
-/// selection doesn't all have; Enter or a click adds one to every selected entity.
-fn add_component(s: &Studio) -> El<Studio> {
-    let l = &s.look;
-    let c = &l.c;
-    let open = s.local.add_component.is_some();
-    let mut b = button(
-        l,
-        Tone::Secondary,
-        Size::Sm,
-        Some(icons::PLUS),
-        "Add Component",
-    )
-    .key("inspector/add")
-    .w_full()
-    .expanded(open)
-    .on_press(|s: &mut Studio| {
-        s.local.add_component = if s.local.add_component.is_some() {
-            None
-        } else {
-            Some((String::new(), 0))
-        };
-        s.local.focus = Some("inspector/add/search");
-    });
-    let Some((query, active)) = s.local.add_component.clone() else {
-        return row().pad_y(4.0).child(b.grow(1.0));
-    };
-    let rows = addable(s, &query);
-    let active = active.min(rows.len().saturating_sub(1));
-    let mut list = col().max_h(300.0).pad(4.0).gap(1.0).scroll(Axis::Vertical);
-    if rows.is_empty() {
-        list = list.child(
-            text("No components match")
-                .text_size(12.0)
-                .color(c.muted_foreground.0)
-                .pad(8.0),
-        );
-    }
-    for (i, (name, doc)) in rows.iter().enumerate() {
-        let on = i == active;
-        let add = name.clone();
-        let hover = c.hover_surface.0;
-        list = list.child(
-            col()
-                .key(format!("inspector/add/{name}"))
-                .pad_x(8.0)
-                .pad_y(5.0)
-                .gap(1.0)
-                .radius(l.radius.sm)
-                .fill(if on {
-                    c.selection_surface_inactive.0
-                } else {
-                    stillkit::Rgba::TRANSPARENT
-                })
-                .label(name.clone())
-                .hovered(move |e| if on { e } else { e.fill(hover) })
-                .on_press(move |s: &mut Studio| add_to_selection(s, &add))
-                .child(
-                    row()
-                        .gap(8.0)
-                        .align(Align::Center)
-                        .child(
-                            icon(component_icon(name))
-                                .size(13.0)
-                                .color(c.info_foreground.0),
-                        )
-                        .child(
-                            text(spaced(name))
-                                .text_size(12.5)
-                                .weight(560)
-                                .color(c.foreground.0),
-                        ),
-                )
-                .child(
-                    text(doc.clone())
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0)
-                        .wrap(1),
-                ),
-        );
-    }
-    let panel = super::style::float(l, col())
-        .key("inspector/add/panel")
-        .radius(l.radius.md)
-        .on_key(move |s: &mut Studio, key, _| {
-            let Some((q, a)) = s.local.add_component.clone() else {
-                return Handled::No;
-            };
-            let n = addable(s, &q).len();
-            match key.0 {
-                0x28 if n > 0 => s.local.add_component = Some((q, (a + 1).min(n - 1))),
-                0x26 => s.local.add_component = Some((q, a.saturating_sub(1))),
-                0x1B => s.local.add_component = None,
-                _ => return Handled::No,
-            }
-            Handled::Yes
-        })
-        .child(
-            row().pad(6.0).child(
-                field(
-                    l,
-                    Size::Sm,
-                    "inspector/add/search",
-                    Some(icons::SEARCH),
-                    "Search components",
-                    &query,
-                    |f| {
-                        f.on_input(|s: &mut Studio, t| {
-                            s.local.add_component = Some((t.to_owned(), 0))
-                        })
-                        .on_submit(|s: &mut Studio, _| {
-                            if let Some((q, a)) = s.local.add_component.clone()
-                                && let Some((name, _)) = addable(s, &q).get(a)
-                            {
-                                let name = name.clone();
-                                add_to_selection(s, &name);
-                            }
-                        })
-                    },
-                )
-                .grow(1.0),
-            ),
-        )
-        .child(list);
-    b = b.overlay(
-        popover(panel)
-            .match_width()
-            .on_dismiss(|s: &mut Studio| s.local.add_component = None),
-    );
-    row().pad_y(4.0).child(b.grow(1.0))
-}
-
-/// Components the selection doesn't all have, matching `query`, with their first doc line.
-fn addable(s: &Studio, query: &str) -> Vec<(String, String)> {
-    let selection = &s.editor.state.selection;
-    let on_all = |name: &str| {
-        selection.iter().all(|e| {
-            s.resolved
-                .get(e)
-                .is_some_and(|r| r.record.contains_key(name))
-        })
-    };
-    let mut out: Vec<(i32, String, String)> = s
-        .editor
-        .host
-        .store()
-        .schema()
-        .components()
-        .filter(|t| !on_all(&t.name))
-        .filter_map(|t| {
-            let score = super::chrome::score(query, &t.name)
-                .or_else(|| super::chrome::score(query, &spaced(&t.name)))?;
-            Some((
-                score,
-                t.name.clone(),
-                t.doc.lines().next().unwrap_or("").to_owned(),
-            ))
-        })
-        .collect();
-    out.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-    out.into_iter().map(|(_, n, d)| (n, d)).collect()
-}
-
-fn add_to_selection(s: &mut Studio, name: &str) {
-    s.local.add_component = None;
-    let commands = s
-        .editor
-        .state
-        .selection
-        .iter()
-        .map(|e| json!({"cmd": "component.add", "args": {"entity": e, "component": name}}))
-        .collect();
-    s.apply(commands, &format!("Add {name}"));
-}
-
 /// A type name with spaces between its words: `MeshRenderer` reads "Mesh Renderer".
-fn spaced(name: &str) -> String {
+pub(super) fn spaced(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 4);
     let chars: Vec<char> = name.chars().collect();
     for (i, &c) in chars.iter().enumerate() {

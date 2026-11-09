@@ -17,6 +17,8 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during
   Play (`app::game::player::PlayerView`; `play.start` calls `Editor::embed_play`). A click
   sends keys and the mouse to the player (VK to SDL scancodes); Esc gives them back.
+- `components.rs`: Add Component (Unity's picker): categories from each component's schema
+  module, search across all, recent first, arrows/Enter/Left, the description below.
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.

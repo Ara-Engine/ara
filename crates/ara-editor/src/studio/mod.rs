@@ -11,6 +11,7 @@
 mod agents;
 mod chrome;
 mod commands;
+mod components;
 mod compositor;
 mod create;
 mod dock;
@@ -195,6 +196,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if sync_changed {
             rt.update(|_| {});
             scene_dirty = true;
+        }
+        // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
+        // pass boundary through the same handlers as the menus.
+        let queued = rt.touch(|s| std::mem::take(&mut s.editor.queued_commands));
+        if !queued.is_empty() {
+            rt.update(|s| {
+                for (id, target) in &queued {
+                    commands::run(s, id, target);
+                }
+            });
         }
         pass.mark("authority");
         // Assets and the diagnostics bus.
