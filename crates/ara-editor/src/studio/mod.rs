@@ -24,6 +24,7 @@ pub mod state;
 mod style;
 #[cfg(test)]
 mod tests;
+mod trace;
 
 use std::time::{Duration, Instant};
 
@@ -170,9 +171,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
+        let mut pass = trace::Pass::begin();
         if pump(&mut rt, &mut surface, started)? {
             break;
         }
+        pass.mark("events+ui");
         // The authority: protocol requests, imports, agent work.
         let (changed, sync_changed) = rt.touch(|s| {
             server.pump(&mut s.editor);
@@ -186,6 +189,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|_| {});
             scene_dirty = true;
         }
+        pass.mark("authority");
         // Assets and the diagnostics bus.
         if rt.touch(|s| {
             s.assets
@@ -220,6 +224,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 rt.update(|_| {});
             }
         }
+        pass.mark("assets+logs");
         let idle = last_frame.elapsed() >= Duration::from_millis(250);
         if rt.touch(|s| sync.refresh(&view, &mut s.editor, &mut renderer, &mut scene_view, idle)) {
             scene_dirty = true;
@@ -240,6 +245,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.touch(|s| sync.rebuild(&view, &mut s.editor, &mut renderer, &mut scene_view));
             scene_dirty = true;
         }
+        pass.mark("scene sync");
         // The Scene view: render where its element shows and present into its layer.
         let rect = rt
             .natives()
@@ -247,7 +253,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .find(|(n, _)| &**n == SCENE_LAYER)
             .map(|(_, r)| r);
         surface.place_native_layer(SCENE_LAYER, rect);
-        if let Some(rect) = rect.filter(|r| r.width() >= 8.0 && r.height() >= 8.0) {
+        // A hidden (minimized) window shows no frames: render none. A covered one skips
+        // presents on its own (the 1 ms present wait).
+        #[cfg(any(windows, target_os = "macos"))]
+        let shown = surface.is_visible();
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let shown = true;
+        if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
             let actual = [rect.width() as u32, rect.height() as u32];
             // Reallocating the renderer's targets takes hundreds of milliseconds, so a live
             // resize keeps the last frame (the layer stretches it) and the renderer follows
@@ -282,6 +294,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     rt.touch(|s| s.editor.report_failure(&*error));
                 }
             }
+            pass.mark(if render {
+                "scene render"
+            } else {
+                "scene check"
+            });
             if (render || restyled) && renderer.presentation_ready() {
                 let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
                 let scale = rt.scale();
@@ -320,6 +337,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 scene_dirty = false;
             }
             // A click in the view: the entity under it through the channel map.
+            pass.mark("composite");
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
                 let size = renderer.size();
                 let at = [
@@ -360,6 +378,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.touch(|s| fly(s, dt, shift));
         }
         last_fly = Instant::now();
+        pass.end();
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || rt.state().editor.state.quality && renderer.scene_frame_pending();
@@ -504,6 +523,9 @@ fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> an
     while let Some((id, event)) = next_event() {
         if id != surface.id() {
             continue;
+        }
+        if !matches!(event, Event::Move(..)) {
+            trace::log(|| format!("event {event:?}"));
         }
         match event {
             Event::Close => return Ok(true),

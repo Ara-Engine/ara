@@ -509,3 +509,32 @@ fn a_console_row_opens_its_details() {
     settle(&mut rt);
     assert_eq!(rt.state().local.console_open, Some(7));
 }
+
+/// What one click costs at Retina scale: event, view, layout and a full CPU repaint.
+/// `cargo test -p ara-editor --release --lib studio::tests::click_cost -- --ignored --nocapture`
+#[test]
+#[ignore = "timing probe"]
+fn click_cost() {
+    let mut rt = open();
+    rt.set_scale(2.0);
+    rt.resize((2984, 1884));
+    for _ in 0..5 {
+        rt.frame(FRAME);
+    }
+    let _ = rt.snap();
+    for id in ["e_lamp", "e_box", "e_lamp", "e_box"] {
+        let at = rt.find(&format!("row/{id}")).unwrap();
+        let t = std::time::Instant::now();
+        rt.pointer_down(at.center().x, at.center().y);
+        rt.pointer_up(at.center().x, at.center().y);
+        let handled = t.elapsed();
+        rt.frame(FRAME);
+        let framed = t.elapsed();
+        let _ = rt.snap();
+        eprintln!(
+            "CLICK {id}: handlers {handled:?}, frame {:?}, paint {:?}",
+            framed - handled,
+            t.elapsed() - framed
+        );
+    }
+}

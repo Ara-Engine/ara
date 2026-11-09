@@ -324,14 +324,19 @@ impl Studio {
     /// Runs an editor action as the window's person; failures are reported like any
     /// other editor failure (Console, Problems) rather than lost.
     pub fn act(&mut self, method: &str, params: Value) {
-        if let Err(error) = self.editor.action(method, params) {
+        let result = super::trace::time(method, std::time::Duration::from_millis(5), || {
+            self.editor.action(method, params)
+        });
+        if let Err(error) = result {
             self.editor.report_failure(&error);
         }
     }
 
     /// Commits content commands (one undo step) as the window's person.
     pub fn apply(&mut self, commands: Vec<Value>, why: &str) {
-        match self.editor.apply(commands, why, None) {
+        match super::trace::time(why, std::time::Duration::from_millis(5), || {
+            self.editor.apply(commands, why, None)
+        }) {
             Ok(_) => self.resolve(),
             Err(error) => self.editor.report_failure(&error),
         }

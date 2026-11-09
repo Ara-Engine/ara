@@ -197,7 +197,11 @@ unsafe fn layer_present(
     extent: [u32; 2],
 ) -> Result<ara_platform::Present> {
     // SAFETY: forwarded caller contract.
-    unsafe { ui.create_layer_present(ui_device(renderer.gpu()), layer, extent) }
+    let mut present = unsafe { ui.create_layer_present(ui_device(renderer.gpu()), layer, extent)? };
+    // The UI thread presents: never wait on a full drawable pool (a covered window shows
+    // none), skip the frame and present again on the next pass.
+    present.set_wait(std::time::Duration::from_millis(1))?;
+    Ok(present)
 }
 
 /// The Scene layer's swapchain for a child HWND (Windows) is not built yet; the studio

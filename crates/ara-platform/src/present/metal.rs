@@ -116,6 +116,17 @@ impl Present {
         })
     }
 
+    /// How long a present may wait for a free drawable before it skips the frame
+    /// (`PRESENT_WAIT`, 100 ms, by default). A host whose UI thread presents sets this near
+    /// zero and presents again on its next pass.
+    pub fn set_wait(&mut self, wait: std::time::Duration) -> Result<()> {
+        self.presenter
+            .as_mut()
+            .context("presentation was retired")?
+            .set_wait(wait);
+        Ok(())
+    }
+
     /// Follow a new drawable size in device px (the layer's rect changed).
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
         Ok(self
