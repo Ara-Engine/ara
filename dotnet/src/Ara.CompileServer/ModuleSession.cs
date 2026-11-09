@@ -404,24 +404,10 @@ internal sealed partial class ModuleSession
         SourcesMatch(state.Texts, files);
 
     static bool SourcesMatch(ImmutableDictionary<string, string> texts, string[] files) =>
-        files.Length == texts.Count && files.All(path => texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text);
+        files.Length == texts.Count && files.All(path => texts.TryGetValue(path, out var text) && ModuleSource.ReadWithRetry(path, text) == text);
 
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
-    internal static string? ReadWithRetry(string path)
-    {
-        var sw = Stopwatch.StartNew();
-        while (true)
-        {
-            try
-            {
-                if (!File.Exists(path)) return null;
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            }
-            catch (IOException) when (sw.ElapsedMilliseconds < 200) { Thread.Yield(); }
-        }
-    }
+    internal static string? ReadWithRetry(string path) => ModuleSource.ReadWithRetry(path, null);
 
     // One immutable membership snapshot per evaluation. Read every current source
     // once: watcher overflow, missed notices and exact last-good restoration must
@@ -430,7 +416,11 @@ internal sealed partial class ModuleSession
     {
         _disk.Clear();
         foreach (var path in files)
-            _disk[path] = ReadWithRetry(path) ?? throw new FileNotFoundException("module source disappeared while capturing inputs", path);
+        {
+            state.Texts.TryGetValue(path, out var previous);
+            _disk[path] = ModuleSource.ReadWithRetry(path, previous)
+                ?? throw new FileNotFoundException("module source disappeared while capturing inputs", path);
+        }
         var changes = new List<FileChange>();
         var trees = state.Trees.ToBuilder();
         var texts = state.Texts.ToBuilder();
