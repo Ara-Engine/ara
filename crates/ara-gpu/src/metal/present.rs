@@ -262,10 +262,18 @@ impl Presenter {
             cmd.presentDrawable(ProtocolObject::from_ref(&*drawable));
             Ok(())
         };
-        if frames_in_flight {
+        let done = if frames_in_flight {
             self.transfer.submit(gpu, record)
         } else {
             self.transfer.run(Some(gpu), record)
+        };
+        // A layer inside a window shows its drawable only once Core Animation commits.
+        // Hosts that render frames back to back may not reach the run loop's implicit
+        // commit between them; without it no drawable is shown and the pool runs dry,
+        // so every next present waits PRESENT_WAIT. Commit here.
+        if self.queued.is_some() {
+            objc2_quartz_core::CATransaction::flush();
         }
+        done
     }
 }

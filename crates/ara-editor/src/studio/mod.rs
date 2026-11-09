@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use stillkit::el::{Runtime, SystemClipboard};
-use stillkit::platform::current::host::{modifiers, reduced_motion, wake_at};
+use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
 use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
 
 use crate::app::{Options, scene_sync::SceneSync, viewport::SceneView};
@@ -152,6 +152,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut compositor =
         unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
     let mut shown_extent = [0, 0];
+    // The Scene's size while a resize is under way, and when it last changed.
+    let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
     let mut scene_dirty = true;
     let mut last_frame = Instant::now();
@@ -246,7 +248,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .map(|(_, r)| r);
         surface.place_native_layer(SCENE_LAYER, rect);
         if let Some(rect) = rect.filter(|r| r.width() >= 8.0 && r.height() >= 8.0) {
-            let extent = [rect.width() as u32, rect.height() as u32];
+            let actual = [rect.width() as u32, rect.height() as u32];
+            // Reallocating the renderer's targets takes hundreds of milliseconds, so a live
+            // resize keeps the last frame (the layer stretches it) and the renderer follows
+            // once the size has held for a moment.
+            if actual != shown_extent && sizing.is_none_or(|(e, _)| e != actual) {
+                sizing = Some((actual, Instant::now()));
+            }
+            let settled = shown_extent == [0, 0]
+                || sizing.is_none_or(|(_, at)| at.elapsed() >= Duration::from_millis(120));
+            let extent = if settled { actual } else { shown_extent };
+            if settled {
+                sizing = None;
+            }
             let now = rt.state().editor.state.camera;
             let camera_moved = now != camera;
             camera = now;
@@ -353,12 +367,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let next = [
             rt.wake_at().map(|at| started + at),
             busy.then(|| Instant::now() + Duration::from_millis(8)),
+            sizing.map(|(_, at)| at + Duration::from_millis(125)),
             Some(Instant::now() + Duration::from_millis(500)),
         ]
         .into_iter()
         .flatten()
         .min();
         wake_at(next);
+        // Sleep until an event, that wake, or an animation frame: never spin.
+        wait();
     }
     renderer.wait_scene_frame().ok();
     compositor.retire(&renderer);
