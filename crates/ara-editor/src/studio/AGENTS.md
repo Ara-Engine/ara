@@ -27,6 +27,11 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
   while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
   Tool pages (Profiler, Material, VFX, Animation) dock in the centre: no floating windows yet.
+- `layer.rs`: a native layer with its own GPU UI adapter (`Layer::draw` of a display list);
+  the Game view and the graph canvas each own one.
+- `graph.rs`: the Material page: the shared node canvas (`crate::graph::Canvas`) in
+  `GRAPH_LAYER`; gestures become `graph.node.move` / `material.connect` / `graph.editor.set`
+  on the document; Add Node lists `ara_material`'s library.
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.

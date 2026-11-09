@@ -12,14 +12,12 @@ use ara_doc::prefab::Resolved;
 use ara_play_host::embed::DeviceEvent;
 use ara_ui::paint::{Box2, DisplayList, Draw};
 use ara_ui::style::Color;
-use ara_ui_render::atlas::TextMode;
-use ara_ui_render::gpu::Renderer as UiRenderer;
 
 use crate::Editor;
 use crate::app::game::{player::PlayerView, player_texture};
 use crate::app::game_preview::{self, GameHost, Preview};
 use crate::app::viewport::SceneView;
-use crate::gpu::{NativeUi, ui_device};
+use crate::gpu::ui_device;
 use crate::state::Camera;
 use crate::world::DocumentView;
 
@@ -168,9 +166,7 @@ impl GameHost for Host {
 /// Draws the Game view into its layer on its own UI adapter. Create it with the renderer;
 /// [`Self::retire`] it before the renderer drops.
 pub(super) struct Game {
-    ui: NativeUi,
-    paint: UiRenderer,
-    present: Option<(ara_platform::Present, [u32; 2])>,
+    layer: super::layer::Layer,
     preview: Preview,
     /// The player shown (the authority, or the local player), and its world.
     player: Option<(String, usize, PlayerView)>,
@@ -191,20 +187,10 @@ impl Game {
     /// # Safety
     /// The renderer outlives this; one thread submits for both.
     pub unsafe fn new(renderer: &ara_render::Renderer) -> Result<Self> {
-        // SAFETY: forwarded caller contract.
-        let mut ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
-        ui.set_deferred_completion(true)?;
-        let mut paint = UiRenderer::default();
-        // The paint renderer skips images it was not told about.
-        for id in std::iter::once(game_preview::texture()).chain((0..=16).map(player_texture)) {
-            paint
-                .external_image(id)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
-        }
+        let images = std::iter::once(game_preview::texture()).chain((0..=16).map(player_texture));
         Ok(Self {
-            ui,
-            paint,
-            present: None,
+            // SAFETY: forwarded caller contract.
+            layer: unsafe { super::layer::Layer::new(renderer, images)? },
             preview: Preview::default(),
             player: None,
             host: Host::default(),
@@ -253,9 +239,7 @@ impl Game {
             self.host.resolved = Arc::clone(resolved);
         }
         // A frame still on the GPU: draw nothing new this pass.
-        let ready = self
-            .ui
-            .wait_previous_for(std::time::Duration::from_millis(1))?;
+        let ready = self.layer.ready()?;
         let gpu = ui_device(renderer.gpu());
         self.host.live = false;
         let mut image = None;
@@ -279,8 +263,16 @@ impl Game {
                     self.player = Some((world.clone(), player, PlayerView::default()));
                 }
                 if let (Some((_, _, view)), Some(extent)) = (&mut self.player, self.host.frame) {
-                    view.update(&world, player, extent, scale, surfaces, &mut self.ui, gpu)
-                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    view.update(
+                        &world,
+                        player,
+                        extent,
+                        scale,
+                        surfaces,
+                        &mut self.layer.ui,
+                        gpu,
+                    )
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
                     self.host.live = view.info().live;
                     if self.host.live {
                         image = Some(player_texture(player));
@@ -290,7 +282,14 @@ impl Game {
                 self.close_player(editor.play_surfaces.as_ref())?;
             }
             self.preview
-                .update(renderer, scene, editor, view, &mut self.host, &mut self.ui)
+                .update(
+                    renderer,
+                    scene,
+                    editor,
+                    view,
+                    &mut self.host,
+                    &mut self.layer.ui,
+                )
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             if image.is_none() && self.host.preview.is_some() {
                 image = Some(game_preview::texture());
@@ -317,7 +316,6 @@ impl Game {
             w: logical[0],
             h: logical[1],
         };
-        self.ui.set_dpi(scale)?;
         let list = DisplayList {
             commands: vec![Draw::Image {
                 node: 1,
@@ -327,23 +325,11 @@ impl Game {
             }],
             glyphs: Vec::new(),
         };
-        let size = logical.map(|v| v.round().max(1.0) as u32);
-        self.paint
-            .render(&mut self.ui, &list, &[], size, TextMode::Raster)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let present = match self.present.take() {
-            Some((mut present, was)) => {
-                if was != extent {
-                    super::compositor::resize(&mut present, extent)?;
-                }
-                present
-            }
-            // SAFETY: forwarded caller contract.
-            None => unsafe { super::compositor::layer_present(&self.ui, renderer, layer, extent)? },
+        // SAFETY: forwarded caller contract.
+        unsafe {
+            self.layer
+                .draw(renderer, layer, extent, scale, &list, &[])?
         };
-        let (present, _) = self.present.insert((present, extent));
-        // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
-        unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
         self.shown = Some((image, extent));
         Ok(status)
     }
@@ -422,7 +408,7 @@ impl Game {
 
     fn close_player(&mut self, surfaces: Option<&ara_play_host::embed::Surfaces>) -> Result<()> {
         if let Some((world, player, mut view)) = self.player.take() {
-            view.close(Some(&world), player, surfaces, &mut self.ui)
+            view.close(Some(&world), player, surfaces, &mut self.layer.ui)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         Ok(())
@@ -488,15 +474,8 @@ impl Game {
     /// Releases the players and the preview; call before the renderer drops.
     pub fn retire(&mut self, editor: &mut Editor, renderer: &mut ara_render::Renderer) {
         let _ = self.close_player(editor.play_surfaces.as_ref());
-        let _ = std::mem::take(&mut self.preview).destroy(renderer, &mut self.ui);
-        let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
-        if let Some((mut present, _)) = self.present.take() {
-            // SAFETY: the adapter is idle and the presentation is not used again.
-            unsafe {
-                self.ui
-                    .retire_present(ui_device(renderer.gpu()), &mut present)
-            };
-        }
+        let _ = std::mem::take(&mut self.preview).destroy(renderer, &mut self.layer.ui);
+        self.layer.retire(renderer);
     }
 }
 
