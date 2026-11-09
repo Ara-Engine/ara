@@ -318,6 +318,15 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
     })
 }
 
+/// Whether `panel` is a tab somewhere in `node`.
+fn holds(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
+    use ara_ui::docking::DockNode;
+    match node {
+        DockNode::Area { tabs, .. } => tabs.iter().any(|t| t == panel),
+        DockNode::Split { first, second, .. } => holds(first, panel) || holds(second, panel),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -327,14 +336,5 @@ mod tests {
         assert_eq!(super::shortcut("Alt+Shift+N").as_deref(), Some("⌥⇧N"));
         assert_eq!(super::shortcut("F2 / Enter").as_deref(), Some("F2"));
         assert_eq!(super::shortcut(""), None);
-    }
-}
-
-/// Whether `panel` is a tab somewhere in `node`.
-fn holds(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
-    use ara_ui::docking::DockNode;
-    match node {
-        DockNode::Area { tabs, .. } => tabs.iter().any(|t| t == panel),
-        DockNode::Split { first, second, .. } => holds(first, panel) || holds(second, panel),
     }
 }
