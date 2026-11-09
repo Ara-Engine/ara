@@ -609,8 +609,13 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
     let b = s.local.create.as_ref()?;
     let panel = panel(s, b);
     let over = popover(panel).on_dismiss(|s: &mut Studio| s.local.create = None);
+    // Under its button, leading edges lined up (it flips and shifts to stay inside).
     Some(match b.anchor {
-        Anchor::Key(key) => over.anchor(key),
+        Anchor::Key(key) => over
+            .anchor(key)
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::Start)
+            .offset(4.0),
         Anchor::Point(x, y) => over.at(x, y),
     })
 }
@@ -623,10 +628,10 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
     // Categories: Recent (when there is any), All, then each with something to create.
     let searching = !b.query.trim().is_empty();
     let mut cats = col()
-        .w(184.0)
-        .min_w(184.0)
-        .pad(8.0)
-        .gap(2.0)
+        .w(172.0)
+        .min_w(172.0)
+        .pad(6.0)
+        .gap(1.0)
         .scroll(Axis::Vertical);
     let mut cat = |key: String,
                    glyph: Icon,
@@ -636,18 +641,13 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
                    pick: Option<Option<Category>>| {
         let hover = c.hover_surface.0;
         cats = std::mem::replace(&mut cats, col()).child(
-            row()
+            super::style::chosen(l, row(), on)
                 .key(key)
-                .h(28.0)
+                .h(24.0)
                 .pad_x(8.0)
                 .gap(8.0)
                 .align(Align::Center)
-                .radius(l.radius.sm)
-                .fill(if on {
-                    c.selection_surface_inactive.0
-                } else {
-                    Rgba::TRANSPARENT
-                })
+                .radius(super::style::RADIUS)
                 .color(if on {
                     c.foreground.0
                 } else {
@@ -665,17 +665,12 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
                     }
                     s.local.focus = Some("create/search");
                 })
-                .child(icon(glyph).size(14.0))
-                .child(
-                    text(title)
-                        .text_size(12.5)
-                        .weight(if on { 600 } else { 500 })
-                        .grow(1.0),
-                )
+                .child(icon(glyph).size(13.0))
+                .child(text(title).text_size(12.0).weight(500).grow(1.0))
                 .child(
                     text(count.to_string())
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0.with_alpha(0.8)),
+                        .text_size(10.5)
+                        .color(c.muted_foreground.0.with_alpha(0.7)),
                 ),
         );
     };
@@ -715,10 +710,10 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
         }
     }
     // Search: typing filters across everything; arrows move, Enter creates.
-    let search = row().pad(10.0).child(
+    let search = row().pad(6.0).child(
         field(
             l,
-            Size::Md,
+            Size::Sm,
             "create/search",
             Some(icons::SEARCH),
             "Search everything you can create…",
@@ -748,7 +743,8 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
             .key("create/list")
             .h(0.0)
             .grow(1.0)
-            .pad(6.0)
+            .pad_x(6.0)
+            .pad_y(2.0)
             .gap(1.0)
             .scroll(Axis::Vertical);
         for (i, item) in rows.iter().enumerate() {
@@ -764,12 +760,12 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
         .child(footer(s, b, rows.get(active).copied()));
     super::style::float(l, row())
         .key("create")
-        .w(700.0)
-        .h(460.0)
-        .radius(l.radius.md)
+        .w(580.0)
+        .h(400.0)
+        .radius(l.radius.sm + 2.0)
         .label("Create")
         .on_key(|s: &mut Studio, key, _| keys(s, key.0))
-        .child(cats.fill(c.muted.0.with_alpha(0.5)))
+        .child(cats.fill(super::style::tones(l).strip))
         .child(right)
 }
 
@@ -793,8 +789,8 @@ fn keys(s: &mut Studio, key: u16) -> Handled {
     Handled::Yes
 }
 
-/// A row: the object's icon on a tinted plate, its name and purpose (and its category when
-/// searching).
+/// A row: the object's icon in its category's colour and its name (its category, muted,
+/// while searching). Its purpose shows in the footer while it is highlighted.
 fn item_row(
     l: &ara_kit::look::Look,
     item: &'static Item,
@@ -805,26 +801,13 @@ fn item_row(
     let c = &l.c;
     let tint = category_tint(l, item.category);
     let hover = c.hover_surface.0;
-    let mut title = row().gap(8.0).align(Align::Center).child(
-        text(item.title)
-            .text_size(13.0)
-            .weight(560)
-            .color(c.foreground.0),
-    );
-    if searching {
-        title = title.child(
-            text(item.category.title())
-                .text_size(11.0)
-                .color(c.muted_foreground.0),
-        );
-    }
     super::style::chosen(l, row(), active)
         .key(format!("create/item/{}", item.id))
-        .h(48.0)
+        .h(26.0)
         .pad_x(8.0)
-        .gap(12.0)
+        .gap(9.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
+        .radius(super::style::RADIUS)
         .label(item.title)
         .description(item.blurb)
         .selected(active)
@@ -848,23 +831,19 @@ fn item_row(
             stillkit::el::PointerPhase::Down => true,
             _ => false,
         })
+        .child(icon(item.icon).size(14.0).color(tint))
         .child(
-            el().size(32.0)
-                .radius(8.0)
-                .fill(tint.with_alpha(0.16))
-                .border(1.0, tint.with_alpha(0.28))
-                .align(Align::Center)
-                .justify(Justify::Center)
-                .child(icon(item.icon).size(16.0).color(tint)),
+            text(item.title)
+                .text_size(12.5)
+                .weight(500)
+                .color(c.foreground.0)
+                .grow(1.0),
         )
-        .child(
-            col()
-                .grow(1.0)
-                .min_w(0.0)
-                .gap(2.0)
-                .child(title)
-                .child(text(item.blurb).text_size(11.5).color(c.muted_foreground.0)),
-        )
+        .children(searching.then(|| {
+            text(item.category.title())
+                .text_size(11.0)
+                .color(c.muted_foreground.0)
+        }))
 }
 
 /// Each category's colour, from the theme's chart palette.
@@ -885,8 +864,12 @@ fn category_tint(l: &ara_kit::look::Look, category: Category) -> Rgba {
 fn footer(s: &Studio, b: &Browser, item: Option<&'static Item>) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let mut out = row().h(48.0).pad_x(12.0).gap(8.0).align(Align::Center);
+    let mut out = row().h(36.0).pad_x(10.0).gap(6.0).align(Align::Center);
     let Some(item) = item else { return out };
+    let about = text(item.blurb)
+        .text_size(11.5)
+        .color(c.muted_foreground.0)
+        .wrap(2);
     let adds: Vec<String> = match item.make {
         Make::Entity { components, .. } => serde_json::from_str::<Value>(components)
             .ok()
@@ -925,9 +908,15 @@ fn footer(s: &Studio, b: &Browser, item: Option<&'static Item>) -> El<Studio> {
                 .color(c.muted_foreground.0),
         );
     }
-    out.child(
+    let actions = out.child(
         button(l, Tone::Primary, Size::Sm, Some(icons::PLUS), "Create")
             .key("create/go")
             .on_press(commit),
-    )
+    );
+    col()
+        .pad_y(6.0)
+        .gap(2.0)
+        .fill(super::style::tones(l).strip)
+        .child(row().pad_x(12.0).child(about.grow(1.0)))
+        .child(actions)
 }

@@ -256,7 +256,9 @@ pub struct Local {
     /// The open component overflow menu, by component.
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.
-    pub add_component: Option<(String, usize)>,
+    pub add_component: Option<super::components::Picker>,
+    /// Components added most recently (newest first): the picker lists them first.
+    pub recent_components: Vec<String>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,

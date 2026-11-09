@@ -275,6 +275,18 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.palette = None);
+        rt.update(|s| s.local.add_component = Some(Default::default()));
+        settle(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-add-component.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.add_component = None);
     }
 }
 

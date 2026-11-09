@@ -5,7 +5,7 @@ use ara_kit::icons;
 use ara_kit::ui::*;
 use stillkit::Role;
 use stillkit::el::{
-    Align, Axis, El, Handled, Justify, KeyCode, col, dialog, el, icon, menu, row, text, text_input,
+    Align, Axis, El, Handled, KeyCode, col, dialog, el, icon, menu, row, text, text_input,
 };
 
 use super::{Studio, commands, dock};
@@ -81,19 +81,12 @@ fn keys(s: &mut Studio, key: KeyCode, tx: &mut stillkit::el::Tx) -> Handled {
 fn title_bar(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let mut lead = vec![
-        el().size(20.0)
-            .radius(6.0)
-            .fill(c.primary.0)
-            .align(Align::Center)
-            .justify(Justify::Center)
-            .child(
-                text("A")
-                    .text_size(12.0)
-                    .weight(800)
-                    .color(c.primary_foreground.0),
-            ),
-    ];
+    // The engine's mark, as the legacy editor's chrome and the loading screen show it.
+    let mark = match ara_kit::brand::mark(ara_kit::brand::Mark::Engine, 60) {
+        Some(mark) => stillkit::el::image(mark).size(20.0),
+        None => el().size(20.0),
+    };
+    let mut lead = vec![mark.label("Ara")];
     lead.extend(MENUS.iter().map(|m| {
         if m.title == "Create" {
             create_button(s)
