@@ -76,6 +76,10 @@ impl Renderer {
     /// Reserve a secondary camera's render/display targets, constants and two
     /// retained output pairs on the bounded allocation worker. Poll at a completed
     /// boundary; false keeps the last image (or loading) without a host wait.
+    /// An allocation for an extent the request has since left (a panel being
+    /// resized) is not cancelled: it is adopted when it completes and the next one
+    /// starts, so a drag adopts a new extent every allocation instead of never.
+    /// While false, `view_extent` is the extent the camera can still render at.
     /// Hidden callers need not poll; release cancels an unfinished allocation.
     /// This does not render, reset the primary history, or change shared content.
     pub fn preallocate_view(
@@ -86,39 +90,28 @@ impl Renderer {
         ara_gpu::cpu_scope!("Raster.preallocate_view");
         ensure!(self.views.owns(view), "View belongs to another renderer");
         request.validate()?;
+        let wanted = (request.render_size, request.size);
         let retained = self
             .views
             .outputs
             .get_mut(&view.id)
             .context("secondary view")?;
-        if retained
-            .preparation
-            .as_ref()
-            .is_some_and(|p| p.render != request.render_size || p.display != request.size)
-        {
-            let old = retained.preparation.take().expect("changed target request");
-            self.gpu.cancel_prepared_resources(old.ticket)?;
-        }
         if view
             .state
             .as_ref()
-            .is_some_and(|s| s.matches_extent(request.render_size, request.size))
+            .is_some_and(|s| s.matches_extent(wanted.0, wanted.1))
         {
+            // Back at the current extent: a pending allocation is for another one.
+            if let Some(old) = retained.preparation.take() {
+                self.gpu.cancel_prepared_resources(old.ticket)?;
+            }
             return Ok(true);
         }
-        if retained.preparation.is_none() {
-            if let Some(ticket) = self
-                .gpu
-                .prepare_resources(|| self::request(request.render_size, request.size, true))?
-            {
-                retained.preparation = Some(Pending {
-                    render: request.render_size,
-                    display: request.size,
-                    ticket,
-                });
-            }
+        let Some(pending) = retained.preparation.as_ref() else {
+            self.prepare_view_targets(view.id, wanted)?;
             return Ok(false);
-        }
+        };
+        let (ticket, prepared) = (pending.ticket, (pending.render, pending.display));
         if self.scene_frame_pending() {
             // A continuously converging Scene must yield one completed boundary
             // for target adoption, as it already does for secondary submission.
@@ -136,11 +129,6 @@ impl Renderer {
             .outputs
             .get_mut(&view.id)
             .context("secondary view")?;
-        let ticket = retained
-            .preparation
-            .as_ref()
-            .context("pending targets")?
-            .ticket;
         let resources = match self.gpu.poll_prepared_resources(ticket) {
             Ok(None) => return Ok(false),
             Ok(Some(resources)) => resources,
@@ -150,10 +138,10 @@ impl Renderer {
             }
         };
         retained.preparation = None;
-        let (mut state, images) =
-            ViewState::from_prepared(self, request.render_size, request.size, resources)?;
+        let (render, display) = prepared;
+        let (mut state, images) = ViewState::from_prepared(self, render, display, resources)?;
         if let Some(old) = view.state.as_mut() {
-            state.inherit(old, &mut self.gpu, request.render_size, request.size)?;
+            state.inherit(old, &mut self.gpu, render, display)?;
         }
         let live = self
             .views
@@ -161,10 +149,44 @@ impl Renderer {
             .get_mut(&view.id)
             .context("secondary view")?;
         live.live
-            .replace_preallocated(&mut self.gpu, images, request.size, request.render_size)?;
+            .replace_preallocated(&mut self.gpu, images, display, render)?;
         if let Some(old) = view.state.replace(state) {
             old.destroy(&mut self.gpu)?;
         }
-        Ok(true)
+        if prepared == wanted {
+            return Ok(true);
+        }
+        // The extent moved on while this one allocated: chase it.
+        self.prepare_view_targets(view.id, wanted)?;
+        Ok(false)
+    }
+
+    /// The (render, display) extent `view`'s targets have now; while
+    /// `preallocate_view` is false for a new extent the camera still renders here.
+    pub fn view_extent(&self, view: &ViewId) -> Option<([u32; 2], [u32; 2])> {
+        view.state.as_ref().map(ViewState::extent)
+    }
+
+    /// Start allocating `view`'s targets at `(render, display)` on the worker.
+    fn prepare_view_targets(
+        &mut self,
+        view: u64,
+        (render, display): ([u32; 2], [u32; 2]),
+    ) -> Result<()> {
+        if let Some(ticket) = self
+            .gpu
+            .prepare_resources(|| self::request(render, display, true))?
+        {
+            self.views
+                .outputs
+                .get_mut(&view)
+                .context("secondary view")?
+                .preparation = Some(Pending {
+                render,
+                display,
+                ticket,
+            });
+        }
+        Ok(())
     }
 }

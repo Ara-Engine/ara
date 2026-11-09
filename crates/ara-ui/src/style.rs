@@ -39,6 +39,30 @@ impl Color {
         ))
     }
 }
+/// One `box-shadow` layer. Outer layers paint below the background and never under
+/// the box itself; inset layers paint above the background, inside the box.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub struct Shadow {
+    /// Paint inside the box (`inset`) instead of around it.
+    pub inset: bool,
+    /// Horizontal and vertical offset in logical pixels.
+    pub offset: [f32; 2],
+    /// Blur radius in logical pixels (twice the Gaussian standard deviation, as in CSS).
+    pub blur: f32,
+    /// Grows (or, negative, shrinks) the shadow shape before blurring.
+    pub spread: f32,
+    /// Straight shadow color.
+    pub color: Color,
+}
+/// `backdrop-filter`: what is already painted behind the box, blurred and saturated
+/// inside its rounded shape (glass).
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub struct Backdrop {
+    /// Gaussian standard deviation in logical pixels (`blur(20px)`).
+    pub blur: f32,
+    /// Saturation multiplier: 1 keeps colors, 0 is grayscale (`saturate(1.2)`).
+    pub saturate: f32,
+}
 /// Independent pointer, focus, active and disabled selector states.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct State {
@@ -68,6 +92,10 @@ pub struct Computed {
     pub radius: f32,
     /// Inset border thickness in logical pixels.
     pub border: f32,
+    /// `box-shadow` layers in source order (the first paints on top).
+    pub shadows: Vec<Shadow>,
+    /// `backdrop-filter` glass, if any.
+    pub backdrop: Option<Backdrop>,
     /// Font size in logical pixels.
     pub font_size: f32,
     /// Explicit font family list, or the host text system default.
@@ -125,6 +153,8 @@ impl Computed {
             border_color: Color(77, 92, 111, 255),
             radius: if control { 6.0 } else { 0.0 },
             border: 0.0,
+            shadows: Vec::new(),
+            backdrop: None,
             font_size: 17.0,
             font_family: None,
             text_end: false,
@@ -344,19 +374,30 @@ impl Sheet {
     pub fn color_token(&self, name: &str) -> Option<Color> {
         self.tokens.get(name).and_then(|v| Color::parse(v).ok())
     }
+    /// Substitute every `var(--token)` in `v`: a whole value, or each part of a layered
+    /// one (`box-shadow: inset 0 1px 0 var(--edge-highlight), …`).
     fn resolve(&self, v: &str) -> Result<String> {
-        let mut value = v;
-        for _ in 0..16 {
-            if let Some(token) = value.strip_prefix("var(").and_then(|s| s.strip_suffix(')')) {
-                value = self
-                    .tokens
-                    .get(token)
-                    .ok_or_else(|| format!("ARA4012: unknown token {token}"))?;
-            } else {
-                return Ok(value.into());
-            }
+        self.resolve_nested(v, 0)
+    }
+    fn resolve_nested(&self, v: &str, depth: u32) -> Result<String> {
+        if depth > 16 {
+            return Err("ARA4013: cyclic or excessive token nesting".into());
         }
-        Err("ARA4013: cyclic or excessive token nesting".into())
+        let Some(start) = v.find("var(") else {
+            return Ok(v.into());
+        };
+        let end = start
+            + v[start..]
+                .find(')')
+                .ok_or("ARA4012: unclosed var( reference")?;
+        let name = &v[start + 4..end];
+        let token = self
+            .tokens
+            .get(name)
+            .ok_or_else(|| format!("ARA4012: unknown token {name}"))?;
+        let value = self.resolve_nested(token, depth + 1)?;
+        let rest = self.resolve_nested(&v[end + 1..], depth)?;
+        Ok(format!("{}{value}{rest}", &v[..start]))
     }
     /// Apply matching rules in specificity/source order, followed by local overrides
     /// (memoized: equal tag, class, inline style and state share one cascade).
@@ -430,6 +471,50 @@ mod tests {
         ] {
             assert!(Sheet::parse(source).is_err(), "{source}");
         }
+    }
+    #[test]
+    fn layered_shadows_and_glass_resolve_a_token_per_layer() -> Result<()> {
+        let tokens = ":root {--light:#ffffff0f; --shade:#0000008c;}";
+        let sheet = Sheet::parse(&format!(
+            "{tokens} button {{ box-shadow: inset 0 1px 0 var(--light), 0 4px 14px -2px var(--shade); backdrop-filter: saturate(1.2) blur(20px); }}"
+        ))?;
+        let c = sheet.compute(
+            &crate::source::parse("<button id='b' />")?[0],
+            State::default(),
+        )?;
+        let layer = |inset, offset, blur, spread, color| Shadow {
+            inset,
+            offset,
+            blur,
+            spread,
+            color,
+        };
+        assert_eq!(
+            c.shadows,
+            [
+                layer(true, [0., 1.], 0., 0., Color(255, 255, 255, 15)),
+                layer(false, [0., 4.], 14., -2., Color(0, 0, 0, 140)),
+            ]
+        );
+        assert_eq!(
+            c.backdrop,
+            Some(Backdrop {
+                blur: 20.,
+                saturate: 1.2
+            })
+        );
+        for bad in [
+            "box-shadow: 0 1px 2px 3px 4px var(--light)",
+            "box-shadow: 0 1px",
+            "box-shadow: 0 1px -2px var(--light)",
+            "backdrop-filter: invert(1)",
+        ] {
+            assert!(
+                Sheet::parse(&format!("{tokens} button {{ {bad}; }}")).is_err(),
+                "{bad}"
+            );
+        }
+        Ok(())
     }
     #[test]
     fn flex_basis_is_validated_and_drives_equal_weight_dock_sizes() -> Result<()> {

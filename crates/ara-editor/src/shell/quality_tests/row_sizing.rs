@@ -88,7 +88,7 @@ fn narrow_inspector_and_import_selects_fit_auto_rows_without_expanding_numeric_d
     let project = Project::new();
     let (mut editor, mut shell) = project.open([800., 760.]);
     let mut measurements = Vec::new();
-    for (density, minimum) in [("compact", 24.), ("comfortable", 28.)] {
+    for (density, minimum) in [("compact", 26.), ("comfortable", 30.)] {
         editor
             .action(
                 "editor.settings.set",

@@ -15,7 +15,7 @@ use ara_gpu::metal::MetalDevice;
 use ara_gpu::{Buffer, Device, HeapIndex, Image, NativeImage, Pipeline, Resource, cooked, vk};
 use ara_platform::{Present, Window};
 use ara_ui::paint::Box2;
-use ara_ui_render::gpu::{Batch, Clip, Instance, TextureUpload, UiGpu};
+use ara_ui_render::gpu::{Batch, Clip, Instance, TextureUpload, UiGpu, backdrop_band};
 pub use shared::PlaySurface;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
@@ -66,9 +66,19 @@ struct Draw {
     mask_offset: u32,
     mask_count: u32,
 }
+/// A render target and its bindless slot (glass samples it).
 struct Target {
     image: Image,
     size: [u32; 2],
+    slot: HeapIndex,
+}
+/// The horizontal pass of a glass draw: its band instance and physical viewport,
+/// drawn into `scratch` (sampling the target) just before draw `index`.
+#[derive(Clone, Copy)]
+struct BackdropPass {
+    index: usize,
+    first: u32,
+    clip: [u32; 4],
 }
 /// A host-visible storage buffer published to the bindless heap, grown as needed.
 struct Records {
@@ -98,13 +108,19 @@ pub struct NativeUi {
     instances: Vec<Instance>,
     masks: Vec<[f32; 4]>,
     draws: Vec<Draw>,
+    backdrops: Vec<BackdropPass>,
+    /// Same-size blur scratch for glass.
+    scratch: Option<Target>,
     /// Time spent waiting for submitted UI work since `take_gpu_wait`.
     gpu_wait: std::cell::Cell<std::time::Duration>,
     /// Submissions return without waiting (`set_deferred_completion`).
     deferred: bool,
     /// The last submission until the next one resolves it.
     in_flight: std::cell::Cell<Option<ara_gpu::TimelinePoint>>,
-    logical: [u32; 2],
+    /// The target's extent in logical pixels (its physical size over `dpi`).
+    logical: [f32; 2],
+    /// The next target's exact pixel size (`pin_target_size`).
+    pinned: Option<[u32; 2]>,
     dpi: f32,
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
@@ -148,10 +164,13 @@ impl NativeUi {
             instances: Vec::new(),
             masks: Vec::new(),
             draws: Vec::new(),
+            backdrops: Vec::new(),
+            scratch: None,
             gpu_wait: Default::default(),
             deferred: false,
             in_flight: Default::default(),
-            logical: [1, 1],
+            logical: [1., 1.],
+            pinned: None,
             dpi: 1.,
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
@@ -169,6 +188,13 @@ impl NativeUi {
     /// Current logical-to-physical pixel density.
     pub fn dpi(&self) -> f32 {
         self.dpi
+    }
+    /// Render the next frame (the next `begin`) at exactly `size` pixels, the window's
+    /// drawable size: the integer logical size times `dpi` can miss it by a pixel, and
+    /// presenting would then rescale the whole UI (pixelated text). Ignored unless
+    /// within a pixel or so of that rounded size.
+    pub fn pin_target_size(&mut self, size: [u32; 2]) {
+        self.pinned = Some(size);
     }
     /// Set the logical-to-physical scale when moving between monitors.
     pub fn set_dpi(&mut self, dpi: f32) -> Result<()> {
@@ -394,6 +420,34 @@ impl NativeUi {
         }
         Ok(())
     }
+    /// Physical clip rect (x, y, width, height) covering logical `rect`.
+    fn physical(&self, rect: Box2) -> [u32; 4] {
+        let x = (rect.x * self.dpi).floor().max(0.) as u32;
+        let y = (rect.y * self.dpi).floor().max(0.) as u32;
+        let right = ((rect.x + rect.w) * self.dpi).ceil().max(0.) as u32;
+        let bottom = ((rect.y + rect.h) * self.dpi).ceil().max(0.) as u32;
+        [x, y, right.saturating_sub(x), bottom.saturating_sub(y)]
+    }
+    /// The glass scratch's slot, (re)creating it at the target's size.
+    fn scratch_slot(&mut self) -> Result<u32> {
+        let size = self.target.as_ref().context("UI target")?.size;
+        if let Some(scratch) = &self.scratch
+            && scratch.size == size
+        {
+            return Ok(scratch.slot.index);
+        }
+        let image = self.device.create_image(
+            size[0],
+            size[1],
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+        )?;
+        let slot = self.device.sampled_image(image, false)?;
+        if let Some(old) = self.scratch.replace(Target { image, size, slot }) {
+            Device::retire(&mut self.device, Resource::Image(old.image))?;
+        }
+        Ok(slot.index)
+    }
     /// The bindless slot of UI texture `id`, external or uploaded.
     fn slot(&self, id: u32) -> Option<u32> {
         self.external
@@ -408,21 +462,32 @@ impl UiGpu for NativeUi {
         self.upload_inner(texture).map_err(Into::into)
     }
     fn begin(&mut self, size: [u32; 2]) -> ara_ui::Result<()> {
-        self.logical = size;
         self.instances.clear();
         self.masks.clear();
         self.draws.clear();
-        let physical = size.map(|v| (v as f32 * self.dpi).round().max(1.) as u32);
+        self.backdrops.clear();
+        let rounded = size.map(|v| (v as f32 * self.dpi).round().max(1.) as u32);
+        // A pin within a pixel or so of the rounded size is the window's real extent.
+        let near = self.dpi.ceil() as u32 + 1;
+        let physical = match self.pinned.take() {
+            Some(pin) if pin.iter().zip(rounded).all(|(p, r)| p.abs_diff(r) <= near) => pin,
+            _ => rounded,
+        };
+        self.logical = physical.map(|v| v as f32 / self.dpi);
         if self.target.as_ref().is_none_or(|t| t.size != physical) {
             let image = self.device.create_image(
                 physical[0],
                 physical[1],
                 vk::Format::R8G8B8A8_UNORM,
-                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::SAMPLED,
             )?;
+            let slot = self.device.sampled_image(image, false)?;
             if let Some(old) = self.target.replace(Target {
                 image,
                 size: physical,
+                slot,
             }) {
                 Device::retire(&mut self.device, Resource::Image(old.image))?;
             }
@@ -449,8 +514,8 @@ impl UiGpu for NativeUi {
         let mut rect = Box2 {
             x: 0.,
             y: 0.,
-            w: self.logical[0] as f32,
-            h: self.logical[1] as f32,
+            w: self.logical[0],
+            h: self.logical[1],
         };
         let mut current = Some(batch.clip);
         let offset = self.masks.len() as u32;
@@ -464,16 +529,32 @@ impl UiGpu for NativeUi {
             }
             current = clip.parent;
         }
-        let x = (rect.x * self.dpi).floor().max(0.) as u32;
-        let y = (rect.y * self.dpi).floor().max(0.) as u32;
-        let right = ((rect.x + rect.w) * self.dpi).ceil().max(0.) as u32;
-        let bottom = ((rect.y + rect.h) * self.dpi).ceil().max(0.) as u32;
+        let mut texture = texture;
+        if batch.pipeline == ara_ui_render::gpu::Pipeline::Backdrop {
+            texture = self.scratch_slot()?;
+            let band = backdrop_band(
+                instances.first().ok_or("empty backdrop batch")?,
+                self.logical[1],
+                self.dpi,
+            );
+            self.backdrops.push(BackdropPass {
+                index: self.draws.len(),
+                first: self.instances.len() as u32,
+                clip: self.physical(Box2 {
+                    x: band.rect[0],
+                    y: band.rect[1],
+                    w: band.rect[2],
+                    h: band.rect[3],
+                }),
+            });
+            self.instances.push(band);
+        }
         self.draws.push(Draw {
             first,
             count: instances.len() as u32,
             texture,
             mode: batch.pipeline as u32,
-            clip: [x, y, right.saturating_sub(x), bottom.saturating_sub(y)],
+            clip: self.physical(rect),
             mask_offset: offset,
             mask_count: (self.masks.len() as u32 - offset) / 2,
         });
@@ -518,6 +599,37 @@ impl NativeUi {
         let (image, size) = self.output()?;
         // SAFETY: the UI submission completed; the target is a transfer source.
         unsafe { present.present_image(&self.device, image, size) }
+    }
+    /// Match `present` to its window's current size (a fresh presentation; the Vulkan
+    /// backend recreates its swapchain in place).
+    /// # Safety
+    /// `present` was created by [`Self::create_present`] for `window`.
+    pub unsafe fn resize_present(
+        &self,
+        gpu: &UiDevice,
+        present: &mut Present,
+        window: &Window,
+        _reach: Option<[u32; 2]>,
+    ) -> Result<()> {
+        // SAFETY: forwarded caller contract; the old presentation is not used again.
+        unsafe {
+            self.retire_present(gpu, present);
+            *present = self.create_present(gpu, window)?;
+        }
+        Ok(())
+    }
+    /// Wait for vertical blank (`vsync`) or present at once (`displaySyncEnabled`).
+    /// # Safety
+    /// `present` was created by [`Self::create_present`] for `window`.
+    pub unsafe fn set_vsync(
+        &self,
+        _gpu: &UiDevice,
+        present: &mut Present,
+        window: &Window,
+        vsync: bool,
+    ) -> Result<bool> {
+        // SAFETY: forwarded caller contract.
+        unsafe { present.set_vsync(&self.device, window, vsync) }
     }
     /// Release window presentation.
     /// # Safety

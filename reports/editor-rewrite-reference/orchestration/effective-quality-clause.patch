@@ -1,0 +1,12 @@
+diff --git a/crates/ara-editor/src/state.rs b/crates/ara-editor/src/state.rs
+index 4f959274..4aedc3dc 100644
+--- a/crates/ara-editor/src/state.rs
++++ b/crates/ara-editor/src/state.rs
+@@ -476,6 +476,7 @@ impl EditorState {
+             || self.hidden != other.hidden
+             || self.quality != other.quality
+             || self.render_quality != other.render_quality
++            || self.render_choice() != other.render_choice()
+     }
+     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
+         self.doc != other.doc

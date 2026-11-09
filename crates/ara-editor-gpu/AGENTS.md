@@ -7,7 +7,10 @@ No project, scene-authority, widget or input state belongs here.
 
 Backend-neutral calls for hosts (editor, splash, Hub): `UiDevice` (Vulkan context, a
 marker on Metal), `ui_device(&GpuDevice)`, `open_presentation`, and
-`NativeUi::{create_present, present, retire_present, wait_idle}` over ara-platform.
+`NativeUi::{create_present, present, resize_present, retire_present, wait_idle}` over
+ara-platform (`resize_present` takes a live-resize reach, `Present::resize`). Hosts call
+`pin_target_size(drawable)` before each render: the integer logical size times a
+fractional dpi can miss the drawable by a pixel, and presenting would rescale the UI.
 
 API: `NativeUi`, `Overlay`. The constructor/native image import are unsafe:
 the caller retains the creating renderer/device until this adapter is dropped.
@@ -43,10 +46,11 @@ editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
-Outlines and hover (mode 5) group channels through an optional table
+The editor draws mode-5 outlines only when the Scene is not raster (a raster Scene draws its own: ara-render `Outlines`). Outlines and hover (mode 5) group channels through an optional table
 (`outline_groups`): a group outlines as one shape; ground (terrain) only against sky,
-void and other ground. Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,
-cubes; shader mode 8). After editing `shaders/ui.slang`, re-cook with
+void and other ground; edges are a 1 logical px antialiased band each side (distance to the
+nearest ID texel across the edge). `Icon` draws an uploaded white image tinted (mode 2). Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,
+cubes; shader mode 8); consecutive lines, quads and icons of one image batch into one instanced draw (both backends). After editing `shaders/ui.slang`, re-cook with
 `shaders/compile.ps1` (slangc + spirv-val from VULKAN_SDK) and commit both .spv.
 
 Play surfaces (D19 Game view, `shared.rs`): `import_play_surface(gpu, &SharedSurface)`
@@ -60,3 +64,9 @@ Floating editor windows (D23) share this adapter: `select_target(window)` swaps 
 active render target (0 is the main window); textures, atlases and pipelines are
 shared. Drop a closed window's target with `release_target` after queue idle.
 Overlays apply only where the viewport image is drawn.
+
+Glass (mode 11, D31): targets are also SAMPLED. A backdrop draw ends rendering, moves
+the target to shader-read, draws `backdrop_band` into the same-size scratch (cleared),
+then resumes the target with LOAD (its barrier grants attachment read) for the vertical
+pass. Vulkan reserves two heap slots (target, scratch); Metal registers both images.
+`tests/ui_pixels.rs` holds a satin/glass case against CpuGpu.

@@ -122,7 +122,7 @@ impl Culling {
             work.cull_tests += 1;
             let g = groups.instance_group[i];
             let group = &groups.groups[g];
-            if group.transparent || !visible(&planes, bounds[i]) {
+            if group.transparent || !group.casts || !visible(&planes, bounds[i]) {
                 continue;
             }
             if let Some(lod) = view.lod(group, self.projections[i]) {
@@ -150,6 +150,7 @@ impl Culling {
                 count: chunk.len() as u32,
                 vertices: group.counts[lod],
                 first_index: group.first_indices[lod],
+                paint: group.paint_shadow,
             };
             cursor += chunk.len();
         }

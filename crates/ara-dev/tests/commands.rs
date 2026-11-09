@@ -62,7 +62,10 @@ fn editor_builds_matching_companion_and_refuses_stale_or_failed_pairs() {
         root.join("Cargo.toml"),
         format!(
             "{}\n[profile.paired]\ninherits = \"dev\"\ndebug-assertions = false\n",
-            manifest.replace("\"diag\"]", "\"diag\", \"editor\", \"player\"]")
+            manifest.replace(
+                "\"diag\"]",
+                "\"diag\", \"editor\", \"player\", \"worker\", \"cli\"]"
+            )
         ),
     )
     .unwrap();
@@ -73,7 +76,13 @@ fn editor_builds_matching_companion_and_refuses_stale_or_failed_pairs() {
     )
     .unwrap();
     fs::write(root.join("tool/Cargo.toml"), "[package]\nname=\"mini-tool\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nmini-core={path=\"../core\",features=[\"paired\"]}\n").unwrap();
-    for (dir, name) in [("editor", "ara-editor"), ("player", "ara-player")] {
+    // The editor stages the player, import worker and CLI beside itself.
+    for (dir, name) in [
+        ("editor", "ara-editor"),
+        ("player", "ara-player"),
+        ("worker", "ara-import-worker"),
+        ("cli", "ara"),
+    ] {
         fs::create_dir_all(root.join(dir).join("src")).unwrap();
         fs::write(root.join(dir).join("Cargo.toml"), format!("[package]\nname={name:?}\nversion=\"0.1.0\"\nedition=\"2024\"\n[dependencies]\nmini-core={{path=\"../core\"}}\n")).unwrap();
     }
@@ -96,6 +105,14 @@ fn editor_builds_matching_companion_and_refuses_stale_or_failed_pairs() {
 }"#,
     )
     .unwrap();
+    for dir in ["worker", "cli"] {
+        fs::write(
+            root.join(dir).join("src/main.rs"),
+            "fn main() {}
+",
+        )
+        .unwrap();
+    }
     let binary = env!("CARGO_BIN_EXE_ara-dev");
     let target = root.join("target/custom-final");
     let build = root.join("target/custom-build");

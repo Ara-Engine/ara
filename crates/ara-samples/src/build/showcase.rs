@@ -8,7 +8,7 @@ use super::{
     place::{Models, Prop, Scene, transform},
 };
 use crate::{
-    kit::{Kit, Material},
+    kit::{Glass, Kit, Material},
     lock::Lock,
 };
 use anyhow::Result;
@@ -67,14 +67,32 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
         ("skin", flat("skin-like", [0.78, 0.53, 0.42], 0.5, 0.0), 0.0),
         ("marble", Material::textured("marble", "marble_01"), 0.0),
         ("wood", Material::textured("wood", "wood_table_001"), 0.0),
+        // Solid glass balls (0.6 m across): clear crown glass, and a green tint
+        // that keeps about half the light over the ball's diameter.
         (
             "glass",
-            Material::glass("clear glass", [0.92, 0.95, 0.95], 0.12),
+            Material::solid_glass(
+                "clear glass",
+                Glass {
+                    ior: 1.5,
+                    thickness: 0.6,
+                    attenuation_color: [1.0; 3],
+                    attenuation_distance: f32::INFINITY,
+                },
+            ),
             0.0,
         ),
         (
             "glass_tinted",
-            Material::glass("tinted glass", [0.2, 0.55, 0.45], 0.35),
+            Material::solid_glass(
+                "tinted glass",
+                Glass {
+                    ior: 1.5,
+                    thickness: 0.6,
+                    attenuation_color: [0.35, 0.75, 0.6],
+                    attenuation_distance: 0.6,
+                },
+            ),
             0.0,
         ),
         (

@@ -167,6 +167,14 @@ impl Presenter {
         self.wait = wait;
     }
 
+    /// Wait for vertical blank when presenting (the default), or present as soon as a
+    /// copy completes. iOS always syncs to the display.
+    pub fn set_vsync(&mut self, vsync: bool) {
+        #[cfg(target_os = "macos")]
+        self.layer.setDisplaySyncEnabled(vsync);
+        #[cfg(not(target_os = "macos"))]
+        let _ = vsync;
+    }
     /// Let `display` return once its copy is committed, GPU-ordered after the
     /// device's submitted work; the next display waits for it first. With
     /// CAMetalLayer's drawable pool this keeps at most one present in flight, so the

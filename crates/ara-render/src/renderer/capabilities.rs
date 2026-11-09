@@ -45,6 +45,22 @@ impl Renderer {
                 "the overdraw view counts the native raster renderer's draws only",
             );
         }
+        if self.is_native() {
+            capabilities.vertex_colors = true;
+        } else {
+            deny(
+                "vertexColors",
+                "the vertex-colour views draw the native raster renderer's geometry only",
+            );
+        }
+        if self.is_native() {
+            capabilities.decals = true;
+        } else {
+            deny(
+                "decals",
+                "deferred decals blend into the native raster renderer's G-buffer only",
+            );
+        }
         capabilities
     }
 
@@ -54,12 +70,16 @@ impl Renderer {
         let key = match mode {
             ViewMode::GiDiffuse => "giDiffuse",
             ViewMode::Overdraw => "overdraw",
+            ViewMode::DecalCoverage => "decals",
+            _ if mode.vertex_color().is_some() => "vertexColors",
             _ => return None,
         };
         let capabilities = self.capabilities();
         let available = match mode {
             ViewMode::GiDiffuse => capabilities.gi_diffuse,
-            _ => capabilities.overdraw,
+            ViewMode::Overdraw => capabilities.overdraw,
+            ViewMode::DecalCoverage => capabilities.decals,
+            _ => capabilities.vertex_colors,
         };
         (!available).then(|| {
             let reason = capabilities.reasons.get(key).cloned().unwrap_or_default();

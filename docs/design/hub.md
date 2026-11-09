@@ -40,7 +40,7 @@ The Hub is sound. Its clutter:
 - **Installs:** Release notes is a compact button.
 - **Agents:** live activity comes first when anyone is attached; the setup steps follow. When nobody is attached, the setup steps lead and the empty state follows.
 
-## On stillkit (D31)
+## On stillkit (D34)
 
 The Hub runs on stillkit with Ara's look from `ara-kit`: one CPU-drawn window that redraws only what changed and sleeps while idle.
 - **Title bar:** 40 px, with the ⌘K launcher centred (projects, templates, pages and actions, keyboard-first), the update pill and the theme toggle. The macOS traffic lights are centred in it.

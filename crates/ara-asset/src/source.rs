@@ -64,7 +64,21 @@ pub fn snapshot(
     worker: &ProcessWorker,
     cancellation: &Cancellation,
 ) -> Result<ImportInput> {
+    let mut db = SchemaDb::new();
+    crate::register_schema(&mut db);
+    let policy = crate::ProjectImportSettings::read(root, &db)?;
+    snapshot_with_policy(root, asset, worker, cancellation, &policy)
+}
+fn snapshot_with_policy(
+    root: &Path,
+    asset: &SourceAsset,
+    worker: &ProcessWorker,
+    cancellation: &Cancellation,
+    policy: &crate::ProjectImportSettings,
+) -> Result<ImportInput> {
     let _trace = crate::trace::Scope::new("source.snapshot", &asset.path);
+    let (settings, preset) =
+        policy.resolved_settings(&asset.importer, asset.preset, &asset.settings)?;
     let project_root = root
         .canonicalize()
         .map_err(|e| io_at(e, &root.display().to_string()))?;
@@ -81,7 +95,7 @@ pub fn snapshot(
         &asset.importer,
         &asset.version,
         source.clone(),
-        asset.settings.clone(),
+        settings.clone(),
         cancellation,
     )? {
         cancellation.check()?;
@@ -90,27 +104,6 @@ pub fn snapshot(
         dependencies.insert(uri, bytes);
     }
     cancellation.check()?;
-    let mut preset = match asset.preset {
-        Some(preset) => preset,
-        None if matches!(
-            asset.importer.as_str(),
-            "ara.texture" | "ara.gltf" | "ara.fbx"
-        ) =>
-        {
-            let mut db = SchemaDb::new();
-            crate::register_schema(&mut db);
-            crate::ProjectImportSettings::read(&project_root, &db)?.preset
-        }
-        None => crate::CookPreset::default(),
-    };
-    if asset.importer == "ara.texture"
-        && let Some(value) = asset
-            .settings
-            .get("preset")
-            .filter(|value| !value.is_null())
-    {
-        preset = serde_json::from_value(value.clone())?;
-    }
     Ok(ImportInput {
         preset,
         thread_budget: asset.thread_budget,
@@ -118,7 +111,7 @@ pub fn snapshot(
         source,
         importer: asset.importer.clone(),
         version: asset.version.clone(),
-        settings: asset.settings.clone(),
+        settings,
         target: asset.target,
         dependencies,
         asset_dependencies: asset.asset_dependencies.clone(),
@@ -168,7 +161,7 @@ pub struct AssetPipeline {
     watcher: FileWatcher,
     sources: BTreeMap<String, SourceAsset>,
     configurations: BTreeMap<String, ImportSettings>,
-    project_preset: Option<crate::CookPreset>,
+    project_policy: Option<crate::ProjectImportSettings>,
     epochs: BTreeMap<String, u64>,
     snapshots: BTreeMap<String, Cancellation>,
     snapshot_changes: BTreeSet<String>,
@@ -188,7 +181,7 @@ impl AssetPipeline {
         let root = root.as_ref().canonicalize()?;
         let authored_root = authored_root(&root)?;
         let watcher = FileWatcher::new(&root)?;
-        let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
+        let project_policy = Some(crate::ProjectImportSettings::read(&root, &schema)?);
         let worker = worker.with_memo(cache.worker_memo_root());
         let (tx, rx) = mpsc::channel();
         Ok(Self {
@@ -199,7 +192,7 @@ impl AssetPipeline {
             watcher,
             sources: BTreeMap::new(),
             configurations: BTreeMap::new(),
-            project_preset,
+            project_policy,
             epochs: BTreeMap::new(),
             snapshots: BTreeMap::new(),
             snapshot_changes: BTreeSet::new(),
@@ -256,25 +249,39 @@ impl AssetPipeline {
         Ok(())
     }
 
-    /// Applies a command-authored project policy without waiting for its file save.
-    /// Explicit source overrides and non-texture importers keep their generations.
+    /// Update the global quality while retaining every typed per-importer policy.
+    /// Existing callers can keep using this preset-only compatibility entry point.
     pub fn configure_project(&mut self, preset: crate::CookPreset) -> Result<bool> {
-        if self.project_preset == Some(preset) {
+        let mut policy = self.project_policy.clone().unwrap_or_default();
+        policy.preset = preset;
+        self.configure_project_settings(policy)
+    }
+    /// Apply an authoritative in-memory policy before its debounced file save.
+    /// Re-request only sources whose effective settings or quality actually change.
+    pub fn configure_project_settings(
+        &mut self,
+        policy: crate::ProjectImportSettings,
+    ) -> Result<bool> {
+        if self.project_policy.as_ref() == Some(&policy) {
             return Ok(false);
         }
-        self.project_preset = Some(preset);
-        let affected: Vec<_> = self
-            .sources
-            .iter()
-            .filter(|(_, source)| {
-                source.preset.is_none()
-                    && matches!(
-                        source.importer.as_str(),
-                        "ara.texture" | "ara.gltf" | "ara.fbx"
-                    )
-            })
-            .map(|(id, _)| id.clone())
-            .collect();
+        let previous = self.project_policy.as_ref();
+        let mut affected = Vec::new();
+        for (id, source) in &self.sources {
+            let next =
+                policy.resolved_settings(&source.importer, source.preset, &source.settings)?;
+            let changed = match previous {
+                None => true,
+                Some(previous) => {
+                    previous.resolved_settings(&source.importer, source.preset, &source.settings)?
+                        != next
+                }
+            };
+            if changed {
+                affected.push(id.clone());
+            }
+        }
+        self.project_policy = Some(policy);
         for id in affected {
             self.request(&id)?;
         }
@@ -314,7 +321,7 @@ impl AssetPipeline {
         let worker = self.worker.clone();
         let schema = Arc::clone(&self.schema);
         let configuration = self.configurations.get(id).cloned();
-        let project_preset = self.project_preset;
+        let project_policy = self.project_policy.clone();
         let known_assets: BTreeMap<_, _> = self
             .sources
             .iter()
@@ -386,13 +393,12 @@ impl AssetPipeline {
                         }
                     }
                 }
-                if matches!(
-                    asset.importer.as_str(),
-                    "ara.texture" | "ara.gltf" | "ara.fbx"
-                ) {
-                    asset.preset = asset.preset.or(project_preset);
+                match project_policy {
+                    Some(policy) => {
+                        snapshot_with_policy(&root, &asset, &worker, &cancellation, &policy)
+                    }
+                    None => snapshot(&root, &asset, &worker, &cancellation),
                 }
-                snapshot(&root, &asset, &worker, &cancellation)
             })();
             let _ = tx.send(SnapshotResult {
                 asset: asset.id,
@@ -440,19 +446,8 @@ impl AssetPipeline {
         }
         let mut invalidated = BTreeSet::new();
         if policy_changed {
-            self.project_preset = None;
-            invalidated.extend(
-                self.sources
-                    .iter()
-                    .filter(|(_, asset)| {
-                        asset.preset.is_none()
-                            && matches!(
-                                asset.importer.as_str(),
-                                "ara.texture" | "ara.gltf" | "ara.fbx"
-                            )
-                    })
-                    .map(|(id, _)| id.clone()),
-            );
+            self.project_policy = None;
+            invalidated.extend(self.sources.keys().cloned());
         }
         let mut handled = Vec::new();
         for path in &self.snapshot_changes {
@@ -529,6 +524,78 @@ impl Drop for AssetPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn authoritative_type_default_change_requeues_only_inheriting_sources_before_file_save() {
+        let directory = tempfile::tempdir().expect("pipeline scratch");
+        let root = directory.path();
+        std::fs::write(
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )
+        .expect("marker");
+        std::fs::create_dir(root.join(ara_doc::AUTHORING_ROOT)).expect("authored root");
+        let mut db = SchemaDb::new();
+        crate::register_schema(&mut db);
+        let cache = Arc::new(crate::FileCache::new(root).expect("private cache"));
+        let mut pipeline = AssetPipeline::new(
+            root,
+            ProcessWorker::new(root.join("never-launched-worker")),
+            cache,
+            Arc::new(db),
+        )
+        .expect("pipeline");
+        for (id, settings) in [
+            ("as_inherit", serde_json::json!({})),
+            (
+                "as_explicit",
+                serde_json::to_value(crate::TextureSettings::default()).expect("explicit settings"),
+            ),
+        ] {
+            pipeline
+                .register(SourceAsset {
+                    preset: Some(crate::CookPreset::Fast),
+                    thread_budget: 1,
+                    id: id.into(),
+                    path: format!("{id}.png"),
+                    importer: "ara.texture".into(),
+                    version: "fixture".into(),
+                    settings,
+                    target: crate::TargetPlatform::Linux,
+                    asset_dependencies: Default::default(),
+                })
+                .expect("source");
+        }
+        let mut policy = crate::ProjectImportSettings::default();
+        policy.defaults.texture = Some(crate::TextureSettings {
+            usage: crate::TextureUsage::Normal,
+            ..Default::default()
+        });
+        assert!(
+            pipeline
+                .configure_project_settings(policy.clone())
+                .expect("policy")
+        );
+        assert_eq!(pipeline.epochs.get("as_inherit"), Some(&1));
+        assert_eq!(pipeline.epochs.get("as_explicit"), None);
+        assert!(
+            !pipeline
+                .configure_project_settings(policy)
+                .expect("same policy")
+        );
+        // Missing fixture media stops before dependency discovery or process launch.
+        // Drain its owned snapshot thread before deleting the private test directory.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !pipeline.snapshots.is_empty() {
+            pipeline.poll().expect("poll");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "snapshot failed to retire"
+            );
+            std::thread::yield_now();
+        }
+    }
     #[test]
     fn source_open_rejects_old_projects_and_accepts_explicit_authored_roots() {
         let directory = tempfile::tempdir().expect("source scratch");

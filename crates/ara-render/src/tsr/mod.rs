@@ -40,7 +40,9 @@
 //! - `ARA_TSR_SHADING_CHANGE` (0: the pyramid pass skipped, equal fidelity and
 //!   steadier in the Showcase sweep; 1 re-enables FSR's), `ARA_TSR_LUMA_INSTABILITY`
 //!   (1; 0 skips the luma instability pass, clearly less stable);
-//! - `ARA_TSR_IDS` (1; 0 drops the entity-ID signal and its scratch traffic).
+//! - `ARA_TSR_IDS` (1; 0 drops the entity-ID signal and its scratch traffic);
+//! - `ARA_TSR_STILL_KEEP` (0.75): the share of a still pixel's history kept
+//!   against rectification.
 //!
 //! Images are allocated on first use at the view's render and display sizes,
 //! reallocated (with a history reset) when either size or the path changes, and
@@ -540,6 +542,7 @@ impl Tsr {
             external: [u32::MAX; 4],
             kernel: t.kernel,
             options: [options, 0, 0, 0],
+            still: [t.still, 0., 0., 0.],
         };
         let clear = if resources.fresh {
             vec![LUMA, ACCUMULATION, LOCKS]

@@ -89,30 +89,30 @@ pub enum HubCommand {
 
 #[derive(Clone, ValueEnum)]
 pub enum McpClient {
+    /// Claude Code: `~/.claude.json` `mcpServers` JSON.
     Claude,
+    /// OpenAI Codex CLI: `~/.codex/config.toml` TOML.
     Codex,
+    /// Cursor: `~/.cursor/mcp.json` `mcpServers` JSON.
+    Cursor,
+    /// OpenCode: `~/.config/opencode/opencode.json` `mcp` JSON.
+    Opencode,
 }
 
 pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
     let executable = std::env::current_exe().map_err(io_error)?;
     let executable = ara_hub_service::normalized_path(&executable).to_owned();
     if let HubCommand::InstallMcp { client } = command {
-        let path = executable
-            .to_str()
-            .ok_or_else(|| io_error("MCP executable path is not UTF-8"))?;
-        match client {
-            McpClient::Claude => println!(
-                "{}",
-                ara_json::to_canonical_string(
-                    &json!({"mcpServers":{"ara":{"command":path,"args":["mcp"]}}})
-                )
-            ),
-            McpClient::Codex => {
-                // JSON string escaping is also valid for this TOML basic string.
-                let quoted = serde_json::to_string(path).map_err(io_error)?;
-                println!("[mcp_servers.ara]\ncommand = {quoted}\nargs = [\"mcp\"]");
-            }
+        if executable.to_str().is_none() {
+            return Err(io_error("MCP executable path is not UTF-8"));
         }
+        let client = match client {
+            McpClient::Claude => ara_agents::Client::Claude,
+            McpClient::Codex => ara_agents::Client::Codex,
+            McpClient::Cursor => ara_agents::Client::Cursor,
+            McpClient::Opencode => ara_agents::Client::OpenCode,
+        };
+        println!("{}", ara_agents::snippet(&executable, client).trim_end());
         return Ok(true);
     }
     if let HubCommand::Serve { port, config_dir } = command {

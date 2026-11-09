@@ -349,6 +349,7 @@ impl Controller {
             typed: String::new(),
             duplicate: false,
             snap: Some(source),
+            offset: glam::Mat4::IDENTITY,
         });
         Ok(true)
     }

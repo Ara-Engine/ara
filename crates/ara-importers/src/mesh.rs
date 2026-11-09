@@ -2,8 +2,12 @@ use crate::invalid;
 use ara_asset::{Error, Result};
 use ara_asset_format::{Builder, Kind, Mesh, Meshlet, QuantizedVertex, SkinExtra};
 use bytemuck::{Pod, Zeroable};
-use serde::{Deserialize, Serialize};
+mod bvh;
 mod lods;
+pub(crate) mod patch_service;
+mod patches;
+pub use patch_service::load_patch_charts;
+pub use patches::PatchCache;
 
 /// Off: current fresh-project ABBA shows no clear win after faster texture prep.
 pub(crate) const PARALLEL_GEOMETRY: bool = false;
@@ -35,41 +39,8 @@ pub struct Vertex {
     /// Original source vertex, retained through tangent splits and fetch remapping.
     pub source_index: u32,
 }
-/// Deterministic geometry cook policy.
-#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
-#[ara(module = "asset")]
-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
-pub struct MeshSettings {
-    /// Texture quality overrides by image URI or #image-index (FBX: #texture-id).
-    /// Other images inherit the model/project preset and retain their cached work.
-    #[serde(default)]
-    pub texture_presets: std::collections::BTreeMap<String, ara_asset::CookPreset>,
-    /// Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.
-    #[ara(default = 8, range(min = 1, max = 8))]
-    pub lod_count: u32,
-    /// Relative simplification error ceiling; skin/morph meshes clamp this to 1%.
-    #[ara(default = 0.1, range(min = 0))]
-    pub lod_error: f32,
-    /// Cook a versioned virtual-geometry DAG for each static material primitive.
-    /// Skinned and morph-deformed meshes retain the classic path.
-    #[ara(default = true)]
-    pub virtual_geometry: bool,
-    /// glTF base-color image URI (or #image-index) to companion opacity image URI.
-    /// The mask's red channel multiplies existing alpha; paths are relative to the model.
-    #[serde(default)]
-    pub opacity_maps: std::collections::BTreeMap<String, String>,
-}
-impl Default for MeshSettings {
-    fn default() -> Self {
-        Self {
-            texture_presets: std::collections::BTreeMap::new(),
-            lod_count: 8,
-            lod_error: 0.1,
-            virtual_geometry: true,
-            opacity_maps: std::collections::BTreeMap::new(),
-        }
-    }
-}
+/// Shared reflected geometry import policy.
+pub use ara_asset::MeshSettings;
 
 pub(crate) fn normalize(v: [f32; 3]) -> [f32; 3] {
     let length = v.iter().map(|x| x * x).sum::<f32>().sqrt();

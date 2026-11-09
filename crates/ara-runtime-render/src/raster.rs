@@ -38,6 +38,9 @@ struct Preparation {
 /// Derived native content and VFX on a caller-owned renderer/device. It never
 /// discovers, cooks or imports assets; the resolver supplies published generations.
 pub struct RasterView {
+    resident_bytes: u64,
+    foliage_percent: u32,
+    budget_changed: bool,
     prepared: Option<Prepared>,
     effects: vfx::Effects,
     gi: Option<crate::gi::Acquisition>,
@@ -67,6 +70,16 @@ pub struct RasterView {
 }
 
 impl RasterView {
+    /// Replace texture residency and stable foliage density on the next prepare.
+    pub(crate) fn set_content_budget(&mut self, resident_bytes: u64, foliage_percent: u32) {
+        let resident_bytes = resident_bytes.clamp(128 * 1024 * 1024, 32768 * 1024 * 1024);
+        let foliage_percent = foliage_percent.min(100);
+        if (resident_bytes, foliage_percent) != (self.resident_bytes, self.foliage_percent) {
+            self.resident_bytes = resident_bytes;
+            self.foliage_percent = foliage_percent;
+            self.budget_changed = true;
+        }
+    }
     /// Borrow the currently prepared native scene for host picking and surface snapping.
     /// Geometry remains owned by this view and must not be retained across publication.
     pub fn scene(&self) -> Option<&ara_render::instanced::Scene> {
@@ -91,6 +104,9 @@ impl RasterView {
     pub fn new(cache: impl Into<PathBuf>) -> Self {
         let cache = cache.into();
         Self {
+            resident_bytes: 1024 * 1024 * 1024,
+            foliage_percent: 100,
+            budget_changed: false,
             prepared: None,
             effects: Default::default(),
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
@@ -337,7 +353,7 @@ impl RasterView {
             key,
             native,
         } = candidate;
-        let look = crate::environment(&frame);
+        let look = crate::environment_locked(&frame, renderer.debug().exposure);
         self.prepare_inner(
             renderer,
             &frame,
@@ -394,7 +410,7 @@ impl RasterView {
             scene_changed,
         } = preparation;
         let result = (|| {
-            let change = if replacement.is_some() {
+            let change = if replacement.is_some() || self.budget_changed {
                 FrameChange::Rebuild
             } else if snapshot_changed || self.prepared.is_none() {
                 self.prepared
@@ -415,14 +431,22 @@ impl RasterView {
                     // assets, while the presented scene continues accepting motion.
                     bake_content = Some(content.clone());
                 }
-                let config = texture_config();
+                let config = NativeConfig {
+                    resident_bytes: self.resident_bytes,
+                    ..texture_config()
+                };
                 let (mut prepared, key) = match replacement {
                     Some((mut prepared, key, native)) => {
                         prepared.scene = renderer.publish_native_content(native)?;
                         (prepared, Some(key))
                     }
                     None => {
-                        let mut prepared = native::prepare(frame, content, config)?;
+                        let mut prepared = native::prepare_with_foliage(
+                            frame,
+                            content,
+                            config,
+                            self.foliage_percent,
+                        )?;
                         prepared.enable_motion();
                         let textures = prepared.textures.fork_sources(config)?;
                         renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
@@ -448,6 +472,7 @@ impl RasterView {
                 }
                 prepared.enable_motion();
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
+                self.budget_changed = false;
                 let arrivals = self
                     .prepared
                     .as_ref()
@@ -489,6 +514,9 @@ impl RasterView {
                 renderer.set_look(raster_look)?;
             }
             crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
+            crate::apply_fog_volumes(renderer, frame)?;
+            renderer.set_sun_radius(frame.sun_radius)?;
+            renderer.set_light_tables(&crate::lights::tables(&frame.lights).0)?;
             // Reflection captures: authored, else placed over this generation's content.
             if let Some(prepared) = &self.prepared {
                 let (limit, automatic) = plan
@@ -568,6 +596,7 @@ impl RasterView {
                     gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
                 }
                 while let Some(delivery) = gi.poll(false) {
+                    self.captures.observe(&delivery);
                     queue_probe_gi(&mut self.gi_updates, delivery);
                 }
                 apply_probe_gi(renderer, &mut self.gi_updates, PROBES_PER_FRAME)?;
@@ -715,8 +744,15 @@ impl RasterView {
         }
         if let Some(gi) = &mut self.gi {
             while let Some(update) = gi.poll(true) {
+                self.captures.observe(&update);
                 queue_probe_gi(&mut self.gi_updates, update);
             }
+        }
+        // Captures placed before the probes arrived move to where the probes saw open space.
+        if let Some(prepared) = &self.prepared
+            && let Some(specs) = self.captures.after_probes(&prepared.scene, self.key)
+        {
+            renderer.set_reflection_captures(&specs)?;
         }
         renderer.complete_probe_preparation()?;
         apply_probe_gi(renderer, &mut self.gi_updates, usize::MAX)?;
@@ -760,6 +796,16 @@ impl RasterView {
         ensure!(request.settle_frames <= 1024, "Settle frame limit is 1024");
         self.reset_capture(renderer)?;
         self.wait_capture_effects(renderer, frame, &request.camera, request.mode)?;
+        // Automatic reflection captures bake once probe GI settles: a capture shows
+        // them baked, as live frames do (bounded, so a stuck bake cannot hang it).
+        let mut frames = 0;
+        while renderer.reflection_captures_baking() && frames < 240 {
+            self.render(renderer, frame, &request.camera, request.mode)?;
+            frames += 1;
+        }
+        if frames > 0 {
+            renderer.reset_capture_history()?;
+        }
         for _ in 0..request.settle_frames.max(4) {
             self.render(renderer, frame, &request.camera, request.mode)?;
         }

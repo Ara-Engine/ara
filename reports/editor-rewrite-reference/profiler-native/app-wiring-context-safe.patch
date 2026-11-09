@@ -1,0 +1,97 @@
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -90,7 +91,7 @@
+ /// False means Cancel; bounded runs report ARA1914 without showing a window.
+ pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
+     // This route replaces the supplied project with a fresh checked fixture in run.
+-    if options.verify_behaviours {
++    if options.verify_behaviours || options.verify_profiler {
+         return Ok(true);
+     }
+     open_project::before_open(options)
+@@ -98,6 +99,28 @@
+ 
+ /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
+ pub fn run(mut options: Options) -> ara_ui::Result<()> {
++    if options.verify_profiler {
++        if options.verify_behaviours
++            || options.verify_monkey
++            || options.verify_journey
++            || options.verify_assets
++            || options.verify
++            || options.verify_panels
++            || options.verify_ux
++            || options.verify_docking
++            || options.verify_first_hour
++            || options.verify_responsiveness
++            || options.verify_unpresentable
++            || options.verify_scene_quality
++            || options.verify_loading
++            || options.headless
++        {
++            return Err(
++                "Run --verify-profiler independently from other verification/headless modes".into(),
++            );
++        }
++        profiler_verify::prepare(&mut options)?;
++    }
+     if options.verify_behaviours {
+         content_drags::fixture(&mut options)?;
+         hierarchy_verify::prepare(&options)?;
+@@ -186,6 +209,7 @@
+         || options.verify_ux
+         || options.verify_docking
+         || options.verify_behaviours
++        || options.verify_profiler
+         || options.screenshot
+     {
+         native.verification_extent(options.size)?;
+@@ -203,6 +227,7 @@
+         || options.verify_ux
+         || options.verify_docking
+         || options.verify_behaviours
++        || options.verify_profiler
+     {
+         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
+     }
+@@ -407,6 +432,15 @@
+     if let (Some(runner), Some(seed)) = (&mut monkey, host_seed) {
+         runner.record_host_seed(seed)?;
+     }
++    let mut profiler_check = if options.verify_profiler {
++        Some(profiler_verify::ProfilerCheck::new(
++            &mut editor,
++            &mut shell,
++            &options.output,
++        )?)
++    } else {
++        None
++    };
+     let mut content_drags = if options.verify_behaviours {
+         Some(content_drags::ContentDrags::new(
+             &mut editor,
+@@ -537,6 +571,12 @@
+                     scale,
+                     &mut events,
+                 )?;
++            }
++            if let Some(check) = &mut profiler_check {
++                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
++                let ready =
++                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
++                check.inject(&mut editor, &mut shell, &window, scale, &mut events, ready)?;
+             }
+             if let Some(check) = &mut content_drags {
+                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+@@ -2291,6 +2340,10 @@
+         }
+         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
+             return Err("UX verification did not finish".into());
++        }
++        if let Some(check) = &profiler_check {
++            check.write()?;
++            check.validate()?;
+         }
+         if let Some(check) = &drag_check {
+             check.write()?;

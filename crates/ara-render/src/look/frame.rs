@@ -17,8 +17,17 @@ pub(crate) const REFLECTIONS: u32 = 16;
 pub(crate) const SNAP: u32 = 32;
 /// Shader flag: probe GI relight and the fog sample local-light shadows.
 pub(crate) const LOCAL_INDIRECT: u32 = 64;
+/// The reflection debug view shows sources (`RenderDebug::reflections`).
+pub(crate) const REFLECTION_SOURCES: u32 = 128;
+/// Shader flag: this frame renders the near froxel volume (`look::volumetric`).
+pub(crate) const VOLUMETRIC: u32 = 256;
+/// Shader flag: fog is volumetric (`Fog::volumetric`, or no height fog): shadowed sun, local
+/// lights, emission and the extinction scale.
+pub(crate) const FOG_SHADOWED: u32 = 512;
+/// Shader flag: this frame gathered screen probe GI (`look::screen_gi`).
+pub(crate) const SCREEN_GI: u32 = 1024;
 /// Exposure adaptation step; the renderer has no wall clock.
-const FRAME_SECONDS: f32 = 1. / 60.;
+pub(crate) const FRAME_SECONDS: f32 = 1. / 60.;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -115,7 +124,7 @@ pub(crate) struct LookFrame {
     /// Params are reserved.
     pub capture_params: [[f32; 4]; 2],
     pub capture_info: [[u32; 4]; 2],
-    /// Hybrid ray queries (High/Epic on RT devices); zero: raster only.
+    /// Hybrid ray queries (the ray-tracing opt-in on RT devices); zero: raster only.
     pub rt_params: [[f32; 4]; 2],
     pub rt_info: [[u32; 4]; 2],
     /// Screen-space and ray-traced refraction; zero: none.
@@ -127,12 +136,72 @@ pub(crate) struct LookFrame {
     /// shadows need no row (the sun's angular radius is `sun_lux[3]`).
     pub shadow_params: [[f32; 4]; 2],
     pub shadow_info: [[u32; 4]; 2],
+    /// Automatic exposure's compensation curve (`AutoExposure::compensation_curve`):
+    /// two (EV100, stops) keys per row.
+    pub exposure_curve: [[f32; 4]; 4],
+    /// Probe radiance atlas (`GiGpu::radiance`): x sampled, y storage; zero: no probe GI.
+    pub gi_radiance: [u32; 4],
+    /// Volumetric fog (`look::volumetric`): x near volume distance (m), y slice
+    /// distribution scale (m), z history weight this frame (zero: none), w height
+    /// fog extinction scale.
+    pub volumetric: [f32; 4],
+    /// Height fog emission (rgb radiance per metre at base density), w the sun's
+    /// scattering scale in fog (`Look::sun_scattering`).
+    pub volumetric_emissive: [f32; 4],
+    /// x, y froxels, z slices, w render pixels per froxel side.
+    pub volumetric_grid: [u32; 4],
+    /// x slices per atlas row, y frames since the history reset (jitter index), z
+    /// local fog volumes, w the byte offset of their records (`fog_volumes`).
+    pub volumetric_atlas: [u32; 4],
+    /// Injection history, injection and integrated volume (sampled), injection (storage).
+    pub volumetric_images: [u32; 4],
+    /// x integrated volume (storage), y ambient light (storage), z ambient light (sampled).
+    pub volumetric_storage: [u32; 4],
+    /// The ambient light's coarse grid (`volumetric::Layout::ambient`): xyz cells, w
+    /// slices per atlas row.
+    pub volumetric_ambient: [u32; 4],
+    /// Local lights (`look::ltc`, `look-lights.slangh`): info `[0]` LTC inverse
+    /// matrices and sphere integral (sampled), light tables (storage; zero: none).
+    /// Params are reserved.
+    pub light_params: [[f32; 4]; 2],
+    pub light_info: [[u32; 4]; 2],
+    /// The sky atmosphere (`look::atmosphere::record`; `AtmosphereModel` in
+    /// shaders/atmosphere-model.slangh): planet, media, art direction and both
+    /// atmosphere lights. Meaningful with `PHYSICAL_SKY` only.
+    pub sky: super::atmosphere::Record,
+    /// Screen traces and screen probe GI (`look::screen_gi`, look-screen.slangh): params
+    /// `[0]` Hi-Z steps, levels, trace reach (m) and probe bias (render px); info `[0]`
+    /// Hi-Z and probe atlases, `[1]` probe records, probes per row and tile, `[2]` the
+    /// half-resolution gather (sampled, then storage), `[3]` the promoted-emission
+    /// pyramid (sampled, storage). Zero: none.
+    pub screen_params: [[f32; 4]; 2],
+    pub screen_info: [[u32; 4]; 4],
+    /// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang):
+    /// params x angular bins per half circle; info x the render-size scatter the
+    /// composite reads (sampled), y the pass's target (storage), z render pixels per
+    /// texel side (zero: local lights scatter in the froxels).
+    pub fog_lights_params: [f32; 4],
+    pub fog_lights_info: [u32; 4],
+    /// The reflection resolve (look-ssr.slang `ssrResolveMain`): the trace and its
+    /// footprints (sampled), footprints and resolved reflections (storage).
+    pub ssr_resolve: [u32; 4],
+    /// Half-resolution frames: x the pass's target (sampled), y the render-size scatter
+    /// the resolve writes (storage).
+    pub fog_lights_resolve: [u32; 4],
+    /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
+    /// shader's `Look` struct (a variable index into it would spill to memory). Last,
+    /// so the shader struct is a prefix of this one.
+    pub fog_volumes: [[[f32; 4]; 6]; super::MAX_FOG_VOLUMES],
 }
 
 /// Per-frame inputs that are not part of the authored look.
 pub(crate) struct FrameInputs {
     /// Top-of-atmosphere sun illuminance in lux.
     pub sun_lux: Vec3,
+    /// World direction toward the sun (`Renderer::set_sun`).
+    pub sun_direction: Vec3,
+    /// The sun's angular radius in radians, over the sky's default.
+    pub sun_radius: Option<f32>,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
     /// Drop GI hysteresis (first frame, history reset or a capture's settle
@@ -151,6 +220,7 @@ impl LookFrame {
     pub(crate) fn new(look: &Look, inputs: &FrameInputs) -> Self {
         let sky = look.sky.unwrap_or_default();
         let fog = look.fog;
+        let volumetric = fog.and_then(|f| f.volumetric);
         let g = &look.grading;
         let [r, gr, b] = g.white_balance_gain;
         let rgb = |[r, g, b]: [f32; 3], w: f32| [r, g, b, w];
@@ -159,9 +229,18 @@ impl LookFrame {
         let flags = if look.sky.is_some() { PHYSICAL_SKY } else { 0 }
             | if fog.is_some() { FOG } else { 0 }
             | if inputs.reset { RESET } else { 0 }
-            | if inputs.snap { SNAP } else { 0 };
+            | if inputs.snap { SNAP } else { 0 }
+            // Fog volumes without height fog are lit volumetrically too.
+            | if fog.is_none_or(|f| f.volumetric.is_some()) {
+                FOG_SHADOWED
+            } else {
+                0
+            };
         Self {
-            sun_lux: inputs.sun_lux.extend(sky.sun_radius).to_array(),
+            sun_lux: inputs
+                .sun_lux
+                .extend(inputs.sun_radius.unwrap_or(sky.sun_radius))
+                .to_array(),
             atmosphere: [
                 sky.sea_level,
                 fog.map_or(0., |f| f.extinction),
@@ -172,12 +251,7 @@ impl LookFrame {
                 let [r, g, b] = f.tint;
                 [r, g, b, f.anisotropy]
             }),
-            look: [
-                g.contrast,
-                g.vignette,
-                fog.map_or(0., |f| f.base),
-                sky.aerosols,
-            ],
+            look: [g.contrast, g.vignette, fog.map_or(0., |f| f.base), 0.],
             grading: [r, gr, b, g.saturation],
             exposure: [
                 if automatic.is_some() {
@@ -210,7 +284,7 @@ impl LookFrame {
             gi_gather: [0; 4],
             ssr: [0.; 4],
             ssr_images: [0; 4],
-            weather: [sky.cloud_coverage, sky.cloud_height, 0., 0.],
+            weather: [sky.cloud_coverage, sky.cloud_height, look.sky_light, 0.],
             far_shadow: [[0.; 4]; 4],
             far_info: [0; 4],
             cascade_maps: [0; 4],
@@ -246,6 +320,53 @@ impl LookFrame {
             refract_info: [[0; 4]; 2],
             shadow_params: [[0.; 4]; 2],
             shadow_info: [[0; 4]; 2],
+            exposure_curve: {
+                let keys = automatic.map_or([[0.; 2]; super::EXPOSURE_CURVE_KEYS], |a| {
+                    a.compensation_curve
+                });
+                std::array::from_fn(|row| {
+                    let [a, b] = [keys[row * 2], keys[row * 2 + 1]];
+                    [a[0], a[1], b[0], b[1]]
+                })
+            },
+            gi_radiance: [0; 4],
+            volumetric: [0., 0., 0., volumetric.map_or(1., |v| v.extinction_scale)],
+            volumetric_emissive: rgb(
+                volumetric.map_or([0.; 3], |v| v.emissive),
+                look.sun_scattering,
+            ),
+            volumetric_grid: [0; 4],
+            volumetric_atlas: [0; 4],
+            volumetric_images: [0; 4],
+            volumetric_storage: [0; 4],
+            volumetric_ambient: [0; 4],
+            fog_volumes: [[[0.; 4]; 6]; super::MAX_FOG_VOLUMES],
+            light_params: [[0.; 4]; 2],
+            light_info: [[0; 4]; 2],
+            sky: look
+                .sky
+                .map_or([[0.; 4]; super::atmosphere::RECORD_ROWS], |s| {
+                    let radius = inputs.sun_radius.unwrap_or(s.sun_radius);
+                    let sun = s.sun.map(|settings| super::atmosphere::AtmosphereLight {
+                        direction: inputs.sun_direction,
+                        lux: inputs.sun_lux,
+                        radius,
+                        settings,
+                    });
+                    super::atmosphere::record(
+                        &s.atmosphere,
+                        s.sea_level,
+                        sun,
+                        s.sun_is_second,
+                        s.other_light,
+                    )
+                }),
+            screen_params: [[0.; 4]; 2],
+            screen_info: [[0; 4]; 4],
+            fog_lights_params: [0.; 4],
+            fog_lights_info: [0; 4],
+            ssr_resolve: [0; 4],
+            fog_lights_resolve: [0; 4],
         }
     }
 }

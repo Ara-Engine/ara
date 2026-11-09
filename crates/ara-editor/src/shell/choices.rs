@@ -17,6 +17,13 @@ pub(crate) enum Destination {
         doc: String,
         key: String,
     },
+    ImportBatch {
+        group: String,
+        key: String,
+    },
+    ImportGroup,
+    PackageFormat,
+    ProfilerTarget,
     Field(String),
     Append {
         field: String,
@@ -128,7 +135,11 @@ impl Shell {
                         .collect(),
                     Some(select.current.clone()),
                 )
-                .with_control_id(id),
+                .with_control_id(id)
+                .with_empty_text(match select.destination {
+                    Destination::Append { .. } => "Add…",
+                    _ => "Select…",
+                }),
             });
         if entry.destination != select.destination {
             entry.destination = select.destination;
@@ -144,7 +155,18 @@ impl Shell {
             entry.options = select.options;
         }
         entry.select.set_selected(Some(select.current));
-        out.push_str(&entry.select.control_markup());
+        // Editor selects are single-line 22 px controls, like fields. An action menu
+        // ("Add…") keeps its caption whole: it never shrinks or wraps.
+        let class = match entry.destination {
+            Destination::Append { .. } => "class='kit-select kit-select-compact kit-select-action'",
+            _ => "class='kit-select kit-select-compact'",
+        };
+        out.push_str(
+            &entry
+                .select
+                .control_markup()
+                .replacen("class='kit-select'", class, 1),
+        );
     }
 
     pub(super) fn choose_value(
@@ -186,6 +208,15 @@ impl Shell {
                     .insert(format!("@import|{doc}|{key}"), value.to_string());
                 self.commit_import_fields(editor)?;
             }
+            Destination::ImportBatch { group, key } => {
+                self.import_batch_value(editor, group, key, value)?
+            }
+            Destination::ImportGroup => {
+                self.commit_import_fields(editor)?;
+                self.choose_import_group(value)?;
+            }
+            Destination::PackageFormat => self.choose_package_format(value)?,
+            Destination::ProfilerTarget => self.choose_profiler_target(editor, value)?,
             Destination::Field(path) => {
                 editor.apply(
                     self.field_commands(editor, &editor.state.selection, path, value)?,

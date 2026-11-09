@@ -5,119 +5,87 @@
 #include "look-vsm.slangh"
 #include "look-captures.slangh"
 #include "look-translucent.slangh"
-// Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
-// 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
+#include "look-shadow.slangh"
+// Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side, f.look.z
+// active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
-// A 3x3 box of bilinear compares (16 texels from four gathers) inside cascade `c`,
-// with normal offset and depth bias both scaled to the cascade's texel size.
-float cascadeVisibility(Frame f,Look l,uint c,float3 world,float3 normal){
-    float res=float(f.look.y);float4x4 m=frameShadow(c);float texel=2/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
-    float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        // Gather the 2x2 texels (base-1+2i.., base-1+2j..); w is top-left, z top-right,
-        // x bottom-left, y bottom-right. Centres stay inside the cascade's map.
-        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
-        float4 d=textures[NonUniformResourceIndex(component(l.cascadeMaps,c))].GatherRed(samplers[2],g);float4 lit=step(d,depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+// Sun visibility for fog samples of footprint radius `footprint` (m): the cascade
+// holding `world`, else the far map (look-shadow.slangh shadowFog: soft shafts in a
+// few gathers). (The horizon describes the ground, not the air above it: fog keeps the
+// maps.)
+float fogVisibility(Frame f,Look l,float3 world,float footprint=0){
+    uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);ShadowLight sun=shadowSun(l.sunLux.w);
+    bool cascade=c<f.look.z && d<component(f.splits,c);
+    [loop]for(uint k=cascade?0u:1u;k<(l.farInfo.z!=0?2u:1u);k++){
+        float v=shadowFog(l,k==0?shadowCascade(f,l,c):shadowFar(l),world,f.sunDirection.xyz,sun,footprint);if(v>=0)return v;
     }
-    return sum;
-}
-// Distant sun visibility from the far shadow map (look/far.rs): the cascades'
-// 3x3 box of bilinear compares (four gathers), with normal offset and bias
-// scaled to its (metre-sized) texels, so distant edges stay smooth.
-float farVisibility(Look l,float3 world,float3 normal){
-    if(l.farInfo.z==0)return 1;
-    float res=float(l.farInfo.y);float4x4 m=l.farShadow;float texel=2/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
-    float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
-        float4 lit=step(textures[NonUniformResourceIndex(l.farInfo.x)].GatherRed(samplers[2],g),depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
-    }
-    return sum;
-}
-// One bilinear compare (a single gather) of `world` in a sun map: lit share, or -1
-// outside the map.
-float bilinearShadow(uint map,float4x4 m,float res,float3 world){
-    float4 h=mul(m,float4(world,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return -1;
-    float texel=2/(length(m[0].xyz)*res);float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 lit=step(textures[NonUniformResourceIndex(map)].GatherRed(samplers[2],(clamp(base,0,res-2)+1)/res),depth);
-    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
-}
-// Cheap sun visibility for fog samples: the cascade holding `world`, else the far map.
-// (The horizon describes the ground, not the air above it: fog keeps the maps.)
-float fogVisibility(Frame f,Look l,float3 world){
-    uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);
-    if(c<f.look.z && d<component(f.splits,c)){float v=bilinearShadow(component(l.cascadeMaps,c),frameShadow(c),float(f.look.y),world);if(v>=0)return v;}
-    if(l.farInfo.z!=0){float v=bilinearShadow(l.farInfo.x,l.farShadow,float(l.farInfo.y),world);if(v>=0)return v;}
     return 1;
 }
-// Local-shadow table layout (ara_render look::local::{FACES, RECORDS}).
-static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
-// Visibility of `world` from shadowed local light `index` (look::local): the
-// light's face (a cube's by the major axis from the light), its atlas tile, a
-// slope-scaled normal offset (shadowOffset) and a 3x3 tent filter in the tile.
-float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
-    if(l.localShadows.y==0)return 1;
-    uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
-    float3 d=world-light,a=abs(d);
-    uint face=entry.y==1?0:(a.x>=a.y&&a.x>=a.z?(d.x>0?0:1):a.y>=a.z?(d.y>0?2:3):(d.z>0?4:5));
-    uint at=LOCAL_RECORDS+(entry.x+face)*80;
-    float4x4 m=buffers[NonUniformResourceIndex(l.localShadows.x)].Load<float4x4>(at);
-    float4 tile=asfloat(buffers[NonUniformResourceIndex(l.localShadows.x)].Load4(at+64));
-    float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
-    // A face's view depth is the major axis of the light-to-point vector (a
-    // spot's is close to its length): texel size without a second transform.
-    float texel=2*max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01)/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*shadowOffset(saturate(dot(normal,normalize(light-world)))),1));if(h.w<=0)return 1;
-    float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
-    float depth=q.z*1.002;
-    float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        float2 g=clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas;
-        float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],g),depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
-    }
-    return sum;
+// Visibility of `world` from shadowed local light `index` (look::local) at `light`,
+// reaching `range`, whose source `shape` spans half-axes a, b (m; zero for an ideal
+// point): look-shadow.slangh shadowSoft in the light's face. `penumbra`: the kernel's
+// half-width (m).
+float localShadowShape(Look l,uint index,float3 world,float3 normal,float3 light,float range,ShadowLight shape,out float penumbra){
+    penumbra=0;ShadowMap s;if(!shadowLocal(l,index,world,light,range,s))return 1;
+    float v=shadowSoft(l,s,world,normal,normalize(light-world),shape,penumbra);return v<0?1:v;
 }
-// Sun visibility at `world` in the sun maps: blends into the next cascade over the
-// last tenth of each, then the far map, past which it is lit.
-float mapVisibility(Frame f,Look l,float3 world,float3 normal) {
+// localShadowShape for a round source `size` metres across (zero: an ideal point)
+// facing the receiver (probe relight and ray hits).
+float localShadow(Look l,uint index,float3 world,float3 normal,float3 light,float size=0,float range=1){
+    float3 d=normalize(light-world),u=normalize(cross(d,abs(d.y)<0.9?float3(0,1,0):float3(1,0,0)));
+    ShadowLight shape;shape.a=u*(size*0.5);shape.b=cross(d,u)*(size*0.5);shape.disc=true;shape.tangent=0;
+    float unused;return localShadowShape(l,index,world,normal,light,range,shape,unused);
+}
+// Sun visibility at `world` in the sun maps (renderer/frame.rs cascades, look/far.rs):
+// contact-hardening penumbrae of the sun disc (look-shadow.slangh shadowSoft;
+// Look.sunLux.w its angular radius). Blends into the next cascade over the last tenth
+// of each, then the far map, past which it is lit (`mapped` false). `penumbra`: the
+// kernel's half-width (m). One lookup per map in a loop: each inlined copy would add
+// to every lighting shader's size.
+float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped,out float penumbra) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
-    if(c>=count)return farVisibility(l,world,normal);
-    float far=component(splits,c),near=c==0?0:component(splits,c-1),band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
-    float v=cascadeVisibility(f,l,c,world,normal);
-    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal),blend);
+    float blend=0;
+    if(c<count){float far=component(splits,c),near=c==0?0:component(splits,c-1),band=(far-near)*0.1;blend=saturate((d-(far-band))/max(band,1e-3));}
+    else if(l.farInfo.z==0){mapped=false;penumbra=0;return 1;}
+    mapped=c<count;float v=0;penumbra=0;ShadowLight sun=shadowSun(l.sunLux.w);
+    [loop]for(uint k=0;k<(blend>0?2u:1u);k++){
+        uint m=c+k;bool cascade=m<count;
+        float p,s=shadowSoft(l,cascade?shadowCascade(f,l,m):shadowFar(l),world,normal,f.sunDirection.xyz,sun,p);
+        if(s<0){if(!cascade&&k==0){mapped=false;return 1;}s=1;}
+        else if(!cascade&&k==0)mapped=true;
+        float w=k==0?1-blend:blend;v+=w*s;penumbra+=w*p;
+    }
     return v;
+}
+// The sun's penumbra half-width (m) at `world` from the cascade holding it, else the
+// far map (look-shadow.slangh shadowReach: the blocker search alone); zero where no
+// blocker is near or no map holds it.
+float mapReach(Frame f,Look l,float3 world,float3 normal){
+    uint c=cascadeIndex(f,world);bool cascade=c<f.look.z;if(!cascade&&l.farInfo.z==0)return 0;
+    return max(shadowReach(cascade?shadowCascade(f,l,c):shadowFar(l),world,normal,f.sunDirection.xyz,shadowSun(l.sunLux.w)),0);
 }
 // Sun visibility at `world`: `pages` where the virtual shadow map resolved it
 // (look-vsm.slangh: vsmMask, vsmVisibility), else the sun maps; at every distance the
 // horizon of distant landforms (look-horizon.slangh), so far terrain stays shadowed
-// past them. Shaders sample pages only through the mask or their own entry points:
-// inline page lookups would cost every preset registers (and occupancy).
+// past them: only past HORIZON_NEAR where a map shades `world`. Shaders sample pages
+// only through the mask or their own entry points: inline page lookups would cost
+// every preset registers (and occupancy).
 float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
-    float v=pages>=0?pages:mapVisibility(f,l,world,normal);
-    return v>0?min(v,horizonSun(l,world)):0;
+    bool mapped=pages>=0;
+    float penumbra;float v=mapped?pages:mapVisibility(f,l,world,normal,mapped,penumbra);
+    return v>0?min(v,horizonSun(l,world,mapped)):0;
 }
 // Schlick's Fresnel. Cycles' metals use the F82-tint model (Hoffman 2023, "Generalization
 // of Adobe's Fresnel Model"): Schlick minus b cos (1 - cos)^6, b = Schlick(1/7) (1 - tint)
 // 7 / (6/7)^6, so F at cos 1/7 is Schlick times the tint. No content or material carries a
 // tint (white: b = 0, exactly Schlick); a tint subtracts that term here and b/126 in meanFresnel.
-float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(1-f0)*(m2*m2*m);}
+// The grazing reflectance F90 is 1, except below 2% F0: no real material reflects that
+// little, so such F0 is occlusion (Unreal's saturate(50 F0.g)) and a black metal stays
+// black instead of mirroring the sky at grazing angles.
+float grazing(float3 f0){return saturate(50*f0.g);}
+float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(grazing(f0)-f0)*(m2*m2*m);}
 // Hemispherical average of fresnel, 2 int F(mu) mu dmu.
-float3 meanFresnel(float3 f0){return f0+(1-f0)/21;}
+float3 meanFresnel(float3 f0){return f0+(grazing(f0)-f0)/21;}
 // Ara's GGX lobe (alpha `a` = roughness^2, height-correlated Smith masking as in Cycles):
 // the energy its single scattering loses towards a viewer with masking `g` = G1(v),
 // K = 1/E - 1 for Kulla and Conty 2017's directional albedo E. A polynomial fit to offline
@@ -175,7 +143,7 @@ Lobes specularLobes(Surface s,float3 v){
     o.lv=sqrt(o.nv*o.nv*(1-o.a2)+o.a2);float g=2*o.nv/(o.nv+o.lv);
     float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness),eavg=averageAlbedo(s.roughness);
     o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),eavg)*k;
-    o.albedo=(o.f0*e+(1-o.f0)*bias)*o.scale;
+    o.albedo=(o.f0*e+(grazing(o.f0)-o.f0)*bias)*o.scale;
     float layer=(0.04*e+0.96*bias)*(1+multipleFresnel(meanFresnel(float3(0.04)),eavg).x*k);
     o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(1-layer)/PI;
     return o;
@@ -261,25 +229,54 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
     if(total<=1e-3){diffuse=nearestD.rgb;specular=nearestS.rgb;return nearestS.w;}
     diffuse/=total;specular/=total;return coverage/total;
 }
+// Screen probe light at full-resolution pixel `p` (look-screen-gi.slang
+// screenGatherMain): irradiance and pre-filtered specular radiance, upsampled from half
+// resolution with depth-similar weights; returns the share the probes cover (zero
+// without screen probe GI this frame, LOOK_SCREEN_GI).
+float screenLobes(Frame f,Look l,int2 p,out float3 irradiance,out float3 radiance){
+    irradiance=0;radiance=0;if((l.flags.y&LOOK_SCREEN_GI)==0)return 0;
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    float depth=pixel(f.extra.x,p).x;float4 d=0,s=0,nearestD=0,nearestS=0;float total=0,best=1e30;
+    for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*50);float4 a=pixel(l.screenInfo[2].x,q),r=pixel(l.screenInfo[2].y,q);
+        d+=a*w;s+=r*w;total+=w;if(dz<best){best=dz;nearestD=a;nearestS=r;}
+    }
+    if(total>1e-3){d/=total;s/=total;}else{d=nearestD;s=nearestS;}
+    irradiance=d.rgb;radiance=s.rgb;return saturate(d.w);
+}
 // The hybrid path's reflections at full-resolution pixel `p` (renderer::rt,
 // look-rt.slang rtFilterMain): ray-traced reflections composited over screen-space
 // ones, rgb and a confidence like screenReflection. Read only by the `rays` PSO
 // variant (lighting_high_rt), never behind a runtime test.
 float4 rtReflection(Look l,int2 p){return pixel(l.rtInfo[1].z,p);}
-// Screen-space reflection at full-resolution pixel `p`: rgb radiance, a confidence
-// (zero without a hit). Upsampled from half resolution with depth-similar weights.
-float4 screenReflection(Frame f,Look l,int2 p){
+// Traced reflection (look-ssr.slang: on screen, then through the captures) at
+// full-resolution pixel `p`: rgb radiance, a confidence (zero without a hit), and in
+// `captured` the share of it the captures resolved. Upsampled from half resolution
+// with depth- and normal-similar weights: where a floor strip meets the grating beside
+// it at the same depth, each keeps its own reflection (no stair-stepped half-resolution
+// edge).
+float4 screenReflection(Frame f,Look l,int2 p,out float captured){
+    captured=0;
     if((l.flags.y&LOOK_REFLECTIONS)==0)return 0;
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
-    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30;
+    float depth=pixel(f.extra.x,p).x;float3 n=gbufferNormal(f,p);float4 sum=0,nearest=0;float total=0,best=1e30,fromCaptures=0,nearestCaptured=0;
     for(uint k=0;k<4;k++){
-        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;float dz=abs(d/max(depth,1e-7)-1);
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;
+        float bend=1-saturate(dot(gbufferNormal(f,q*2),n)),dz=abs(d/max(depth,1e-7)-1)+bend;
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*40);float4 r=pixel(l.ssrImages.y,q);
-        sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
+        // A negative confidence marks a result mostly from the captures.
+        float c=r.a<0?1:0;r.a=abs(r.a);
+        sum+=r*w;fromCaptures+=c*w;total+=w;if(dz<best){best=dz;nearest=r;nearestCaptured=c;}
     }
     // Volume intensity (look.ssr.w) scales the hit confidence; probes fill the rest.
-    float4 r=total>1e-3?sum/total:nearest;r.w*=l.ssr.w;return r;
+    float4 r=total>1e-3?sum/total:nearest;captured=total>1e-3?fromCaptures/total:nearestCaptured;r.w*=l.ssr.w;return r;
 }
+float4 screenReflection(Frame f,Look l,int2 p){float captured;return screenReflection(f,l,p,captured);}
+// The share of a surface's reflection screen probes resolve (look-screen-gi.slangh):
+// none on near-mirrors, whose lobe is narrower than a probe texel (reflection traces
+// and captures own them), all past roughness 0.35.
+float screenProbeSpecularShare(float roughness){return smoothstep(0.12,0.35,roughness);}
 // The direction probe and sky reflections are looked up along for a lobe of
 // perceptual `roughness` at normal `n`, viewed from `v`: GGX's dominant direction
 // (Lagarde and de Rousiers 2014), the mirror direction pulled towards the normal as
@@ -292,14 +289,11 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
-// the sky's diffuse light and occludes its reflections by the ratio of probe to
-// sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
-// direction would count the ground below the horizon at grazing views); rough
-// reflections blend towards the probes' irradiance lobe by GGX's alpha (roughness
-// squared): a cosine lobe stands in for a GGX lobe only as the lobe widens, and at
-// mid roughness it would average the ground into grazing reflections. Reflections
-// are looked up along specularDirection, the
-// lobe's dominant direction. Outside the volume, the heightfield's sky visibility
+// the sky's diffuse light and the probes' radiance cache its reflections: what the
+// nearby probes see along the reflection, parallax-corrected, blending into their
+// irradiance lobe as roughness grows (giLatticeLobes), so an enclosed floor reflects
+// its ceiling and walls, never the sky beyond them. Reflections are looked up along
+// specularDirection, the lobe's dominant direction. Outside the volume, the heightfield's sky visibility
 // (look-horizon.slangh) occludes the sky's light instead. Reflected light takes the
 // compensated specular albedo of specularLobes' `o` (the split sum, scaled for multiple
 // scattering like direct light), diffuse light its Lambert base, and ambient occlusion
@@ -313,18 +307,20 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // reflections composited over screen-space ones (rtReflection) instead.
 // `diffuseOnly`: the diffuse share alone (the gi_diffuse view, lighting_gi and
 // lighting_high_gi), a compile-time constant like `high`.
-float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false,bool diffuseOnly=false) {
+// `view` (a compile-time constant; the lighting_refl PSOs): 1 returns the reflected
+// light alone, 2 a colour per reflection source weighted by its share (REFLECTION_*).
+float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false,bool diffuseOnly=false,uint view=0) {
     // Material occlusion policy (dynamicOcclusion) for forward surfaces and ray hits,
     // which have no screen-space occlusion of their own; deferred pixels arrive with it.
     if(!gathered && dynamicOcclusion(l))s.ao=1;
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
     float3 reflected=specularDirection(s.normal,v,s.roughness);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
-    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
-    float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
+    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level))*skyLight(l);
+    float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb*skyLight(l);
     float coverage=0;float3 diffuseGi=0,specularGi=0;
     [branch]if(giEnabled(l)){
         if(gathered)coverage=gatheredLobes(f,l,p,length(world-f.camera.xyz),diffuseGi,specularGi);
-        else coverage=giPoolLobes(l,l.giImages.y,world,s.normal,reflected,v,true,diffuseGi,specularGi);
+        else coverage=giPoolLobes(l,l.giImages.y,world,s.normal,reflected,v,s.roughness,true,diffuseGi,specularGi);
         coverage*=giWeight(l);
     }
     // Where the probe volume does not reach (and across its fade), distant
@@ -332,9 +328,8 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     // Inside it the sky term weighs under 1%: the lookup is skipped.
     float sky=coverage<0.99?horizonSky(l,world):1;float3 ambientSky=ambient*sky,specSky=spec*sky;
     [branch]if(coverage>0){
-        float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
         ambient=lerp(ambientSky,diffuseGi,coverage);
-        spec=lerp(specSky,lerp(spec*occlusion,specularGi/PI,s.roughness*s.roughness),coverage);
+        spec=lerp(specSky,specularGi,coverage);
     }else{ambient=ambientSky;spec=specSky;}
     // High/Epic: local reflection captures (look-captures.slangh) replace probe and
     // sky reflections where they cover; screen-space (or ray) reflections stay on
@@ -344,15 +339,15 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     // forward surfaces every visible one. Debug modes (`ARA_CAPTURE_DEBUG`): `mirror`
     // returns the captures alone along every mirror direction; `only` drops SSR
     // where captures cover.
-    float4 r=0;
-    if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p);
+    float4 r=0;float captured=0,boxed=0;
+    if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p,captured);
     if(high){
         uint debug=l.captureInfo[1].w;
         [branch]if(r.a<0.999||debug!=0){
             uint mask=gathered?captureTileMask(f,l,p):l.captureInfo[1].z;
             float4 c=captureReflection(l,world,s.normal,v,(debug&CAPTURE_DEBUG_MIRROR)!=0?0:s.roughness,mask);
             if(!diffuseOnly&&(debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
-            spec=lerp(spec,c.rgb,c.a);
+            spec=lerp(spec,c.rgb,c.a);boxed=c.a;
             // Under a capture, SSR's low-confidence fringe fades into it smoothly.
             if(!rays&&(debug&CAPTURE_DEBUG_ONLY)==0)r.a=lerp(r.a,smoothstep(0.2,0.9,r.a),c.a);
             if((debug&CAPTURE_DEBUG_ONLY)!=0)r.a*=1-c.a;
@@ -360,6 +355,15 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     }
     // Traced reflections (SSR, RT; `r`) carry their own visibility, so specular
     // occlusion and the screen bounce fill darken only the probe/sky/capture fallback.
+    // High/Epic deferred pixels take screen probes (screenLobes) where they cover: they
+    // traced their own occlusion and near-field bounce, so they replace the screen-space
+    // ambient light below, and own rough reflections (screenProbeSpecularShare), under
+    // which single mirror traces fade out.
+    float3 screenIrradiance=0,screenRadiance=0;float sp=0,spSpec=0;
+    if(high&&gathered){
+        sp=screenLobes(f,l,p,screenIrradiance,screenRadiance);spSpec=sp*screenProbeSpecularShare(s.roughness);
+        if(!rays)r.a*=1-sp*smoothstep(0.25,0.4,s.roughness);
+    }
     float3 incident,specular;
     if(high&&gathered){
         // Screen-space ambient light (look-ao.slang aoBitmaskMain; s.ao is the material's
@@ -371,12 +375,24 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
         float3 bounce;float visible=screenAmbient(f,l,p,bounce),ao=min(s.ao,visible);
         float so=specularOcclusion(o.nv,ao,s.roughness),screenSo=specularOcclusion(o.nv,visible,s.roughness);
         incident=(ambient*visible+bounce)*multiBounce(min(1,ao/max(visible,1e-4)),s.albedo);
-        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0),r.rgb,r.a);
+        incident=lerp(incident,screenIrradiance*multiBounce(s.ao,s.albedo),sp);
+        float3 fallback=(spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0);
+        specular=lerp(lerp(fallback,screenRadiance,spSpec),r.rgb,r.a);
     }else{
         // Multi-bounce for both lobes (Jimenez et al. 2016; F0 for the specular): occluded
         // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
         // already see their surroundings, then ambient occlusion again).
         incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(o.nv,s.ao,s.roughness),o.f0),r.rgb,gathered?r.a:0);
+    }
+    if(view==1)return specular*o.albedo;
+    if(view==2){
+        // Screen green, capture trace blue, screen probes yellow, box-projected
+        // captures cyan, probes orange, sky magenta; surfaces too rough to trace are dimmed.
+        float screen=r.a*(1-captured),traced=r.a*captured,rest=1-r.a,screenProbes=rest*spSpec,left=rest-screenProbes;
+        float box=left*boxed,probes=left*(1-boxed)*coverage,sky=left-box-probes;
+        float3 c=screen*float3(0.1,0.85,0.1)+traced*float3(0.15,0.35,1)+screenProbes*float3(1,0.9,0.1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
+        float shade=0.55+0.45*saturate(dot(s.normal,v));
+        return c*shade*(s.roughness<l.ssr.x||(l.flags.y&LOOK_REFLECTIONS)==0?1:0.25)/max(hdrExposure(f,l),1e-6);
     }
     return diffuseOnly?incident*o.diffuse:incident*o.diffuse+specular*o.albedo;
 }
@@ -384,32 +400,49 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false){
     return ibl(f,l,s,specularLobes(s,v),world,v,p,gathered,high,rays);
 }
+// Local lights (after Lobes and brdf, which they shade with).
+#include "look-lights.slangh"
+// The shadow shape of local light `index` (`light`) seen from `world` (look-shadow.slangh
+// ShadowLight): a rect's or disc's half-axes, a sphere's disc facing the point, a tube's
+// half-length and radius as a box; zero for an ideal point or spot.
+// `shape`: its shape row (localShadowLight loads it).
+ShadowLight localShadowLightShaped(Light light,LightShape shape,float3 world){
+    ShadowLight s;s.a=0;s.b=0;s.disc=true;s.tangent=0;
+    if(!lightHasArea(light))return s;
+    uint kind=lightKind(light);
+    float3 n=light.directionOuter.xyz,t=shape.tangentLength.xyz,d=normalize(light.positionRange.xyz-world);
+    if(kind==LIGHT_RECT){float2 e=max(shape.rect.xy,0.001);s.a=t*e.x;s.b=cross(t,n)*e.y;s.disc=false;return s;}
+    float r=max(light.parameters.z,0.001);
+    if(kind==LIGHT_DISC){s.a=t*r;s.b=cross(t,n)*r;return s;}
+    float3 u=normalize(cross(d,abs(d.y)<0.9?float3(0,1,0):float3(1,0,0)));float span=shape.tangentLength.w;
+    if(span<=0){s.a=u*r;s.b=cross(d,u)*r;return s;}
+    float3 side=cross(t,d);float sl=dot(side,side);side=sl>1e-8?side*rsqrt(sl):u;
+    s.a=t*(span*0.5+r);s.b=side*r;s.disc=false;return s;
+}
+ShadowLight localShadowLight(Frame f,Light light,uint index,float3 world){
+    return localShadowLightShaped(light,lightHasArea(light)?loadLightShape(f.lighting.w,index):(LightShape)0,world);
+}
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
     float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);float3 result=s.emissive+ibl(f,l,s,o,world,v,p,gathered,high,rays);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
-    // The High tier passes the sun through blended casters (look-translucent.slangh);
-    // virtual pages already hold it where they resolved this pixel.
+    // The High tier passes the sun through blended films and glass (coloured,
+    // look-translucent.slangh).
     if(dot(s.normal,f.sunDirection.xyz)>0){
         float pages=gathered?vsmMask(l,p):-1,lit=visibility(f,l,world,s.normal,pages);
-        if(high && pages<0 && lit>0)lit*=translucentSun(l,world);
-        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit;
+        float3 through=high && lit>0?translucentSun(l,world):float3(1,1,1);
+        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit*through;
     }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
-    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
+    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++) {
         uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
-        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(index*64);
-        float3 delta=light.positionRange.xyz-world;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
-        float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
-        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        // Lumens are point-equivalent for spots too (the cone masks, it does not
-        // concentrate), as in the path tracer; inside a source's radius the near
-        // field softens instead of peaking.
-        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
-        if(any(illuminance>0))illuminance*=localShadow(l,index,world,s.normal,light.positionRange.xyz);
-        result+=brdf(s,v,toLight,o)*illuminance;
+        // look-lights.slangh: points, spots, spheres, tubes, rects and discs.
+        Light light=loadLight(f.lighting.w,index);
+        float size;float3 c=localLight(f,l,s,o,v,world,index,light,area,size);
+        if(any(c>0)){float unused;c*=localShadowShape(l,index,world,s.normal,light.positionRange.xyz,light.positionRange.w,localShadowLight(f,light,index,world),unused);}
+        result+=c;
     }
     return result;
 }
@@ -435,7 +468,7 @@ float4 forwardOutput(Frame f,float3 c,float coverage,float stop,float exposure=1
 float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,float exposure,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
     // Clamped in radiance (forwardOutput), then pre-exposed like every HDR writer.
-    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
+    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv,FOG_LIGHTS_FRONT),s.alpha,s.alpha*(1-s.transmission));
     return float4(min(o.rgb*exposure,60000),o.a);
 }
 // World-space view ray through pixel centre `p`.
@@ -444,8 +477,7 @@ float3 viewRay(Frame f,float2 p){
     return normalize(far.xyz/far.w-f.camera.xyz);
 }
 // Background radiance: the physical sky (with sun disk) or the environment map,
-// the latter fogged over the whole froxel range.
+// fogged (fogBackground).
 float3 background(Frame f,Look l,float3 d,float2 uv){
-    if(physicalSky(l))return skyRadiance(f,l,d,true);
-    return applyFog(f,l,envTex(f.extra.w,environmentUv(d)).rgb,f.camera.xyz+d*FOG_RANGE,uv);
+    return fogBackground(f,l,physicalSky(l)?skyRadiance(f,l,d,true):envTex(f.extra.w,environmentUv(d)).rgb,d,uv);
 }

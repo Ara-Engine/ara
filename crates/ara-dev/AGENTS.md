@@ -21,7 +21,8 @@ Local developer binary. Uses git/cargo subprocesses; ara-hotpatch is tooling-onl
 - `cargo -- <args>`: focused checks with optional `ARA_SHARED_BUILD_DIR` reuse.
   Explicit CARGO_BUILD_JOBS is preserved; the unset default is two.
   Keep targets separate; the shared admission lease covers builds and test execution.
-  Editor build/run pairs ara-player in one Cargo build, probes both RT values,
+  Editor build/run pairs ara-player, ara-import-worker and ara in one Cargo build
+  (live stages them beside the editor), probes both RT values,
   and pins the exact companion artifact. Stale overrides/failed builds stop launch.
 - `merge`: clean-tree no-ff merge, Cargo.lock-only recovery, workspace check,
   affected gate (or `--full`), commit and optional push.
@@ -42,6 +43,10 @@ Local developer binary. Uses git/cargo subprocesses; ara-hotpatch is tooling-onl
 - `history-rewrite`: rehearse message cleanup in a fresh independent bare mirror;
   verify trees, metadata and ordered parents. Never rewrite a live checkout or push.
   `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
+- `live hub|editor [-- args]`: rebuild on Rust/manifest/resource saves (not the app's live
+  CSS) and relaunch from a staged copy under target/ara-dev/live; failed builds keep the
+  old window. The Hub gets a persistent scratch profile there; Enter forces a relaunch.
+  Apps run without Vulkan validation (`ARA_NO_GPU_VALIDATION=1`) so frames time true.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
 - `hotpatch`: `--install-dx` prepares optional pinned dx plus its native Rust save fix;

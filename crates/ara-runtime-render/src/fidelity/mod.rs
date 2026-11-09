@@ -3,7 +3,6 @@
 use anyhow::Result;
 use ara_render::scene::{self, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::{
-    components::LightKind,
     extract::{Geometry, RenderFrame},
     model::{Model, Primitive},
 };
@@ -328,32 +327,5 @@ fn solid(rgba: [u8; 4], srgb: bool) -> Texture {
 
 /// Every local light (the fidelity view has no 64-light cap).
 fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
-    frame
-        .lights
-        .iter()
-        .map(|l| {
-            let [x, y, z] = l.position;
-            let [dx, dy, dz] = l.direction;
-            let spot = l.kind == LightKind::Spot;
-            scene::Light {
-                position_range: [x, y, z, l.range],
-                color_lumens: [l.color[0], l.color[1], l.color[2], l.lumens],
-                direction_outer: [
-                    dx,
-                    dy,
-                    dz,
-                    if spot {
-                        l.cone[1].to_radians().cos()
-                    } else {
-                        0.0
-                    },
-                ],
-                parameters: if spot {
-                    [1.0, l.cone[0].to_radians().cos(), 0.0, 0.0]
-                } else {
-                    [0.0; 4]
-                },
-            }
-        })
-        .collect()
+    crate::lights::scene_lights(&frame.lights)
 }

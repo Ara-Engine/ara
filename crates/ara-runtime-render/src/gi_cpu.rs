@@ -9,16 +9,23 @@
 //! An edit only moves, adds or drops instances ([`Tracer::adopt`],
 //! [`Tracer::edit`]) and re-traces the probes it can change ([`affected`],
 //! [`rebake`]). Deforming (skinned) geometry and dynamic entities never enter the
-//! surfaces. Materials use their factors times each map's mean texel;
-//! alpha-tested surfaces count as opaque.
+//! surfaces. Materials use their factors times each map's mean texel, bouncing
+//! with [`bounce_albedo`]; alpha-tested and blended surfaces let rays through by the
+//! [`Cutout`] texel each hit lands on.
 use anyhow::{Context, Result, ensure};
 use ara_render::{
     instanced::{Geometry, Scene},
-    look::gi::{ProbeLattice, ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
+    look::gi::{
+        MOMENT_VECTORS, ProbeLattice, ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS,
+        moment_limit, pack_moments,
+    },
 };
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 /// Longest probe ray, matching the GPU bake.
 const RANGE: f32 = 200.;
@@ -39,15 +46,66 @@ fn worker_threads() -> usize {
     std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1))
 }
 
-/// Diffuse albedo (metal removed), emissive radiance and the share of rays an
-/// alpha-tested or blended surface lets through.
-#[derive(Clone, Copy, Default, PartialEq)]
+/// Bounce albedo ([`bounce_albedo`]), emissive radiance and what an alpha-tested or
+/// blended surface lets through.
+#[derive(Clone, Default, PartialEq)]
 pub(crate) struct Shading {
     pub albedo: Vec3,
     pub emissive: Vec3,
-    /// Share of rays passing through, as the ray-traced bake's any-hit test
-    /// (alpha mask coverage, or one minus blend alpha); 0 is opaque.
-    pub cutout: f32,
+    /// The rays passing through, texel by texel; `None` is opaque.
+    pub cutout: Option<Arc<Cutout>>,
+}
+
+/// The share of rays an alpha-tested or blended surface lets through at each texel of
+/// its base colour (texture coordinates wrap), decided at the hit's own texel as the
+/// ray-traced bake's any-hit test (`nativeAccept`) does: all of them below an alpha
+/// test's cutoff, one minus alpha where blended. A material-wide mean share instead
+/// let every solid panel of a masked wall atlas leak the sky into the probes.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Cutout {
+    size: [u32; 2],
+    /// Row-major shares in 255ths.
+    share: Vec<u8>,
+}
+
+impl Cutout {
+    /// From row-major texel shares in 0..=1; `None` when no texel lets a ray through.
+    pub(crate) fn new(size: [u32; 2], shares: impl IntoIterator<Item = f32>) -> Option<Self> {
+        let share: Vec<u8> = shares
+            .into_iter()
+            .map(|s| (s.clamp(0., 1.) * 255.).round() as u8)
+            .collect();
+        (size[0] > 0
+            && size[1] > 0
+            && share.len() == size[0] as usize * size[1] as usize
+            && share.iter().any(|&s| s > 0))
+        .then_some(Self { size, share })
+    }
+
+    /// The share at texture coordinate `uv` (nearest texel).
+    fn at(&self, uv: Vec2) -> f32 {
+        let [w, h] = self.size;
+        let texel = |t: f32, n: u32| ((t.rem_euclid(1.) * n as f32) as u32).min(n - 1) as usize;
+        f32::from(self.share[texel(uv.y, h) * w as usize + texel(uv.x, w)]) / 255.
+    }
+}
+
+/// The albedo a probe hit bounces light with: the diffuse share plus its specular
+/// lobe's directional albedo at its roughness, seen from 60 degrees (Karis's
+/// `EnvBRDFApprox`), so metals pass on the light they reflect. At roughness 1 it
+/// is Unreal's `EnvBRDFApproxFullyRough` (0.45 F0, as Lumen's surface cache stores
+/// every surface); smoother metals keep up to about 0.9 F0 instead of losing half.
+/// `probe-surfaces.slang` bakes the same.
+pub(crate) fn bounce_albedo(base: Vec3, metal: f32, roughness: f32) -> Vec3 {
+    let r = roughness.clamp(0., 1.);
+    let (x, y) = (1. - r, 0.0425 - 0.0275 * r);
+    let a004 = (x * x).min((-9.28f32 * 0.5).exp2()) * x + y;
+    let (scale, bias) = (
+        1.04 - 0.572 * r - 1.04 * a004,
+        1.04 * a004 - 0.04 + 0.022 * r,
+    );
+    let f0 = Vec3::splat(0.04).lerp(base, metal);
+    (base * (1. - metal) + f0 * scale + Vec3::splat(bias)).max(Vec3::ZERO)
 }
 
 /// Whether the ray `seed` passes a triangle of a surface with `cutout`: a
@@ -289,12 +347,29 @@ fn traverse(
 pub(crate) struct Mesh {
     nodes: Vec<Node>,
     triangles: Vec<Triangle>,
+    /// Each triangle's corner texture coordinates (set zero), read only for hits on
+    /// cut-out surfaces, so traversal never loads them.
+    uvs: Vec<[Vec2; 3]>,
 }
 
 impl Mesh {
-    fn new(mut triangles: Vec<Triangle>) -> Self {
-        let nodes = build(&mut triangles, Triangle::bounds, LEAF);
-        Self { nodes, triangles }
+    fn new(triangles: Vec<Triangle>) -> Self {
+        Self::with_uvs(
+            triangles
+                .into_iter()
+                .map(|t| (t, [Vec2::ZERO; 3]))
+                .collect(),
+        )
+    }
+
+    fn with_uvs(mut triangles: Vec<(Triangle, [Vec2; 3])>) -> Self {
+        let nodes = build(&mut triangles, |(t, _)| t.bounds(), LEAF);
+        let (triangles, uvs) = triangles.into_iter().unzip();
+        Self {
+            nodes,
+            triangles,
+            uvs,
+        }
     }
 
     /// The geometry's triangles at LOD `level` (or its coarsest).
@@ -328,7 +403,7 @@ impl Mesh {
                 normal = -normal;
             }
             let splat = [a, b, c].map(|v| v.terrain_weights.to_le_bytes());
-            triangles.push(Triangle {
+            let triangle = Triangle {
                 a: pa,
                 e1,
                 e2,
@@ -336,9 +411,10 @@ impl Mesh {
                 weights: std::array::from_fn(|i| {
                     (splat.iter().map(|w| u32::from(w[i])).sum::<u32>() / 3) as u8
                 }),
-            });
+            };
+            triangles.push((triangle, [a, b, c].map(|v| Vec2::from_array(v.uv))));
         }
-        Self::new(triangles)
+        Self::with_uvs(triangles)
     }
 
     /// Model bounds (empty when the mesh has no triangles).
@@ -355,17 +431,17 @@ impl Mesh {
         direction: Vec3,
         limit: f32,
     ) -> Option<(f32, Vec3, [u8; 4])> {
-        self.trace_cut(origin, direction, limit, 0., 0)
+        self.trace_cut(origin, direction, limit, None, 0)
     }
 
-    /// [`Self::trace`] through a surface with `cutout`: the ray `seed` passes the
-    /// triangles [`passes`] picks.
+    /// [`Self::trace`] through a surface with `cutout`: the ray `seed` passes each
+    /// hit as [`passes`] picks with the share at the hit's texel.
     fn trace_cut(
         &self,
         origin: Vec3,
         direction: Vec3,
         limit: f32,
-        cutout: f32,
+        cutout: Option<&Cutout>,
         seed: u32,
     ) -> Option<(f32, Vec3, [u8; 4])> {
         let mut normal = None;
@@ -397,7 +473,11 @@ impl Mesh {
                         continue;
                     }
                     let d = t.e2.dot(q) * inv;
-                    if d > 0.001 && d < limit && !passes(cutout, seed, index) {
+                    let through = |cutout: &Cutout| {
+                        let [a, b, c] = self.uvs[index as usize];
+                        passes(cutout.at(a + (b - a) * u + (c - a) * v), seed, index)
+                    };
+                    if d > 0.001 && d < limit && !cutout.is_some_and(through) {
                         limit = d;
                         closest = Some(d);
                         normal = Some((t.normal, t.weights));
@@ -598,7 +678,7 @@ impl Tracer {
                 world: Mat4::IDENTITY,
                 inverse: Mat4::IDENTITY,
                 normal: Mat3::IDENTITY,
-                shading: shading.get(instance.material).copied().unwrap_or_default(),
+                shading: shading.get(instance.material).cloned().unwrap_or_default(),
                 layers,
                 local,
                 bounds: EMPTY,
@@ -749,7 +829,7 @@ impl Tracer {
                     );
                     let mesh = &self.meshes[placed.mesh];
                     if let Some((t, n, w)) =
-                        mesh.trace_cut(o, d, limit, placed.shading.cutout, seed)
+                        mesh.trace_cut(o, d, limit, placed.shading.cutout.as_deref(), seed)
                     {
                         limit = t;
                         closest = Some(t);
@@ -764,7 +844,8 @@ impl Tracer {
             normal: (placed.normal * n).normalize_or_zero(),
             shading: Shading {
                 albedo: placed.layers.map_or(placed.shading.albedo, |l| l.albedo(w)),
-                ..placed.shading
+                emissive: placed.shading.emissive,
+                cutout: None,
             },
         })
     }
@@ -814,11 +895,18 @@ const MARGIN: f32 = 6.;
 /// single lattice's.
 const FINER: f32 = 0.5;
 
+/// Version of what a probe texel records (bump when the bake's shading changes,
+/// such as [`bounce_albedo`]; 5: probe rays pass glass by its transmittance; 7: 16x16
+/// distance moments, each ray clamped at the moment limit, misses at it; 13: texels relight
+/// at a real hit, the most central one, the mean distance kept for parallax; 14: emissive
+/// as RGB9E5 and a mask of the sub-rays on the relit hit's plane).
+const SURFACE_VERSION: u32 = 14;
+
 /// The lattice rule's identity, part of the probe cache's file names
 /// (`gi.rs`): any change to the constants above misses older bakes.
 pub(crate) fn lattice_rule() -> String {
     format!(
-        "pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
+        "s{SURFACE_VERSION}-pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
     )
 }
 
@@ -1100,6 +1188,73 @@ fn half_bits(v: f32) -> u32 {
     }
 }
 
+/// Nonnegative RGB as RGB9E5 (shared five-bit exponent, nine-bit mantissas, red in the
+/// low bits), as probeSurfacesMain packs emissive light (`giEmissive` decodes it).
+fn rgb9e5(c: Vec3) -> u32 {
+    const MAX: f32 = 65408.;
+    let c = c.clamp(Vec3::ZERO, Vec3::splat(MAX));
+    let top = c.max_element();
+    let mut exponent = top.log2().floor().max(-16.) as i32 + 16;
+    let mut scale = 2f32.powi(exponent - 24);
+    if (top / scale + 0.5).floor() >= 512. {
+        scale *= 2.;
+        exponent += 1;
+    }
+    let m = |v: f32| ((v / scale + 0.5).floor() as u32).min(511);
+    m(c.x) | m(c.y) << 9 | m(c.z) << 18 | (exponent as u32) << 27
+}
+
+/// Which of a texel's sixteen sub-rays (bit k) found a front hit on the relit hit's
+/// plane (`relit`: sub-ray, distance, normal): within 2% of its distance and a
+/// centimetre of the plane, facing within 25 degrees. Relighting spreads the texel's
+/// light over these sub-rays only (look-gi.slang giFootprintPoint): the plane goes on
+/// where the texel sees other surfaces (a floor's beyond the room's walls, a wall's
+/// across its window), and those points could be sunlit where the texel sees none.
+fn plane_mask(
+    hits: &[Option<(Vec3, Hit)>; 16],
+    (ray, distance, normal): (usize, f32, Vec3),
+) -> u32 {
+    let Some((dir, _)) = hits[ray] else {
+        return 1 << ray;
+    };
+    let point = dir * distance;
+    hits.iter().enumerate().fold(0, |mask, (k, hit)| match hit {
+        Some((d, h))
+            if h.normal.dot(*d) < 0.
+                && h.normal.dot(normal) > 0.9
+                && (*d * h.distance - point).dot(normal).abs() <= 0.02 * distance + 0.01 =>
+        {
+            mask | 1 << k
+        }
+        _ => mask,
+    })
+}
+
+/// The real hit a cache texel is relit at (sub-ray index, distance, normal), as
+/// `probeSurfacesMain`: the front hit closest to the texel's centre (nearest first on
+/// ties), with its own normal. A point rebuilt from the hits' mean would float between
+/// the surfaces of a texel that sees two (a window frame and the ground outside, a
+/// block and the wall behind): outside the room, or in the air of a sunlit room, where
+/// relighting would find light no surface it sees receives. None without front hits.
+fn relit_hit(hits: &[Option<(Vec3, Hit)>; 16]) -> Option<(usize, f32, Vec3)> {
+    let centre = |k: usize| {
+        let (x, y) = ((k % 4) as f32 - 1.5, (k / 4) as f32 - 1.5);
+        x * x + y * y
+    };
+    hits.iter()
+        .enumerate()
+        .filter_map(|(k, hit)| {
+            hit.as_ref()
+                .filter(|(dir, h)| h.normal.dot(*dir) < 0.)
+                .map(|(_, h)| (k, h.distance, h.normal))
+        })
+        .min_by(|a, b| {
+            centre(a.0)
+                .total_cmp(&centre(b.0))
+                .then(a.1.total_cmp(&b.1))
+        })
+}
+
 /// One probe: relocation and classification, then the 8x8 cache texels (sixteen
 /// stratified rays each) and distance moments, exactly as `probeSurfacesMain`.
 fn probe(
@@ -1149,38 +1304,46 @@ fn probe(
         .filter(|&lane| back(origin, fibonacci(lane)).is_some_and(|(_, b)| b))
         .count();
     let active = backs <= 16;
-    statics[64] = [offset.x, offset.y, offset.z, if active { 1. } else { 0. }];
-    statics[65] = [backs as f32, 0., 0., 0.];
+    statics[MOMENT_VECTORS] = [offset.x, offset.y, offset.z, if active { 1. } else { 0. }];
+    statics[MOMENT_VECTORS + 1] = [backs as f32, 0., 0., 0.];
     // A buried probe stays dark and is never read (relight skips it, shading
     // weights it out), so its texel rays are not traced: its texels stay zero.
     if !active {
         return;
     }
+    let limit = moment_limit(volume.spacing.to_array());
     for lane in 0..64 {
-        let (mut albedo, mut emissive, mut normal) = (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
-        let (mut centroid, mut moment1, mut moment2, mut geometry) = (Vec3::ZERO, 0f32, 0f32, 0u32);
-        for k in 0..16 {
+        // The lane's 2x2 visibility texels (look::gi::pack_moments), four rays each.
+        let (mut moment1, mut moment2) = ([0f32; 4], [0f32; 4]);
+        let hits: [Option<(Vec3, Hit)>; 16] = std::array::from_fn(|k| {
             let uv = (Vec2::new((lane % 8) as f32, (lane / 8) as f32)
                 + (Vec2::new((k % 4) as f32, (k / 4) as f32) + 0.5) / 4.)
                 / 8.;
             let dir = oct_decode(uv);
-            let mut t = RANGE;
-            if let Some(hit) = tracer.trace(origin, dir, RANGE) {
-                t = hit.distance;
-                geometry += 1;
-                centroid += dir * t;
-                if hit.normal.dot(dir) < 0. {
-                    albedo += hit.shading.albedo;
-                    emissive += hit.shading.emissive;
-                    normal += hit.normal;
-                } else {
-                    normal -= dir;
-                }
-            }
-            moment1 += t;
-            moment2 += t * t;
-        }
+            let hit = tracer.trace(origin, dir, RANGE);
+            // Clamped per ray at the limit, as probeSurfacesMain; a miss is open as far
+            // as the limit (rays stop at RANGE, which a coarse lattice's cells exceed:
+            // recorded there, every point past it would read as hidden).
+            let t = hit.as_ref().map_or(limit, |h| h.distance.min(limit));
+            let quadrant = (k % 4) / 2 + (k / 8) * 2;
+            moment1[quadrant] += t;
+            moment2[quadrant] += t * t;
+            hit.map(|h| (dir, h))
+        });
+        let geometry = hits.iter().flatten().count() as u32;
         let sky = 1. - geometry as f32 / 16.;
+        let (mut albedo, mut emissive, mut normal, mut centroid) =
+            (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
+        for (dir, hit) in hits.iter().flatten() {
+            centroid += *dir * hit.distance;
+            if hit.normal.dot(*dir) < 0. {
+                albedo += hit.shading.albedo;
+                emissive += hit.shading.emissive;
+                normal += hit.normal;
+            } else {
+                normal -= *dir;
+            }
+        }
         let g = geometry.max(1) as f32;
         let (albedo, emissive, centroid) = (albedo / g, emissive / g, centroid / g);
         let normal = if normal.length_squared() > 0. {
@@ -1188,25 +1351,31 @@ fn probe(
         } else {
             -oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.)
         };
-        // The centre ray's distance to the plane through the hits' centroid along their
-        // mean normal, as `probeSurfacesMain`: relighting rebuilds one hit per texel on
-        // the centre ray, and the hits' mean distance would land behind a surface seen at
-        // an angle (distance grows as 1/cos across the texel), shadowing itself.
+        // Reflections parallax-correct with the centre ray's distance to the plane
+        // through the hits' centroid along their mean normal (as probeSurfacesMain):
+        // the hits' mean distance would land behind a surface seen at an angle.
         let axis = oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.);
         let facing = normal.dot(axis);
-        let mean = if facing < -0.05 {
+        let parallax = if facing < -0.05 {
             (normal.dot(centroid) / facing).clamp(0., RANGE)
         } else {
             centroid.length()
         };
+        let relit = relit_hit(&hits);
+        let mask = relit.map_or(1 << 5, |r| plane_mask(&hits, r));
+        let (ray, distance, normal) = relit.unwrap_or((5, parallax, normal));
         let n = oct_encode(normal);
         texels[lane] = [
             unorm8(albedo.x) | unorm8(albedo.y) << 8 | unorm8(albedo.z) << 16 | unorm8(sky) << 24,
-            (n.x * 65535.).round() as u32 | ((n.y * 65535.).round() as u32) << 16,
-            half_bits(emissive.x) | half_bits(emissive.y) << 16,
-            half_bits(emissive.z) | half_bits(mean) << 16,
+            (n.x * 1023.).round() as u32
+                | ((n.y * 1023.).round() as u32) << 10
+                | (ray as u32) << 20
+                | ara_render::look::gi::log_distance(parallax) << 24,
+            rgb9e5(emissive),
+            mask | half_bits(distance) << 16,
         ];
-        statics[lane] = [moment1 / 16., moment2 / 16., 0., 0.];
+        statics[lane] =
+            std::array::from_fn(|q| pack_moments(moment1[q] / 4., moment2[q] / 4., limit));
     }
 }
 
@@ -1271,7 +1440,7 @@ mod tests {
             let (lo, hi) = tracer.bounds().context("static triangles")?;
             Ok(lattice(&ProbeVolume::automatic_within(lo, hi, PROBES)?))
         };
-        let shading = [Shading::default(); 2];
+        let shading = [Shading::default(), Shading::default()];
         let open = scene(vec![geometry(1, &[ground], Vec3::Y)]);
         let tracer = Tracer::new(&open, &shading, &BTreeSet::new());
         assert_eq!(layout(&tracer)?.lattices(), [single(&tracer)?]);
@@ -1308,7 +1477,7 @@ mod tests {
                 tangent: [1., 0., 0., 1.],
                 uv1: [0.; 2],
                 terrain_weights: 0,
-                reserved: 0,
+                color: u32::MAX,
             }));
             indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
         }
@@ -1322,6 +1491,7 @@ mod tests {
             lods: vec![Lod { indices, error: 0. }],
             bounds: [lo, hi],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }
     }
@@ -1335,6 +1505,9 @@ mod tests {
                 material: i,
                 world: Mat4::IDENTITY,
                 previous_world: Mat4::IDENTITY,
+                casts_shadows: true,
+                paint: None,
+                receives_decals: true,
             })
             .collect();
         Scene {
@@ -1347,6 +1520,7 @@ mod tests {
             sun_lux: Vec3::ZERO,
             environment: Vec::new(),
             environment_size: [0, 0],
+            decals: Vec::new(),
         }
     }
 
@@ -1443,7 +1617,7 @@ mod tests {
         ]);
         let through = |cutout: f32| {
             let canopy = Shading {
-                cutout,
+                cutout: Cutout::new([1, 1], [cutout]).map(Arc::new),
                 ..Shading::default()
             };
             let tracer = Tracer::new(&scene, &[Shading::default(), canopy], &BTreeSet::new());
@@ -1460,6 +1634,43 @@ mod tests {
         assert_eq!(through(1.), 1000);
         let half = through(0.5);
         assert!((400..600).contains(&half), "{half}");
+    }
+
+    #[test]
+    fn rays_pass_cut_out_surfaces_at_the_texel_they_hit() -> Result<()> {
+        // A unit quad whose texture's left half is cut out: every ray through that
+        // half passes, and the solid half stops every one (no mean share leaks).
+        let q = [
+            Vec3::ZERO,
+            Vec3::new(1., 0., 0.),
+            Vec3::new(1., 0., 1.),
+            Vec3::new(0., 0., 1.),
+        ];
+        let uv = |p: Vec3| Vec2::new(p.x, p.z);
+        let mesh = Mesh::with_uvs(
+            [(q[1], q[2]), (q[2], q[3])]
+                .map(|(b, c)| {
+                    let triangle = Triangle {
+                        a: q[0],
+                        e1: b - q[0],
+                        e2: c - q[0],
+                        normal: Vec3::Y,
+                        weights: [0; 4],
+                    };
+                    (triangle, [uv(q[0]), uv(b), uv(c)])
+                })
+                .into(),
+        );
+        let cutout = Cutout::new([2, 1], [1., 0.]).context("half the texels pass")?;
+        for i in 0..100 {
+            let x = (i as f32 + 0.5) / 100.;
+            let at = Vec3::new(x, 1., 0.1 + 0.8 * (i % 9) as f32 / 8.);
+            let hit = mesh
+                .trace_cut(at, Vec3::NEG_Y, RANGE, Some(&cutout), i)
+                .is_some();
+            assert_eq!(hit, x > 0.5, "x {x}");
+        }
+        Ok(())
     }
 
     #[test]
@@ -1504,6 +1715,27 @@ mod tests {
             assert!((oct_decode(oct_encode(d)) - d).length() < 1e-4);
         }
         assert_eq!(half_bits(1.), 0x3c00);
+        // RGB9E5: the brightest channel keeps nine bits; zero stays zero.
+        let decode = |v: u32| {
+            let scale = 2f32.powi((v >> 27) as i32 - 24);
+            Vec3::new(
+                (v & 511) as f32,
+                (v >> 9 & 511) as f32,
+                (v >> 18 & 511) as f32,
+            ) * scale
+        };
+        assert_eq!(rgb9e5(Vec3::ZERO) & 0x7ff_ffff, 0);
+        for c in [
+            Vec3::new(4., 2., 0.5),
+            Vec3::new(60., 45., 25.),
+            Vec3::splat(1e-3),
+        ] {
+            let back = decode(rgb9e5(c));
+            assert!(
+                (back - c).abs().max_element() <= c.max_element() / 256.,
+                "{c} {back}"
+            );
+        }
         assert_eq!(half_bits(1e9), 0x7bff);
     }
 
@@ -1546,7 +1778,16 @@ mod tests {
         assert_eq!(statics[64][3], 1., "an open probe is active");
         // Every texel hits a wall (no sky); some see the emissive ceiling.
         assert!(texels.iter().all(|t| t[0] >> 24 == 0));
-        let emitting = texels.iter().filter(|t| (t[2] & 0xffff) != 0).count();
+        let emitting = texels.iter().filter(|t| t[2] != 0).count();
         assert!(emitting > 0 && emitting < SURFACE_TEXELS, "{emitting}");
+        // Each texel's plane mask holds its relit sub-ray; texels that see a wall alone
+        // hold all sixteen, those across a corner only the relit wall's share.
+        let full = texels.iter().filter(|t| t[3] & 0xffff == 0xffff).count();
+        assert!(
+            texels
+                .iter()
+                .all(|t| t[3] & (1 << ((t[1] >> 20) & 15)) != 0)
+        );
+        assert!(full > 0 && full < SURFACE_TEXELS, "{full}");
     }
 }

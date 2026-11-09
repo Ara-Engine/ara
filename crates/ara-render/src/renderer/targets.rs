@@ -16,7 +16,7 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
                 DEPTH => vk::Format::D32_SFLOAT,
                 OUTPUT => vk::Format::R8G8B8A8_UNORM,
                 MOTION => vk::Format::R16G16_SFLOAT,
-                WIRE => vk::Format::R16_SFLOAT,
+                WIRE | OUTLINE => vk::Format::R16_SFLOAT,
                 // HDR is pre-exposed (`HdrExposure`), so half floats keep its range.
                 HDR | HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
                 _ => vk::Format::R32G32B32A32_SFLOAT,
@@ -31,7 +31,11 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
                 mip_levels: 1,
                 usage: vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::TRANSFER_SRC
-                    | if target == DEPTH {
+                    // The decal pass blends into the G-buffer in place (storage; the sRGB
+                    // albedo stores through its UNORM alias view).
+                    | if matches!(target, ALBEDO | NORMAL | MATERIAL | EMISSIVE) {
+                        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE
+                    } else if target == DEPTH {
                         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
                     } else if (HISTORY0..=OUTPUT).contains(&target) {
                         vk::ImageUsageFlags::STORAGE

@@ -19,12 +19,31 @@ pub(crate) fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
+/// Image files the texture importer reads (lowercase extensions), plus cooked KTX2.
+pub(crate) fn is_texture(extension: &str) -> bool {
+    matches!(
+        extension,
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "hdr"
+            | "exr"
+            | "tga"
+            | "tif"
+            | "tiff"
+            | "webp"
+            | "bmp"
+            | "dds"
+            | "ktx2"
+    )
+}
+
 /// What kind of asset this is, in words ("Model", "Texture", …).
 pub(crate) fn kind_label(asset: &Asset) -> &'static str {
     match asset.kind.as_str() {
         "folder" => "Folder",
         "glb" | "gltf" | "fbx" | "obj" => "Model",
-        "png" | "jpg" | "jpeg" | "hdr" | "exr" | "ktx2" | "tga" | "bmp" => "Texture",
+        kind if is_texture(kind) => "Texture",
         "graph" | "material" => match asset.domain.as_deref() {
             Some("vfx") => "Visual effect",
             _ => "Material",
@@ -48,7 +67,7 @@ pub(crate) fn kind_label(asset: &Asset) -> &'static str {
 pub(crate) fn kind_color(asset: &Asset) -> &'static str {
     match asset.kind.as_str() {
         "glb" | "gltf" | "fbx" | "obj" => "chart-1",
-        "png" | "jpg" | "jpeg" | "hdr" | "exr" | "ktx2" | "tga" | "bmp" => "chart-2",
+        kind if is_texture(kind) => "chart-2",
         "graph" | "material" | "materialinstance" => match asset.domain.as_deref() {
             Some("vfx") => "chart-5",
             _ => "chart-3",

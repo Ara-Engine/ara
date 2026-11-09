@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sun/horizonSunMain.dxil",
-      "dxil_hash": "d2f20c61254b233be4a9620bb29f12d8c96f63823651d832bf767595e911f17a",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_horizon_sun/horizonSunMain.dxil",
+      "dxil_hash": "6e117912237128bbf0cdc61f916322148c4e23bcd5662fccab4991e2283b5cdf",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sun/horizonSunMain.metallib",
-        "metallib_hash": "cc542e1a5baabb0d865fcf553476b815fd7c5628dbaa17d6df4f98408779d4d9",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sun/horizonSunMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_horizon_sun/horizonSunMain.metallib",
+        "metallib_hash": "939e7d376d7da31c78f419ba25ddd6fd551366b4b0945d66f412df2af9589c9f",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_horizon_sun/horizonSunMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "horizonSunMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sun/horizonSunMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_horizon_sun/horizonSunMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "636fca79630c905050ccb7c265581eda53b2df67deb511de1b0c69fe1bbb20c7",
+      "spirv_hash": "bdbf54db17c74ea176d7ead5c0beafe5b44203bdc561214c9f2d6ba6118b4960",
       "stage": "compute"
     }
   ],

@@ -86,6 +86,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
         glam::Vec3::from_array(camera),
         frame.environment.exposure,
     );
+    environment.sky_light = frame.environment.sky_light;
     look.tune_effects(&mut frame.effects);
     let effects = frame.effects.clone();
     look.override_environment(&mut environment);

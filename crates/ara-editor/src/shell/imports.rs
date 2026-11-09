@@ -131,7 +131,7 @@ impl Shell {
                 .is_some()
             {
                 self.bind_command("status-imports", "window.assets", Target::None);
-                out.push_str(&format!("<button id='status-imports' class='chip' label='Imports' description='Checking which sources need importing; open Assets' action='Dispatch'>{}<text id='status-imports-text' text='Preparing imports…' /></button>",icons::icon_in("status-imports","loader-circle","accent")));
+                out.push_str(&format!("<button id='status-imports' class='chip status-chip' label='Imports' description='Checking which sources need importing; open Assets' action='Dispatch'>{}<text id='status-imports-text' text='Preparing imports…' /></button>",icons::icon_in("status-imports","loader-circle","accent")));
             }
             return;
         };
@@ -139,11 +139,11 @@ impl Shell {
             let finished = progress.total - progress.pending.len();
             let percent = finished as f32 * 100. / progress.total.max(1) as f32;
             self.bind_command("status-imports", "window.assets", Target::None);
-            out.push_str(&format!("<button id='status-imports' class='chip' label='Imports' description='{} of {} assets still importing; open Assets' action='Dispatch'>{}<text id='status-imports-text' text='Importing {finished} / {}' /><panel id='status-imports-bar' class='progress'><panel id='status-imports-fill' class='progress-fill' style='width:{percent:.0}%' /></panel></button>",progress.pending.len(),progress.total,icons::icon_in("status-imports","loader-circle","accent"),progress.total));
+            out.push_str(&format!("<button id='status-imports' class='chip status-chip' label='Imports' description='{} of {} assets still importing; open Assets' action='Dispatch'>{}<text id='status-imports-text' text='Importing {finished} / {}' /><panel id='status-imports-bar' class='progress'><panel id='status-imports-fill' class='progress-fill' style='width:{percent:.0}%' /></panel></button>",progress.pending.len(),progress.total,icons::icon_in("status-imports","loader-circle","accent"),progress.total));
         } else if let Some(error) = progress.failed.values().next() {
             let n = progress.failed.len();
             self.bind_command("status-imports", "window.problems", Target::None);
-            out.push_str(&format!("<button id='status-imports' class='chip' label='Imports' description='{}' action='Dispatch'>{}<text id='status-imports-text' class='warning' text='{n} import{} failed' /></button>",escape(error),icons::icon_in("status-imports","triangle-alert","warning"),if n==1{""}else{"s"}));
+            out.push_str(&format!("<button id='status-imports' class='chip status-chip' label='Imports' description='{}' action='Dispatch'>{}<text id='status-imports-text' class='warning' text='{n} import{} failed' /></button>",escape(error),icons::icon_in("status-imports","triangle-alert","warning"),if n==1{""}else{"s"}));
         }
     }
     /// The Scene view's loading notice while assets the open scene uses are importing

@@ -223,7 +223,8 @@ impl Bridge {
 
     /// Returns a backend token only when cancellation cannot cancel another live
     /// Host subscriber, including one from a different session sharing this generation.
-    pub(crate) fn cancel_target(&self, job: &str) -> Option<ProbeJob> {
+    pub(crate) fn cancel_target(&mut self, job: &str) -> Option<ProbeJob> {
+        self.collect();
         let tracked = self.tracked.get(job)?;
         let backend = tracked.backend?;
         (tracked.cancelled

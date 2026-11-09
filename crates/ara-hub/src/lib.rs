@@ -1,4 +1,4 @@
-//! Ara Hub (D25): the native project launcher, on stillkit like the editor (D31). Projects,
+//! Ara Hub (D25): the native project launcher, on stillkit like the editor (D34). Projects,
 //! create from templates and samples, engine installs with per-project pins, agent
 //! onboarding and live activity, all over the user Hub service's JSON-RPC API.
 //!

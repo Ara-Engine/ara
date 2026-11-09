@@ -25,6 +25,9 @@ fn readiness_waits_for_probe_delivery_and_convergence_but_allows_motion() -> Res
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     });
     presenter.present(&frame)?;
     assert!(!presenter.readiness().is_ready());

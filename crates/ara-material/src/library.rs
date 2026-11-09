@@ -61,6 +61,10 @@ nodes! {
     "color" => (0,0,0) "color(vec3) -> ColorLinear: tag linear RGB data explicitly.",
     "rgb" => (0,0,0) "rgb(vec4) -> vec3: select the first three data lanes.",
     "alpha" => (0,0,0) "alpha(vec4) -> float: select the fourth data lane.",
+    "red" => (0,0,0) "red(vecN|ColorLinear) -> float: select the first lane (vertex-colour R masks).",
+    "green" => (0,0,0) "green(vecN|ColorLinear) -> float: select the second lane.",
+    "blue" => (0,0,0) "blue(vec3|vec4|ColorLinear) -> float: select the third lane.",
+    "vertexColor" => (0,0,0) "vertexColor() -> vec4: interpolated linear RGBA vertex colour (imported COLOR_0 or per-instance paint; white without); surface and unlit only. Lerp material layers by its channels (Unreal VertexColor).",
     "luminance" => (0,5,0) "luminance(ColorLinear) -> float: Rec.709 luminance.",
     "normalBlend" => (0,24,0) "normalBlend(vec3,vec3) -> vec3: reoriented tangent normals with safe normalization.",
     "normalStrength" => (0,16,0) "normalStrength(vec3,float) -> vec3: scale tangent XY and renormalize.",
@@ -116,6 +120,7 @@ pub(crate) fn available(op: &str, domain: Domain) -> bool {
         "worldPosition" | "worldNormal" | "viewDirection" => {
             matches!(domain, Domain::Surface | Domain::Unlit | Domain::Decal)
         }
+        "vertexColor" => matches!(domain, Domain::Surface | Domain::Unlit),
         _ => true,
     }
 }
@@ -153,6 +158,9 @@ pub fn infer(op: &str, a: &[Type]) -> Option<Type> {
         ("srgb", [Vec3]) => Some(ColorSrgb),
         ("rgb", [Vec4]) => Some(Vec3),
         ("alpha", [Vec4]) => Some(Float),
+        ("red" | "green", [Vec2 | Vec3 | Vec4 | ColorLinear]) => Some(Float),
+        ("blue", [Vec3 | Vec4 | ColorLinear]) => Some(Float),
+        ("vertexColor", []) => Some(Vec4),
         ("luminance", [ColorLinear]) => Some(Float),
         ("normalBlend", [Vec3, Vec3]) | ("normalStrength", [Vec3, Float]) => Some(Vec3),
         ("noise", [Vec2]) | ("roundedPanel", [Vec2, Vec2, Float]) => Some(Float),

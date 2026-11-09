@@ -144,7 +144,7 @@ impl Window {
     }
 
     /// Wait for the window system to apply pending mode, size and position changes.
-    fn sync(&self) -> Result<()> {
+    pub(super) fn sync(&self) -> Result<()> {
         // SAFETY: Live window on its owning thread.
         unsafe {
             ensure!(SDL_SyncWindow(self.handle), "SDL window sync: {}", error());

@@ -8,7 +8,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
   checked native `Transform`), shared by the runtime, export hash and checked-in binding generation.
   A direct pointer view requires an explicit checked binding; other components use codecs.
-- `abi` (ABI v4): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
+- `abi` (ABI v5): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry: `ara_script_init(*const HostInit, *mut ScriptApi)`; Rust rejects null slots with ARA0922 before dispatch.
@@ -17,6 +17,9 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   stops and boolean animator parameters, supplied/drained by the embedding runtime.
   Every callback uses the active host context and its world resources.
   HostApi: component_json precedes query/input/navigation/control callbacks; regenerate C# after edits.
+- `HostApi.graphics`/`graphics_revision`: exclusive access to `ara-graphics-settings::Service`;
+  no gameplay column, snapshot or replication. Applied event delegates are per host/module
+  and removed on L3/shutdown. See [graphics settings](../../docs/dev/graphics-settings.md).
 - `csgen`: Rust → C# (`csharp(db, engine)`, `write`, `stale`, `blittable_components`):
   `Abi.g.cs`, `Components.g.cs`, `Units.g.cs`, `Codes.g.cs`.
 - `ScriptHost` (per world; simultaneous hosts share one process-level CLR):
@@ -133,18 +136,4 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
 - Tags are 1 byte in C#. Native chunk loops stay allocation-free; variable-value access
   allocates callback-local copies. Keep bulk hot loops in native views.
-## Measurements (`reload_bench`, 7800X3D shared with other agents' builds)
-5.2k-line module, 20k entities, 60 Hz; edits rotate L1, L2 (a new method), L3 (a signature
-change). v1 = `218d449` measured with the same bench (its additive edits take L3). Two
-interleaved rounds; system CPU busy during each run in brackets. p50 / p95, ms:
-| | v1 [48%, 28%] | v2 [35%, 39%] |
-|---|---|---|
-| L3 save→visible | 313 / 386, 265 / 334 | 282 / 299, 285 / 334 |
-| additive edit save→visible | 305 / 391, 283 / 366 (L3) | 35 / 54, 41 / 56 (L2) |
-| L1 save→visible | 25 / 32, 20 / 36 | 19 / 51, 19 / 34 |
-| L3 emit | 109 / 180, 88 / 155 | 99 / 121, 106 / 116 |
-| L3 load (AMSI) | 143 / 178, 136 / 144 | 134 / 144, 137 / 162 |
-| L3 generators | 13 / 33, 11 / 28 | 18 / 47, 16 / 41 |
-| L3 rest: detect, parse, transfer, pre-JIT, register, boundary, first tick (p50 sum) | 33, 25 | 20, 24 |
-The L3 floor here is emit (~100 ms) plus the AMSI scan (~140 ms). Earlier v1 runs at 61–71%
-CPU measured L3 427 / 614. Tick p99 2.5 ms during reloads; no leaked generations.
+Historical reload measurements: [script-host-benchmarks](../../docs/dev/script-host-benchmarks.md).

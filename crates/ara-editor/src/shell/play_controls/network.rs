@@ -66,9 +66,9 @@ impl Shell {
             .and_then(Value::as_f64)
             .unwrap_or(1.)
             .clamp(0., 16.) as usize;
-        out.push_str("<text id='play-network-hint' class='caption' text='Network conditions apply on the next Play start.' />");
+        out.push_str("<panel id='play-network-head' class='form-section-row'><text id='play-network-title' class='form-section' text='Network' /><text id='play-network-hint' class='caption' text='Applies on the next Play start' /></panel>");
         for player in 1..=clients {
-            out.push_str(&format!("<panel id='play-network-row-{player}' class='row' style='gap:8px'><text id='play-network-label-{player}' class='caption' text='Client {player}' />"));
+            out.push_str(&format!("<panel id='play-network-row-{player}' class='form-row'><text id='play-network-label-{player}' class='form-label' text='Client {player}' />"));
             self.choice_button(
                 &format!("play-network-{player}"),
                 &format!("Client {player} network"),

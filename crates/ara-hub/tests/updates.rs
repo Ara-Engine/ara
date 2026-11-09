@@ -40,7 +40,7 @@ fn install_and_open_waits_for_success_and_restart_uses_authenticated_staging() {
 fn installs_settings_and_banner_bind_to_service_actions() {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
-    let mut cap = capture::Capture::new([1440, 900], 1.0, Vec::new()).expect("headless hub");
+    let mut cap = capture::Capture::new([1440, 900], 1.0).expect("headless hub");
     hub.view = View::Installs;
     hub.take_calls();
     cap.click(&mut hub, "cancel-0.0.3-alpha")

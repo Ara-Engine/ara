@@ -52,7 +52,8 @@ pub fn scene() -> Scene {
             position_range: [x, 2.65, z, 3.5],
             color_lumens: [0.55, 0.75, 1., 20.],
             direction_outer: [0., -1., 0., -1.],
-            parameters: [0.; 4],
+            parameters: [0., 0., 0., 1.],
+            ..ara_render::scene::Light::ZERO
         });
         scene.meshes.push(quad(
             scene.meshes.len() as u64 + 1,

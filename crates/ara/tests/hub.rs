@@ -638,6 +638,13 @@ fn registry_metadata_subscriptions_templates_and_global_install_configs() {
         json!(cli_executable())
     );
     assert_eq!(config["mcpServers"]["ara"]["args"], json!(["mcp"]));
+    let cursor = hub.cli(&["hub", "install-mcp", "--client", "cursor"]);
+    assert_eq!(cursor["mcpServers"], config["mcpServers"]);
+    let opencode = hub.cli(&["hub", "install-mcp", "--client", "opencode"]);
+    assert_eq!(
+        opencode["mcp"]["ara"]["command"],
+        json!([cli_executable(), "mcp"])
+    );
     let codex = Command::new(env!("CARGO_BIN_EXE_ara"))
         .env("ARA_CONFIG_DIR", hub.config())
         .args(["hub", "install-mcp", "--client", "codex"])

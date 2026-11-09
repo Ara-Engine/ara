@@ -58,7 +58,7 @@ fn watcher_publishes_valid_saves_rejects_invalid_saves_and_recovers() {
     let resources = Resources::new();
     let (updates, stop) = watch(resources.0.clone()).unwrap();
     let receive = || updates.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert_eq!(receive().unwrap().tokens[0]["--control-size"], "24px");
+    assert_eq!(receive().unwrap().tokens[0]["--control-size"], "22px");
     resources.metric(30);
     assert_eq!(receive().unwrap().tokens[0]["--control-size"], "30px");
     std::fs::write(

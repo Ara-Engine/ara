@@ -28,6 +28,8 @@ mod query_tests;
 mod recording;
 mod reload;
 pub use reload::ShaderStatus;
+mod queue_gate;
+pub use queue_gate::QueueGate;
 mod submission;
 mod surface;
 pub use submission::SubmissionStats;
@@ -430,8 +432,38 @@ impl VulkanDevice {
                 "Image was not allocated for shader storage".into(),
             ));
         }
-        self.heap
-            .storage_image(&self.context, image, value.raw.view)
+        // sRGB colour images store through their UNORM alias (shaders encode).
+        let view = value.raw.storage_view.unwrap_or(value.raw.view);
+        if self.heap.storage_full() {
+            self.reclaim_storage()?;
+        }
+        self.heap.storage_image(&self.context, image, view)
+    }
+    /// The storage-image heap (64 slots, part of every cooked binding layout) is
+    /// shared by every view on this device. A resize or content swap retires a whole
+    /// generation of view images, whose slots return only once their last GPU use
+    /// completes, so back-to-back resizes can fill it with retired images. Wait
+    /// (bounded) for those uses and collect, instead of failing the frame.
+    fn reclaim_storage(&mut self) -> Result<()> {
+        crate::cpu_scope!("GPU.reclaim_storage");
+        let mut last = [0u64; 2];
+        for retired in &self.retired {
+            if let Retired::Image(image) = retired
+                && self.heap.has_storage(image.raw.view)
+            {
+                for (q, value) in retired.last().into_iter().enumerate() {
+                    last[q] = last[q].max(value.min(self.flushed[q]));
+                }
+            }
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(250);
+        for queue in [Queue::Graphics, Queue::Compute] {
+            let value = last[queue.index()];
+            if value > 0 {
+                self.wait_until(TimelinePoint { queue, value }, deadline)?;
+            }
+        }
+        Device::collect(self)
     }
     /// Create a pipeline exclusively from a versioned, hashed offline cook.
     pub fn create_pipeline(

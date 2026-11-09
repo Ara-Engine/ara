@@ -39,7 +39,10 @@ Position decode is `min + position.xyz / 65535 * (max-min)`; zero extent is vali
 Normalize decoded normals/tangents and all eight combined skin weights. XSKN is
 zero for unskinned/four-influence meshes. Joint indices address the owning skin's
 joint order, not node IDs. VSRC follows every tangent split, dedup and fetch remap;
-it indexes original morph target arrays in the scene manifest.
+it indexes original morph target arrays in the scene manifest and keys per-instance
+vertex paint (`VertexPaint` stores colours per source vertex). The colour is glTF
+`COLOR_0` or FBX vertex colour as authored (no sRGB conversion); absent colours cook
+opaque white.
 
 Meshlet: vertex offset u32 (in MVER), triangle offset u32 (in MTRI), vertex count
 u32 (1–64), triangle count u32 (1–124), sphere center f32[3], radius f32,

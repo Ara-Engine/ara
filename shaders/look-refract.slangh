@@ -1,5 +1,6 @@
 // Screen-space refraction of transmissive forward surfaces (look/refract.rs).
 // Include after look-shading.slangh.
+#include "look-glass.slangh"
 //
 // The copy: frames whose forward pass draws a transmissive material copy the lit
 // opaque scene after deferred lighting (Refract.Copy), inside the render-pixel rect
@@ -66,11 +67,20 @@ float refractLevelFor(Frame f,float radius,float depth){
 // thickness (zero: thin-walled) and absorption coefficients per metre.
 struct RefractVolume {float ior;float thickness;float3 absorption;};
 RefractVolume refractVolume(uint2 words){
-    RefractVolume m;uint code=words.x>>16,h=words.x&0xffff;
-    m.ior=code==0?1.5:1+float(code-1)/32767.;
+    RefractVolume m;uint h=words.x&0xffff;
+    m.ior=glassIor(words.x);
     m.thickness=h<0x400?float(h)*5.96046448e-8:asfloat((((h>>10)+112)<<23)|((h&0x3ff)<<13));
-    m.absorption=float3(words.y&511,(words.y>>9)&511,(words.y>>18)&511)*exp2(float(words.y>>27)-24.);
+    m.absorption=glassAbsorption(words.y);
     return m;
+}
+// Radiance of the background a ray (o, d) leaving the scene meets, from the copy:
+// where its direction lands on screen inside the copied rect with no surface there,
+// the sky as drawn (fog, sun disk) under any transparent layers drawn before this
+// one (glass behind glass against the sky), blurred to `level`. False elsewhere.
+bool refractBackground(Frame f,Look l,float3 o,float3 d,float level,out float3 c){
+    c=0;float2 px=refractPixel(f,o+d*FOG_RANGE);
+    if(px.x<0 || refractDepthAt(l,int2(px))!=0)return false;
+    c=refractSample(f,l,px/float2(f.extent.xy),level);return true;
 }
 // Radiance the ray (o, d) brings back from the opaque scene: a march of the copied
 // depth over `reach` metres (quadratic steps, then a binary refinement), read at the
@@ -82,14 +92,26 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
     // End in front of the near plane, as the reflection march does.
     float ahead=refractViewDepth(f,o),toward=dot(d,f.forward.xyz);
     if(toward<0)reach=min(reach,max(ahead-f.camera.w*2,0)/-toward);
-    uint steps=max(uint(l.refractParams[0].x),1u);float previous=0;
+    uint steps=max(uint(l.refractParams[0].x),1u);float previous=0,before=-1;bool front=true;
+    // The last on-screen sample in front of a surface: a ray leaving the copied rect
+    // (towards a floor below the frame) reads the copy there, as screen reflections
+    // clamp to the edge, rather than the sky.
+    float2 edge=-1;float edgeDepth=0;
     for(uint i=1;i<=steps;i++){
-        float s=float(i)/float(steps),t=reach*s*s;float3 q=o+d*t;
-        float scene=refractDepthAt(l,int2(refractPixel(f,q)));if(scene<0)break;
+        float s=float(i)/float(steps),t=reach*s*s;float3 q=o+d*t;float2 qp=refractPixel(f,q);
+        float scene=refractDepthAt(l,int2(qp));
+        if(scene<0){
+            if(edge.x>=0)return refractSample(f,l,edge/float2(f.extent.xy),refractLevelFor(f,spread*(travelled+previous),edgeDepth));
+            break;
+        }
         float depth=refractViewDepth(f,q);
-        // Behind the copied surface: a crossing within this step is a hit; far behind,
-        // the ray passed behind a nearer object and marches on.
-        if(scene>0 && depth>scene && depth-scene<(t-previous)*max(abs(toward),0.2)+0.02*depth){
+        // Behind the copied surface: a crossing within this step is a hit, either close
+        // behind it or where the ray was in front of a surface continuous with this
+        // one at the last step (a floor met at a grazing angle, whose depth moves a few
+        // times faster than the ray). Far behind a surface that jumped nearer, the ray
+        // passed behind a nearer object and marches on.
+        bool continuous=front && before>0 && abs(scene-before)<(t-previous)*4+0.05*depth;
+        if(scene>0 && depth>scene && (depth-scene<(t-previous)*max(abs(toward),0.2)+0.02*depth || continuous)){
             float lo=previous,hi=t;
             for(uint k=0;k<4;k++){
                 float m=(lo+hi)*0.5;float3 c=o+d*m;float z=refractDepthAt(l,int2(refractPixel(f,c)));
@@ -98,11 +120,14 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
             float3 at=o+d*hi;
             return refractSample(f,l,refractPixel(f,at)/float2(f.extent.xy),refractLevelFor(f,spread*(travelled+hi),refractViewDepth(f,at)));
         }
-        previous=t;
+        previous=t;before=scene;front=scene<=0 || depth<=scene;
+        // Sky last (zero depth): the background read below, not the edge.
+        if(scene<=0)edge=-1;else if(front){edge=qp;edgeDepth=scene;}
     }
+    float3 drawn;if(refractBackground(f,l,o,d,roughness*4,drawn))return drawn;
     uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float2 e=environmentUv(d);float level=roughness*4,low=floor(level),high=min(low+1,4);
     float3 sky=lerp(envTex(prefilter,float2(e.x,(e.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(e.x,(e.y*127+0.5+high*128)/640)).rgb,frac(level));
-    return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv))*refractExposure(f,l);
+    return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv,FOG_LIGHTS_BEHIND))*refractExposure(f,l);
 }
 // Final colour of a transmissive forward surface in the HDR target's space
 // (refractExposure), premultiplied by its coverage
@@ -131,7 +156,18 @@ float3 refractSurface(Frame f,Look l,Surface s,float f0,float3 world,int2 p,bool
     float nv=saturate(dot(s.normal,v));float4 c=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
     float a004=min(c.x*c.x,exp2(-9.28*nv))*c.x+c.y;float2 ab=float2(-1.04,1.04)*a004+c.zw;
     through=saturate(1-(f0*ab.x+ab.y));
-    return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv)*refractExposure(f,l);
+    return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv,FOG_LIGHTS_FRONT)*refractExposure(f,l);
+}
+// Hollow glass (bottles, bulbs, drinking glasses) is a shell: a wall much thinner than
+// its curvature, whose far wall the same draw holds, so the copy never shows it. Where
+// the curvature's chord `sphere` is longer than the wall's `slab` but at most
+// SHELL_SPAN walls (a curved window is not a shell) and ends before the opaque scene
+// `room` metres behind (zero: none), the ray crosses a far wall like the near one:
+// its medium over `chord`, its tint at both faces and its Fresnel.
+static const float SHELL_SPAN=100;
+float3 refractShell(float sphere,float slab,float chord,float room,float3 absorption,float3 tint,float f0,float leave){
+    bool shell=slab<sphere && sphere<SHELL_SPAN*slab && (room<=0 || sphere<room);
+    return shell?exp(-absorption*chord)*tint*tint*leave*(1-f0):float3(1,1,1);
 }
 // The angular spread (radians per metre travelled, about) a rough interface adds:
 // GGX's lobe width (roughness squared) bent by (1 - 1/IOR), twice that for the tails
@@ -157,15 +193,21 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float thickness=m.thickness*scale;
         float3 t1=refract(-v,n,1/m.ior);if(dot(t1,t1)<1e-6)t1=-v;
         float radius=max(1/max(curvature,1e-4),thickness*0.5),cosine=max(-dot(t1,geometric),0.05);
-        float chord=min(2*radius*cosine,thickness/cosine);
-        float3 exit=world+t1*chord,n2=normalize(exit-(world-geometric*radius));
+        // The far side's outward normal: the sphere's at the exit, or a slab's flat
+        // back face (facing away from the viewer) where the thickness bounds the chord.
+        float sphere=2*radius*cosine,slab=thickness/cosine,chord=min(sphere,slab);
+        float3 exit=world+t1*chord,n2=sphere<slab?normalize(exit-(world-geometric*radius)):-geometric;
         float3 t2=refract(t1,-n2,m.ior);float leave;
         // Total internal reflection where the far side's estimate is too steep: keep
         // the ray, at the normal-incidence loss.
         if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else leave=refractLeave(f0,t2,n2);
-        float reach=behind>0?2.5*max(behind-refractViewDepth(f,exit),thickness):FOG_RANGE*0.01;
+        // Bent rays may cross far more than the scene just behind this pixel (a close
+        // ball looking down at the floor sees the far wall): at least twice the view
+        // depth; over the sky (nothing behind) four times, so the first steps stay short.
+        float reach=behind>0?max(2.5*max(behind-refractViewDepth(f,exit),thickness),2*front):4*front+thickness;
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
-        transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
+        float room=behind>0?max(behind-front,0)/max(dot(-v,f.forward.xyz),0.2):0;
+        transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave*refractShell(sphere,slab,chord,room,m.absorption,s.albedo,f0,leave);
     }
     return forwardOutput(f,reflected+tau*through*transmitted,s.alpha,s.alpha,refractExposure(f,l));
 }

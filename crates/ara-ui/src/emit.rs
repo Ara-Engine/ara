@@ -46,11 +46,6 @@ impl Ui {
         node.clip = clip;
         let id = stable_id(&node.element.id);
         let numeric = crate::input::numeric::declared(&node.element);
-        let grip_width = if numeric {
-            crate::input::numeric::GRIP
-        } else {
-            0.
-        };
         let c = &node.computed;
         let transformed = local != [0.0, 0.0];
         let clipped = c.clip;
@@ -58,6 +53,40 @@ impl Ui {
             self.display
                 .commands
                 .push(Draw::PushTransform { translation: local });
+        }
+        // Outer shadows reach past the box: test their extent, not just the box.
+        let reach = c
+            .shadows
+            .iter()
+            .filter(|s| !s.inset)
+            .map(|s| s.offset[0].abs().max(s.offset[1].abs()) + s.spread.max(0.) + s.blur * 1.5)
+            .fold(0., f32::max);
+        let shadowed = Box2 {
+            x: visual.x - reach,
+            y: visual.y - reach,
+            w: visual.w + 2. * reach,
+            h: visual.h + 2. * reach,
+        };
+        if visual.intersects(clip)
+            && let Some(backdrop) = c.backdrop
+        {
+            self.display.commands.push(Draw::Backdrop {
+                node: id,
+                rect,
+                radius: c.radius,
+                backdrop,
+            });
+        }
+        if shadowed.intersects(clip) {
+            // CSS paints the first layer on top, so emit in reverse.
+            for shadow in c.shadows.iter().rev().filter(|s| !s.inset) {
+                self.display.commands.push(Draw::Shadow {
+                    node: id,
+                    rect,
+                    radius: c.radius,
+                    shadow: *shadow,
+                });
+            }
         }
         if visual.intersects(clip) {
             if c.background.3 > 0 {
@@ -76,6 +105,14 @@ impl Ui {
                     }
                 });
             }
+            for shadow in c.shadows.iter().rev().filter(|s| s.inset) {
+                self.display.commands.push(Draw::Shadow {
+                    node: id,
+                    rect,
+                    radius: c.radius,
+                    shadow: *shadow,
+                });
+            }
             if c.border > 0.0 {
                 self.display.commands.push(Draw::Border {
                     node: id,
@@ -83,6 +120,23 @@ impl Ui {
                     radius: c.radius,
                     width: c.border,
                     color: c.border_color,
+                });
+            }
+            // A slider field fills to its shown value (previews included).
+            if numeric
+                && let Some(text) = &node.text
+                && let Some(ratio) = crate::input::numeric::slider_ratio(&node.element, &text.value)
+                && rect.w * ratio >= 1.
+            {
+                let accent = self.sheet.color_token("--accent").unwrap_or(c.color);
+                self.display.commands.push(Draw::RoundedRect {
+                    node: id,
+                    rect: Box2 {
+                        w: rect.w * ratio,
+                        ..rect
+                    },
+                    radius: c.radius.min(rect.w * ratio * 0.5),
+                    color: crate::style::Color(accent.0, accent.1, accent.2, 72),
                 });
             }
         }
@@ -132,8 +186,7 @@ impl Ui {
                             - l.padding.left
                             - l.padding.right
                             - l.border.left
-                            - l.border.right
-                            - grip_width)
+                            - l.border.right)
                             .max(1.0),
                     );
                 }
@@ -143,7 +196,6 @@ impl Ui {
                         - l.padding.right
                         - l.border.left
                         - l.border.right
-                        - grip_width
                         - text.layout.width())
                     .max(0.);
                 }
@@ -174,7 +226,6 @@ impl Ui {
                     self.widgets.get(&id),
                     Some(text),
                     node.state.focus,
-                    numeric,
                     rect,
                     origin,
                     id,
@@ -197,8 +248,7 @@ impl Ui {
                             - l.padding.left
                             - l.padding.right
                             - l.border.left
-                            - l.border.right
-                            - grip_width)
+                            - l.border.right)
                             .max(0.),
                         h: (rect.h
                             - l.padding.top
@@ -274,7 +324,6 @@ impl Ui {
                 self.widgets.get(&id),
                 None,
                 node.state.focus,
-                numeric,
                 rect,
                 [rect.x, rect.y],
                 id,

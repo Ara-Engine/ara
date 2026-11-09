@@ -128,7 +128,7 @@ A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation
 
-`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML using the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary. Hub displays/copies it without editing client config files.
+`ara hub install-mcp --client claude|codex|cursor|opencode` prints Claude or Cursor `mcpServers` JSON, Codex TOML or OpenCode `mcp` JSON using the current executable's absolute path and `mcp`; PATH is unnecessary. The Hub copies it, or merges only the `ara` entry into that client's config when asked to connect.
 Register with `ara hub add <absolute-path>`; create with `ara hub create <absolute-path> --name Name --template blank`.
 Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`, or give `project` on any tool. Sessions never cross projects.
 Per-project `ara mcp --root <project>` and optional `.mcp.json` (`args:["mcp","--root","."]`) retain standalone daemon behavior.

@@ -41,6 +41,9 @@ pub struct PlayStartParams {
     /// `{latencyMs, jitterMs, loss, duplication, reordering, bandwidth}` (probabilities
     /// in basis points, bandwidth in bytes/s) or null for a clean link.
     pub conditions: Option<Vec<Value>>,
+    /// Rendering diagnosis: effects to turn off in every player of this world (the
+    /// editor's View > Rendering Debug). Default: everything on.
+    pub render_debug: Option<ara_play::RenderDebug>,
 }
 
 /// Params of methods addressing one world.
@@ -52,6 +55,22 @@ pub struct WorldParams {
     pub session: String,
     /// World ID from `play.start` (`play:1`); default: the most recent world.
     pub world: Option<String>,
+}
+
+/// Local user graphics requests, independently addressed to one rendering player.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayGraphicsParams {
+    /// Calling session handle.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Player index; absent selects the authority. Preferences are never broadcast.
+    pub player: Option<u32>,
+    /// Graphics operation: get/set/apply/revert/resetToDefaults/save/autoDetect;
+    /// set carries a complete settings candidate, validated by the player service.
+    pub request: Option<Value>,
 }
 
 /// Params of `play.step`.
@@ -287,6 +306,20 @@ pub struct PlayTimescaleParams {
     pub world: Option<String>,
     /// Host-time multiplier in [0, 1000]; the fixed dt never changes.
     pub value: f64,
+}
+
+/// Params of `play.renderDebug`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayRenderDebugParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// Effects to turn off (omitted fields stay on); every player of the world applies
+    /// them from its next frame.
+    pub render_debug: ara_play::RenderDebug,
 }
 
 /// Params of `play.recording` and `play.replay`.

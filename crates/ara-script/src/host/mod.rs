@@ -11,6 +11,7 @@
 mod bindings;
 mod command;
 mod ctx;
+mod graphics;
 mod register;
 mod registry;
 mod scene;

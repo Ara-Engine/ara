@@ -8,6 +8,7 @@ uint emitterCount(Frame f){
     return 0;
 #endif
 }
+#include "local-lights.slangh"
 uint chooseLight(Frame f,inout uint rng){
     uint4 h=buffers[f.scene.x].Load<uint4>(0);
     uint4 e=0;
@@ -30,15 +31,9 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
     float mixture=h.w>0 && e.z>0?0.5:1;float bsdfPdf;
     if((light&0x80000000)==0){
         if(light>=h.w)return c;
-        uint at=h.z+light*64;
-        float4 p=buffers[f.scene.x].Load<float4>(at),colour=buffers[f.scene.x].Load<float4>(at+16);
-        float4 cone=buffers[f.scene.x].Load<float4>(at+32),params=buffers[f.scene.x].Load<float4>(at+48);
-        float3 delta=p.xyz-s.position;float d=length(delta),luminanceScale=colour.w/(4*PI*max(d*d,0.01));float3 l=delta/max(d,1e-6);
-        c.pdf=mixture/max(h.w,1);c.distance=max(d-0.03,0.001);c.direction=coneDirection(l,0.025/max(d,0.025),seed);
-        if(d>p.w)return c;
-        float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
-        float fade=pow(saturate(1-pow(d/p.w,4)),2);
-        c.value=evaluate(s,v,c.direction,bsdfPdf)*colour.rgb*luminanceScale*spot*fade;
+        // local-lights.slangh: one emitter sample from this candidate's own stream.
+        uint stream=seed;LocalSample sample=sampleLocal(f,s,v,localLight(f,h.z+light*LIGHT_BYTES),stream);
+        c.pdf=mixture/max(h.w,1);c.direction=sample.direction;c.distance=sample.distance;c.value=sample.value;
     }
 #ifdef EMISSIVE_LIGHTS
     else{
@@ -87,7 +82,7 @@ float3 risDirect(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
         if(w>0 && random(rng)*sum<w){selected=c;target=t;}
     }
     if(target<=0)return 0;
-    float visibility=occluded(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng)?0:1;
+    float3 visibility=shadowTransmittance(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng);
     return selected.value*(sum/(candidates*target))*visibility;
 }
 float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
@@ -95,26 +90,31 @@ float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
 #ifdef SKY_ATMOSPHERE
     [branch]if((f.display.w&2)!=0)sunlight=solarIrradiance(f,s.position);
 #endif
-    return any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng)?evaluate(s,v,l,pdf)*sunlight:float3(0);
+    // Light behind a surface reaches it only through glass, along shadow rays.
+    return any(sunlight>0) && dot(s.normal,l)>0?evaluate(s,v,l,pdf)*sunlight*shadowTransmittance(f,rayOrigin(s,l),l,10000,rng):float3(0);
 }
-float3 directLocal(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
+// `mis`: the caller adds what BSDF-sampled rays see on area lights (localHits), so
+// each light sample takes its power-heuristic share (the exact estimator only).
+float3 directLocal(Frame f,Surface s,float3 v,inout uint rng,bool primary=false,bool mis=false){
     float3 sum=0;
     uint count=buffers[f.scene.x].Load(12);
-#ifdef EMISSIVE_LIGHTS
-    if(emitterCount(f)>0 || count>8)return sum+risDirect(f,s,v,rng,primary);
-#endif
+    if(!localMis(f))return sum+risDirect(f,s,v,rng,primary);
     // Small non-emissive scenes retain their exact all-light estimator.
     for(uint i=0;i<count;i++){
-        uint offset=buffers[f.scene.x].Load(8)+i*64;
-        float4 p=buffers[f.scene.x].Load<float4>(offset),colour=buffers[f.scene.x].Load<float4>(offset+16);
-        float4 cone=buffers[f.scene.x].Load<float4>(offset+32),params=buffers[f.scene.x].Load<float4>(offset+48);
-        float3 delta=p.xyz-s.position;float d=length(delta);if(d>p.w)continue;float3 l=delta/max(d,1e-5);
-        float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
-        float fade=pow(saturate(1-pow(d/p.w,4)),2);l=coneDirection(l,0.025/max(d,0.025),rng);float pdf;
-        if((dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,max(d-0.03,0.001),rng))sum+=evaluate(s,v,l,pdf)*colour.rgb*(colour.w/(4*PI*max(d*d,0.01)))*spot*fade;
+        LocalSample sample=sampleLocal(f,s,v,localLight(f,buffers[f.scene.x].Load(8)+i*LIGHT_BYTES),rng);
+        if(all(sample.value<=0))continue;
+        if(dot(s.normal,sample.direction)<=0)continue;
+        bool crossed;float3 through=shadowTransmittance(f,rayOrigin(s,sample.direction),sample.direction,sample.distance,rng,crossed);
+        if(any(through>0)){
+            // BSDF rays never count lights behind glass (sampleBrdfPdf): the light
+            // sample takes all of what crosses it.
+            float w=1;
+            if(mis && sample.pdf>0 && !crossed){float bsdfPdf;evaluate(s,v,sample.direction,bsdfPdf);w=sample.pdf*sample.pdf/max(sample.pdf*sample.pdf+bsdfPdf*bsdfPdf,1e-30);}
+            sum+=sample.value*w*through;
+        }
     }return sum;
 }
-float3 direct(Frame f,Surface s,float3 v,inout uint rng){float3 sun=directSun(f,s,v,rng);return sun+directLocal(f,s,v,rng);}
+float3 direct(Frame f,Surface s,float3 v,inout uint rng,bool mis=false){float3 sun=directSun(f,s,v,rng);return sun+directLocal(f,s,v,rng,false,mis);}
 float3 primarySun(Frame f,Surface s,float3 v,uint2 p,inout uint rng){
     uint4 shadow=extensionRow(8);
     if(shadow.y!=0){

@@ -12,6 +12,7 @@ mod protocol;
 mod references;
 mod scenes;
 mod session;
+mod stress;
 mod track;
 mod variants;
 mod watch;
@@ -37,6 +38,8 @@ pub(crate) struct Options {
 
 #[derive(Subcommand)]
 enum Action {
+    /// Run or score renderer G1-G6 stress replays without starting the lab daemon.
+    Gate(stress::Options),
     #[command(hide = true)]
     PrepareScene { input: PathBuf },
     /// Configure the PC-owned Mac source/artifact mirror and queue synchronization.
@@ -203,6 +206,7 @@ pub(super) fn directory(root: &Path) -> PathBuf {
 
 pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let (tool, mut arguments) = match options.action {
+        Action::Gate(options) => return stress::run(root, options),
         Action::PrepareScene { input } => return prepare::run(root, &input),
         Action::Mirror {
             grant_slot,

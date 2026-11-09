@@ -25,6 +25,7 @@ embed-resource.workspace = true
 ara-update = { path = "../ara-update" }
 ara-crash = { path = "../ara-crash" }
 ara-diag.workspace = true
+ara-agents = { path = "../ara-agents" }
 ara-hub-service = { path = "../ara-hub-service" }
 ara-json.workspace = true
 ara-kit = { path = "../ara-kit" }

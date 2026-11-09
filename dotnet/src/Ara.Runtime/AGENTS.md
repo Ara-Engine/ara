@@ -17,6 +17,8 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
   `ctx.Reject("reason")`, `ctx.Cue(...)`, `ctx.Commands`, `ctx.Rng`, `ctx.Caller`. `[Expose]`, `[Example]`.
 - `World.Get/Read/Has/Resource` (behaviours and commands only), `Commands` (spawn,
   despawn, add, remove, cue; applied at the next sync point), `Log`.
+- `GraphicsSettings`: immutable local preferences with explicit Apply/Revert/Reset/Save
+  and AutoDetect. Host IO stays outside the whitelist; Applied delegates clear on L3/shutdown.
 - Metadata attributes: `Unit`, `Range`/`Min`/`Max`, `Default`, `Replicate`, `Tooltip`, `ColorPicker` (HDR/temperature),
   `Header`, `FormerlySerializedAs`, `Simulation`.
 - Hosting (for loaders and generated code): `ScriptRuntime.Init/Enqueue`, `IModuleLoader`

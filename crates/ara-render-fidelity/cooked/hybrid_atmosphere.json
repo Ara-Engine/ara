@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_atmosphere/hybridAtmosphereMain.dxil",
-      "dxil_hash": "66b94d132e8b2d6f038a83d6e4f194c82e307372fb6dfd7843611e483e90cdae",
+      "dxil": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/hybrid_atmosphere/hybridAtmosphereMain.dxil",
+      "dxil_hash": "322cb9dad7624a956288a4933b516230d03e2424fce668347673bed0ac832384",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_atmosphere/hybridAtmosphereMain.metallib",
-        "metallib_hash": "ed99e74eac8d63784601f9c340ac4582eadbd70d7979efbcded8e000cac1826c",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_atmosphere/hybridAtmosphereMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/hybrid_atmosphere/hybridAtmosphereMain.metallib",
+        "metallib_hash": "acd47a35e7c9c539883886ddcbe899edd20e9320a057665a7974b382b40d1792",
+        "reflection": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/hybrid_atmosphere/hybridAtmosphereMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "hybridAtmosphereMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_atmosphere/hybridAtmosphereMain.spv",
+      "spirv": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/hybrid_atmosphere/hybridAtmosphereMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "3a2df8294451b89d7099353961ab144190de3a429d1dfc336677fa31de5c9ec1",
+      "spirv_hash": "fc2d394e75a7f2285a56b8bc1aafd9e6d0ca174f9b18e5eaa62b6455cc9741c7",
       "stage": "compute"
     }
   ],

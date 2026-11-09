@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_vsm_project/vsmProjectMain.dxil",
-      "dxil_hash": "6da1634112fca63a9b494e85ddde17c13c212ca1871404f1b9c09d72068e4437",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_vsm_project/vsmProjectMain.dxil",
+      "dxil_hash": "07aa4e85d22aefc4e590526992d040d54e22061541bc39224dd2234b3a0d89cf",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_vsm_project/vsmProjectMain.metallib",
-        "metallib_hash": "48f820c56a6bc833c0ac0a7af992f6ca8c09251941becdee4a2f8de0171fe36c",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_vsm_project/vsmProjectMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_vsm_project/vsmProjectMain.metallib",
+        "metallib_hash": "b77704899dae9d7723ab2b60f6f1500c125149e0a57e1adb9d8e646a0cff13ab",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_vsm_project/vsmProjectMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "vsmProjectMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_vsm_project/vsmProjectMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_vsm_project/vsmProjectMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b0407e40cb67af4b34f84068b2c1c8e1914e46d87ea37017cc71a35874d8dec8",
+      "spirv_hash": "67a9e766a41a3c6729b176fb907e9513fa77ec9e0454159e7582a137b7c0f4b0",
       "stage": "compute"
     }
   ],

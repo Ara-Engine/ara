@@ -206,9 +206,9 @@ impl Fixture {
             status: None,
             grace: Instant::now() + Duration::from_secs(10),
             events: Vec::new(),
+            profiling: Vec::new(),
             embed: Vec::new(),
             replies: Default::default(),
-            profiling: Vec::new(),
         }
     }
     fn service(&self, held: bool, internal: bool) -> PlayService {
@@ -282,6 +282,7 @@ fn world(player: Player) -> World {
         hot_reload: false,
         streaming_assets: false,
         import_revision: 0,
+        scripts: false,
         commands: Value::Null,
         startup: Value::Null,
         events: Vec::new(),

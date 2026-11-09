@@ -28,6 +28,8 @@ struct AraMaterialInput {
     float3 worldTangent;
     float3 worldBitangent;
     float3 viewDirection;
+    // Linear RGBA vertex colour (imported or painted); white without.
+    float4 vertexColor;
 };
 struct AraSurface {
     float3 baseColor;
@@ -42,6 +44,9 @@ struct AraSurface {
     float3 color;
     float opacity;
     float clip;
+    // Decal domain: specular level (0.5 is 4% F0) and ambient occlusion.
+    float specular;
+    float ambientOcclusion;
 };
 
 float4 ara_load(uint offset) {
@@ -169,6 +174,7 @@ float4 fragmentMain(AraValidationInput v) : SV_Target {
     input.uv = v.uv; input.worldPosition = v.worldPosition;
     input.worldNormal = v.worldNormal; input.worldTangent = v.worldTangent;
     input.worldBitangent = v.worldBitangent; input.viewDirection = v.viewDirection;
+    input.vertexColor = float4(1, 1, 1, 1);
     AraSurface s = ara_evaluate(input);
     clip(s.clip - 0.5);
     float alpha = saturate(s.opacity);

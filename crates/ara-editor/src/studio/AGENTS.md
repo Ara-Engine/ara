@@ -1,4 +1,4 @@
-# studio: Ara's editor on stillkit (D31)
+# studio: Ara's editor on stillkit (D34)
 
 The editor window: one stillkit `Runtime<Studio>` drawn on the CPU and redrawn only where
 something changed, with the Scene view as a native GPU layer under a hole. It is a client

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 #[cfg(test)]
 mod tests;
 mod view;
-pub(super) const CSS: &str = include_str!("probes/probes.css");
+pub(super) const CSS: &str = super::live_styles::embedded::PROBES;
 const CADENCE: Duration = Duration::from_millis(250);
 const TERMINAL_HISTORY: usize = 32;
 
@@ -120,6 +120,28 @@ impl State {
 }
 
 impl Shell {
+    /// Renderer-owned capability snapshot for native view command availability.
+    pub(crate) fn probe_debug_capabilities(
+        &self,
+        editor: &Editor,
+    ) -> Option<&ara_runtime_render::probes::RenderCapabilities> {
+        (self.probe_ui.doc == editor.state.doc && self.probe_ui.available)
+            .then_some(self.probe_ui.capabilities.as_ref())
+            .flatten()
+    }
+
+    /// Read-only native proof projection; never polls, changes or re-logs jobs.
+    pub(crate) fn probe_report(&self) -> Value {
+        json!({"available":self.probe_ui.available,"error":self.probe_ui.error,
+            "snapshot":self.probe_ui.snapshot,
+            "jobs":self.probe_ui.job_order.iter().filter_map(|id| {
+                self.probe_ui.jobs.get(id).map(|job| json!({
+                    "job":id,"doc":job.doc,"entities":job.entities,
+                    "status":job.latest,"error":job.error
+                }))
+            }).collect::<Vec<_>>()})
+    }
+
     /// Shared registry/menu disabled reason; querying a command never touches the renderer.
     pub(crate) fn probe_capture_blocker(
         &self,

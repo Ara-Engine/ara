@@ -170,7 +170,12 @@ pub(super) fn sidebar(s: &HubApp) -> El<HubApp> {
         ))
         .child(nav(View::Learn, icons::GRADUATION_CAP, None))
         .child(el().grow(1.0));
-    if hub.view != View::Agents && agents == 0 && update_label(s).is_none() {
+    // Onboarding only while no agent is around and no client has Ara yet.
+    if hub.view != View::Agents
+        && agents == 0
+        && !super::agents::connected(s)
+        && update_label(s).is_none()
+    {
         side = side.child(agent_card(s));
     }
     side.child(nav(View::Settings, icons::SETTINGS, None))
@@ -341,7 +346,7 @@ fn subtitle(s: &HubApp) -> String {
             "Engine builds install side by side. Each project pins one version.".into()
         }
         View::Agents => "Connect agents once; they work in any project registered here.".into(),
-        View::Learn => "Samples to explore and the docs that ship with Ara.".into(),
+        View::Learn => "Samples to explore, Ara's docs and the command line.".into(),
         View::Settings => "Appearance, Hub updates and where releases come from.".into(),
     }
 }

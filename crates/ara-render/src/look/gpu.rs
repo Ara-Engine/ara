@@ -33,30 +33,74 @@ pub(crate) const DOF_COMPOSITE: usize = 17;
 /// Motion blur velocity maxima per 16-pixel display tile and per 3x3 neighbourhood.
 pub(crate) const MOTION_TILES: usize = 18;
 pub(crate) const MOTION_NEIGHBOURS: usize = 19;
-const IMAGES: usize = 20;
+/// The near volume of volumetric fog (`look::volumetric`): the injected froxels
+/// (scattered light, extinction), a pair swapped each frame for reprojection, and
+/// the integrated in-scatter and transmittance; RGBA16F slice atlases.
+pub(crate) const VOLUME_A: usize = 20;
+pub(crate) const VOLUME_B: usize = 21;
+pub(crate) const VOLUME_LIGHT: usize = 22;
+/// The near volume's ambient light on a coarser grid (`volumetric::Layout::ambient`).
+pub(crate) const VOLUME_AMBIENT: usize = 23;
+/// Screen probe GI (`look::screen_gi`): the Hi-Z atlas (R32F closest depth, levels 1..),
+/// the probe atlas (radiance levels and irradiance per probe), the probe records
+/// (RGBA32F position and normal) and the half-resolution gather lighting reads.
+pub(crate) const HIZ: usize = 24;
+pub(crate) const SCREEN_PROBES: usize = 25;
+pub(crate) const SCREEN_PROBE_RECORDS: usize = 26;
+pub(crate) const SCREEN_DIFFUSE: usize = 27;
+pub(crate) const SCREEN_SPECULAR: usize = 28;
+/// This frame's emission promoted to emitter lights, as a pyramid in the reflection
+/// pyramid's layout: screen probe hits take their cone's share of it off.
+pub(crate) const SCREEN_EMISSION: usize = 29;
+/// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang):
+/// in-scattered light and its mean view depth, RGBA16F at the render size over
+/// `VolumetricFogQuality::light_scale`.
+pub(crate) const VOLUME_SCATTER: usize = 30;
+/// Each traced reflection's GGX footprint as seen through its mirror (half-resolution
+/// pixels: two semi-axes), and the resolved reflections lighting reads: the trace's
+/// confidence spread over each pixel's footprint (look-ssr.slang `ssrResolveMain`).
+pub(crate) const SSR_FOOTPRINT: usize = 31;
+pub(crate) const SSR_RESOLVED: usize = 32;
+/// The scatter at the render size the composite reads on half-resolution frames: the
+/// half-resolution one resolved, its disagreeing pixels integrated at full resolution
+/// (look-fog-lights.slang `fogLightsResolveMain`, `fogLightsEdgesMain`).
+pub(crate) const VOLUME_SCATTER_FULL: usize = 33;
+const IMAGES: usize = 34;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
-const BITMASK_THICKNESS: f32 = 0.4;
+/// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
+/// went black (3.4% of a street scene darkened past 40%; 1.4% at 0.1).
+const BITMASK_THICKNESS: f32 = 0.1;
 /// The largest colour lookup table: 32 steps per channel.
 pub(crate) const LUT_SIZE: u32 = 32;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
 pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
+/// Logarithmic slices of the coarse fog grid (look.slangh `FOG_SLICES`): the first 32
+/// reach 4 km, the rest carry the aerial perspective to 111 km.
+pub(crate) const FOG_SLICES: u32 = 46;
 
 /// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
-/// the render size, the bloom atlases the display size.
-fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
+/// the render size, the bloom atlases the display size; screen probes the render
+/// size in tiles of `tile` pixels.
+fn extent(image: usize, render: [u32; 2], display: [u32; 2], tile: u32) -> [u32; 2] {
     match image {
         TRANSMITTANCE => [256, 64],
         MULTISCATTER => [32, 32],
         SKY_VIEW => [192, 108],
-        FROXELS => [4096, 36],
+        FROXELS => [FOG_SLICES * 128, 36],
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
-        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE => {
-            render.map(|v| v.div_ceil(2))
+        HIZ => super::screen_gi::hiz_extent(render),
+        SCREEN_PROBES => {
+            let [x, y] = super::screen_gi::grid(render, tile);
+            let [w, h] = super::screen_gi::PROBE_TILE;
+            [x * w, y * h]
         }
-        SSR_PYRAMID => [render[0], (render[1] / 2).max(1)],
+        SCREEN_PROBE_RECORDS => super::screen_gi::grid(render, tile),
+        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE | SSR_FOOTPRINT
+        | SSR_RESOLVED | SCREEN_DIFFUSE | SCREEN_SPECULAR => render.map(|v| v.div_ceil(2)),
+        SSR_PYRAMID | SCREEN_EMISSION => [render[0], (render[1] / 2).max(1)],
         VSM_MASK | DOF_COMPOSITE => render,
         DOF_PREPARED | DOF_GATHERED => render.map(|v| v.div_ceil(2)),
         MOTION_TILES | MOTION_NEIGHBOURS => display.map(|v| v.div_ceil(16)),
@@ -72,6 +116,16 @@ pub(crate) struct Pipelines {
     pub sky_irradiance: Pipeline,
     pub sky_prefilter: Pipeline,
     pub fog: Pipeline,
+    /// The near volume of volumetric fog (`look::volumetric`).
+    pub fog_inject: Pipeline,
+    pub fog_integrate: Pipeline,
+    pub fog_ambient: Pipeline,
+    /// Per-pixel local-light scattering (look-fog-lights.slang).
+    pub fog_lights: Pipeline,
+    /// Its render-size resolve, which lists the edge pixels.
+    pub fog_lights_resolve: Pipeline,
+    /// Its edges, integrated at full resolution by an indirect dispatch.
+    pub fog_lights_edges: Pipeline,
     pub exposure: Pipeline,
     pub bloom: Pipeline,
     pub post: Pipeline,
@@ -89,6 +143,13 @@ pub(crate) struct Pipelines {
     pub gi_gather: Pipeline,
     pub ssr_pyramid: Pipeline,
     pub ssr_trace: Pipeline,
+    /// Spreads traced reflections' confidence over their lobes (`SSR_RESOLVED`).
+    pub ssr_resolve: Pipeline,
+    /// Screen probe GI (`look::screen_gi`): Hi-Z levels, the probe trace, the gather.
+    pub hiz: Pipeline,
+    pub screen_probes: Pipeline,
+    pub screen_gather: Pipeline,
+    pub emission_pyramid: Pipeline,
     /// Reflection capture bake (face projection, scratch mips, GGX prefilter) and
     /// the per-frame relight (`look::captures`, look-captures.slang).
     pub capture_face: Pipeline,
@@ -101,16 +162,19 @@ pub(crate) struct Pipelines {
     pub vsm_mark: Pipeline,
     pub vsm_project: Pipeline,
     pub gi_relight_vsm: Pipeline,
+    /// Shadow moment pyramid levels (`look::moments`).
+    pub shadow_moments: Pipeline,
     /// The refraction copy and its blurred levels (`look::refract`).
     pub refract: Pipeline,
 }
 
-/// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
+/// What the sky LUTs (`luts`: the atmosphere's media) and the sky IBL (the sun and
+/// the whole sky) were computed for.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct SkyKey {
-    pub aerosols: f32,
+    pub luts: [u32; 22],
     pub sun: [f32; 6],
-    pub clouds: [f32; 2],
+    pub sky: super::Sky,
 }
 
 pub(crate) struct LookGpu {
@@ -129,6 +193,15 @@ pub(crate) struct LookGpu {
     pub lut_index: u32,
     /// Steps per channel of the current table; zero without one.
     pub lut_size: u32,
+    /// Area-light LTC tables (`look::ltc`), uploaded once; secondary views share them.
+    pub ltc: super::ltc::LtcTables,
+    /// The sun's angular radius (`Renderer::set_sun_radius`); `None` keeps the sky's.
+    pub sun_radius: Option<f32>,
+    /// Light tables (`Renderer::set_light_tables`): host-visible words, their storage
+    /// index and capacity in words; secondary views share them.
+    pub light_tables: Option<(Buffer, u32, usize)>,
+    /// The words last written there, so unchanged tables are not rewritten.
+    pub light_table_words: Vec<u32>,
     pub images: [Option<Image>; IMAGES],
     pub sampled: [u32; IMAGES],
     pub storage: [u32; IMAGES],
@@ -150,6 +223,9 @@ pub(crate) struct LookGpu {
     pub frame_wire: bool,
     /// This frame counts fragments for the overdraw view (`ViewMode::Overdraw`).
     pub frame_overdraw: bool,
+    /// This frame outlines the editor's selection (`renderer::outline`), composited
+    /// after the post chain, here or in a deferred frame's `finish`.
+    pub frame_outline: bool,
     /// Frames are not shown (`Renderer::set_unseen`); probe volumes inherit it.
     pub unseen: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
@@ -171,6 +247,8 @@ pub(crate) struct LookGpu {
     pub horizon: Option<super::horizon::Horizon>,
     /// Virtual shadow maps for the sun (`Quality::virtual_shadows`).
     pub vsm: Option<super::vsm::VirtualShadowMap>,
+    /// Moment pyramids of the local atlas, cascades and far map (`look::moments`).
+    pub moments: super::moments::ShadowMoments,
     /// Idle host staging for probe records, reused.
     pub probe_staging: Vec<super::gi::ProbeStaging>,
     /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count,
@@ -182,6 +260,23 @@ pub(crate) struct LookGpu {
     /// Sun shadows of blended casters (`look::translucent`), allocated by the first
     /// High/Epic frame that has one.
     pub translucent: Option<super::translucent::TranslucentSun>,
+    /// Local fog volumes (`Renderer::set_fog_volumes`), at most `MAX_FOG_VOLUMES`.
+    pub fog_volumes: Vec<super::FogVolume>,
+    /// The allocated near volume (`ensure_volumetric`).
+    pub volumetric: Option<super::volumetric::Layout>,
+    /// Which of the injection pair this frame writes (the other is its history).
+    pub volumetric_slot: usize,
+    /// Near volume frames accumulated since its history last reset.
+    pub volumetric_frames: u32,
+    /// The edge list of half-resolution fog lights' resolve (`ensure_volumetric`).
+    pub fog_edges: Option<super::volumetric::FogEdges>,
+    /// This frame renders the near volume (`begin_volumetric`).
+    pub frame_volumetric: bool,
+    /// This frame runs screen probe GI (`screen_gi_active`): its passes, rows and
+    /// lighting reads agree on it.
+    pub frame_screen: bool,
+    /// This frame builds the Hi-Z pyramid (`begin_screen_traces`).
+    pub frame_hiz: bool,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -192,7 +287,7 @@ pub(crate) struct LookIds {
     /// The colour lookup table (host-written between frames).
     pub lut: ResourceId,
     /// Surface caches, meta, moments, irradiance read and irradiance write.
-    pub gi: Option<[ResourceId; 5]>,
+    pub gi: Option<[ResourceId; 6]>,
     /// The far shadow map.
     pub far: Option<ResourceId>,
     /// The cascade maps, in cascade order.
@@ -201,10 +296,14 @@ pub(crate) struct LookIds {
     pub probe_writes: Vec<ResourceId>,
     /// The local-shadow atlas.
     pub local: Option<ResourceId>,
+    /// The shadow moment pyramids: local, cascades, far (`look::moments`).
+    pub moments: [Option<ResourceId>; 3],
     /// The horizon's capture, sun and sky visibility (`look::horizon`).
     pub horizon: Option<[ResourceId; 3]>,
     /// The virtual shadow atlas (`look::vsm`).
     pub vsm: Option<ResourceId>,
+    /// The fog lights' edge list (`look::volumetric::FogEdges`).
+    pub fog_edges: Option<ResourceId>,
 }
 
 impl LookIds {
@@ -238,6 +337,12 @@ impl LookGpu {
             sky_irradiance: load("look_sky_irradiance")?,
             sky_prefilter: load("look_sky_prefilter")?,
             fog: load("look_fog")?,
+            fog_inject: load("look_fog_inject")?,
+            fog_integrate: load("look_fog_integrate")?,
+            fog_ambient: load("look_fog_ambient")?,
+            fog_lights: load("look_fog_lights")?,
+            fog_lights_resolve: load("look_fog_lights_resolve")?,
+            fog_lights_edges: load("look_fog_lights_edges")?,
             exposure: load("look_exposure")?,
             bloom: load("look_bloom")?,
             post: load("look_post")?,
@@ -253,6 +358,11 @@ impl LookGpu {
             gi_gather: load("look_gi_gather")?,
             ssr_pyramid: load("look_ssr_pyramid")?,
             ssr_trace: load("look_ssr_trace")?,
+            ssr_resolve: load("look_ssr_resolve")?,
+            hiz: load("look_hiz")?,
+            screen_probes: load("look_screen_probes")?,
+            screen_gather: load("look_screen_gather")?,
+            emission_pyramid: load("look_emission_pyramid")?,
             capture_face: load("look_capture_face")?,
             capture_mip: load("look_capture_mip")?,
             capture_prefilter: load("look_capture_prefilter")?,
@@ -262,6 +372,7 @@ impl LookGpu {
             horizon_sky: load("look_horizon_sky")?,
             vsm_mark: load("look_vsm_mark")?,
             vsm_project: load("look_vsm_project")?,
+            shadow_moments: load("look_shadow_moments")?,
             gi_relight_vsm: load("look_gi_relight_vsm")?,
             refract: load("look_refract")?,
         };
@@ -285,6 +396,7 @@ impl LookGpu {
             true,
         )?;
         let lut_index = gpu.storage_buffer(lut)?.index;
+        let ltc = super::ltc::LtcTables::new(gpu)?;
         Ok(Self {
             look: Look::default(),
             quality: Quality::default(),
@@ -297,6 +409,10 @@ impl LookGpu {
             lut,
             lut_index,
             lut_size: 0,
+            ltc,
+            sun_radius: None,
+            light_tables: None,
+            light_table_words: Vec::new(),
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],
@@ -312,6 +428,7 @@ impl LookGpu {
             frame_motion: false,
             frame_wire: false,
             frame_overdraw: false,
+            frame_outline: false,
             unseen: false,
             deferred_history: None,
             settle: 0,
@@ -322,10 +439,19 @@ impl LookGpu {
             local: None,
             horizon: None,
             vsm: None,
+            moments: super::moments::ShadowMoments::default(),
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
             refract: None,
             translucent: None,
+            fog_volumes: Vec::with_capacity(super::MAX_FOG_VOLUMES),
+            volumetric: None,
+            volumetric_slot: 0,
+            volumetric_frames: 0,
+            fog_edges: None,
+            frame_volumetric: false,
+            frame_screen: false,
+            frame_hiz: false,
         })
     }
 
@@ -366,6 +492,20 @@ impl LookGpu {
             DOF_COMPOSITE,
             MOTION_TILES,
             MOTION_NEIGHBOURS,
+            VOLUME_A,
+            VOLUME_B,
+            VOLUME_LIGHT,
+            VOLUME_AMBIENT,
+            HIZ,
+            SCREEN_PROBES,
+            SCREEN_PROBE_RECORDS,
+            SCREEN_DIFFUSE,
+            SCREEN_SPECULAR,
+            SCREEN_EMISSION,
+            VOLUME_SCATTER,
+            SSR_FOOTPRINT,
+            SSR_RESOLVED,
+            VOLUME_SCATTER_FULL,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -373,6 +513,7 @@ impl LookGpu {
         }
         self.render = render;
         self.display = display;
+        self.volumetric = None;
         Ok(())
     }
 
@@ -385,11 +526,13 @@ impl LookGpu {
         ara_gpu::cpu_scope!("Look.ensure");
         let look = self.effective();
         let sky = look.sky.is_some();
+        let screen = self.quality.screen_gi.is_some() && self.quality.high_tier;
+        let tile = self.quality.screen_gi.map_or(16, |s| s.tile);
         let needed = [
             sky,
             sky,
             sky,
-            sky || look.fog.is_some(),
+            self.fogged(),
             sky,
             sky,
             look.bloom > 0.,
@@ -398,7 +541,8 @@ impl LookGpu {
             self.quality.ambient_occlusion.is_some(),
             self.gi.is_some(),
             self.gi.is_some(),
-            self.quality.reflections.is_some(),
+            // The colour pyramid feeds screen probe hits too.
+            self.quality.reflections.is_some() || screen,
             self.quality.reflections.is_some(),
             self.vsm.is_some(),
             self.quality.depth_of_field.is_some(),
@@ -406,16 +550,35 @@ impl LookGpu {
             self.quality.depth_of_field.is_some(),
             self.quality.motion_blur.is_some(),
             self.quality.motion_blur.is_some(),
+            // The near volume follows its own layout (`ensure_volumetric`).
+            false,
+            false,
+            false,
+            false,
+            // Reflections traverse the Hi-Z pyramid too.
+            screen || self.quality.reflections.is_some(),
+            screen,
+            screen,
+            screen,
+            screen,
+            screen,
+            // The per-pixel fog lights follow the near volume (`ensure_volumetric`).
+            false,
+            self.quality.reflections.is_some(),
+            self.quality.reflections.is_some(),
+            // The per-pixel fog lights' resolve follows the near volume.
+            false,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
                 continue;
             }
-            let [width, height] = extent(i, self.render, self.display);
-            let format = if i == VSM_MASK {
-                vk::Format::R16G16_SFLOAT
-            } else {
-                vk::Format::R16G16B16A16_SFLOAT
+            let [width, height] = extent(i, self.render, self.display, tile);
+            let format = match i {
+                VSM_MASK => vk::Format::R16G16_SFLOAT,
+                HIZ => vk::Format::R32_SFLOAT,
+                SCREEN_PROBE_RECORDS => vk::Format::R32G32B32A32_SFLOAT,
+                _ => vk::Format::R16G16B16A16_SFLOAT,
             };
             let image = gpu.create_image(
                 width,
@@ -435,7 +598,7 @@ impl LookGpu {
                 self.sky = None;
             }
         }
-        Ok(())
+        self.ensure_volumetric(gpu)
     }
 
     /// Bindless indices for the shader record: (sampled, storage) rows of four.
@@ -468,13 +631,25 @@ impl LookGpu {
         frame.shadow_info[0] = [u32::from(bounce), 0, 0, 0];
     }
 
-    /// Reflection rows: pyramid and trace (sampled), then (storage).
+    /// Reflection rows: pyramid and resolved reflections (sampled), then pyramid and
+    /// trace (storage).
     pub(crate) fn ssr_indices(&self) -> [u32; 4] {
         [
             self.sampled[SSR_PYRAMID],
-            self.sampled[SSR_TRACE],
+            self.sampled[SSR_RESOLVED],
             self.storage[SSR_PYRAMID],
             self.storage[SSR_TRACE],
+        ]
+    }
+
+    /// Reflection resolve rows: trace and footprints (sampled), then footprints and
+    /// resolved reflections (storage).
+    pub(crate) fn ssr_resolve_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[SSR_TRACE],
+            self.sampled[SSR_FOOTPRINT],
+            self.storage[SSR_FOOTPRINT],
+            self.storage[SSR_RESOLVED],
         ]
     }
 
@@ -595,10 +770,23 @@ impl LookGpu {
                 .local
                 .as_ref()
                 .map(|local| graph.import(Resource::Image(local.atlas), local.state)),
+            moments: self
+                .moments
+                .pyramids()
+                .map(|p| p.map(|p| graph.import(Resource::Image(p.image), p.state))),
             vsm: self
                 .vsm
                 .as_ref()
                 .map(|v| graph.import(Resource::Image(v.atlas), v.atlas_state)),
+            fog_edges: self.fog_edges.as_ref().map(|e| {
+                graph.import(
+                    Resource::Buffer(e.buffer),
+                    State {
+                        access: e.access,
+                        queue: Queue::Graphics,
+                    },
+                )
+            }),
             horizon: self.horizon.as_ref().map(|h| {
                 let mut import = |image, state| graph.import(Resource::Image(image), state);
                 [
@@ -635,6 +823,7 @@ impl LookGpu {
                         Resource::Image(gi.irradiance[write]),
                         state(gi.access[write]),
                     ),
+                    graph.import(Resource::Image(gi.radiance), state(gi.radiance_access)),
                 ]
             }),
         }
@@ -655,6 +844,10 @@ impl LookGpu {
             let (read, write) = (1 - gi.slot, gi.slot);
             gi.access[read] = final_states[ids[3].0].access;
             gi.access[write] = final_states[ids[4].0].access;
+            gi.radiance_access = final_states[ids[5].0].access;
+        }
+        if let (Some(edges), Some(id)) = (&mut self.fog_edges, ids.fog_edges) {
+            edges.access = final_states[id.0].access;
         }
         if let (Some(far), Some(id)) = (&mut self.far, ids.far) {
             far.state = final_states[id.0];
@@ -664,6 +857,11 @@ impl LookGpu {
         }
         if let (Some(vsm), Some(id)) = (&mut self.vsm, ids.vsm) {
             vsm.atlas_state = final_states[id.0];
+        }
+        for (pyramid, id) in self.moments.pyramids_mut().into_iter().zip(ids.moments) {
+            if let (Some(pyramid), Some(id)) = (pyramid, id) {
+                pyramid.state = final_states[id.0];
+            }
         }
         if let (Some(horizon), Some(ids)) = (&mut self.horizon, ids.horizon) {
             for (state, id) in horizon.states.iter_mut().zip(ids) {

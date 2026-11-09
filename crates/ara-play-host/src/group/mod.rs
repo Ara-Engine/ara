@@ -5,7 +5,7 @@ pub use child::ChildHandle;
 use crate::pool::{Player, PoolConfig};
 use ara_play::{
     HELLO, Hello, PROTOCOL, TOKEN_ENV,
-    link::{Link, Message, error},
+    link::{Link, Message, Pump, error},
 };
 use serde_json::{Value, json};
 use std::{
@@ -60,7 +60,7 @@ pub(crate) fn spawn(
         .arg(&config.gpu_cache)
         .arg("--size")
         .arg(format!("{}x{}", config.size[0], config.size[1]))
-        .arg(format!("--ray-tracing={}", rendering.ray_tracing))
+        .arg(format!("--prewarm-ray-tracing={}", rendering.ray_tracing))
         .env(TOKEN_ENV, token)
         .env("ARA_CRASH_DIR", config.logs.join("crashes"))
         .stdin(Stdio::null())
@@ -147,16 +147,16 @@ pub(crate) fn spawn(
             players.push(Player {
                 incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
                 child: handles.pop().ok_or("Shared player handles exhausted")?,
-                link: ara_play::link::Pump::owner(link).map_err(|error| error.to_string())?,
+                link: Pump::owner(link).map_err(|e| e.to_string())?,
                 hello,
                 log: log.clone(),
                 seen: Instant::now(),
                 status: None,
                 grace: Instant::now(),
                 events: Vec::new(),
+                profiling: Vec::new(),
                 embed: Vec::new(),
                 replies: Default::default(),
-                profiling: Vec::new(),
             });
         }
         players.sort_by_key(|p| {

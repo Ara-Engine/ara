@@ -7,7 +7,7 @@ use stillkit::TextRole;
 use stillkit::el::{Align, El, Justify, col, el, icon, row, text};
 
 use super::{HubApp, shell};
-use crate::model::{AgentClient, Intent, Participant, Presence, State, text as fmt};
+use crate::model::{AgentClient, AgentSetup, Intent, Participant, Presence, State, text as fmt};
 
 pub(super) fn body(s: &HubApp) -> El<HubApp> {
     let live: Vec<_> = s
@@ -70,7 +70,11 @@ fn activity_empty(s: &HubApp) -> El<HubApp> {
         l,
         icons::USERS,
         "No one is attached right now",
-        "Open a project in the editor or headless, then connect an agent. People and agents working in each project appear here with what they are doing.",
+        if connected(s) {
+            "Open a project in the editor, or ask a connected agent to open one. Editors, people and agents working in each project appear here with what they are doing."
+        } else {
+            "Open a project in the editor or headless, then connect an agent. Editors, people and agents working in each project appear here with what they are doing."
+        },
         None,
     )))
 }
@@ -157,45 +161,204 @@ fn participant(s: &HubApp, person: &Participant, presence: Option<&Presence>) ->
         .child(if busy { spinner(l, 12.0) } else { el() })
 }
 
+/// Whether any agent client already has Ara registered.
+pub(super) fn connected(s: &HubApp) -> bool {
+    s.hub
+        .agent_setup
+        .values()
+        .any(|state| *state == AgentSetup::Connected)
+}
+
+/// A client's mark in a `size` px slot.
+fn logo(s: &HubApp, client: AgentClient, size: f32) -> El<HubApp> {
+    match s.logos.get(&client) {
+        Some(image) => stillkit::el::image(image.clone()).size(size),
+        None => icon(icons::BOT).size(size),
+    }
+}
+
+/// One-time global MCP setup. Clients the Hub finds connect in one click; manual steps show
+/// only on request. Once one is connected the panel folds to a summary row.
 fn connect(s: &HubApp) -> El<HubApp> {
     let l = &s.look;
     let c = &l.c;
     let hub = &s.hub;
-    let client = hub.prefs.agent;
-    let picker = segmented(
-        l,
-        &[
-            ("agent-claude", None, "Claude Code"),
-            ("agent-codex", None, "Codex"),
-        ],
-        if client == AgentClient::Claude { 0 } else { 1 },
-        |i| {
-            move |s: &mut HubApp| {
-                s.intent(Intent::Agent(if i == 0 {
-                    AgentClient::Claude
-                } else {
-                    AgentClient::Codex
-                }))
-            }
-        },
-    );
-    let head = row().gap(14.0).align(Align::Center)
-        .child(el().size(40.0).radius(10.0).fill(c.primary.0.with_alpha(0.14)).align(Align::Center).justify(Justify::Center).child(icon(icons::PLUG).size(19.0).color(c.info_foreground.0)))
-        .child(col().gap(3.0).grow(1.0).child(text("Connect an AI agent").font(TextRole::Title3).color(c.foreground.0)).child(text("One global MCP server for every project. Install it once per agent client.").text_size(12.0).color(c.muted_foreground.0)))
-        .child(picker);
-    let mut panel = card(l).pad(18.0).gap(16.0).child(head).child(divider(l));
-    let Some(executable) = hub.cli_executable.as_ref() else {
-        return panel.child(
+    let done: Vec<AgentClient> = AgentClient::ALL
+        .into_iter()
+        .filter(|client| hub.agent_setup.get(client) == Some(&AgentSetup::Connected))
+        .collect();
+    if !done.is_empty() && !hub.agent_setup_open {
+        let names: Vec<&str> = done.iter().map(|client| client.name()).collect();
+        let mut marks = row().gap(4.0);
+        for client in &done {
+            marks = marks.child(logo(s, *client, 20.0));
+        }
+        return card(l).pad(14.0).child(
             row()
-                .gap(8.0)
+                .gap(12.0)
                 .align(Align::Center)
-                .child(spinner(l, 14.0))
+                .child(marks)
                 .child(
-                    text("Preparing connection instructions…")
-                        .text_size(12.0)
-                        .color(c.muted_foreground.0),
+                    col()
+                        .gap(2.0)
+                        .grow(1.0)
+                        .child(
+                            text(format!("Connected to {}", names.join(", ")))
+                                .text_size(12.5)
+                                .weight(560)
+                                .color(c.foreground.0),
+                        )
+                        .child(
+                            text("Agents see every project registered in this Hub.")
+                                .text_size(11.5)
+                                .color(c.muted_foreground.0),
+                        ),
+                )
+                .child(
+                    button(
+                        l,
+                        Tone::Secondary,
+                        Size::Sm,
+                        Some(icons::PLUS),
+                        "Connect another agent",
+                    )
+                    .key("agents-open")
+                    .on_press(|s: &mut HubApp| s.intent(Intent::ShowAgentSetup(true))),
                 ),
         );
+    }
+    let mut head = row()
+        .gap(14.0)
+        .align(Align::Center)
+        .child(el().size(40.0).radius(10.0).fill(c.primary.0.with_alpha(0.14)).align(Align::Center).justify(Justify::Center).child(icon(icons::PLUG).size(19.0).color(c.info_foreground.0)))
+        .child(
+            col()
+                .gap(3.0)
+                .grow(1.0)
+                .child(text("Connect AI agents").font(TextRole::Title3).color(c.foreground.0))
+                .child(text("One global MCP server for every project. Agents list, create, open and edit projects registered in this Hub.").text_size(12.0).wrap(2).color(c.muted_foreground.0)),
+        );
+    if !done.is_empty() {
+        head = head.child(
+            icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Done")
+                .key("agents-close")
+                .on_press(|s: &mut HubApp| s.intent(Intent::ShowAgentSetup(false))),
+        );
+    }
+    let mut clients = col().gap(2.0);
+    for client in AgentClient::ALL {
+        clients = clients.child(client_row(s, client));
+    }
+    let mut panel = card(l).pad(18.0).gap(14.0).child(head).child(clients);
+    if !done.is_empty() {
+        panel = panel.child(
+            text("Restart a newly connected agent, then ask it to list your projects.")
+                .text_size(11.5)
+                .color(c.muted_foreground.0),
+        );
+    }
+    panel
+}
+
+/// One client: its mark, what the Hub found, and the one action that fits.
+fn client_row(s: &HubApp, client: AgentClient) -> El<HubApp> {
+    let l = &s.look;
+    let c = &l.c;
+    let state = s.hub.agent_setup.get(&client);
+    let manual = s.hub.agent_manual == Some(client);
+    let status = match state {
+        None => "Looking for it…",
+        Some(AgentSetup::Missing) => "Not found on this computer",
+        Some(AgentSetup::Available) => "Installed · not connected yet",
+        Some(AgentSetup::Working) => "Connecting…",
+        Some(AgentSetup::Connected) => "Ara is connected",
+        Some(AgentSetup::Failed(_)) => "Couldn't connect",
+    };
+    let id = client.id();
+    let action: El<HubApp> = match state {
+        Some(AgentSetup::Available) => {
+            button(l, Tone::Primary, Size::Sm, Some(icons::PLUG), "Connect")
+                .key(format!("agent-{id}-connect"))
+                .on_press(move |s: &mut HubApp| s.intent(Intent::SetupAgent(client)))
+        }
+        Some(AgentSetup::Failed(_)) => button(
+            l,
+            Tone::Secondary,
+            Size::Sm,
+            Some(icons::REFRESH_CW),
+            "Retry",
+        )
+        .key(format!("agent-{id}-retry"))
+        .on_press(move |s: &mut HubApp| s.intent(Intent::SetupAgent(client))),
+        Some(AgentSetup::Connected) => chip(l, Status::Success, "Connected", true),
+        Some(AgentSetup::Working) | None => spinner(l, 14.0),
+        Some(AgentSetup::Missing) => el(),
+    };
+    let mut line = row()
+        .key(format!("agent-{id}"))
+        .min_h(48.0)
+        .pad_x(10.0)
+        .pad_y(6.0)
+        .gap(12.0)
+        .align(Align::Center)
+        .child(logo(s, client, 22.0))
+        .child(
+            col()
+                .gap(2.0)
+                .grow(1.0)
+                .child(
+                    text(client.name())
+                        .text_size(12.5)
+                        .weight(560)
+                        .color(c.foreground.0),
+                )
+                .child(text(status).text_size(11.5).color(c.muted_foreground.0)),
+        )
+        .child(action);
+    // Manual steps only where the Hub cannot connect the client itself.
+    if matches!(state, Some(AgentSetup::Missing | AgentSetup::Failed(_))) {
+        let (label, intent) = if manual {
+            ("Hide steps", Intent::ManualAgent(None))
+        } else {
+            ("Set up manually", Intent::ManualAgent(Some(client)))
+        };
+        line = line.child(
+            button(l, Tone::Ghost, Size::Sm, None, label)
+                .key(format!("agent-{id}-manual"))
+                .on_press(move |s: &mut HubApp| s.intent(intent.clone())),
+        );
+    }
+    let mut out = col().gap(6.0).child(line);
+    if let Some(AgentSetup::Failed(error)) = state {
+        out = out.child(
+            text(fmt::clip(error, 240))
+                .text_size(11.5)
+                .wrap(3)
+                .color(c.muted_foreground.0)
+                .pad_x(10.0),
+        );
+    }
+    if manual {
+        out = out.child(
+            col()
+                .pad_x(10.0)
+                .pad_y(6.0)
+                .gap(14.0)
+                .children(manual_steps(s, client)),
+        );
+    }
+    out
+}
+
+/// The copyable steps for a client the Hub could not find or connect.
+fn manual_steps(s: &HubApp, client: AgentClient) -> Vec<El<HubApp>> {
+    let c = &s.look.c;
+    let Some(executable) = s.hub.cli_executable.as_ref() else {
+        return vec![
+            text("Preparing Ara connection instructions…")
+                .text_size(12.0)
+                .color(c.muted_foreground.0),
+        ];
     };
     let path = executable.to_string_lossy();
     let quoted = if cfg!(windows) {
@@ -204,47 +367,48 @@ fn connect(s: &HubApp) -> El<HubApp> {
         format!("'{}'", path.replace('\'', "'\\''"))
     };
     let invoke = if cfg!(windows) { "& " } else { "" };
-    let printed = hub
+    let install = format!("{invoke}{quoted} hub install-mcp --client {}", client.id());
+    let printed = s
+        .hub
         .install
         .get(&client)
         .map(String::as_str)
         .filter(|o| !o.trim().is_empty());
-    let install = format!("{invoke}{quoted} hub install-mcp --client {}", client.id());
-    let block = |key: &str| shell::code(s, key, printed.map_or(install.as_str(), str::trim_end));
-    let steps: Vec<(&str, El<HubApp>)> = match client {
-        AgentClient::Claude => vec![
-            (
-                "Register Ara with Claude Code (user scope)",
-                shell::code(
-                    s,
-                    "copy-claude-add",
-                    &format!("claude mcp add --scope user ara -- {quoted} mcp"),
-                ),
+    let id = format!("copy-{}", client.id());
+    let mut steps = Vec::new();
+    if client == AgentClient::Claude {
+        steps.push((
+            "Register Ara with Claude Code (user scope)".to_owned(),
+            shell::code(
+                s,
+                &format!("{id}-add"),
+                &format!("claude mcp add --scope user ara -- {quoted} mcp"),
             ),
-            (
-                "Or add this entry to ~/.claude.json yourself",
-                block("copy-claude-json"),
-            ),
-        ],
-        AgentClient::Codex => vec![
-            ("Add this to ~/.codex/config.toml", block("copy-codex-toml")),
-            (
-                "Print it again any time",
-                shell::code(s, "copy-codex-install", &install),
-            ),
-        ],
-    };
-    let mut n = 0;
-    for (title, content) in steps {
-        n += 1;
-        panel = panel.child(step(s, n, title, content));
+        ));
     }
-    panel.child(step(
-        s,
-        n + 1,
-        "Restart the agent and ask it to list your projects",
-        text("Agents call ara_projects to list, create, open headless and close projects. They only see projects registered in this Hub; their edits apply immediately and stay undoable per turn.").text_size(12.0).wrap(4).color(c.muted_foreground.0),
-    ))
+    let config = match client {
+        AgentClient::Claude => "Or add this entry to ~/.claude.json",
+        AgentClient::Codex => "Add this to ~/.codex/config.toml",
+        AgentClient::Cursor => "Add this server to ~/.cursor/mcp.json",
+        AgentClient::OpenCode => "Add this to ~/.config/opencode/opencode.json",
+    };
+    steps.push((
+        config.to_owned(),
+        shell::code(
+            s,
+            &format!("{id}-config"),
+            printed.map_or(install.as_str(), str::trim_end),
+        ),
+    ));
+    steps.push((
+        "Restart the agent and ask it to list your projects".to_owned(),
+        text("Agents call ara_projects to list, create, open headless and close projects. Their edits apply immediately and stay undoable per turn.").text_size(12.0).wrap(4).color(c.muted_foreground.0),
+    ));
+    steps
+        .into_iter()
+        .enumerate()
+        .map(|(n, (title, content))| step(s, n + 1, &title, content))
+        .collect()
 }
 
 fn step(s: &HubApp, n: usize, title: &str, content: El<HubApp>) -> El<HubApp> {

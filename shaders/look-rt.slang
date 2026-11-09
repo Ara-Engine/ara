@@ -18,6 +18,8 @@
 // The trace's alpha: the reflected hit distance in metres, RT_SKY for a miss (the
 // sky, already prefiltered) and -1 where nothing was traced.
 static const float RT_SKY=65000;
+// See-through surfaces (glass, films) a mirror ray composites before its opaque hit.
+static const uint RT_SEE_THROUGH=3;
 // The blur sigma in render pixels of a reflector `distance` from the camera whose
 // ray travelled `t`: the reflected lobe's spread at the hit (a Gaussian sigma of
 // about 0.7 alpha rad) as the camera sees it across the reflector. Lobes within the
@@ -47,15 +49,28 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
         // Biased along the normal by the depth reconstruction's and coarser raster
         // LODs' error, which grows with distance.
         float3 origin=world+n*(l.rtParams[1].x+l.rtParams[1].y*distance);
-        RtHit hit;float3 radiance;float travelled=RT_SKY;
-        if(rtTrace(f,l,origin,d,l.rtParams[0].y,hit,RT_OPAQUE|RT_MASKED,spread)){
+        RtHit hit;float3 radiance=0,weight=1;float travelled=RT_SKY,reach=l.rtParams[0].y,start=0;
+        // Glass and films in the reflection (rtSeeThroughHit): each adds its own light
+        // over what it passes, up to RT_SEE_THROUGH of them before the opaque hit.
+        [loop]for(uint layer=0;layer<=RT_SEE_THROUGH;layer++){
+            uint mask=layer<RT_SEE_THROUGH?RT_OPAQUE|RT_MASKED|RT_TRANSPARENT:RT_OPAQUE|RT_MASKED;
+            if(!rtTrace(f,l,origin,d,reach-start,hit,mask,spread)){
+                radiance+=weight*rtMiss(f,l,d,roughness)*skyLight(l); // sky reflections take the sky light, as ibl's
+                break;
+            }
             // The ray cone: the pixel's footprint growing with the path plus the lobe.
-            float width=spread*(distance+hit.distance)+2*alpha*hit.distance;
+            float at=start+hit.distance,width=spread*(distance+at)+2*alpha*at;
+            if(rtSeeThrough(rtMaterial(l,rtHitTriangle(l,hit).material))){
+                float3 through;radiance+=weight*rtSeeThroughHit(f,l,hit,d,width,hit.distance,through);weight*=through;
+                float step=hit.distance+l.rtParams[1].x;origin+=d*step;start+=step;
+                if(max(weight.x,max(weight.y,weight.z))<1e-3)break;
+                continue;
+            }
             float3 position,geometric;Surface s=rtSurface(l,hit,d,width,position,geometric);
             // Contact darkening where the camera sees the hit too.
             s.ao=min(s.ao,rtScreenVisibility(f,l,position,geometric));
-            radiance=rtShadeHit(f,l,s,position,geometric,-d);travelled=hit.distance;
-        }else radiance=rtMiss(f,l,d,roughness);
+            radiance+=weight*rtShadeHit(f,l,s,position,geometric,-d);travelled=at;break;
+        }
         result=float4(min(radiance,float3(60000)),travelled);
     }
     images[NonUniformResourceIndex(root.materials)][p]=result;

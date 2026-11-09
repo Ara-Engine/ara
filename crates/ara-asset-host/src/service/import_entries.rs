@@ -32,7 +32,9 @@ pub(super) fn sidecar_document(
     let edit = ara_asset::SidecarCommand::InitializeInherited(ara_asset::ImportSettings {
         importer: binding.importer.clone(),
         version: binding.version.clone(),
-        settings: binding.settings.clone(),
+        // The binding is an effective cook input. A genuinely new sidecar has
+        // no explicit overrides; materializing project defaults would freeze them.
+        settings: serde_json::json!({}),
         preset: None,
         dependencies: Vec::new(),
     })

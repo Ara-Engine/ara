@@ -6,6 +6,7 @@
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
 //! M1 baseline: manual exposure, the ACES fit, no bloom, no sky and no fog.
+pub mod atmosphere;
 pub mod captures;
 pub(crate) mod cascades;
 pub(crate) mod far;
@@ -14,16 +15,34 @@ pub mod gi;
 pub(crate) mod gpu;
 pub(crate) mod horizon;
 mod lens;
+pub(crate) mod lights;
 pub(crate) mod local;
+pub(crate) mod ltc;
+pub(crate) mod moments;
 pub(crate) mod passes;
+pub mod placement;
 pub(crate) mod refract;
+pub(crate) mod reflect;
+pub(crate) mod screen_gi;
+pub(crate) mod trace;
 pub(crate) mod translucent;
+pub(crate) mod transport;
+pub mod volumetric;
 pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;
 pub use lens::{
     AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
 };
+pub use volumetric::{
+    FogVolume, FogVolumeShape, MAX_FOG_VOLUMES, VolumetricFog, VolumetricFogQuality,
+};
+
+/// Mean emitted luminance (cd/m2) above which hosts promote a material's emission to
+/// emitter lights (`Quality::emitter_lights`; ara-runtime-render's emitters): that
+/// light then reaches the scene directly, so screen probe GI drops such emission
+/// where its rays hit it, and probe bakes zero it.
+pub const EMITTER_RADIANCE: f32 = 5.;
 
 /// Per-preset raster budgets (`Renderer::set_quality`); independent of the
 /// authored look. The default is the M1 configuration.
@@ -86,12 +105,37 @@ pub struct Quality {
     /// Motion blur where a look asks for it (the post pass's motion variant; needs the
     /// native renderer's motion vectors); `None` ignores looks' shutter.
     pub motion_blur: Option<MotionBlurQuality>,
-    /// Hardware ray queries of the hybrid High/Epic path (D29; `renderer::rt`):
+    /// Hardware ray queries of the hybrid path (D29; `renderer::rt`), set only under
+    /// the ray-tracing opt-in:
     /// deterministic mirror and glossy reflections below a roughness cut, which
     /// replace screen-space reflections there. They run only on native content on
     /// devices with ray queries; other devices keep the raster path of the same
     /// preset. `None`: raster only.
     pub ray_queries: Option<RayQueries>,
+    /// The near-field froxel volume of volumetric fog (`look::volumetric`): sun
+    /// shafts, lamp cones and local fog volumes at screen-tile resolution up to the
+    /// fog's volumetric distance, temporally accumulated. `None` keeps the coarse
+    /// 4 km fog grid alone (still shadowed, at 40-pixel columns).
+    pub volumetric_fog: Option<VolumetricFogQuality>,
+    /// Screen probe GI (`look::screen_gi`; read by the High/Epic lighting PSOs,
+    /// `high_tier`): probes on the visible surfaces trace fixed directions through a
+    /// Hi-Z pyramid of the frame's depth, shade hits from last frame's colour and
+    /// continue misses into the probe volume, so diffuse and rough specular indirect
+    /// light come from what the screen shows (multi-bounce, emissive surfaces, near
+    /// occlusion). `None` keeps the probe volume's lighting alone.
+    pub screen_gi: Option<ScreenGi>,
+}
+
+/// Screen probe GI budgets (`Quality::screen_gi`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenGi {
+    /// Render pixels per probe tile side (8, 16 or 32): one probe of 64 rays per tile.
+    pub tile: u32,
+    /// Hi-Z traversal steps per ray (8 to 128); rays that run out fall back to the
+    /// probe volume.
+    pub steps: u32,
+    /// Longest screen trace in metres; what lies further comes from the probe volume.
+    pub distance: f32,
 }
 
 /// Hybrid ray-query budgets (`Quality::ray_queries`).
@@ -141,6 +185,8 @@ impl Default for Quality {
             depth_of_field: None,
             motion_blur: None,
             ray_queries: None,
+            volumetric_fog: None,
+            screen_gi: None,
         }
     }
 }
@@ -318,6 +364,13 @@ impl Quality {
                         && r.rough_roughness <= 1.
                         && r.distance.is_finite()
                         && r.distance > 0.
+                })
+                && self.volumetric_fog.is_none_or(|v| v.valid())
+                && self.screen_gi.is_none_or(|s| {
+                    matches!(s.tile, 8 | 16 | 32)
+                        && (8..=128).contains(&s.steps)
+                        && s.distance.is_finite()
+                        && s.distance > 0.
                 }),
             "Invalid raster quality"
         );
@@ -348,6 +401,13 @@ pub struct Look {
     pub ao: AoTuning,
     /// Screen-space reflection strength and reach (where the quality runs them).
     pub ssr: SsrTuning,
+    /// Scale of the light the sky casts into the scene (its ambient light,
+    /// reflections, probe bounce and fog ambient) relative to the sky drawn in the
+    /// background; 1 is physical. Unreal's sky light intensity.
+    pub sky_light: f32,
+    /// Scale of the sun's in-scattering in fog particles (its light's volumetric
+    /// scattering intensity; 1 physical, 0 none). Clear air scatters it regardless.
+    pub sun_scattering: f32,
 }
 impl Default for Look {
     fn default() -> Self {
@@ -361,6 +421,8 @@ impl Default for Look {
             lens: Lens::default(),
             ao: AoTuning::default(),
             ssr: SsrTuning::default(),
+            sky_light: 1.,
+            sun_scattering: 1.,
         }
     }
 }
@@ -380,6 +442,30 @@ pub struct AutoExposure {
     pub compensation: f32,
     /// Adaptation rate in inverse seconds (frames are taken as 1/60 s).
     pub adaptation: f32,
+    /// Extra compensation by the metered scene EV100 (Unreal's exposure compensation
+    /// curve): (EV100, stops) keys in rising EV order, linear between them and flat
+    /// beyond the ends. Build it with [`AutoExposure::curve`]; all zero adds none.
+    pub compensation_curve: [[f32; 2]; EXPOSURE_CURVE_KEYS],
+}
+/// Keys an exposure compensation curve holds ([`AutoExposure::compensation_curve`]).
+pub const EXPOSURE_CURVE_KEYS: usize = 8;
+impl AutoExposure {
+    /// A compensation curve from (EV100, stops) keys in any order: sorted, the first
+    /// [`EXPOSURE_CURVE_KEYS`] kept, the rest of the table repeating the last key.
+    pub fn curve(keys: &[[f32; 2]]) -> [[f32; 2]; EXPOSURE_CURVE_KEYS] {
+        let mut sorted: Vec<[f32; 2]> = keys
+            .iter()
+            .copied()
+            .filter(|k| k[0].is_finite() && k[1].is_finite())
+            .collect();
+        sorted.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        let last = sorted.get(EXPOSURE_CURVE_KEYS.min(sorted.len()).wrapping_sub(1));
+        let mut table = [last.copied().unwrap_or([0.; 2]); EXPOSURE_CURVE_KEYS];
+        for (slot, key) in table.iter_mut().zip(&sorted) {
+            *slot = *key;
+        }
+        table
+    }
 }
 impl Default for AutoExposure {
     fn default() -> Self {
@@ -390,6 +476,7 @@ impl Default for AutoExposure {
             high_percentile: 0.95,
             compensation: 0.,
             adaptation: 2.,
+            compensation_curve: [[0.; 2]; EXPOSURE_CURVE_KEYS],
         }
     }
 }
@@ -431,13 +518,26 @@ impl Default for Grading {
     }
 }
 
-/// Earth-like physical sky (Rayleigh, Mie and ozone over a spherical planet).
+/// Physical sky atmosphere (`atmosphere::Atmosphere`: Unreal's SkyAtmosphere in SI
+/// units) lit by the sun and an optional second atmosphere light, with a planar cloud
+/// layer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sky {
-    /// World-space altitude of sea level, in metres.
+    /// World-space altitude of the planet's surface (sea level), in metres.
     pub sea_level: f32,
-    /// Aerosol (Mie) density relative to clear Earth air, from zero to twenty.
-    pub aerosols: f32,
+    /// The planet and its atmosphere's media and art direction.
+    pub atmosphere: atmosphere::Atmosphere,
+    /// How the sun (`Renderer::set_sun`, the shadowed directional light) meets the
+    /// atmosphere; `None` keeps it out: no sky scattering, disc or transmittance
+    /// (Unreal's atmosphere sun light off).
+    pub sun: Option<atmosphere::LightAtmosphere>,
+    /// The sun is the second atmosphere light (Unreal's atmosphere light index 1): a
+    /// moon lighting the scene while the first is below the horizon.
+    pub sun_is_second: bool,
+    /// The other atmosphere light (a moon, a second sun, or the set sun at night): it
+    /// scatters in the sky and the aerial perspective, draws its disc and lights the
+    /// sky's image-based lighting. It does not light surfaces directly.
+    pub other_light: Option<atmosphere::AtmosphereLight>,
     /// Angular radius of the sun disk in radians.
     pub sun_radius: f32,
     /// Planar cloud cover from zero (clear) to one; clouds also shade the sun.
@@ -449,7 +549,10 @@ impl Default for Sky {
     fn default() -> Self {
         Self {
             sea_level: 0.,
-            aerosols: 1.,
+            atmosphere: atmosphere::Atmosphere::EARTH,
+            sun: Some(atmosphere::LightAtmosphere::default()),
+            sun_is_second: false,
+            other_light: None,
             sun_radius: 0.00465,
             cloud_coverage: 0.,
             cloud_height: 2200.,
@@ -472,6 +575,11 @@ pub struct Fog {
     pub albedo: f32,
     /// Henyey-Greenstein anisotropy, from zero to 0.9.
     pub anisotropy: f32,
+    /// Volumetric lighting: sun and local-light shadows cut shafts into the fog,
+    /// local lights scatter in it, and the near field renders in the froxel volume
+    /// where the quality runs it (`Quality::volumetric_fog`). `None` is plain height
+    /// fog: unshadowed sun in-scattering and ambient light only.
+    pub volumetric: Option<VolumetricFog>,
 }
 impl Default for Fog {
     fn default() -> Self {
@@ -482,6 +590,7 @@ impl Default for Fog {
             tint: [1.; 3],
             albedo: 0.9,
             anisotropy: 0.3,
+            volumetric: Some(VolumetricFog::default()),
         }
     }
 }
@@ -493,6 +602,9 @@ impl Look {
         let g = &self.grading;
         anyhow::ensure!(
             (0.0..=0.25).contains(&self.bloom)
+                && self.sky_light.is_finite()
+                && self.sky_light >= 0.
+                && (0.0..=16.0).contains(&self.sun_scattering)
                 && finite(&g.white_balance_gain)
                 && g.white_balance_gain.iter().all(|x| *x >= 0.)
                 && (0.25..=4.0).contains(&g.contrast)
@@ -502,7 +614,7 @@ impl Look {
                 && finite(&g.gain)
                 && (0.0..=1.0).contains(&g.lut_contribution)
                 && g.gamma.iter().all(|x| x.is_finite() && *x > 0.),
-            "Invalid look grading or bloom"
+            "Invalid look grading, bloom or sky light"
         );
         self.lens.validate(&self.ao, &self.ssr)?;
         if let Some(a) = self.auto_exposure {
@@ -513,14 +625,22 @@ impl Look {
                     && a.low_percentile < a.high_percentile
                     && a.high_percentile <= 1.
                     && a.adaptation > 0.
-                    && a.adaptation.is_finite(),
+                    && a.adaptation.is_finite()
+                    && a.compensation_curve.iter().flatten().all(|v| v.is_finite())
+                    && a.compensation_curve.windows(2).all(|k| k[0][0] <= k[1][0]),
                 "Invalid automatic exposure"
             );
         }
         if let Some(s) = self.sky {
+            s.atmosphere.validate()?;
             anyhow::ensure!(
                 s.sea_level.is_finite()
-                    && (0.0..=20.0).contains(&s.aerosols)
+                    && s.other_light.is_none_or(|l| {
+                        l.direction.is_finite()
+                            && l.direction.length_squared() > 1e-8
+                            && l.lux.is_finite()
+                            && (0.0..=0.2).contains(&l.radius)
+                    })
                     && (0.0..=0.2).contains(&s.sun_radius)
                     && (0.0..=1.0).contains(&s.cloud_coverage)
                     && s.cloud_height.is_finite(),
@@ -535,7 +655,8 @@ impl Look {
                     && f.base.is_finite()
                     && f.tint.iter().all(|c| (0.0..=1.0).contains(c))
                     && (0.0..=1.0).contains(&f.albedo)
-                    && (0.0..=0.9).contains(&f.anisotropy),
+                    && (0.0..=0.9).contains(&f.anisotropy)
+                    && f.volumetric.is_none_or(|v| v.valid()),
                 "Invalid fog"
             );
         }

@@ -1,4 +1,4 @@
-//! The Hub's interface on stillkit (D31). [`HubApp`] is the runtime's state: the view-model
+//! The Hub's interface on stillkit (D34). [`HubApp`] is the runtime's state: the view-model
 //! ([`Hub`], changed only by intents and service events) plus what only the window needs
 //! (the look, images, the palette). [`view`] builds the element tree from it; handlers call
 //! [`HubApp::intent`], and the host drains the model's calls and effects after each frame.
@@ -13,25 +13,12 @@ mod projects;
 mod settings;
 mod shell;
 
-use std::path::PathBuf;
-
 use ara_kit::look::Look;
 use stillkit::el::{El, Handled, KeyCode, col, row};
 
 use crate::model::{Hub, Intent, View};
 pub use images::Images;
 pub use palette::Palette;
-
-/// A Learn link: title, caption and the local file it opens.
-#[derive(Clone, Debug)]
-pub struct Doc {
-    /// Link title.
-    pub title: String,
-    /// One-line caption.
-    pub caption: String,
-    /// Local file.
-    pub path: PathBuf,
-}
 
 /// What the window adds around the drawn content: where the system's window controls sit.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -50,8 +37,6 @@ pub struct HubApp {
     pub look: Look,
     /// Wall-clock milliseconds, for relative times ("2 h ago"); the host ticks it.
     pub now_ms: u64,
-    /// Docs present on this machine (Learn).
-    pub docs: Vec<Doc>,
     /// Decoded pictures and generated covers.
     pub images: Images,
     /// The window's own controls.
@@ -62,22 +47,26 @@ pub struct HubApp {
     pub palette: Palette,
     /// The dropdown open now, by its trigger's key.
     pub select: Option<String>,
+    /// Agent clients' marks, rasterized for the current scheme.
+    pub logos:
+        std::collections::BTreeMap<crate::model::AgentClient, std::sync::Arc<stillkit::Image>>,
 }
 
 impl HubApp {
     /// A Hub window's state over `hub`.
-    pub fn new(hub: Hub, docs: Vec<Doc>, width: f32) -> Self {
+    pub fn new(hub: Hub, width: f32) -> Self {
         let look = Look::new(!hub.prefs.light);
+        let logos = logos(&look);
         Self {
             hub,
             look,
             now_ms: 0,
-            docs,
             images: Images::default(),
             frame: Frame::default(),
             width,
             palette: Palette::default(),
             select: None,
+            logos,
         }
     }
 
@@ -102,8 +91,30 @@ impl HubApp {
             return false;
         }
         self.look = Look::new(dark);
+        self.logos = logos(&self.look);
         true
     }
+}
+
+/// Each agent client's mark at 2x a 20 px slot: Claude in its brand colour, the others in
+/// the scheme's ink (their SVGs paint `currentColor`).
+fn logos(
+    look: &Look,
+) -> std::collections::BTreeMap<crate::model::AgentClient, std::sync::Arc<stillkit::Image>> {
+    let ink = look.c.foreground.0;
+    let hex = format!(
+        "#{:02x}{:02x}{:02x}",
+        (ink.r * 255.0) as u8,
+        (ink.g * 255.0) as u8,
+        (ink.b * 255.0) as u8
+    );
+    crate::model::AgentClient::ALL
+        .into_iter()
+        .filter_map(|client| {
+            let svg = client.logo().replace("currentColor", &hex);
+            ara_kit::art::svg(&svg, 40, 40).map(|image| (client, std::sync::Arc::new(image)))
+        })
+        .collect()
 }
 
 /// The whole window: title bar, then the sidebar and the current page (Create takes the full

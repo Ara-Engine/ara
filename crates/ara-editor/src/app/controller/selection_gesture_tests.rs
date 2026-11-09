@@ -302,3 +302,29 @@ fn alt_pointer_chord_does_not_turn_the_next_escape_into_a_menu_mnemonic_cancel()
         assert_eq!(editor.host.store().revision(), revision, "{case}");
     }
 }
+#[test]
+fn a_dragged_gizmo_draws_at_the_previewed_pivot() {
+    let (mut editor, mut shell) = open();
+    let view = shell.document_view(&editor).unwrap();
+    let rect = shell.viewport().unwrap();
+    let committed = overlay::handles(&view, &editor.state, rect).unwrap();
+    let _controller = preview(&mut editor, &mut shell);
+    let gesture = editor.gesture.as_ref().unwrap();
+    let offset = gesture.world_delta(editor.state.selection.first().map(String::as_str));
+    let moved = overlay::moved_handles(&view, &editor.state, rect, offset).unwrap();
+    let id = editor.state.selection.first().unwrap();
+    let parent = view
+        .entities()
+        .get(id.as_str())
+        .unwrap()
+        .parent
+        .as_deref()
+        .and_then(|p| crate::world::world_transform(view.entities(), p))
+        .unwrap_or(glam::Mat4::IDENTITY);
+    let previewed = (parent * gesture.current[id.as_str()]).transform_point3(Vec3::ZERO);
+    assert!(committed.pivot.distance(moved.pivot) > 1e-3);
+    if !editor.state.centre {
+        assert!(moved.pivot.distance(previewed) < 1e-4);
+    }
+    assert!(Vec2::from(moved.origin).distance(Vec2::from(committed.origin)) > 1.);
+}

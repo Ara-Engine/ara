@@ -23,6 +23,9 @@ impl Object {
                 }
                 Self::Image(image) => {
                     device.destroy_image_view(image.view, None);
+                    if let Some(storage) = image.storage_view {
+                        device.destroy_image_view(storage, None);
+                    }
                     device.destroy_image(image.handle, None);
                     device.free_memory(image.memory, None);
                 }

@@ -100,7 +100,11 @@ fn run(input: Input, progress: &Reporter) -> Outcome {
             service.run_restart(&pending.id, keep_state, progress)
         }
     };
-    let catalog = if result.is_ok() && progress.check().is_ok() {
+    let scripts = service.worlds.get(&pending.id).is_some_and(|w| w.scripts);
+    let catalog = if result.is_ok() && progress.check().is_ok() && !scripts {
+        // No C# modules, no commands: never wait on the player's first frames for it.
+        Some(Ok(json!({})))
+    } else if result.is_ok() && progress.check().is_ok() {
         let _ = progress.report("catalog", 0, 1);
         let catalog = service
             .call_on_checked(

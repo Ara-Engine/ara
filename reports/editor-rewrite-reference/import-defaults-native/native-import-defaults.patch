@@ -1,0 +1,1194 @@
+diff --git a/crates/ara-editor/src/app/import_defaults_verify.rs b/crates/ara-editor/src/app/import_defaults_verify.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify.rs
+@@ -0,0 +1,186 @@
++//! Native SDL proof for mixed source edits and scoped project importer defaults.
++use super::input_verify::native;
++use crate::{Editor, gpu::NativeUi, shell::Shell};
++use ara_platform::{Event, Window};
++use serde_json::{Value, json};
++use std::{
++    path::{Path, PathBuf},
++    time::{Duration, Instant},
++};
++mod cleanup;
++mod fixture;
++mod input;
++mod proof;
++mod steps;
++pub(super) use fixture::prepare;
++const FOLDER: &str = "P4 Import Defaults";
++const SOURCES: [&str; 2] = ["P4 Import Defaults/A.png", "P4 Import Defaults/B.png"];
++const DOCS: [&str; 2] = ["as_nativeimporta", "as_nativeimportb"];
++const EXPECTED: usize = 5;
++
++#[derive(Default)]
++struct Clip(String);
++impl ara_ui_text::Clipboard for Clip {
++    fn read(&mut self) -> ara_ui_text::Result<String> {
++        Ok(self.0.clone())
++    }
++    fn write(&mut self, value: &str) -> ara_ui_text::Result<()> {
++        self.0 = value.into();
++        Ok(())
++    }
++}
++struct Initial {
++    folder: String,
++    query: String,
++    scope: bool,
++    grid: bool,
++    asset: Option<String>,
++    maximized: Option<String>,
++    focus: String,
++    camera: crate::state::Camera,
++    doc: String,
++    selection: Vec<String>,
++    source: Value,
++    policy: Value,
++}
++
++/// Drives only a private behaviour fixture; authoring cleanup remains typed.
++pub(super) struct ImportDefaultsCheck {
++    output: PathBuf,
++    phase: u32,
++    started: Option<Instant>,
++    finished: bool,
++    restored: bool,
++    initial: Option<Initial>,
++    base: u64,
++    edit_txn: Option<String>,
++    undo_txn: Option<String>,
++    checkpoint_policy: Value,
++    passed: Vec<&'static str>,
++    trace: Vec<Value>,
++    error: Option<String>,
++    pending_capture: Option<&'static str>,
++    native_events: usize,
++    pointer: Option<[f32; 2]>,
++    clipboard: Clip,
++}
++impl ImportDefaultsCheck {
++    pub fn new(editor: &Editor, output: &Path) -> ara_ui::Result<Self> {
++        if !editor.host.root().join(".ara-behaviour-fixture").is_file() {
++            return Err("Import-defaults proof requires the isolated behaviour fixture".into());
++        }
++        Ok(Self {
++            output: output.into(),
++            phase: 0,
++            started: None,
++            finished: false,
++            restored: false,
++            initial: None,
++            base: 0,
++            edit_txn: None,
++            undo_txn: None,
++            checkpoint_policy: Value::Null,
++            passed: Vec::new(),
++            trace: Vec::new(),
++            error: None,
++            pending_capture: None,
++            native_events: 0,
++            pointer: None,
++            clipboard: Clip::default(),
++        })
++    }
++    pub fn finished(&self) -> bool {
++        self.finished
++    }
++    pub fn clipboard(&mut self) -> &mut dyn ara_ui_text::Clipboard {
++        &mut self.clipboard
++    }
++    pub fn validate(&self) -> ara_ui::Result<()> {
++        if !self.finished || !self.restored || self.error.is_some() || self.passed.len() != EXPECTED
++        {
++            return Err(format!("Native import-defaults proof incomplete: phase={}, restored={}, passed={}/{EXPECTED}, error={:?}", self.phase,self.restored,self.passed.len(),self.error).into());
++        }
++        Ok(())
++    }
++    pub fn inject(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        if self.finished {
++            return Ok(());
++        }
++        if let Some(pointer) = self.pointer {
++            shell.desktop_pointer = Some(pointer);
++        }
++        if self.pending_capture.is_some() {
++            return Ok(());
++        }
++        if self.error.is_some() || self.phase == 29 {
++            native::focus_lost(window, events)?;
++            if let Err(error) = self.restore(editor, shell) {
++                self.error = Some(format!(
++                    "{}; cleanup: {error}",
++                    self.error
++                        .as_deref()
++                        .unwrap_or("Import-defaults cleanup failed")
++                ));
++            }
++            self.finished = true;
++            return self.write();
++        }
++        let before = events.len();
++        let result = (|| {
++            if !scale.is_finite() || scale <= 0. {
++                return Err("Invalid native import-defaults scale".into());
++            }
++            if self
++                .started
++                .is_some_and(|start| start.elapsed() >= Duration::from_secs(120))
++            {
++                return Err(format!(
++                    "Native import-defaults proof timed out at phase {}",
++                    self.phase
++                )
++                .into());
++            }
++            self.step(editor, shell, window, scale, events)
++        })();
++        self.native_events += events.len().saturating_sub(before);
++        if let Err(error) = result {
++            events.truncate(before);
++            native::tap(window, 41, events)?;
++            self.error = Some(error.to_string());
++            self.mark("failure", editor, shell, json!({"error":self.error}));
++        }
++        Ok(())
++    }
++    pub fn end(
++        &mut self,
++        editor: &Editor,
++        shell: &mut Shell,
++        gpu: &mut NativeUi,
++    ) -> ara_ui::Result<()> {
++        if let Some(stage) = self.pending_capture.take() {
++            self.capture(stage, editor, shell, gpu)?;
++            self.write()?;
++        }
++        Ok(())
++    }
++    pub fn write(&self) -> ara_ui::Result<()> {
++        std::fs::create_dir_all(&self.output)?;
++        std::fs::write(
++            self.output.join("import-defaults.json"),
++            ara_json::to_canonical_string(&json!({
++                "completed":self.finished,"restored":self.restored,"expected":EXPECTED,"passed":self.passed.len(),
++                "journeys":self.passed,"phase":self.phase,"nativeEvents":self.native_events,"error":self.error,
++                "elapsedSeconds":self.started.map(|start|start.elapsed().as_secs_f64()),"trace":self.trace,
++                "scope":"Hidden window, real SDL pointer/key injection, mounted Assets selection and shared Inspector controls. Setup/cleanup navigation and cleanup authoring use typed commands; all measured authoring gestures use production UI. No post-open filesystem mutation. No timing acceptance claim."
++            })),
++        )?;
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/import_defaults_verify/fixture.rs b/crates/ara-editor/src/app/import_defaults_verify/fixture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify/fixture.rs
+@@ -0,0 +1,61 @@
++//! Sources and typed sidecar ops are prepared before Host/file watching starts.
++use super::*;
++use crate::app::Options;
++
++pub(in crate::app) fn prepare(options: &Options) -> ara_ui::Result<()> {
++    let root = &options.project;
++    if !root.join(".ara-behaviour-fixture").is_file() {
++        return Err(
++            "Refusing import-defaults fixture writes outside the private behaviour project".into(),
++        );
++    }
++    let folder = root.join(ara_doc::AUTHORING_ROOT).join(FOLDER);
++    std::fs::create_dir(&folder)?;
++    let registry = ara_importers::registry()?;
++    let importer = registry.get("ara.texture")?;
++    let mut schema = ara_schema::SchemaDb::new();
++    ara_asset::register_schema(&mut schema);
++    importer.register_settings(&mut schema);
++    for (index, settings) in [
++        json!({"usage":"color","mipmaps":true,"maxDimension":512}),
++        json!({"usage":"normal","mipmaps":false,"maxDimension":2048}),
++    ]
++    .into_iter()
++    .enumerate()
++    {
++        let _: ara_asset::TextureSettings = serde_json::from_value(settings.clone())?;
++        let id: ara_doc::AssetId = DOCS[index].parse()?;
++        let sidecar = ara_asset::Sidecar::empty(id.clone());
++        let mut document = sidecar.into_document();
++        // The fixture uses the same typed Edit -> Op path as authoring; no JSON sidecar patching.
++        let edit = ara_asset::SidecarCommand::InitializeInherited(ara_asset::ImportSettings {
++            importer: "ara.texture".into(),
++            version: importer.version().into(),
++            settings,
++            ..Default::default()
++        })
++        .edit(id)?;
++        let _created = document.apply(edit, &schema)?;
++        let source = root.join(ara_doc::AUTHORING_ROOT).join(SOURCES[index]);
++        std::fs::write(
++            &source,
++            include_bytes!("../../../../../assets/brand/icons/engine/ara-engine-64.png"),
++        )?;
++        std::fs::write(
++            source.with_extension("png.import.json"),
++            ara_doc::write(&document, &schema),
++        )?;
++    }
++    let policy = ara_asset::ProjectImportSettings {
++        preset: ara_asset::CookPreset::Fast,
++        defaults: Default::default(),
++    };
++    let policy_path = root.join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE);
++    std::fs::create_dir_all(
++        policy_path
++            .parent()
++            .ok_or("Import settings path has no parent")?,
++    )?;
++    std::fs::write(policy_path, policy.canonical_text()?)?;
++    Ok(())
++}
+diff --git a/crates/ara-editor/src/app/import_defaults_verify/input.rs b/crates/ara-editor/src/app/import_defaults_verify/input.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify/input.rs
+@@ -0,0 +1,136 @@
++//! Only genuine SDL input reaches the production control/router path.
++use super::*;
++use crate::shell::Binding;
++
++fn point(shell: &Shell, id: &str) -> Option<[f32; 2]> {
++    let index = shell.shown_node(id)?;
++    let node = &shell.ui.nodes[index];
++    let r = node.rect.intersection(node.clip);
++    let p = [r.x + r.w * 0.5, r.y + r.h * 0.5];
++    (!node.state.disabled
++        && r.w >= 2.
++        && r.h >= node.rect.h - 0.5
++        && shell.ui.hit_test(p[0], p[1]) == Some(index))
++    .then_some(p)
++}
++impl ImportDefaultsCheck {
++    fn motion(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        at: [f32; 2],
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        let rect = window.rect()?;
++        let desktop = [
++            rect[0] as f32 + at[0] / scale,
++            rect[1] as f32 + at[1] / scale,
++        ];
++        self.pointer = Some(desktop);
++        shell.desktop_pointer = Some(desktop);
++        native::motion(window, at, scale, events)
++    }
++    pub(super) fn click(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        id: &str,
++        scroll: Option<&str>,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<bool> {
++        if let Some(at) = point(shell, id) {
++            self.motion(shell, window, scale, at, events)?;
++            native::button(window, true, events)?;
++            native::button(window, false, events)?;
++            return Ok(true);
++        }
++        // Scroll only with the same SDL wheel gesture a human uses; never set retained offsets.
++        if let (Some(target), Some(scroll)) = (
++            shell.ui.find(id),
++            scroll.and_then(|id| shell.shown_node(id)),
++        ) {
++            let target = shell.ui.nodes[target].rect;
++            let viewport = shell.ui.nodes[scroll]
++                .rect
++                .intersection(shell.ui.nodes[scroll].clip);
++            if viewport.w > 8. && viewport.h > 8. {
++                let direction = if target.y < viewport.y { 3. } else { -3. };
++                self.motion(
++                    shell,
++                    window,
++                    scale,
++                    [viewport.x + viewport.w * 0.6, viewport.y + viewport.h * 0.5],
++                    events,
++                )?;
++                native::wheel(window, direction, events)?;
++            }
++        }
++        Ok(false)
++    }
++    pub(super) fn source(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        logical: &str,
++        multiple: bool,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<bool> {
++        let storage = shell
++            .asset_authored_files()
++            .iter()
++            .find(|file| {
++                matches!(file.scope, ara_host::project::AuthoredScope::Authored)
++                    && file.path == logical
++            })
++            .map(|file| file.storage_path.clone());
++        let id = storage.and_then(|storage| shell.ui.nodes.iter().enumerate().find_map(|(index,node)|
++            (shell.ui.shown(index) && matches!(shell.bindings.get(&ara_ui::source::stable_id(&node.element.id)),Some(Binding::Asset(asset)) if asset.path==storage))
++                .then(||node.element.id.clone())));
++        let Some(id) = id else {
++            return Ok(false);
++        };
++        if point(shell, &id).is_none() {
++            return self.click(shell, window, scale, &id, Some("asset-grid"), events);
++        }
++        let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
++        if multiple {
++            native::key(window, primary, true, events)?;
++        }
++        let sent = self.click(shell, window, scale, &id, None, events)?;
++        if multiple {
++            native::key(window, primary, false, events)?;
++        }
++        Ok(sent)
++    }
++    pub(super) fn option(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        control: &str,
++        label: &str,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<bool> {
++        let prefix = format!("choice-{control}-option-");
++        let id = shell.ui.nodes.iter().enumerate().find_map(|(index, node)| {
++            let label_matches = node
++                .element
++                .attrs
++                .get("label")
++                .is_some_and(|text| text.eq_ignore_ascii_case(label))
++                || node
++                    .text
++                    .as_ref()
++                    .is_some_and(|text| text.value.eq_ignore_ascii_case(label));
++            (shell.ui.shown(index) && node.element.id.starts_with(&prefix) && label_matches)
++                .then(|| node.element.id.clone())
++        });
++        match id {
++            Some(id) => self.click(shell, window, scale, &id, None, events),
++            None => Ok(false),
++        }
++    }
++}
+diff --git a/crates/ara-editor/src/app/import_defaults_verify/proof.rs b/crates/ara-editor/src/app/import_defaults_verify/proof.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify/proof.rs
+@@ -0,0 +1,196 @@
++//! Compact, in-memory authority snapshots; never infer settings from rendered labels.
++use super::*;
++use std::collections::BTreeSet;
++
++pub(super) fn require(value: bool, message: &str) -> ara_ui::Result<()> {
++    if value {
++        Ok(())
++    } else {
++        Err(message.to_owned().into())
++    }
++}
++pub(super) fn sources(editor: &Editor) -> ara_ui::Result<Value> {
++    let workspace = editor.host.store().workspace();
++    DOCS.into_iter()
++        .map(|id| {
++            let doc = workspace
++                .doc(id)
++                .ok_or("Fixture sidecar missing from the Host model")?;
++            let record = doc
++                .record("i_settings")
++                .ok_or("Fixture sidecar has no i_settings")?;
++            Ok((id.to_owned(), json!(record)))
++        })
++        .collect::<ara_ui::Result<serde_json::Map<String, Value>>>()
++        .map(Value::Object)
++}
++pub(super) fn policy(editor: &Editor) -> ara_ui::Result<ara_asset::ProjectImportSettings> {
++    let doc = editor
++        .host
++        .store()
++        .workspace()
++        .docs()
++        .find(|(path, _)| *path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
++        .map(|(_, doc)| doc)
++        .ok_or("Canonical project import settings are not loaded")?;
++    let record = doc
++        .record("pi_settings")
++        .ok_or("Project import settings have no pi_settings")?;
++    Ok(serde_json::from_value(json!(record))?)
++}
++impl ImportDefaultsCheck {
++    pub(super) fn revision(&self, editor: &Editor, delta: u64) -> ara_ui::Result<()> {
++        require(
++            editor.host.store().revision() == self.base + delta,
++            "A native import edit did not produce exactly one content transaction",
++        )
++    }
++    pub(super) fn batch_state(&self, editor: &Editor, changed: bool) -> ara_ui::Result<()> {
++        let current = sources(editor)?;
++        let initial = &self
++            .initial
++            .as_ref()
++            .ok_or("Import proof has no initial state")?
++            .source;
++        let mut expected = initial.clone();
++        if changed {
++            for id in DOCS {
++                expected[id]["settings"]["usage"] = json!("mask");
++            }
++        }
++        require(
++            current == expected,
++            "Batch edit/Undo/Redo lost an independent source override or missed a selected source",
++        )
++    }
++    pub(super) fn source_transaction(
++        &self,
++        editor: &Editor,
++        reverts: Option<&str>,
++    ) -> ara_ui::Result<String> {
++        let txn = editor
++            .host
++            .store()
++            .history()
++            .last()
++            .ok_or("No import transaction was committed")?;
++        let docs = txn
++            .ops
++            .iter()
++            .map(|op| op.doc().to_string())
++            .collect::<BTreeSet<_>>();
++        let expected = DOCS.into_iter().map(str::to_owned).collect::<BTreeSet<_>>();
++        require(
++            docs == expected && txn.author.to_string() == "human",
++            "The native batch transaction did not touch exactly both selected source documents as human",
++        )?;
++        require(
++            txn.reverts.as_ref().map(ToString::to_string).as_deref() == reverts,
++            "Native Undo/Redo did not revert the exact preceding batch transaction",
++        )?;
++        Ok(txn.id.to_string())
++    }
++    pub(super) fn policy_transaction(&self, editor: &Editor) -> ara_ui::Result<()> {
++        let txn = editor
++            .host
++            .store()
++            .history()
++            .last()
++            .ok_or("No project-defaults transaction")?;
++        let doc = editor
++            .host
++            .store()
++            .workspace()
++            .docs()
++            .find(|(path, _)| *path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
++            .map(|(_, doc)| &doc.id)
++            .ok_or("No project-defaults document")?;
++        require(
++            txn.author.to_string() == "human"
++                && !txn.ops.is_empty()
++                && txn.ops.iter().all(|op| op.doc() == doc)
++                && txn.reverts.is_none(),
++            "Project defaults edit changed an unrelated document or did not use one human transaction",
++        )
++    }
++    pub(super) fn protected(&self, editor: &Editor) -> ara_ui::Result<()> {
++        let initial = self
++            .initial
++            .as_ref()
++            .ok_or("No protected import proof context")?;
++        require(
++            editor.state.doc == initial.doc
++                && editor.state.camera == initial.camera
++                && editor.state.selection == initial.selection,
++            "Import/defaults UI changed the scene, camera or entity selection",
++        )
++    }
++    pub(super) fn selected(
++        &self,
++        editor: &Editor,
++        shell: &Shell,
++        count: usize,
++    ) -> ara_ui::Result<()> {
++        let selection = shell.asset_import_selection(editor);
++        let keys = selection["browserKeys"]
++            .as_array()
++            .ok_or("Browser selection report has no keys")?;
++        require(
++            keys.len() == count,
++            "Native Assets clicks did not preserve the expected multi-selection",
++        )?;
++        if count == 2 {
++            let expected = SOURCES
++                .into_iter()
++                .map(|path| {
++                    let storage = editor.host.store().workspace().storage_path(path);
++                    json!(ara_ui::source::stable_id(&storage))
++                })
++                .collect::<Vec<_>>();
++            require(
++                expected.iter().all(|key| keys.contains(key)),
++                "Browser selection contains unrelated assets",
++            )?;
++        }
++        self.protected(editor)
++    }
++    pub(super) fn mark(
++        &mut self,
++        stage: &'static str,
++        editor: &Editor,
++        shell: &Shell,
++        effect: Value,
++    ) {
++        let txns = editor.host.store().since(self.base).iter().take(16).map(|txn|
++            json!({"id":txn.id,"base":txn.base,"result":txn.result,"author":txn.author,"reverts":txn.reverts,
++                "ops":txn.ops.iter().map(|op|json!({"doc":op.doc()})).collect::<Vec<_>>()})).collect::<Vec<_>>();
++        self.trace.push(json!({"stage":stage,"phase":self.phase,"revision":editor.host.store().revision(),
++            "selection":shell.asset_import_selection(editor),"sources":sources(editor).ok(),
++            "policy":policy(editor).ok().and_then(|policy|serde_json::to_value(policy).ok()),"transactions":txns,"effect":effect}));
++        self.pending_capture = Some(stage);
++    }
++    pub(super) fn capture(
++        &self,
++        stage: &str,
++        editor: &Editor,
++        shell: &mut Shell,
++        gpu: &mut NativeUi,
++    ) -> ara_ui::Result<()> {
++        shell.leave();
++        gpu.select_target(0);
++        std::fs::create_dir_all(&self.output)?;
++        let file = format!("import-defaults-{stage}.png");
++        gpu.pixels()?.save(self.output.join(&file))?;
++        let controls=shell.ui.nodes.iter().enumerate().filter(|(index,node)|
++            shell.ui.shown(*index) && (node.element.id.starts_with("import-batch-") || node.element.id.starts_with("import-defaults-") || node.element.id.starts_with("choice-import-")))
++            .take(128).map(|(_,node)|json!({"id":node.element.id,"tag":node.element.tag,"rect":node.rect,"clip":node.clip,
++                "text":node.text.as_ref().map(|text|&text.value),"label":node.element.attrs.get("label"),"enabled":!node.state.disabled})).collect::<Vec<_>>();
++        std::fs::write(
++            self.output.join(format!("import-defaults-{stage}.json")),
++            ara_json::to_canonical_string(&json!({
++            "stage":stage,"file":file,"revision":editor.host.store().revision(),"dpi":gpu.dpi(),"controls":controls,
++            "selection":shell.asset_import_selection(editor),"kind":"full hidden main-window capture"})),
++        )?;
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/import_defaults_verify/steps.rs b/crates/ara-editor/src/app/import_defaults_verify/steps.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify/steps.rs
+@@ -0,0 +1,418 @@
++//! One intent per age so mounted geometry/selection comes from the preceding real frame.
++use super::proof::{policy, require, sources};
++use super::*;
++impl ImportDefaultsCheck {
++    pub(super) fn step(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        let advanced = match self.phase {
++            0 => return self.setup(editor, shell, window, events),
++            1 => self.source(shell, window, scale, SOURCES[0], false, events)?,
++            2 => {
++                self.selected(editor, shell, 1)?;
++                self.source(shell, window, scale, SOURCES[1], true, events)?
++            }
++            3 => {
++                self.selected(editor, shell, 2)?;
++                let mixed = shell.shown_node("import-batch-usage-mixed").is_some();
++                let dropdown = shell
++                    .shown_node("import-batch-usage-options")
++                    .is_some_and(|index| shell.ui.nodes[index].element.tag == "dropdown");
++                let number = shell
++                    .shown_node("import-batch-maxDimension")
++                    .is_some_and(|index| {
++                        shell.ui.nodes[index]
++                            .element
++                            .attrs
++                            .get("placeholder")
++                            .is_some_and(|text| text == "Mixed values")
++                    });
++                if mixed && dropdown && number {
++                    self.base = editor.host.store().revision();
++                    self.mark(
++                        "mixed-selection",
++                        editor,
++                        shell,
++                        json!({"mixedUsage":mixed,"sharedSelect":dropdown,"mixedSize":number}),
++                    );
++                    true
++                } else {
++                    false
++                }
++            }
++            4 => self.click(
++                shell,
++                window,
++                scale,
++                "import-batch-usage-options",
++                Some("import-inspector"),
++                events,
++            )?,
++            5 => self.option(
++                shell,
++                window,
++                scale,
++                "import-batch-usage-options",
++                "Mask",
++                events,
++            )?,
++            6 => {
++                self.revision(editor, 1)?;
++                self.batch_state(editor, true)?;
++                self.selected(editor, shell, 2)?;
++                self.edit_txn = Some(self.source_transaction(editor, None)?);
++                self.mark("batch-shared-usage",editor,shell,json!({"oneTransaction":true,"bothSelectedSourcesChanged":true,"unrelatedOverridesPreserved":true}));
++                true
++            }
++            7 => {
++                native::shortcut(window, 29, events)?;
++                true
++            }
++            8 => {
++                self.revision(editor, 2)?;
++                self.batch_state(editor, false)?;
++                self.undo_txn = Some(self.source_transaction(editor, self.edit_txn.as_deref())?);
++                self.mark(
++                    "batch-undo",
++                    editor,
++                    shell,
++                    json!({"exactBatchReverted":true}),
++                );
++                true
++            }
++            9 => {
++                native::shortcut(window, 28, events)?;
++                true
++            }
++            10 => {
++                self.revision(editor, 3)?;
++                self.batch_state(editor, true)?;
++                self.selected(editor, shell, 2)?;
++                let _redo = self.source_transaction(editor, self.undo_txn.as_deref())?;
++                self.passed
++                    .push("mixed-selected-textures-one-batch-native-undo-redo");
++                self.mark(
++                    "batch-redo",
++                    editor,
++                    shell,
++                    json!({"exactUndoReverted":true,"allSelectedRestored":true}),
++                );
++                true
++            }
++            11 => self.click(
++                shell,
++                window,
++                scale,
++                "import-batch-defaults",
++                Some("import-inspector"),
++                events,
++            )?,
++            12 => {
++                if shell.shown_node("import-defaults-title").is_none() {
++                    false
++                } else {
++                    let p = policy(editor)?;
++                    require(
++                        p.preset == ara_asset::CookPreset::Fast,
++                        "Fixture global texture quality was not retained when opening defaults",
++                    )?;
++                    require(
++                        serde_json::to_value(&p.defaults)?
++                            == self
++                                .initial
++                                .as_ref()
++                                .ok_or("Missing initial policy")?
++                                .policy["defaults"],
++                        "Opening defaults changed per-type policy",
++                    )?;
++                    self.base = editor.host.store().revision();
++                    self.checkpoint_policy = serde_json::to_value(p)?;
++                    self.mark(
++                        "defaults-open-fast",
++                        editor,
++                        shell,
++                        json!({"globalPreset":"fast","noAuthoringOnOpen":true}),
++                    );
++                    true
++                }
++            }
++            13 => self.click(
++                shell,
++                window,
++                scale,
++                "import-batch-flipNormalY",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            14 => {
++                self.revision(editor, 1)?;
++                self.policy_transaction(editor)?;
++                self.batch_state(editor, true)?;
++                self.protected(editor)?;
++                let p = serde_json::to_value(policy(editor)?)?;
++                require(
++                    p["defaults"]["texture"]["flipNormalY"] == true,
++                    "Texture defaults UI did not commit flipNormalY",
++                )?;
++                self.check_policy_scope(&p, "texture")?;
++                self.passed
++                    .push("project-texture-default-native-toggle-scoped");
++                self.checkpoint_policy = p;
++                self.base = editor.host.store().revision();
++                self.mark(
++                    "defaults-texture",
++                    editor,
++                    shell,
++                    json!({"scopedType":"texture","globalPresetPreserved":true}),
++                );
++                true
++            }
++            15 | 19 => self.click(
++                shell,
++                window,
++                scale,
++                "import-defaults-type",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            16 => self.option(
++                shell,
++                window,
++                scale,
++                "import-defaults-type",
++                "glTF model",
++                events,
++            )?,
++            17 => self.click(
++                shell,
++                window,
++                scale,
++                "import-batch-virtualGeometry",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            18 => {
++                self.revision(editor, 1)?;
++                self.policy_transaction(editor)?;
++                self.batch_state(editor, true)?;
++                self.protected(editor)?;
++                let p = serde_json::to_value(policy(editor)?)?;
++                require(
++                    p["defaults"]["gltf"]["virtualGeometry"] == false,
++                    "glTF defaults UI did not disable virtual geometry",
++                )?;
++                self.check_policy_scope(&p, "gltf")?;
++                self.passed
++                    .push("project-gltf-default-native-toggle-scoped");
++                self.checkpoint_policy = p;
++                self.base = editor.host.store().revision();
++                self.mark(
++                    "defaults-gltf",
++                    editor,
++                    shell,
++                    json!({"scopedType":"gltf","textureDefaultsRetained":true}),
++                );
++                true
++            }
++            20 => self.option(
++                shell,
++                window,
++                scale,
++                "import-defaults-type",
++                "Audio",
++                events,
++            )?,
++            21 => self.click(
++                shell,
++                window,
++                scale,
++                "import-batch-codec-options",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            22 => self.option(
++                shell,
++                window,
++                scale,
++                "import-batch-codec-options",
++                "Adpcm",
++                events,
++            )?,
++            23 => {
++                self.revision(editor, 1)?;
++                self.policy_transaction(editor)?;
++                self.batch_state(editor, true)?;
++                self.protected(editor)?;
++                let p = serde_json::to_value(policy(editor)?)?;
++                require(
++                    p["defaults"]["audio"]["codec"] == "adpcm",
++                    "Audio defaults UI did not commit Adpcm",
++                )?;
++                self.check_policy_scope(&p, "audio")?;
++                self.passed
++                    .push("project-audio-default-native-select-scoped");
++                self.checkpoint_policy = p;
++                self.base = editor.host.store().revision();
++                self.mark(
++                    "defaults-audio",
++                    editor,
++                    shell,
++                    json!({"scopedType":"audio","otherTypeDefaultsRetained":true}),
++                );
++                true
++            }
++            24 => self.click(
++                shell,
++                window,
++                scale,
++                "import-defaults-quality",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            25 => self.option(
++                shell,
++                window,
++                scale,
++                "import-defaults-quality",
++                "Balanced",
++                events,
++            )?,
++            26 => {
++                self.revision(editor, 1)?;
++                self.policy_transaction(editor)?;
++                self.batch_state(editor, true)?;
++                self.protected(editor)?;
++                let p = policy(editor)?;
++                let value = serde_json::to_value(&p)?;
++                require(
++                    value["preset"] == "balanced"
++                        && value["defaults"] == self.checkpoint_policy["defaults"],
++                    "Global quality edit regressed typed defaults or failed to update the preset",
++                )?;
++                let current = sources(editor)?;
++                for id in DOCS {
++                    let raw = &current[id]["settings"];
++                    let (effective, preset) = p.resolved_settings("ara.texture", None, raw)?;
++                    require(
++                        effective["flipNormalY"] == true
++                            && effective["usage"] == "mask"
++                            && preset == ara_asset::CookPreset::Balanced,
++                        "Worker settings resolution did not combine source override, type default and global quality",
++                    )?;
++                    require(
++                        effective["mipmaps"] == raw["mipmaps"]
++                            && effective["maxDimension"] == raw["maxDimension"],
++                        "Inherited defaults overwrote explicit independent source fields",
++                    )?;
++                }
++                require(
++                    p.effective_settings("ara.gltf", &json!({}))?["virtualGeometry"] == false,
++                    "glTF typed default is not consumed by the importer resolution seam",
++                )?;
++                require(
++                    p.effective_settings("ara.audio", &json!({}))?["codec"] == "adpcm",
++                    "Audio typed default is not consumed by the importer resolution seam",
++                )?;
++                self.passed
++                    .push("global-quality-native-select-preserves-scoped-defaults-and-resolution");
++                self.mark("global-balanced-inheritance",editor,shell,json!({"sourceOverridesWin":true,"typeDefaultsApply":true,"globalQualityWorks":true}));
++                true
++            }
++            27 => self.click(
++                shell,
++                window,
++                scale,
++                "import-defaults-close",
++                Some("import-defaults-inspector"),
++                events,
++            )?,
++            28 => {
++                if shell.shown_node("import-batch-title").is_none() {
++                    false
++                } else {
++                    self.selected(editor, shell, 2)?;
++                    self.batch_state(editor, true)?;
++                    self.mark(
++                        "selection-returned",
++                        editor,
++                        shell,
++                        json!({"bothSelectedRetained":true,"noPostOpenFilesystemMutation":true}),
++                    );
++                    true
++                }
++            }
++            _ => return Err("Invalid import-defaults native phase".into()),
++        };
++        if advanced {
++            self.phase += 1;
++        }
++        Ok(())
++    }
++    fn check_policy_scope(&self, current: &Value, changed: &str) -> ara_ui::Result<()> {
++        require(
++            current["preset"] == self.checkpoint_policy["preset"],
++            "Per-type defaults changed the global preset",
++        )?;
++        for key in ["texture", "gltf", "fbx", "audio"] {
++            if key != changed {
++                require(
++                    current["defaults"][key] == self.checkpoint_policy["defaults"][key],
++                    "Per-type defaults changed an unrelated importer scope",
++                )?;
++            }
++        }
++        Ok(())
++    }
++    fn setup(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        require(
++            shell.offscreen && !shell.modal_active(),
++            "Import-defaults proof requires an idle hidden shell",
++        )?;
++        self.started = Some(Instant::now());
++        self.initial = Some(Initial {
++            folder: editor.state.asset_folder.clone(),
++            query: editor
++                .state
++                .searches
++                .get("assets")
++                .cloned()
++                .unwrap_or_default(),
++            scope: editor.state.asset_search_folder_only,
++            grid: editor.state.asset_grid,
++            asset: editor.state.asset_path.clone(),
++            maximized: editor.state.maximized.clone(),
++            focus: editor.state.focus.clone(),
++            camera: editor.state.camera,
++            doc: editor.state.doc.clone(),
++            selection: editor.state.selection.clone(),
++            source: sources(editor)?,
++            policy: serde_json::to_value(policy(editor)?)?,
++        });
++        shell.leave();
++        shell.menu = None;
++        editor.action(
++            "editor.layout.move",
++            json!({"panel":"assets","slot":"view"}),
++        )?;
++        editor.action("editor.layout.show", json!({"panel":"inspector"}))?;
++        editor.action("editor.view", json!({"maximized":""}))?;
++        editor.action("editor.workspace",json!({"folder":format!("{}/{FOLDER}",ara_doc::AUTHORING_ROOT),"asset":"","assetQuery":"","folderOnly":true,"grid":false}))?;
++        editor.action("editor.focus", json!({"panel":"assets"}))?;
++        shell.refresh_asset_browser()?;
++        shell.rebuild(editor)?;
++        native::focus_lost(window, events)?;
++        self.phase = 1;
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/import_defaults_verify/cleanup.rs b/crates/ara-editor/src/app/import_defaults_verify/cleanup.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/import_defaults_verify/cleanup.rs
+@@ -0,0 +1,76 @@
++//! Cleanup is one ordinary typed content batch, never a filesystem restore.
++use super::proof::{policy, require, sources};
++use super::*;
++impl ImportDefaultsCheck {
++    pub(super) fn restore(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
++        let Some(initial) = &self.initial else {
++            self.restored = true;
++            return Ok(());
++        };
++        if shell.import_defaults_open() {
++            shell.close_import_defaults(editor)?;
++        }
++        let mut commands = Vec::new();
++        for (index, id) in DOCS.into_iter().enumerate() {
++            let record = &initial.source[id];
++            let mut args = json!({"source":SOURCES[index],"settings":record["settings"]});
++            match record.get("preset").filter(|value| !value.is_null()) {
++                Some(preset) => args["preset"] = preset.clone(),
++                None => args["useProjectPreset"] = json!(true),
++            }
++            commands.push(json!({"cmd":"import.configure","args":args}));
++        }
++        commands.push(
++            json!({"cmd":"import.project.configure","args":{"preset":initial.policy["preset"]}}),
++        );
++        for key in ["texture", "gltf", "fbx", "audio"] {
++            let mut args = json!({});
++            if initial.policy["defaults"][key].is_null() {
++                args["resetType"] = json!(key);
++            } else {
++                args[key] = initial.policy["defaults"][key].clone();
++            }
++            commands.push(json!({"cmd":"import.project.configure","args":args}));
++        }
++        let _receipt = editor.apply(
++            commands,
++            "Restore native import/defaults fixture",
++            Some(editor.host.store().revision()),
++        )?;
++        require(
++            sources(editor)? == initial.source
++                && serde_json::to_value(policy(editor)?)? == initial.policy,
++            "Typed cleanup did not restore both sidecars and every importer-default slot",
++        )?;
++        editor.action(
++            "editor.workspace",
++            json!({"folder":initial.folder,"assetQuery":initial.query,"folderOnly":initial.scope,
++            "asset":initial.asset.as_deref().unwrap_or(""),"grid":initial.grid}),
++        )?;
++        editor.action(
++            "editor.view",
++            json!({"maximized":initial.maximized.as_deref().unwrap_or("")}),
++        )?;
++        editor.action("editor.focus", json!({"panel":initial.focus}))?;
++        shell.desktop_pointer = None;
++        self.pointer = None;
++        shell.rebuild(editor)?;
++        self.protected(editor)?;
++        self.restored = editor.state.asset_folder == initial.folder
++            && editor
++                .state
++                .searches
++                .get("assets")
++                .map(String::as_str)
++                .unwrap_or("")
++                == initial.query
++            && editor.state.asset_search_folder_only == initial.scope
++            && editor.state.asset_path == initial.asset
++            && editor.state.asset_grid == initial.grid
++            && editor.state.maximized == initial.maximized;
++        require(
++            self.restored,
++            "Import/defaults navigation cleanup was incomplete",
++        )
++    }
++}
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+index 45c87e633..9bc4807bb 100644
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -21,6 +21,7 @@ mod hierarchy_verify;
+ mod history_verify;
+ mod import_drops;
+ mod import_verify;
++mod import_defaults_verify;
+ mod input_verify;
+ mod journey;
+ mod lighting_verify;
+@@ -100,6 +101,7 @@ pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
+ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+     if options.verify_behaviours {
+         content_drags::fixture(&mut options)?;
++        import_defaults_verify::prepare(&options)?;
+         hierarchy_verify::prepare(&options)?;
+         std::fs::write(
+             options.output.join("verification-scope.json"),
+@@ -422,6 +424,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+     let mut hierarchy_check = None;
+     let mut collection_check = None;
+     let mut bookmarks_check = None;
++    let mut import_defaults_check = None;
+     let mut lighting_check = None;
+     let mut pilot_check = None;
+     let mut snapping_check = None;
+@@ -704,6 +707,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+             if bookmarks_check
+                 .as_ref()
+                 .is_some_and(bookmarks_verify::BookmarksCheck::finished)
++                && import_defaults_check.is_none()
++            {
++                import_defaults_check = Some(import_defaults_verify::ImportDefaultsCheck::new(
++                    &editor,
++                    &options.output,
++                )?);
++            }
++            if let Some(check) = &mut import_defaults_check {
++                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
++                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
++            }
++            if import_defaults_check
++                .as_ref()
++                .is_some_and(import_defaults_verify::ImportDefaultsCheck::finished)
+                 && lighting_check.is_none()
+             {
+                 lighting_check = Some(lighting_verify::LightingCheck::new(
+@@ -900,6 +917,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
+                 {
+                     check.clipboard()
++                } else if let Some(check) = import_defaults_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+@@ -1120,6 +1139,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
+                 {
+                     check.clipboard()
++                } else if let Some(check) = import_defaults_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+@@ -2205,6 +2226,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+             if let Some(check) = &mut bookmarks_check {
+                 check.end(&editor, &mut shell, &mut gpu)?;
+             }
++            if let Some(check) = &mut import_defaults_check {
++                check.end(&editor, &mut shell, &mut gpu)?;
++            }
++
+             if let Some(check) = &mut input_check {
+                 check.end(
+                     &editor,
+@@ -2400,6 +2425,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 .ok_or("The Assets bookmarks journey did not start")?;
+             check.write()?;
+             check.validate()?;
++            let check = import_defaults_check
++                .as_ref()
++                .ok_or("The import defaults journey did not start")?;
++            check.write()?;
++            check.validate()?;
++
+             let check = script_check
+                 .as_ref()
+                 .ok_or("The native C# iteration journey did not start")?;

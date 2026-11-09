@@ -1,9 +1,8 @@
 //! First-use VFX construction inside an asynchronous Scene frame. Vulkan only: the
-//! atlas upload is held back with a raw timeline semaphore.
+//! atlas upload is held back with a `QueueGate`.
 #![cfg(not(target_os = "macos"))]
 use anyhow::Result;
-use ara_gpu::vk::TaggedStructure;
-use ara_gpu::{Device, GpuDevice, Queue, Resource, vk};
+use ara_gpu::{Device, GpuDevice, Queue, Resource, vk, vulkan::QueueGate};
 use ara_vfx_gpu::GpuSystem;
 use std::path::Path;
 
@@ -16,27 +15,8 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
     let baseline = gpu.descriptor_usage();
     // Block the actual atlas transfer until the constructor returns. This makes
     // the old post-submit host upload fail deterministically, without timing races.
-    let device = gpu.context().device.clone();
-    let mut kind =
-        vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-    // SAFETY: Test-owned semaphore, signalled and destroyed after its only wait.
-    let gate = unsafe {
-        device.create_semaphore(&vk::SemaphoreCreateInfo::default().push(&mut kind), None)?
-    };
     gpu.begin_deferred_completion()?;
-    // SAFETY: The owner thread submits an empty wait before the atlas transfer.
-    unsafe {
-        device.queue_submit2(
-            gpu.context().scene_graphics,
-            &[vk::SubmitInfo2::default().wait_semaphore_infos(&[
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(gate)
-                    .value(1)
-                    .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS),
-            ])],
-            vk::Fence::null(),
-        )?;
-    }
+    let mut gate = QueueGate::new(gpu.context(), gpu.context().scene_graphics)?;
     let mut system = GpuSystem::new(
         &mut gpu,
         &effect,
@@ -48,17 +28,11 @@ fn deferred_vfx_initialization_and_failed_retries_release_their_heap_slots() -> 
         Ok(system) => system.advance(&mut gpu, &Default::default()),
         Err(_) => Ok(()),
     };
-    // Always release even when construction fails: an assertion must not hang Drop.
-    // SAFETY: Sole signal releases the test-owned queue wait.
-    unsafe {
-        device.signal_semaphore(&vk::SemaphoreSignalInfo::default().semaphore(gate).value(1))?;
-    }
+    // Always release even when construction fails (Drop would too).
+    gate.open()?;
     let mut completion = gpu.end_deferred_completion()?;
     gpu.wait_completion(&mut completion)?;
-    // SAFETY: Completion drained all submissions after the semaphore wait.
-    unsafe {
-        device.destroy_semaphore(gate, None);
-    }
+    drop(gate);
     system?.retire(&mut gpu)?;
     advanced?;
     gpu.collect()?;

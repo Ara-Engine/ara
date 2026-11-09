@@ -68,24 +68,18 @@ impl Shell {
             } else {
                 String::new()
             };
-            out.push_str(&format!("<field id='{id}' class='{}'{metrics} style='flex-grow:1;flex-basis:0px' text='{}' label='{}' description='{}' action='Dispatch' />",if numeric{"number"}else{""},escape(&text),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
+            // A bounded number fills to its value and drags across its range.
+            let bounded = desc
+                .and_then(|desc| desc.range)
+                .is_some_and(|range| range.min.is_some() && range.max.is_some());
+            let class = match (numeric, bounded) {
+                (true, true) => "number slider",
+                (true, false) => "number",
+                _ => "",
+            };
+            out.push_str(&format!("<field id='{id}' class='{class}'{metrics} style='flex-grow:1;flex-basis:0px;min-width:0px' text='{}' label='{}' description='{}' action='Dispatch' />",escape(&text),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
         };
         if ty.is_number() {
-            let range = desc.and_then(|d| d.range);
-            if let Some((min, max)) = range.and_then(|r| Some((r.min?, r.max?))) {
-                let slider = format!("nest-slider-{rid}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&slider),
-                    Binding::Nested(
-                        target.to_owned(),
-                        Leaf::Number,
-                        false,
-                        desc.and_then(|desc| desc.unit)
-                            .map(|unit| unit.symbol().to_owned()),
-                    ),
-                );
-                out.push_str(&format!("<slider id='{slider}' style='flex-grow:1;flex-basis:0px' min='{min}' max='{max}' step='{}' value='{}' action='Dispatch' />",desc.and_then(|d|d.editor.step).unwrap_or(0.01),value.as_f64().unwrap_or(min).clamp(min,max)));
-            }
             text_box(
                 self,
                 out,
@@ -116,17 +110,9 @@ impl Shell {
                         },
                     ),
                 );
-                out.push_str(&format!("<button id='{swatch}' class='swatch inspector-swatch' label='Pick colour' description='Open the colour picker' action='Dispatch' />"));
+                // One long swatch, as top-level colours; the picker edits the rest.
+                out.push_str(&format!("<button id='{swatch}' class='swatch inspector-swatch' label='Pick colour' description='{} · Click to edit in the colour picker' action='Dispatch' />", escape(&linear_hex(value))));
                 self.nested_swatches.push((swatch, value.clone()));
-                text_box(
-                    self,
-                    out,
-                    &id,
-                    target.to_owned(),
-                    Leaf::Hex,
-                    linear_hex(value),
-                    false,
-                );
                 return;
             }
             for axis in 0..count {
@@ -198,21 +184,7 @@ impl Shell {
                     ),
                     None => {
                         if !source.is_empty()
-                            && matches!(
-                                source.rsplit('.').next(),
-                                Some(
-                                    "material"
-                                        | "graph"
-                                        | "png"
-                                        | "jpg"
-                                        | "jpeg"
-                                        | "hdr"
-                                        | "exr"
-                                        | "glb"
-                                        | "gltf"
-                                        | "fbx"
-                                )
-                            )
+                            && crate::asset_tools::thumbnails::has_thumbnail(source)
                         {
                             self.thumbnails.request(source);
                         }
@@ -236,6 +208,7 @@ impl Shell {
                 let Some(Shape::Enum { variants }) = db.get(name).map(|t| &t.shape) else {
                     return;
                 };
+                let start = out.len();
                 self.choice_button(
                     &id,
                     name,
@@ -249,6 +222,14 @@ impl Shell {
                     },
                     out,
                 );
+                // Like top-level selects, nested ones fill the value column.
+                let markup = out[start..].replacen(
+                    "kit-select-compact'",
+                    "kit-select-compact kit-select-fill'",
+                    1,
+                );
+                out.truncate(start);
+                out.push_str(&markup);
             }
             ValueType::Json => {
                 let text = if value.is_null() {

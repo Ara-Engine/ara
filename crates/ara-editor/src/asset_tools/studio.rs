@@ -107,6 +107,16 @@ impl Subject {
         Ok(subject)
     }
 
+    /// An extracted scene's meshes, materials and textures (a prefab's entities, as the
+    /// Scene view draws them); its lights and environment are replaced by the studio's.
+    pub fn scene(scene: Scene) -> Self {
+        Self {
+            meshes: scene.meshes,
+            materials: scene.materials,
+            textures: scene.textures,
+        }
+    }
+
     /// Untextured geometry (FBX meshes use material 0) in a neutral clay.
     pub fn clay(meshes: Vec<Mesh>) -> Self {
         Self {

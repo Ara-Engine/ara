@@ -47,6 +47,21 @@ pub struct SceneCaptureParams {
     pub seed: Option<u64>,
     /// Numbered entity marks (default 40; zero disables them).
     pub marks: Option<u32>,
+    /// Rendering diagnosis: effects to turn off (or full resolution on) for this image.
+    pub render_debug: Option<ara_play::RenderDebug>,
+    /// Measure flicker: render this many live frames with a still camera, report how
+    /// much the last eight change and write the final one as `<name>.live.png`.
+    #[ara(range(min = 1, max = 600))]
+    pub stability: Option<u32>,
+    /// Record a clip: render this many live frames (60 per second) while the camera
+    /// moves by `videoMove` and turns by `videoYaw`, writing each frame to
+    /// `<name>.video/NNNNN.png`.
+    #[ara(range(min = 1, max = 3600))]
+    pub video: Option<u32>,
+    /// World-space camera travel over the clip, in metres.
+    pub video_move: Option<[f32; 3]>,
+    /// Camera turn over the clip, in degrees about the vertical axis.
+    pub video_yaw: Option<f32>,
 }
 
 fn tick_count(ticks: Option<u32>, duration: Option<f64>, hz: u32) -> Result<u32, Vec<Diagnostic>> {
@@ -106,6 +121,7 @@ impl PlayService {
                 tick_hz: hz,
                 hot_reload: Some(false),
                 conditions: None,
+                render_debug: None,
             },
         )?;
         Ok(started["world"]
@@ -185,12 +201,21 @@ impl PlayService {
         );
         let result = (|| {
             self.call(&id, method::STEP, json!({"ticks":ticks}), false)?;
+            if let Some(debug) = p.render_debug {
+                self.call(
+                    &id,
+                    method::RENDER_DEBUG,
+                    json!({"renderDebug": debug}),
+                    false,
+                )?;
+            }
             let mut result = self.call(
                 &id,
                 method::CAPTURE,
                 json!({
                     "path":path,"width":size[0],"height":size[1],"marks":p.marks.unwrap_or(40),
-                    "camera":p.camera,"preset":p.preset,
+                    "camera":p.camera,"preset":p.preset,"stability":p.stability,
+                    "video":p.video,"videoMove":p.video_move,"videoYaw":p.video_yaw,
                 }),
                 false,
             )?;
@@ -208,6 +233,19 @@ impl PlayService {
             size[1],
             path.display()
         ));
+        if let Some(s) = result.get("stability").filter(|s| !s.is_null()).cloned() {
+            let number = |key: &str| s[key].as_f64().unwrap_or_default();
+            result["text"] = json!(format!(
+                "{}Stability after {} live frames: mean change {:.3}, worst 16x16 block {:.2}, {:.1}% of blocks flicker, GPU {:.2} ms/frame; live frame {}.\n",
+                result["text"].as_str().unwrap_or_default(),
+                s["frames"],
+                number("meanChange"),
+                number("worstBlock"),
+                number("flickeringBlocks") * 100.,
+                number("gpuMs"),
+                s["liveImage"].as_str().unwrap_or_default(),
+            ));
+        }
         Ok(result)
     }
 }

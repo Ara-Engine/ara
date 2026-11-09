@@ -1,0 +1,112 @@
+Collection/native DnD follow-up -- prepared only; Root owns gates and commit
+
+Directory: D:/AraBuild/ux-editor-target/orchestration/collection-followup/
+Base source: 83ef733b146b80a7e4f04d9fb145d724cf52b995.
+Last read-only apply checks also passed against current Root 4d303079f.
+
+all.patch (core + Root-owned app hook)
+  SHA256 939DD209D80DBF859D696F93BDC70EA793EC552FFBE26D603D63D46B6564651F
+collection-followup.patch (six non-hardfile sources)
+  SHA256 C7733D9D16A604EAE99DC3114F84EF3B3D3F9D90CC1C332FA4478564638E9921
+app-hook.patch (Root serially integrates four exact hook sites)
+  SHA256 B79BCBA562BDF6D0406354BB98848F107A6C3C83EBAD45B72F73F9C04002FE0A
+
+No tracked files were edited. No cargo/build/tests/native runs/commits executed.
+Standalone rustfmt parsed/formatted the seven D-only candidate source copies.
+git apply --check passed for the combined patch and both separate patches.
+
+Cause pinned by the existing native capture
+The old accepted caret y=464.462 was 5.720px away from the current legal row edge
+y=458.742. The same frame had advanced scroll offset, then recycled/laid out rows
+after resolving feedback. The driver also selected item100's bottom while it was
+still in the 24px edge-scroll band, allowing the logical item to move away before
+release. Store revision remained158, records unchanged, pool<=14; pointer and drag
+pointer agreed at scale1. The two issues are corrected independently.
+
+Production flow -- systemic, no duplicate target-validation cache
+1. advance_content_drag(dt) updates the existing typed pointer/capture and performs
+   edge scroll only. It does not query/validate an authoring target or produce ops.
+   Native motion uses dt0; the held frame uses nonzero dt once, as before.
+2. Dispatch and layout recycle/position the bounded rows normally.
+3. The final main render calls settle_content_feedback after the late diagnostic
+   and Game-preview rebuild sites. It uses the existing shared content target
+   resolver once and repaints the matching ghost/caret. It does not scroll again.
+   It handles all payloads, not collections alone. A validation error becomes a
+   rejected preview plus the existing diagnostic path, not a stale accepted drop.
+4. The final floating frame wrapper does frame + settle with the same enter/leave
+   and returning-surface ownership as existing frame_surface. No additional
+   surface-ID clone is introduced compared with that existing wrapper.
+5. Native material picking caches the current borrowed draw's subtree-local slot
+   without requiring pre-layout rejection feedback. Import/lock/target validation
+   happens in the same common post-layout/release resolver. Native re-picks clear
+   old surface/material contacts first, including a miss at the same pointer.
+6. content_drag_over remains a standalone/release compatibility wrapper. The
+   finish path still calls it at dt0 and resolves the target afresh before the
+   existing typed command-producing-ops commit. No authoring validation is skipped.
+
+Cost/safety
+- Native target validation moved from pre-layout to post-layout; it is not added
+  twice per frame. No new history/model snapshot, target cache, Host inspect query,
+  per-frame full document clone or GPU readback/wait is added.
+- Collection resolution reads existing mounted bindings/compound values. Other
+  payloads retain their existing cached resolver and validation behavior.
+- Main active content drag needs one final UI repaint pass to paint the settled
+  feedback. Gate/measure the complete native route; the old scroll-math-only
+  benchmark alone does not establish its full frame cost.
+- Reflection/catalog/schema/wire formats are unchanged. The drag evidence JSON
+  adds the existing typed ItemKey to source and target, so journeys can assert
+  actual model identity instead of inferring it solely from a line position.
+
+Why refresh does not cause an incorrect release retarget
+The displayed target is resolved from the captured pointer on its owning surface
+against the current row bindings, after layout. The source ItemKey remains in the
+original DragSession. In the controlled regression, scrolling moves the pointer
+from after item100 to before item101: the resolver now advertises that current row
+and current caret, which represent the SAME insertion slot. Release at unchanged
+pointer/layout revalidates that slot at dt0. If model/layout really changed, fresh
+release validation rejects or resolves the actual new target; no stale target is
+silently committed. Native item100 proof waits in the neutral band so its literal
+after-item100 target remains stable across the real pointer move and release.
+
+Prepared regression seams -- NOT RUN
+1. Existing held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once:
+   stationary capture scrolls at dt0.016 (<=400 bounded iterations), then one more
+   real nonzero scroll occurs before post-layout feedback. Asserts source Index0,
+   actual typed target Index101/Before under the pointer, exact current row caret,
+   the same native display command, no second scroll/no preview mutation, exact
+   insertion after item100, and one transaction/Undo/Redo with revision checks.
+2. native_surface_pick_miss_cannot_reuse_previous_contact_at_the_same_pointer:
+   clearing/re-picking cannot reuse an earlier precise surface point; preview stays
+   read-only. Existing surface/material and floating-drop acceptance must also pass.
+3. neutral_after_point_waits_for_real_scroll_band_and_keeps_exact_item_boundary:
+   pure kit-math test of the actual captured viewport, neutral margin and After
+   placement, including invalid/clipped input rejection.
+
+Native collection acceptance remains exact
+- Held phase injects NO extra pointer movement. It simply keeps waiting while
+  real auto-scroll runs until item100's after point and +/-2px margin have zero
+  auto-scroll velocity according to the actual shared kit function.
+- Then the existing raw SDL motion/release is injected. No reveal API, scroll_to,
+  command shortcut, model write or synthetic success sets the result.
+- Existing exact two-record snapshots, one Undo/Redo and <=14-row bounds stay.
+  Source and destination ItemKeys are asserted explicitly, with after=true for
+  item100 (also the stable key for the keyed-list case).
+- Existing phase deadline remains60s. Timeout now explains neutral-band waiting
+  and records actual scroll offset/row; traces include item100 row/neutral point.
+
+Root hook sites in app-hook.patch
+- Held offscreen/native fallback: content_drag_over(editor,dt) -> advance(dt).
+- Native track_content_drag: advance only; clear/reacquire surface pick candidates.
+- Final main UI render, after late rebuilds and before gpu.select_target(0):
+  work += shell.settle_content_feedback(&mut editor)?;
+- Final floating frame_surface call -> frame_surface_with_content_feedback.
+  No submission/fence code is changed.
+
+Root focused gates after application
+- ara-dev fmt; strict all-target ara-editor Clippy.
+- The three named seams, existing drag/material/nested suites, editor --lib and
+  editor --test ux / --test script_assets.
+- Native core16 (surface/material/floating routes), import9/assets12 as warranted,
+  and full collections4 using the same hidden-window event route. Keep failure
+  evidence; obey the active GPU gate guard/queue before each capture or soak.
+- No goldens were updated by this preparation. No merge-ready SHA is claimed.

@@ -15,13 +15,17 @@ impl Gpu {
     ) -> Result<Self> {
         crate::cpu_scope!("GPU.device_create");
         let mut validation = Box::<Validation>::default();
+        // Debug builds validate unless `ARA_NO_GPU_VALIDATION` is set non-empty (the
+        // `ara-dev live` loop sets it so dev frames time like real ones).
+        let validate = cfg!(debug_assertions)
+            && std::env::var_os("ARA_NO_GPU_VALIDATION").is_none_or(|v| v.is_empty());
         // SAFETY: All create-info slices live through their calls; the entry,
         // instance, device and callback userdata are retained by Gpu.
         unsafe {
             let entry = Entry::load()?;
             let layers = entry.enumerate_instance_layer_properties()?;
             ensure!(
-                !cfg!(debug_assertions)
+                !validate
                     || layers
                         .iter()
                         .any(|l| CStr::from_ptr(l.layer_name.as_ptr())
@@ -29,21 +33,31 @@ impl Gpu {
                 "Khronos validation layer unavailable"
             );
             let mut extensions = vec![ash::ext::debug_utils::NAME.as_ptr()];
-            if cfg!(debug_assertions) {
+            if validate {
                 extensions.push(ash::ext::validation_features::NAME.as_ptr());
             }
             extensions.extend(window_extensions.iter().map(|s| s.as_ptr()));
             // Defer optional WSI discovery until a surface is requested.
-            if !window_extensions.is_empty()
-                && entry
-                    .enumerate_instance_extension_properties(None)?
+            let instance_extensions = if window_extensions.is_empty() {
+                Vec::new()
+            } else {
+                entry.enumerate_instance_extension_properties(None)?
+            };
+            let instance_has = |name: &CStr| {
+                instance_extensions
                     .iter()
-                    .any(|extension| {
-                        CStr::from_ptr(extension.extension_name.as_ptr())
-                            == ash::ext::swapchain_colorspace::NAME
-                    })
-            {
+                    .any(|e| CStr::from_ptr(e.extension_name.as_ptr()) == name)
+            };
+            if instance_has(ash::ext::swapchain_colorspace::NAME) {
                 extensions.push(ash::ext::swapchain_colorspace::NAME.as_ptr());
+            }
+            // Present scaling (a swapchain of another size presented 1:1, for live window
+            // resizes) needs both surface queries here and the device extension below.
+            let surface_scaling = instance_has(ash::khr::get_surface_capabilities2::NAME)
+                && instance_has(ash::ext::surface_maintenance1::NAME);
+            if surface_scaling {
+                extensions.push(ash::khr::get_surface_capabilities2::NAME.as_ptr());
+                extensions.push(ash::ext::surface_maintenance1::NAME.as_ptr());
             }
             let layer_names = [c"VK_LAYER_KHRONOS_validation".as_ptr()];
             let enabled = [vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION];
@@ -67,13 +81,9 @@ impl Gpu {
             let mut instance_info = vk::InstanceCreateInfo::default()
                 .application_info(&app)
                 .enabled_extension_names(&extensions)
-                .enabled_layer_names(if cfg!(debug_assertions) {
-                    &layer_names
-                } else {
-                    &[]
-                })
+                .enabled_layer_names(if validate { &layer_names } else { &[] })
                 .push(&mut debug_info);
-            if cfg!(debug_assertions) {
+            if validate {
                 instance_info = instance_info.push(&mut features);
             }
             let instance = entry.create_instance(&instance_info, None)?;
@@ -163,6 +173,12 @@ impl Gpu {
             if external_memory {
                 device_extensions.push(ash::khr::external_memory_win32::NAME.as_ptr());
             }
+            // Its swapchainMaintenance1 feature is required wherever the extension is offered.
+            let present_scaling =
+                surface_scaling && has_extension(ash::ext::swapchain_maintenance1::NAME);
+            if present_scaling {
+                device_extensions.push(ash::ext::swapchain_maintenance1::NAME.as_ptr());
+            }
             for &extension in &device_extensions {
                 ensure!(
                     has_extension(CStr::from_ptr(extension)),
@@ -195,13 +211,13 @@ impl Gpu {
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
-            let ray_tracing = enable_ray_tracing
-                && rt_extensions
+            let ray_tracing_supported = rt_extensions
                 && acceleration_features.acceleration_structure != 0
                 && ray.ray_query != 0
                 && acceleration_features
                     .descriptor_binding_acceleration_structure_update_after_bind
                     != 0;
+            let ray_tracing = enable_ray_tracing && ray_tracing_supported;
             if ray_tracing {
                 device_extensions.extend([
                     ash::khr::acceleration_structure::NAME.as_ptr(),
@@ -295,6 +311,11 @@ impl Gpu {
             if mesh_shading {
                 device_info = device_info.push(&mut mesh_features);
             }
+            let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+                .swapchain_maintenance1(true);
+            if present_scaling {
+                device_info = device_info.push(&mut maintenance);
+            }
             let (device, high_priority) =
                 super::priority::create(global_priority_extension.is_some(), |high| {
                     let mut priority = vk::DeviceQueueGlobalPriorityCreateInfo::default()
@@ -375,6 +396,7 @@ impl Gpu {
                     .map(|heap| heap.size / (1024 * 1024))
                     .sum(),
                 ray_tracing,
+                ray_tracing_supported,
                 texture_compression_bc: core_supported.texture_compression_bc != 0,
                 sampled_image_capacity,
                 storage_buffer_capacity,
@@ -393,6 +415,7 @@ impl Gpu {
                 ],
                 geometry_shader: core_supported.geometry_shader != 0,
                 hdr_metadata,
+                present_scaling,
                 buffer_int64_atomics,
                 shader_integer_dot_product,
                 packed_integer_dot_accelerated: shader_integer_dot_product

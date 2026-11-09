@@ -23,6 +23,19 @@ impl Key {
             && self.pose == current.pose
             && self.scene == current.scene
     }
+
+    /// Whether content prepared for this key may be shown: it matches `current`,
+    /// or it is the same committed document, scene and pose with an older draft
+    /// projection (`epoch`) that is still newer than the frame `shown`. A slider
+    /// drag shows such intermediates and then follows the latest, rather than
+    /// discarding every result; a frame patched in place since is never undone.
+    pub fn shows_progress(self, current: Self, shown: Option<Self>) -> bool {
+        self.matches(current)
+            || self.matches(Self {
+                epoch: self.epoch,
+                ..current
+            }) && shown.is_some_and(|shown| self.epoch.wrapping_sub(shown.epoch) as i64 > 0)
+    }
 }
 
 pub(super) fn scene_key(editor: &crate::Editor) -> u64 {
@@ -74,12 +87,13 @@ pub(super) fn poll(
     job: &mut Option<Job>,
     publication: &mut Option<Publication>,
     current: Key,
+    shown: Option<Key>,
     renderer: &mut ara_render::Renderer,
     wait: bool,
 ) -> anyhow::Result<()> {
     if publication
         .as_ref()
-        .is_some_and(|p| !p.key.matches(current))
+        .is_some_and(|p| !p.key.shows_progress(current, shown))
     {
         publication
             .take()
@@ -97,7 +111,7 @@ pub(super) fn poll(
             .thread
             .join()
             .map_err(|_| anyhow::anyhow!("Scene content worker panicked"))?;
-        if job.key.matches(current) {
+        if job.key.shows_progress(current, shown) {
             *publication = Some(Publication {
                 key: job.key,
                 scene: result?,
@@ -182,5 +196,27 @@ mod tests {
         assert!(!key.matches(Key { epoch: 6, ..key }));
         assert!(!key.matches(Key { pose: None, ..key }));
         assert!(!key.matches(Key { scene: 8, ..key }));
+    }
+
+    fn key(revision: u64, epoch: u64) -> Key {
+        Key {
+            revision: (revision, 0, 0, 0),
+            epoch,
+            pose: None,
+            scene: 1,
+        }
+    }
+
+    #[test]
+    fn older_drafts_show_only_when_newer_than_the_shown_frame() {
+        let (current, shown) = (key(5, 9), Some(key(5, 6)));
+        assert!(key(5, 9).shows_progress(current, None));
+        // A slider step behind the latest, ahead of the screen: show it.
+        assert!(key(5, 7).shows_progress(current, shown));
+        // Older than a frame patched in place, or before the first frame: drop it.
+        assert!(!key(5, 6).shows_progress(current, shown));
+        assert!(!key(5, 7).shows_progress(current, None));
+        // A different committed document is never an intermediate.
+        assert!(!key(4, 7).shows_progress(current, shown));
     }
 }

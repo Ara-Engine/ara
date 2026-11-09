@@ -396,6 +396,18 @@ fn text(shell: &Shell, id: &str) -> String {
         .map(|t| t.value.clone())
         .unwrap_or_default()
 }
+
+/// A colour swatch's tooltip: its hex, alpha and HDR intensity ("#FF0000 · +3.0 EV").
+fn swatch(shell: &Shell, component: &str, field: &str) -> String {
+    let id = format!("swatch-{component}-{field}");
+    let i = shell.ui.find(&id).unwrap_or_else(|| panic!("no {id}"));
+    shell.ui.nodes[i]
+        .element
+        .attrs
+        .get("description")
+        .cloned()
+        .unwrap_or_default()
+}
 /// A stored colour's channels as numbers (documents may write `1` or `1.0`).
 fn channels(value: Value) -> Vec<f64> {
     value
@@ -467,7 +479,7 @@ fn the_colour_picker_previews_drags_applies_each_gesture_once_and_escape_restore
     assert!(!picker_shown(&shell));
     assert!(authored(&editor, "e_crate001", "MeshRenderer", "color").is_null());
     assert_eq!(history(&editor), before + 2);
-    assert_eq!(text(&shell, "edit-MeshRenderer-color"), "#FFFFFF");
+    assert!(swatch(&shell, "MeshRenderer", "color").starts_with("#FFFFFF · Click"));
 }
 
 #[test]
@@ -526,17 +538,13 @@ fn hdr_colours_edit_a_base_colour_and_an_intensity_in_stops() {
         channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
         vec![8.0, 0.0, 0.0]
     );
-    // The Inspector shows the base colour's hex and the intensity; typed hex keeps it.
+    // The Inspector's swatch reads out the base colour's hex and the intensity; a
+    // new hex typed in the picker keeps the intensity.
     shell.close_color_picker(&mut editor, false).unwrap();
     shell.rebuild(&mut editor).unwrap();
-    assert_eq!(text(&shell, "edit-MeshRenderer-emissive"), "#FF0000");
-    assert_eq!(text(&shell, "stops-MeshRenderer-emissive"), "+3.0 EV");
-    type_into(
-        &mut shell,
-        &mut editor,
-        "edit-MeshRenderer-emissive",
-        "#00FF00",
-    );
+    assert!(swatch(&shell, "MeshRenderer", "emissive").starts_with("#FF0000 · +3.0 EV · "));
+    press(&mut shell, &mut editor, "swatch-MeshRenderer-emissive");
+    type_into(&mut shell, &mut editor, "cp-hex", "#00FF00");
     assert_eq!(
         channels(authored(&editor, "e_crate001", "MeshRenderer", "emissive")),
         vec![0.0, 8.0, 0.0]
@@ -867,8 +875,8 @@ fn material_overrides_add_slots_by_picking_a_material() {
     let mut clip = MemoryClipboard::default();
     // Real widgets for the material fields around the slots.
     assert!(shell.ui.find("swatch-MeshRenderer-emissive").is_some());
-    assert!(shell.ui.find("slider-MeshRenderer-roughness").is_some());
-    assert!(shell.ui.find("slider-MeshRenderer-metallic").is_some());
+    assert!(shell.ui.find("edit-MeshRenderer-roughness").is_some());
+    assert!(shell.ui.find("edit-MeshRenderer-metallic").is_some());
     // Add opens a picker of materials; picking one adds the slot (no empty slot).
     shell
         .click("add-MeshRenderer-materialOverrides", &mut clip)
@@ -984,7 +992,7 @@ fn maps_and_optional_structs_edit_per_entry() {
     assert!(
         shell
             .ui
-            .find("nest-slider-AcousticSurface-custom-scattering")
+            .find("nest-edit-AcousticSurface-custom-scattering")
             .is_some()
     );
     type_into(

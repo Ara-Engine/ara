@@ -2,7 +2,6 @@
 use super::*;
 use ara_render_fidelity::{
     FidelityView, FrameInput, PostSettings,
-    environment::FrameEnvironment,
     presets::{Capabilities, FidelityPlan, Plan, RenderPath},
 };
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
@@ -28,11 +27,30 @@ enum RasterWork {
     Capture(u32),
     Prepare,
 }
+/// The camera and gizmo pose a Scene frame was rendered with (`SceneView::shown_frame`):
+/// overlays draw with the frame on screen, so gizmos never drift from the image while
+/// Scene frames lag the camera.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FrameView {
+    pub camera: crate::state::Camera,
+    /// The gizmo drag offset of that frame (`GizmoState::offset`).
+    pub offset: glam::Mat4,
+    /// The document revision of that frame: a drag committed since moved the pivot
+    /// itself, so its offset no longer applies.
+    pub revision: u64,
+}
 #[derive(Default)]
 pub(crate) struct SceneView {
+    /// Recent submitted frames by tag (`Renderer::set_frame_tag`), oldest first.
+    frames: std::collections::VecDeque<(u64, FrameView)>,
+    /// The live gizmo drag offset for the next frames, set by the main loop.
+    pub(super) gizmo_offset: glam::Mat4,
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,
+    /// The `Editor::paint_revision` the frame shows, and whether a preview is applied.
+    paint_revision: u64,
+    paint_applied: bool,
     /// One submitted Scene frame; UI draws its previous completed color/ID pair.
     frame_pending: bool,
     fidelity: Option<FidelityView>,
@@ -73,6 +91,32 @@ pub(crate) struct SceneView {
     recovery: recovery::Recovery,
 }
 impl SceneView {
+    /// Entity `address`'s drawn model primitives (Mesh Paint targets): draw identity,
+    /// model generation, primitive index and model-to-world.
+    pub(super) fn paint_targets(
+        &self,
+        address: &str,
+    ) -> Vec<(
+        u64,
+        std::sync::Arc<ara_runtime::model::Model>,
+        usize,
+        glam::Mat4,
+    )> {
+        self.raster_frame
+            .iter()
+            .flat_map(|frame| &frame.draws)
+            .filter(|d| d.address == address)
+            .filter_map(|draw| match &draw.geometry {
+                ara_runtime::extract::Geometry::Model { model, primitive } => Some((
+                    draw.entity,
+                    std::sync::Arc::clone(model),
+                    *primitive,
+                    glam::Mat4::from_cols_array(&draw.world.to_cols_array()),
+                )),
+                ara_runtime::extract::Geometry::Shape { .. } => None,
+            })
+            .collect()
+    }
     /// Recheck native input at the next render boundary. Notifications for an
     /// already adopted publication coalesce; changed input retains last-good GPU
     /// content until its replacement or in-place update succeeds.
@@ -394,6 +438,15 @@ impl SceneView {
                 return Ok(());
             }
             self.convergence.completed();
+            // Automatic exposure still adapting when the budget runs out (it moves a
+            // little each frame): keep drawing until it lands, so a still view never
+            // freezes halfway and resumes on the next input. Bounded per input.
+            if !self.convergence.needs_frame()
+                && !matches!(work, RasterWork::Capture(_))
+                && renderer.exposure_settled() == Some(false)
+            {
+                self.convergence.adapt();
+            }
             self.frame_pending = false;
             if renderer.scene_frame_async() {
                 self.active = renderer.presentation_ready();
@@ -457,9 +510,13 @@ impl SceneView {
                 ray_tracing: settings.ray_tracing,
             },
         )?;
-        let RenderPath::Raster(plan) = plan.path else {
+        let RenderPath::Raster(mut plan) = plan.path else {
             return Ok(());
         };
+        // The Scene view renders at its full physical size: the preset's temporal
+        // upscale (`raster_scale` 0.45-0.7) blurred edges, outlines and wireframes,
+        // most visibly while the camera moved. Play and exports keep the preset scale.
+        plan.render_size = plan.display_size;
         self.convergence.configure(ara_render::temporal_phases(
             plan.render_size,
             plan.display_size,
@@ -467,6 +524,13 @@ impl SceneView {
         let presentation = (view_mode(&editor.state.view_mode), plan);
         if self.raster_presentation != Some(presentation) {
             self.raster_presentation = Some(presentation);
+            self.convergence.reset();
+        }
+        // Rendering Debug switches change the image without changing its input.
+        if renderer.debug() != editor.state.render_debug {
+            renderer
+                .set_debug(editor.state.render_debug)
+                .map_err(|error| format!("{error:#}"))?;
             self.convergence.reset();
         }
         if self.camera != Some(editor.state.camera) {
@@ -523,6 +587,7 @@ impl SceneView {
             &mut self.content_job,
             &mut self.content_ready,
             key,
+            self.raster_input,
             renderer,
             wait_for_content,
         )?;
@@ -554,6 +619,10 @@ impl SceneView {
             if !self.raster_snapshot_dirty
                 && !self.convergence.needs_frame()
                 && !self.preview_needs_frame()
+                && self
+                    .raster
+                    .as_ref()
+                    .is_none_or(|raster| !raster.needs_frame())
             {
                 // A completion only publishes its retained image. It must not
                 // turn an exhausted convergence budget into another submission.
@@ -578,6 +647,7 @@ impl SceneView {
                 .content_ready
                 .take()
                 .ok_or("Scene content publication")?;
+            let candidate_epoch = candidate.key.epoch;
             let prepared = candidate.scene;
             self.failed = Some(revision);
             let raster = self.raster.get_or_insert_with(|| {
@@ -603,9 +673,13 @@ impl SceneView {
                 revision.2,
                 content.snapshot_revision(),
             ));
-            self.raster_input = self
-                .revision
-                .map(|revision| content::Key { revision, ..key });
+            // The candidate's own draft epoch: an older slider value shown mid-drag
+            // leaves the latest one still to extract.
+            self.raster_input = self.revision.map(|revision| content::Key {
+                revision,
+                epoch: candidate_epoch,
+                ..key
+            });
             self.patched_pose = key.pose;
             self.failed = None;
             self.convergence.reset();
@@ -632,6 +706,24 @@ impl SceneView {
         }
         {
             let frame = self.raster_frame.as_mut().ok_or("raster frame")?;
+            // A Mesh Paint stroke's colours stream into the drawn instances; when it
+            // ends, the document (committed or not) extracts again.
+            if editor.paint_revision != self.paint_revision {
+                self.paint_revision = editor.paint_revision;
+                if let Some(preview) = &editor.paint_preview {
+                    for draw in &mut frame.draws {
+                        if let Some(colors) = preview.get(&draw.entity) {
+                            draw.paint = Some(std::sync::Arc::clone(colors));
+                        }
+                    }
+                    self.raster_snapshot_dirty = true;
+                    self.paint_applied = true;
+                    self.convergence.reset();
+                } else if std::mem::take(&mut self.paint_applied) {
+                    self.revision = None;
+                    self.remaining = self.remaining.max(8);
+                }
+            }
             if let Some(changed) =
                 content.style_pending(frame, self.preview_view.as_ref().unwrap_or(view))
             {
@@ -643,11 +735,7 @@ impl SceneView {
                     .style_unpublished(renderer, |asset| content.model_is_pending(asset))?;
             }
             // Volumes blend for the Scene view's camera.
-            let look = FrameEnvironment::resolve(
-                &frame.look,
-                editor.state.camera.position(),
-                frame.environment.exposure,
-            );
+            let look = ara_runtime_render::environment_at(frame, editor.state.camera.position());
             let raster = self.raster.as_mut().ok_or("raster view")?;
             let resolve = || content.content(frame, store.workspace(), store.schema());
             if self.raster_snapshot_dirty {
@@ -677,6 +765,20 @@ impl SceneView {
                 &editor.state.camera.spec(),
                 view_mode(&editor.state.view_mode),
             )?;
+        }
+        // Tag the frame with its camera and gizmo pose (`shown_frame`).
+        let tag = self.frames.back().map_or(1, |(tag, _)| tag + 1);
+        renderer.set_frame_tag(tag);
+        self.frames.push_back((
+            tag,
+            FrameView {
+                camera: editor.state.camera,
+                offset: self.gizmo_offset,
+                revision: editor.host.store().revision(),
+            },
+        ));
+        while self.frames.len() > 8 {
+            self.frames.pop_front();
         }
         for _ in 0..settle.max(1) {
             raster.render(
@@ -767,11 +869,7 @@ impl SceneView {
                 &editor.state.hidden,
             )?;
             // Volumes blend for the Scene view's camera.
-            let look = FrameEnvironment::resolve(
-                &frame.look,
-                editor.state.camera.position(),
-                frame.environment.exposure,
-            );
+            let look = ara_runtime_render::environment_at(&frame, editor.state.camera.position());
             let rebuild = scene_changed
                 || self
                     .prepared
@@ -882,6 +980,29 @@ impl SceneView {
         self.revision = Some(revision);
         Ok(())
     }
+    /// The camera and gizmo pose of the frame on screen, if it is a recent raster frame.
+    pub fn shown_frame(&self, renderer: &Renderer) -> Option<FrameView> {
+        let tag = renderer.shown_frame_tag();
+        self.frames
+            .iter()
+            .rev()
+            .find(|(t, _)| *t == tag)
+            .map(|(_, view)| *view)
+    }
+    /// Whether the raster Scene draws selection outlines into its frames.
+    pub fn draws_outlines(&self) -> bool {
+        self.raster.is_some()
+    }
+    /// One more frame for an image-only change (new outlines): no new convergence.
+    pub fn redraw(&mut self) {
+        self.convergence.redraw();
+    }
+    /// Whether a Scene frame is still on its way: one in flight to collect, or
+    /// content being prepared for the next. After an edit these render at once
+    /// rather than after the input pause, so the edit shows as soon as it lands.
+    pub fn frame_in_flight(&self) -> bool {
+        self.frame_pending || self.content_job.is_some() || self.content_ready.is_some()
+    }
     pub fn needs_frame(&self, quality: bool) -> bool {
         if self
             .recovery
@@ -890,6 +1011,10 @@ impl SceneView {
             return self.frame_pending;
         }
         self.frame_pending
+            || self
+                .raster
+                .as_ref()
+                .is_some_and(|raster| raster.needs_frame())
             || self.recovery.pending()
             || self.content_job.is_some()
             || self.content_ready.is_some()
@@ -984,6 +1109,16 @@ fn view_mode(name: &str) -> ViewMode {
         "shadowCascades" => ViewMode::ShadowCascades,
         "wireframe" => ViewMode::Wireframe,
         "litWireframe" => ViewMode::LitWireframe,
+        "gi_diffuse" => ViewMode::GiDiffuse,
+        "overdraw" => ViewMode::Overdraw,
+        "vertexColor" => ViewMode::VertexColor,
+        "vertexColorRed" => ViewMode::VertexColorRed,
+        "vertexColorGreen" => ViewMode::VertexColorGreen,
+        "vertexColorBlue" => ViewMode::VertexColorBlue,
+        "vertexColorAlpha" => ViewMode::VertexColorAlpha,
+        "decalCoverage" => ViewMode::DecalCoverage,
+        "lightComplexity" => ViewMode::LightComplexity,
+        "shadowPenumbra" => ViewMode::ShadowPenumbra,
         _ => ViewMode::Lit,
     }
 }
@@ -1012,12 +1147,93 @@ fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
     })
 }
 
+/// Draw view image `image` (`size` physical pixels at `dpi`) on its node, centred
+/// and cropped by the panel's clip. A frame rendered for the node (within a pixel)
+/// draws 1:1, never resampled. A frame from before a resize (the panel, dock, aspect
+/// or DPI changed and the frame at the new size is in flight, a few frames) is scaled
+/// to cover the node, keeping its aspect: never a small image with bars around it,
+/// never stretched out of aspect; the cameras keep their FOV around the view centre,
+/// so the next frame lands on it. Run on the display list right before the UI renders.
+pub(super) fn draw_view_image(
+    display: &mut ara_ui::paint::DisplayList,
+    image: u32,
+    size: [u32; 2],
+    dpi: f32,
+) {
+    if size.contains(&0) || dpi <= 0. {
+        return;
+    }
+    for draw in &mut display.commands {
+        if let ara_ui::paint::Draw::Image {
+            rect, image: id, ..
+        } = draw
+            && *id == image
+        {
+            *rect = view_image_rect(*rect, size, dpi);
+        }
+    }
+}
+
+/// Where [`draw_view_image`] puts a `size`-pixel frame on `node` (logical px at `dpi`).
+/// Its corner lands on a physical pixel: the UI samples images bilinearly, so a 1:1
+/// frame at a fractional offset (layout is logical; 125% and 150% scales put nodes
+/// between pixels) would blur the whole view by half a pixel.
+fn view_image_rect(node: ara_ui::paint::Box2, size: [u32; 2], dpi: f32) -> ara_ui::paint::Box2 {
+    let (mut w, mut h) = (size[0] as f32 / dpi, size[1] as f32 / dpi);
+    // One physical pixel of rounding either way is the same frame.
+    let slack = 1.5 / dpi;
+    if (w - node.w).abs() > slack || (h - node.h).abs() > slack {
+        let cover = (node.w / w).max(node.h / h);
+        w *= cover;
+        h *= cover;
+    }
+    let snap = |v: f32| (v * dpi).round() / dpi;
+    ara_ui::paint::Box2 {
+        x: snap(node.x + (node.w - w) * 0.5),
+        y: snap(node.y + (node.h - h) * 0.5),
+        w,
+        h,
+    }
+}
+
 #[cfg(test)]
 mod patch_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
     use ara_ui_render::gpu::UiGpu;
+
+    #[test]
+    fn view_images_draw_one_to_one_or_cover_their_node_on_whole_pixels() {
+        use ara_ui::paint::Box2;
+        let node = Box2 {
+            x: 301.,
+            y: 87.,
+            w: 800.,
+            h: 450.,
+        };
+        // At 125% a 1000x563 frame is the node's own: 1:1, its corner on a pixel.
+        let one = view_image_rect(node, [1000, 563], 1.25);
+        assert!((one.w - 800.).abs() < 1e-3 && (one.h - 563. / 1.25).abs() < 1e-3);
+        for v in [one.x, one.y] {
+            assert!(
+                ((v * 1.25) - (v * 1.25).round()).abs() < 1e-3,
+                "{v} is between pixels"
+            );
+        }
+        // A frame from before the panel grew covers it, never a small image with
+        // bars around it.
+        let grown = view_image_rect(node, [640, 360], 1.25);
+        assert!((grown.h - 450.).abs() < 0.01);
+        assert!((grown.w - 800.).abs() < 0.01);
+        // Other aspects keep theirs, cropped by the clip: wider at the sides, taller
+        // (the panel lost height) at the top and bottom.
+        let wide = view_image_rect(node, [1600, 600], 1.);
+        assert_eq!((wide.h, wide.w), (450., 1200.));
+        assert!((wide.x + wide.w * 0.5 - (node.x + node.w * 0.5)).abs() <= 1.);
+        let tall = view_image_rect(node, [800, 600], 1.);
+        assert_eq!((tall.w, tall.h), (800., 600.));
+    }
 
     fn submit_ui(scene: &SceneView, renderer: &Renderer, ui: &mut NativeUi) -> anyhow::Result<()> {
         scene

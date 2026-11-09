@@ -12,7 +12,7 @@ impl<T: Clone + PartialEq> Select<T> {
             .selected
             .as_ref()
             .and_then(|value| self.options.iter().find(|o| &o.value == value));
-        let text = selected.map_or("Select…", |o| o.label.as_str());
+        let text = selected.map_or(self.empty.as_str(), |o| o.label.as_str());
         format!(
             "<dropdown id='{}' class='kit-select' text='{}' label='{}' description='{}' cursor='pointer' action='ara.select.toggle' disabled='{}' />",
             escape(self.control_id(), b'\''),
@@ -32,7 +32,7 @@ impl<T: Clone + PartialEq> Select<T> {
         let esc = |text: &str| escape(text, b'\'');
         let popup = esc(&self.popup_id());
         let mut out = format!(
-            "<popover id='{popup}' class='kit-select-popover' anchor='{}' placement='bottom-start'><field id='{}' class='kit-select-search' text='{}' placeholder='{}' label='Filter {}' action='ara.select.query' /><scroll id='{popup}-options' class='kit-select-options'>",
+            "<popover id='{popup}' class='kit-select-popover' anchor='{}' placement='bottom-start' match-anchor='width'><field id='{}' class='kit-select-search' text='{}' placeholder='{}' label='Filter {}' action='ara.select.query' /><scroll id='{popup}-options' class='kit-select-options'>",
             esc(self.control_id()),
             esc(&self.search_id()),
             esc(&self.query),

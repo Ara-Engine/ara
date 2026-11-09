@@ -14,10 +14,21 @@ pub(crate) enum Drag {
     },
     /// Resizing the inspector's label column.
     Column,
+    /// Moving a Scene toolbar by its grip (`scene_toolbars.rs`); `grab` is the pointer
+    /// within the toolbar, `moved` whether it left the click slop.
+    Toolbar {
+        id: String,
+        grab: [f32; 2],
+        start: [f32; 2],
+        moved: bool,
+    },
 }
 impl Shell {
     /// Capture an entity, asset, component section or dock tab as a typed drag payload.
     pub fn begin_drag(&mut self) {
+        if self.begin_toolbar_drag() {
+            return;
+        }
         let [x, y] = self.pointer;
         if let Some(panel) = self
             .ui
@@ -82,6 +93,9 @@ impl Shell {
     pub fn drop_at(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         if self.content_pending() {
             return self.finish_content_drag(editor);
+        }
+        if matches!(self.drag, Some(Drag::Toolbar { .. })) {
+            return self.drop_toolbar(editor);
         }
         match self.drag.take() {
             Some(Drag::Column) => Ok(true),

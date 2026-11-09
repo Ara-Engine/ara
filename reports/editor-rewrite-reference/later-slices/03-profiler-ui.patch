@@ -1,0 +1,1909 @@
+diff --git a/crates/ara-editor/src/actions.rs b/crates/ara-editor/src/actions.rs
+--- a/crates/ara-editor/src/actions.rs
++++ b/crates/ara-editor/src/actions.rs
+@@ -348,6 +348,10 @@
+                 probe_cancel_blocker: Some(
+                     "Capture cancellation requires the owning editor window",
+                 ),
++                profiler_target_blocker: None,
++                profiler_freeze_blocker: None,
++                profiler_compare_blocker: None,
++                profiler_compare_active: state.profiler_compare,
+                 // The window's build job is not visible here; the project's state is.
+                 build: crate::shell::commands::BuildState {
+                     running: false,
+diff --git a/crates/ara-editor/src/editor.rs b/crates/ara-editor/src/editor.rs
+--- a/crates/ara-editor/src/editor.rs
++++ b/crates/ara-editor/src/editor.rs
+@@ -48,6 +48,8 @@
+     pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
+     /// Independent baseline trace for the compare view.
+     pub profile_baseline: Option<std::sync::Arc<ara_profile::Profile>>,
++    /// Owned asynchronous player-profiling adapter, attached by the Play owner.
++    pub(crate) play_profiling: Option<Box<dyn crate::shell::profiler_targets::backend::Backend>>,
+     /// Deferred capture jobs, consumed by the GPU/window owner.
+     pub(crate) captures: Receiver<CaptureTask>,
+     /// GPU job results returned to the capture service.
+@@ -250,6 +252,7 @@
+             active_fields: BTreeSet::new(),
+             profile_current: None,
+             profile_baseline: None,
++            play_profiling: None,
+             captures,
+             completed,
+             probe_captures,
+diff --git a/crates/ara-editor/src/shell/choices.rs b/crates/ara-editor/src/shell/choices.rs
+--- a/crates/ara-editor/src/shell/choices.rs
++++ b/crates/ara-editor/src/shell/choices.rs
+@@ -23,6 +23,7 @@
+     },
+     ImportGroup,
+     PackageFormat,
++    ProfilerTarget,
+     Field(String),
+     Append {
+         field: String,
+@@ -200,6 +201,7 @@
+                 self.choose_import_group(value)?;
+             }
+             Destination::PackageFormat => self.choose_package_format(value)?,
++            Destination::ProfilerTarget => self.choose_profiler_target(editor, value)?,
+             Destination::Field(path) => {
+                 editor.apply(
+                     self.field_commands(editor, &editor.state.selection, path, value)?,
+diff --git a/crates/ara-editor/src/shell/commands/mod.rs b/crates/ara-editor/src/shell/commands/mod.rs
+--- a/crates/ara-editor/src/shell/commands/mod.rs
++++ b/crates/ara-editor/src/shell/commands/mod.rs
+@@ -86,6 +86,11 @@
+     pub probe_capture_blocker: Option<&'a str>,
+     /// Cached reason why no owned capture request can be cancelled.
+     pub probe_cancel_blocker: Option<&'a str>,
++    /// Target-aware Profiler command availability from the retained UI state.
++    pub profiler_target_blocker: Option<&'a str>,
++    pub profiler_freeze_blocker: Option<&'a str>,
++    pub profiler_compare_blocker: Option<&'a str>,
++    pub profiler_compare_active: bool,
+     /// Build menu state.
+     pub build: BuildState,
+ }
+@@ -250,6 +255,10 @@
+             pilot: self.pilot_active(),
+             probe_capture_blocker: self.probe_capture_blocker(editor, target),
+             probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
++            profiler_target_blocker: self.profiler_target_blocker(),
++            profiler_freeze_blocker: self.profiler_freeze_blocker(),
++            profiler_compare_blocker: self.profiler_compare_blocker(editor),
++            profiler_compare_active: self.profiler_compare_active(editor),
+             starting: editor.state.playing.is_none()
+                 && (self.game_start.is_some() || editor.play_world.is_some()),
+             build: BuildState {
+diff --git a/crates/ara-editor/src/shell/commands/table.rs b/crates/ara-editor/src/shell/commands/table.rs
+--- a/crates/ara-editor/src/shell/commands/table.rs
++++ b/crates/ara-editor/src/shell/commands/table.rs
+@@ -2347,17 +2347,20 @@
+             s.copy_text(text.clone());
+             Ok(())
+         }),
+-        cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
+-        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
+-        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
++        cmd("profiler.record", "Record", "circle-dot", "", "Start or stop recording the selected Profiler target.", |s,e,_|s.profiler_record_target(e)).when(|c|c.profiler_target_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
++        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze the selected target's completed frames.", |s,e,_|s.profiler_freeze_target(e,false)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
++        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze an explicitly scoped comparison baseline.", |s,e,_|s.profiler_freeze_target(e,true)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
++        cmd("profiler.snapshot", "Follow Profiler Target", "refresh-cw", "", "Read completed target frames without stopping recording.", |s,e,_|s.profiler_snapshot_target(e)),
++        cmd("profiler.refresh", "Refresh Profiler Targets", "refresh-cw", "", "Refresh live player targets without changing the selected scope.", |s,e,_|s.refresh_profiler_targets(e)),
++        cmd("profiler.frame", "Inspect Profiler Frame", "chart-no-axes-combined", "", "Inspect a frame from its exact target and capture incarnation.", |s,e,t|s.choose_profiler_frame(e,t)),
+         cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
+             if let Target::Text(label) = t {
+                 s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
+             }
+             Ok(())
+         }),
+-        cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
+-            .when(|c| Avail::Checked(c.state.profiler_compare)),
++        cmd("profiler.compare", "Compare", "git-compare", "", "Compare explicitly scoped frozen captures.", |s,e,_|s.compare_profiler_targets(e))
++            .when(|c|c.profiler_compare_blocker.map_or(Avail::Checked(c.profiler_compare_active),|reason|Avail::Blocked(reason.into()))),
+         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),
+     ]);
+     c
+diff --git a/crates/ara-editor/src/shell/mod.rs b/crates/ara-editor/src/shell/mod.rs
+--- a/crates/ara-editor/src/shell/mod.rs
++++ b/crates/ara-editor/src/shell/mod.rs
+@@ -86,6 +86,7 @@
+ pub(crate) mod play_controls;
+ pub mod prefab_ops;
+ mod profiler_panel;
++pub(crate) mod profiler_targets;
+ pub(crate) mod reachability;
+ mod vfx_panel;
+ use crate::{Editor, inspector::Field};
+@@ -310,6 +311,7 @@
+     lighting: lighting::View,
+     probe_ui: probes::State,
+     project_request: Option<project_actions::LaunchRequest>,
++    profiler_targets: profiler_targets::State,
+     pilot: pilot::Pilot,
+     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
+     pub(crate) drag: Option<Drag>,
+@@ -651,6 +653,7 @@
+             lighting: Default::default(),
+             probe_ui: Default::default(),
+             project_request: None,
++            profiler_targets: Default::default(),
+             pilot: Default::default(),
+             viewport_diagnostics: Default::default(),
+             drag: None,
+@@ -848,6 +851,7 @@
+         let compiled = self.poll_script_job(editor)?;
+         let modules_changed = self.poll_script_modules(editor)?;
+         let probes_changed = self.poll_probes(editor)?;
++        let profiler_changed = self.poll_profiler_target_state(editor)?;
+         let play_changed = match self.poll_play_job(editor) {
+             Ok(changed) => changed,
+             Err(error) => {
+@@ -858,6 +862,7 @@
+         if !compiled
+             && !modules_changed
+             && !probes_changed
++            && !profiler_changed
+             && !play_changed
+             && self.built == (editor.panels_revision, editor.host.store().revision())
+         {
+@@ -876,6 +881,7 @@
+     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+         self.poll_compile_problems(editor)?;
+         self.poll_probes(editor)?;
++        self.poll_profiler_target_state(editor)?;
+         self.built = (editor.panels_revision, editor.host.store().revision());
+         // Async catalog reloads can make saved extension overrides reachable.
+         let settings = keymap_settings(&editor.state);
+@@ -977,6 +983,7 @@
+         css.push_str(history_panel::CSS);
+         css.push_str(lighting::CSS);
+         css.push_str(probes::CSS);
++        css.push_str(profiler_targets::CSS);
+         css.push_str(palette::FORM_CSS);
+         if self.toolkit_verify.is_some() {
+             css.push_str(toolkit_verify::CSS);
+diff --git a/crates/ara-editor/src/shell/monkey_support.rs b/crates/ara-editor/src/shell/monkey_support.rs
+--- a/crates/ara-editor/src/shell/monkey_support.rs
++++ b/crates/ara-editor/src/shell/monkey_support.rs
+@@ -12,7 +12,7 @@
+             json!({"job":job,"ageMs":last.elapsed().as_millis()/1000*1000,"ageResolutionMs":1000,
+                 "ageScope":"Since handle assignment or last status poll; not task lifetime"})
+         });
+-        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),
+-            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy()})
++        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),"profiler":self.profiler_targets_report(),
++            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy() || self.profiler_targets_busy()})
+     }
+ }
+diff --git a/crates/ara-editor/src/shell/profiler_panel.rs b/crates/ara-editor/src/shell/profiler_panel.rs
+--- a/crates/ara-editor/src/shell/profiler_panel.rs
++++ b/crates/ara-editor/src/shell/profiler_panel.rs
+@@ -23,44 +23,45 @@
+         editor: &mut Editor,
+         out: &mut String,
+     ) -> ara_ui::Result<()> {
+-        // Read the editor state first: the live profile borrows the host mutably.
+-        let recording = editor.host.profiler().is_recording();
+-        let frozen = editor.profile_current.is_some();
+-        let baseline = editor.profile_baseline.clone();
+-        let compare = editor.state.profiler_compare;
+-        let picked = editor.state.profiler_frame;
+-        let current = match &editor.profile_current {
+-            Some(profile) => profile.as_ref(),
+-            None => editor.host.profiler().profile(),
++        let reading = self.profiler_reading(editor);
++        self.profiler_target_toolbar(&reading, out);
++        let recording = reading.recording;
++        let frozen = reading.frozen;
++        let baseline = &reading.baseline;
++        let compare = reading.compare;
++        let picked = reading.frame;
++        let freeze_blocked = self.profiler_freeze_blocker().map(str::to_owned);
++        let missing_player = !reading.editor && reading.current.is_none();
++        let empty = Profile::default();
++        let current = match reading.current.as_deref() {
++            Some(profile) => profile,
++            None if reading.editor => editor.host.profiler().profile(),
++            None => &empty,
+         };
+         let selected = picked
+-            .and_then(|id| current.frames.iter().find(|f| f.id == id))
++            .and_then(|id| {
++                current
++                    .frames
++                    .iter()
++                    .find(|f| f.id == id && f.duration_ns > 0)
++            })
+             .or_else(|| current.frames.iter().rev().find(|f| f.duration_ns > 0));
+-        out.push_str("<panel id='profiler-toolbar' class='toolbar'>");
++        out.push_str("<panel id='profiler-toolbar' class='toolbar profiler-actions'>");
+         self.bind_command("profile-record", "profiler.record", commands::Target::None);
+-        out.push_str(&format!("<button id='profile-record' class='{}' label='{}' description='{}' action='Dispatch'>{}<text id='profile-record-label' text='{}' /></button>",if recording{"selected"}else{"ghost"},if recording{"Stop"}else{"Record"},if recording{"Stop recording editor frames"}else{"Record editor frames"},if recording{icons::icon_in("profile-record","square","on-selection")}else{icons::icon_in("profile-record","circle-dot","destructive")},if recording{"Stop"}else{"Record"}));
+-        self.tool_text(
+-            out,
+-            "profile-freeze",
+-            "profiler.freeze",
+-            "pause",
+-            "Freeze",
+-            "ghost",
+-        );
+-        self.tool_text(
+-            out,
+-            "profile-baseline",
+-            "profiler.baseline",
+-            "flag",
+-            "Baseline",
+-            "ghost",
+-        );
++        out.push_str(&format!("<button id='profile-record' class='{}' label='{}' description='{}' disabled='{}' action='Dispatch'>{}<text id='profile-record-label' text='{}' /></button>",if recording{"selected"}else{"ghost"},if recording{"Stop"}else{"Record"},escape(reading.blocker.as_deref().unwrap_or(if recording{"Stop recording the selected target"}else{"Record the selected target"})),reading.blocker.is_some(),if recording{icons::icon_in("profile-record","square","on-selection")}else{icons::icon_in("profile-record","circle-dot","destructive")},if recording{"Stop"}else{"Record"}));
++        for (id, command, label) in [
++            ("profile-freeze", "profiler.freeze", "Freeze"),
++            ("profile-baseline", "profiler.baseline", "Baseline"),
++        ] {
++            self.bind_command(id, command, commands::Target::None);
++            out.push_str(&format!("<button id='{id}' class='ghost' text='{label}' disabled='{}' description='{}' action='Dispatch' />",freeze_blocked.is_some(),escape(freeze_blocked.as_deref().unwrap_or("Read an immutable closed-frame capture from the selected target"))));
++        }
+         self.bind_command(
+             "profile-compare",
+             "profiler.compare",
+             commands::Target::None,
+         );
+-        out.push_str(&format!("<button id='profile-compare' class='{}' label='Compare' description='Compare the frozen capture with the baseline' action='Dispatch'>{}<text id='profile-compare-label' text='Compare' /></button>",if compare{"selected"}else{"ghost"},if compare{icons::icon_in("profile-compare","git-compare","on-selection")}else{icons::icon("profile-compare","git-compare")}));
++        out.push_str(&format!("<button id='profile-compare' class='{}' label='Compare' description='{}' disabled='{}' action='Dispatch'>{}<text id='profile-compare-label' text='Compare' /></button>",if compare{"selected"}else{"ghost"},escape(reading.compare_blocker.as_deref().unwrap_or("Compare the explicitly labelled current and baseline targets")),reading.compare_blocker.is_some(),if compare{icons::icon_in("profile-compare","git-compare","on-selection")}else{icons::icon("profile-compare","git-compare")}));
+         if let Some(frame) = selected.filter(|_| !compare) {
+             // ‹ Frame 239 › steps through the capture.
+             let at = current
+@@ -74,17 +75,22 @@
+                     "profile-prev",
+                     "chevron-left",
+                     "Previous frame",
+-                    at.checked_sub(1),
++                    (0..at)
++                        .rev()
++                        .find(|index| current.frames[*index].duration_ns > 0),
+                 ),
+-                ("profile-next", "chevron-right", "Next frame", Some(at + 1)),
++                (
++                    "profile-next",
++                    "chevron-right",
++                    "Next frame",
++                    (at + 1..current.frames.len())
++                        .find(|index| current.frames[*index].duration_ns > 0),
++                ),
+             ] {
+                 let target = step
+                     .and_then(|i| current.frames.get(i))
+                     .map_or(frame.id, |f| f.id);
+-                self.bindings.insert(
+-                    ara_ui::source::stable_id(id),
+-                    Binding::Protocol("editor.workspace", json!({ "frame": target })),
+-                );
++                self.bind_profiler_frame(id, target);
+                 out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon(id,icon)));
+                 if id == "profile-prev" {
+                     out.push_str(&format!(
+@@ -99,12 +105,29 @@
+         } else {
+             out.push_str("<panel id='profile-toolbar-fill' class='fill' /></panel>");
+         }
++        if missing_player {
++            self.empty(out,"profile-player-empty","gauge","No snapshot for this target",
++                reading.blocker.as_deref().unwrap_or("Record or read a snapshot of this exact player. Editor frames are not substituted for missing player data."),&[]);
++            return Ok(());
++        }
+         if compare {
+             self.profile_compare(baseline.as_deref(), current, out)?;
+-            profile_status(current, frozen, baseline.is_some(), recording, out);
++            profile_status(
++                current,
++                frozen,
++                baseline.is_some(),
++                recording,
++                &reading.label,
++                out,
++            );
+             return Ok(());
+         }
+         let Some(frame) = selected else {
++            if !reading.editor {
++                self.empty(out,"profile-player-no-frames","gauge","No completed player frames",
++                    "The selected target returned an empty closed-frame snapshot. Use its Record control above; no editor frames are substituted.",&[]);
++                return Ok(());
++            }
+             self.empty(
+                 out,
+                 "profile-empty",
+@@ -123,7 +146,14 @@
+         out.push_str("<panel id='profile-details-edge' class='tool-edge' />");
+         profile_details(frame, out);
+         out.push_str("</panel></panel>");
+-        profile_status(current, frozen, baseline.is_some(), recording, out);
++        profile_status(
++            current,
++            frozen,
++            baseline.is_some(),
++            recording,
++            &reading.label,
++            out,
++        );
+         Ok(())
+     }
+ 
+@@ -134,7 +164,8 @@
+         let frames = current
+             .frames
+             .iter()
+-            .skip(current.frames.len().saturating_sub(STRIP));
++            .skip(current.frames.len().saturating_sub(STRIP))
++            .filter(|frame| frame.duration_ns > 0);
+         let top = frames
+             .clone()
+             .map(|f| f.duration_ns)
+@@ -143,11 +174,8 @@
+             .max(budget + budget / 4);
+         out.push_str("<panel id='profile-strip' class='profile-strip'>");
+         for frame in frames {
+-            let id = format!("profile-frame-{}", frame.id);
+-            self.bindings.insert(
+-                ara_ui::source::stable_id(&id),
+-                Binding::Protocol("editor.workspace", json!({"frame":frame.id})),
+-            );
++            let id = self.profiler_frame_id(frame.id);
++            self.bind_profiler_frame(&id, frame.id);
+             let class = if frame.id == selected.id {
+                 " profile-bar-on"
+             } else if frame.duration_ns > budget {
+@@ -525,15 +553,17 @@
+     frozen: bool,
+     baseline: bool,
+     recording: bool,
++    label: &str,
+     out: &mut String,
+ ) {
+-    let (icon, tint, state) = if recording {
+-        ("circle-dot", "destructive", "Recording")
++    let (icon, tint) = if recording {
++        ("circle-dot", "destructive")
+     } else if frozen {
+-        ("pause", "fg", "Frozen capture")
++        ("pause", "fg")
+     } else {
+-        ("gauge", "fg", "Live")
++        ("gauge", "fg")
+     };
++    let state = escape(label);
+     let mut times: Vec<u64> = current
+         .frames
+         .iter()
+diff --git a/crates/ara-editor/src/shell/profiler_targets.rs b/crates/ara-editor/src/shell/profiler_targets.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets.rs
+@@ -0,0 +1,338 @@
++//! Target identity and immutable player captures over a small private asynchronous port.
++use super::*;
++pub(crate) mod backend;
++mod controls;
++#[cfg(test)]
++mod tests;
++mod view;
++use backend::{Action, Backend, Outcome, Request, Row, Scope, Status, Ticket};
++use std::{
++    sync::Arc,
++    time::{Duration, Instant},
++};
++const POLL: Duration = Duration::from_millis(250);
++const LIVE_SNAPSHOT: Duration = Duration::from_secs(1);
++pub(super) const CSS: &str = ".profiler-targets { flex-shrink:0;min-width:0px;gap:4px;padding:6px; }.profiler-target-row { flex-direction:row;flex-wrap:wrap;min-width:0px;gap:6px; }.profiler-target-caption { white-space:normal;min-width:0px;flex-shrink:0;font-size:11px;color:var(--muted-foreground); }.profiler-actions { flex-wrap:wrap;height:auto;min-height:28px;flex-shrink:0;min-width:0px; }";
++
++#[derive(Clone, Debug, Default, PartialEq, Eq)]
++enum Target {
++    #[default]
++    Editor,
++    Player(Scope),
++}
++impl Target {
++    fn value(&self) -> Value {
++        match self {
++            Self::Editor => Value::Null,
++            Self::Player(scope) => json!(scope),
++        }
++    }
++    fn label(&self) -> String {
++        match self {
++            Self::Editor => "Editor".into(),
++            Self::Player(scope) => scope.label(),
++        }
++    }
++}
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum Purpose {
++    Record,
++    Snapshot,
++    Freeze,
++    Baseline,
++}
++struct Pending {
++    ticket: Ticket,
++    target: Scope,
++    purpose: Purpose,
++    session: String,
++}
++struct Capture {
++    target: Target,
++    name: String,
++    profile: Arc<ara_profile::Profile>,
++    serial: u64,
++    frozen: bool,
++}
++
++/// Local reading state; target changes never retarget a pending ticket or capture.
++pub(crate) struct State {
++    selected: Target,
++    rows: Vec<Row>,
++    error: Option<String>,
++    refresh_error: Option<String>,
++    diagnostics: Vec<ara_diag::Diagnostic>,
++    pending: Option<Pending>,
++    current: Option<Capture>,
++    baseline: Option<Capture>,
++    frame: Option<u64>,
++    compare: bool,
++    follow: bool,
++    serial: u64,
++    next_poll: Option<Instant>,
++    next_snapshot: Option<Instant>,
++    transport: bool,
++    editor_job: Option<String>,
++    next_editor_poll: Option<Instant>,
++}
++impl Default for State {
++    fn default() -> Self {
++        Self {
++            selected: Target::Editor,
++            rows: Vec::new(),
++            error: None,
++            refresh_error: None,
++            diagnostics: Vec::new(),
++            pending: None,
++            current: None,
++            baseline: None,
++            frame: None,
++            compare: false,
++            follow: true,
++            serial: 0,
++            next_poll: None,
++            next_snapshot: None,
++            transport: false,
++            editor_job: None,
++            next_editor_poll: None,
++        }
++    }
++}
++impl State {
++    fn row(&self) -> Option<&Row> {
++        let Target::Player(scope) = &self.selected else {
++            return None;
++        };
++        self.rows.iter().find(|row| &row.target == scope)
++    }
++    fn blocker(&self) -> Option<&str> {
++        if self.selected == Target::Editor {
++            return None;
++        }
++        if self.pending.is_some() {
++            return Some("Wait for the pending player profiling request to finish");
++        }
++        if !self.transport {
++            return Some("The player profiling transport is not attached");
++        }
++        if let Some(error) = self.refresh_error.as_deref() {
++            return Some(error);
++        }
++        if let Target::Player(scope) = &self.selected
++            && (scope.world.trim().is_empty() || scope.source.trim().is_empty())
++        {
++            return Some("The profiling target has no valid world/source incarnation identity");
++        }
++        match self.row() {
++            Some(row) if row.available => None,
++            Some(row) => row
++                .reason
++                .as_deref()
++                .or(Some("This target does not provide profiling")),
++            None => {
++                Some("This exact player incarnation is no longer live; select a current target")
++            }
++        }
++    }
++    fn capture(&self) -> Option<&Capture> {
++        self.current
++            .as_ref()
++            .filter(|capture| capture.target == self.selected)
++    }
++    fn recording(&self) -> bool {
++        self.row().is_some_and(|row| row.recording)
++    }
++    fn observe_rows(&mut self, rows: &[Row]) -> bool {
++        if self.rows == rows {
++            return false;
++        }
++        self.rows = rows.to_vec();
++        true
++    }
++    fn accept(&mut self, status: Status) -> bool {
++        let Some(pending) = self.pending.as_ref() else {
++            return false;
++        };
++        if status.ticket != pending.ticket {
++            self.error=Some("A profiling response had another request's ticket; the original request remains pending".into());
++            return true;
++        }
++        if !status.finished {
++            return false;
++        }
++        let pending = self
++            .pending
++            .take()
++            .expect("matching finished profiling ticket");
++        self.diagnostics = status.diagnostics.into_iter().take(16).collect();
++        if status.target != pending.target {
++            self.error=Some("A profiling response did not match its requested world/player incarnation; data was not adopted".into());
++            return true;
++        }
++        if let Some(row) = self.rows.iter_mut().find(|row| row.target == status.target) {
++            row.recording = status.recording;
++        }
++        if !matches!(
++            status.outcome,
++            Some(Outcome::Completed | Outcome::Unchanged)
++        ) {
++            self.follow = false;
++            self.error = Some(
++                match status.outcome {
++                    Some(Outcome::Refused) => "The player refused this profiling request",
++                    Some(Outcome::Failed) => "The player profiling request failed",
++                    _ => "The profiling request finished without an outcome",
++                }
++                .into(),
++            );
++            return true;
++        }
++        self.error = None;
++        if let Some(mut profile) = status.profile {
++            profile.frames.retain(|frame| frame.duration_ns > 0);
++            let Some(serial) = self.serial.checked_add(1) else {
++                self.error =
++                    Some("Profiler capture identity exhausted; restart the editor session".into());
++                return true;
++            };
++            self.serial = serial;
++            let name = self
++                .rows
++                .iter()
++                .find(|row| row.target == pending.target)
++                .map_or_else(|| pending.target.label(), |row| row.name.clone());
++            let capture = Capture {
++                target: Target::Player(pending.target),
++                name,
++                profile: Arc::new(profile),
++                serial,
++                frozen: matches!(pending.purpose, Purpose::Freeze | Purpose::Baseline),
++            };
++            if pending.purpose == Purpose::Baseline {
++                self.baseline = Some(capture);
++            } else {
++                self.current = Some(capture);
++                self.frame = None;
++            }
++            self.compare = false;
++        } else if matches!(
++            pending.purpose,
++            Purpose::Freeze | Purpose::Baseline | Purpose::Snapshot
++        ) {
++            let target = Target::Player(pending.target);
++            let existing = self
++                .current
++                .as_mut()
++                .filter(|capture| capture.target == target);
++            if let (Some(Outcome::Unchanged), Some(existing)) = (status.outcome, existing) {
++                if pending.purpose == Purpose::Baseline {
++                    self.baseline = Some(Capture {
++                        target: existing.target.clone(),
++                        name: existing.name.clone(),
++                        profile: Arc::clone(&existing.profile),
++                        serial: existing.serial,
++                        frozen: true,
++                    });
++                } else if pending.purpose == Purpose::Freeze {
++                    existing.frozen = true;
++                }
++            } else {
++                self.follow = false;
++                self.error = Some(
++                    "The profiling response contained no completed-frame capture for this target"
++                        .into(),
++                );
++            }
++        }
++        true
++    }
++}
++
++impl Shell {
++    /// Poll the private port, not the network. Backend work remains single-flight.
++    /// Root takes/restores its Editor handle around this call to keep borrows disjoint.
++    pub(crate) fn poll_profiler_targets(
++        &mut self,
++        session: &str,
++        backend: Option<&mut dyn Backend>,
++    ) -> ara_ui::Result<bool> {
++        let state = &mut self.profiler_targets;
++        let Some(backend) = backend else {
++            let changed = state.transport;
++            state.transport = false;
++            return Ok(changed);
++        };
++        let mut changed = !state.transport;
++        state.transport = true;
++        let now = Instant::now();
++        if state.next_poll.is_some_and(|next| now < next) {
++            return Ok(changed);
++        }
++        state.next_poll = Some(now + POLL);
++        match backend.refresh_targets() {
++            Ok(()) => {
++                changed |= state.refresh_error.is_some();
++                state.refresh_error = None;
++                changed |= state.observe_rows(backend.targets());
++            }
++            Err(diagnostics) => {
++                let message = diagnostics
++                    .first()
++                    .map_or("Player profiling targets could not be refreshed", |d| {
++                        d.message.as_str()
++                    })
++                    .to_owned();
++                changed |= state.refresh_error.as_ref() != Some(&message);
++                state.refresh_error = Some(message);
++                state.diagnostics = diagnostics.into_iter().take(16).collect();
++            }
++        }
++        if let Some(pending) = &state.pending
++            && let Some(status) = backend.poll(pending.ticket)
++        {
++            changed |= state.accept(status);
++        }
++        if state.pending.is_none()
++            && state.follow
++            && (state.recording() || state.capture().is_none())
++            && state.blocker().is_none()
++            && state.next_snapshot.is_none_or(|next| now >= next)
++        {
++            let Target::Player(target) = &state.selected else {
++                return Ok(changed);
++            };
++            let target = target.clone();
++            match backend.request(Request {
++                session: session.into(),
++                target: target.clone(),
++                action: Action::Snapshot,
++                why: Some("Read selected player's closed profiler frames".into()),
++            }) {
++                Ok(ticket) => {
++                    state.pending = Some(Pending {
++                        ticket,
++                        target,
++                        purpose: Purpose::Snapshot,
++                        session: session.into(),
++                    });
++                    state.next_snapshot = Some(now + LIVE_SNAPSHOT);
++                    changed = true;
++                }
++                Err(diagnostics) => {
++                    state.follow = false;
++                    state.error = Some(
++                        diagnostics
++                            .first()
++                            .map_or("Player profiling snapshot was refused", |d| {
++                                d.message.as_str()
++                            })
++                            .into(),
++                    );
++                    state.diagnostics = diagnostics.into_iter().take(16).collect();
++                    changed = true;
++                }
++            }
++        }
++        Ok(changed)
++    }
++}
+diff --git a/crates/ara-editor/src/shell/profiler_targets/backend.rs b/crates/ara-editor/src/shell/profiler_targets/backend.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/backend.rs
+@@ -0,0 +1,73 @@
++//! Private UI port. The real PlayProfilingHandle adapter is required before player closure.
++use ara_diag::Diagnostic;
++use serde::{Deserialize, Serialize};
++
++/// Exact live-world/player incarnation. Player number alone is never an identity.
++#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "camelCase", deny_unknown_fields)]
++pub(crate) struct Scope {
++    /// Live Play world ID.
++    pub world: String,
++    /// Rendering player index in that world.
++    pub player: u32,
++    /// Opaque process/world producer incarnation.
++    pub source: String,
++    /// Monotonic binding within that producer slot.
++    pub binding: u64,
++}
++impl Scope {
++    pub(super) fn label(&self) -> String {
++        format!(
++            "{} · player {} · source {} · binding {}",
++            self.world, self.player, self.source, self.binding
++        )
++    }
++}
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct Row {
++    pub target: Scope,
++    pub name: String,
++    pub process_id: Option<u32>,
++    pub recording: bool,
++    pub available: bool,
++    pub reason: Option<String>,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum Action {
++    Start,
++    Stop,
++    Snapshot,
++    Freeze,
++}
++pub(crate) struct Request {
++    pub session: String,
++    pub target: Scope,
++    pub action: Action,
++    pub why: Option<String>,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct Ticket(pub u64);
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum Outcome {
++    Completed,
++    Unchanged,
++    Failed,
++    Refused,
++}
++pub(crate) struct Status {
++    pub ticket: Ticket,
++    pub target: Scope,
++    pub finished: bool,
++    pub outcome: Option<Outcome>,
++    pub recording: bool,
++    pub profile: Option<ara_profile::Profile>,
++    pub diagnostics: Vec<Diagnostic>,
++}
++/// All methods are bounded handle operations; implementations own any asynchronous transport.
++/// No default/fake implementation is provided. None means unavailable player profiling.
++pub(crate) trait Backend: Send {
++    fn refresh_targets(&mut self) -> Result<(), Vec<Diagnostic>>;
++    fn targets(&self) -> &[Row];
++    fn request(&mut self, request: Request) -> Result<Ticket, Vec<Diagnostic>>;
++    fn poll(&mut self, ticket: Ticket) -> Option<Status>;
++}
+diff --git a/crates/ara-editor/src/shell/profiler_targets/controls.rs b/crates/ara-editor/src/shell/profiler_targets/controls.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/controls.rs
+@@ -0,0 +1,343 @@
++use super::*;
++impl Shell {
++    /// The Editor owns the real adapter. Taking/restoring its box never clones a capture.
++    pub(crate) fn poll_profiler_target_state(
++        &mut self,
++        editor: &mut Editor,
++    ) -> ara_ui::Result<bool> {
++        let mut backend = editor.play_profiling.take();
++        let result = match backend.as_mut() {
++            Some(handle) => self.poll_profiler_targets(&editor.session, Some(handle.as_mut())),
++            None => self.poll_profiler_targets(&editor.session, None),
++        };
++        editor.play_profiling = backend;
++        let mut changed = result?;
++        let now = Instant::now();
++        if self.profiler_targets.editor_job.is_some()
++            && self
++                .profiler_targets
++                .next_editor_poll
++                .is_none_or(|next| now >= next)
++        {
++            self.profiler_targets.next_editor_poll = Some(now + POLL);
++            let id = self
++                .profiler_targets
++                .editor_job
++                .as_ref()
++                .expect("pending editor capture");
++            match editor.action("jobs.status", json!({"job":id})) {
++                Ok(status) if status["status"] != "running" => {
++                    self.profiler_targets.editor_job = None;
++                    changed = true;
++                    if status["status"] != "done" {
++                        self.profiler_targets.error=Some("The editor capture save did not complete successfully; inspect its job diagnostic".into());
++                    }
++                }
++                Err(error) => {
++                    let message = format!("Editor capture job state unavailable: {error}");
++                    changed |= self.profiler_targets.error.as_ref() != Some(&message);
++                    self.profiler_targets.error = Some(message);
++                }
++                _ => {}
++            }
++        }
++        Ok(changed)
++    }
++
++    pub(crate) fn choose_profiler_target(
++        &mut self,
++        editor: &mut Editor,
++        value: Value,
++    ) -> ara_ui::Result<()> {
++        let selected = if value.is_null() {
++            Target::Editor
++        } else {
++            Target::Player(serde_json::from_value::<Scope>(value)?)
++        };
++        if let Target::Player(scope) = &selected {
++            if !self
++                .profiler_targets
++                .rows
++                .iter()
++                .any(|row| &row.target == scope)
++                && selected != self.profiler_targets.selected
++            {
++                return Err("That player incarnation is no longer in the live profiler target list; refresh it".into());
++            }
++        }
++        if selected != self.profiler_targets.selected {
++            self.input.cancel_interaction(&mut self.ui);
++            self.profiler_targets.selected = selected;
++            self.profiler_targets.frame = None;
++            self.profiler_targets.compare = false;
++            self.profiler_targets.follow = true;
++            self.profiler_targets.next_poll = None;
++            self.profiler_targets.next_snapshot = None;
++            self.profile_scope = None;
++            if editor.state.profiler_compare {
++                editor.action("editor.workspace", json!({"compare":false}))?;
++            }
++        }
++        self.poll_profiler_target_state(editor)?;
++        self.rebuild(editor)
++    }
++
++    fn request_player_profile(
++        &mut self,
++        editor: &mut Editor,
++        action: Action,
++        purpose: Purpose,
++    ) -> ara_ui::Result<()> {
++        if let Some(reason) = self.profiler_targets.blocker() {
++            return Err(reason.to_owned().into());
++        }
++        let Target::Player(target) = &self.profiler_targets.selected else {
++            return Err("Choose a live player target".into());
++        };
++        let target = target.clone();
++        let backend = editor
++            .play_profiling
++            .as_mut()
++            .ok_or("The player profiling transport is not attached")?;
++        let ticket = match backend.request(Request {
++            session: editor.session.clone(),
++            target: target.clone(),
++            action,
++            why: Some("Native Profiler target action".into()),
++        }) {
++            Ok(ticket) => ticket,
++            Err(diagnostics) => {
++                self.profiler_targets.error = Some(
++                    diagnostics
++                        .first()
++                        .map_or("Player profiling request was refused", |diagnostic| {
++                            diagnostic.message.as_str()
++                        })
++                        .into(),
++                );
++                self.profiler_targets.diagnostics = diagnostics.into_iter().take(16).collect();
++                return self.rebuild(editor);
++            }
++        };
++        self.profiler_targets.error = None;
++        self.profiler_targets.pending = Some(Pending {
++            ticket,
++            target,
++            purpose,
++            session: editor.session.clone(),
++        });
++        self.profiler_targets.next_poll = None;
++        if purpose == Purpose::Freeze {
++            self.profiler_targets.follow = false;
++        }
++        self.rebuild(editor)
++    }
++
++    pub(crate) fn profiler_record_target(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        if self.profiler_targets.selected == Target::Editor {
++            if !editor.host.profiler().is_recording() {
++                editor.profile_current = None;
++            }
++            self.profiler_record(editor)?;
++            return self.rebuild(editor);
++        }
++        let action = if self.profiler_targets.recording() {
++            Action::Stop
++        } else {
++            Action::Start
++        };
++        self.profiler_targets.follow = true;
++        self.request_player_profile(editor, action, Purpose::Record)
++    }
++    pub(crate) fn profiler_snapshot_target(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        if self.profiler_targets.selected == Target::Editor {
++            return self.profiler_freeze_target(editor, false);
++        }
++        self.profiler_targets.follow = true;
++        self.profiler_targets.next_snapshot = Some(Instant::now() + LIVE_SNAPSHOT);
++        self.request_player_profile(editor, Action::Snapshot, Purpose::Snapshot)
++    }
++    pub(crate) fn profiler_freeze_target(
++        &mut self,
++        editor: &mut Editor,
++        baseline: bool,
++    ) -> ara_ui::Result<()> {
++        if self.profiler_targets.selected == Target::Editor {
++            if self.profiler_targets.editor_job.is_some() {
++                return Err(
++                    "An editor capture save is already pending; wait for its receipt".into(),
++                );
++            }
++            let response = editor.action("editor.profile.freeze", json!({"baseline":baseline}))?;
++            self.profiler_targets.editor_job = response["job"].as_str().map(str::to_owned);
++            if baseline {
++                self.profiler_targets.baseline = None;
++            }
++            self.profiler_targets.compare = false;
++            return self.rebuild(editor);
++        }
++        self.request_player_profile(
++            editor,
++            Action::Freeze,
++            if baseline {
++                Purpose::Baseline
++            } else {
++                Purpose::Freeze
++            },
++        )
++    }
++    pub(crate) fn refresh_profiler_targets(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.profiler_targets.next_poll = None;
++        self.poll_profiler_target_state(editor)?;
++        self.rebuild(editor)
++    }
++
++    pub(crate) fn profiler_target_blocker(&self) -> Option<&str> {
++        self.profiler_targets.blocker()
++    }
++    pub(crate) fn profiler_freeze_blocker(&self) -> Option<&str> {
++        if self.profiler_targets.selected == Target::Editor
++            && self.profiler_targets.editor_job.is_some()
++        {
++            Some("An editor capture save is already pending")
++        } else {
++            self.profiler_targets.blocker()
++        }
++    }
++    pub(crate) fn profiler_compare_blocker(&self, editor: &Editor) -> Option<&str> {
++        let current = if self.profiler_targets.selected == Target::Editor {
++            editor.profile_current.is_some()
++        } else {
++            self.profiler_targets.capture().is_some()
++        };
++        if !current {
++            return Some("Freeze or snapshot the selected target before comparing");
++        }
++        if self.profiler_targets.baseline.is_none() && editor.profile_baseline.is_none() {
++            return Some("Set an explicitly scoped baseline first");
++        }
++        if self.profiler_targets.follow && self.profiler_targets.recording() {
++            return Some("Freeze the selected player snapshot before comparing");
++        }
++        None
++    }
++    pub(crate) fn profiler_compare_active(&self, editor: &Editor) -> bool {
++        if self.profiler_targets.selected == Target::Editor
++            && self.profiler_targets.baseline.is_none()
++        {
++            editor.state.profiler_compare
++        } else {
++            self.profiler_targets.compare
++        }
++    }
++    pub(crate) fn compare_profiler_targets(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        if let Some(reason) = self.profiler_compare_blocker(editor) {
++            return Err(reason.to_owned().into());
++        }
++        if self.profiler_targets.selected == Target::Editor
++            && self.profiler_targets.baseline.is_none()
++        {
++            editor.action(
++                "editor.workspace",
++                json!({"compare":!editor.state.profiler_compare}),
++            )?;
++        } else {
++            self.profiler_targets.compare = !self.profiler_targets.compare;
++        }
++        self.rebuild(editor)
++    }
++
++    pub(in crate::shell) fn bind_profiler_frame(&mut self, id: &str, frame: u64) {
++        let serial = self
++            .profiler_targets
++            .capture()
++            .map_or(0, |capture| capture.serial);
++        self.bind_command(id,"profiler.frame",commands::Target::Text(ara_json::to_canonical_string(&json!({"target":self.profiler_targets.selected.value(),"capture":serial,"frame":frame}))));
++    }
++    pub(in crate::shell) fn profiler_frame_id(&self, frame: u64) -> String {
++        if self.profiler_targets.selected == Target::Editor {
++            return format!("profile-frame-{frame}");
++        }
++        let context = ara_json::to_canonical_string(&self.profiler_targets.selected.value());
++        format!(
++            "profile-frame-{:016x}-{}-{frame}",
++            ara_ui::source::stable_id(&context),
++            self.profiler_targets
++                .capture()
++                .map_or(0, |capture| capture.serial)
++        )
++    }
++    pub(crate) fn choose_profiler_frame(
++        &mut self,
++        editor: &mut Editor,
++        target: &commands::Target,
++    ) -> ara_ui::Result<()> {
++        let commands::Target::Text(text) = target else {
++            return Err("Choose a profiler frame".into());
++        };
++        let value: Value = serde_json::from_str(text)?;
++        let scope = if value["target"].is_null() {
++            Target::Editor
++        } else {
++            Target::Player(serde_json::from_value(value["target"].clone())?)
++        };
++        let frame = value["frame"]
++            .as_u64()
++            .ok_or("Profiler frame identity is missing")?;
++        if scope != self.profiler_targets.selected {
++            return Err("That frame belongs to a different profiling target; the current selection was preserved".into());
++        }
++        if scope == Target::Editor {
++            let exists = if let Some(profile) = &editor.profile_current {
++                profile
++                    .frames
++                    .iter()
++                    .any(|candidate| candidate.id == frame && candidate.duration_ns > 0)
++            } else {
++                editor
++                    .host
++                    .profiler()
++                    .profile()
++                    .frames
++                    .iter()
++                    .any(|candidate| candidate.id == frame && candidate.duration_ns > 0)
++            };
++            if !exists {
++                return Err(
++                    "That editor profiler frame is no longer in the current capture".into(),
++                );
++            }
++            editor.action("editor.workspace", json!({"frame":frame}))?;
++        } else {
++            let capture = self
++                .profiler_targets
++                .capture()
++                .ok_or("No completed frame snapshot exists for this exact player incarnation")?;
++            if value["capture"].as_u64() != Some(capture.serial)
++                || !capture
++                    .profile
++                    .frames
++                    .iter()
++                    .any(|candidate| candidate.id == frame)
++            {
++                return Err(
++                    "That profiler frame was superseded; select a frame in the current snapshot"
++                        .into(),
++                );
++            }
++            self.profiler_targets.frame = Some(frame);
++            self.profiler_targets.follow = false;
++        }
++        self.rebuild(editor)
++    }
++    pub(crate) fn profiler_targets_busy(&self) -> bool {
++        self.profiler_targets.pending.is_some() || self.profiler_targets.editor_job.is_some()
++    }
++    pub(crate) fn profiler_targets_report(&self) -> Value {
++        let capture = |capture: &Capture| json!({"target":capture.target.value(),"name":capture.name,"serial":capture.serial,"frames":capture.profile.frames.len(),"frozen":capture.frozen});
++        json!({"selected":self.profiler_targets.selected.value(),"transport":self.profiler_targets.transport,
++            "pending":self.profiler_targets.pending.as_ref().map(|pending|json!({"ticket":pending.ticket.0,"target":pending.target,"session":pending.session})),
++            "editorCaptureJob":self.profiler_targets.editor_job,"current":self.profiler_targets.current.as_ref().map(capture),
++            "baseline":self.profiler_targets.baseline.as_ref().map(capture),"error":self.profiler_targets.error,"refreshError":self.profiler_targets.refresh_error})
++    }
++}
+diff --git a/crates/ara-editor/src/shell/profiler_targets/tests.rs b/crates/ara-editor/src/shell/profiler_targets/tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/tests.rs
+@@ -0,0 +1,256 @@
++//! Controlled private-port observations test UI identity/ownership, not player transport acceptance.
++#![allow(clippy::unwrap_used)]
++mod fixture;
++use super::*;
++use ara_ui::{input::InputEvent, source::stable_id};
++use fixture::*;
++
++#[test]
++fn absent_player_transport_leaves_real_editor_recording_functional() {
++    let mut f = Fixture::new(false);
++    let revision = f.editor.host.store().revision();
++    assert!(!f.shell.poll_profiler_target_state(&mut f.editor).unwrap());
++    assert!(f.shell.profiler_target_blocker().is_none());
++    f.shell.profiler_record_target(&mut f.editor).unwrap();
++    assert!(f.editor.host.profiler().is_recording());
++    f.shell.profiler_record_target(&mut f.editor).unwrap();
++    assert!(!f.editor.host.profiler().is_recording());
++    assert_eq!(f.editor.host.store().revision(), revision);
++    assert!(!f.shell.profiler_targets_busy());
++}
++
++#[test]
++fn missing_incarnation_is_not_replaced_and_completed_profile_moves_once() {
++    let mut state = State {
++        selected: Target::Player(scope(1, "old", 1)),
++        transport: true,
++        ..State::default()
++    };
++    let old = scope(1, "old", 1);
++    state.observe_rows(&[row(1, "replacement", 2)]);
++    assert_eq!(state.selected, Target::Player(old.clone()));
++    assert!(state.blocker().unwrap().contains("no longer live"));
++    state.pending = Some(Pending {
++        ticket: Ticket(1),
++        target: old.clone(),
++        purpose: Purpose::Snapshot,
++        session: "original-session".into(),
++    });
++    let profile = profile();
++    let spans = profile.frames[0].spans.as_ptr();
++    assert!(state.accept(Status {
++        ticket: Ticket(1),
++        target: old.clone(),
++        finished: true,
++        outcome: Some(Outcome::Completed),
++        recording: false,
++        profile: Some(profile),
++        diagnostics: vec![]
++    }));
++    let capture = state.current.as_ref().unwrap();
++    assert_eq!(capture.target, Target::Player(old));
++    assert_eq!(
++        capture.profile.frames[0].spans.as_ptr(),
++        spans,
++        "owned profile buffers are moved, not cloned"
++    );
++    assert_eq!(Arc::strong_count(&capture.profile), 1);
++    assert!(state.blocker().unwrap().contains("no longer live"));
++    assert!(state.pending.is_none());
++}
++
++#[test]
++fn native_target_select_pending_typing_and_late_frame_actions_preserve_target_scope() {
++    let mut f = Fixture::new(true);
++    f.poll();
++    f.shell.rebuild(&mut f.editor).unwrap();
++    f.shell.frame().unwrap();
++    click(&mut f.shell, &mut f.editor, "profile-target");
++    f.shell.key(&mut f.editor, 77, true, &mut Clip).unwrap();
++    f.shell.key(&mut f.editor, 40, true, &mut Clip).unwrap();
++    let (ticket, request) = f.requests.as_ref().unwrap().try_recv().unwrap();
++    assert_eq!(request.target, scope(2, "second", 1));
++    assert_eq!(request.action, Action::Snapshot);
++    assert_eq!(request.session, f.editor.session);
++    assert!(f.shell.profiler_targets_busy());
++    let revision = f.editor.host.store().revision();
++    assert!(
++        f.shell
++            .input
++            .focus_if_available(&mut f.shell.ui, stable_id("search-hierarchy"))
++    );
++    f.shell.native_text("λ", &mut Clip).unwrap();
++    f.shell.dispatch(&mut f.editor).unwrap();
++    for _ in 0..4 {
++        f.editor.tick();
++        f.poll();
++    }
++    assert!(
++        f.requests.as_ref().unwrap().try_recv().is_err(),
++        "one pending request stays single-flight while typing"
++    );
++    assert_eq!(f.editor.host.store().revision(), revision);
++    f.shell
++        .choose_profiler_target(&mut f.editor, Value::Null)
++        .unwrap();
++    f.shell.profiler_record_target(&mut f.editor).unwrap();
++    assert!(
++        f.editor.host.profiler().is_recording(),
++        "pending player work does not block Editor recording"
++    );
++    f.shell.profiler_record_target(&mut f.editor).unwrap();
++    let profile = profile();
++    let spans = profile.frames[0].spans.as_ptr();
++    f.reply(Status {
++        ticket,
++        target: request.target.clone(),
++        finished: true,
++        outcome: Some(Outcome::Completed),
++        recording: false,
++        profile: Some(profile),
++        diagnostics: vec![],
++    });
++    assert_eq!(
++        f.shell
++            .profiler_targets
++            .current
++            .as_ref()
++            .unwrap()
++            .profile
++            .frames[0]
++            .spans
++            .as_ptr(),
++        spans
++    );
++    assert!(
++        f.shell.profiler_reading(&mut f.editor).editor,
++        "late player data never substitutes for Editor data"
++    );
++    f.shell
++        .choose_profiler_target(&mut f.editor, json!(request.target))
++        .unwrap();
++    f.shell.frame().unwrap();
++    let id = f.shell.profiler_frame_id(7);
++    let Binding::Command(_, late) = f.shell.bindings[&stable_id(&id)].clone() else {
++        panic!("scoped frame command")
++    };
++    f.shell
++        .choose_profiler_target(&mut f.editor, json!(scope(1, "first", 1)))
++        .unwrap();
++    assert!(f.shell.choose_profiler_frame(&mut f.editor, &late).is_err());
++    assert!(f.shell.profiler_targets.frame.is_none());
++    let (ticket, request) = f.requests.as_ref().unwrap().try_recv().unwrap();
++    f.reply(Status {
++        ticket,
++        target: request.target,
++        finished: true,
++        outcome: Some(Outcome::Refused),
++        recording: false,
++        profile: None,
++        diagnostics: vec![ara_diag::Diagnostic::error(
++            ara_play_host::codes::REQUEST,
++            "Controlled refusal: target cannot provide this snapshot",
++        )],
++    });
++    f.poll();
++    assert!(
++        f.shell
++            .profiler_targets
++            .error
++            .as_deref()
++            .unwrap()
++            .contains("refused")
++    );
++    assert!(f.shell.ui.find("profile-target-error").is_some());
++    assert!(!f.shell.profiler_targets_busy());
++    assert_eq!(f.editor.host.store().revision(), revision);
++}
++
++#[test]
++fn comparison_labels_both_incarnations_and_unknown_target_actions_stay_disabled() {
++    let mut f = Fixture::new(true);
++    f.poll();
++    let current = scope(2, "second", 1);
++    let baseline = scope(1, "first", 1);
++    f.shell.profiler_targets.selected = Target::Player(current.clone());
++    f.shell.profiler_targets.follow = false;
++    f.shell.profiler_targets.current = Some(Capture {
++        target: Target::Player(current),
++        name: "Client two".into(),
++        profile: Arc::new(profile()),
++        serial: 2,
++        frozen: true,
++    });
++    f.shell.profiler_targets.baseline = Some(Capture {
++        target: Target::Player(baseline),
++        name: "Client one".into(),
++        profile: Arc::new(profile()),
++        serial: 1,
++        frozen: true,
++    });
++    let reading = f.shell.profiler_reading(&mut f.editor);
++    assert!(reading.current_label.contains("second"));
++    assert!(reading.baseline_label.contains("first"));
++    assert!(!reading.compare);
++    f.shell.compare_profiler_targets(&mut f.editor).unwrap();
++    assert!(f.shell.profiler_reading(&mut f.editor).compare);
++    f.rows(vec![row(1, "first", 2), row(2, "second", 2)]);
++    f.shell.rebuild(&mut f.editor).unwrap();
++    f.shell.frame().unwrap();
++    assert_eq!(
++        f.shell.profiler_targets.selected,
++        Target::Player(scope(2, "second", 1))
++    );
++    assert!(
++        f.shell
++            .profiler_target_blocker()
++            .unwrap()
++            .contains("no longer live")
++    );
++    let record = f.shell.ui.find("profile-record").unwrap();
++    assert!(f.shell.ui.nodes[record].state.disabled);
++    assert!(
++        f.shell.ui.nodes[f.shell.ui.find("profile-current-scope").unwrap()]
++            .element
++            .attrs["text"]
++            .contains("binding 1")
++    );
++    let pointer = f
++        .shell
++        .profiler_targets
++        .current
++        .as_ref()
++        .unwrap()
++        .profile
++        .frames[0]
++        .spans
++        .as_ptr();
++    let reads = f
++        .reads
++        .as_ref()
++        .unwrap()
++        .load(std::sync::atomic::Ordering::Relaxed);
++    f.shell.profiler_targets.next_poll = Some(Instant::now() + Duration::from_secs(3600));
++    for _ in 0..128 {
++        f.shell.poll_profiler_target_state(&mut f.editor).unwrap();
++    }
++    assert_eq!(
++        f.reads
++            .as_ref()
++            .unwrap()
++            .load(std::sync::atomic::Ordering::Relaxed),
++        reads
++    );
++    assert_eq!(
++        f.shell
++            .profiler_targets
++            .current
++            .as_ref()
++            .unwrap()
++            .profile
++            .frames[0]
++            .spans
++            .as_ptr(),
++        pointer
++    );
++}
+diff --git a/crates/ara-editor/src/shell/profiler_targets/tests/fixture.rs b/crates/ara-editor/src/shell/profiler_targets/tests/fixture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/tests/fixture.rs
+@@ -0,0 +1,229 @@
++use super::*;
++use std::{
++    collections::BTreeMap,
++    path::PathBuf,
++    sync::{
++        atomic::{AtomicU64, AtomicUsize, Ordering},
++        mpsc::{self, Receiver, Sender},
++    },
++};
++pub(super) enum Change {
++    Rows(Vec<Row>),
++    Reply(Status),
++}
++struct Controlled {
++    rows: Vec<Row>,
++    changes: Receiver<Change>,
++    requests: Sender<(Ticket, Request)>,
++    replies: BTreeMap<u64, Status>,
++    next: u64,
++    reads: Arc<AtomicUsize>,
++}
++impl Backend for Controlled {
++    fn refresh_targets(&mut self) -> Result<(), Vec<ara_diag::Diagnostic>> {
++        self.reads.fetch_add(1, Ordering::Relaxed);
++        while let Ok(change) = self.changes.try_recv() {
++            match change {
++                Change::Rows(rows) => self.rows = rows,
++                Change::Reply(status) => {
++                    self.replies.insert(status.ticket.0, status);
++                }
++            }
++        }
++        Ok(())
++    }
++    fn targets(&self) -> &[Row] {
++        &self.rows
++    }
++    fn request(&mut self, request: Request) -> Result<Ticket, Vec<ara_diag::Diagnostic>> {
++        self.next += 1;
++        let ticket = Ticket(self.next);
++        self.requests.send((ticket, request)).unwrap();
++        Ok(ticket)
++    }
++    fn poll(&mut self, ticket: Ticket) -> Option<Status> {
++        self.replies.remove(&ticket.0)
++    }
++}
++struct Project(PathBuf);
++impl Project {
++    fn new() -> Self {
++        static NEXT: AtomicU64 = AtomicU64::new(0);
++        let root = std::path::absolute(crate::test_target())
++            .unwrap()
++            .join("profiler-targets")
++            .join(format!(
++                "{}-{}",
++                std::process::id(),
++                NEXT.fetch_add(1, Ordering::Relaxed)
++            ));
++        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
++        std::fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Profiler targets","main":"levels/main.scene"}))).unwrap();
++        std::fs::write(
++            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
++            ara_json::to_canonical_string(
++                &json!({"$schema":"ara://schema/scene/1","id":"sc_profilertest","records":{}}),
++            ),
++        )
++        .unwrap();
++        Self(root)
++    }
++}
++impl Drop for Project {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_dir_all(&self.0);
++    }
++}
++pub(super) struct Fixture {
++    pub editor: Editor,
++    pub shell: Shell,
++    pub requests: Option<Receiver<(Ticket, Request)>>,
++    changes: Option<Sender<Change>>,
++    pub reads: Option<Arc<AtomicUsize>>,
++    _project: Project,
++}
++impl Fixture {
++    pub fn new(controlled: bool) -> Self {
++        let project = Project::new();
++        let profile = project.0.join(".ara/test-profile");
++        std::fs::create_dir_all(&profile).unwrap();
++        let mut editor =
++            Editor::open_with(&project.0, Some(profile.join("editor-settings.json"))).unwrap();
++        editor
++            .action(
++                "editor.layout.move",
++                json!({"panel":"profiler","slot":"view"}),
++            )
++            .unwrap();
++        let mut requests = None;
++        let mut changes = None;
++        let mut reads = None;
++        if controlled {
++            let (send, receive) = mpsc::channel();
++            let (requests_send, requests_receive) = mpsc::channel();
++            let count = Arc::new(AtomicUsize::new(0));
++            editor.play_profiling = Some(Box::new(Controlled {
++                rows: vec![row(1, "first", 1), row(2, "second", 1)],
++                changes: receive,
++                requests: requests_send,
++                replies: BTreeMap::new(),
++                next: 0,
++                reads: Arc::clone(&count),
++            }));
++            requests = Some(requests_receive);
++            changes = Some(send);
++            reads = Some(count);
++        }
++        let mut shell = Shell::new(&mut editor, [1100., 760.]).unwrap();
++        shell.offscreen = true;
++        Self {
++            editor,
++            shell,
++            requests,
++            changes,
++            reads,
++            _project: project,
++        }
++    }
++    pub fn poll(&mut self) {
++        self.shell.profiler_targets.next_poll = None;
++        self.shell
++            .poll_profiler_target_state(&mut self.editor)
++            .unwrap();
++    }
++    pub fn reply(&mut self, status: Status) {
++        self.changes
++            .as_ref()
++            .unwrap()
++            .send(Change::Reply(status))
++            .unwrap();
++        self.poll();
++        self.shell.rebuild(&mut self.editor).unwrap();
++        self.shell.frame().unwrap();
++    }
++    pub fn rows(&mut self, rows: Vec<Row>) {
++        self.changes
++            .as_ref()
++            .unwrap()
++            .send(Change::Rows(rows))
++            .unwrap();
++        self.poll();
++    }
++}
++pub(super) fn scope(player: u32, source: &str, binding: u64) -> Scope {
++    Scope {
++        world: "world-proof".into(),
++        player,
++        source: source.into(),
++        binding,
++    }
++}
++pub(super) fn row(player: u32, source: &str, binding: u64) -> Row {
++    Row {
++        target: scope(player, source, binding),
++        name: format!("Client {player}"),
++        process_id: Some(1200 + player),
++        recording: false,
++        available: true,
++        reason: None,
++    }
++}
++pub(super) fn profile() -> ara_profile::Profile {
++    ara_profile::Profile {
++        version: 1,
++        budget_ns: 16_666_667,
++        labels: vec!["Player.Update".into()],
++        threads: vec![ara_profile::ThreadInfo {
++            id: 1,
++            name: "Player thread".into(),
++        }],
++        frames: [ara_profile::Frame {
++            id: 7,
++            duration_ns: 4_000_000,
++            spans: vec![ara_profile::CpuSpan {
++                label: 0,
++                thread: 1,
++                id: 1,
++                parent: 0,
++                start_ns: 0,
++                duration_ns: 1_000_000,
++                self_ns: 1_000_000,
++                allocated_bytes: 0,
++                self_allocated_bytes: 0,
++            }],
++            ..Default::default()
++        }]
++        .into(),
++        ..Default::default()
++    }
++}
++pub(super) struct Clip;
++impl ara_ui_text::Clipboard for Clip {
++    fn read(&mut self) -> ara_ui_text::Result<String> {
++        Ok(String::new())
++    }
++    fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
++        Ok(())
++    }
++}
++pub(super) fn click(shell: &mut Shell, editor: &mut Editor, id: &str) {
++    let node = &shell.ui.nodes[shell.shown_node(id).unwrap()];
++    let rect = node.rect.intersection(node.clip);
++    assert!(rect.w > 0. && rect.h > 0.);
++    let point = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
++    assert_eq!(
++        shell
++            .ui
++            .hit_test(point[0], point[1])
++            .map(|index| shell.ui.nodes[index].element.id.as_str()),
++        Some(id)
++    );
++    shell
++        .event(InputEvent::PointerDown(point), &mut Clip)
++        .unwrap();
++    shell
++        .event(InputEvent::PointerUp(point), &mut Clip)
++        .unwrap();
++    shell.dispatch(editor).unwrap();
++    shell.frame().unwrap();
++}
+diff --git a/crates/ara-editor/src/shell/profiler_targets/view.rs b/crates/ara-editor/src/shell/profiler_targets/view.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/profiler_targets/view.rs
+@@ -0,0 +1,260 @@
++use super::*;
++
++pub(in crate::shell) struct Reading {
++    pub editor: bool,
++    pub current: Option<Arc<ara_profile::Profile>>,
++    pub baseline: Option<Arc<ara_profile::Profile>>,
++    pub recording: bool,
++    pub frozen: bool,
++    pub compare: bool,
++    pub frame: Option<u64>,
++    pub label: String,
++    pub current_label: String,
++    pub baseline_label: String,
++    pub blocker: Option<String>,
++    pub compare_blocker: Option<String>,
++}
++
++impl Shell {
++    /// Clone only Arc handles at a markup rebuild; profiles/frames are never copied here.
++    pub(in crate::shell) fn profiler_reading(&self, editor: &mut Editor) -> Reading {
++        let state = &self.profiler_targets;
++        let is_editor = state.selected == Target::Editor;
++        let recording = if is_editor {
++            editor.host.profiler().is_recording()
++        } else {
++            state.transport
++                && state.refresh_error.is_none()
++                && state
++                    .row()
++                    .is_some_and(|row| row.available && row.recording)
++        };
++        let current = if is_editor {
++            editor.profile_current.as_ref().map(Arc::clone)
++        } else {
++            state.capture().map(|capture| Arc::clone(&capture.profile))
++        };
++        let frozen = if is_editor {
++            current.is_some()
++        } else {
++            state.capture().is_some_and(|capture| capture.frozen)
++        };
++        let baseline = state
++            .baseline
++            .as_ref()
++            .map(|capture| Arc::clone(&capture.profile))
++            .or_else(|| editor.profile_baseline.as_ref().map(Arc::clone));
++        let editor_label = format!("Editor · PID {}", std::process::id());
++        let current_label = if is_editor {
++            format!(
++                "{} · {}",
++                editor_label,
++                if frozen {
++                    "frozen capture"
++                } else {
++                    "live closed frames"
++                }
++            )
++        } else {
++            state.capture().map_or_else(
++                || format!("{} · no snapshot", state.selected.label()),
++                |capture| {
++                    format!(
++                        "{} · {} · {}",
++                        capture.name,
++                        capture.target.label(),
++                        if capture.frozen {
++                            "frozen capture"
++                        } else {
++                            "snapshot"
++                        }
++                    )
++                },
++            )
++        };
++        let baseline_label = state.baseline.as_ref().map_or_else(
++            || {
++                if baseline.is_some() {
++                    editor_label
++                } else {
++                    "Not set".into()
++                }
++            },
++            |capture| format!("{} · {}", capture.name, capture.target.label()),
++        );
++        let label = if is_editor {
++            if recording {
++                "Recording editor frames"
++            } else if frozen {
++                "Frozen editor capture"
++            } else {
++                "Editor closed-frame history"
++            }
++            .into()
++        } else if current.is_none() {
++            "No player snapshot received".into()
++        } else if recording {
++            if frozen {
++                "Player recording · viewing frozen capture"
++            } else if !state.follow {
++                "Player recording · viewing held snapshot"
++            } else {
++                "Player recording · viewing latest snapshot"
++            }
++            .into()
++        } else if state.blocker().is_some() {
++            "Cached player snapshot · target unavailable/pending".into()
++        } else if frozen {
++            "Frozen player capture".into()
++        } else if !state.follow {
++            "Held player snapshot".into()
++        } else {
++            "Player snapshot".into()
++        };
++        Reading {
++            editor: is_editor,
++            current,
++            baseline,
++            recording,
++            frozen,
++            compare: if is_editor && state.baseline.is_none() {
++                editor.state.profiler_compare
++            } else {
++                state.compare
++            },
++            frame: if is_editor {
++                editor.state.profiler_frame
++            } else {
++                state.frame
++            },
++            label,
++            current_label,
++            baseline_label,
++            blocker: state.blocker().map(str::to_owned),
++            compare_blocker: self.profiler_compare_blocker(editor).map(str::to_owned),
++        }
++    }
++
++    pub(in crate::shell) fn profiler_target_toolbar(
++        &mut self,
++        reading: &Reading,
++        out: &mut String,
++    ) {
++        let state = &self.profiler_targets;
++        let mut options = vec![(Value::Null, "Editor".to_owned())];
++        for row in &state.rows {
++            options.push((
++                json!(row.target),
++                format!(
++                    "{} · {}{}",
++                    row.name,
++                    row.target.label(),
++                    if row.available { "" } else { " · unavailable" }
++                ),
++            ));
++        }
++        if let Target::Player(scope) = &state.selected
++            && !state.rows.iter().any(|row| &row.target == scope)
++        {
++            options.push((json!(scope), format!("{} · unavailable", scope.label())));
++        }
++        let current = state.selected.value();
++        let pending = state
++            .pending
++            .as_ref()
++            .map(|pending| {
++                format!(
++                    "Pending profiling request {} · {}",
++                    pending.ticket.0,
++                    pending.target.label()
++                )
++            })
++            .or_else(|| {
++                state
++                    .editor_job
++                    .as_ref()
++                    .map(|job| format!("Editor capture save pending · {job}"))
++            });
++        let error = state.error.clone();
++        let refresh_error = state.refresh_error.clone();
++        let transport = state.transport;
++        let empty_targets = state.rows.is_empty();
++        let process = state.row().map(|row| {
++            row.process_id
++                .map_or("Process ID not reported".into(), |pid| {
++                    format!("Process PID {pid}")
++                })
++        });
++        let diagnostics: Vec<_> = state
++            .diagnostics
++            .iter()
++            .take(8)
++            .map(|diagnostic| format!("{}: {}", diagnostic.code, diagnostic.message))
++            .collect();
++        out.push_str("<panel id='profiler-targets' class='profiler-targets'><panel id='profiler-target-row' class='profiler-target-row'>");
++        self.choice_button(
++            "profile-target",
++            "Profiler target",
++            choices::Select {
++                destination: choices::Destination::ProfilerTarget,
++                options,
++                current,
++            },
++            out,
++        );
++        for (id, command, label) in [
++            (
++                "profile-target-refresh",
++                "profiler.refresh",
++                "Refresh targets",
++            ),
++            (
++                "profile-snapshot",
++                "profiler.snapshot",
++                if reading.editor {
++                    "Freeze snapshot"
++                } else {
++                    "Follow target"
++                },
++            ),
++        ] {
++            self.bind_command(id, command, commands::Target::None);
++            let disabled = command == "profiler.snapshot" && reading.blocker.is_some();
++            out.push_str(&format!("<button id='{id}' class='ghost' style='height:auto;min-height:26px;max-width:100%;white-space:normal' text='{label}' disabled='{disabled}' description='{}' action='Dispatch' />",escape(if disabled{reading.blocker.as_deref().unwrap_or("Unavailable")}else if command=="profiler.snapshot"&&!reading.editor{"Read closed frames and follow new snapshots while this exact player records"}else{"Read current profiler target metadata or closed frames; no project mutation"})));
++        }
++        out.push_str(&format!("</panel><text id='profile-current-scope' class='profiler-target-caption' text='Current: {}' /><text id='profile-baseline-scope' class='profiler-target-caption' text='Baseline: {}' />",escape(&reading.current_label),escape(&reading.baseline_label)));
++        if let Some(process) = process {
++            out.push_str(&format!(
++                "<text id='profile-target-process' class='profiler-target-caption' text='{}' />",
++                escape(&process)
++            ));
++        }
++        if !transport {
++            out.push_str("<text id='profile-player-transport' class='profiler-target-caption' text='Player targets unavailable: profiling transport is not attached. Editor recording remains available.' />");
++        } else if empty_targets {
++            out.push_str("<text id='profile-player-targets-empty' class='profiler-target-caption' text='No live player profiling targets have been reported.' />");
++        }
++        if let Some(reason) = &reading.blocker {
++            out.push_str(&format!("<text id='profile-target-unavailable' class='profiler-target-caption' text='{}' />",escape(reason)));
++        }
++        if let Some(pending) = pending {
++            out.push_str(&format!(
++                "<text id='profile-target-pending' class='profiler-target-caption' text='{}' />",
++                escape(&pending)
++            ));
++        }
++        if let Some(error) = error {
++            out.push_str(&format!(
++                "<text id='profile-target-error' class='profiler-target-caption' text='{}' />",
++                escape(&error)
++            ));
++        }
++        if let Some(error) = refresh_error {
++            out.push_str(&format!("<text id='profile-target-refresh-error' class='profiler-target-caption' text='Last target list retained: {}' />",escape(&error)));
++        }
++        for (index, diagnostic) in diagnostics.iter().enumerate() {
++            out.push_str(&format!("<text id='profile-target-diagnostic-{index}' class='profiler-target-caption' text='{}' />",escape(diagnostic)));
++        }
++        out.push_str("</panel>");
++    }
++}

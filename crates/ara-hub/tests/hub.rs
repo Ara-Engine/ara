@@ -13,10 +13,7 @@ fn setup() -> (Capture, Hub) {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
     hub.take_calls();
-    (
-        Capture::new([1440, 900], 1.0, Vec::new()).expect("headless hub"),
-        hub,
-    )
+    (Capture::new([1440, 900], 1.0).expect("headless hub"), hub)
 }
 
 const ENTER: u16 = 0x0D;
@@ -36,7 +33,7 @@ fn every_page_lays_out_in_both_themes_and_sizes() {
                 None,
             );
             capture::seed(&mut hub);
-            let mut cap = Capture::new(size, 1.0, Vec::new()).expect("headless hub");
+            let mut cap = Capture::new(size, 1.0).expect("headless hub");
             for view in View::ALL {
                 hub.view = view;
                 assert!(

@@ -52,7 +52,8 @@ impl Shell {
         if !options.iter().any(|(value, _)| value == &current) {
             options.push((current.clone(), "Custom type filter".into()));
         }
-        out.push_str("<panel id='asset-types' class='row' name='enum' style='height:auto;min-height:30px;flex-shrink:0;flex-wrap:wrap;gap:8px;padding:4px'><text id='asset-type-label' class='caption' text='Type' /><panel id='asset-type-value' style='flex-basis:0px;flex-grow:1;min-width:0px;flex-shrink:1'>");
+        out.push_str("<panel id='asset-types' class='asset-filters' name='enum'><panel id='asset-type-value' class='asset-filter'>");
+        let start = out.len();
         self.choice_button(
             "asset-type-select",
             "Filter asset type",
@@ -63,6 +64,7 @@ impl Shell {
             },
             out,
         );
+        compact_select(out, start);
         out.push_str("</panel>");
         self.asset_bookmarks_select(editor, out);
         out.push_str("</panel>");
@@ -96,3 +98,21 @@ impl Shell {
 #[cfg(test)]
 #[path = "type_tests.rs"]
 mod tests;
+/// Mark the dropdown appended since `start` as a compact toolbar select.
+pub(in crate::shell) fn compact_select(out: &mut String, start: usize) {
+    let markup = if out[start..].contains("kit-select-compact'") {
+        out[start..].replacen(
+            "kit-select-compact'",
+            "kit-select-compact kit-select-filter'",
+            1,
+        )
+    } else {
+        out[start..].replacen(
+            "class='kit-select'",
+            "class='kit-select kit-select-compact kit-select-filter'",
+            1,
+        )
+    };
+    out.truncate(start);
+    out.push_str(&markup);
+}

@@ -9,8 +9,8 @@ mod interactions;
 mod migration;
 use crate::{
     connection::Event,
-    model::{AgentClient, Call, Hub, Intent, Layout, View},
-    ui::{Doc, HubApp},
+    model::{AgentClient, AgentSetup, Call, Hub, Intent, Layout, View},
+    ui::HubApp,
 };
 use serde_json::{Value, json};
 use std::{
@@ -203,6 +203,13 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
             json!(cli)
         ),
     );
+    hub.install.insert(
+        AgentClient::OpenCode,
+        ara_json::to_canonical_string(&json!({
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {"ara": {"type": "local", "command": [cli, "mcp"], "enabled": true}}
+        })),
+    );
     // Releases and incomplete samples are separate demonstration states, not
     // the default state of a newly installed current build.
     if !with_projects {
@@ -280,7 +287,27 @@ const STEPS: &[Step] = &[
     }),
     ("installs", |hub| hub.view = View::Installs),
     ("update-banner", |hub| hub.view = View::Settings),
-    ("agents", |hub| hub.view = View::Agents),
+    ("agents", |hub| {
+        hub.view = View::Agents;
+        for (client, state) in [
+            (AgentClient::Claude, AgentSetup::Available),
+            (AgentClient::Codex, AgentSetup::Available),
+            (AgentClient::Cursor, AgentSetup::Missing),
+            (AgentClient::OpenCode, AgentSetup::Missing),
+        ] {
+            hub.agent_setup.insert(client, state);
+        }
+    }),
+    ("agents-manual", |hub| {
+        hub.intent(Intent::ManualAgent(Some(AgentClient::OpenCode)))
+    }),
+    ("agents-connected", |hub| {
+        hub.intent(Intent::ManualAgent(None));
+        hub.agent_setup
+            .insert(AgentClient::Claude, AgentSetup::Connected);
+        hub.agent_setup
+            .insert(AgentClient::Codex, AgentSetup::Connected);
+    }),
     ("learn", |hub| hub.view = View::Learn),
 ];
 
@@ -295,14 +322,14 @@ pub struct Capture {
 
 impl Capture {
     /// A `physical` px window at `dpi` device px per design px.
-    pub fn new(physical: [u32; 2], dpi: f32, docs: Vec<Doc>) -> anyhow::Result<Self> {
+    pub fn new(physical: [u32; 2], dpi: f32) -> anyhow::Result<Self> {
         let width = physical[0] as f32 / dpi;
         let hub = Hub::new(
             crate::model::Prefs::default(),
             PathBuf::from("target/hub-captures"),
             None,
         );
-        let mut app = HubApp::new(hub, docs, width);
+        let mut app = HubApp::new(hub, width);
         app.now_ms = NOW;
         app.frame.controls = (!cfg!(target_os = "macos")).then_some(false);
         let theme = app.look.theme.clone();

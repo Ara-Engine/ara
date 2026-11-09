@@ -13,20 +13,55 @@ use measure::Sweep;
 use menu::{Row, Source};
 use std::path::PathBuf;
 
+// One test per window size so the three sweeps run in parallel.
 #[test]
-fn editor_overlays_and_control_choices_fit_all_mounted_contexts() {
+fn editor_overlays_and_control_choices_fit_all_mounted_contexts_1x() {
+    overlays_fit(0);
+}
+#[test]
+fn editor_overlays_and_control_choices_fit_all_mounted_contexts_2x() {
+    overlays_fit(1);
+}
+#[test]
+fn editor_overlays_and_control_choices_fit_all_mounted_contexts_narrow() {
+    overlays_fit(2);
+}
+
+/// Info dialogs size to their content, so their text and code block are fully shown.
+#[test]
+fn info_dialog_shows_its_text_and_code() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open([800., 600.]);
+    shell.dialog = Some(Dialog::cli_fix(
+        "Repair engine",
+        &["hub".into(), "repair".into(), "0.0.1".into()],
+    ));
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    for id in ["dialog-line-0", "dialog-line-1", "dialog-code"] {
+        let node = &shell.ui.nodes[shell.shown_node(id).expect(id)];
+        let shown = node.clip.intersection(node.rect);
+        assert!(
+            node.rect.h > 10. && shown.h >= node.rect.h - 0.5,
+            "{id} must be fully visible: {:?} clipped to {:?}",
+            node.rect,
+            node.clip
+        );
+    }
+}
+
+fn overlays_fit(size: usize) {
     let project = Project::new();
     let output = project.0.join("measurements");
-    let sweep = run_sweep(&project, &mut |_, _| {});
+    let sweep = run_sweep(&project, &SIZES[size..=size], &mut |_, _| {});
     sweep.write(&output);
-    let retained = project
-        .0
-        .parent()
-        .unwrap()
-        .join("latest-quality-measurements.json");
+    let retained = project.0.parent().unwrap().join(format!(
+        "latest-quality-measurements-{}.json",
+        SIZES[size].0
+    ));
     std::fs::copy(output.join("quality-measurements.json"), retained).unwrap();
     assert!(
-        sweep.measurements.len() > 100,
+        sweep.measurements.len() > 30,
         "sweep must actually mount and measure overlays"
     );
     assert!(
@@ -100,14 +135,21 @@ fn retained_main_tooltips_fit_their_final_shaped_text() {
     );
 }
 
-fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> Sweep {
+/// Every window size the overlay sweep measures; tests split them so they run in parallel.
+const SIZES: [(&str, [f32; 2]); 3] = [
+    ("1x", [1440., 900.]),
+    ("2x", [1280., 720.]),
+    ("narrow", [640., 480.]),
+];
+
+fn run_sweep(
+    project: &Project,
+    sizes: &[(&str, [f32; 2])],
+    capture: &mut impl FnMut(&mut Shell, &str),
+) -> Sweep {
     let (mut editor, mut shell) = project.open([1440., 900.]);
     let mut sweep = Sweep::default();
-    for (scale, size) in [
-        ("1x", [1440., 900.]),
-        ("2x", [1280., 720.]),
-        ("narrow", [640., 480.]),
-    ] {
+    for &(scale, size) in sizes {
         shell.ui.resize(size).unwrap();
         editor
             .action("editor.view", json!({"maximized":""}))
@@ -249,6 +291,7 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
             Context::Snapping,
             Context::ViewModes,
             Context::Show,
+            Context::Gizmos,
             Context::GameAspect,
             Context::HierarchyFilter,
         ]

@@ -204,13 +204,15 @@ fn inputs(op: &str) -> Vec<Type> {
         "abs" | "sin" | "cos" | "floor" | "fract" | "saturate" | "sqrt" | "normalize"
         | "length" => vec![Vec3],
         "dot" | "cross" | "normalBlend" => vec![Vec3, Vec3],
-        "uv" | "worldPosition" | "worldNormal" | "viewDirection" | "time" => vec![],
+        "uv" | "worldPosition" | "worldNormal" | "viewDirection" | "time" | "vertexColor" => {
+            vec![]
+        }
         "sampleColor" => vec![TextureColor, Vec2],
         "sampleNormal" => vec![TextureNormal, Vec2],
         "sampleData" => vec![TextureData, Vec2],
         "linear" => vec![ColorSrgb],
         "srgb" | "color" => vec![Vec3],
-        "rgb" | "alpha" => vec![Vec4],
+        "rgb" | "alpha" | "red" | "green" | "blue" => vec![Vec4],
         "luminance" => vec![ColorLinear],
         "normalStrength" => vec![Vec3, Float],
         "noise" | "sceneColor" => vec![Vec2],

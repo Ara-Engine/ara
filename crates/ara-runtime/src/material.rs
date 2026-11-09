@@ -46,6 +46,46 @@ pub struct MaterialAsset {
     pub base_color_decode_srgb: bool,
     /// Decode the raw emissive sample from sRGB after filtering (`sampleColor`).
     pub emissive_decode_srgb: bool,
+    /// Vertex-paint layers (the graph lerps between layers by vertex-colour channels,
+    /// like Unreal's VertexColor): each a complete PBR material over `textures`,
+    /// blended by its channel weights. Empty for an ordinary material; `material`
+    /// then holds the first layer with the blend's alpha mode.
+    pub paint_layers: Vec<PaintLayer>,
+    /// Decal-domain extras (`Domain::Decal` graphs, drawn by `Decal` components);
+    /// `material` then holds the decal's base colour, normal, ORM, emissive and
+    /// occlusion slots.
+    pub decal: Option<DecalSurface>,
+}
+
+/// What a decal-domain material adds to its PBR slots.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecalSurface {
+    /// Opacity factor; with `opacity_texture` it multiplies that sample.
+    pub opacity: f32,
+    /// A sampled opacity: texture (into `MaterialAsset::textures`), its coordinates
+    /// and the channel read (base colour alpha is channel 3 of its texture).
+    pub opacity_texture: Option<(usize, crate::model::TextureTransform, u32)>,
+    /// Ambient occlusion factor; `material.occlusion_texture` (its `occlusion_channel`)
+    /// multiplies it when sampled.
+    pub occlusion: f32,
+    /// Channel of the occlusion texture read.
+    pub occlusion_channel: u32,
+    /// Specular level (0.5 is the 4% dielectric F0).
+    pub specular: f32,
+}
+
+/// One vertex-paint layer of a [`MaterialAsset`].
+#[derive(Debug, Clone)]
+pub struct PaintLayer {
+    /// Per channel R, G, B, A: 0 unused, 1 weight times the channel, 2 times one
+    /// minus it (`ara_render::scene::PaintWeight`). The layers' weights sum to one.
+    pub terms: [u8; 4],
+    /// The layer's surface factors and texture slots into the asset's `textures`.
+    pub material: ModelMaterial,
+    /// Decode the layer's raw base-colour sample from sRGB after filtering.
+    pub base_color_decode_srgb: bool,
+    /// Decode the layer's raw emissive sample from sRGB after filtering.
+    pub emissive_decode_srgb: bool,
 }
 
 /// Resolved native material generations. Failed reloads retain their last good data.
@@ -127,7 +167,11 @@ impl MaterialAsset {
             );
         }
         let material = ara_material::fold_constants(&material).map_err(diagnostics)?;
-        let prepared = lower::surface(&material, source)?;
+        let prepared = if material.domain == ara_material::Domain::Decal {
+            lower::decal(&material, source)?
+        } else {
+            lower::surface(&material, source)?
+        };
         let identity = ara_json::to_value(&(&material, &prepared.generations))?;
         let digest = Digest::of(ara_json::to_canonical_string(&identity).as_bytes());
         Ok(Self {
@@ -138,6 +182,8 @@ impl MaterialAsset {
             texture_generations: prepared.generations,
             base_color_decode_srgb: prepared.base_color_decode_srgb,
             emissive_decode_srgb: prepared.emissive_decode_srgb,
+            paint_layers: prepared.paint_layers,
+            decal: prepared.decal,
         })
     }
 }
@@ -193,6 +239,12 @@ pub(crate) fn references(workspace: &Workspace) -> Result<BTreeSet<String>> {
                 references.insert(crate::assets::asset_id(&entry.material)?.to_owned());
             }
         }
+        if let Some(decal) = value.get("Decal") {
+            let decal: crate::decal::Decal = serde_json::from_value(decal.clone())?;
+            if let Some(material) = decal.material {
+                references.insert(crate::assets::asset_id(&material)?.to_owned());
+            }
+        }
         // Prefab instance overrides contain partial component fields, so collect
         // their typed reference values without materializing incomplete renderers.
         if let Some(overrides) = value.get("overrides") {
@@ -212,7 +264,7 @@ pub(crate) fn references(workspace: &Workspace) -> Result<BTreeSet<String>> {
 fn collect_renderer_overrides(value: &serde_json::Value, assets: &mut BTreeSet<String>) {
     if let Some(values) = value.as_object() {
         for (key, value) in values {
-            if key.contains("MeshRenderer") {
+            if key.contains("MeshRenderer") || key.contains("Decal") {
                 collect_material_refs(value, assets);
             } else {
                 collect_renderer_overrides(value, assets);
@@ -253,12 +305,18 @@ pub(crate) fn patch_references(ops: &[ara_doc::Op]) -> BTreeSet<String> {
                 path,
                 value: Some(value),
                 ..
-            } if path.to_string().contains("MeshRenderer") => {
+            } if {
+                let path = path.to_string();
+                path.contains("MeshRenderer") || path.contains("Decal")
+            } =>
+            {
                 collect_material_refs(value, &mut assets)
             }
             ara_doc::Op::Create { record, .. } => {
-                if let Some(value) = record.get("MeshRenderer") {
-                    collect_material_refs(value, &mut assets);
+                for component in ["MeshRenderer", "Decal"] {
+                    if let Some(value) = record.get(component) {
+                        collect_material_refs(value, &mut assets);
+                    }
                 }
                 if let Some(value) = record.get("overrides") {
                     collect_renderer_overrides(value, &mut assets);

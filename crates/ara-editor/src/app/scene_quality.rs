@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use ara_editor_gpu::NativeUi;
 use ara_render::Renderer;
-use ara_render_fidelity::presets::{Capabilities, Plan, RenderOptions, RenderPath};
+use ara_render_fidelity::presets::{Capabilities, Plan, RenderOptions};
 use glam::Vec3;
 use serde_json::{Value, json};
 
@@ -176,10 +176,7 @@ impl SceneQuality {
                 ray_tracing: settings.ray_tracing,
             },
         )?;
-        let render = match plan.path {
-            RenderPath::Raster(raster) => raster.render_size,
-            RenderPath::Fidelity(_) => display,
-        };
+        let render = renderer.render_size();
         let textures = renderer.native_texture_stats();
         // The last completed Scene frame's passes: a new start time is a new frame.
         let timings = renderer.timings();
@@ -220,6 +217,8 @@ impl SceneQuality {
             "sceneMs": scene_ms,
             "gpuStartMs": gpu_start,
             "gpuMs": gpu_ms,
+            "exposure": renderer.exposure().ok().flatten(),
+            "exposureSettled": renderer.exposure_settled(),
             "importing": importing,
             "camera": {"target": camera.target.to_array(), "yaw": camera.yaw, "pitch": camera.pitch, "distance": camera.distance},
             "capture": capture,

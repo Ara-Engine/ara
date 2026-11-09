@@ -13,9 +13,15 @@ float inputScale(Frame f,Look l,bool stored){
 // groups, one grid sample per thread) bins in groupshared memory and adds each
 // group's counts to the bins; pass 1 (one group) meters their trimmed mean with a
 // parallel prefix sum, zeroes them for the next frame and writes the state
-// (applied multiplier, previous multiplier, EV100, metered luminance).
+// (applied multiplier, previous multiplier, EV100, metered luminance). Highlight
+// protection: exposure never rises so far that the brightest 1% of samples (the 99th
+// percentile bin) lands above HIGHLIGHT_HEADROOM, about 3.5 stops over middle grey. A
+// dark frame with a few lit objects (a black room, a street of shaded walls under a
+// bright sky) would otherwise meter its darkness and blow the lit part out.
+static const float HIGHLIGHT_PERCENTILE=0.99,HIGHLIGHT_HEADROOM=2;
 groupshared uint histogram[256];
 groupshared float2 reduce[256];
+groupshared uint highlight;
 [shader("compute")][numthreads(256,1,1)]
 void exposureMain(uint lane:SV_GroupIndex,uint3 group:SV_GroupID){
     Frame f=frame();Look l=look(f);bool automatic=l.exposure.x<=0;uint state=l.state.x;
@@ -33,13 +39,20 @@ void exposureMain(uint lane:SV_GroupIndex,uint3 group:SV_GroupID){
         float count=float(buffers[NonUniformResourceIndex(state)].Load(EXPOSURE_BINS+lane*4));buffers[NonUniformResourceIndex(state)].Store(EXPOSURE_BINS+lane*4,0);
         // Inclusive prefix sum of the counts (Hillis-Steele), then this bin's share
         // of the trimmed [low, high) sample range, summed by a tree reduction.
+        if(lane==0)highlight=0;
         reduce[lane]=float2(count,0);GroupMemoryBarrierWithGroupSync();
         for(uint step=1;step<256;step*=2){float v=lane>=step?reduce[lane-step].x:0;GroupMemoryBarrierWithGroupSync();reduce[lane].x+=v;GroupMemoryBarrierWithGroupSync();}
         float prefix=reduce[lane].x-count,low=l.metering.z*9216,high=l.metering.w*9216;
+        float q=HIGHLIGHT_PERCENTILE*9216;if(count>0 && prefix<=q && prefix+count>q)highlight=lane;
         float weight=max(0,min(prefix+count,high)-max(prefix,low));GroupMemoryBarrierWithGroupSync();
         reduce[lane]=float2((-12+(lane+0.5)/8)*weight,weight);GroupMemoryBarrierWithGroupSync();
         for(uint stride=128;stride>0;stride/=2){if(lane<stride)reduce[lane]+=reduce[lane+stride];GroupMemoryBarrierWithGroupSync();}
-        metered=exp2(reduce[0].x/max(reduce[0].y,1));ev=clamp(log2(metered/(0.18*1.2)),l.metering.x,l.metering.y);target=l.exposure.y/(1.2*exp2(ev));
+        metered=exp2(reduce[0].x/max(reduce[0].y,1));
+        float bright=exp2(-12+(highlight+0.5)/8);
+        // The compensation curve reads the unclamped scene EV100 (as Unreal's).
+        float sceneEv=log2(metered/(0.18*1.2));
+        ev=clamp(max(sceneEv,log2(bright/(1.2*HIGHLIGHT_HEADROOM))),l.metering.x,l.metering.y);
+        target=l.exposure.y*exp2(exposureCurve(l,sceneEv))/(1.2*exp2(ev));
     }else ev=log2(1/max(1.2*target,1e-12));
     if(lane!=0)return;
     // LOOK_SNAP: the meter applies at once (history reset, or new GI arriving);

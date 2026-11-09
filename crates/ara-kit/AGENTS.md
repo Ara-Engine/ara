@@ -1,6 +1,6 @@
 # ara-kit
 
-Ara's design system on [stillkit](https://github.com/Snowy7/stillkit) (D31), shared by the
+Ara's design system on [stillkit](https://github.com/Snowy7/stillkit) (D34), shared by the
 editor and the Hub. Ara-specific look only: anything a generic app could use belongs in
 stillkit or stillkit-kit as a PR, then reaches Ara through the pinned `ara` revision in the
 root `Cargo.toml`.

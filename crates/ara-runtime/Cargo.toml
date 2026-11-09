@@ -46,6 +46,8 @@ bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }
 bytemuck = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+base64 = "0.22"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 glam34 = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]

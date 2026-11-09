@@ -33,6 +33,9 @@ pub(crate) struct GpuFrame {
     fog: [f32; 4],
     grading: [f32; 4],
     look: [f32; 4],
+    /// Volumetric fog (`Atmosphere::fog_volumetric`): emitted radiance per metre at
+    /// base density (rgb; volumetric fog only) and the extinction scale (w; 1 otherwise).
+    fog_light: [f32; 4],
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
     // Shader helpers fetch descriptor rows by offset; their by-value Frame ends
@@ -41,6 +44,12 @@ pub(crate) struct GpuFrame {
     extra_read: [[u32; 4]; 3],
     extra_write: [[u32; 4]; 3],
     shadow: [u32; 4],
+    /// Private row 9: x the light tables (`FidelityView::set_light_tables`; storage,
+    /// zero none).
+    lights: [u32; 4],
+    /// Private rows 10..: the sky atmosphere record (`ara_render::look::atmosphere::record`,
+    /// `atmosphereModel` in atmosphere.slangh).
+    sky: ara_render::look::atmosphere::Record,
 }
 impl FidelityView {
     pub(crate) fn frame(&self, input: &FrameInput<'_>) -> Result<(GpuFrame, Mat4, Vec3)> {
@@ -151,7 +160,11 @@ impl FidelityView {
                     .min(self.volume.len() as u32),
                 self.probe_start,
             ],
-            sun_direction: self.scene.sun_direction.extend(0.00465).to_array(),
+            sun_direction: self
+                .scene
+                .sun_direction
+                .extend(self.sun_radius.tan())
+                .to_array(),
             sun_lux: self.scene.sun_lux.extend(f32::from(responsive)).to_array(),
             temporal: [
                 f32::from(reset),
@@ -230,9 +243,16 @@ impl FidelityView {
             atmosphere: self.atmosphere.map_or([0.; 4], |a| {
                 [a.sea_level, a.fog_extinction, a.fog_height, a.fog_albedo]
             }),
-            weather: self
-                .atmosphere
-                .map_or([0.; 4], |a| [a.cloud_coverage, a.cloud_height, 0., 0.]),
+            // z: volumetric fog (shadowed sun, local lights).
+            weather: self.atmosphere.map_or([0.; 4], |a| {
+                let volumetric = f32::from(u8::from(a.fog_volumetric));
+                [
+                    a.cloud_coverage,
+                    a.cloud_height,
+                    volumetric,
+                    a.fog_volumetric_distance,
+                ]
+            }),
             fog: self.atmosphere.map_or([0.; 4], |a| {
                 let [r, g, b] = a.fog_tint;
                 [r, g, b, a.fog_anisotropy]
@@ -245,8 +265,15 @@ impl FidelityView {
                 p.grading.contrast,
                 p.grading.vignette,
                 self.atmosphere.map_or(0., |a| a.fog_base),
-                self.atmosphere.map_or(1., |a| a.aerosols),
+                0.,
             ],
+            fog_light: self
+                .atmosphere
+                .filter(|a| a.fog_volumetric)
+                .map_or([0., 0., 0., 1.], |a| {
+                    let [r, g, b] = a.fog_emissive;
+                    [r, g, b, a.fog_extinction_scale]
+                }),
             read: self.targets.sampled[..28].as_chunks::<4>().0.try_into()?,
             write: self.targets.storage[..28].as_chunks::<4>().0.try_into()?,
             reservoirs,
@@ -259,6 +286,27 @@ impl FidelityView {
                     render_size,
                 } => [visibility.sampled_index, 1, render_size[0], render_size[1]],
             },
+            lights: [self.light_tables.map_or(0, |(_, index, _)| index), 0, 0, 0],
+            sky: self.atmosphere.map_or(
+                [[0.; 4]; ara_render::look::atmosphere::RECORD_ROWS],
+                |a| {
+                    let sun = a
+                        .sun
+                        .map(|settings| ara_render::look::atmosphere::AtmosphereLight {
+                            direction: self.scene.sun_direction,
+                            lux: self.scene.sun_lux,
+                            radius: self.sun_radius,
+                            settings,
+                        });
+                    ara_render::look::atmosphere::record(
+                        &a.model,
+                        a.sea_level,
+                        sun,
+                        a.sun_is_second,
+                        a.other_light,
+                    )
+                },
+            ),
         };
         Ok((f, unjittered, camera.position))
     }

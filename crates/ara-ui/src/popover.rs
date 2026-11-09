@@ -229,6 +229,8 @@ pub(crate) struct Applied {
     anchor: Box2,
     /// Set when the content is larger than the room; it then scrolls.
     clamp: [Option<f32>; 2],
+    /// `match-anchor='width'`: the anchor width, the box's minimum width.
+    min_width: Option<f32>,
 }
 
 impl Applied {
@@ -239,6 +241,9 @@ impl Applied {
         style.position = Position::Absolute;
         style.inset.left = LengthPercentageAuto::length(self.origin[0]);
         style.inset.top = LengthPercentageAuto::length(self.origin[1]);
+        if let Some(width) = self.min_width {
+            style.min_size.width = LengthPercentageAuto::length(width);
+        }
         if let Some(width) = self.clamp[0] {
             style.size.width = Dimension::length(width);
         }
@@ -408,9 +413,18 @@ impl Ui {
                 moved = true;
                 continue;
             }
-            let content = self.natural_size(i)?;
+            // `match-anchor='width'`: a select's list is at least as wide as its field.
+            let match_width = self.nodes[i]
+                .element
+                .attrs
+                .get("match-anchor")
+                .is_some_and(|v| v == "width");
+            let mut content = self.natural_size(i)?;
+            if match_width {
+                content[0] = content[0].max(anchor.w);
+            }
             let placed = place(anchor, content, self.size, placement, offset);
-            let applied = Applied {
+            let mut applied = Applied {
                 origin: placed.origin,
                 window: self.size,
                 anchor,
@@ -418,7 +432,20 @@ impl Ui {
                     (placed.size[0] + 0.5 < content[0]).then_some(placed.size[0]),
                     (placed.size[1] + 0.5 < content[1]).then_some(placed.size[1]),
                 ],
+                min_width: match_width.then(|| anchor.w.min(placed.size[0])),
             };
+            // A box we clamped measures at its clamp. While the anchor and window stay
+            // put and it still does, keep the clamp: dropping it lets the content regrow
+            // past the room on the next frame and the placement oscillates.
+            if let Some(previous) = self.placed.get(&id)
+                && previous.anchor == anchor
+                && previous.window == self.size
+                && let Some(width) = previous.clamp[0]
+                && applied.clamp[0].is_none()
+                && content[0] <= width + 0.5
+            {
+                applied.clamp[0] = Some(placed.size[0].min(width));
+            }
             let node = &mut self.nodes[i];
             let current = self.tree.style(node.layout_id)?;
             // From the CSS, so an earlier clamp does not stick once there is room.

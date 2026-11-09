@@ -1,4 +1,4 @@
-//! The studio: Ara's editor on stillkit (D31). One app window, CPU-drawn and redrawn only
+//! The studio: Ara's editor on stillkit (D34). One app window, CPU-drawn and redrawn only
 //! where something changed, with the Scene view as a native GPU layer under a transparent
 //! hole: the renderer's image and the scene overlays (grid, outlines, gizmo) are composited
 //! on the GPU and presented into it (no copy through the CPU UI), and the UI's
@@ -466,9 +466,16 @@ fn fly(s: &mut Studio, dt: f32, fast: bool) {
 
 /// The gizmo handles to light: the one under the pointer and the one dragged.
 fn gizmo_state(s: &Studio) -> crate::shell::overlay::GizmoState {
+    // While dragging, the gizmo draws at the previewed pose, not the committed one.
+    let offset = match (&s.local.gizmo, &s.editor.gesture) {
+        (Some(_), Some(g)) => g.world_delta(s.editor.state.selection.first().map(String::as_str)),
+        _ => glam::Mat4::IDENTITY,
+    };
     crate::shell::overlay::GizmoState {
         hover: s.local.gizmo_hover,
         active: s.local.gizmo.as_ref().map(|d| d.handle),
+        offset,
+        icon: None,
     }
 }
 

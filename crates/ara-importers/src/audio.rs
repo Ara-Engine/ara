@@ -6,63 +6,12 @@ use ara_asset::{
     Artifact, ArtifactKind, Error, ImportContext, ImportInput, ImportOutput, Importer,
 };
 use ara_audio::importer::{AudioUse, CookCodec, CookSettings, Importer as _};
-use ara_schema::Schema;
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// Audio use selects resident effects or streamed music/dialogue.
-#[derive(Debug, Clone, Copy, Default, Schema, Serialize, Deserialize)]
-#[ara(module = "asset", name = "AudioImportUse")]
-#[serde(rename_all = "camelCase")]
-pub enum Usage {
-    /// Resident sound effect.
-    #[default]
-    ShortEffect,
-    /// Streamed music encoded as Opus.
-    Music,
-    /// Streamed dialogue encoded as Opus.
-    Dialogue,
-}
-
-/// Codec for resident sound effects; streamed audio always uses Opus.
-#[derive(Debug, Clone, Copy, Default, Schema, Serialize, Deserialize)]
-#[ara(module = "asset", name = "AudioEffectCodec")]
-#[serde(rename_all = "camelCase")]
-pub enum EffectCodec {
-    /// Signed 16-bit PCM.
-    #[default]
-    Pcm,
-    /// IMA ADPCM.
-    Adpcm,
-}
-
-/// Audio sidecar settings, validated identically by authoring commands and workers.
-#[derive(Debug, Clone, Schema, Serialize, Deserialize)]
-#[ara(module = "asset", name = "AudioImportSettings")]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct Settings {
-    /// Resident effect, streamed music or streamed dialogue.
-    pub usage: Usage,
-    /// Codec for resident effects.
-    pub codec: EffectCodec,
-    /// Stereo Opus bitrate for music/dialogue, in bits per second.
-    #[ara(default = 128000, range(min = 6000, max = 512000))]
-    pub opus_bitrate: i32,
-    /// Resident decoded PCM budget in bytes; streamed cooking uses bounded blocks.
-    #[ara(default = 67108864, range(min = 65536))]
-    pub decoded_budget: u64,
-}
-impl Default for Settings {
-    fn default() -> Self {
-        let defaults = CookSettings::default();
-        Self {
-            usage: Usage::default(),
-            codec: EffectCodec::default(),
-            opus_bitrate: defaults.opus_bitrate,
-            decoded_budget: defaults.decoded_budget as u64,
-        }
-    }
-}
+/// Shared reflected audio import policy.
+pub use ara_asset::{
+    AudioEffectCodec as EffectCodec, AudioImportSettings as Settings, AudioImportUse as Usage,
+};
 
 /// The `ara.audio` importer.
 pub struct AudioAsset {
