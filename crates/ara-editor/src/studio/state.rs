@@ -317,6 +317,8 @@ pub struct Studio {
     pub profile: Arc<ara_profile::Profile>,
     /// The Material page's canvas (`studio::graph`).
     pub graph: super::graph::Page,
+    /// The VFX page's preview (`studio::vfx`).
+    pub vfx: super::vfx::Page,
 }
 
 impl Studio {
@@ -338,6 +340,7 @@ impl Studio {
             logs: Vec::new(),
             profile: Arc::default(),
             graph: Default::default(),
+            vfx: Default::default(),
         };
         studio.resolve();
         studio
