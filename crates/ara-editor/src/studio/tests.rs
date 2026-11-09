@@ -894,6 +894,84 @@ fn c_wraps_the_selection_in_a_comment_that_is_titled_and_removed_alone() {
     );
 }
 
+#[test]
+fn command_d_duplicates_a_node_with_its_own_inline_defaults() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/twin.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc.clone()}));
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "editor.material.node.add", "args": {"kind": "material.add", "position": [40, 40]}})],
+                "Add",
+            )
+            .unwrap();
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
+    });
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let before = super::graph::node_ids(rt.state());
+    let defaults = super::graph::inline_values(rt.state());
+    let add = defaults[0].0.clone();
+    // The Add node is the one its defaults feed: pick it by its inline values' consumer.
+    let workspace = rt.state().editor.host.store().workspace();
+    let doc = workspace.find("samples/twin.graph").expect("material");
+    let graph =
+        ara_graph::Graph::from_document(workspace.doc(doc.as_str()).expect("doc")).expect("graph");
+    let node = graph
+        .edges
+        .values()
+        .find(|e| e.from.node == add)
+        .expect("fed")
+        .to
+        .node
+        .clone();
+    rt.update(|s| super::graph::select(s, std::slice::from_ref(&node)));
+    rt.focus("graph/view");
+    rt.frame(FRAME);
+    let command = if cfg!(target_os = "macos") {
+        stillkit::el::Modifiers {
+            meta: true,
+            ..Default::default()
+        }
+    } else {
+        stillkit::el::Modifiers {
+            ctrl: true,
+            ..Default::default()
+        }
+    };
+    rt.key_with(0x44, command);
+    settle(&mut rt);
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let after = super::graph::node_ids(rt.state());
+    assert_eq!(
+        after.len(),
+        before.len() + 1,
+        "one copy, its defaults drawn inline"
+    );
+    let copied = super::graph::inline_values(rt.state());
+    assert_eq!(
+        copied.len(),
+        defaults.len() * 2,
+        "the copy has its own defaults"
+    );
+    let ids: std::collections::BTreeSet<_> = copied.iter().map(|(id, _)| id).collect();
+    assert_eq!(ids.len(), copied.len(), "no default is shared");
+}
+
 /// The open effect at `path`, compiled.
 fn effect_at(rt: &Runtime<Studio>, path: &str) -> ara_vfx::Effect {
     let workspace = rt.state().editor.host.store().workspace();

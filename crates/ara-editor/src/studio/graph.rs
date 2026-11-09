@@ -4,9 +4,9 @@
 //! to connect, drag empty space to box-select, middle or right drag to pan, the wheel to
 //! zoom; F frames the graph; Space, Add Node, a right-click or a wire dropped on nothing
 //! searches the material library (only what fits the wire). Inputs show their defaults
-//! inline, typed where they show; C wraps the selection in a comment box; Delete removes the
-//! selection. Every edit is a command on the document (one undo step per gesture), the same
-//! ones agents send.
+//! inline, typed where they show; C wraps the selection in a comment box; ⌘D duplicates it;
+//! Delete removes it. Every edit is a command on the document (one undo step per gesture),
+//! the same ones agents send.
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -410,7 +410,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             }
             true
         })
-        .on_key(move |s: &mut Studio, key, _| match key.0 {
+        .on_key(move |s: &mut Studio, key, tx| match key.0 {
             0x46 => {
                 frame(s);
                 Handled::Yes
@@ -426,8 +426,13 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 Handled::Yes
             }
             // C wraps the selection in a comment box, as Unreal does.
-            0x43 if !animation => {
+            0x43 if !animation && !command(tx) => {
                 comment_selection(s);
+                Handled::Yes
+            }
+            // ⌘D (Ctrl+D) duplicates the selected nodes.
+            0x44 if !animation && command(tx) => {
+                duplicate_selection(s);
                 Handled::Yes
             }
             _ => Handled::No,
@@ -1215,6 +1220,54 @@ fn edit_layout(s: &mut Studio, doc: &str, change: impl FnOnce(&mut ara_graph::Ed
     let command = json!({"cmd": "graph.editor.set", "args": {"editor": layout}});
     if let Err(error) = s.editor.apply_to(doc, vec![command], "Edit graph comments") {
         s.editor.report_failure(&error);
+    }
+}
+
+/// Whether the platform's command modifier (⌘ on macOS, Ctrl elsewhere) is held.
+fn command(tx: &stillkit::el::Tx) -> bool {
+    let m = tx.modifiers();
+    if cfg!(target_os = "macos") {
+        m.meta
+    } else {
+        m.ctrl
+    }
+}
+
+/// Duplicates the selected nodes (one undo step) and picks the copies.
+fn duplicate_selection(s: &mut Studio) {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return;
+    };
+    let graph = shown.canvas.graph();
+    let nodes: Vec<&String> = shown
+        .canvas
+        .selection
+        .iter()
+        .filter(|id| graph.nodes.contains_key(*id))
+        .collect();
+    if nodes.is_empty() {
+        return;
+    }
+    let doc = shown.doc.clone();
+    let command = json!({"cmd": "editor.material.node.duplicate", "args": {"nodes": nodes}});
+    match s
+        .editor
+        .apply_to(&doc, vec![command], "Duplicate material nodes")
+    {
+        Ok(result) => {
+            let copies: std::collections::BTreeSet<String> = result["outputs"][0]["ids"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|id| id.as_str().map(str::to_owned))
+                .collect();
+            sync(s, "material");
+            if let Some(shown) = s.graph.shown.as_mut() {
+                shown.canvas.selection = copies;
+                s.graph.dirty = true;
+            }
+        }
+        Err(error) => s.editor.report_failure(&error),
     }
 }
 
