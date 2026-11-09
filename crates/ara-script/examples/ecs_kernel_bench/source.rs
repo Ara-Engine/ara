@@ -91,3 +91,30 @@ pub fn module(workload: &str, mode: &str) -> String {
     let helpers = if mode == "simd" { simd::HELPERS } else { "" };
     format!("{TYPES}\n{SCALAR}\n{helpers}\n{query}\n}}")
 }
+
+/// Splits the identical kernel into a public batch and one borrowed-span caller.
+#[allow(dead_code)] // The direct-only reload fixture also imports this source helper.
+pub fn split_module(workload: &str, mode: &str) -> (String, String) {
+    let original = module(workload, mode);
+    let declaration = "[Query] static void Run(";
+    assert_eq!(original.matches(declaration).count(), 1);
+    let kernel = original.replacen(
+        declaration,
+        "/// <summary>Runs the unchanged kernel over caller-borrowed ECS columns.</summary>\n    public static void Batch(",
+        1,
+    );
+    let query = if workload == "w1" { W1 } else { W3 };
+    let signature = query
+        .lines()
+        .find(|line| line.contains(declaration))
+        .expect("the scalar query defines the same span signature as every mode");
+    let arguments = if workload == "w1" {
+        "positions, velocities, rotations"
+    } else {
+        "positions, velocities"
+    };
+    let wrapper = format!(
+        "namespace EcsKernels;\n/// <summary>Editable orchestration over an explicitly cold kernel.</summary>\n[Simulation] public static partial class Driver {{\n{signature}\n    {{\n        Kernels.Batch({arguments});\n    }}\n}}\n"
+    );
+    (kernel, wrapper)
+}

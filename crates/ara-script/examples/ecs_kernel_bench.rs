@@ -3,6 +3,7 @@
 //! Compile/spawn, every-row scalar validation, hashes and optional --dump are untimed.
 //! Use matching prebuilt .NET fixtures and DOTNET_TieredCompilation=0 for comparisons.
 //! `direct` emits native ISA math for this Rust target, with a scalar capability fallback.
+//! `--kernel-module` keeps the math explicitly cold behind an editable Game wrapper.
 #[path = "ecs_kernel_bench/direct.rs"]
 mod direct;
 #[path = "ecs_kernel_bench/reference.rs"]
@@ -13,6 +14,8 @@ mod simd;
 mod source;
 #[path = "../tests/support/mod.rs"]
 mod support;
+#[path = "ecs_kernel_bench/topology.rs"]
+mod topology;
 
 use std::collections::HashSet;
 use std::error::Error;
@@ -183,6 +186,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let warmup = number("--warmup", 24)?;
     let samples = number("--samples", 80)?;
     let hot = std::env::args().any(|arg| arg == "--hot");
+    let kernel_module = std::env::args().any(|arg| arg == "--kernel-module");
     if !["w1", "w3"].contains(&workload.as_str())
         || !["span", "simd", "direct"].contains(&mode.as_str())
         || rows == 0
@@ -190,7 +194,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         || threads == 0
         || samples == 0
     {
-        return Err("--workload w1|w3 --mode span|simd|direct --rows 1..u32::MAX --threads TOTAL>=1 --warmup N --samples N>=1 [--hot] [--dump PATH]".into());
+        return Err("--workload w1|w3 --mode span|simd|direct --rows 1..u32::MAX --threads TOTAL>=1 --warmup N --samples N>=1 [--hot] [--kernel-module] [--dump PATH]".into());
     }
     let steps = warmup.checked_add(samples).ok_or("tick count overflow")?;
     // Bevy's native executor supports zero pool workers; the caller drains its scope.
@@ -206,19 +210,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         workers,
         "fresh process must honor requested pool+caller ceiling"
     );
-    let module_source = source::module(&workload, &mode);
-    let root = support::Live::write("ecs-kernel-bench", &[("Game", &module_source, &[])]);
-    if !hot {
-        let path = root.join("Game/ara.module.toml");
-        let contents = std::fs::read_to_string(&path)?;
-        std::fs::write(path, contents.replace("hot = true", "hot = false"))?;
-    }
-    let mut live = support::Live::host(root);
-    let module = ara_script::ModuleSpec::from_dir(&live.root.join("Game"))
-        .map_err(|diagnostic| format!("module spec: {diagnostic:?}"))?;
-    live.host
-        .load_modules(&mut live.world, &[module])
-        .map_err(|diagnostics| format!("module compilation: {diagnostics:?}"))?;
+    let mut live = topology::start(&workload, &mode, hot, kernel_module)?;
     let entities = (0..rows)
         .map(|id| {
             let [p, v, q] = reference::initial(id as u32);
@@ -252,15 +244,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let validation = validate(&live, &entities, &workload, steps, option("--dump"))?;
     let mut sorted = timings.clone();
     sorted.sort_by(f64::total_cmp);
-    println!(
-        "{}",
-        json!({"backend": "Ara ScriptHost/CoreCLR", "workload": workload, "mode": mode, "hot": hot,
+    let mut result = json!({"backend": "Ara ScriptHost/CoreCLR", "workload": workload, "mode": mode, "hot": hot,
         "rows": rows, "threads": threads, "worker_threads": workers, "runner_ceiling": workers + 1,
         "direct_compiled_backend": (mode == "direct").then(direct::backend),
         "warmup": warmup, "samples": samples, "steps": steps,
         "p50_ms": sorted[(samples * 50).div_ceil(100) - 1], "p95_ms": sorted[(samples * 95).div_ceil(100) - 1],
-        "ms": timings, "sorted_ms": sorted, "validation": validation})
-    );
+        "ms": timings, "sorted_ms": sorted, "validation": validation});
+    if kernel_module {
+        result["topology"] = json!({
+            "kind": "game-wrapper/cold-kernel", "kernel_mode": mode,
+            "modules": live.host.modules().into_iter().map(|module| json!({
+                "name": module.name, "slot": module.slot, "hot": module.hot,
+                "generation": module.generation, "systems": module.counts.0,
+            })).collect::<Vec<_>>()
+        });
+    }
+    println!("{result}");
     assert_eq!(live.finish(), 0, "host generations must not leak");
     Ok(())
 }
