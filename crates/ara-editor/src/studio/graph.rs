@@ -1,9 +1,9 @@
-//! The Material tool: the material graph on the shared node canvas (`crate::graph::Canvas`,
-//! the legacy window's), drawn into its own native layer (`GRAPH_LAYER`) like the Scene.
-//! Drag nodes, drag from a port to connect, drag empty space to box-select, middle or right
-//! drag to pan, the wheel to zoom; F frames the graph; Add Node searches the material
-//! library. Every edit is a command on the document (one undo step per gesture), the same
-//! ones agents send.
+//! The Material and Animation tools: a material graph, or an animation controller's state
+//! machine, on the shared node canvas (`crate::graph::Canvas`, the legacy window's), drawn
+//! into the page's own native layer ([`PAGES`]) like the Scene. Drag nodes, drag from a port
+//! to connect, drag empty space to box-select, middle or right drag to pan, the wheel to
+//! zoom; F frames the graph; Space or Add Node searches the material library. Every edit is
+//! a command on the document (one undo step per gesture), the same ones agents send.
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -19,10 +19,21 @@ use stillkit::el::{
 use super::Studio;
 use crate::graph::{Canvas, Edit, Theme};
 
-/// The graph canvas's native layer.
-pub(crate) const GRAPH_LAYER: &str = "graph";
+/// The graph pages and their native layers.
+pub(crate) const PAGES: [(&str, &str); 2] = [
+    ("material", "graph-material"),
+    ("animation", "graph-animation"),
+];
 
-/// The graph page's state: the canvas for the open document and the text it shapes with.
+/// The native layer of `domain`'s page.
+fn layer(domain: &str) -> &'static str {
+    PAGES
+        .iter()
+        .find(|(d, _)| *d == domain)
+        .map_or("graph-material", |(_, l)| l)
+}
+
+/// The graph pages' state: the canvas for the open document and the text it shapes with.
 #[derive(Default)]
 pub struct Page {
     text: Option<ara_ui_text::TextSystem>,
@@ -36,6 +47,7 @@ pub struct Page {
 
 /// The document a canvas shows, at which store revision.
 struct Shown {
+    domain: &'static str,
     doc: String,
     revision: u64,
     canvas: Canvas,
@@ -43,11 +55,14 @@ struct Shown {
     fresh: bool,
 }
 
-/// The material document the page edits: the selected resource when it is one, else the
-/// project's first material.
+/// The document `domain`'s page edits: the selected resource when it is one of its kind,
+/// else the project's first.
 fn document(s: &Studio, domain: &str) -> Option<String> {
     let workspace = s.editor.host.store().workspace();
     let matches = |doc: &ara_doc::Document| {
+        if domain == "animation" {
+            return doc.kind == "animation";
+        }
         doc.kind == "graph"
             && doc
                 .record("g_meta")
@@ -67,10 +82,10 @@ fn document(s: &Studio, domain: &str) -> Option<String> {
         .map(|d| d.id.to_string())
 }
 
-/// Loads the page's document into the canvas if it changed (another document, or a newer
+/// Loads `domain`'s document into the canvas if it changed (another document, or a newer
 /// revision of it); the same document refreshes in place, keeping its view and selection.
-pub(super) fn sync(s: &mut Studio) {
-    let Some(doc) = document(s, "material") else {
+pub(super) fn sync(s: &mut Studio, domain: &'static str) {
+    let Some(doc) = document(s, domain) else {
         s.graph.shown = None;
         return;
     };
@@ -78,17 +93,32 @@ pub(super) fn sync(s: &mut Studio) {
     if s.graph
         .shown
         .as_ref()
-        .is_some_and(|g| g.doc == doc && g.revision == revision)
+        .is_some_and(|g| g.domain == domain && g.doc == doc && g.revision == revision)
     {
         return;
     }
-    let Some(document) = s.editor.host.store().workspace().doc(&doc) else {
+    let workspace = s.editor.host.store().workspace();
+    let Some(document) = workspace.doc(&doc) else {
         return;
     };
-    let graph = match ara_graph::Graph::from_document(document) {
+    let graph = if domain == "animation" {
+        // The state machine, laid out from its sidecar layout document.
+        let layout = workspace
+            .find(&crate::authoring::animation::layout_path(&doc))
+            .and_then(|id| workspace.doc(id.as_str()))
+            .and_then(|d| ara_graph::Graph::from_document(d).ok())
+            .map(|g| g.editor)
+            .unwrap_or_default();
+        crate::authoring::animation::projection(document, layout, false)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+    } else {
+        ara_graph::Graph::from_document(document).map_err(|e| anyhow::anyhow!("{e}"))
+    };
+    let graph = match graph {
         Ok(graph) => graph,
         Err(error) => {
-            s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+            s.editor.report_failure(&*error);
+            s.graph.shown = None;
             return;
         }
     };
@@ -105,13 +135,18 @@ pub(super) fn sync(s: &mut Studio) {
     let Some(text) = page.text.as_mut() else {
         return;
     };
-    match page.shown.as_mut().filter(|g| g.doc == doc) {
+    match page
+        .shown
+        .as_mut()
+        .filter(|g| g.domain == domain && g.doc == doc)
+    {
         Some(shown) => {
             shown.canvas.refresh(graph, text);
             shown.revision = revision;
         }
         None => {
             page.shown = Some(Shown {
+                domain,
                 doc,
                 revision,
                 canvas: Canvas::new(graph, text),
@@ -122,7 +157,7 @@ pub(super) fn sync(s: &mut Studio) {
     page.dirty = true;
 }
 
-/// Draws the canvas into the page's layer when it changed. `extent` is in physical pixels.
+/// Draws the canvas into the page's layer. `extent` is in physical pixels.
 /// # Safety
 /// `layer` is the live `CAMetalLayer` of the graph page.
 pub(super) unsafe fn draw(
@@ -186,26 +221,36 @@ fn theme(l: &ara_kit::look::Look) -> Theme {
     }
 }
 
-/// The Material page: its toolbar and the canvas, or a way to start one.
-pub(super) fn view(s: &Studio) -> El<Studio> {
+/// `domain`'s page: its toolbar and the canvas, or a way to start one.
+pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let Some(doc) = document(s, "material") else {
+    let animation = domain == "animation";
+    let Some(doc) = document(s, domain) else {
+        let (glyph, title, detail, new) = if animation {
+            (
+                icons::PERSON_STANDING,
+                "No animation controller yet",
+                "Controllers are state machines: states play clips, transitions move between them.",
+                "New controller",
+            )
+        } else {
+            (
+                icons::PALETTE,
+                "No material yet",
+                "Materials are node graphs: start one, then add nodes and connect them.",
+                "New material",
+            )
+        };
         return col().grow(1.0).justify(Justify::Center).child(empty(
             l,
-            icons::PALETTE,
-            "No material yet",
-            "Materials are node graphs: start one, then add nodes and connect them.",
+            glyph,
+            title,
+            detail,
             Some(
-                button(
-                    l,
-                    Tone::Primary,
-                    Size::Sm,
-                    Some(icons::PLUS),
-                    "New material",
-                )
-                .key("material/new")
-                .on_press(|s: &mut Studio| create(s, "material")),
+                button(l, Tone::Primary, Size::Sm, Some(icons::PLUS), new)
+                    .key(format!("{domain}/new"))
+                    .on_press(move |s: &mut Studio| create(s, domain)),
             ),
         ));
     };
@@ -228,7 +273,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             };
             s.local.focus = Some("material/add/search");
         });
-    if let Some(query) = &s.graph.adding {
+    if let Some(query) = s.graph.adding.as_ref().filter(|_| !animation) {
         add = add.overlay(
             stillkit::el::popover(palette(s, &doc, query))
                 .side(Side::Bottom)
@@ -257,7 +302,25 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .color(c.foreground.0),
         )
         .child(el().grow(1.0))
-        .child(add)
+        .children((!animation).then_some(add))
+        .children(animation.then(|| {
+            let edit = |kind: &'static str, label: &str, glyph| {
+                let doc = doc.clone();
+                button(l, Tone::Ghost, Size::Sm, Some(glyph), label)
+                    .key(format!("animation/add/{kind}"))
+                    .on_press(move |s: &mut Studio| {
+                        if let Err(error) =
+                            crate::shell::animation_panel::edit(&mut s.editor, &doc, kind)
+                        {
+                            s.editor.report_failure(&*error);
+                        }
+                    })
+            };
+            row()
+                .gap(2.0)
+                .child(edit("state", "Add State", icons::PLUS))
+                .child(edit("blend", "Add Blend", icons::SPLINE))
+        }))
         .child(
             icon_button(
                 l,
@@ -266,28 +329,22 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 icons::FOCUS,
                 "Frame the graph (F)",
             )
-            .key("material/frame")
+            .key(format!("{domain}/frame"))
             .on_press(|s: &mut Studio| frame(s)),
         );
-    let canvas = native(GRAPH_LAYER)
+    let canvas = native(layer(domain))
         .key("graph/view")
         .grow(1.0)
         .w_full()
         .focusable()
-        .label("Material graph")
+        .label(if animation {
+            "State machine"
+        } else {
+            "Material graph"
+        })
         .on_pointer(pointer)
         .on_wheel(|s: &mut Studio, w, _| {
-            let size = s
-                .local
-                .rects
-                .get("graph/view")
-                .map_or((800.0, 600.0), |r| (r.width(), r.height()));
-            let rect = Box2 {
-                x: 0.0,
-                y: 0.0,
-                w: size.0,
-                h: size.1,
-            };
+            let rect = view_rect(s);
             let (left, top) = origin(s);
             if let Some(shown) = s.graph.shown.as_mut() {
                 shown
@@ -297,12 +354,12 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             }
             true
         })
-        .on_key(|s: &mut Studio, key, _| match key.0 {
+        .on_key(move |s: &mut Studio, key, _| match key.0 {
             0x46 => {
                 frame(s);
                 Handled::Yes
             }
-            0x20 => {
+            0x20 if !animation => {
                 s.graph.adding = Some(String::new());
                 s.local.focus = Some("material/add/search");
                 Handled::Yes
@@ -318,6 +375,21 @@ fn origin(s: &Studio) -> (f32, f32) {
         .rects
         .get("graph/view")
         .map_or((0.0, 0.0), |r| (r.left, r.top))
+}
+
+/// The canvas's own rect (design px, at its origin), from the last layout.
+fn view_rect(s: &Studio) -> Box2 {
+    let (w, h) = s
+        .local
+        .rects
+        .get("graph/view")
+        .map_or((800.0, 600.0), |r| (r.width(), r.height()));
+    Box2 {
+        x: 0.0,
+        y: 0.0,
+        w,
+        h,
+    }
 }
 
 /// A press, drag or release on the canvas: the canvas's own gesture, then its edits as
@@ -340,9 +412,8 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
                 stillkit::Button::Middle => 2,
                 _ => 3,
             };
-            shown
-                .canvas
-                .begin(p, button, e.mods.shift || e.mods.meta || e.mods.ctrl, rect);
+            let additive = e.mods.shift || e.mods.meta || e.mods.ctrl;
+            shown.canvas.begin(p, button, additive, rect);
             s.graph.dragging = true;
         }
         PointerPhase::Move if s.graph.dragging => shown.canvas.motion(p),
@@ -350,8 +421,12 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
             s.graph.dragging = false;
             match shown.canvas.end(p, rect) {
                 Ok(edits) => {
-                    let doc = shown.doc.clone();
-                    submit(s, &doc, edits);
+                    let (domain, doc) = (shown.domain, shown.doc.clone());
+                    if domain == "animation" {
+                        submit_animation(s, &doc, edits);
+                    } else {
+                        submit(s, &doc, edits);
+                    }
                 }
                 Err(error) => shown.canvas.diagnostic = Some(error),
             }
@@ -390,33 +465,65 @@ fn submit(s: &mut Studio, doc: &str, edits: Vec<Edit>) {
     }
 }
 
+/// The canvas's edits on an animation controller: node moves and layout go to its layout
+/// document, a connection adds a transition (or feeds a blend input).
+fn submit_animation(s: &mut Studio, doc: &str, edits: Vec<Edit>) {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return;
+    };
+    let mut layout = shown.canvas.graph().editor.clone();
+    let graph = shown.canvas.graph().clone();
+    let mut moved = false;
+    for edit in edits {
+        let result = match edit {
+            Edit::Move(nodes) => {
+                layout.positions.extend(nodes);
+                moved = true;
+                Ok(())
+            }
+            Edit::Layout(next) => {
+                layout = next;
+                moved = true;
+                Ok(())
+            }
+            Edit::Connect(from, to) => {
+                crate::shell::animation_panel::connect(&mut s.editor, doc, &graph, from, to)
+            }
+        };
+        if let Err(error) = result {
+            s.editor.report_failure(&*error);
+        }
+    }
+    if moved {
+        s.act(
+            "editor.animation.layout",
+            json!({"doc": doc, "editor": layout}),
+        );
+    }
+}
+
 /// Fits the whole graph in view.
 fn frame(s: &mut Studio) {
-    let size = s
-        .local
-        .rects
-        .get("graph/view")
-        .map_or((800.0, 600.0), |r| (r.width(), r.height()));
-    let rect = Box2 {
-        x: 0.0,
-        y: 0.0,
-        w: size.0,
-        h: size.1,
-    };
+    let rect = view_rect(s);
     if let Some(shown) = s.graph.shown.as_mut() {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
         s.graph.dirty = true;
     }
 }
 
-/// Starts a new `domain` graph in the open Assets folder and opens it.
+/// Starts a new `domain` document in the open Assets folder and opens it.
 fn create(s: &mut Studio, domain: &str) {
     let folder = s.editor.state.asset_folder.clone();
     let first = s.editor.host.store().revision();
     let workspace = s.editor.host.store().workspace();
+    let extension = if domain == "animation" {
+        "animation"
+    } else {
+        "graph"
+    };
     let path = (first..first.saturating_add(10_000))
         .map(|n| {
-            let leaf = format!("{domain}-{n}.graph");
+            let leaf = format!("{domain}-{n}.{extension}");
             if folder.is_empty() {
                 leaf
             } else {
@@ -527,23 +634,22 @@ fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
 /// Adds a `kind` node at the centre of the view (one undo step).
 fn add_node(s: &mut Studio, doc: &str, kind: &str) {
     s.graph.adding = None;
-    let size = s
-        .local
-        .rects
-        .get("graph/view")
-        .map_or((800.0, 600.0), |r| (r.width(), r.height()));
-    let rect = Box2 {
-        x: 0.0,
-        y: 0.0,
-        w: size.0,
-        h: size.1,
-    };
+    let rect = view_rect(s);
     let position = s.graph.shown.as_ref().map_or([240.0, 160.0], |g| {
-        g.canvas.world([size.0 * 0.45, size.1 * 0.4], rect)
+        g.canvas.world([rect.w * 0.45, rect.h * 0.4], rect)
     });
     let command =
         json!({"cmd": "editor.material.node.add", "args": {"kind": kind, "position": position}});
     if let Err(error) = s.editor.apply_to(doc, vec![command], "Add material node") {
         s.editor.report_failure(&error);
     }
+}
+
+/// The nodes on the open canvas (tests read the page without a window).
+#[cfg(test)]
+pub(super) fn node_ids(s: &Studio) -> Vec<String> {
+    s.graph
+        .shown
+        .as_ref()
+        .map_or_else(Vec::new, |g| g.canvas.node_ids())
 }

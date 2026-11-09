@@ -648,6 +648,29 @@ fn scrubbing_a_linked_scale_previews_every_axis_before_it_commits() {
 }
 
 #[test]
+fn the_animation_page_shows_states_added_to_its_controller() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let result = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/walk.animation", "domain": "animation"}),
+            )
+            .unwrap();
+        let doc = result["doc"].as_str().unwrap().to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for _ in 0..2 {
+            crate::shell::animation_panel::edit(&mut s.editor, &doc, "state").unwrap();
+        }
+        doc
+    });
+    rt.touch(|s| super::graph::sync(s, "animation"));
+    let nodes = super::graph::node_ids(rt.state());
+    assert_eq!(nodes.len(), 2, "{doc}: {nodes:?}");
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(

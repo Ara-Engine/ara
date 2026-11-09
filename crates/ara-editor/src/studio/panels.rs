@@ -20,7 +20,8 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "history" => super::agents::history(s),
         "lighting" => super::lighting::view(s),
         "profiler" => super::profiler::view(s),
-        "material" => super::graph::view(s),
+        "material" => super::graph::view(s, "material"),
+        "animation" => super::graph::view(s, "animation"),
         // Import settings live in the asset inspector; the Import tab shows the same.
         "import" => match s.editor.state.asset_path.as_deref() {
             Some(path) => super::asset_inspector::view(s, path),

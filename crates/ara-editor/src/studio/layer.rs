@@ -16,7 +16,8 @@ use crate::gpu::{NativeUi, ui_device};
 pub(super) struct Layer {
     pub ui: NativeUi,
     paint: UiRenderer,
-    present: Option<(ara_platform::Present, [u32; 2])>,
+    /// The presentation, its size and the layer it presents into.
+    present: Option<(ara_platform::Present, [u32; 2], usize)>,
 }
 
 impl Layer {
@@ -68,8 +69,15 @@ impl Layer {
         self.paint
             .render(&mut self.ui, list, fonts, size, TextMode::Raster)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let target = layer.as_ptr() as usize;
+        // Another layer (a different graph page) gets its own presentation.
+        if let Some((mut old, _, _)) = self.present.take_if(|(_, _, at)| *at != target) {
+            let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
+            // SAFETY: the adapter is idle and the presentation is not used again.
+            unsafe { self.ui.retire_present(ui_device(renderer.gpu()), &mut old) };
+        }
         let present = match self.present.take() {
-            Some((mut present, was)) => {
+            Some((mut present, was, _)) => {
                 if was != extent {
                     super::compositor::resize(&mut present, extent)?;
                 }
@@ -78,7 +86,7 @@ impl Layer {
             // SAFETY: forwarded caller contract.
             None => unsafe { super::compositor::layer_present(&self.ui, renderer, layer, extent)? },
         };
-        let (present, _) = self.present.insert((present, extent));
+        let (present, _, _) = self.present.insert((present, extent, target));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
         unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
         Ok(())
@@ -87,7 +95,7 @@ impl Layer {
     /// Waits for and releases the presentation; call before the renderer drops.
     pub fn retire(&mut self, renderer: &ara_render::Renderer) {
         let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
-        if let Some((mut present, _)) = self.present.take() {
+        if let Some((mut present, _, _)) = self.present.take() {
             // SAFETY: the adapter is idle and the presentation is not used again.
             unsafe {
                 self.ui
