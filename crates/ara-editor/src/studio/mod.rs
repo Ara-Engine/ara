@@ -880,6 +880,8 @@ fn pump(
         keys.push("scene/view".into());
         keys.push("profiler/track".into());
         keys.push("graph/view".into());
+        keys.push("vfx/preview".into());
+        keys.push("vfx/stacks".into());
         let s = rt.scale();
         let rects = keys
             .into_iter()

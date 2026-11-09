@@ -1,8 +1,9 @@
 //! The VFX tool, laid out as Niagara's: the live GPU preview with its timeline (restart,
-//! play/pause, step, rate, time, particles) on the left; the System Overview in the middle,
-//! one card per emitter with its stages (spawn, initialize, update, render) in their colours;
-//! the picked module's Selection on the right, where its values are typed and its tools move,
-//! duplicate or remove it. A module's checkbox keeps it but skips it. Hide and Isolate change only the preview. The preview runs on its own worker
+//! play/pause, step, rate), time and particle count on the left; the System Overview in the
+//! middle, one card per emitter with its stages (spawn, initialize, update, render) in their
+//! colours; the picked module's Selection on the right, where its values are typed and its
+//! tools move, duplicate or remove it. A module's checkbox keeps it but skips it. Hide and
+//! Isolate change only the preview. The preview runs on its own worker
 //! (`asset_tools::vfx_stream`); every edit is one undo step of the document's commands.
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -15,6 +16,8 @@ use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, row, text};
 use super::Studio;
 use crate::asset_tools::vfx_stream::VfxStream;
 
+/// An emitter card's width in the System Overview.
+const CARD: f32 = 300.0;
 /// Preview rates, in percent of real time.
 const RATES: [u32; 4] = [25, 50, 100, 200];
 
@@ -185,10 +188,16 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         ));
     };
     let fx = effect(s, &doc);
+    // The preview fills its column (as the last layout measured it), square.
+    let size = s
+        .local
+        .rects
+        .get("vfx/preview")
+        .map_or(360.0, |r| (r.width() - 20.0).clamp(160.0, 720.0));
     let preview = match &s.vfx.frame {
-        Some(frame) => image(frame.clone()).size(360.0),
+        Some(frame) => image(frame.clone()).size(size),
         None => el()
-            .size(360.0)
+            .size(size)
             .align(Align::Center)
             .justify(Justify::Center)
             .child(
@@ -197,12 +206,23 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                     .color(c.muted_foreground.0),
             ),
     };
+    let seconds = s.vfx.tick as f32 / s.vfx.hz.max(1) as f32;
     let status = match &fx {
         Ok(_) => row()
             .gap(6.0)
             .align(Align::Center)
             .child(el().size(7.0).radius(3.5).fill(c.success_foreground.0))
-            .child(text("Compiled").text_size(11.5).color(c.muted_foreground.0)),
+            .child(text("Compiled").text_size(11.5).color(c.muted_foreground.0))
+            .child(el().grow(1.0))
+            .child(
+                text(format!(
+                    "{seconds:.2} s · tick {} · {} particles",
+                    s.vfx.tick, s.vfx.alive
+                ))
+                .text_size(11.5)
+                .family(mono())
+                .color(c.muted_foreground.0),
+            ),
         Err(error) => row().child(
             text(format!(
                 "Compile failed · {error} · the last good preview keeps running"
@@ -236,22 +256,31 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         );
     let overview = match &fx {
         Ok(effect) => {
-            let mut cards = row().pad(16.0).gap(16.0).align(Align::Start);
-            for emitter in &effect.emitters {
-                cards = cards.child(emitter_card(s, &doc, emitter));
+            // Cards wrap into as many columns as fit (the last layout's width).
+            let width = s.local.rects.get("vfx/stacks").map_or(960.0, |r| r.width());
+            let columns = (((width - 32.0 + 16.0) / (CARD + 16.0)).floor() as usize).max(1);
+            let mut cards = col().pad(16.0).gap(16.0);
+            for line in effect.emitters.chunks(columns) {
+                cards = cards.child(
+                    row()
+                        .gap(16.0)
+                        .align(Align::Start)
+                        .children(line.iter().map(|e| emitter_card(s, &doc, e))),
+                );
             }
             col()
                 .key("vfx/stacks")
+                .h(0.0)
                 .grow(1.0)
-                .min_h(0.0)
                 .scroll(Axis::Vertical)
-                .child(row().scroll(Axis::Horizontal).child(cards))
+                .child(cards)
         }
         Err(_) => col().grow(1.0),
     };
     let middle = col()
         .grow(1.0)
         .min_w(0.0)
+        .min_h(0.0)
         // Niagara's graph paper behind the emitter cards.
         .fill(mix(c.card.0, c.raised.0, 0.35))
         .child(heading(
@@ -273,7 +302,13 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     .min_w(240.0)
     .fill(t.panel)
     .scroll(Axis::Vertical);
-    row().grow(1.0).child(left).child(middle).child(right)
+    // Bounded, so the overview and Selection scroll inside the page.
+    row()
+        .grow(1.0)
+        .min_h(0.0)
+        .child(left)
+        .child(middle)
+        .child(right)
 }
 
 /// A panel's title row: its glyph, title and a muted note.
@@ -393,7 +428,7 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
             }),
         );
     let mut out = col()
-        .w(300.0)
+        .w(CARD)
         .radius(6.0)
         .fill(card)
         .border(1.0, stillkit::Rgba::new(0.0, 0.0, 0.0, 0.55))
@@ -750,12 +785,12 @@ fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
     }
 }
 
-/// The timeline: restart, play or pause, step, rate, time and particles.
+/// The timeline: restart, play or pause, step and rate (time and particles show in the
+/// status line under it).
 fn timeline(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let playing = s.editor.state.preview_playing;
-    let seconds = s.vfx.tick as f32 / s.vfx.hz.max(1) as f32;
     let mut rates = row().gap(1.0);
     for rate in RATES {
         let on = s.vfx.rate == rate;
@@ -824,14 +859,4 @@ fn timeline(s: &Studio) -> El<Studio> {
             !playing,
         ))
         .child(rates)
-        .child(el().grow(1.0))
-        .child(
-            text(format!(
-                "{seconds:.2} s · tick {} · {} particles",
-                s.vfx.tick, s.vfx.alive
-            ))
-            .text_size(11.5)
-            .family(mono())
-            .color(c.muted_foreground.0),
-        )
 }
