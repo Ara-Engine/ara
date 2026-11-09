@@ -33,10 +33,15 @@ internal sealed class ProjectCompilations
         {
             // Parse options are fixed for this server. References, heat and the API
             // profile affect binding/generation, not parsing the same source text.
-            var tree = previous is not null && previous.Sources.TryGetValue(source.Path, out var old)
-                ? ModuleText.Update(source.Path, old.Tree, old.Text, source.Text)
-                : ModuleCompiler.Parse(source.Path, source.Text);
-            trees.Add(source.Path, (source.Text, tree));
+            var text = source.Text;
+            SyntaxTree tree;
+            if (previous is not null && previous.Sources.TryGetValue(source.Path, out var old))
+            {
+                tree = ModuleText.Update(source.Path, old.Tree, old.Text, source.Text);
+                if (ReferenceEquals(tree, old.Tree)) text = old.Text;
+            }
+            else tree = ModuleCompiler.Parse(source.Path, source.Text);
+            trees.Add(source.Path, (text, tree));
         }
         CSharpCompilation user;
         if (reusable && previous!.Sources.Keys.SequenceEqual(trees.Keys, StringComparer.Ordinal))
