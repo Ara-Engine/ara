@@ -31,6 +31,18 @@ internal interface ICompileContext
     EncCapabilities Caps { get; }
     /// <summary>The state a referenced module is compiled against: prepared in the current cascade, or committed.</summary>
     ModuleState? Dependency(string name);
+    /// <summary>A compiled or published dependency's exact committed metadata reference.</summary>
+    MetadataReference? Reference(string name) => Dependency(name)?.Reference;
+    /// <summary>A known compiled public surface; published surfaces may be unknown.</summary>
+    string? Surface(string name) => Dependency(name)?.Surface;
+    /// <summary>Committed source ownership, including loaded publications without compilations.</summary>
+    ImmutableDictionary<string, string>? CommittedTexts(string name) => Dependency(name)?.Texts;
+    /// <summary>Known committed ownership without inventing source bodies for read-only images.</summary>
+    IEnumerable<string>? CommittedPaths(string name) => CommittedTexts(name)?.Keys;
+    /// <summary>An opaque loaded image has no provable prior source ownership.</summary>
+    bool HasOpaqueSourceOwnership => false;
+    /// <summary>The identity of a still-published loaded image; freshly compiled states have none.</summary>
+    string? PublishedFingerprint(string name) => null;
     /// <summary>True if another module references <paramref name="module"/> (its surface hash is needed).</summary>
     bool HasDependents(ModuleSession module);
     /// <summary>One immutable project inventory for a preparation wave; final publication validates a fresh scan.</summary>
@@ -48,7 +60,7 @@ internal interface ICompileContext
 /// L3 rebuild as Debug IL that makes it hot; after that body edits take L1 and additive
 /// edits L2. A full rebuild can switch heat back ("cool all" / perf play).
 /// </remarks>
-internal sealed class ModuleSession
+internal sealed partial class ModuleSession
 {
     /// <summary>Soft size cap (R10: about 5k lines).</summary>
     internal const int SoftCapLines = 5000;
@@ -64,13 +76,17 @@ internal sealed class ModuleSession
     readonly IAnalysis? _analysis;
     readonly ModuleCompiler _compiler;
     readonly bool _startHot;
-    readonly SyntaxTree _usings = ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
+    SyntaxTree? _usings;
+    SyntaxTree Usings => _usings ??= ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
     GeneratorDriver _driver = ModuleCompiler.Driver();
     ModuleState? _state;
     int _sizeLevel;
     readonly ModuleInputs? _project;
-    readonly string? _graph;
+    string? _graph;
     readonly Dictionary<string, string> _sourceOwners = new(ModuleState.Paths);
+    // This is observed discovery, used only to reject mutations around opaque
+    // dependencies; it is not claimed to be the source of their loaded images.
+    readonly Dictionary<string, string> _observedSources = new(ModuleState.Paths);
     internal string WatchDirectory => _project is { } project ? Path.Combine(project.Project, project.AuthoringRoot) : Dir;
 
     // Latest text on disk; differs from the state's texts while the module has compile errors.
@@ -92,6 +108,8 @@ internal sealed class ModuleSession
         {
             var inventory = project.Scan();
             _graph = Graph(inventory);
+            foreach (var source in inventory.Sources)
+                _observedSources[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
             foreach (var source in inventory.Sources.Where(source => source.Editor))
                 _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
         }
@@ -103,19 +121,20 @@ internal sealed class ModuleSession
     /// <summary>Whether saved bytes differ from this module's last committed input snapshot.</summary>
     internal bool SavedSourcesChanged(ICompileContext context)
     {
-        if (_state is not { } state) return false;
+        if (LoadedTexts is not { } texts) return false;
         var inventory = _project is { } project ? context.Inventory(project) : null;
         if (inventory is not null && (inventory.Diagnostics.Length != 0 || Graph(inventory) != _graph)) return false;
-        return !SourcesMatch(state, SourceFiles(inventory));
+        return !SourcesMatch(texts, SourceFiles(inventory));
     }
 
     internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
-        outcome.Next is { } next && MatchesCurrentInputs(next, context);
+        outcome.Next is { } next ? MatchesCurrentInputs(next, context)
+            : outcome.Kind == OutcomeKind.None && _published is { } published && MatchesPublishedInputs(published, context);
 
     bool MatchesCurrentInputs(ModuleState state, ICompileContext context)
     {
         var current = _project?.Scan();
-        if (current is not null && (current.Diagnostics.Length != 0 || Graph(current) != _graph || OwnershipChanged(current, context))) return false;
+        if (current is not null && (current.Diagnostics.Length != 0 || Graph(current) != _graph || OpaqueInventoryChanged(current, context) || OwnershipChanged(current, context))) return false;
         if (current is not null) ObserveUnloadedDomains(current, context);
         return MatchesInputs(state, context, SourceFiles(current));
     }
@@ -123,7 +142,7 @@ internal sealed class ModuleSession
     /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
     internal void Commit(Outcome o)
     {
-        if (o.Next is { } next) _state = next;
+        if (o.Next is { } next) { _state = next; _published = null; }
         _diagnosticReferencesChanged = !o.ValidatedInputs;
     }
 
@@ -155,7 +174,7 @@ internal sealed class ModuleSession
 
     // Source membership belongs to its existing module. Only module definitions,
     // dependency edges or domains require rebuilding the player's module graph.
-    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References }));
+    internal static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References }));
 
     // A removal and an addition spanning owners can be a move even when both
     // modules already exist. Preserve L4 conservatively for that ambiguous case;
@@ -163,8 +182,8 @@ internal sealed class ModuleSession
     bool OwnershipChanged(ProjectInventoryResult inventory, ICompileContext context)
     {
         if (_project is not { } project) return false;
-        var states = inventory.Modules.Select(module => (module.Name, State: context.Dependency(module.Name)))
-            .Where(module => module.State is not null).ToArray();
+        var states = inventory.Modules.Select(module => (module.Name, Paths: context.CommittedPaths(module.Name)))
+            .Where(module => module.Paths is not null).ToArray();
         var loaded = new HashSet<string>(states.Select(module => module.Name), StringComparer.Ordinal);
         var previous = new Dictionary<string, string>(ModuleState.Paths);
         // Editor-only domains may not be loaded by a player. Keep their discovered
@@ -172,7 +191,7 @@ internal sealed class ModuleSession
         foreach (var (path, owner) in _sourceOwners)
             if (!loaded.Contains(owner)) previous[path] = owner;
         foreach (var module in states)
-            foreach (var path in module.State!.Texts.Keys) previous[path] = module.Name;
+            foreach (var path in module.Paths!) previous[path] = module.Name;
         var current = inventory.Sources.ToDictionary(source => ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath)), source => source.Module, ModuleState.Paths);
         var removed = previous.Where(pair => !current.ContainsKey(pair.Key)).Select(pair => pair.Value).ToHashSet(StringComparer.Ordinal);
         return current.Any(pair => !previous.ContainsKey(pair.Key) && removed.Any(owner => owner != pair.Value));
@@ -183,17 +202,23 @@ internal sealed class ModuleSession
         if (_project is not { } project) return;
         _sourceOwners.Clear();
         foreach (var source in inventory.Sources)
-            if (source.Editor && context.Dependency(source.Module) is null)
+            if (source.Editor && context.Reference(source.Module) is null)
                 _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
     }
 
     Outcome? CheckInventory(Phases timing, ICompileContext context, out string[] files)
     {
         files = [];
-        if (_project is not { } project) { files = SourceFiles(null); return null; }
+        if (_project is not { } project)
+        {
+            files = SourceFiles(null);
+            return context.HasOpaqueSourceOwnership && LoadedPaths is { } paths && !paths.ToHashSet(ModuleState.Paths).SetEquals(files)
+                ? OpaqueInventoryFailure(timing) : null;
+        }
         var inventory = context.Inventory(project);
         if (inventory.Diagnostics.Length > 0)
             return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. inventory.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
+        if (OpaqueInventoryChanged(inventory, context)) return OpaqueInventoryFailure(timing);
         if (Graph(inventory) != _graph || OwnershipChanged(inventory, context))
         {
             // Compile the entire candidate gameplay graph before asking the player
@@ -210,6 +235,19 @@ internal sealed class ModuleSession
         ObserveUnloadedDomains(inventory, context);
         return null;
     }
+
+    bool OpaqueInventoryChanged(ProjectInventoryResult inventory, ICompileContext context)
+    {
+        if (!context.HasOpaqueSourceOwnership || _project is not { } project) return false;
+        return Graph(inventory) != _graph || inventory.Sources.Length != _observedSources.Count
+            || inventory.Sources.Any(source => !_observedSources.TryGetValue(ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath)), out var owner) || owner != source.Module);
+    }
+
+    Outcome OpaqueInventoryFailure(Phases timing) => new(this, OutcomeKind.Errors)
+    {
+        Timing = timing, ValidatedInputs = false,
+        Extra = [(AraCodes.LoadFailed, "error", "Source ownership or module graph changes require republishing the opaque prebuilt dependencies and reloading Play; their committed source ownership is unknown. Loaded code was retained.")],
+    };
 
     internal bool IsIgnored(string path)
     {
@@ -235,9 +273,8 @@ internal sealed class ModuleSession
         var surfaces = ImmutableDictionary.CreateBuilder<string, string?>();
         foreach (var name in References)
         {
-            var dep = ctx.Dependency(name) ?? throw new InvalidOperationException($"module `{Name}` references `{name}`, which has not built");
-            refs[name] = dep.Reference;
-            surfaces[name] = dep.Surface;
+            refs[name] = ctx.Reference(name) ?? throw new InvalidOperationException($"module `{Name}` references `{name}`, which has not built");
+            surfaces[name] = ctx.Surface(name);
         }
         return (refs.ToImmutable(), surfaces.ToImmutable());
     }
@@ -246,6 +283,7 @@ internal sealed class ModuleSession
     internal Outcome Initial(ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(0, Stopwatch.GetTimestamp());
+        if (ReadOnlyPublished) return ReadOnlyWork(p);
         if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
@@ -258,20 +296,22 @@ internal sealed class ModuleSession
             texts[full] = text;
             trees[full] = ModuleCompiler.Parse(full, text);
         }
-        var hot = (_state?.Hot ?? _startHot) && ctx.Enc;
+        var hot = (LoadedHot ?? _startHot) && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
-        var user = _compiler.Create([.. trees.Values, _usings], hot, refs.Values);
+        var user = _compiler.Create([.. trees.Values, Usings], hot, refs.Values);
         var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
             null, hot, 0, null, surfaces, refs);
         p.Parse = p.Mark();
-        var kind = _state is null ? AbiConst.ReloadInitial : AbiConst.ReloadL3;
-        return Build(user, start, kind, _state is null ? Escalation.None : Escalation.Requested, p, [.. trees.Values], null, ctx, true, ct);
+        var kind = Loaded ? AbiConst.ReloadL3 : AbiConst.ReloadInitial;
+        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, [.. trees.Values], null, ctx, true, ct);
     }
 
     /// <summary>A full image of the committed state, hot or cold (heat change, or the host asked for one).</summary>
     internal Outcome Full(Escalation escalation, bool? hot, ICompileContext ctx, CancellationToken ct = default)
     {
-        if (_state is not { } s) return Initial(ctx, ct);
+        if (_state is not { } s)
+            return _published is null ? Initial(ctx, ct) : BuildPublished(ctx, new Phases(0, Stopwatch.GetTimestamp()),
+                null, CompileIntent.CommittedCode, escalation, hot, ct);
         var h = (hot ?? s.Hot) && ctx.Enc;
         var user = h == s.Hot ? s.User : s.User.WithOptions(ModuleCompiler.Options(h));
         var current = MatchesCurrentInputs(s, ctx);
@@ -289,11 +329,14 @@ internal sealed class ModuleSession
     internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default, CompileIntent intent = CompileIntent.CurrentSources)
     {
         var timing = new Phases(0, Stopwatch.GetTimestamp());
+        if (ReadOnlyPublished) return ReadOnlyWork(timing);
         string[] files = [];
         // Current project candidates may require L4. Explicit committed-code work
         // only validates that drift; it must not compile or request activation of it.
         if (intent == CompileIntent.CurrentSources && CheckInventory(timing, ctx, out files) is { } invalid) return invalid;
         _diagnosticReferencesChanged = true;
+        if (_state is null && _published is not null)
+            return BuildPublished(ctx, timing, intent == CompileIntent.CurrentSources ? files : null, intent, Escalation.Dependency, null, ct);
         var s = _state ?? throw new InvalidOperationException($"module `{Name}` has not built");
         var (refs, surfaces) = Dependencies(ctx);
         var user = s.User;
@@ -344,11 +387,14 @@ internal sealed class ModuleSession
     static bool MatchesInputs(ModuleState state, ICompileContext ctx, string[] files)
     {
         return SourcesMatch(state, files)
-            && state.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Dependency(pair.Key)?.Reference));
+            && state.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)));
     }
 
     static bool SourcesMatch(ModuleState state, string[] files) =>
-        files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text);
+        SourcesMatch(state.Texts, files);
+
+    static bool SourcesMatch(ImmutableDictionary<string, string> texts, string[] files) =>
+        files.Length == texts.Count && files.All(path => texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text);
 
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
     internal static string? ReadWithRetry(string path)
@@ -401,14 +447,17 @@ internal sealed class ModuleSession
     internal Outcome Compile(IEnumerable<string> paths, long tEvent, ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(tEvent, Stopwatch.GetTimestamp());
+        if (ReadOnlyPublished) return ReadOnlyWork(p);
         if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
-        if (_state is not { } s) return Initial(ctx, ct);
+        if (_state is not { } s)
+            return _published is null ? Initial(ctx, ct) : BuildPublished(ctx, p, files, CompileIntent.CurrentSources,
+                _published.Hot ? Escalation.Requested : Escalation.Cold, null, ct, ownEdit: true);
         var (nextState, changes) = ReadSources(s, files);
         if (changes.Count == 0)
         {
             var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), []);
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
-            var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference));
+            var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Reference(name)));
             if (validated) _diagnosticReferencesChanged = false;
             return new Outcome(this, OutcomeKind.None) { Next = s, ValidatedInputs = validated, Problems = problems };
         }
@@ -560,7 +609,7 @@ internal sealed class ModuleSession
                 Final = final,
                 Generated = generated,
                 Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
-                Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? 0) + 1,
+                Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? _published?.Generation ?? 0) + 1,
                 Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,
                 DepSurfaces = Dependencies(ctx).Surfaces,
             },

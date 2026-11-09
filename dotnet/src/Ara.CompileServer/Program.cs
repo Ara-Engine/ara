@@ -106,7 +106,8 @@ while (Protocol.Receive(pipe) is { } msg)
             var (slot, name, dir, hot, refs, modules, profile, watch) = (r.U32(), r.Str(), r.Str(), r.Bool(), r.Strs(), r.Strs(), r.Str(), r.Bool());
             var initial = r.Remaining == 0 || r.Bool();
             var generation = r.Remaining == 0 ? 0 : r.U32();
-            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation);
+            var published = r.Remaining > 0 && r.Bool() ? PublishedSnapshot.Read(r) : null;
+            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation, published);
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());

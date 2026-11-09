@@ -91,17 +91,30 @@ internal static class ProjectCompiler
                 var schemaFile = Path.Combine(root, module.SchemaPath);
                 var publicationFile = Path.Combine(state, "published.sha256");
                 var publication = File.Exists(publicationFile) ? File.ReadAllLines(publicationFile) : [];
-                if (File.Exists(stamp) && File.ReadAllText(stamp).Trim() == fingerprint && File.Exists(assembly) && File.Exists(schemaFile)
-                    && publication.Length == 3 && publication[0] == fingerprint && publication[1] == Hash(File.ReadAllBytes(schemaFile)) && publication[2] == Hash(File.ReadAllBytes(assembly)))
+                var cached = File.Exists(stamp) && File.ReadAllText(stamp).Trim() == fingerprint && File.Exists(assembly) && File.Exists(schemaFile)
+                    && publication.Length == 3 && publication[0] == fingerprint && publication[1] == Hash(File.ReadAllBytes(schemaFile));
+                var cachedPe = cached ? File.ReadAllBytes(assembly) : [];
+                var cachedPdbPath = Path.ChangeExtension(assembly, ".pdb");
+                var cachedPdb = cached && File.Exists(cachedPdbPath) ? File.ReadAllBytes(cachedPdbPath) : [];
+                if (cached && publication[2] == Hash(cachedPe) && PublishedSnapshot.CacheMatches(state, fingerprint, cachedPe, cachedPdb))
                 {
                     var schema = JsonNode.Parse(File.ReadAllText(schemaFile));
                     if (schema?["$schema"]?.GetValue<string>() == "ara://schema/types/1")
                     {
-                        build.Reference = MetadataReference.CreateFromImage(File.ReadAllBytes(assembly));
+                        if (writeOutputs) WriteSnapshot(cachedPe, cachedPdb);
+                        build.Reference = MetadataReference.CreateFromImage(cachedPe);
                         build.Module = module with { Schema = schema, Result = "cached", Fingerprint = fingerprint };
                         validated = true;
                         return;
                     }
+                }
+                void WriteSnapshot(byte[] pe, byte[] pdb)
+                {
+                    var bytes = PublishedSnapshot.ManifestBytes(name, module.Hot, module.Profile, module.References,
+                        fingerprint, pe, pdb, sources.Select(source => (Path.Combine(root, source.Source.StoragePath), source.Text)),
+                        module.References.ToDictionary(reference => reference, reference => builds[reference].Module.Fingerprint!), ModuleSession.Graph(inventory));
+                    var path = Path.Combine(state, PublishedSnapshot.ManifestFile);
+                    if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes)) AtomicWrite(path, bytes);
                 }
                 var extra = new List<string> { typeof(Behaviour).Assembly.Location };
                 if (module.Profile == "editor")
@@ -151,6 +164,7 @@ internal static class ProjectCompiler
                     foreach (var generated in driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources))
                         AtomicWrite(Path.Combine(state, "generated", generated.HintName), Encoding.UTF8.GetBytes(generated.SourceText.ToString()));
                     AtomicWrite(stamp, Encoding.UTF8.GetBytes(fingerprint + "\n"));
+                    WriteSnapshot(image.Pe, image.Pdb);
                 }
                 // Rust publishes this JSON through the canonical writer. The compiler
                 // returns it explicitly; no consumer scans private output directories.

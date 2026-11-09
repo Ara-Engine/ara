@@ -2,7 +2,7 @@
 
 The warm out-of-process compile server (A13): Roslyn never runs in the game process, so
 its CPU and GC pauses never stall ticks. One process serves a host over a named pipe
-(`Protocol.cs`, v2) and exits with its parent.
+(`Protocol.cs`, v3) and exits with its parent.
 
 ## Pieces
 
@@ -33,6 +33,10 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   the dependency surfaces it was compiled against) and the generator driver. `Initial`,
   `Compile`, `Full` (heat/rebuild), `Cascade` and `Rebind` return an `Outcome` holding the
   next state; `Commit` adopts it.
+  - `PublishedLoaded` retains the exact loaded PE, publication identity and trusted source
+    snapshot separately from Roslyn state. First edits emit L3 and establish a real new
+    baseline; unchanged saves do no parsing. Published dependents join atomic cascades.
+    Explicit unwatched images without trusted source bodies remain read-only references.
   - Compile: classify; L1/L2 → `EmitDifference` (the generator runs only for inserts and doc
     edits, and any change in its output is L3); L3 → generator + full emit with the analyzers
     in parallel. Errors (compiler, generator, analyzers) are diagnostics; nothing commits.
@@ -66,4 +70,5 @@ sat at tier 0 or in PGO instrumentation for many edits; a 5.2k-line L3 emit took
 `dotnet test tests/Ara.CompileServer.Tests`: `ClassifierTests` (the L1/L2/L3 edit matrix,
 capabilities, new/removed files), `SessionTests` (cold → hot, L1, L2, errors, Ara
 declarations, unknown references, L4), `CascadeTests` (local L1, relink, rebuild, breaking
-edits, dependents seeing L2 members), `SchedulingTests` (agent coalescing and priority).
+edits, dependents seeing L2 members), `SchedulingTests` (agent coalescing and priority),
+`Published*Tests` (snapshot integrity, first-edit state, read-only supplied images).
