@@ -74,7 +74,9 @@ internal static class ProjectCompiler
                         build.Module = module with { Result = "failed", Schema = null, Fingerprint = null };
                         return;
                     }
-                var sources = module.Sources.Select(s => (Source:s, Text:File.ReadAllText(Path.Combine(root, s.StoragePath)))).ToArray();
+                var assembly = Path.Combine(root, module.AssemblyPath);
+                var capture = ProjectSourceCapture.Read(root, module.Sources);
+                var sources = capture.Sources;
                 var configuration = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
@@ -84,10 +86,9 @@ internal static class ProjectCompiler
                 var fingerprint = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     configuration,
-                    sources = sources.Select(s => new { s.Source.StoragePath, hash = Hash(Encoding.UTF8.GetBytes(s.Text)) }),
+                    sources = sources.Select(s => new { s.Source.StoragePath, hash = s.Hash }),
                 }));
                 var state = Path.Combine(root, module.StatePath);
-                var assembly = Path.Combine(root, module.AssemblyPath);
                 var stamp = Path.Combine(state, "input.sha256");
                 var schemaFile = Path.Combine(root, module.SchemaPath);
                 var publicationFile = Path.Combine(state, "published.sha256");
@@ -111,8 +112,8 @@ internal static class ProjectCompiler
                 }
                 void WriteSnapshot(byte[] pe, byte[] pdb)
                 {
-                    var bytes = PublishedSnapshot.ManifestBytes(name, module.Hot, module.Profile, module.References,
-                        fingerprint, pe, pdb, sources.Select(source => (Path.Combine(root, source.Source.StoragePath), source.Text)),
+                    var bytes = PublishedSnapshot.ProjectManifestBytes(name, module.Hot, module.Profile, module.References,
+                        fingerprint, pe, pdb, capture,
                         module.References.ToDictionary(reference => reference, reference => builds[reference].Module.Fingerprint!), graph.Value);
                     var path = Path.Combine(state, PublishedSnapshot.ManifestFile);
                     if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes)) AtomicWrite(path, bytes);
@@ -125,7 +126,7 @@ internal static class ProjectCompiler
                 }
                 var compiler = new ModuleCompiler(name, extra);
                 var (driver, final, generatorDiagnostics, _) = compilations.Generate(assembly, configuration, compiler, module.Hot,
-                    sources.Select(s => (Path.Combine(root, s.Source.StoragePath), s.Text)).ToArray(), module.References.Select(r => builds[r].Reference!));
+                    sources.Select(s => (s.Path, s.Text)).ToArray(), module.References.Select(r => builds[r].Reference!));
                 // Analysis and emission share immutable Roslyn state. Keep both off the
                 // game thread, and let emit supply compiler diagnostics in the same pass.
                 var analyzing = Task.Run(() => new AnalyzerSet().AnalyzeProject(final, module.Profile));
