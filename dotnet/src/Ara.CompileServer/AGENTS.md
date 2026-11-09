@@ -15,6 +15,9 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   Publication markers verify input, schema and assembly hashes; editor code stays separate.
   Fingerprint payloads serialize directly to UTF8. Parallel snapshot writers share one
   lazily serialized immutable inventory graph per request.
+- `ProjectSourceCapture`: fully reads each project source and derives its hash once
+  per request. Fingerprints and `ProjectSnapshot` manifests share that captured hash;
+  no extra source capture survives the request, including publication-cache hits.
 - `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
   changes. Those changes still rebuild semantic compilations and generator drivers.
   `compiler_scale.py --dependency-fanout` measures a shared edit with unchanged consumers.
