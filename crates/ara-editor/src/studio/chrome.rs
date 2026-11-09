@@ -3,10 +3,10 @@
 //! overlays they open (menus, the command palette).
 use ara_kit::icons;
 use ara_kit::ui::*;
+use stillkit::Role;
 use stillkit::el::{
     Align, Axis, El, Handled, Justify, KeyCode, col, dialog, el, icon, menu, row, text, text_input,
 };
-use stillkit::{Role, ShadowLevel};
 
 use super::{Studio, commands, dock};
 use crate::shell::commands::Target;
@@ -36,15 +36,13 @@ fn drag_chip(s: &Studio) -> Option<El<Studio>> {
     let l = &s.look;
     let c = &l.c;
     Some(
-        row()
+        super::style::float(l, row())
             .absolute(x + 14.0, y + 10.0)
             .h(26.0)
             .pad_x(10.0)
             .gap(6.0)
             .align(Align::Center)
             .radius(l.radius.sm)
-            .fill(c.popover.0)
-            .shadow_level(stillkit::ShadowLevel::Menu)
             .child(icon(icons::BOX).size(13.0).color(c.primary.0))
             .child(text(name.clone()).text_size(12.0).color(c.foreground.0)),
     )
@@ -695,12 +693,10 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
         }
         list = list.child(item);
     }
-    let panel = col()
+    let panel = super::style::float(l, col())
         .key("palette")
         .w(640.0)
         .radius(l.radius.base + 2.0)
-        .fill(c.popover.0)
-        .shadow_level(ShadowLevel::Dialog)
         .role(Role::Dialog)
         .label("Command palette")
         .child(field)

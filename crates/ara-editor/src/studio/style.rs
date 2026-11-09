@@ -3,8 +3,9 @@
 //! joined to the panel body, component headers are a band a step above the body, and
 //! fields are wells set into it. Everything comes from the theme's tokens.
 use ara_kit::look::Look;
-use ara_kit::ui::mix;
+use ara_kit::ui::{Material, mix};
 use stillkit::Rgba;
+use stillkit::el::El;
 
 /// Corner radius of panels, bands, wells and tabs: tools, not cards.
 pub const RADIUS: f32 = 4.0;
@@ -16,6 +17,23 @@ pub const STRIP: f32 = 26.0;
 pub const TOOLBAR: f32 = 26.0;
 /// Body text.
 pub const TEXT: f32 = 12.0;
+
+/// `el` lifted out as the Raised material while `on`: how the chosen row, folder or tile
+/// shows (D31: selection is depth, never a colour). Start a chain with it:
+/// `chosen(l, row(), selected).key(..)`.
+pub fn chosen<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
+    if on {
+        Material::Raised.paint(l, el)
+    } else {
+        el
+    }
+}
+
+/// A popup's panel (menus, the palette, the Create browser, dialogs): the Float material,
+/// opaque, since nothing behind it is frosted.
+pub fn float<S: 'static>(l: &Look, el: El<S>) -> El<S> {
+    Material::Float.paint(l, el).fill(l.c.popover.0)
+}
 
 /// The studio's surface tones for the current scheme.
 #[derive(Clone, Copy, Debug)]

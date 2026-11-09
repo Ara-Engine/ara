@@ -403,7 +403,7 @@ fn folder_row(
         None => el().size(16.0),
     };
     let open = path.clone();
-    row()
+    super::style::chosen(l, row(), current)
         .key(format!("assets/tree/{path}"))
         .h(super::style::ROW)
         .pad_x(4.0)
@@ -480,7 +480,7 @@ fn tile(
         None => (kind_icon(a), c.muted_foreground.0),
     };
     let hover = c.hover_surface.0.with_alpha(0.7);
-    col()
+    super::style::chosen(l, col(), selected)
         .key(format!("asset/{}", a.path))
         .w(84.0)
         .pad_x(4.0)
@@ -489,7 +489,7 @@ fn tile(
         .align(Align::Center)
         .radius(super::style::RADIUS)
         .fill(if selected {
-            c.selection_surface.0.with_alpha(0.35)
+            c.selection_surface.0
         } else {
             stillkit::Rgba::TRANSPARENT
         })

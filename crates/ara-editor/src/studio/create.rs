@@ -762,13 +762,11 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
         .child(search)
         .child(list)
         .child(footer(s, b, rows.get(active).copied()));
-    row()
+    super::style::float(l, row())
         .key("create")
         .w(700.0)
         .h(460.0)
         .radius(l.radius.md)
-        .fill(c.popover.0)
-        .shadow_level(stillkit::ShadowLevel::Menu)
         .label("Create")
         .on_key(|s: &mut Studio, key, _| keys(s, key.0))
         .child(cats.fill(c.muted.0.with_alpha(0.5)))
@@ -820,26 +818,13 @@ fn item_row(
                 .color(c.muted_foreground.0),
         );
     }
-    row()
+    super::style::chosen(l, row(), active)
         .key(format!("create/item/{}", item.id))
         .h(48.0)
         .pad_x(8.0)
         .gap(12.0)
         .align(Align::Center)
         .radius(l.radius.sm)
-        .fill(if active {
-            c.selection_surface_inactive.0
-        } else {
-            Rgba::TRANSPARENT
-        })
-        .border(
-            1.0,
-            if active {
-                c.ring.0.with_alpha(0.45)
-            } else {
-                Rgba::TRANSPARENT
-            },
-        )
         .label(item.title)
         .description(item.blurb)
         .selected(active)

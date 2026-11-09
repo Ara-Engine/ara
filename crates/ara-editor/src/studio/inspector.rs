@@ -820,11 +820,9 @@ fn add_component(s: &Studio) -> El<Studio> {
                 ),
         );
     }
-    let panel = col()
+    let panel = super::style::float(l, col())
         .key("inspector/add/panel")
         .radius(l.radius.md)
-        .fill(c.popover.0)
-        .shadow_level(stillkit::ShadowLevel::Menu)
         .on_key(move |s: &mut Studio, key, _| {
             let Some((q, a)) = s.local.add_component.clone() else {
                 return Handled::No;

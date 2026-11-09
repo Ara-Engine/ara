@@ -4,7 +4,7 @@ use stillkit::el::{Align, El, Justify, col, el, icon, row, text};
 use stillkit::icons::Icon;
 use stillkit::{Role, TextRole};
 
-use super::count;
+use super::{Material, count};
 use crate::icons;
 use crate::look::Look;
 
@@ -118,7 +118,7 @@ pub fn nav_item<S: 'static>(
 ) -> El<S> {
     let c = &l.c;
     let hover = c.foreground.0;
-    let mut item = row()
+    let mut item: El<S> = row()
         .key(key)
         .h(32.0)
         .pad_x(10.0)
@@ -127,12 +127,11 @@ pub fn nav_item<S: 'static>(
         .radius(l.radius.sm)
         .role(Role::Tab)
         .label(label)
-        .selected(current)
-        .fill(if current {
-            c.raised.0
-        } else {
-            stillkit::Rgba::TRANSPARENT
-        })
+        .selected(current);
+    if current {
+        item = Material::Raised.paint(l, item);
+    }
+    item = item
         .color(if current {
             c.foreground.0
         } else {
@@ -148,9 +147,6 @@ pub fn nav_item<S: 'static>(
                 .weight(if current { 580 } else { 500 })
                 .grow(1.0),
         );
-    if current {
-        item = item.border(1.0, c.border.0);
-    }
     if let Some((n, strong)) = badge.filter(|(n, _)| *n > 0) {
         item = item.child(count(l, n, strong));
     }

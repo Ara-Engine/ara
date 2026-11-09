@@ -45,8 +45,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - Window-only state lives in `Local`; anything agents should see goes to `EditorState`.
 - Visual review: `cargo test -p ara-editor --lib studio::tests::captures -- --ignored`
   writes both themes (panels, context menu, Create) to `target/studio-captures/`.
-- Spacing: 4 px gutters, 30 px tab strips, 22 px tree and field rows, 24 px dense
+- Spacing: 3 px gutters, 26 px tab strips, 20 px tree and field rows, 24 px dense
   controls. Fields set `focus_ring(false)` where their well shows focus.
+- Depth, never lines (D31): `style::chosen` lifts the chosen row, folder, tile or item as
+  Raised; `style::float` makes popups the Float material; fields are Wells.
 
 ## Tests
 

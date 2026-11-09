@@ -235,13 +235,11 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         .min_h(0.0)
         .child(search)
         .child(col().h(0.0).grow(1.0).scroll(Axis::Vertical).child(body));
-    let window = col()
+    let window = super::style::float(l, col())
         .key("settings")
         .w(860.0)
         .h(600.0)
         .radius(l.radius.base)
-        .fill(c.popover.0)
-        .shadow_level(stillkit::ShadowLevel::Dialog)
         .label("Settings")
         .child(head)
         .child(
