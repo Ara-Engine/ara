@@ -67,6 +67,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   after exact EOF equality. A pooled buffer avoids allocating new unchanged strings;
   changed/new files retain normal text ownership, BOM decoding and editor sharing.
   Both capture and final source validation read contents; timestamps never grant trust.
+  `PooledReadAheadStream` replaces the private FileStream byte buffer with an owned
+  pooled 4 KiB block, preserving synchronous read-ahead and the unchanged StreamReader.
 - `ModuleWatcher`: one pump thread for every module folder (1 ms spin settle).
 - `AnalyzerSet`: the Ara analyzers over changed trees, with the module's API profile
   (`build_property.AraModuleProfile`). `Diagnostics`: Roslyn → ara-diag JSON.
