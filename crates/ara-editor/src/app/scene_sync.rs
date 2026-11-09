@@ -10,6 +10,33 @@ use super::*;
 use crate::world::{DocumentView, Patch};
 use std::collections::BTreeMap;
 
+/// What a window previews in the Scene without committing: its Inspector drafts (compared
+/// to skip unchanged frames) and the records they make. The legacy shell and the studio
+/// each keep their own.
+pub(crate) trait Drafts {
+    /// The drafts, keyed by what they edit; equal maps preview the same records.
+    fn drafts(&self) -> &BTreeMap<String, String>;
+    /// The selection's records with the drafts applied, or None when nothing previews.
+    fn draft_records(
+        &self,
+        editor: &Editor,
+        view: &DocumentView,
+    ) -> Option<BTreeMap<String, ara_doc::Record>>;
+}
+
+impl Drafts for Shell {
+    fn drafts(&self) -> &BTreeMap<String, String> {
+        Shell::drafts(self)
+    }
+    fn draft_records(
+        &self,
+        editor: &Editor,
+        view: &DocumentView,
+    ) -> Option<BTreeMap<String, ara_doc::Record>> {
+        Shell::draft_records(self, editor, view)
+    }
+}
+
 /// Whether the Scene renders natively (`Renderer::is_native`), or will from its next
 /// frame: the render plan takes the raster path, as it does for every project without
 /// `rayTracing` (the plan `SceneView::render` resolves). Before that first frame the
@@ -298,7 +325,7 @@ impl SceneSync {
         &mut self,
         view: &DocumentView,
         editor: &mut Editor,
-        shell: &Shell,
+        shell: &dyn Drafts,
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> bool {
@@ -366,7 +393,7 @@ impl SceneSync {
         &mut self,
         view: &DocumentView,
         editor: &Editor,
-        shell: &Shell,
+        shell: &dyn Drafts,
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> bool {

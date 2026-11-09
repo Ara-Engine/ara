@@ -490,6 +490,40 @@ fn a_linked_scale_keeps_its_proportions() {
 }
 
 #[test]
+fn scrubbing_a_linked_scale_previews_every_axis_before_it_commits() {
+    let mut rt = open();
+    rt.update(|s| s.local.scale_linked = true);
+    settle(&mut rt);
+    let before = rt.state().editor.host.store().revision();
+    let tag = rt.find("field/Transform.scale/1/scrub").unwrap();
+    let (x, y) = (tag.center().x, tag.center().y);
+    rt.pointer_down(x, y);
+    rt.frame(FRAME);
+    // 8 px a step of 0.01: 40 px is +0.05 on Y, and the others follow.
+    rt.pointer_move(x + 40.0, y);
+    rt.frame(FRAME);
+    let draft = rt.state().local.draft.clone().unwrap();
+    assert_eq!(draft.0, "Transform.scale");
+    assert_eq!(
+        draft.1,
+        json!([1.05, 1.05, 1.05]),
+        "every axis moves with the drag"
+    );
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        before,
+        "nothing commits mid-drag"
+    );
+    rt.pointer_up(x + 40.0, y);
+    rt.frame(FRAME);
+    assert!(rt.state().local.draft.is_none());
+    assert_eq!(
+        rt.state().resolved["e_box"].record["Transform"]["scale"],
+        json!([1.05, 1.05, 1.05])
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
@@ -536,5 +570,24 @@ fn click_cost() {
             framed - handled,
             t.elapsed() - framed
         );
+    }
+    // A dropdown: the press, then each frame of its opening until it settles.
+    let at = rt.find("field/MeshRenderer.shape").unwrap();
+    let t = std::time::Instant::now();
+    rt.pointer_down(at.center().x, at.center().y);
+    rt.pointer_up(at.center().x, at.center().y);
+    eprintln!("DROPDOWN press {:?}", t.elapsed());
+    for i in 0..30 {
+        let f = std::time::Instant::now();
+        let more = rt.frame(FRAME);
+        let framed = f.elapsed();
+        let _ = rt.snap();
+        eprintln!(
+            "DROPDOWN frame {i}: frame {framed:?}, paint {:?}",
+            f.elapsed() - framed
+        );
+        if !more && !rt.animating() {
+            break;
+        }
     }
 }

@@ -155,6 +155,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut shown_extent = [0, 0];
     // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
     let mut shown_tag = u64::MAX;
+    // A composite is owed (something changed) but has not presented yet.
+    let mut composite = false;
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
@@ -255,6 +257,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.touch(|s| sync.rebuild(&view, &mut s.editor, &mut renderer, &mut scene_view));
             scene_dirty = true;
         }
+        // The gizmo drag or the scrubbed field, shown before it commits.
+        let preview = rt.touch(|s| inspector::Preview::of(s));
+        if rt.touch(|s| {
+            sync.preview(
+                &view,
+                &mut s.editor,
+                &preview,
+                &mut renderer,
+                &mut scene_view,
+            )
+        }) {
+            scene_dirty = true;
+        }
         pass.mark("scene sync");
         // The Scene view: render where its element shows and present into its layer.
         let rect = rt
@@ -313,10 +328,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             });
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;
-            if (render || restyled || landed) && renderer.presentation_ready() {
+            composite |= render || restyled || landed;
+            if composite && renderer.presentation_ready() {
                 let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
                 let scale = rt.scale();
-                rt.touch(|s| {
+                let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
                     // so a lagging frame carries its gizmos and grid with it.
                     let mut gizmo = gizmo_state(s);
@@ -349,22 +365,28 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     s.editor.state.camera = live;
                     done
                 })?;
-                if landed {
-                    let tag = renderer.shown_frame_tag();
-                    trace::log(|| format!("scene frame {tag} shown"));
-                }
-                shown_tag = renderer.shown_frame_tag();
-                shown_extent = extent;
-                if render {
-                    let dt = last_frame.elapsed().as_secs_f32().max(1e-4);
-                    fps = if fps == 0.0 {
-                        1.0 / dt
-                    } else {
-                        fps * 0.9 + 0.1 / dt
-                    };
-                    last_frame = Instant::now();
-                    let shown = (fps.min(999.0), 1000.0 / fps.max(1.0));
-                    rt.touch(|s| s.local.scene.fps = Some(shown));
+                if !shown {
+                    // The last composite is still on the GPU: try again next pass.
+                    pass.mark("composite skipped");
+                } else {
+                    composite = false;
+                    if landed {
+                        let tag = renderer.shown_frame_tag();
+                        trace::log(|| format!("scene frame {tag} shown"));
+                    }
+                    shown_tag = renderer.shown_frame_tag();
+                    shown_extent = extent;
+                    if render {
+                        let dt = last_frame.elapsed().as_secs_f32().max(1e-4);
+                        fps = if fps == 0.0 {
+                            1.0 / dt
+                        } else {
+                            fps * 0.9 + 0.1 / dt
+                        };
+                        last_frame = Instant::now();
+                        let shown = (fps.min(999.0), 1000.0 / fps.max(1.0));
+                        rt.touch(|s| s.local.scene.fps = Some(shown));
+                    }
                 }
             }
             if render {
@@ -415,7 +437,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.end();
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
-            || renderer.scene_frame_pending();
+            || renderer.scene_frame_pending()
+            || composite;
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
             rt.wake_at().map(|at| started + at),
