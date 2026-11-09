@@ -539,6 +539,11 @@ static P_FOLDER: IconPath = IconPath {
     d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
 };
 pub const FOLDER: Icon = Icon::Path(&P_FOLDER);
+static P_FOLDER_FULL: IconPath = IconPath {
+    name: "folder-full",
+    d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2ZM6.5 11h11M6.5 15h7",
+};
+pub const FOLDER_FULL: Icon = Icon::Path(&P_FOLDER_FULL);
 static P_FOLDER_OPEN: IconPath = IconPath {
     name: "folder-open",
     d: "M6 14l1.5 -2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
@@ -1709,6 +1714,7 @@ pub const ALL: &[(&str, Icon)] = &[
     ("flashlight", FLASHLIGHT),
     ("focus", FOCUS),
     ("folder", FOLDER),
+    ("folder-full", FOLDER_FULL),
     ("folder-open", FOLDER_OPEN),
     ("folder-plus", FOLDER_PLUS),
     ("folder-search", FOLDER_SEARCH),

@@ -213,18 +213,31 @@ fn assets(s: &Studio) -> El<Studio> {
         }
     } else {
         let selected = s.editor.state.asset_path.clone();
+        let counts = contents(browser);
         let tiles: Vec<El<Studio>> = items
             .into_iter()
             .map(|a| {
                 let preview = s.previews.images.get(&a.path).cloned();
-                tile(l, &a, selected.as_deref() == Some(a.path.as_str()), preview)
+                let held = (a.kind == "folder").then(|| {
+                    counts
+                        .get(a.path.trim_end_matches('/'))
+                        .copied()
+                        .unwrap_or(0)
+                });
+                tile(
+                    l,
+                    &a,
+                    selected.as_deref() == Some(a.path.as_str()),
+                    preview,
+                    held,
+                )
             })
             .collect();
         col()
             .grow(1.0)
             .min_h(0.0)
             .scroll(Axis::Vertical)
-            .child(row().flow_wrap().pad(8.0).gap(4.0).children(tiles))
+            .child(row().flow_wrap().pad(6.0).gap(2.0).children(tiles))
     };
     // Unity's Project window: the folder tree beside the folder's contents.
     let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
@@ -235,10 +248,45 @@ fn assets(s: &Studio) -> El<Studio> {
         .child(right)
 }
 
+/// How many visible entries (files and subfolders) each folder holds directly.
+fn contents(browser: &crate::shell::assets::Browser) -> std::collections::HashMap<String, usize> {
+    let mut seen = std::collections::HashSet::new();
+    let mut counts = std::collections::HashMap::new();
+    for a in &browser.items {
+        let mut path = a.path.trim_end_matches('/');
+        // The entry, and every folder above it, counts once in its parent.
+        while !path.is_empty() {
+            if path.rsplit('/').next().is_some_and(|n| n.starts_with('.')) {
+                break;
+            }
+            if seen.insert(path.to_owned()) {
+                *counts.entry(parent(path).to_owned()).or_insert(0) += 1;
+            }
+            path = parent(path);
+        }
+    }
+    counts
+}
+
+/// A folder's icon: the plain outline when empty, with contents lines when not.
+fn folder_glyph(empty: bool) -> stillkit::icons::Icon {
+    if empty {
+        icons::FOLDER
+    } else {
+        icons::FOLDER_FULL
+    }
+}
+
+/// Folders' one colour, a little dimmer when empty.
+fn folder_tint(l: &ara_kit::look::Look, empty: bool) -> stillkit::Rgba {
+    l.c.warning.0.with_alpha(if empty { 0.6 } else { 1.0 })
+}
+
 /// Every folder in the project, as a tree: the open ones and the current one's ancestors
 /// show their children. A click opens the folder in the grid.
 fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
     let l = &s.look;
+    let counts = contents(browser);
     let mut dirs = std::collections::BTreeSet::new();
     for a in &browser.items {
         let path = a.path.trim_end_matches('/');
@@ -272,7 +320,7 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
         0,
         current.is_empty(),
         None,
-        icons::BOX,
+        false,
     ));
     for dir in &dirs {
         // Shown when every ancestor is open.
@@ -289,11 +337,7 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
         let has_children = dirs.iter().any(|d| parent(d) == dir);
         let expanded = has_children.then(|| open(dir));
         let name = dir.rsplit('/').next().unwrap_or(dir);
-        let glyph = if current == dir {
-            icons::FOLDER_OPEN
-        } else {
-            icons::FOLDER
-        };
+        let empty = counts.get(dir.as_str()).copied().unwrap_or(0) == 0;
         tree = tree.child(folder_row(
             l,
             name,
@@ -301,10 +345,10 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
             depth,
             current == dir,
             expanded,
-            glyph,
+            empty,
         ));
     }
-    tree.fill(super::style::tones(l).strip)
+    tree
 }
 
 /// A folder tree row: disclosure (when it has subfolders), icon and name.
@@ -315,7 +359,7 @@ fn folder_row(
     depth: usize,
     current: bool,
     expanded: Option<bool>,
-    glyph: stillkit::icons::Icon,
+    empty: bool,
 ) -> El<Studio> {
     let c = &l.c;
     let hover = c.hover_surface.0;
@@ -324,6 +368,14 @@ fn folder_row(
     } else {
         (stillkit::Rgba::TRANSPARENT, c.foreground.0)
     };
+    // The shape tells what a folder holds; its colour stays one colour (later a user
+    // choice), only dimmed when empty.
+    let glyph = if path.is_empty() {
+        icons::BOX
+    } else {
+        folder_glyph(empty)
+    };
+    let folder_ink = if current { ink } else { folder_tint(l, empty) };
     let disclosure = match expanded {
         Some(on) => {
             let path = path.clone();
@@ -353,11 +405,11 @@ fn folder_row(
     let open = path.clone();
     row()
         .key(format!("assets/tree/{path}"))
-        .h(22.0)
+        .h(super::style::ROW)
         .pad_x(4.0)
         .gap(4.0)
         .align(Align::Center)
-        .radius(4.0)
+        .radius(super::style::RADIUS)
         .fill(fill)
         .color(ink)
         .cascade_ink()
@@ -367,11 +419,7 @@ fn folder_row(
         .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"folder": open})))
         .child(el().w(depth as f32 * 12.0))
         .child(disclosure)
-        .child(
-            icon(glyph)
-                .size(13.0)
-                .color(if current { ink } else { c.warning.0 }),
-        )
+        .child(icon(glyph).size(13.0).color(folder_ink))
         .child(text(name.to_owned()).text_size(12.0).grow(1.0))
 }
 
@@ -399,12 +447,15 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
         )
 }
 
-/// One asset: its icon on a soft plate and the name under it, two lines at most.
+/// One asset: its picture or bare icon and the name under it (two lines at most). A folder
+/// with contents shows the full folder glyph, an empty one the plain outline. Only hover
+/// and selection give a tile a background.
 fn tile(
     l: &ara_kit::look::Look,
     a: &Asset,
     selected: bool,
     preview: Option<std::sync::Arc<stillkit::Image>>,
+    held: Option<usize>,
 ) -> El<Studio> {
     let c = &l.c;
     let name = a
@@ -423,21 +474,22 @@ fn tile(
     let scene = a.document_kind.as_deref() == Some("scene");
     let placeable = a.kind == "prefab" || matches!(a.kind.as_str(), "gltf" | "glb" | "fbx" | "obj");
     let reference = a.authored_path.clone();
-    let glyph_ink = if folder {
-        c.warning.0
-    } else {
-        c.muted_foreground.0
+    let empty = held == Some(0);
+    let (glyph, glyph_ink) = match held {
+        Some(_) => (folder_glyph(empty), folder_tint(l, empty)),
+        None => (kind_icon(a), c.muted_foreground.0),
     };
-    let hover = c.hover_surface.0;
+    let hover = c.hover_surface.0.with_alpha(0.7);
     col()
         .key(format!("asset/{}", a.path))
         .w(84.0)
-        .pad(6.0)
-        .gap(5.0)
+        .pad_x(4.0)
+        .pad_y(6.0)
+        .gap(3.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
+        .radius(super::style::RADIUS)
         .fill(if selected {
-            c.selection_surface.0
+            c.selection_surface.0.with_alpha(0.35)
         } else {
             stillkit::Rgba::TRANSPARENT
         })
@@ -493,26 +545,24 @@ fn tile(
             }
         })
         .child(match preview {
-            // The rendered picture, or the kind's icon until it lands.
+            // The rendered picture, or the kind's bare icon until it lands.
             Some(picture) => stillkit::el::image(picture).size(52.0),
             None => el()
                 .size(52.0)
-                .radius(l.radius.sm)
-                .fill(l.well())
                 .align(Align::Center)
                 .justify(Justify::Center)
-                .child(icon(kind_icon(a)).size(24.0).color(glyph_ink)),
+                .child(
+                    icon(glyph)
+                        .size(if folder { 44.0 } else { 36.0 })
+                        .color(glyph_ink),
+                ),
         })
         .child(
             text(stem.to_owned())
                 .text_size(11.5)
                 .wrap(2)
                 .text_align(stillkit::el::TextAlign::Center)
-                .color(if selected {
-                    c.selection_foreground.0
-                } else {
-                    c.foreground.0
-                }),
+                .color(c.foreground.0),
         )
 }
 
