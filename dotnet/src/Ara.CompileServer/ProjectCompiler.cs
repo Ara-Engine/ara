@@ -54,6 +54,7 @@ internal static class ProjectCompiler
         var toolHash = Hash(File.ReadAllBytes(typeof(ProjectCompiler).Assembly.Location));
         var runtimeHash = Hash(File.ReadAllBytes(typeof(Behaviour).Assembly.Location));
         var generatorHash = Hash(File.ReadAllBytes(typeof(Ara.Generators.ModuleGenerator).Assembly.Location));
+        var graph = new Lazy<string>(() => ModuleSession.Graph(inventory), LazyThreadSafetyMode.ExecutionAndPublication);
 
         void Build(BuildState build)
         {
@@ -74,17 +75,17 @@ internal static class ProjectCompiler
                         return;
                     }
                 var sources = module.Sources.Select(s => (Source:s, Text:File.ReadAllText(Path.Combine(root, s.StoragePath)))).ToArray();
-                var configuration = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+                var configuration = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
                     editorHash = module.Profile == "editor" ? Hash(File.ReadAllBytes(typeof(Ara.Editor.EditorRegistry).Assembly.Location)) : "",
                     references = module.References.Select(r => new { name = r, hash = builds[r].Module.Fingerprint }),
-                })));
-                var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+                }));
+                var fingerprint = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     configuration,
                     sources = sources.Select(s => new { s.Source.StoragePath, hash = Hash(Encoding.UTF8.GetBytes(s.Text)) }),
-                })));
+                }));
                 var state = Path.Combine(root, module.StatePath);
                 var assembly = Path.Combine(root, module.AssemblyPath);
                 var stamp = Path.Combine(state, "input.sha256");
@@ -112,7 +113,7 @@ internal static class ProjectCompiler
                 {
                     var bytes = PublishedSnapshot.ManifestBytes(name, module.Hot, module.Profile, module.References,
                         fingerprint, pe, pdb, sources.Select(source => (Path.Combine(root, source.Source.StoragePath), source.Text)),
-                        module.References.ToDictionary(reference => reference, reference => builds[reference].Module.Fingerprint!), ModuleSession.Graph(inventory));
+                        module.References.ToDictionary(reference => reference, reference => builds[reference].Module.Fingerprint!), graph.Value);
                     var path = Path.Combine(state, PublishedSnapshot.ManifestFile);
                     if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes)) AtomicWrite(path, bytes);
                 }
