@@ -38,71 +38,42 @@ impl Canvas {
         list.commands.push(Draw::PopClip);
     }
 
-    /// A quiet dot grid with faint major lines every eight cells.
+    /// Unreal's graph paper: faint lines every 16 units, stronger ones every 128; the minor
+    /// lines fade out as the view zooms away.
     fn grid(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
         let z = self.camera.zoom;
-        let major = 128. * z;
-        let mut line = theme.border;
-        line.3 = 150;
-        if major >= 40. {
+        let mut lines = |step: f32, color: Color| {
             let offset = [
-                self.camera.pan[0].rem_euclid(major),
-                self.camera.pan[1].rem_euclid(major),
+                self.camera.pan[0].rem_euclid(step),
+                self.camera.pan[1].rem_euclid(step),
             ];
-            for x in 0..=(rect.w / major) as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x + offset[0] + x as f32 * major,
-                        y: rect.y,
-                        w: 1.,
-                        h: rect.h,
-                    },
-                    0.,
-                    line,
-                );
+            for x in 0..=(rect.w / step) as usize {
+                let at = Box2 {
+                    x: rect.x + offset[0] + x as f32 * step,
+                    y: rect.y,
+                    w: 1.,
+                    h: rect.h,
+                };
+                fill(list, 1, at, 0., color);
             }
-            for y in 0..=(rect.h / major) as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x,
-                        y: rect.y + offset[1] + y as f32 * major,
-                        w: rect.w,
-                        h: 1.,
-                    },
-                    0.,
-                    line,
-                );
+            for y in 0..=(rect.h / step) as usize {
+                let at = Box2 {
+                    x: rect.x,
+                    y: rect.y + offset[1] + y as f32 * step,
+                    w: rect.w,
+                    h: 1.,
+                };
+                fill(list, 1, at, 0., color);
             }
+        };
+        let minor = 16. * z;
+        if minor >= 8. {
+            let fade = ((minor - 8.) / 8.).clamp(0., 1.);
+            lines(minor, alpha(theme.border, (60. * fade) as u8));
         }
-        let step = 32. * z;
-        if step < 14. {
-            return;
-        }
-        let offset = [
-            self.camera.pan[0].rem_euclid(step),
-            self.camera.pan[1].rem_euclid(step),
-        ];
-        let mut dot = theme.separator;
-        dot.3 = 170;
-        for x in 0..(rect.w / step).ceil() as usize {
-            for y in 0..(rect.h / step).ceil() as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x + offset[0] + x as f32 * step - 0.75,
-                        y: rect.y + offset[1] + y as f32 * step - 0.75,
-                        w: 1.5,
-                        h: 1.5,
-                    },
-                    0.75,
-                    dot,
-                );
-            }
+        let major = 128. * z;
+        if major >= 24. {
+            lines(major, alpha(theme.separator, 150));
         }
     }
 
@@ -168,8 +139,11 @@ impl Canvas {
             if selecting && !related {
                 color.3 = 120;
             }
-            let width = if related { 2.75 } else { 2. };
+            let width = if related { 3.25 } else { 2.25 };
             let id = stable_id(&wire.id);
+            // A dark under-stroke keeps a wire legible over any node or grid line.
+            let under = Color(0, 0, 0, if selecting && !related { 40 } else { 90 });
+            curve(list, id, a, b, width + 2.5, under);
             let mut previous = a;
             for (index, p) in wire.points.iter().enumerate() {
                 let p = if let Some(super::interaction::Drag::Reroute {
@@ -368,14 +342,34 @@ impl Canvas {
         let selected = self.selection.contains(&node.id);
         let error = self.errors.get(&node.id);
         let accent = theme.accent(node.look.accent);
-        fill(list, id, offset(r, 0., 2. * z), radius, theme.shadow);
+        // A soft, layered shadow lifts the card off the graph paper.
+        for (spread, lift, strength) in [(6., 4., 0.35), (2., 2., 0.6)] {
+            let mut shade = theme.shadow;
+            shade.3 = (f32::from(shade.3) * strength) as u8;
+            fill(
+                list,
+                id,
+                offset(grow(r, spread * z), 0., lift * z),
+                radius + spread * z,
+                shade,
+            );
+        }
         if selected {
-            border(list, id, grow(r, 3.), radius + 3., 2., theme.accent);
+            // Unreal's selection: a bright ring just outside the card.
+            border(
+                list,
+                id,
+                grow(r, 2.5 * z),
+                radius + 2.5 * z,
+                2.5 * z.max(0.8),
+                theme.select,
+            );
         }
         fill(list, id, r, radius, theme.card);
-        // Header: rounded top, flat bottom, tinted by category, ruled in its accent.
+        // Header: the category's colour, solid as Unreal's material nodes; a light rule
+        // under it.
         let header = Box2 { h: HEADER * z, ..r };
-        let tint = mix(theme.raised, accent, 0.14);
+        let tint = mix(theme.card, accent, 0.42);
         fill(list, id, header, radius, tint);
         fill(
             list,
@@ -392,13 +386,14 @@ impl Canvas {
             list,
             id,
             Box2 {
-                y: header.y + header.h - 2. * z,
-                h: 2. * z,
+                y: header.y + header.h - 1.,
+                h: 1.,
                 ..header
             },
             0.,
-            accent,
+            alpha(accent, 200),
         );
+        // A dark rim, not a light outline: the card reads as a solid object.
         border(
             list,
             id,
@@ -408,7 +403,7 @@ impl Canvas {
             if error.is_some() {
                 theme.error
             } else {
-                theme.separator
+                Color(0, 0, 0, 150)
             },
         );
         let detailed = z >= 0.45;
@@ -473,7 +468,7 @@ impl Canvas {
                 color,
             );
             if !pin.connected {
-                let inner = outer * 0.55;
+                let inner = outer * 0.6;
                 fill(
                     list,
                     id,

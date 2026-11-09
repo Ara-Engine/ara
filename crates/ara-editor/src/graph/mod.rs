@@ -111,6 +111,8 @@ pub struct Theme {
     pub chart: [Color; 6],
     /// Drop shadow under cards (alpha carries the strength).
     pub shadow: Color,
+    /// The ring around selected nodes (Unreal's orange).
+    pub select: Color,
 }
 impl Theme {
     fn accent(&self, accent: Accent) -> Color {
