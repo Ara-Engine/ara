@@ -20,6 +20,8 @@ internal interface IAnalysis
 {
     /// <summary>Analyzer diagnostics for <paramref name="trees"/> of <paramref name="compilation"/> under an API profile.</summary>
     ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile);
+    /// <summary>Validates declarations and cross-file effects; custom providers retain their full-tree fallback.</summary>
+    ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) => Analyze(compilation, trees, profile);
 }
 
 /// <summary>What a compile needs from outside its module.</summary>
@@ -487,9 +489,16 @@ internal sealed partial class ModuleSession
             var final = s.Final;
             foreach (var c in changes) final = Apply(final, c);
             nextState = nextState with { Final = final };
+            // Declarations can change policy on another partial file. Accessor edits
+            // can also synthesize backing fields; directives may alter declarations.
+            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !EditClassifier.DocsChanged(changes)
+                && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
+                && cls.Bodies.All(body => body.New is MethodDeclarationSyntax method && !method.Modifiers.Any(SyntaxKind.PartialKeyword))
+                && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true);
+            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : [.. nextState.Trees.Values];
             if (cls.Bodies.Count == 0 && !cls.Additive)
             {
-                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), changed);
+                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, module: true);
                 if (checkedProblems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, checkedProblems);
                 return new Outcome(this, OutcomeKind.None) { Next = nextState, Problems = checkedProblems, ValidatedInputs = true };
             }
@@ -505,7 +514,7 @@ internal sealed partial class ModuleSession
                 Trace.WriteLine($"module `{Name}`: EmitDifference threw, taking L3: {e.Message}");
             }
             p.Emit = p.Mark();
-            var problems = Problems(final, [], errors, changed);
+            var problems = Problems(final, [], errors, analyze, module: !ordinaryBodies);
             p.Analyze = p.Mark();
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
@@ -562,13 +571,15 @@ internal sealed partial class ModuleSession
 
     /// <summary>Errors and Ara diagnostics: generator, compiler (from emit) and analyzers (skipped when there are errors).</summary>
     List<Diagnostic> Problems(Compilation final, ImmutableArray<Diagnostic> generator, ImmutableArray<Diagnostic> emit,
-        IReadOnlyCollection<SyntaxTree> changed, Task<ImmutableArray<Diagnostic>>? analysis = null)
+        IReadOnlyCollection<SyntaxTree> changed, Task<ImmutableArray<Diagnostic>>? analysis = null, bool module = false)
     {
         var list = generator.Concat(emit).Where(Diagnostics.Reportable).ToList();
         if (list.All(d => d.Severity != DiagnosticSeverity.Error))
         {
             if (analysis is not null) list.AddRange(analysis.GetAwaiter().GetResult().Where(Diagnostics.Reportable));
-            else if (_analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees) list.AddRange(_analysis.Analyze(final, trees, Profile).Where(Diagnostics.Reportable));
+            else if (_analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees)
+                list.AddRange((module || _diagnosticReferencesChanged ? _analysis.AnalyzeModule(final, trees, Profile)
+                    : _analysis.Analyze(final, trees, Profile)).Where(Diagnostics.Reportable));
         }
         return list;
     }
@@ -577,8 +588,8 @@ internal sealed partial class ModuleSession
         _diagnosticReferencesChanged ? final.SyntaxTrees.Where(tree => _disk.ContainsKey(tree.FilePath)).ToArray() : changed;
 
     /// <summary>
-    /// Generator (unless reused), full emit and analyzers (in parallel with the emit, over
-    /// <paramref name="analyze"/>), then the EnC baseline. <paramref name="start"/> is the next
+    /// Generator (unless reused), full emit and all user-tree analyzers (in parallel
+    /// with the emit), then the EnC baseline. <paramref name="start"/> is the next
     /// state without its compilations, image facts and generation.
     /// </summary>
     Outcome Build(CSharpCompilation user, ModuleState start, uint kind, Escalation escalation, Phases p,
@@ -589,8 +600,10 @@ internal sealed partial class ModuleSession
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
         p.Generate += p.Mark();
         if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze));
-        var analysisTrees = AnalysisTrees(final, analyze);
-        var analysis = _analysis is not null && analysisTrees.Count > 0 ? Task.Run(() => _analysis.Analyze(final, analysisTrees, Profile), ct) : null;
+        // A changed base, attribute or overload can affect unchanged companion files.
+        // Validate the exact candidate snapshot, including committed-code rebuilds.
+        var analysisTrees = start.Trees.Values.ToArray();
+        var analysis = _analysis is not null && analysisTrees.Length > 0 ? Task.Run(() => _analysis.AnalyzeModule(final, analysisTrees, Profile), ct) : null;
         var (image, errors) = ModuleCompiler.Emit(final, ct);
         p.Emit = p.Mark();
         var problems = Problems(final, genDiags, errors, analyze, analysis);
