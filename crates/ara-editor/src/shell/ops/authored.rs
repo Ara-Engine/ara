@@ -22,7 +22,7 @@ pub(in crate::shell) fn reference_storage<'a>(
 }
 /// New source files use the indexed parent; an empty browser folder denotes the
 /// workspace's authored root, never project-level settings or generated outputs.
-pub(in crate::shell) fn storage(
+pub(crate) fn storage(
     files: &[AuthoredFile],
     workspace: &ara_doc::Workspace,
     logical: &str,

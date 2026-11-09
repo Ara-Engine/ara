@@ -48,6 +48,11 @@ pub(super) fn shortcut(keys: &str) -> Option<String> {
 /// Whether the studio runs `id`.
 pub(super) fn ported(id: &str) -> bool {
     super::create::item(id).is_some()
+        || id.strip_prefix("assets.create.").is_some_and(|kind| {
+            super::asset_create::KINDS
+                .iter()
+                .any(|(k, _, _)| *k == kind)
+        })
         || matches!(
             id,
             "file.save"
@@ -100,6 +105,15 @@ pub(super) fn ported(id: &str) -> bool {
 
 /// Runs registry command `id` on `target`; failures are reported like any editor failure.
 pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
+    // Assets' Create menu, wherever it is asked for (context menus, the palette, agents).
+    if let Some(kind) = id.strip_prefix("assets.create.")
+        && super::asset_create::KINDS
+            .iter()
+            .any(|(k, _, _)| *k == kind)
+    {
+        super::asset_create::create(s, kind);
+        return;
+    }
     let e = &mut s.editor;
     let result = match id {
         "file.save" | "file.save_all" => {

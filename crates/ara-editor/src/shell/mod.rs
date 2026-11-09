@@ -33,7 +33,7 @@ mod menu;
 mod monkey_support;
 mod motion;
 mod notices;
-mod ops;
+pub(crate) mod ops;
 mod polish;
 #[cfg(test)]
 mod quality_tests;

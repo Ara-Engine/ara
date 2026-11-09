@@ -259,6 +259,8 @@ pub struct Local {
     pub add_component: Option<super::components::Picker>,
     /// Components added most recently (newest first): the picker lists them first.
     pub recent_components: Vec<String>,
+    /// Assets' layout, type filter, folder history and Add menu.
+    pub assets_view: super::panels::AssetsView,
     /// The Inspector shows the asset picked in Assets (until an entity is picked).
     pub inspect_asset: bool,
     /// Whether profiling records (the host loop reports it).
