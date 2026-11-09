@@ -119,15 +119,11 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                     glass_group(l)
                         .pad_x(10.0)
                         .gap(6.0)
-                        .child(
-                            icon(icons::GAUGE)
-                                .size(13.0)
-                                .color(Rgba::new(1.0, 1.0, 1.0, 0.8)),
-                        )
+                        .child(icon(icons::GAUGE).size(13.0).color(l.c.muted_foreground.0))
                         .child(
                             text(format!("{speed:.1} m/s · wheel to change"))
                                 .text_size(11.5)
-                                .color(Rgba::new(1.0, 1.0, 1.0, 0.85)),
+                                .color(l.c.foreground.0),
                         ),
                 )
                 .child(el().h(12.0)),
@@ -155,19 +151,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .align(Align::Center)
                 .justify(Justify::Center)
                 .child(
-                    row()
-                        .pad_x(16.0)
-                        .pad_y(12.0)
+                    glass_group(l)
+                        .h(36.0)
+                        .pad_x(14.0)
                         .gap(10.0)
-                        .align(Align::Center)
-                        .radius(l.radius.md)
-                        .fill(Rgba::new(0.0, 0.0, 0.0, 0.55))
-                        .border(1.0, Rgba::new(1.0, 1.0, 1.0, 0.1))
                         .child(spinner(l, 16.0))
                         .child(
                             text(s.local.scene.message.clone())
                                 .text_size(12.5)
-                                .color(Rgba::new(1.0, 1.0, 1.0, 0.92)),
+                                .color(l.c.foreground.0),
                         ),
                 ),
         );
@@ -327,7 +319,6 @@ fn toolbar(s: &Studio) -> El<Studio> {
         .child(views)
 }
 
-/// The frame rate, top right, while frames run.
 /// The top-right corner: the orientation gizmo, and the frame rate under it while frames run.
 fn orientation(s: &Studio) -> El<Studio> {
     let mut corner = col().gap(6.0).align(Align::End).child(axes(s));
@@ -337,7 +328,7 @@ fn orientation(s: &Studio) -> El<Studio> {
                 text(format!("{fps:.0} fps  {ms:.1} ms"))
                     .text_size(10.5)
                     .family(mono())
-                    .color(Rgba::new(1.0, 1.0, 1.0, 0.75)),
+                    .color(s.look.c.muted_foreground.0),
             ),
         );
     }
@@ -490,57 +481,55 @@ fn look_from(s: &mut Studio, axis: usize, positive: bool) {
     camera.pitch = pitch;
 }
 
-/// A translucent group over the viewport, legible over any picture.
+/// A group of Scene controls over the image: the panels' strip tone, nearly opaque, no
+/// border, so it reads as the same UI as the docks around it.
 fn glass_group(l: &ara_kit::look::Look) -> El<Studio> {
     row()
-        .h(28.0)
-        .pad_x(3.0)
-        .gap(2.0)
+        .h(26.0)
+        .pad_x(2.0)
+        .gap(1.0)
         .align(Align::Center)
-        .radius(l.radius.md)
-        .fill(Rgba::new(0.06, 0.06, 0.07, 0.72))
-        .border(1.0, Rgba::new(1.0, 1.0, 1.0, 0.09))
+        .radius(super::style::RADIUS + 1.0)
+        .fill(super::style::tones(l).strip.with_alpha(0.94))
 }
 
-/// An icon toggle in a viewport group: the accent while on.
+/// An icon toggle in a Scene group: the chosen tone while on, like a selected row.
 fn glass_toggle(
     l: &ara_kit::look::Look,
     glyph: stillkit::icons::Icon,
     label: &str,
     on: bool,
 ) -> El<Studio> {
-    let ink = if on {
-        Rgba::new(1.0, 1.0, 1.0, 1.0)
-    } else {
-        Rgba::new(1.0, 1.0, 1.0, 0.72)
-    };
-    row()
-        .size(24.0)
+    let c = &l.c;
+    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
+    super::style::chosen(l, row(), on)
+        .size(22.0)
         .align(Align::Center)
         .justify(Justify::Center)
-        .radius(l.radius.sm)
-        .fill(if on { l.c.primary.0 } else { Rgba::TRANSPARENT })
-        .color(ink)
+        .radius(super::style::RADIUS)
+        .color(if on { ink } else { c.muted_foreground.0 })
         .cascade_ink()
         .label(label)
         .tooltip(label)
         .checked(on)
-        .hovered(|e| e.color(Rgba::new(1.0, 1.0, 1.0, 1.0)))
-        .child(icon(glyph).size(15.0))
+        .hovered(move |e| if on { e } else { e.fill(hover).color(ink) })
+        .child(icon(glyph).size(14.0))
 }
 
-/// An icon and label button in a viewport group.
+/// An icon and label button in a Scene group.
 fn glass_label(l: &ara_kit::look::Look, glyph: stillkit::icons::Icon, label: &str) -> El<Studio> {
+    let c = &l.c;
+    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
     row()
-        .h(24.0)
-        .pad_x(8.0)
-        .gap(6.0)
+        .h(22.0)
+        .pad_x(7.0)
+        .gap(5.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
-        .color(Rgba::new(1.0, 1.0, 1.0, 0.78))
+        .radius(super::style::RADIUS)
+        .color(c.muted_foreground.0)
         .cascade_ink()
         .label(label)
-        .hovered(|e| e.color(Rgba::new(1.0, 1.0, 1.0, 1.0)))
-        .child(icon(glyph).size(14.0))
-        .child(text(label).text_size(12.0))
+        .hovered(move |e| e.fill(hover).color(ink))
+        .child(icon(glyph).size(13.0))
+        .child(text(label).text_size(super::style::TEXT))
 }

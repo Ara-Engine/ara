@@ -18,8 +18,8 @@ pub const TOOLBAR: f32 = 26.0;
 /// Body text.
 pub const TEXT: f32 = 12.0;
 
-/// `el` lifted out as the Raised material while `on`: how the chosen row, folder or tile
-/// shows (D31: selection is depth, never a colour). Start a chain with it:
+/// `el` in the Raised tone while `on`: how the chosen row, folder, tile or tool shows (a
+/// step lighter, never an outline or the accent). Start a chain with it:
 /// `chosen(l, row(), selected).key(..)`.
 pub fn chosen<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
     if on {
@@ -29,10 +29,9 @@ pub fn chosen<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
     }
 }
 
-/// A popup's panel (menus, the palette, the Create browser, dialogs): the Float material,
-/// opaque, since nothing behind it is frosted.
+/// A popup's panel (menus, the palette, the Create browser, dialogs): the Float material.
 pub fn float<S: 'static>(l: &Look, el: El<S>) -> El<S> {
-    Material::Float.paint(l, el).fill(l.c.popover.0)
+    Material::Float.paint(l, el)
 }
 
 /// The studio's surface tones for the current scheme.
