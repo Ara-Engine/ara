@@ -37,18 +37,19 @@ impl SortedGrid {
         let c = model::cell(p);
         for z in (c[2] - 1).max(0)..=(c[2] + 1).min(15) {
             for y in (c[1] - 1).max(0)..=(c[1] + 1).min(15) {
-                for x in (c[0] - 1).max(0)..=(c[0] + 1).min(15) {
-                    let k = model::key([x, y, z]);
-                    let range = self.grid.offsets[k] as usize..self.grid.offsets[k + 1] as usize;
-                    for (&other_p, &other_v) in self.p[range.clone()].iter().zip(&self.v[range]) {
-                        let d = p - other_p;
-                        let d2 = (d.x * d.x + d.y * d.y) + d.z * d.z;
-                        if d2 < 16.0 && d2 > 0.0 {
-                            separation += d / d2.max(0.01);
-                            alignment += other_v;
-                            cohesion += other_p;
-                            count += 1;
-                        }
+                // Adjacent x cells are consecutive in the stable counting sort.
+                // One span preserves the exact z/y/x/ID accumulation order.
+                let first = model::key([(c[0] - 1).max(0), y, z]);
+                let last = model::key([(c[0] + 1).min(15), y, z]) + 1;
+                let range = self.grid.offsets[first] as usize..self.grid.offsets[last] as usize;
+                for (&other_p, &other_v) in self.p[range.clone()].iter().zip(&self.v[range]) {
+                    let d = p - other_p;
+                    let d2 = (d.x * d.x + d.y * d.y) + d.z * d.z;
+                    if d2 < 16.0 && d2 > 0.0 {
+                        separation += d / d2.max(0.01);
+                        alignment += other_v;
+                        cohesion += other_p;
+                        count += 1;
                     }
                 }
             }
