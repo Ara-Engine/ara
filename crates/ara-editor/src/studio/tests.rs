@@ -291,6 +291,32 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.add_component = None);
+        // An asset in the Inspector: the open scene's file.
+        rt.update(|s| {
+            let path = s
+                .assets
+                .as_ref()
+                .and_then(|b| b.items.iter().find(|a| a.path.ends_with(".scene")))
+                .map(|a| a.path.clone());
+            if let Some(path) = path {
+                s.act("editor.workspace", json!({"asset": path}));
+                s.local.inspect_asset = true;
+            }
+        });
+        settle(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-asset-inspector.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.inspect_asset = false);
     }
 }
 

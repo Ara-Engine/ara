@@ -259,6 +259,8 @@ pub struct Local {
     pub add_component: Option<super::components::Picker>,
     /// Components added most recently (newest first): the picker lists them first.
     pub recent_components: Vec<String>,
+    /// The Inspector shows the asset picked in Assets (until an entity is picked).
+    pub inspect_asset: bool,
     /// The Lighting panel's filter.
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
@@ -360,6 +362,7 @@ impl Studio {
 
     /// Selects `entities` (replacing, or toggling one with `toggle`).
     pub fn select(&mut self, entities: Vec<String>, toggle: bool) {
+        self.local.inspect_asset = false;
         self.act(
             "editor.select",
             json!({"entities": entities, "toggle": toggle}),

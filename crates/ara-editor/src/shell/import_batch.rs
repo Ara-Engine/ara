@@ -28,7 +28,7 @@ pub(crate) struct State {
 }
 
 /// One edited override; lowering merges with each latest independent sidecar.
-pub(super) enum Change {
+pub(crate) enum Change {
     Setting {
         doc: String,
         field: String,
@@ -164,14 +164,14 @@ impl Shell {
     }
 }
 
-pub(super) fn apply_changes(
+pub(crate) fn apply_changes(
     editor: &mut Editor,
     changes: Vec<Change>,
     why: &str,
 ) -> ara_ui::Result<bool> {
     commands::apply(editor, changes, why)
 }
-pub(super) fn inherited_defaults(
+pub(crate) fn inherited_defaults(
     editor: &Editor,
     importer: &str,
     mut builtin: Value,
@@ -184,7 +184,7 @@ pub(super) fn inherited_defaults(
     }
     Ok(builtin)
 }
-pub(super) fn enum_values(options: Vec<String>, nullable: bool) -> Vec<(Value, String)> {
+pub(crate) fn enum_values(options: Vec<String>, nullable: bool) -> Vec<(Value, String)> {
     let mut values = Vec::new();
     if nullable {
         values.push((Value::Null, "Use source/global quality".into()));

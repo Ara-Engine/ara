@@ -1,6 +1,6 @@
 //! Every dependency graph node is a physical browser key; references remain logical.
 use super::*;
-pub(super) fn document<'a>(
+pub(crate) fn document<'a>(
     workspace: &'a ara_doc::Workspace,
     asset: &assets::Asset,
 ) -> Option<&'a ara_doc::Document> {
@@ -15,7 +15,7 @@ pub(super) fn document<'a>(
                 .find_map(|(storage, doc)| (storage == asset.path).then_some(doc))
         })
 }
-pub(super) fn dependency(
+pub(crate) fn dependency(
     files: &[ara_host::project::AuthoredFile],
     workspace: &ara_doc::Workspace,
     reference: &str,

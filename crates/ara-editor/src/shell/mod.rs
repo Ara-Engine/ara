@@ -63,12 +63,12 @@ mod hierarchy;
 pub(crate) mod hierarchy_actions;
 mod hierarchy_filters;
 mod history_panel;
-mod import_batch;
-mod import_panel;
+pub(crate) mod import_batch;
+pub(crate) mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
 mod inspector_fields;
-mod inspector_panel;
+pub(crate) mod inspector_panel;
 mod inspector_sections;
 pub(crate) mod lighting;
 mod live_styles;

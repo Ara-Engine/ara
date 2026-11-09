@@ -23,6 +23,12 @@ const ROW: f32 = super::style::ROW;
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
+    // An asset picked in Assets has the Inspector until an entity is picked again (Unity).
+    if s.local.inspect_asset
+        && let Some(path) = s.editor.state.asset_path.as_deref()
+    {
+        return super::asset_inspector::view(s, path);
+    }
     let selection = &s.editor.state.selection;
     if selection.is_empty() {
         return empty(

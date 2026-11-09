@@ -19,6 +19,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   sends keys and the mouse to the player (VK to SDL scancodes); Esc gives them back.
 - `components.rs`: Add Component (Unity's picker): categories from each component's schema
   module, search across all, recent first, arrows/Enter/Left, the description below.
+- `asset_inspector.rs`: an asset in the Inspector (Unity) and the Import tab: preview,
+  importer settings (`shell::import_batch`, one `import.configure` step each), Reimport,
+  Open, Uses / Used by (`shell::import_panel::links`).
+- `lighting.rs`: everything that lights the scene (`shell::lighting::{model, authoring}`).
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
