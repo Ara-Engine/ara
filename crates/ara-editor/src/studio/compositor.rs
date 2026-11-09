@@ -68,14 +68,18 @@ impl Compositor {
             .map(str::to_owned))
     }
 
-    /// Draws the renderer's completed image and the overlays for `state` at `extent`
-    /// physical pixels (`scale` per logical px), and presents it into `layer`.
+    /// Draws the Scene's image on screen and the overlays for `state` at `extent` physical
+    /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
+    /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
+    /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
+    /// to the renderer and `scene` redraws.
     /// # Safety
-    /// `layer` is the live `CAMetalLayer` of the Scene view; the renderer's output is complete.
+    /// `layer` is the live `CAMetalLayer` of the Scene view.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
-        renderer: &ara_render::Renderer,
+        renderer: &mut ara_render::Renderer,
+        scene: &mut crate::app::viewport::SceneView,
         view: &DocumentView,
         state: &EditorState,
         changed: &std::collections::BTreeMap<u64, &str>,
@@ -89,19 +93,12 @@ impl Compositor {
             self.sheet = sheet(state.light)?;
             self.light = state.light;
         }
-        // SAFETY: both images belong to the live renderer and finish in CopySource.
-        unsafe {
-            self.ui.external_image(
-                overlay::viewport_image(),
-                renderer.gpu().native_image(renderer.output())?,
-                renderer.gpu().image_view(renderer.output())?,
-            )?;
-            self.ui.external_image(
-                overlay::ENTITY_IMAGE,
-                renderer.gpu().native_image(renderer.entity_channel())?,
-                renderer.gpu().image_view(renderer.entity_channel())?,
-            )?;
-        }
+        // The image on screen: the last completed frame of an asynchronous Scene, or the
+        // published presentation of a synchronous one (as the legacy window attaches it).
+        scene
+            .attach(&mut self.ui, renderer, state.quality)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.outlines.in_scene = scene.draws_outlines();
         let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
         let rect = Box2 {
             x: 0.0,
@@ -121,6 +118,10 @@ impl Compositor {
             &self.sheet,
         )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+        if let Some(outlines) = self.outlines.take_scene_outlines() {
+            renderer.set_outlines(outlines);
+            scene.redraw();
+        }
         self.outlines
             .upload(&mut self.paint, &mut self.ui)
             .map_err(|e| anyhow::anyhow!("{e}"))?;

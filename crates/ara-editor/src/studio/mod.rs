@@ -153,6 +153,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut compositor =
         unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
     let mut shown_extent = [0, 0];
+    // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
+    let mut shown_tag = u64::MAX;
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
@@ -234,7 +236,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 revision = s.editor.host.store().revision();
                 s.editor.view()
             })?;
-            rt.touch(|s| sync.commit(&view, &next, &mut s.editor, &mut renderer, &mut scene_view));
+            let stages = rt.touch(|s| {
+                sync.commit(&view, &next, &mut s.editor, &mut renderer, &mut scene_view)
+            });
+            trace::log(|| {
+                format!(
+                    "scene commit: patched {} native {}, {:.1} ms",
+                    stages.patched, stages.native, stages.upload_ms
+                )
+            });
             view = next;
             rt.update(Studio::resolve);
             scene_dirty = true;
@@ -288,9 +298,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 renderer
                     .resize(extent)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let Err(error) =
-                    rt.touch(|s| scene_view.render(&mut renderer, &s.editor, &view, 1))
-                {
+                if let Err(error) = rt.touch(|s| {
+                    // Frames carry the drag pose they show (`SceneView::shown_frame`).
+                    scene_view.gizmo_offset = gizmo_state(s).offset;
+                    scene_view.render(&mut renderer, &s.editor, &view, 1)
+                }) {
                     rt.touch(|s| s.editor.report_failure(&*error));
                 }
             }
@@ -299,27 +311,49 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             } else {
                 "scene check"
             });
-            if (render || restyled) && renderer.presentation_ready() {
+            // An asynchronous Scene frame lands passes after it was submitted: show it then.
+            let landed = renderer.shown_frame_tag() != shown_tag;
+            if (render || restyled || landed) && renderer.presentation_ready() {
                 let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
                 let scale = rt.scale();
                 rt.touch(|s| {
+                    // Overlays draw with the camera and drag pose of the frame on screen,
+                    // so a lagging frame carries its gizmos and grid with it.
+                    let mut gizmo = gizmo_state(s);
+                    let live = s.editor.state.camera;
+                    if let Some(shown) = scene_view.shown_frame(&renderer) {
+                        s.editor.state.camera = shown.camera;
+                        gizmo.offset = if shown.revision == s.editor.host.store().revision() {
+                            shown.offset
+                        } else {
+                            glam::Mat4::IDENTITY
+                        };
+                    }
                     let changed = s.editor.agent_tints();
-                    // SAFETY: the layer is the Scene view's own, alive while the window is;
-                    // the renderer's frame for this extent is complete.
-                    unsafe {
+                    // SAFETY: the layer is the Scene view's own, alive while the window is.
+                    let done = unsafe {
                         compositor.frame(
-                            &renderer,
+                            &mut renderer,
+                            &mut scene_view,
                             &view,
                             &s.editor.state,
                             &changed,
-                            gizmo_state(s),
+                            gizmo,
                             revision,
                             layer,
                             extent,
                             scale,
                         )
-                    }
+                    };
+                    drop(changed);
+                    s.editor.state.camera = live;
+                    done
                 })?;
+                if landed {
+                    let tag = renderer.shown_frame_tag();
+                    trace::log(|| format!("scene frame {tag} shown"));
+                }
+                shown_tag = renderer.shown_frame_tag();
                 shown_extent = extent;
                 if render {
                     let dt = last_frame.elapsed().as_secs_f32().max(1e-4);
@@ -381,7 +415,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.end();
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
-            || rt.state().editor.state.quality && renderer.scene_frame_pending();
+            || renderer.scene_frame_pending();
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
             rt.wake_at().map(|at| started + at),

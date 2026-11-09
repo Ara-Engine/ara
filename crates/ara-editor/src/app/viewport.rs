@@ -44,7 +44,7 @@ pub(crate) struct SceneView {
     /// Recent submitted frames by tag (`Renderer::set_frame_tag`), oldest first.
     frames: std::collections::VecDeque<(u64, FrameView)>,
     /// The live gizmo drag offset for the next frames, set by the main loop.
-    pub(super) gizmo_offset: glam::Mat4,
+    pub(crate) gizmo_offset: glam::Mat4,
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,
