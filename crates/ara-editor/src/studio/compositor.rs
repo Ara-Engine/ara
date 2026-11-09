@@ -135,10 +135,14 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
-        // Metal: the adapter has its own queue, ordered after the renderer's frame (Vulkan
-        // shares the renderer's queue).
+        // Metal: the adapter has its own queue (Vulkan shares the renderer's). A synchronous
+        // frame's image needs ordering after the renderer's work. An asynchronous Scene shows
+        // its last completed frame instead, so waiting on the renderer would wait on the
+        // frame still in flight and stall the UI until it lands (seconds while converging).
         #[cfg(target_os = "macos")]
-        self.ui.order_after(renderer.gpu());
+        if !renderer.scene_frame_async() {
+            self.ui.order_after(renderer.gpu());
+        }
         let size = [
             logical[0].round().max(1.0) as u32,
             logical[1].round().max(1.0) as u32,
