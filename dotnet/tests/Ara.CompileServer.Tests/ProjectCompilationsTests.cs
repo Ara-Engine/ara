@@ -23,7 +23,7 @@ public sealed class ProjectCompilationsTests
     }
 
     [Fact]
-    public void Unchanged_sources_keep_their_syntax_trees_and_configuration_changes_invalidate_them()
+    public void Unchanged_sources_keep_their_syntax_trees_across_configuration_changes()
     {
         var cache = new ProjectCompilations();
         var compiler = new ModuleCompiler("game", [typeof(Behaviour).Assembly.Location]);
@@ -35,7 +35,48 @@ public sealed class ProjectCompilationsTests
         Assert.Same(first.Trees[1], changed.Trees[1]);
         var configured = cache.Generate("game.dll", "config-2", compiler, true,
             [("A.cs", "class A { public int Value => 1; }"), ("B.cs", "class B { }")], []);
-        Assert.NotSame(changed.Trees[1], configured.Trees[1]);
+        Assert.Same(changed.Trees[0], configured.Trees[0]);
+        Assert.Same(changed.Trees[1], configured.Trees[1]);
+        Assert.Equal(Microsoft.CodeAnalysis.OptimizationLevel.Debug, configured.Final.Options.OptimizationLevel);
+    }
+
+    [Fact]
+    public void Unchanged_consumer_text_rebinds_changed_references_and_emits_fresh_build_bytes()
+    {
+        var cache = new ProjectCompilations();
+        var coreCompiler = new ModuleCompiler("Core", [typeof(Behaviour).Assembly.Location]);
+        var consumerCompiler = new ModuleCompiler("Consumer", [typeof(Behaviour).Assembly.Location]);
+        (string Path, string Text)[] sources = [("Code.cs", "public static class Consumer { public static int Read() => Core.Value; }")];
+        Microsoft.CodeAnalysis.SyntaxTree? priorTree = null;
+        foreach (var (type, value, hot) in new[] { ("int", "1", false), ("string", "\"bad\"", false), ("int", "3", true) })
+        {
+            var core = coreCompiler.Create([ModuleCompiler.Parse("Core.cs", $"public static class Core {{ public const {type} Value = {value}; }}")], false, []);
+            var coreImage = ModuleCompiler.Emit(core).Image;
+            Assert.NotNull(coreImage);
+            Microsoft.CodeAnalysis.MetadataReference[] references = [Microsoft.CodeAnalysis.MetadataReference.CreateFromImage(coreImage.Pe)];
+            var configuration = type + value + hot;
+            var reused = cache.Generate("consumer.dll", configuration, consumerCompiler, hot, sources, references);
+            var fresh = new ProjectCompilations().Generate("consumer.dll", configuration, consumerCompiler, hot, sources, references);
+            if (priorTree is not null) Assert.Same(priorTree, reused.Trees[0]);
+            priorTree = reused.Trees[0];
+            var actual = ModuleCompiler.Emit(reused.Final);
+            var expected = ModuleCompiler.Emit(fresh.Final);
+            Assert.Equal(expected.Errors.Select(error => error.ToString()), actual.Errors.Select(error => error.ToString()));
+            if (type == "string")
+            {
+                Assert.Null(actual.Image);
+                Assert.Contains(actual.Errors, error => error.Id == "CS0029");
+            }
+            else
+            {
+                Assert.NotNull(actual.Image);
+                Assert.NotNull(expected.Image);
+                Assert.Equal(expected.Image.Pe, actual.Image.Pe);
+                Assert.Equal(expected.Image.Pdb, actual.Image.Pdb);
+            }
+            Assert.Equal(fresh.Driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(source => source.SourceText.ToString()),
+                reused.Driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(source => source.SourceText.ToString()));
+        }
     }
 
     [Fact]

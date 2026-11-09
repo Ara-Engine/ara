@@ -21,7 +21,7 @@ internal sealed class ProjectCompilations
         foreach (var path in _modules.Keys.Where(path => !active.Contains(path)).ToArray()) _modules.TryRemove(path, out _);
     }
 
-    /// <summary>Reuses unchanged syntax and declarations; dependency/configuration changes start a new compilation.</summary>
+    /// <summary>Reuses unchanged parsed text; dependency/configuration changes rebuild semantic and generator state.</summary>
     internal (GeneratorDriver Driver, Compilation Final, ImmutableArray<Diagnostic> Diagnostics, SyntaxTree[] Trees) Generate(
         string output, string configuration, ModuleCompiler compiler, bool hot,
         (string Path, string Text)[] sources, IEnumerable<MetadataReference> references)
@@ -31,7 +31,9 @@ internal sealed class ProjectCompilations
         var trees = new Dictionary<string, (string Text, SyntaxTree Tree)>(StringComparer.Ordinal);
         foreach (var source in sources)
         {
-            var tree = reusable && previous!.Sources.TryGetValue(source.Path, out var old) && old.Text == source.Text
+            // Parse options are fixed for this server. References, heat and the API
+            // profile affect binding/generation, not parsing the same source text.
+            var tree = previous is not null && previous.Sources.TryGetValue(source.Path, out var old) && old.Text == source.Text
                 ? old.Tree : ModuleCompiler.Parse(source.Path, source.Text);
             trees.Add(source.Path, (source.Text, tree));
         }
