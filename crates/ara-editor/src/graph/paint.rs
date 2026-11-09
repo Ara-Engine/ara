@@ -384,7 +384,7 @@ impl Canvas {
         // Header: the category's colour, solid as Unreal's material nodes; a light rule
         // under it.
         let header = Box2 { h: HEADER * z, ..r };
-        let tint = mix(theme.card, accent, 0.42);
+        let tint = header_tint(theme.card, accent);
         fill(list, id, header, radius, tint);
         fill(
             list,
@@ -906,6 +906,20 @@ fn alpha(mut color: Color, a: u8) -> Color {
     color
 }
 /// `base` moved `amount` of the way toward `tint` (opaque result).
+/// A node header's colour: the category's accent over the card, kept dark enough that its
+/// light title reads (a pale accent, such as a light theme's primary, tints less).
+fn header_tint(card: Color, accent: Color) -> Color {
+    let luminance = |c: Color| {
+        (0.2126 * f32::from(c.0) + 0.7152 * f32::from(c.1) + 0.0722 * f32::from(c.2)) / 255.
+    };
+    let tint = mix(card, accent, 0.42);
+    if luminance(tint) > 0.32 {
+        mix(card, accent, 0.18)
+    } else {
+        tint
+    }
+}
+
 fn mix(base: Color, tint: Color, amount: f32) -> Color {
     let lerp = |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * amount).round() as u8;
     Color(
