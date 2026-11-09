@@ -26,7 +26,7 @@ impl SortedGrid {
             self.v[row] = v[id as usize];
         }
     }
-    /// Computes one boid with the same arithmetic and neighbour order as S8.
+    /// Uses one row from the same snapshot supplied to build, retaining S8 order/math.
     pub fn boid(&self, id: usize, positions: &[Vec4], velocities: &[Vec4]) -> (Vec4, Vec4) {
         let p = positions[id];
         let mut v = velocities[id];
@@ -34,7 +34,12 @@ impl SortedGrid {
         let mut alignment = Vec4::ZERO;
         let mut cohesion = Vec4::ZERO;
         let mut count = 0;
-        let c = model::cell(p);
+        let key = usize::from(self.grid.keys[id]);
+        let c = [
+            (key & 15) as i32,
+            ((key >> 4) & 15) as i32,
+            (key >> 8) as i32,
+        ];
         // Conservative y/z distance bounds reject whole x spans. Widen each
         // plane because cell() rounds p+32 before flooring; never widen radius.
         let gaps = [1, 2].map(|axis| {
@@ -104,6 +109,19 @@ pub fn validate_pruning() {
                 let mut point = Vec4::W;
                 point[axis] = value;
                 positions.push(point);
+            }
+        }
+    }
+    // Diagonal y/z distances just around radius four, with cell-plane rounding
+    // on both axes. Their accepted reductions must keep every scalar bit.
+    for plane in [-4.0f32, 0.0, 4.0] {
+        for dy in [1.0f32, 2.0, 3.0, 8.0f32.sqrt()] {
+            let dz = (16.0 - dy * dy).sqrt();
+            for y in [dy.next_down(), dy, dy.next_up()] {
+                for z in [dz.next_down(), dz, dz.next_up()] {
+                    positions.push(Vec4::new(0.0, plane + y, plane + z, 1.0));
+                    positions.push(Vec4::new(0.0, plane.next_down(), plane.next_down(), 1.0));
+                }
             }
         }
     }

@@ -63,8 +63,8 @@ pub struct Grid {
     pub ids: Vec<i32>,
     /// Reusable counting-sort scatter positions.
     pub cursor: Vec<i32>,
-    /// Twelve-bit cell keys reused between counting and stable scatter.
-    keys: Vec<u16>,
+    /// Twelve-bit snapshot cell keys for counting, scatter and stable-ID lookup.
+    pub keys: Vec<u16>,
 }
 
 /// Clipped cell coordinates for a position in the benchmark cube.
