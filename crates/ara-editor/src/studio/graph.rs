@@ -41,8 +41,19 @@ pub struct Page {
     dragging: bool,
     /// The canvas changed since it was last drawn.
     pub dirty: bool,
-    /// The Add Node palette's query, while it is open.
-    pub adding: Option<String>,
+    /// The Add Node search, while it is open.
+    pub adding: Option<Adding>,
+}
+
+/// The Add Node search: what is typed, where the node goes (graph space; the view's centre
+/// when unset), where the search shows (window point; under its button when unset), and the
+/// pin a dropped wire came from, which the new node connects to.
+#[derive(Clone, Default)]
+pub struct Adding {
+    pub query: String,
+    at: Option<[f32; 2]>,
+    point: Option<(f32, f32)>,
+    from: Option<(ara_graph::Endpoint, ara_graph::Direction)>,
 }
 
 /// The document a canvas shows, at which store revision.
@@ -271,18 +282,22 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
         .on_press(|s: &mut Studio| {
             s.graph.adding = match s.graph.adding {
                 Some(_) => None,
-                None => Some(String::new()),
+                None => Some(Adding::default()),
             };
             s.local.focus = Some("material/add/search");
         });
-    if let Some(query) = s.graph.adding.as_ref().filter(|_| !animation) {
-        add = add.overlay(
-            stillkit::el::popover(palette(s, &doc, query))
-                .side(Side::Bottom)
-                .align(Align::Start)
-                .offset(4.0)
-                .on_dismiss(|s: &mut Studio| s.graph.adding = None),
-        );
+    // Under the button, or at the pointer (right-click, a dropped wire) from an element of
+    // no size: a press on the element an overlay hangs from never dismisses it.
+    let mut at_point = el().key("graph/search-anchor").absolute(0.0, 0.0).size(0.0);
+    if let Some(adding) = s.graph.adding.as_ref().filter(|_| !animation) {
+        let search = stillkit::el::popover(palette(s, &doc, &adding.query))
+            .on_dismiss(|s: &mut Studio| s.graph.adding = None);
+        match adding.point {
+            Some((x, y)) => at_point = at_point.overlay(search.at(x, y)),
+            None => {
+                add = add.overlay(search.side(Side::Bottom).align(Align::Start).offset(4.0));
+            }
+        }
     }
     let toolbar = row()
         .h(super::style::TOOLBAR + 6.0)
@@ -362,8 +377,13 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 Handled::Yes
             }
             0x20 if !animation => {
-                s.graph.adding = Some(String::new());
+                s.graph.adding = Some(Adding::default());
                 s.local.focus = Some("material/add/search");
+                Handled::Yes
+            }
+            // Delete and Backspace remove the selected nodes (one undo step).
+            0x2E | 0x08 if !animation => {
+                delete_selection(s);
                 Handled::Yes
             }
             _ => Handled::No,
@@ -371,7 +391,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
     let body = row()
         .grow(1.0)
         .min_h(0.0)
-        .child(col().grow(1.0).min_w(0.0).child(canvas));
+        .child(col().grow(1.0).min_w(0.0).child(canvas).child(at_point));
     let body = if animation {
         body
     } else {
@@ -690,6 +710,27 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         PointerPhase::Move if s.graph.dragging => shown.canvas.motion(p),
         PointerPhase::Up if s.graph.dragging => {
             s.graph.dragging = false;
+            let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
+            // A wire dropped where no pin is: search for the node to feed (or be fed by).
+            let dropped = shown
+                .canvas
+                .connecting()
+                .filter(|_| !shown.canvas.port_at(p, rect));
+            let world = shown.canvas.world(p, rect);
+            let material = shown.domain == "material";
+            let right = e.button != stillkit::Button::Left;
+            if material && (dropped.is_some() || (right && still)) {
+                shown.canvas.cancel();
+                s.graph.adding = Some(Adding {
+                    query: String::new(),
+                    at: Some(world),
+                    point: Some((e.at.x, e.at.y)),
+                    from: dropped,
+                });
+                s.local.focus = Some("material/add/search");
+                s.graph.dirty = true;
+                return true;
+            }
             match shown.canvas.end(p, rect) {
                 Ok(edits) => {
                     let (domain, doc) = (shown.domain, shown.doc.clone());
@@ -861,7 +902,13 @@ fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
                     Some(icons::SEARCH),
                     "Search nodes",
                     query,
-                    |f| f.on_input(|s: &mut Studio, t| s.graph.adding = Some(t.to_owned())),
+                    |f| {
+                        f.on_input(|s: &mut Studio, t| {
+                            if let Some(adding) = s.graph.adding.as_mut() {
+                                adding.query = t.to_owned();
+                            }
+                        })
+                    },
                 )
                 .grow(1.0),
             ),
@@ -869,17 +916,81 @@ fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
         .child(list)
 }
 
-/// Adds a `kind` node at the centre of the view (one undo step).
+/// Adds a `kind` node where the search was opened (else the view's centre); dropped from a
+/// wire, it connects to that pin: its output into the pin, or the pin into its first input.
 fn add_node(s: &mut Studio, doc: &str, kind: &str) {
-    s.graph.adding = None;
+    let adding = s.graph.adding.take().unwrap_or_default();
     let rect = view_rect(s);
-    let position = s.graph.shown.as_ref().map_or([240.0, 160.0], |g| {
-        g.canvas.world([rect.w * 0.45, rect.h * 0.4], rect)
+    let position = adding.at.unwrap_or_else(|| {
+        s.graph.shown.as_ref().map_or([240.0, 160.0], |g| {
+            g.canvas.world([rect.w * 0.45, rect.h * 0.4], rect)
+        })
     });
     let command =
         json!({"cmd": "editor.material.node.add", "args": {"kind": kind, "position": position}});
-    if let Err(error) = s.editor.apply_to(doc, vec![command], "Add material node") {
+    let added = match s.editor.apply_to(doc, vec![command], "Add material node") {
+        Ok(result) => result["outputs"][0]["id"].as_str().map(str::to_owned),
+        Err(error) => {
+            s.editor.report_failure(&error);
+            return;
+        }
+    };
+    let (Some(id), Some((pin, direction))) = (added, adding.from) else {
+        return;
+    };
+    let connect = if direction == ara_graph::Direction::Input {
+        // Dragged from an input: the new node's output feeds it.
+        Some(
+            json!({"cmd": "material.connect", "args": {"source": id, "node": pin.node, "port": pin.port}}),
+        )
+    } else {
+        // Dragged from an output: it feeds the new node's first input.
+        let workspace = s.editor.host.store().workspace();
+        workspace
+            .doc(doc)
+            .and_then(|d| ara_graph::Graph::from_document(d).ok())
+            .and_then(|g| {
+                g.nodes.get(&id).and_then(|n| {
+                    n.ports
+                        .iter()
+                        .find(|(_, p)| p.direction == ara_graph::Direction::Input)
+                        .map(|(port, _)| port.clone())
+                })
+            })
+            .map(|port| json!({"cmd": "material.connect", "args": {"source": pin.node, "node": id, "port": port}}))
+    };
+    if let Some(command) = connect
+        && let Err(error) = s
+            .editor
+            .apply_to(doc, vec![command], "Connect material node")
+    {
         s.editor.report_failure(&error);
+    }
+}
+
+/// Removes the selected nodes (one undo step).
+fn delete_selection(s: &mut Studio) {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return;
+    };
+    let doc = shown.doc.clone();
+    let commands: Vec<_> = shown
+        .canvas
+        .selection
+        .iter()
+        .filter(|id| shown.canvas.graph().nodes.contains_key(*id))
+        .map(|node| json!({"cmd": "graph.node.remove", "args": {"node": node}}))
+        .collect();
+    if commands.is_empty() {
+        return;
+    }
+    match s.editor.apply_to(&doc, commands, "Delete graph nodes") {
+        Ok(_) => {
+            if let Some(shown) = s.graph.shown.as_mut() {
+                shown.canvas.selection.clear();
+            }
+        }
+        Err(error) => s.editor.report_failure(&error),
     }
 }
 

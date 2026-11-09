@@ -154,6 +154,21 @@ impl Canvas {
             self.drag = Some(Drag::Box { start: p, additive });
         }
     }
+    /// The pin a connection is being dragged from, while one is: a host offers the node
+    /// search when it is dropped on empty space (Unreal, Shader Graph).
+    pub fn connecting(&self) -> Option<(Endpoint, Direction)> {
+        match &self.drag {
+            Some(Drag::Connect {
+                endpoint,
+                direction,
+            }) => Some((endpoint.clone(), *direction)),
+            _ => None,
+        }
+    }
+    /// Whether a pin is under `p` (a dropped connection that found none lands on nothing).
+    pub fn port_at(&self, p: [f32; 2], rect: Box2) -> bool {
+        self.hit_port(p, rect).is_some()
+    }
     /// Update transient gesture geometry; the authoring graph remains unchanged.
     pub fn motion(&mut self, p: [f32; 2]) {
         self.pointer = p;

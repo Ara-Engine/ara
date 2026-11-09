@@ -710,6 +710,57 @@ fn right_clicking_an_asset_offers_its_actions_and_a_press_outside_closes_them() 
 }
 
 #[test]
+fn right_clicking_the_material_graph_adds_a_node_where_it_was_clicked() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/look.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
+    });
+    rt.touch(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let before = super::graph::node_ids(rt.state()).len();
+    let canvas = rt.find("graph/view").expect("the canvas shows");
+    // Empty canvas near its bottom-left corner.
+    let (x, y) = (canvas.left + 30.0, canvas.bottom - 30.0);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.right_click(x, y);
+    settle(&mut rt);
+    assert!(
+        rt.state().graph.adding.is_some(),
+        "the node search opens at the pointer"
+    );
+    let item = rt
+        .find("material/add/material.add")
+        .expect("the search lists Add");
+    rt.pointer_move(item.center().x, item.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(item.center().x, item.center().y);
+    rt.pointer_up(item.center().x, item.center().y);
+    // The pick runs on the next frame; the host then loads the changed graph.
+    settle(&mut rt);
+    rt.touch(|s| super::graph::sync(s, "material"));
+    let after = super::graph::node_ids(rt.state()).len();
+    assert!(
+        after > before,
+        "Add and its default inputs land: {before} -> {after}"
+    );
+    assert!(rt.state().graph.adding.is_none());
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
