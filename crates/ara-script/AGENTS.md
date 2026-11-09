@@ -76,9 +76,9 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   chain, new ALC bound to A's new generation) when A's public surface is unchanged, or
   rebuilds it (`ESC_DEPENDENCY`). All swap at one boundary (`ReloadReport::cascade`). If a
   dependent no longer compiles, nothing applies (`ARA0925` on both).
-- C# systems: `ecs::system::ScriptQuery`, a custom `SystemParam` registering column/resource
-  access with bevy's scheduler, one `run_system` call per chunk on the compute task pool
-  (serial when writing a resource or taking `Commands`). Conflicts order by `(Order, name)`.
+- C# systems: `ScriptQuery` registers column/resource access; one `run_system` call per
+  chunk (serial for resource writes/`Commands`). Conflicts order by `(Order, name)`. One
+  system or zero workers uses caller dispatch; multiple systems retain parallel scheduling.
 - Behaviours and commands run with exclusive world access published to C# as a `Scope`
   (`host/ctx.rs`). Commands journal first-seen bytes; rejection or a fault restores them;
   `undo` is all or nothing and converts saved bytes across layout migrations.

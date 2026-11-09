@@ -26,7 +26,7 @@ use ara_schema::SchemaDb;
 use bevy_ecs::component::ComponentId;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{IntoScheduleConfigs, Mut, Res, Resource};
-use bevy_ecs::schedule::{MultiThreadedExecutor, Schedule, SystemSet};
+use bevy_ecs::schedule::{MultiThreadedExecutor, Schedule, SingleThreadedExecutor, SystemSet};
 use bevy_ecs::system::{ParamBuilder, SystemParamBuilder, SystemState};
 use bevy_ecs::world::World;
 use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
@@ -555,7 +555,7 @@ impl ScriptHost {
             .collect();
         systems.sort_by(|a, b| (a.order, &a.name, a.id).cmp(&(b.order, &b.name, b.id)));
         let mut schedule = Schedule::default();
-        schedule.set_executor(MultiThreadedExecutor::new());
+        let mut scheduled = 0usize;
         let comp = |i: u32| reg.components.get(i as usize);
         for (k, s) in systems.iter().enumerate() {
             let columns: Option<Vec<_>> = s
@@ -628,6 +628,16 @@ impl ScriptHost {
                 config = config.after(ScriptSet(earlier.id));
             }
             schedule.add_systems(config);
+            scheduled += 1;
+        }
+        // One system already parallelizes its rows. Run its outer schedule on the
+        // caller instead of relaying it through a worker and stranding the caller.
+        // With no workers, the outer schedule has no system-level parallelism to
+        // exploit either; its tasks would be drained by the caller regardless.
+        if scheduled <= 1 || ComputeTaskPool::get().thread_num() == 0 {
+            schedule.set_executor(SingleThreadedExecutor::new());
+        } else {
+            schedule.set_executor(MultiThreadedExecutor::new());
         }
         self.schedule = Some(schedule);
         self.behaviours = reg

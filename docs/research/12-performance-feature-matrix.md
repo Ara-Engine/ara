@@ -8,11 +8,11 @@ commit. This inventory adds feature and correctness coverage to
 contain new timing runs; subsequent measurements are linked below.
 
 The present evidence does **not** establish that Ara beats Unity across ECS,
-Jobs, Burst, editor iteration or complete games. The controlled Mac comparison
-covers two kernels, transforms/quaternions and particles, each single-threaded
-and parallel. Ara leads three of those four p50 cases; Unity leads parallel
-particles. That is useful evidence about those exact workloads, not four
-independent feature families. No executable Unreal comparison exists here.
+Jobs, Burst, editor iteration or complete games. The original Mac comparison
+lost parallel particles; the November 9 optimized C# comparison below wins both
+dense kernels in serial and parallel. Native boids and other feature timings
+remain open. These are exact workload results. No executable Unreal comparison
+exists here.
 
 The useful target is a growing set of representative, reproducible workloads
 with a stated margin, equal state/quality gates and visible losses. A universal
@@ -26,6 +26,23 @@ A12/A13 and S8 in [the decisions](../decisions.md).
 The baseline inventory below remains a snapshot of `20e8ccdbc`. These subsequent
 changes have executable evidence:
 
+- [Actual C# versus Unity](../../benchmarks/iteration/csharp_unity_mac_2026-11-09.json)
+  now covers optimized public Span/Vector128 W1 and W3 gameplay over 1M rows,
+  serial and parallel, in two reversed fresh-process rounds. Every 48 MB output
+  matches Unity byte for byte; IDs, component presence and independent scalar
+  replay pass. All eight pairs meet at least 20% lower p50 and no more than 5%
+  p95 regression. Mean process p50 reductions are 63.5%/31.1% for serial/parallel
+  W1 and 80.8%/56.6% for W3. This measures Release CoreCLR 10.0.14 and explicit
+  SIMD, not hot Debug, NativeAOT, whole frames or arbitrary C# code. A separate
+  [caller dispatch experiment](../../benchmarks/iteration/csharp_executor_mac_2026-11-09.json)
+  isolates the production change: one-system schedules run on the caller while
+  row tasks remain parallel. Its own gain is small, approximately 1–5%; the
+  entire cross-engine lead must not be attributed to that dispatcher change.
+- The [current native suite](../../benchmarks/iteration/unity/current/current_timed_mac_2026-11-09.json)
+  retains all 20 quality-gated timed pairs. Eight meet the declared margin,
+  including W3 at batch 8192 and legacy W4; W1 and W2 do not. W2 batch 4096
+  exposes only five tasks at 20k, so a fresh batch-128 comparison is still needed.
+  W4 compares different bookkeeping workflows, not identical ECS APIs.
 - Native SparseSet views now pass actual CLR mixed-storage, filter, tick, churn,
   command-order and undo tests. The [sparse results](../../benchmarks/iteration/sparse_native_mac_2026-11-09.json)
   retain fragmented-query costs and a cold dense-tail increase; they do not establish
