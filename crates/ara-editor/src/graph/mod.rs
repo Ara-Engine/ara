@@ -108,6 +108,14 @@ impl NodeView {
         HEADER + if self.look.value.is_some() { VALUE } else { 0. } + PAD
     }
 }
+/// A state machine arrow on screen: its ends, unit normal, and how far it sits off the
+/// centre line (a reverse pair splits apart).
+struct ArrowLine {
+    start: [f32; 2],
+    end: [f32; 2],
+    normal: [f32; 2],
+    shift: f32,
+}
 struct Wire {
     id: String,
     from: Endpoint,
@@ -675,6 +683,84 @@ impl Canvas {
             w: self.labels.width(&inline.text) * small + (12. + chip) * z,
             h: 16. * z,
         }
+    }
+    /// A transition arrow between state boxes `ra` and `rb` (screen); `None` for a
+    /// self-transition. `pairs` holds every (from, to) node pair with an arrow.
+    fn arrow_line(
+        &self,
+        wire: &Wire,
+        ra: Box2,
+        rb: Box2,
+        pairs: &BTreeSet<(&str, &str)>,
+    ) -> Option<ArrowLine> {
+        if wire.from.node == wire.to.node {
+            return None;
+        }
+        let z = self.camera.zoom;
+        let (ca, cb) = (paint::centre(ra), paint::centre(rb));
+        let length = (cb[0] - ca[0]).hypot(cb[1] - ca[1]).max(1e-3);
+        let d = [(cb[0] - ca[0]) / length, (cb[1] - ca[1]) / length];
+        let n = [-d[1], d[0]];
+        let shift = if pairs.contains(&(wire.to.node.as_str(), wire.from.node.as_str())) {
+            6. * z.max(0.6)
+        } else {
+            0.
+        };
+        let oa = [ca[0] + n[0] * shift, ca[1] + n[1] * shift];
+        let ob = [cb[0] + n[0] * shift, cb[1] + n[1] * shift];
+        let start = paint::edge_point(ra, oa, d, 3.);
+        let end = paint::edge_point(rb, ob, [-d[0], -d[1]], 4.);
+        Some(ArrowLine {
+            start,
+            end,
+            normal: n,
+            shift,
+        })
+    }
+    /// The state machine transition arrow under a screen point (its edge id), for picking
+    /// it; a self-transition answers over its loop.
+    pub fn arrow_at(&self, p: [f32; 2], rect: Box2) -> Option<String> {
+        let pairs = self
+            .wires
+            .iter()
+            .map(|w| (w.from.node.as_str(), w.to.node.as_str()))
+            .collect::<BTreeSet<_>>();
+        let z = self.camera.zoom;
+        self.wires
+            .iter()
+            .filter(|w| {
+                self.index
+                    .get(&w.from.node)
+                    .is_some_and(|i| self.nodes[*i].look.shape == Shape::State)
+            })
+            .find(|wire| {
+                let (Some(a), Some(b)) = (
+                    self.index.get(&wire.from.node).map(|i| &self.nodes[*i]),
+                    self.index.get(&wire.to.node).map(|i| &self.nodes[*i]),
+                ) else {
+                    return false;
+                };
+                let (ra, rb) = (self.node_rect(a, rect), self.node_rect(b, rect));
+                match self.arrow_line(wire, ra, rb, &pairs) {
+                    Some(ArrowLine { start, end, .. }) => {
+                        let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+                        let t = (((p[0] - start[0]) * dx + (p[1] - start[1]) * dy)
+                            / (dx * dx + dy * dy).max(1e-3))
+                        .clamp(0., 1.);
+                        let near = [start[0] + dx * t, start[1] + dy * t];
+                        (p[0] - near[0]).hypot(p[1] - near[1]) <= 6.
+                    }
+                    // The loop over the top edge.
+                    None => (Box2 {
+                        x: ra.x + ra.w * 0.5 - 24. * z,
+                        y: ra.y - 30. * z,
+                        w: 48. * z,
+                        h: 30. * z,
+                    })
+                    .contains(p[0], p[1]),
+                }
+            })
+            .map(|w| w.id.clone())
     }
     /// A group's box around its nodes on screen, and its title band (where it is dragged
     /// and picked); `None` when none of its nodes is shown.

@@ -50,6 +50,27 @@ pub struct Page {
     pub editing: Option<Editing>,
 }
 
+impl Page {
+    /// The graph the canvas shows (its last loaded revision).
+    pub(super) fn shown_graph(&self) -> Option<&ara_graph::Graph> {
+        self.shown.as_ref().map(|g| g.canvas.graph())
+    }
+    /// What is picked on the canvas: nodes, wires (transition arrows), comments.
+    pub(super) fn selection(&self) -> std::collections::BTreeSet<String> {
+        self.shown
+            .as_ref()
+            .map(|g| g.canvas.selection.clone())
+            .unwrap_or_default()
+    }
+    /// Picks `id` alone on the canvas (a transition from the Details' list).
+    pub(super) fn pick(&mut self, id: String) {
+        if let Some(shown) = self.shown.as_mut() {
+            shown.canvas.selection = std::iter::once(id).collect();
+            self.dirty = true;
+        }
+    }
+}
+
 /// An inline input default edited in place: its constant node, the text it started from,
 /// and the value box's window rectangle (left, top, width).
 #[derive(Clone)]
@@ -446,7 +467,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             .child(at_value),
     );
     let body = if animation {
-        body
+        body.child(super::animator::details(s, &doc))
     } else {
         body.child(details(s, &doc))
     };
