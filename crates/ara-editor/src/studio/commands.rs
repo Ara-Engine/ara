@@ -238,6 +238,13 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 let mut params = play_params(e);
                 params["scene"] = json!(e.state.doc);
                 params["background"] = json!(true);
+                // In the Game view (the default): an embedded player at its size, and the
+                // Game tab comes forward, as in Unity.
+                e.embed_play(&mut params);
+                if e.plays_in_game_view() {
+                    let _ = act(e, "editor.layout.show", json!({"panel": "game"}))
+                        .and_then(|_| act(e, "editor.focus", json!({"panel": "game"})));
+                }
                 play(e, "play.start", params).and_then(|()| view(e, json!({"play": "playing"})))
             }
         }

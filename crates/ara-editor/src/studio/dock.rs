@@ -10,7 +10,7 @@ use stillkit::Cursor;
 use stillkit::el::{Align, El, Justify, PointerPhase, col, el, icon, row, text};
 
 use super::state::SplitDrag;
-use super::{Studio, hierarchy, inspector, panels, scene, style};
+use super::{Studio, game, hierarchy, inspector, panels, scene, style};
 
 /// Keys of every split container, for the host's rect feedback.
 pub(super) fn rect_keys(root: &DockNode) -> Vec<String> {
@@ -255,11 +255,12 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
         .children(area_tools(s, &active_id));
     let body = match active_id.as_str() {
         "scene" => scene::view(s),
+        "game" => game::view(s),
         "hierarchy" => hierarchy::view(s),
         "inspector" => inspector::view(s),
         other => panels::view(s, other),
     };
-    let surface = if active_id == "scene" {
+    let surface = if matches!(active_id.as_str(), "scene" | "game") {
         c.background.0
     } else {
         t.panel

@@ -14,6 +14,7 @@ mod commands;
 mod compositor;
 mod create;
 mod dock;
+mod game;
 mod gizmo;
 mod hierarchy;
 mod inspector;
@@ -127,7 +128,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 server.pump(&mut s.editor);
                 s.editor.tick();
             });
-            quit |= pump(&mut rt, &mut surface, started)?;
+            quit |= pump(&mut rt, &mut surface, started, None)?;
             Ok(!quit)
         },
     )
@@ -152,6 +153,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // it); this thread submits for both.
     let mut compositor =
         unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
+    // SAFETY: as the compositor's.
+    let mut game = unsafe { game::Game::new(&renderer)? };
     let mut shown_extent = [0, 0];
     // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
     let mut shown_tag = u64::MAX;
@@ -176,7 +179,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     });
     loop {
         let mut pass = trace::Pass::begin();
-        if pump(&mut rt, &mut surface, started)? {
+        if pump(&mut rt, &mut surface, started, Some(&mut game))? {
             break;
         }
         pass.mark("events+ui");
@@ -425,6 +428,65 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
+        // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
+        let game_rect = rt
+            .natives()
+            .into_iter()
+            .find(|(n, _)| &**n == game::GAME_LAYER)
+            .map(|(_, r)| r);
+        surface.place_native_layer(game::GAME_LAYER, game_rect);
+        #[cfg(any(windows, target_os = "macos"))]
+        let visible = surface.is_visible();
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let visible = true;
+        // Play embeds its player at the Game view's size (`Editor::embed_play`).
+        if let Some(r) = game_rect.filter(|r| r.width() >= 64.0 && r.height() >= 64.0) {
+            let (size, scale) = ([r.width() as u32, r.height() as u32], rt.scale());
+            rt.touch(|s| {
+                s.editor.game_size = size;
+                s.editor.game_scale = scale;
+            });
+        }
+        let game_layer =
+            match game_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
+                Some(r) => Some((
+                    metal_layer(surface.native_layer(game::GAME_LAYER)?)?,
+                    [r.width() as u32, r.height() as u32],
+                )),
+                None => None,
+            };
+        if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
+        {
+            let scale = rt.scale();
+            let status = rt.touch(|s| {
+                let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
+                // SAFETY: the layer is the Game view's own, alive while the window is.
+                unsafe {
+                    game.frame(
+                        &mut renderer,
+                        &mut scene_view,
+                        &mut s.editor,
+                        &view,
+                        &resolved,
+                        revision,
+                        game_layer,
+                        scale,
+                    )
+                }
+            });
+            match status {
+                Ok(status) if status != rt.state().local.game => {
+                    rt.update(|s| s.local.game = status)
+                }
+                Ok(_) => {}
+                Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
+            }
+        }
+        // Play ended: the keyboard and mouse come back.
+        if rt.state().local.game_captured && rt.state().editor.state.playing.is_none() {
+            rt.update(|s| s.local.game_captured = false);
+        }
+        pass.mark("game");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
         // speed setting, three times as fast with Shift.
         let flying = rt.state().local.flying && !rt.state().local.held.is_empty();
@@ -438,7 +500,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
-            || composite;
+            || composite
+            || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
             rt.wake_at().map(|at| started + at),
@@ -454,6 +517,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         wait();
     }
     renderer.wait_scene_frame().ok();
+    rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
     compositor.retire(&renderer);
     drop(compositor);
     scene_view
@@ -583,10 +647,49 @@ fn chrome_parts(surface: &Surface, rt: &Runtime<Studio>) {
 }
 
 /// Handles window events, runs a UI frame and presents it; whether the window closed.
-fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> anyhow::Result<bool> {
+/// While the game has the keyboard and mouse (`game`, once the renderer runs), its events
+/// go to the player instead: Esc, leaving the window or a click outside the Game view give
+/// them back; F5 to F8 stay the editor's Play controls.
+fn pump(
+    rt: &mut Runtime<Studio>,
+    surface: &mut Surface,
+    started: Instant,
+    mut game: Option<&mut game::Game>,
+) -> anyhow::Result<bool> {
     while let Some((id, event)) = next_event() {
         if id != surface.id() {
             continue;
+        }
+        if rt.state().local.game_captured
+            && let Some(game) = game.as_deref_mut()
+        {
+            let inside = |p: &stillkit::Pointer| {
+                rt.natives()
+                    .into_iter()
+                    .find(|(n, _)| &**n == game::GAME_LAYER)
+                    .is_some_and(|(_, r)| {
+                        p.at.x >= r.left
+                            && p.at.x <= r.right
+                            && p.at.y >= r.top
+                            && p.at.y <= r.bottom
+                    })
+            };
+            let release = match &event {
+                Event::Key(0x1B) | Event::Deactivated | Event::Leave => true,
+                Event::Press(p, _) => !inside(p),
+                _ => false,
+            };
+            if release {
+                game.release(&rt.state().editor);
+                rt.update(|s| s.local.game_captured = false);
+                if matches!(event, Event::Key(0x1B)) {
+                    continue;
+                }
+            } else if !matches!(event, Event::Key(0x74..=0x77) | Event::KeyUp(0x74..=0x77))
+                && game.input(&rt.state().editor, &event)
+            {
+                continue;
+            }
         }
         if !matches!(event, Event::Move(..)) {
             trace::log(|| format!("event {event:?}"));

@@ -13,6 +13,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Scene when it is dirty, resolves picks, polls Assets and the diagnostics bus, applies
   `Local::focus` requests, and sleeps until the next timer (idle costs nothing).
 - `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
+- `game.rs`: the Game view's own layer (`GAME_LAYER`): the gameplay camera's preview outside
+  Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during
+  Play (`app::game::player::PlayerView`; `play.start` calls `Editor::embed_play`). A click
+  sends keys and the mouse to the player (VK to SDL scancodes); Esc gives them back.
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
