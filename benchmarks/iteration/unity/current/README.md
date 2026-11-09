@@ -4,7 +4,18 @@ This new lane preserves `../bench.py`, `../MacBatch.cs`, the original S8 kernels
 
 Status: 11 focused current-lane tests and the existing38 feature tests pass. Actual C# compilation and all4 paired S8 smoke gates pass after excluded first-import bootstrap/reprepare: W1/W2/W3 use1003 entities and W4 uses100000, each2warmup+3steps at15-runner ceiling. Full numeric hashes and independent exact IDs/components match, and durable preference restoration is proven. See `current_smoke_mac_2026-11-09.json`. All20 fresh strict timed pairs now pass their state/control gates, recorded separately in `current_timed_mac_2026-11-09.json`. Earlier50 feature pairs remain correctness evidence under their original per-record controllers; they are not timing samples for this lane.
 
-W3 particles meets the target in both orders/budgets: Ara serial p50 is2.878–2.884ms versus Unity4.378–4.622ms, and parallel8192 is0.324–0.329ms versus0.435–0.439ms; p95 is lower in both orders. W4 also meets the fixture target with its bookkeeping difference disclosed below. W1 and the explicitW2 batch4096 configuration miss the target. W1 parallel p95 regresses12.6% in round2 despite a lower p50. W2 batch4096 is not the previously measured best128 configuration; a separate fresh128 comparison is required before describing bestW2 performance. The overall target remains unmet;8of20 pairs meet it, all fromW3/W4. Feature timings and additional tuning remain pending.
+The earlier20-pair matrix retains its original results: W3 particles meets the target in both orders/budgets, and W4 meets the fixture target with its bookkeeping difference disclosed below. W1 and the explicitW2 batch4096 configuration miss the target; W1 parallel p95 regresses12.6% in round2. W2 batch4096 is not the previously measured best128 configuration. Those losses stay in `current_timed_mac_2026-11-09.json`.
+
+The subsequent exact NEON implementation now meets the target in all8 fresh W1/W3 pairs, with identical numerical contracts and lower p95 in both orders. This helper optimizes benchmark kernels, not production simulation systems. See `neon_timed_mac_2026-11-09.json`, which binds the new helper, immutable binary/build record and128 evidence file hashes. At1M entities:
+
+| Case | Ara p50, rounds1/2 (ms) | Unity p50, rounds1/2 (ms) | Ara p50 reduction |
+|---|---|---|---|
+| W1 serial | 1.297 / 1.362 | 4.338 / 4.477 | 69.6–70.1% |
+| W1 parallel | 0.360 / 0.366 | 0.492 / 0.519 | 26.9–29.5% |
+| W3 serial | 1.098 / 1.182 | 4.704 / 4.458 | 73.5–76.7% |
+| W3 parallel | 0.296 / 0.302 | 0.419 / 0.429 | 29.2–29.6% |
+
+This packet reruns W1/W3 only. W2 batch128 and representative feature timings remain pending. `clr_state_smoke_mac_2026-11-09.json` supplies supplementary state-only proof for16 actual C# Release/hot span/SIMD smoke dumps at1003 rows/5ticks, byte-identical to Unity, with63 file hashes binding results, commands, executable, source/build and host identity records. It establishes correctness across these execution paths, not C# timing performance.
 
 Use the installed arm64 Unity 6000.4.5f1 with Entities6.4.0, Collections6.4.0, Burst1.8.29 and Mathematics1.3.3. Both engines run at niceness10. This is Rust native versus Unity Editor Burst on the Mac CPU; Windows, GPU, player builds and Unreal remain unmeasured. Runtime/public Ara C# API support is separate from native fixture coverage.
 
