@@ -259,6 +259,10 @@ pub struct Local {
     pub add_component: Option<super::components::Picker>,
     /// Components added most recently (newest first): the picker lists them first.
     pub recent_components: Vec<String>,
+    /// The asset being renamed in place: its path and the name typed so far.
+    pub asset_rename: Option<(String, String)>,
+    /// The asset whose deletion waits for confirmation.
+    pub asset_delete: Option<String>,
     /// Assets' layout, type filter, folder history and Add menu.
     pub assets_view: super::panels::AssetsView,
     /// The Inspector shows the asset picked in Assets (until an entity is picked).

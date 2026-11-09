@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 mod backend;
 mod history;
 mod jobs;
-mod plan;
+pub(crate) mod plan;
 mod view;
 const HISTORY_SCAN_WAIT: &str = "Asset history is waiting for a fresh browser index. Use Refresh Assets to retry, or change selection to stop following this history entry.";
 const JOB_SCAN_WAIT: &str = "Asset transaction completed; waiting for a fresh browser index. Use Refresh Assets to retry, or change selection to stop following this result.";

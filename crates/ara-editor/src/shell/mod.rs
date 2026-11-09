@@ -5,7 +5,7 @@
 //! floating surface in and [`Shell::leave`] swaps it back, so panels need not
 //! know which OS window hosts them.
 pub(crate) mod asset_import;
-mod asset_ops;
+pub(crate) mod asset_ops;
 pub(crate) mod assets;
 mod assets_favourites;
 mod axis;

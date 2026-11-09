@@ -24,8 +24,18 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
         .children(drag_chip(s))
-        .overlay(context_menu(s))
-        .overlay(super::create::overlay(s))
+        // Menus at a point hang from an element of no size: an overlay never closes on a
+        // press over the element it hangs from, and the root covers every press.
+        .child(
+            el().key("studio/menus")
+                .absolute(0.0, 0.0)
+                .size(0.0)
+                .overlay(context_menu(s))
+                .overlay(super::create::overlay(
+                    s,
+                    super::create::Anchor::Point(0.0, 0.0),
+                )),
+        )
         .overlay(super::preferences::overlay(s));
     palette(s, root)
 }
@@ -202,7 +212,10 @@ fn create_button(s: &Studio) -> El<Studio> {
     if open {
         b = b.fill(l.c.raised.0).color(l.c.foreground.0);
     }
-    b
+    b.overlay(super::create::overlay(
+        s,
+        super::create::Anchor::Key("menu/Create"),
+    ))
 }
 
 /// A title-bar menu: its name, and its registry items while open.
@@ -291,11 +304,16 @@ fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Stud
     let spec = commands::spec(id)?;
     let glyph = icons::named(spec.icon);
     let keys = commands::shortcut(spec.keys);
+    // The OS file manager by its own name.
+    let title = match id {
+        "assets.reveal" if cfg!(target_os = "macos") => "Show in Finder",
+        _ => spec.title,
+    };
     let item = menu_item(
         l,
         &format!("cmd/{id}"),
         glyph,
-        spec.title,
+        title,
         keys.as_deref(),
         id == "edit.delete",
     )

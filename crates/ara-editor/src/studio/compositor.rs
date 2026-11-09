@@ -158,9 +158,11 @@ impl Compositor {
             logical[0].round().max(1.0) as u32,
             logical[1].round().max(1.0) as u32,
         ];
-        self.paint
-            .render(&mut self.ui, &list, &[], size, TextMode::Raster)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        super::trace::time("scene paint", std::time::Duration::from_millis(3), || {
+            self.paint
+                .render(&mut self.ui, &list, &[], size, TextMode::Raster)
+        })
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
         let present = match self.present.take() {
             Some((mut present, was)) => {
                 if was != extent {
@@ -173,7 +175,14 @@ impl Compositor {
         };
         let (present, _) = self.present.insert((present, extent));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
-        unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
+        super::trace::time(
+            "scene present",
+            std::time::Duration::from_millis(3),
+            || {
+                // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
+                unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
+            },
+        )?;
         Ok(true)
     }
 

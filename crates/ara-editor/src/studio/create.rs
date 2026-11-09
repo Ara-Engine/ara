@@ -418,7 +418,7 @@ pub fn item(id: &str) -> Option<&'static Item> {
 }
 
 /// Where the browser opens.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Anchor {
     /// Under a keyed element (the title bar's Create, the Hierarchy's +).
     Key(&'static str),
@@ -604,9 +604,19 @@ fn commit(s: &mut Studio) {
     create(s, item, &Target::None, b.place, b.child);
 }
 
-/// The browser's overlay while open.
-pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
-    let b = s.local.create.as_ref()?;
+/// The browser's overlay while it is open at `anchor`. Attach it to that anchor's element
+/// (a button), or for a point to an element of no size: a press on the element an overlay
+/// hangs from never dismisses it, so a window-sized one would never close.
+pub fn overlay(s: &Studio, anchor: Anchor) -> Option<Overlay<Studio>> {
+    let b = s
+        .local
+        .create
+        .as_ref()
+        .filter(|b| match (b.anchor, anchor) {
+            (Anchor::Key(a), Anchor::Key(k)) => a == k,
+            (Anchor::Point(..), Anchor::Point(..)) => true,
+            _ => false,
+        })?;
     let panel = panel(s, b);
     let over = popover(panel).on_dismiss(|s: &mut Studio| s.local.create = None);
     // Under its button, leading edges lined up (it flips and shifts to stay inside).

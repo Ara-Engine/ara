@@ -11,6 +11,7 @@
 mod agents;
 mod asset_create;
 mod asset_inspector;
+mod asset_ops;
 mod chrome;
 mod commands;
 mod components;
@@ -849,7 +850,9 @@ fn pump(
         rt.update(|_| {});
     }
     rt.sync_text_input(surface);
-    let painted = rt.frame(started.elapsed().saturating_sub(rt.now()));
+    let painted = trace::time("ui frame", Duration::from_millis(3), || {
+        rt.frame(started.elapsed().saturating_sub(rt.now()))
+    });
     if let Some(key) = rt.touch(|s| s.local.focus.take()) {
         rt.focus(key);
     }
@@ -857,7 +860,20 @@ fn pump(
         stillkit::el::Clipboard::set(&mut SystemClipboard, &text);
     }
     if painted {
-        rt.present(surface, (0, 0))?;
+        if let Some(d) = rt.damage() {
+            trace::log(|| {
+                format!(
+                    "damage {:.0}x{:.0} at {:.0},{:.0}",
+                    d.width(),
+                    d.height(),
+                    d.left,
+                    d.top
+                )
+            });
+        }
+        trace::time("ui present", Duration::from_millis(3), || {
+            rt.present(surface, (0, 0))
+        })?;
         chrome_parts(surface, rt);
         // Layout feedback the view reads next time: where splits and the Scene view are.
         let mut keys = dock::rect_keys(&rt.state().editor.state.layout);

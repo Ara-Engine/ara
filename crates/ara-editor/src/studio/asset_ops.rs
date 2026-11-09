@@ -1,0 +1,236 @@
+//! What Assets' items do, from their right-click menu, the palette, keys or agents (the
+//! registry's `assets.*` commands): open, show in Finder, copy a reference or path,
+//! reimport, rename in place, duplicate, delete after confirming, show the asset's
+//! properties (the asset inspector), refresh. File changes are authored transactions on the
+//! project (`cmd.apply` on `ara.project.json`, the legacy window's plans) and show in Assets
+//! at once, before the host's next scan.
+use serde_json::json;
+
+use super::Studio;
+use crate::shell::assets::Asset;
+use crate::shell::commands::Target;
+
+/// The `assets.*` commands the studio runs.
+pub(super) const COMMANDS: [&str; 9] = [
+    "assets.open",
+    "assets.reveal",
+    "assets.copy_reference",
+    "assets.references",
+    "assets.reimport",
+    "assets.refresh",
+    "assets.rename",
+    "assets.duplicate",
+    "assets.delete",
+];
+
+/// The asset a command acts on: its target, else the one picked in Assets.
+fn target(s: &Studio, target: &Target) -> Option<Asset> {
+    let path = match target {
+        Target::Asset(p) | Target::Folder(p) => p.clone(),
+        _ => s.editor.state.asset_path.clone()?,
+    };
+    let browser = s.assets.as_ref()?;
+    browser
+        .items
+        .iter()
+        .find(|a| a.path.trim_end_matches('/') == path.trim_end_matches('/'))
+        .cloned()
+        .or_else(|| Some(Asset::folder(path, None)))
+}
+
+/// Runs `id` (one of [`COMMANDS`]) on `target`.
+pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
+    let result = match (id, self::target(s, target)) {
+        ("assets.refresh", _) => {
+            if let Some(b) = s.assets.as_ref() {
+                b.refresh();
+            }
+            Ok(())
+        }
+        (_, None) => Err(anyhow::anyhow!("Pick an asset first")),
+        ("assets.open", Some(a)) => {
+            open(s, &a);
+            Ok(())
+        }
+        ("assets.reveal", Some(a)) => crate::shell::ops::open_external(&reveal_target(s, &a))
+            .map_err(|e| anyhow::anyhow!("{e}")),
+        ("assets.copy_reference", Some(a)) => {
+            let workspace = s.editor.host.store().workspace();
+            let text = a
+                .current_reference(workspace)
+                .or_else(|| a.authored_path.as_ref().map(|p| format!("@{p}")))
+                .unwrap_or_else(|| a.path.clone());
+            s.local.copy = Some(text);
+            Ok(())
+        }
+        ("assets.references", Some(a)) => {
+            s.act("editor.workspace", json!({"asset": a.path}));
+            s.local.inspect_asset = true;
+            Ok(())
+        }
+        ("assets.reimport", Some(a)) => {
+            s.act("editor.asset.reimport", json!({"path": a.path}));
+            Ok(())
+        }
+        ("assets.rename", Some(a)) => {
+            s.local.asset_rename = Some((a.path.clone(), a.name().to_owned()));
+            s.local.focus = Some("asset/rename");
+            Ok(())
+        }
+        ("assets.duplicate", Some(a)) => duplicate(s, a),
+        ("assets.delete", Some(a)) => {
+            s.local.asset_delete = Some(a.path);
+            Ok(())
+        }
+        _ => Ok(()),
+    };
+    if let Err(error) = result {
+        s.editor.report_failure(&*error);
+    }
+}
+
+/// Opens an asset where it is edited: a folder in Assets, a scene in the Scene view, a
+/// material, effect or controller in its page, anything else with the system's app.
+pub(super) fn open(s: &mut Studio, a: &Asset) {
+    if a.kind == "folder" {
+        s.act(
+            "editor.workspace",
+            json!({"folder": a.path.trim_end_matches('/')}),
+        );
+        return;
+    }
+    if a.document_kind.as_deref() == Some("scene")
+        && let Some(doc) = &a.authored_path
+    {
+        s.act("editor.scene.open", json!({"scene": doc}));
+        s.resolve();
+        s.act("editor.focus", json!({"panel": "scene"}));
+        return;
+    }
+    let page = match (a.domain.as_deref(), a.kind.as_str()) {
+        (Some("material"), _) => Some("material"),
+        (Some("vfx"), _) => Some("vfx"),
+        (Some("animation"), _) | (_, "animation") => Some("animation"),
+        _ => None,
+    };
+    let workspace = s.editor.host.store().workspace();
+    let doc = a
+        .authored_path
+        .as_deref()
+        .and_then(|p| workspace.find(p))
+        .map(|id| id.to_string());
+    match (page, doc) {
+        (Some(page), Some(doc)) => {
+            s.act(
+                "editor.workspace",
+                json!({"resource": doc, "asset": a.path}),
+            );
+            super::commands::run(s, &format!("window.{page}"), &Target::None);
+        }
+        _ => {
+            if let Err(error) =
+                crate::shell::ops::open_external(&s.editor.host.root().join(&a.path))
+            {
+                s.editor.report_failure(&*error);
+            }
+        }
+    }
+}
+
+/// What Show in Finder opens: a folder itself, a file's folder.
+fn reveal_target(s: &Studio, a: &Asset) -> std::path::PathBuf {
+    let root = s.editor.host.root();
+    if a.kind == "folder" {
+        root.join(a.path.trim_end_matches('/'))
+    } else {
+        root.join(a.path.rsplit_once('/').map_or("", |(dir, _)| dir))
+    }
+}
+
+/// Runs an authored file transaction on the project (one undo step).
+fn transact(s: &mut Studio, commands: Vec<serde_json::Value>, why: &str) -> anyhow::Result<()> {
+    s.editor.action(
+        "cmd.apply",
+        json!({"doc": "ara.project.json", "commands": commands, "why": why}),
+    )?;
+    Ok(())
+}
+
+fn duplicate(s: &mut Studio, a: Asset) -> anyhow::Result<()> {
+    let inventory = s
+        .assets
+        .as_ref()
+        .map(|b| b.items.clone())
+        .unwrap_or_default();
+    let plan = crate::shell::asset_ops::plan::duplicate(vec![a], &inventory)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    transact(s, plan.calls, &plan.title)?;
+    if let Some(b) = s.assets.as_ref() {
+        b.refresh();
+    }
+    Ok(())
+}
+
+/// Commits an in-place rename: the file (or folder) moves to its new name beside itself, its
+/// references updated in the same transaction. Shows at once.
+pub(super) fn rename(s: &mut Studio, path: &str, name: &str) {
+    s.local.asset_rename = None;
+    let name = name.trim();
+    let Some(a) = target(s, &Target::Asset(path.to_owned())) else {
+        return;
+    };
+    if name.is_empty() || name == a.name() {
+        return;
+    }
+    let result = (|| -> anyhow::Result<()> {
+        let source =
+            crate::shell::asset_ops::plan::source(&a).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let destination = match source.rsplit_once('/') {
+            Some((dir, _)) => format!("{dir}/{name}"),
+            None => name.to_owned(),
+        };
+        transact(
+            s,
+            vec![
+                json!({"cmd": "asset.move", "args": {"source": source, "destination": destination}}),
+            ],
+            &format!("Rename {} to {name}", a.name()),
+        )?;
+        if let Some(b) = s.assets.as_mut() {
+            let storage = match a.path.trim_end_matches('/').rsplit_once('/') {
+                Some((dir, _)) => format!("{dir}/{name}"),
+                None => name.to_owned(),
+            };
+            b.remove_path(&a.path);
+            b.insert_path(&storage, &a.kind);
+            b.refresh();
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        s.editor.report_failure(&*error);
+    }
+}
+
+/// Deletes `path` after its confirmation (referenced files are protected by the host).
+pub(super) fn delete(s: &mut Studio, path: &str) {
+    s.local.asset_delete = None;
+    let Some(a) = target(s, &Target::Asset(path.to_owned())) else {
+        return;
+    };
+    let result = crate::shell::asset_ops::plan::delete(vec![a.clone()])
+        .map_err(|e| anyhow::anyhow!("{e}"))
+        .and_then(|plan| transact(s, plan.calls, &plan.title));
+    match result {
+        Ok(()) => {
+            if let Some(b) = s.assets.as_mut() {
+                b.remove_path(&a.path);
+                b.refresh();
+            }
+            if s.editor.state.asset_path.as_deref() == Some(a.path.as_str()) {
+                s.local.inspect_asset = false;
+            }
+        }
+        Err(error) => s.editor.report_failure(&*error),
+    }
+}

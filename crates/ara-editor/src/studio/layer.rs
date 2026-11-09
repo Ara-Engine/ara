@@ -66,9 +66,11 @@ impl Layer {
         self.ui.set_dpi(scale)?;
         let size =
             [extent[0] as f32 / scale, extent[1] as f32 / scale].map(|v| v.round().max(1.0) as u32);
-        self.paint
-            .render(&mut self.ui, list, fonts, size, TextMode::Raster)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        super::trace::time("layer paint", std::time::Duration::from_millis(3), || {
+            self.paint
+                .render(&mut self.ui, list, fonts, size, TextMode::Raster)
+        })
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
         let target = layer.as_ptr() as usize;
         // Another layer (a different graph page) gets its own presentation.
         if let Some((mut old, _, _)) = self.present.take_if(|(_, _, at)| *at != target) {
@@ -88,7 +90,14 @@ impl Layer {
         };
         let (present, _, _) = self.present.insert((present, extent, target));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
-        unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
+        super::trace::time(
+            "layer present",
+            std::time::Duration::from_millis(3),
+            || {
+                // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
+                unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
+            },
+        )?;
         Ok(())
     }
 

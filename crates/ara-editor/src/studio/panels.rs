@@ -460,6 +460,12 @@ fn assets(s: &Studio) -> El<Studio> {
                         .copied()
                         .unwrap_or(0)
                 });
+                let renaming = s
+                    .local
+                    .asset_rename
+                    .as_ref()
+                    .filter(|(path, _)| *path == a.path)
+                    .map(|(_, name)| name.as_str());
                 tile(
                     l,
                     &a,
@@ -467,13 +473,20 @@ fn assets(s: &Studio) -> El<Studio> {
                     preview,
                     held,
                     size,
+                    renaming,
                 )
             })
             .collect();
+        let here = folder.clone();
         col()
             .grow(1.0)
             .min_h(0.0)
             .scroll(Axis::Vertical)
+            // Empty space: the folder's own menu (create, refresh, import), as in Unity.
+            .on_context_menu(move |s: &mut Studio, x, y| {
+                use crate::shell::commands::{Target, menus::Context};
+                s.local.context = Some((Context::Assets, Target::Folder(here.clone()), (x, y)));
+            })
             .child(if size == TileSize::List {
                 col().pad(4.0).gap(1.0).children(tiles)
             } else {
@@ -482,11 +495,43 @@ fn assets(s: &Studio) -> El<Studio> {
     };
     // Unity's Project window: the folder tree beside the folder's contents.
     let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
-    row()
+    let mut root = row()
         .grow(1.0)
         .min_h(0.0)
         .child(folder_tree(s, browser, &folder))
-        .child(right)
+        .child(right);
+    if let Some(path) = s.local.asset_delete.clone() {
+        let name = path
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or(&path)
+            .to_owned();
+        let confirm = path.clone();
+        let panel = dialog_panel(
+            l,
+            Some((Status::Danger, icons::TRASH)),
+            &format!("Delete {name}?"),
+            text("The file goes from the project. Files other assets still use are kept.")
+                .text_size(12.0)
+                .color(c.muted_foreground.0)
+                .wrap(3),
+            vec![
+                button(l, Tone::Secondary, Size::Md, None, "Cancel")
+                    .key("asset/delete/cancel")
+                    .on_press(|s: &mut Studio| s.local.asset_delete = None),
+                button(l, Tone::Danger, Size::Md, Some(icons::TRASH), "Delete")
+                    .key("asset/delete/confirm")
+                    .on_press(move |s: &mut Studio| super::asset_ops::delete(s, &confirm)),
+            ],
+            |s: &mut Studio| s.local.asset_delete = None,
+        )
+        .w(380.0);
+        root = root.overlay(
+            stillkit::el::dialog(panel).on_dismiss(|s: &mut Studio| s.local.asset_delete = None),
+        );
+    }
+    root
 }
 
 /// How many visible entries (files and subfolders) each folder holds directly.
@@ -698,6 +743,7 @@ fn tile(
     preview: Option<std::sync::Arc<stillkit::Image>>,
     held: Option<usize>,
     size: TileSize,
+    renaming: Option<&str>,
 ) -> El<Studio> {
     let c = &l.c;
     let (width, picture) = size.tile();
@@ -827,7 +873,32 @@ fn tile(
         })
         .child(picture_el)
         .children(strip)
-        .child(if list {
+        .child(if let Some(name) = renaming {
+            // Renaming in place: Enter renames (references follow), Escape keeps the name.
+            let path = a.path.clone();
+            stillkit::el::text_input("asset/rename")
+                .value(name.to_owned())
+                .select_all_on_focus()
+                .text_size(11.5)
+                .w(if list { 200.0 } else { width - 8.0 })
+                .h(20.0)
+                .fill(super::style::tones(l).well)
+                .radius(super::style::RADIUS)
+                .on_input(|s: &mut Studio, t| {
+                    if let Some((_, name)) = s.local.asset_rename.as_mut() {
+                        *name = t.to_owned();
+                    }
+                })
+                .on_submit(move |s: &mut Studio, t| super::asset_ops::rename(s, &path, t))
+                .on_key(|s: &mut Studio, key, _| {
+                    if key.0 == 0x1B {
+                        s.local.asset_rename = None;
+                        stillkit::el::Handled::Yes
+                    } else {
+                        stillkit::el::Handled::No
+                    }
+                })
+        } else if list {
             text(stem.to_owned())
                 .text_size(12.0)
                 .color(c.foreground.0)
