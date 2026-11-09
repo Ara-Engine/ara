@@ -145,7 +145,19 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         "layout.reset" => act(e, "editor.layout.reset", json!({})),
         id if id.starts_with("window.") => {
             let panel = id.trim_start_matches("window.");
+            // Tool pages open floating in the legacy window; the studio draws no floating
+            // windows yet, so they dock in the centre beside the Scene.
             act(e, "editor.layout.show", json!({"panel": panel}))
+                .and_then(|_| {
+                    if e.state.floating.iter().any(|f| holds(&f.root, panel)) {
+                        act(
+                            e,
+                            "editor.layout.move",
+                            json!({"panel": panel, "slot": "view"}),
+                        )?;
+                    }
+                    Ok(())
+                })
                 .and_then(|_| act(e, "editor.focus", json!({"panel": panel})))
         }
         "edit.preferences" => {
@@ -315,5 +327,14 @@ mod tests {
         assert_eq!(super::shortcut("Alt+Shift+N").as_deref(), Some("⌥⇧N"));
         assert_eq!(super::shortcut("F2 / Enter").as_deref(), Some("F2"));
         assert_eq!(super::shortcut(""), None);
+    }
+}
+
+/// Whether `panel` is a tab somewhere in `node`.
+fn holds(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
+    use ara_ui::docking::DockNode;
+    match node {
+        DockNode::Area { tabs, .. } => tabs.iter().any(|t| t == panel),
+        DockNode::Split { first, second, .. } => holds(first, panel) || holds(second, panel),
     }
 }

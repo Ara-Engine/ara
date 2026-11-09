@@ -1,6 +1,7 @@
 //! `ARA_STUDIO_TRACE=1`: what the studio spends its time on, on stderr. Every input event,
 //! every loop pass slower than a frame (by phase), and every editor action or content commit
-//! slower than 5 ms. Off, it costs one cached flag read.
+//! slower than 5 ms. Off, it costs one cached flag read. While `profile.start` records, each
+//! pass is also a profiled frame with a scope per phase ([`Pass::phase`]).
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -39,6 +40,8 @@ pub(super) struct Pass {
     start: Option<Instant>,
     last: Option<Instant>,
     phases: Vec<(&'static str, Duration)>,
+    /// The profiled phase now running (inactive unless recording).
+    scope: Option<ara_profile::SpanGuard>,
 }
 
 impl Pass {
@@ -49,7 +52,14 @@ impl Pass {
             start: now,
             last: now,
             phases: Vec::new(),
+            scope: None,
         }
+    }
+
+    /// Starts profiled phase `name` (ending the one before): the Profiler's lanes.
+    pub fn phase(&mut self, name: &'static str) {
+        self.scope = None;
+        self.scope = Some(ara_profile::scope(name));
     }
 
     /// Ends phase `name` here.
@@ -62,7 +72,8 @@ impl Pass {
     }
 
     /// Logs the pass if it took longer than 16 ms.
-    pub fn end(self) {
+    pub fn end(mut self) {
+        self.scope = None;
         if let Some(start) = self.start {
             let total = start.elapsed();
             if total >= Duration::from_millis(16) {
