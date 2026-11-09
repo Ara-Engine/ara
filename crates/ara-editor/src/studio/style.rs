@@ -16,8 +16,6 @@ pub const STRIP: f32 = 26.0;
 pub const TOOLBAR: f32 = 26.0;
 /// Body text.
 pub const TEXT: f32 = 12.0;
-/// Secondary text (counts, ids, hints).
-pub const SMALL: f32 = 11.0;
 
 /// The studio's surface tones for the current scheme.
 #[derive(Clone, Copy, Debug)]
