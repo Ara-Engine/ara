@@ -674,6 +674,72 @@ fn the_animation_page_shows_states_added_to_its_controller() {
     assert_eq!(nodes.len(), 2, "{doc}: {nodes:?}");
 }
 
+/// Presses the element keyed `key` (hovered first, as a pointer would).
+fn press(rt: &mut Runtime<Studio>, key: &str) {
+    let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+    rt.pointer_move(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.center().x, r.center().y);
+    rt.pointer_up(r.center().x, r.center().y);
+    settle(rt);
+}
+
+#[test]
+fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/run.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::shell::animation_panel::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.animation", &crate::shell::commands::Target::None)
+    });
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let controller = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+    };
+    press(&mut rt, "animation/param/add");
+    press(&mut rt, "animation/param/add/Float");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    assert!(
+        controller(&rt).parameters.contains_key("Float1"),
+        "Add made Float1"
+    );
+    let transition = controller(&rt).transitions[0].id.clone();
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition))
+    });
+    settle(&mut rt);
+    press(&mut rt, "animation/condition/add");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let condition = controller(&rt).transitions[0].conditions[0].clone();
+    assert_eq!(condition.parameter, "Float1");
+    assert_eq!(condition.comparison, ara_anim::graph::Comparison::Greater);
+    assert!(
+        rt.find("animation/condition/0/value").is_some(),
+        "its threshold is typed in place"
+    );
+}
+
 #[test]
 fn right_clicking_an_asset_offers_its_actions_and_a_press_outside_closes_them() {
     let mut rt = open();

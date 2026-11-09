@@ -135,6 +135,10 @@ impl Canvas {
                     .map(|n| (n.id.clone(), n.position))
                     .collect(),
             });
+        } else if let Some(edge) = self.arrow_at(p, rect) {
+            // A state machine's transition arrow picks that transition.
+            self.selection.clear();
+            self.selection.insert(edge);
         } else {
             self.drag = Some(Drag::Box { start: p, additive });
         }

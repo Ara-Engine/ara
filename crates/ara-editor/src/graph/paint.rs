@@ -220,6 +220,7 @@ impl Canvas {
             }
             let related = self.selection.contains(&a.id)
                 || self.selection.contains(&b.id)
+                || self.selection.contains(&wire.id)
                 || self.highlight.contains(&wire.id);
             let fading = self.live.as_ref().is_some_and(|live| {
                 live.node == a.id && live.fade.as_ref().is_some_and(|(to, _)| *to == b.id)
@@ -253,20 +254,16 @@ impl Canvas {
                 head(list, id, to, [0., 1.], color);
                 continue;
             }
-            let ca = centre(ra);
-            let cb = centre(rb);
-            let length = (cb[0] - ca[0]).hypot(cb[1] - ca[1]).max(1e-3);
-            let d = [(cb[0] - ca[0]) / length, (cb[1] - ca[1]) / length];
-            let n = [-d[1], d[0]];
-            let shift = if pairs.contains(&(b.id.as_str(), a.id.as_str())) {
-                6. * z.max(0.6)
-            } else {
-                0.
+            let Some(super::ArrowLine {
+                start,
+                end,
+                normal: n,
+                shift,
+            }) = self.arrow_line(wire, ra, rb, &pairs)
+            else {
+                continue;
             };
-            let oa = [ca[0] + n[0] * shift, ca[1] + n[1] * shift];
-            let ob = [cb[0] + n[0] * shift, cb[1] + n[1] * shift];
-            let start = edge_point(ra, oa, d, 3.);
-            let end = edge_point(rb, ob, [-d[0], -d[1]], 4.);
+            let d = [n[1], -n[0]];
             line(list, id, start, end, 1.75, color);
             head(list, id, end, d, color);
             if let Some(label) = wire.label.as_deref().filter(|_| z >= 0.5) {
@@ -867,7 +864,7 @@ pub(super) fn union(a: Box2, b: Box2) -> Box2 {
         h: (a.y + a.h).max(b.y + b.h) - a.y.min(b.y),
     }
 }
-fn centre(r: Box2) -> [f32; 2] {
+pub(super) fn centre(r: Box2) -> [f32; 2] {
     [r.x + r.w * 0.5, r.y + r.h * 0.5]
 }
 fn grow(r: Box2, by: f32) -> Box2 {
@@ -886,7 +883,7 @@ fn offset(r: Box2, x: f32, y: f32) -> Box2 {
     }
 }
 /// Where a ray from `origin` (inside `r`) along `d` leaves the box, pulled back by `gap`.
-fn edge_point(r: Box2, origin: [f32; 2], d: [f32; 2], gap: f32) -> [f32; 2] {
+pub(super) fn edge_point(r: Box2, origin: [f32; 2], d: [f32; 2], gap: f32) -> [f32; 2] {
     let half = [
         (r.w * 0.5 - (origin[0] - r.x - r.w * 0.5).abs()).max(0.),
         (r.h * 0.5 - (origin[1] - r.y - r.h * 0.5).abs()).max(0.),
