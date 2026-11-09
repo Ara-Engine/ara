@@ -11,6 +11,9 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 - `ProjectCompiler`: `--compile-project` builds deterministically before scene validation,
   returning generated schemas for Rust's canonical publication under `.ara/scripts`.
   Publication markers verify input, schema and assembly hashes; editor code stays separate.
+- `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
+  changes. Those changes still rebuild semantic compilations and generator drivers.
+  `compiler_scale.py --dependency-fanout` measures a shared edit with unchanged consumers.
 - `CodeFixRunner`: `--fix` applies the shipped code-fix providers to immutable input texts,
   returning replacements only. The host commits those through `source.replace` ops.
 

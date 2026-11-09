@@ -198,3 +198,33 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
   Clippy passes after one borrowed-slice fixture correction; formatter114 packages passes.
   Raw logs: target/perf-main-integration-20261109/published-*.log and
   prebuilt-watch-scope-recovery-fixed.log. No runtime throughput/Unity claim from this fix.
+
+
+### Dependency/configuration syntax reuse (verified; limited timing scope)
+
+- Committed/pushed published-module fix as bf3a04b3a. Performance target remains active.
+- ProjectCompilations now keeps identical path/text syntax trees across dependency,
+  heat and profile changes while creating fresh semantic compilation/generator state.
+  Changed-reference errors, recovery, heat, fresh PE/PDB/generated output equivalence
+  pass; full157 compiler tests and solution build pass. Independent source review clear.
+- Added compiler_scale --dependency-fanout: one shared constant edit rebuilds8unchanged
+  256-script modules plusCore. One clean guarded baseline->candidate pair accepted,
+  3 discarded requests +4 measured per process: p50 5021.96->3569.09ms, p95(max4)
+  5376.52->4401.40ms. All7request schemas agree. Actual CoreCLR10.0.14 observed.
+  Public packet benchmarks/iteration/compiler_dependency_reuse_mac_2026-11-09.json.
+- Baseline SDK was built from source later committed bf3a while HEAD4b245; candidate
+  embeds bf3a. All changed SDK method bodies audited: only CompileServer.Generate
+  differs; other changed managed SDK methods/signatures/IL/local/EH bodies equal.
+  Complete hashes/version caveat/raw method audit retained, no source-map ambiguity.
+- Retained initial fixture schema-file mistake and unaccepted competing-build run.
+  Reverse guarded02 attempt conservatively rejected its own just-started child due
+  ps ownership sampling race; guard narrowed to exact argv+live parent and rejected
+  run stays unaccepted. Guarded03 reverse attempt rejected a new active Unity
+  compiler. One order only, four samples per process, no stable-tail/Unity/Play claim.
+- DAG prototype sixteen internal cases passed full original420step output guards.
+  Parallel DAG improved, dirty inconsistent, serial chain tail regressed: no blanket
+  promotion or fresh Unity claim. Contiguous-only isolation quality build/120frames/
+  240actual observers/fourfull dumps passed. Timings await clean CPU slot.
+- Ownership-only scan change source frozen by batch_queries; public/default/full
+  publication hydration and excluded editor results preserved. Actual .NET build,
+  dedicated test and runtime gates still pending; not part of measured SDK above.
