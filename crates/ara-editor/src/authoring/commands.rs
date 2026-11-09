@@ -95,17 +95,23 @@ impl Command for MaterialAdd {
                         .ok_or_else(|| crate::invalid(format!("unknown material type `{t}`")))
                 })
                 .transpose()?;
-        // A constant or parameter of the wanted value type (textures stay floats).
+        // A constant of the wanted value type (a texture constant stays a float); a
+        // parameter of it, textures included (white, or a flat normal).
         let value_ty = wanted.filter(|t| !t.is_texture()).unwrap_or(Type::Float);
         let half = |ty: Type| vec![if ty == Type::Bool { 0. } else { 0.5 }; ty.lanes()];
         if op == "parameter" {
+            let ty = wanted.unwrap_or(Type::Float);
             material.parameters.insert(
                 id.clone(),
                 Parameter {
                     name,
                     order,
-                    ty: value_ty,
-                    default: ParameterValue::Numeric(half(value_ty)),
+                    ty,
+                    default: if ty.is_texture() || ty == Type::Bool {
+                        ParameterValue::zero(ty)
+                    } else {
+                        ParameterValue::Numeric(half(ty))
+                    },
                     is_static: false,
                 },
             );

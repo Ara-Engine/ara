@@ -487,6 +487,81 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
     col().grow(1.0).child(toolbar).child(body)
 }
 
+/// The parameter types the Parameters band's + offers (Shader Graph's Blackboard), as
+/// (title, material type).
+const PARAMETER_TYPES: [(&str, &str); 8] = [
+    ("Float", "float"),
+    ("Vector 2", "vec2"),
+    ("Vector 3", "vec3"),
+    ("Vector 4", "vec4"),
+    ("Color", "ColorLinear"),
+    ("Boolean", "bool"),
+    ("Texture", "TextureColor"),
+    ("Normal map", "TextureNormal"),
+];
+
+/// The Parameters band's add button: a menu of types; a pick adds a parameter of it at
+/// the view's left, picked.
+fn add_parameter_menu(s: &Studio, doc: &str) -> El<Studio> {
+    const KEY: &str = "material/param/add";
+    let l = &s.look;
+    let open = s.local.select.as_deref() == Some(KEY);
+    let mut add = icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "Add a parameter")
+        .size(22.0)
+        .key(KEY)
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if open {
+        let items = PARAMETER_TYPES
+            .iter()
+            .map(|(title, ty)| {
+                let (doc, ty) = (doc.to_owned(), *ty);
+                menu_item(l, &format!("{KEY}/{ty}"), None, title, None, false).on_press(
+                    move |s: &mut Studio| {
+                        s.local.select = None;
+                        add_parameter(s, &doc, ty);
+                    },
+                )
+            })
+            .collect();
+        add = add.overlay(
+            stillkit::el::menu(menu_panel(l, items))
+                .side(Side::Bottom)
+                .align(Align::End)
+                .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    add
+}
+
+/// Adds a parameter of material type `ty` at the view's left and picks it.
+fn add_parameter(s: &mut Studio, doc: &str, ty: &str) {
+    let rect = view_rect(s);
+    let position = s.graph.shown.as_ref().map_or([0.0, 0.0], |g| {
+        g.canvas.world([rect.w * 0.15, rect.h * 0.3], rect)
+    });
+    let command = json!({"cmd": "editor.material.node.add", "args": {"kind": "material.parameter", "position": position, "ty": ty}});
+    match s
+        .editor
+        .apply_to(doc, vec![command], "Add material parameter")
+    {
+        Ok(result) => {
+            let id = result["outputs"][0]["id"].as_str().map(str::to_owned);
+            sync(s, "material");
+            if let (Some(id), Some(shown)) = (id, s.graph.shown.as_mut()) {
+                shown.canvas.selection = std::iter::once(id).collect();
+                s.graph.dirty = true;
+            }
+        }
+        Err(error) => s.editor.report_failure(&error),
+    }
+}
+
 /// Over an empty state machine, how to start one (Unity's Animator opens on Entry).
 fn empty_hint(s: &Studio, animation: bool) -> Option<El<Studio>> {
     let empty = s.graph.shown_graph().is_none_or(|g| g.nodes.is_empty());
@@ -621,11 +696,14 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
             );
     }
     if selection.is_empty() {
-        out = out.child(band(
-            "Parameters".into(),
-            String::new(),
-            icons::SLIDERS_HORIZONTAL,
-        ));
+        out = out.child(
+            band(
+                "Parameters".into(),
+                String::new(),
+                icons::SLIDERS_HORIZONTAL,
+            )
+            .child(add_parameter_menu(s, doc)),
+        );
         let mut any = false;
         for (id, node) in &graph.nodes {
             if node.kind != "material.parameter" {
@@ -690,7 +768,26 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
             "output" => "Material output".into(),
             _ => style::op_title(op),
         };
+        let renamed = name.clone();
         out = out.child(band(name, kind, icons::CONTRAST));
+        if op != "output" {
+            let doc = doc.to_owned();
+            out = out.child(prop(
+                "Name".into(),
+                field(l, Size::Sm, format!("material/name/{id}"), None, "", &renamed.clone(), move |x| {
+                    x.select_all_on_focus().on_submit(move |s: &mut Studio, t| {
+                        let to = t.trim();
+                        if to.is_empty() || to == renamed {
+                            return;
+                        }
+                        let command = json!({"cmd": "material.rename", "args": {"from": renamed, "to": to}});
+                        if let Err(error) = s.editor.apply_to(&doc, vec![command], "Rename material value") {
+                            s.editor.report_failure(&error);
+                        }
+                    })
+                }),
+            ));
+        }
         let doc_line = match op {
             "output" => "The material's typed outputs for its domain.",
             "parameter" => "A value material instances and scripts can change.",

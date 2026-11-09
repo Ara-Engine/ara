@@ -1111,6 +1111,59 @@ fn command_d_duplicates_a_node_with_its_own_inline_defaults() {
     assert_eq!(ids.len(), copied.len(), "no default is shared");
 }
 
+#[test]
+fn parameters_are_added_by_type_and_renamed_in_details() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/blackboard.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
+    });
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let material = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        let doc = workspace
+            .find("samples/blackboard.graph")
+            .expect("material");
+        let graph = ara_graph::Graph::from_document(workspace.doc(doc.as_str()).expect("doc"))
+            .expect("graph");
+        ara_material::Material::from_graph(&graph).expect("material")
+    };
+    let before = material(&rt).parameters.len();
+    press(&mut rt, "material/param/add");
+    press(&mut rt, "material/param/add/vec3");
+    let added = material(&rt);
+    assert_eq!(added.parameters.len(), before + 1);
+    let (id, parameter) = added
+        .parameters
+        .iter()
+        .find(|(_, p)| p.ty == ara_material::Type::Vec3)
+        .expect("a vec3 parameter");
+    let id = id.clone();
+    assert!(!parameter.name.is_empty());
+    press(&mut rt, &format!("material/name/{id}"));
+    rt.type_text("tint");
+    rt.key(0x0D);
+    settle(&mut rt);
+    assert_eq!(
+        material(&rt).parameters[&id].name,
+        "tint",
+        "renamed in place"
+    );
+}
+
 /// The open effect at `path`, compiled.
 fn effect_at(rt: &Runtime<Studio>, path: &str) -> ara_vfx::Effect {
     let workspace = rt.state().editor.host.store().workspace();
