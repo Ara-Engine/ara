@@ -39,6 +39,8 @@ fn open() -> Runtime<Studio> {
             vec![
                 json!({"cmd":"entity.create","args":{"id":"e_box","name":"Box","components":{"Transform":{"position":[0,0,0]},"MeshRenderer":{"shape":"box"}}}}),
                 json!({"cmd":"entity.create","args":{"id":"e_lamp","name":"Lamp","components":{"Transform":{"position":[3,2,0]}}}}),
+                json!({"cmd":"entity.create","args":{"id":"e_sun","name":"Sun","components":{"Transform":{},"Light":{"kind":"directional"}}}}),
+                json!({"cmd":"entity.create","args":{"id":"e_post","name":"Post","components":{"Transform":{},"PostProcessVolume":{"shape":"global"}}}}),
             ],
             "Create",
             None,
@@ -208,7 +210,9 @@ fn captures() {
             rt.set_theme(theme);
             rt.set_background(Some(background));
         }
-        for panel in ["assets", "console", "problems", "agents", "history"] {
+        for panel in [
+            "assets", "console", "problems", "agents", "history", "lighting",
+        ] {
             rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
             for _ in 0..30 {
                 rt.frame(FRAME);
