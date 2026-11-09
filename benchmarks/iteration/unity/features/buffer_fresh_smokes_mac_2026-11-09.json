@@ -1,0 +1,1040 @@
+{
+  "schema_version": 1,
+  "quality_only": true,
+  "scope": "Fresh serial fixed-buffer correctness pairs at lengths 64 and 4 in the private Unity project ufi. Each uses 1,003 entities, two warmup and three measured steps. Both engine dumps match the independent original scalar oracle. No throughput timings are accepted; no 100,000-entity retry or crash-cause claim follows.",
+  "Unity_invocations_after_bootstrap": 2,
+  "Bevy_invocations": 2,
+  "engine_builds": 0,
+  "cached_BLAKE3_verifier_links": 2,
+  "no_retry_recovery_or_variant_changes": true,
+  "prepared": {
+    "marker_path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/.ara-query-feature.json",
+    "marker_sha256": "8caa3734eaeb0d95c3ccb1036fbd30b4967133368774b5f3aff83aa9967cd9ef",
+    "input_manifest_sha256": "c04bf9daa99a9374f88053fa40b3e28813b94fb316fe37453476bc9add55d1b5",
+    "input_manifest": {
+      "fixture": "extended-v1",
+      "editor": "/Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents/MacOS/Unity",
+      "repository_root": "/Users/islam/.t3/worktrees/ara/t3-6f34c966",
+      "requested_packages": {
+        "com.unity.entities": "6.4.0",
+        "com.unity.collections": "6.4.0",
+        "com.unity.burst": "1.8.29",
+        "com.unity.mathematics": "1.3.3"
+      },
+      "input_manifest_version": 1,
+      "template_inputs": {
+        "benchmarks/iteration/unity/MacBatch.cs": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+        "benchmarks/iteration/unity/bench.py": "4a83dbdd24b133de9f6a773b1ddadcd6f3dc1bd5fef13f195fe38f0edbffbc3f",
+        "benchmarks/iteration/unity/features/build.py": "c7cdfb682e18da5c0a87c230fc634406c79ed4913f247a935cce1d813c2dea1d",
+        "benchmarks/iteration/unity/features/cases.py": "d352ca374d5a0321f32d4d2d7ae92c5ff7e2a87ec0d7f55def72d55912fadb41",
+        "benchmarks/iteration/unity/features/editor/PreferenceRecovery.cs": "cb2fb347789b2084cd29b124f01fb6c50a90603a0569a7ce11427cd547b38b83",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/BufferSystem.cs": "33457d126a421f1c5327c6838b75f5924666327fa2cf9a7c14ecc24ff0399433",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/ChurnSystem.cs": "45447b2b248311cfaa9d994c339d34dc58d660baf35df7693062ba616e25ad35",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/Components.cs": "2ad37a5b8da0a0df8a7f15b6d2561f2232b6f50208a20a1e5fb8c456e3da933a",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/DagSystem.cs": "eaeceea2c9882c339c4fa8d2b269dc19f00857b4c4feffd2b7d035c1deebd060",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/DirtySystem.cs": "19b6091472129599acac4a0f2264f839bb6d00342112e393e80c7214e5ea579b",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/Extended.asmdef": "dc7212c8693036643183e32d5ee9cd749d94c7548dbaceec9a05c0add8de4f26",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/ExtendedBenchmark.cs": "6afc90df5af2cc0e0dfe05120cbd69defa23a556f25ba5840a764f9e7d1d4f1d",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/StateWriter.cs": "c5d12c442fd7cdd301543f64761ce0da6829158af3a35c29ab742e4a66b6ab83",
+        "benchmarks/iteration/unity/features/extended/unity/Assets/WorkerProbe.cs": "cc76e05bca547265063c4c957f2b9d293fb8fb41eb9fb9a66011b766313b8cfc",
+        "benchmarks/iteration/unity/features/inputs.py": "3f47e2e187469a926550b1b2b43795f4469a54ded78ee8ce66376e021ed403ae",
+        "benchmarks/iteration/unity/features/monitor.py": "a0fcb5d0b7812b9c8c82d37c65c5aef0df27c8c754adb3ec631bb9999d4fc0e3",
+        "benchmarks/iteration/unity/features/project.py": "5a22e6525a2cc05198528ea51167ce8c493e024ffd4353beb502b6544dfc1d06",
+        "benchmarks/iteration/unity/features/recover.py": "10176c3a8982433c92cfe7ef5cc28b283e2453a63ef6fd3704ac8316e46a4959",
+        "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c",
+        "benchmarks/iteration/unity/features/reference.py": "dd9fee9034aabedb0ee93348c0d92bea4d8d5989a6978865c0a6dbb6e7f1031c",
+        "benchmarks/iteration/unity/features/run.py": "30c7073307e8b12c78f1f7b82d8e96673e818c6abf5d6638ec3d8030bc9fc870",
+        "benchmarks/iteration/unity/features/rust/Cargo.lock": "1c47c56fbbdef5b1cc4810666b5fd5a29c6e84d6a85841e07d95275fa40b5dc8",
+        "benchmarks/iteration/unity/features/rust/Cargo.toml": "88ac7943b5adad663f022804d9280a16499c45d8e26199113e96bd0255306b45",
+        "benchmarks/iteration/unity/features/rust/src/extended/buffer_words.rs": "e42bfbed0f8581e723f2d8f3844ba4f62b35cf9aef4a2d71b1fcc63474063b82",
+        "benchmarks/iteration/unity/features/rust/src/extended/buffers.rs": "7c55db2fc3906f0c34f62444a08ec66f4090f949e4eb227a9229e83c31d26e91",
+        "benchmarks/iteration/unity/features/rust/src/extended/buffers_baseline.rs": "19cdaf70494d2a3cdad3fac70b2117b4cc90a0b019de052e8761c2c3d23e6934",
+        "benchmarks/iteration/unity/features/rust/src/extended/buffers_contiguous.rs": "ea34becfc5ac56cfaa761d7500171199dfb8b1a13c388603e5ca13994a7b09ad",
+        "benchmarks/iteration/unity/features/rust/src/extended/churn.rs": "bff88d5c26221dfc081ce97aa4c426d1dc9538fed18343dcf399d80e1cc77ae0",
+        "benchmarks/iteration/unity/features/rust/src/extended/dag.rs": "6f3c00c8dce49dec6c4ea12da525a001e6c7fbaacfa41a1d10e3bdf8cef80397",
+        "benchmarks/iteration/unity/features/rust/src/extended/dirty.rs": "d1794e8eb2326a9f0ea8d696cd01165ec793bc92ddd57df112e9bc3725adfdc8",
+        "benchmarks/iteration/unity/features/rust/src/extended/export.rs": "7b8f93cd51be5e0fc0aa73edc9794dd05dc4f67380b74eaf85b953d648bf22e5",
+        "benchmarks/iteration/unity/features/rust/src/extended/main.rs": "ef7232fea99a52fe13aebe584ef176a60c20b01a97b3e9773891376f3a3fe6be",
+        "benchmarks/iteration/unity/features/rust/src/extended/model.rs": "17659098a802a59f26f0d3976cd4affd3d962b39b4153e8f1e26f229beadb99d",
+        "benchmarks/iteration/unity/features/rust/src/extended/probe.rs": "00082358caf13ab29e05af08477770b444e86beec26308ade9ca343299889215",
+        "benchmarks/iteration/unity/features/rust/src/main.rs": "d47f120e64fe118b095557c7b4ba7fe097cced7dcc9edbc90ae5d62a08e2fb4a",
+        "benchmarks/iteration/unity/features/rust/src/protocol.rs": "d4d49abf92bec95e6695588444ffc4d3e7961f4140f9d69c031eafeacf53d917",
+        "benchmarks/iteration/unity/features/rust/src/world.rs": "2ed6f0ba1a12c1115367db65cc19338e96d25ed3d90958a169d51484c1bd3fe0",
+        "benchmarks/iteration/unity/features/smoke_plan.py": "b51b71973bd708088a9211be589532ba6db962a11d2f676db0a0a5ffebec319e",
+        "benchmarks/iteration/unity/features/unity/Assets/Features.asmdef": "a299f83e6ac74be1735d5abc8befdbc68686d39f1accb9ebdb2037003192a19b",
+        "benchmarks/iteration/unity/features/unity/Assets/QueryBenchmark.cs": "db389b0d337fbe926a754ca0c7e624a95b4ac35320ae41c317d04385c0c0a7f9",
+        "benchmarks/iteration/unity/features/unity/Assets/QueryComponents.cs": "90d6cd7cc5b82ec1785509503ca31232d5be8ce7876eccaca9a11e96ce83767d",
+        "benchmarks/iteration/unity/features/unity/Assets/QuerySystem.cs": "767a5fb73de7f502ec8a0d5f4b49a0b35b62eab28a8996461fd0750908313c47",
+        "benchmarks/iteration/unity/features/unity/Assets/StateWriter.cs": "3bab83ce3819fb2055f4b1561a92225a42c5c4ca30456e35b7ea8e1ff9fe671d",
+        "benchmarks/iteration/unity/features/verify.py": "b5b6faf97ccf9cacf85d481a233560734e429d480f46a74a2fa66ad5a7323c99"
+      },
+      "prepared_inputs": {
+        "Assets/BufferSystem.cs": "33457d126a421f1c5327c6838b75f5924666327fa2cf9a7c14ecc24ff0399433",
+        "Assets/BufferSystem.cs.meta": "77146fe60a0b1f30c0f21dcf1f023a15b1db26c339ac563f91b7fbfe7d2e8003",
+        "Assets/ChurnSystem.cs": "45447b2b248311cfaa9d994c339d34dc58d660baf35df7693062ba616e25ad35",
+        "Assets/ChurnSystem.cs.meta": "82b00297262f2ab9fca024c6c3bfbcebca94e02b1aa2c29f9b44328c9dbc004f",
+        "Assets/Components.cs": "2ad37a5b8da0a0df8a7f15b6d2561f2232b6f50208a20a1e5fb8c456e3da933a",
+        "Assets/Components.cs.meta": "16c6b9a3b67ca2843fcfde8ec70dce020e8008681a9b02f1b922be9948823bf7",
+        "Assets/DagSystem.cs": "eaeceea2c9882c339c4fa8d2b269dc19f00857b4c4feffd2b7d035c1deebd060",
+        "Assets/DagSystem.cs.meta": "3d0e8b9b9b6e402b5f5f41e3951884d4d1bb6f0a5053947e00836ae214706d19",
+        "Assets/DirtySystem.cs": "19b6091472129599acac4a0f2264f839bb6d00342112e393e80c7214e5ea579b",
+        "Assets/DirtySystem.cs.meta": "13293fb982968c44a270829abb35e6b3a54fbb7486bd9048f84b6aac3dde3da9",
+        "Assets/Editor/Features.Editor.asmdef": "c1dd53480f67ebf555fc03239c22f00e088c94f370e4a6f2fcf706d952a1fc00",
+        "Assets/Editor/Features.Editor.asmdef.meta": "be206a811d2b9fc830c8070e52dcc110dbecc2b35a28e4ab418984ad5024f4d4",
+        "Assets/Editor/MacBatch.cs": "f17779b20730dc1b86f748827b24bd8adf64e44da9753920d71e79dfe5c11e7b",
+        "Assets/Editor/MacBatch.cs.meta": "d683b47ede64215a79a2980ef9f8c86400e83be8848bfc63bebb9693ece082d3",
+        "Assets/Editor/PreferenceRecovery.cs": "cb2fb347789b2084cd29b124f01fb6c50a90603a0569a7ce11427cd547b38b83",
+        "Assets/Editor/PreferenceRecovery.cs.meta": "7aef25e8e6c0b3076aff095c9566cb7cf9c3de789730d0c8ec0d198e85719a4c",
+        "Assets/Editor.meta": "fa7d5f7dc42a12d000a923f3bae5770cd7b0f8f8404173b6d0f2d8260f940262",
+        "Assets/Extended.asmdef": "dc7212c8693036643183e32d5ee9cd749d94c7548dbaceec9a05c0add8de4f26",
+        "Assets/Extended.asmdef.meta": "b9d530f85b7a8f6357ee23b549ae4c5641c65e1bfe3e2bec2c9b43889cb451cc",
+        "Assets/ExtendedBenchmark.cs": "6afc90df5af2cc0e0dfe05120cbd69defa23a556f25ba5840a764f9e7d1d4f1d",
+        "Assets/ExtendedBenchmark.cs.meta": "61e9c94f81d19e02f510873d8786642d0f585cb0f506b9ce7d10bd9bffcad856",
+        "Assets/StateWriter.cs": "c5d12c442fd7cdd301543f64761ce0da6829158af3a35c29ab742e4a66b6ab83",
+        "Assets/StateWriter.cs.meta": "73276f40dd1751e0f5c9b6cd825e86155ee46e5fdaecaee8d6fdc5d958264b4d",
+        "Assets/WorkerProbe.cs": "cc76e05bca547265063c4c957f2b9d293fb8fb41eb9fb9a66011b766313b8cfc",
+        "Assets/WorkerProbe.cs.meta": "8b058d9b5729c8ef3d23537b8ceade209af9579c33bedf63ef4761b05dff5279",
+        "Packages/manifest.json": "fa91eacabba80a5a635c5d586c69956e0131c17360cf92dde1ae6f7616cb8f68",
+        "Packages/packages-lock.json": "748c106a204dd959a6e655ed75534069aa16f02d28e281d5fbea202334d323a8",
+        "ProjectSettings/AudioManager.asset": "9543c41dbfc7d3951217c4dd9481ed026eb8e529b85ecf4463969a0fea747729",
+        "ProjectSettings/ClusterInputManager.asset": "40e65dd214bf254955d2c8829ca8ce2130fd3510485560ce012e9a1ddd93e623",
+        "ProjectSettings/DynamicsManager.asset": "fb36e677f7de32325bede8462e7e3eaf0be86ca374216d2907886fce7cb1d488",
+        "ProjectSettings/EditorBuildSettings.asset": "1942c088ddfeeef348fdf12390e2a2d6da51056e197458d67969d44e7b2cbbd3",
+        "ProjectSettings/EditorSettings.asset": "89cb14ab05ce8ce1e1413fa559e9d9ccb2633db48685215527d44eba43412aff",
+        "ProjectSettings/GraphicsSettings.asset": "40de98f4d46d02fb08e268ad3a722a00eed7289f4ef6d2e759984b1b4a85d2af",
+        "ProjectSettings/InputManager.asset": "d0f454ddb880912abcae92e3e12957a7446786ba89e24937e019ff3bbc0d4300",
+        "ProjectSettings/MemorySettings.asset": "cb2e41edd7f5a64298d68dd4ab768e8908e33a00f26e5ee53638e4d4251c358e",
+        "ProjectSettings/MultiplayerManager.asset": "ce4075d7a7dd8ac7ffe55de2427692c63f90dae398208bd80cec0f27cbe09f4b",
+        "ProjectSettings/NavMeshAreas.asset": "7ebbf8f53b8033104e1878b95ca07a28d0954092d81c220f14196a42f651e658",
+        "ProjectSettings/Physics2DSettings.asset": "1cfc0c8fbceec604fd7cd2a06c04ff05dddee6335b75c92b0f5715ad80ba9490",
+        "ProjectSettings/PresetManager.asset": "29c125923fe6e29f90190d4fce1c82d660e7051546e2c9d02908d18c9cf2436c",
+        "ProjectSettings/ProjectSettings.asset": "67d37d98623c3f03780a63aca6d44e7845034ec8702e34ef073d8e391c3e22b2",
+        "ProjectSettings/ProjectVersion.txt": "c88aca53996b7a2c9be5551cb82a59b405b91d5eb9ac511bdb83b16cfb0c4d96",
+        "ProjectSettings/QualitySettings.asset": "f1f893b1be47ad2442f58338dd7c860dc1986bb317e2f5bb31084454ffabbf4c",
+        "ProjectSettings/TagManager.asset": "996628fdc904025b83606bbfbda4fe08c0bbe916475146110e77cdc2f22c2013",
+        "ProjectSettings/TimeManager.asset": "3396f52fdc16d445024e01d7a2d99db6f0a37569d1d73c0302e9ffb857d90287",
+        "ProjectSettings/UnityConnectSettings.asset": "11251dae0356b6f43dd2c67bb511f6b7ecda4e5de425186bba3297e6f3dc1c6f",
+        "ProjectSettings/VFXManager.asset": "2973a6af930e142f62cde00076beda8a3cc3a66d9bfcde7a58ba7d4be2251c26",
+        "ProjectSettings/VersionControlSettings.asset": "e199cdfa6a8f2bf33cfd47e549198f13e3eb2a5099e908fdb4e0f14d939ccc6b"
+      },
+      "wrapper_template_sha256": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+      "prepared_wrapper_sha256": "f17779b20730dc1b86f748827b24bd8adf64e44da9753920d71e79dfe5c11e7b"
+    }
+  },
+  "reprepare": "Adopted only verified first-import metadata. All copied input-file bytes unchanged during reprepare; ten historical C# inputs unchanged. Already registered ufi retained without shared registry rewrite.",
+  "records": [
+    {
+      "length": 64,
+      "entities": 1003,
+      "warmup": 2,
+      "frames": 3,
+      "steps": 5,
+      "runners": 1,
+      "quality_passed": true,
+      "independent_original_scalar_reference_verified": true,
+      "full_state_byte_identical": true,
+      "state_sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+      "state_bytes": 292900,
+      "full_state_blake3": "149554c3d8a3b17012b1240d79391b7ec38d92a215b144a5b328def1b0efaba7",
+      "timings_accepted": false,
+      "timing_comparable": false,
+      "prepared_manifests_match": true,
+      "validation": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.validation.json",
+      "engines": {
+        "bevy": {
+          "result": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_bevy_smoke.json",
+          "result_sha256": "021ff11a3f7c47410e477340d24ea277034bfc83328df2f12241a144067db44c",
+          "launch_sha256": "3470b5eeb40a7dcab3a1c285d4c527d3511b7c08021125a4638de7032823b50f",
+          "config": {
+            "distribution": "spread",
+            "fork_join": false,
+            "length": 64,
+            "percent": 10,
+            "trim": false
+          },
+          "max_kernel_runners": 1,
+          "worker_probe": {
+            "kind": "separate_1003_entity_scheduler_probe",
+            "caller_thread_id": "ThreadId(1)",
+            "observed_thread_ids": [
+              "ThreadId(1)"
+            ],
+            "caller_observed": true,
+            "observed_unique_runners": 1,
+            "proves_timed_case_concurrency": false,
+            "instrumentation": "one mutex registration per participating thread; diagnostic only"
+          },
+          "layout": {
+            "smallvec_inline_words": 4,
+            "buffer_component_bytes": 24,
+            "buffer_component_alignment": 8,
+            "capacity_histogram": {
+              "64": 1003
+            },
+            "spilled_components": 1003,
+            "live_words": 64192,
+            "capacity_observation": "post-run only; not an allocation counter",
+            "resize_storage_policy_checked": false,
+            "components": [
+              {
+                "name": "Id",
+                "bytes": 4,
+                "alignment": 4
+              },
+              {
+                "name": "Value",
+                "bytes": 8,
+                "alignment": 4
+              },
+              {
+                "name": "Words",
+                "bytes": 24,
+                "alignment": 8
+              }
+            ]
+          },
+          "buffer_kernel_requested": "baseline",
+          "buffer_kernel_reported": "baseline-row-mut-scalar",
+          "timings_accepted": false,
+          "executable": {
+            "executable_sha256": "ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/ara-ecs-extended-fixture",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29.build.json",
+            "original_build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/extended-feature-rust/build-provenance.json",
+            "build_provenance_sha256": "9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29",
+            "buffer_kernel": {
+              "requested": "baseline",
+              "expected_reported_label": "baseline-row-mut-scalar",
+              "legacy_metadata_allowed": false,
+              "rustc_target_cfg": null
+            }
+          }
+        },
+        "unity": {
+          "result": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json",
+          "result_sha256": "314ea1fd85427107077a42edeafe5a61e07aa849bdd8b4120d0e58e6e466218a",
+          "launch_sha256": "a8983bae062e339af1170f7bd72e9c52b37636b98179044f4876623c244930d6",
+          "config": {
+            "percent": 10,
+            "distribution": "spread",
+            "length": 64,
+            "trim": false,
+            "fork_join": false
+          },
+          "max_kernel_runners": 1,
+          "worker_probe": {
+            "kind": "separate_1003_entity_ECS_job_probe",
+            "caller_observation": "native slots not mapped to managed caller",
+            "scope": "does not prove timed-case concurrency",
+            "configured_workers": 0,
+            "observed_native_thread_slots": [
+              0
+            ]
+          },
+          "layout": {
+            "inline_words": 4,
+            "buffer_size_in_chunk": 32,
+            "element_bytes": 4,
+            "alignment": 4,
+            "capacities": [
+              64
+            ],
+            "capacity_counts": [
+              1003
+            ],
+            "live_words": 64192,
+            "capacity_above_inline": 1003,
+            "components": [
+              {
+                "name": "Id",
+                "bytes": 4,
+                "alignment": 4,
+                "size_in_chunk": 4
+              },
+              {
+                "name": "Value",
+                "bytes": 8,
+                "alignment": 4,
+                "size_in_chunk": 8
+              },
+              {
+                "name": "Word",
+                "bytes": 4,
+                "alignment": 4,
+                "size_in_chunk": 32
+              }
+            ],
+            "resize_storage_policy_checked": false
+          },
+          "buffer_kernel_requested": "baseline",
+          "buffer_kernel_reported": null,
+          "timings_accepted": false,
+          "restoration": {
+            "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json.environment.json.initial.json",
+            "sha256": "da978019ae57c20379282e0c9d7175d3775ebf22839e709103f7da4c99d58898",
+            "invocation_id": "3dcd382455124e41a7e8f1fe4ef2bf0f",
+            "initial_state_sha256": "1fc2634e46e10470b5146f2fc1b6a3c3ec97360efcbdce9d27f1d135452867c0",
+            "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json.environment.json.initial.json.restoration.json",
+            "receipt_sha256": "c6163dd78e310c853c76da2656c96bd4b33b5c07b91835fac0c8fbca92f4e3bb",
+            "restored": true
+          },
+          "Editor": "6000.4.5f1",
+          "packages": [
+            {
+              "name": "com.unity.burst",
+              "version": "1.8.29",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.collections",
+              "version": "6.4.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.entities",
+              "version": "6.4.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.ext.nunit",
+              "version": "2.0.5",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.mathematics",
+              "version": "1.3.3",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.modules.assetbundle",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.audio",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.hierarchycore",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.imgui",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.jsonserialize",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.physics",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.ui",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.uielements",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.unityanalytics",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.unitywebrequest",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.nuget.mono-cecil",
+              "version": "1.11.6",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.profiling.core",
+              "version": "1.0.3",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.scriptablebuildpipeline",
+              "version": "2.6.1",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.serialization",
+              "version": "3.1.5",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.test-framework",
+              "version": "1.6.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.test-framework.performance",
+              "version": "3.4.0",
+              "source": "Registry"
+            }
+          ],
+          "effective_Burst_flags": {
+            "burst_enabled": true,
+            "burst_safety_checks": false,
+            "burst_force_safety_checks": false,
+            "burst_debug": false
+          },
+          "finally_restored": true
+        }
+      }
+    },
+    {
+      "length": 4,
+      "entities": 1003,
+      "warmup": 2,
+      "frames": 3,
+      "steps": 5,
+      "runners": 1,
+      "quality_passed": true,
+      "independent_original_scalar_reference_verified": true,
+      "full_state_byte_identical": true,
+      "state_sha256": "77a1e073882a43c709e04fafabbf0241a60027b41e03741335f2bea38bdafe0f",
+      "state_bytes": 52180,
+      "full_state_blake3": "e4f40706808adecee02b261f45e08e3f1ef83e3af3c59d4cac8b6fb9b833743c",
+      "timings_accepted": false,
+      "timing_comparable": false,
+      "prepared_manifests_match": true,
+      "validation": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.validation.json",
+      "engines": {
+        "bevy": {
+          "result": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_bevy_smoke.json",
+          "result_sha256": "18efb3047730b8976d2ee20fa4aafe1c5161bf6f435eacab027d649716d37214",
+          "launch_sha256": "b8519c3feb0b9637e7fa1b1dd2ee4df5cc6e3a40cc8e2a8ffe79213117ddfae0",
+          "config": {
+            "distribution": "spread",
+            "fork_join": false,
+            "length": 4,
+            "percent": 10,
+            "trim": false
+          },
+          "max_kernel_runners": 1,
+          "worker_probe": {
+            "kind": "separate_1003_entity_scheduler_probe",
+            "caller_thread_id": "ThreadId(1)",
+            "observed_thread_ids": [
+              "ThreadId(1)"
+            ],
+            "caller_observed": true,
+            "observed_unique_runners": 1,
+            "proves_timed_case_concurrency": false,
+            "instrumentation": "one mutex registration per participating thread; diagnostic only"
+          },
+          "layout": {
+            "smallvec_inline_words": 4,
+            "buffer_component_bytes": 24,
+            "buffer_component_alignment": 8,
+            "capacity_histogram": {
+              "4": 1003
+            },
+            "spilled_components": 0,
+            "live_words": 4012,
+            "capacity_observation": "post-run only; not an allocation counter",
+            "resize_storage_policy_checked": false,
+            "components": [
+              {
+                "name": "Id",
+                "bytes": 4,
+                "alignment": 4
+              },
+              {
+                "name": "Value",
+                "bytes": 8,
+                "alignment": 4
+              },
+              {
+                "name": "Words",
+                "bytes": 24,
+                "alignment": 8
+              }
+            ]
+          },
+          "buffer_kernel_requested": "baseline",
+          "buffer_kernel_reported": "baseline-row-mut-scalar",
+          "timings_accepted": false,
+          "executable": {
+            "executable_sha256": "ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/ara-ecs-extended-fixture",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29.build.json",
+            "original_build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/extended-feature-rust/build-provenance.json",
+            "build_provenance_sha256": "9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29",
+            "buffer_kernel": {
+              "requested": "baseline",
+              "expected_reported_label": "baseline-row-mut-scalar",
+              "legacy_metadata_allowed": false,
+              "rustc_target_cfg": null
+            }
+          }
+        },
+        "unity": {
+          "result": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json",
+          "result_sha256": "b80d7cf9b19563b472f814ac839a92b764c145a1e802dfc5750cccb35d1af39f",
+          "launch_sha256": "71bd9465ef3fe9a85305747d5a0245562dc7864f25d39b2e5571af26e6a0257d",
+          "config": {
+            "percent": 10,
+            "distribution": "spread",
+            "length": 4,
+            "trim": false,
+            "fork_join": false
+          },
+          "max_kernel_runners": 1,
+          "worker_probe": {
+            "kind": "separate_1003_entity_ECS_job_probe",
+            "caller_observation": "native slots not mapped to managed caller",
+            "scope": "does not prove timed-case concurrency",
+            "configured_workers": 0,
+            "observed_native_thread_slots": [
+              0
+            ]
+          },
+          "layout": {
+            "inline_words": 4,
+            "buffer_size_in_chunk": 32,
+            "element_bytes": 4,
+            "alignment": 4,
+            "capacities": [
+              4
+            ],
+            "capacity_counts": [
+              1003
+            ],
+            "live_words": 4012,
+            "capacity_above_inline": 0,
+            "components": [
+              {
+                "name": "Id",
+                "bytes": 4,
+                "alignment": 4,
+                "size_in_chunk": 4
+              },
+              {
+                "name": "Value",
+                "bytes": 8,
+                "alignment": 4,
+                "size_in_chunk": 8
+              },
+              {
+                "name": "Word",
+                "bytes": 4,
+                "alignment": 4,
+                "size_in_chunk": 32
+              }
+            ],
+            "resize_storage_policy_checked": false
+          },
+          "buffer_kernel_requested": "baseline",
+          "buffer_kernel_reported": null,
+          "timings_accepted": false,
+          "restoration": {
+            "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json.environment.json.initial.json",
+            "sha256": "e20f67c36482114e4ec2419070ba238e71adf7f7adf560013873364ccd3e20dd",
+            "invocation_id": "7cffeb5ee1d1453bb8349b2c7033912e",
+            "initial_state_sha256": "1fc2634e46e10470b5146f2fc1b6a3c3ec97360efcbdce9d27f1d135452867c0",
+            "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json.environment.json.initial.json.restoration.json",
+            "receipt_sha256": "f89b8df8c225214934bed4a0a1d99de2d326ab6b142bc4f8e84aad7437b8804a",
+            "restored": true
+          },
+          "Editor": "6000.4.5f1",
+          "packages": [
+            {
+              "name": "com.unity.burst",
+              "version": "1.8.29",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.collections",
+              "version": "6.4.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.entities",
+              "version": "6.4.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.ext.nunit",
+              "version": "2.0.5",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.mathematics",
+              "version": "1.3.3",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.modules.assetbundle",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.audio",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.hierarchycore",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.imgui",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.jsonserialize",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.physics",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.ui",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.uielements",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.unityanalytics",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.modules.unitywebrequest",
+              "version": "1.0.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.nuget.mono-cecil",
+              "version": "1.11.6",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.profiling.core",
+              "version": "1.0.3",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.scriptablebuildpipeline",
+              "version": "2.6.1",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.serialization",
+              "version": "3.1.5",
+              "source": "Registry"
+            },
+            {
+              "name": "com.unity.test-framework",
+              "version": "1.6.0",
+              "source": "BuiltIn"
+            },
+            {
+              "name": "com.unity.test-framework.performance",
+              "version": "3.4.0",
+              "source": "Registry"
+            }
+          ],
+          "effective_Burst_flags": {
+            "burst_enabled": true,
+            "burst_safety_checks": false,
+            "burst_force_safety_checks": false,
+            "burst_debug": false
+          },
+          "finally_restored": true
+        }
+      }
+    }
+  ],
+  "global_recovery_clear": true,
+  "original_ufx_inputs_marker_cache_metadata_unchanged": true,
+  "shared_registry_unchanged": true,
+  "all10CSharp_unchanged": true,
+  "cache_causality": "Not established. OldSIGBUS and current runs use6000.4.5f1 with same packages; fresh project state and1003entitycount differ fromold100k. Small-count success proves neither old cache causality nor fullremaining timing readiness.",
+  "helper_proof_limit": "Successful link commands reconstructed from bound cached_tool source and recorded linkflags/library hashes. Current helper binary sampled after verification; first-link binary hash not captured separately.",
+  "timings_accepted": false,
+  "timing_comparable": false,
+  "cpu_returned": true,
+  "file_proofs": {
+    "target/feature-unity-recovery-current-20261109-140642Z/fresh-smokes-completion.json": {
+      "sha256": "38f1c1c74ef3b9ac332c2424755683ae210b014997af69aab4a024d2e7b5fa05",
+      "bytes": 54895
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state64.before.json": {
+      "sha256": "3131c5c8bb296007e2e3a8963997f237a6b7856aa3f636bee1cb07ecc22ba7c1",
+      "bytes": 13232
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke4.restoration.json": {
+      "sha256": "24233333047ab2bb311b9cd171c9bbf38e5b3559079467f833d60cfbf906e2c6",
+      "bytes": 738
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-invocation-before.json": {
+      "sha256": "8db8bca48c702afcdae263c306b1956617a20a3f8c92327bdbf49fbfc1599800",
+      "bytes": 20728
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke64.before.json": {
+      "sha256": "3e3199f54dc4e77ea515342ba9c4366c6f1d4356c0df749a5aeb9b1505c2c93d",
+      "bytes": 13127
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/ufi-marker-before-adopting-bootstrap.json": {
+      "sha256": "f9f4d2a95f805623f0ae615639dd1cf9486af84def53a223d8eff9661599153b",
+      "bytes": 7984
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh4_command.frontend.log": {
+      "sha256": "8ad22b4108974f04fc54cc6b4cd9093c17d6964d9eaefdf4098a47762966b4f9",
+      "bytes": 1381
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state4.before.json": {
+      "sha256": "f61c8db000fb15c89d1d4d83a14a1616bf3a1cae8845113e9a216fcdda7acdfb",
+      "bytes": 13234
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh4_command.launch.json": {
+      "sha256": "cbd89f118a14cc63a1b10274ea19abb5151b3b9a458727f72abac12f55e981b4",
+      "bytes": 1513
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh64_command.before.json": {
+      "sha256": "0d8ccb5b1b3bcf5e9f0fa30ae6ad4d62f368aa66b862a6d1cf5bfa08180f7eb2",
+      "bytes": 13154
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/packet-path.txt": {
+      "sha256": "45e1180a3082fbc3d36978e3d6303b63bba46a000cede31bb0870566d8dfae0b",
+      "bytes": 55
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/fresh-smokes-progress.json": {
+      "sha256": "b201952f4e2d6057bbda9d6a27acb834904f28c8e074cd1652433628ed11b37b",
+      "bytes": 27276
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh64_command.frontend.log": {
+      "sha256": "f745fdd4ff8ff4af62fe2bb89f2677e08649bf15a56578848936f8e5ad2ec822",
+      "bytes": 1389
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference4.launch.json": {
+      "sha256": "cc20984a107a3bdf925ad3bee3ea9c201739bf91e904da0c18baaabb30e37f43",
+      "bytes": 1363
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/config-preview-fixed64.json": {
+      "sha256": "ccb0a0d0284edb143f7bdbc56b37f575e3d7117c65ad309667728ba61cef79aa",
+      "bytes": 82
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference4.frontend.log": {
+      "sha256": "de34eea54cae9cffd1e1a309d1975857113d62b693fb9f009c6f5b801a539295",
+      "bytes": 322
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke4.before.json": {
+      "sha256": "d5b6341f426da2a29bfdcea143652a34c675ae9bb7a8420885a2d70ac489949d",
+      "bytes": 13117
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/reprepare-proof.json": {
+      "sha256": "a861d0f6409969b23e75086026fc93f5763062dd17d13878bc44860f99febbf3",
+      "bytes": 12758
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference64.launch.json": {
+      "sha256": "2aa11f3e61fb5ced54ccdb40bc584c55a9f1ef27c48110a1927185b72b06d61c",
+      "bytes": 1387
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/helper-link-proofs.json": {
+      "sha256": "7647b58d6e20cde16a0633c9cda0cbe129fd8d97e0a22764a06aac55df5a953e",
+      "bytes": 3148
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state64.frontend.log": {
+      "sha256": "7bc74075f016fbd4334839943b28ed0cb3929da5a93c82eca6089779e1c5757e",
+      "bytes": 4529
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke64.frontend.log": {
+      "sha256": "d62f8fe44ea403d7687e815ade6a5b0a223bc09278bc9272752f54ad42a20f1f",
+      "bytes": 256
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-driver.py": {
+      "sha256": "f7b3e21454320f3deb86c7a7b7bb5f1b8241cb39c1789b2f8b2bb4204ff76e48",
+      "bytes": 5329
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-result.json": {
+      "sha256": "c5f63d7d859c86d25df4338737325eaaaa72f8d8a1301d4920fe920730604e43",
+      "bytes": 13880
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/fresh-smokes-driver.py": {
+      "sha256": "8831e88310a0db046522433e21bce1d9d39cd55ebfad78db4cf1f0c55db3bacb",
+      "bytes": 6372
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/summary-packaging-correction.json": {
+      "sha256": "9b7b8a1d43eb75aec6d7d31d8b1114f6b7258c13088abeb74b4836d09cbffbc1",
+      "bytes": 300
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/reference-fixed4-1003-5steps.bin": {
+      "sha256": "77a1e073882a43c709e04fafabbf0241a60027b41e03741335f2bea38bdafe0f",
+      "bytes": 52180
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke64.before.json": {
+      "sha256": "79b413f4d56fa23fe635dad99d237c71f3e7719322907ffa4a5d6ca0dcdf6caa",
+      "bytes": 13126
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke4.launch.json": {
+      "sha256": "1ead8f1927d7dbdb6c15cff388cb9a833c1e1770e6ab37664027a083b866e3dc",
+      "bytes": 5820
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/README.md": {
+      "sha256": "927309a789f03b57072c25860fa4b1989c73b39aa4950495a39d58b45b9cd6a3",
+      "bytes": 1285
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-frontend.log": {
+      "sha256": "bccfca18e193c36d360f139f0e4db64aada7734a08288ed25a212798363d9029",
+      "bytes": 2994
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/fresh-smokes-driver.log": {
+      "sha256": "c6d5aecc02b8eaf2abfc3a70d62f895f186c54c9df74f74ded239049e214b4b0",
+      "bytes": 845
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke4.launch.json": {
+      "sha256": "20a66101a47a5e344452eb660d8659127602f0b0bf245fc01787f780691a60e6",
+      "bytes": 1474
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference64.before.json": {
+      "sha256": "4366f3e37190d66b15bea58c5a99b566bac41fa8d09f418dc7d53686b1960e76",
+      "bytes": 13004
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-driver.log": {
+      "sha256": "a6a3f038a077c7dd9c50b17d461f1a68ecf391f6345e130050345bb0c74fe8fe",
+      "bytes": 238
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-summary.json": {
+      "sha256": "53a4d0f76715b7e080710c7fd2ae666497e3b49f8f2a8b708c478d4ac7b77eeb",
+      "bytes": 14475
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/preparation-proof.json": {
+      "sha256": "6fa5bc6eb9348cba290887cdb996e33a6d898adcaa5b8439f655f82ffd794625",
+      "bytes": 22376
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke4.frontend.log": {
+      "sha256": "8c586b4c03c509d7446cd54e445e562e00adf4bb931e1311ee592e97698a210b",
+      "bytes": 253
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke64.restoration.json": {
+      "sha256": "861edf7a063ba73ae8d2f51a0189279a6f9694cb2b00ca4df294abd75b89a630",
+      "bytes": 742
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke64.launch.json": {
+      "sha256": "ebb373e63e24cd9009bb10ae1b3d45e100baa33d2a2b3eaed0f644488e5a6a22",
+      "bytes": 1498
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke4.before.json": {
+      "sha256": "656473ff43b1f299510cc04e23c8b046f75803cd149898822f4a8eedb4563112",
+      "bytes": 13118
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke4.frontend.log": {
+      "sha256": "b23502a5793b9bd5a3e6f5304c67fc0da71ea925edf1762e337e7634c0d3efb2",
+      "bytes": 254
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/helper-after-verifications.bin": {
+      "sha256": "d94e5bf4c9a06983783f457ce84aa2670bcf475e46d208d0f2e75d7599357f0e",
+      "bytes": 547520
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/ufi-marker-before.json": {
+      "sha256": "85bcfe6df6f415b6067f81e840c86ab81043644a1b7f5a2db44ef2f5b669fa51",
+      "bytes": 7539
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state64.launch.json": {
+      "sha256": "18afe9b32c34b2fd3a5a2bdf4ba16e8889012abe04f6c0f872b86e2266c142f4",
+      "bytes": 1596
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/cold64-invocation-after.json": {
+      "sha256": "c51436e0c5f301a0547f42577cebfb7ea90c1799c9c37e5fd4ad3c1e15f2c4ea",
+      "bytes": 79188
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/config-preview-fixed4.json": {
+      "sha256": "4ad411936048615e089439b4ced4b595f947edc25f8e650bc0532d824fe5ad33",
+      "bytes": 81
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/prepare-output.json": {
+      "sha256": "d5a4e1230308372b41aeabd339ae37e5db7680bf8f15ce36815bac7a0de7584c",
+      "bytes": 201
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state4.frontend.log": {
+      "sha256": "b7615f55cd7bcbe35b51b487740d49d187af3f19b8d3b75915930fb319cfbc4b",
+      "bytes": 4513
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/unity_smoke64.launch.json": {
+      "sha256": "63ae083ac23841da26022d9db694de2cc40ce380bc3540edec46250e62847871",
+      "bytes": 7520
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/bevy_smoke64.frontend.log": {
+      "sha256": "ed39df47288af962bdbc9153108b1a0ecafe6fd6a39109280066ee35ebd3439d",
+      "bytes": 255
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference64.frontend.log": {
+      "sha256": "5664e98f981cd9d84879fb244d025d6a70f4f25eb31b6110787e155bce76e0cd",
+      "bytes": 324
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/verify_full_state4.launch.json": {
+      "sha256": "b7eee394d8e9512b33540022f2bb5ff2321e57391a413b71d111401275cab469",
+      "bytes": 1605
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh4_command.before.json": {
+      "sha256": "269e42368358c1507baed96263b99b45677c476d06acead56590bcb46a42f4a7",
+      "bytes": 13145
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/capture_fresh64_command.launch.json": {
+      "sha256": "34bb4d70205b7697a3334206b64c7da8a461d30b04da40267982bbb9059cc8d4",
+      "bytes": 1537
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/diagnostic-plan.json": {
+      "sha256": "29fd43ca13601f324e3c8cfa5e941e65cf2b004b333a772d94a95ee899e9d6ca",
+      "bytes": 13529
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/reprepare-output.json": {
+      "sha256": "d5a4e1230308372b41aeabd339ae37e5db7680bf8f15ce36815bac7a0de7584c",
+      "bytes": 201
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/independent_reference4.before.json": {
+      "sha256": "0fbf5372c8eb6520bc63ac6f1f04b62dbf16574d73aa37ab330ff4d63789f316",
+      "bytes": 12995
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/prepared-manifest.json": {
+      "sha256": "f91bdea335e99f1457d5a3c928893b9b2fb58cb8a6586352e23cefbc9ae98da4",
+      "bytes": 8449
+    },
+    "target/feature-unity-recovery-current-20261109-140642Z/reference-fixed64-1003-5steps.bin": {
+      "sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+      "bytes": 292900
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json.environment.json.initial.json": {
+      "sha256": "da978019ae57c20379282e0c9d7175d3775ebf22839e709103f7da4c99d58898",
+      "bytes": 3388
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json": {
+      "sha256": "314ea1fd85427107077a42edeafe5a61e07aa849bdd8b4120d0e58e6e466218a",
+      "bytes": 1984
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.launch.json": {
+      "sha256": "a8983bae062e339af1170f7bd72e9c52b37636b98179044f4876623c244930d6",
+      "bytes": 22378
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.bin": {
+      "sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+      "bytes": 292900
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json.environment.json.initial.json.restoration.json": {
+      "sha256": "c6163dd78e310c853c76da2656c96bd4b33b5c07b91835fac0c8fbca92f4e3bb",
+      "bytes": 680
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.launcher.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.validation.json": {
+      "sha256": "5c10e9fa040b28bc1bb18d338490665ca6552c0b4711d1b115ac8c0917ded0f3",
+      "bytes": 5365
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.json.environment.json": {
+      "sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c",
+      "bytes": 4300
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_bevy_smoke.bin": {
+      "sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+      "bytes": 292900
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_bevy_smoke.launcher.log": {
+      "sha256": "f2ad028a3a55872370ef7d4a1a854f4b30c60ecea354e0382958d43e6b432547",
+      "bytes": 2050
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_bevy_smoke.json": {
+      "sha256": "021ff11a3f7c47410e477340d24ea277034bfc83328df2f12241a144067db44c",
+      "bytes": 2049
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_bevy_smoke.launch.json": {
+      "sha256": "3470b5eeb40a7dcab3a1c285d4c527d3511b7c08021125a4638de7032823b50f",
+      "bytes": 15692
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke64-140642Z/buffer_fixed_1003_length64_r1_unity_smoke.log": {
+      "sha256": "6e80b6f82843d560a148e15c1804bbabc8f3ad2eb043f8d026660b4062d05514",
+      "bytes": 36270
+    },
+    "target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/ara-ecs-extended-fixture": {
+      "sha256": "ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1",
+      "bytes": 2038832
+    },
+    "target/perf-scale/feature-binaries/ac94fd1a7d9a880cc86e20c68e765136894dec8a8d93c2c31de563bae3ce90a1/9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29.build.json": {
+      "sha256": "9d93850b4e52489f3b91d0c9ef436da19697795f9e8de2fb025a5db0d1201f29",
+      "bytes": 21430
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json.environment.json.initial.json": {
+      "sha256": "e20f67c36482114e4ec2419070ba238e71adf7f7adf560013873364ccd3e20dd",
+      "bytes": 3386
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.validation.json": {
+      "sha256": "33b9f96a05bef3ff3992d80c53232550d689064f632ae1df99f3f7a85f02b971",
+      "bytes": 5349
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json": {
+      "sha256": "b80d7cf9b19563b472f814ac839a92b764c145a1e802dfc5750cccb35d1af39f",
+      "bytes": 1975
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_bevy_smoke.launch.json": {
+      "sha256": "b8519c3feb0b9637e7fa1b1dd2ee4df5cc6e3a40cc8e2a8ffe79213117ddfae0",
+      "bytes": 15669
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_bevy_smoke.launcher.log": {
+      "sha256": "28c0bda4d2ebce11fdc761b4a56b9aca4b667018d4cecb800c3049f9b665cb67",
+      "bytes": 2048
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_bevy_smoke.bin": {
+      "sha256": "77a1e073882a43c709e04fafabbf0241a60027b41e03741335f2bea38bdafe0f",
+      "bytes": 52180
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.bin": {
+      "sha256": "77a1e073882a43c709e04fafabbf0241a60027b41e03741335f2bea38bdafe0f",
+      "bytes": 52180
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json.environment.json": {
+      "sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c",
+      "bytes": 4300
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_bevy_smoke.json": {
+      "sha256": "18efb3047730b8976d2ee20fa4aafe1c5161bf6f435eacab027d649716d37214",
+      "bytes": 2047
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.json.environment.json.initial.json.restoration.json": {
+      "sha256": "f89b8df8c225214934bed4a0a1d99de2d326ab6b142bc4f8e84aad7437b8804a",
+      "bytes": 678
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.launch.json": {
+      "sha256": "71bd9465ef3fe9a85305747d5a0245562dc7864f25d39b2e5571af26e6a0257d",
+      "bytes": 20527
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.launcher.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "target/perf-scale/ufi/results/ufi-current-smoke4-140642Z/buffer_fixed_1003_length4_r1_unity_smoke.log": {
+      "sha256": "e1c3bedadf929c177dbd6e8e08ed9d29a3ddc23cd891529d04650cc7c8fdd870",
+      "bytes": 31757
+    }
+  },
+  "date": "2026-11-09",
+  "checkpoint_version_clarification": "The old SIGBUS checkpoint and current diagnostic both identify Unity 6000.4.5f1 with the same package cohort. A separately observed 6000.3.27f2 idle compiler was unrelated.",
+  "bootstrap_proof_sha256": "53a4d0f76715b7e080710c7fd2ae666497e3b49f8f2a8b708c478d4ac7b77eeb",
+  "fresh_pair_proof_sha256": "3d6d1c82e8b0cd6b23b69c53f3ced6d476b4f1e0964f7cde5beaa318c8a69c7a"
+}

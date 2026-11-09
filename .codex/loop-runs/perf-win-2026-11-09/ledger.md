@@ -350,3 +350,44 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
   20261109 (fourfilesplusplan), privateSDKonly, globallycleanbaseline, eight exact
   diagnostic differentials plusineligiblepropertycounterexample. Unbuilt/unrun; Root
   willgrant isolatedqualityafterthisverifiedcorrectnesssliceispushed.
+
+
+### Active after7ddac7ecb checkpoint
+
+- Coveragefix committed+pushed7ddac7ecb. Root treecleanbeforethisledgerupdate.
+- Targetbodyanalysisquality initiallyfailed unqualifiedEnvironment (Ara/System); Root
+  qualifiedSystem.Environment, preservedsource/logs. Nextfailure exposedduplicate
+  cacheddiagnostics fromsuccessive CWA semanticspanrequests. Filtereachrequesttoits
+  disjointfullmethodspan; exactfull-vs-scopedmultisetassertnotweakened. All8differentials
+  +ineligiblepropertycounterexample nowpass in quality-scoped-filter-512.json.
+  No productionnarrowing/no timings. Batch_queries owns target-onlyfinite24cell/
+  288calltiming implementation SOURCEpreparation, NO CPU/build/run grant yet.
+- CurrentUnitysource-onlyplan refreshed in feature-unity-recovery-current-20261109-
+  140642Z. TenC#numeric/controlhashes matchold; ufipreparedextended-v1controls fresh,
+  ufxandoldcacheunchanged, recoveryregistryclear. Rootgrantedecs_research CPU for
+  ONLYONEcold64 bootstrap serial1003/5ticksmoke diagnostic. No acceptedtimings,
+  noBevy/helperbuild/secondUnity/reprepare/manualglobalchanges/retry/recovery.
+  Stoponfailure,verifydurablecheckpoint+normalfinallyreceipt,returnCPU. Root IOonly.
+
+- Unity cold64 completed without crash. First-import metadata/settings delta caused
+  expected rejection; exact normal restoration receipt passed, editor exited and
+  recovery registry cleared. Root reviewed only33added metadata/settings files and
+  ProjectVersion change, C#kernels unchanged; granted verified reprepare and two
+  serial1003/5tick full-state pairs64/4, baseline-only, no accepted throughput.
+  Current64 pair nowpasses both engines+independent scalar oracle and receipt.
+  Length4 runsnext. Current verifier relinks BLAKE3 helper onceperverify; Root
+  authorized two tiny helperlinks outsidecase, no engine build orsourceadapter.
+- Version correction: direct oldSIGBUS checkpoint and current cold64 both record
+  Unity6000.4.5f1 and identical package cohorts (Burst1.8.29, Entities/Collections6.4.0,
+  Maths1.3.3). Root initially inferred .3.27f2 from unrelated observedVBCS; retract
+  that inference. Checkpoint facts rule; no cache-only cause attribution eitherway.
+
+- Fresh serial Unity/Bevy baseline fixed64 andfixed4 pairs complete. Bothcurrent
+  full-state/ID/component/update/buffer dumps match independent originalscalar
+  references at1003entities/5steps, exact current input/nativebuild bindings and
+  normalrestorationreceipts. Guardclear/Editorclosed,ufx/cache/registryunchanged.
+  No acceptedthroughput; no 100k retry orcachecause claim. Public correctness
+  packet buffer_fresh_smokes_mac_2026-11-09.json retains88rawproof hashes/limits.
+- Bodyrequesttiming sources frozen thenRoot requested guardonlychanges before
+  execution: minimal nonsensitiveenvironment snapshot, stablepower withbattery
+  allowed, unchangedcumulativeidleVBCS exception,100mssampling. Unbuilt/unrun.
