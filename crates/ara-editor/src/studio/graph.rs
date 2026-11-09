@@ -197,9 +197,10 @@ fn theme(l: &ara_kit::look::Look) -> Theme {
         let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         Color(b(rgba.r), b(rgba.g), b(rgba.b), b(rgba.a))
     };
+    // Unreal's contrast: dark nodes on lighter graph paper, coloured headers.
     Theme {
-        background: color(c.background.0),
-        card: color(c.card.0),
+        background: color(ara_kit::ui::mix(c.card.0, c.raised.0, 0.35)),
+        card: color(ara_kit::ui::mix(c.background.0, c.card.0, 0.4)),
         raised: color(c.raised.0),
         border: color(c.border.0),
         separator: color(c.separator_strong.0),
@@ -217,7 +218,8 @@ fn theme(l: &ara_kit::look::Look) -> Theme {
             c.chart_6.0,
         ]
         .map(color),
-        shadow: Color(0, 0, 0, if l.dark { 90 } else { 22 }),
+        shadow: Color(0, 0, 0, if l.dark { 140 } else { 40 }),
+        select: color(c.warning.0),
     }
 }
 
@@ -366,7 +368,276 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             }
             _ => Handled::No,
         });
-    col().grow(1.0).child(toolbar).child(canvas)
+    let body = row()
+        .grow(1.0)
+        .min_h(0.0)
+        .child(col().grow(1.0).min_w(0.0).child(canvas));
+    let body = if animation {
+        body
+    } else {
+        body.child(details(s, &doc))
+    };
+    col().grow(1.0).child(toolbar).child(body)
+}
+
+/// The material's Details (Unreal) / Graph Inspector (Shader Graph): with nothing selected,
+/// its parameters, as Shader Graph's Blackboard lists them; with a node, its value (typed
+/// here), what feeds each input and what its output feeds.
+fn details(s: &Studio, doc: &str) -> El<Studio> {
+    use crate::graph::style;
+    let l = &s.look;
+    let c = &l.c;
+    let t = super::style::tones(l);
+    let mut out = col()
+        .key("material/details")
+        .w(300.0)
+        .min_w(240.0)
+        .fill(t.panel)
+        .scroll(Axis::Vertical);
+    let Some(shown) = s.graph.shown.as_ref().filter(|g| g.domain == "material") else {
+        return out;
+    };
+    let graph = shown.canvas.graph();
+    let material = ara_material::Material::from_graph(graph).ok();
+    let band = |title: String, caption: String, glyph| {
+        row()
+            .h(28.0)
+            .pad_x(10.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .fill(t.band)
+            .child(
+                stillkit::el::icon(glyph)
+                    .size(13.0)
+                    .color(c.muted_foreground.0),
+            )
+            .child(
+                text(title)
+                    .text_size(12.5)
+                    .weight(600)
+                    .color(c.foreground.0)
+                    .grow(1.0),
+            )
+            .child(text(caption).text_size(11.0).color(c.muted_foreground.0))
+    };
+    let prop = |label: String, value: El<Studio>| {
+        row()
+            .min_h(24.0)
+            .pad_x(10.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .child(
+                text(label)
+                    .text_size(12.0)
+                    .color(c.muted_foreground.0)
+                    .w(0.0)
+                    .grow(0.4),
+            )
+            .child(value.w(0.0).grow(0.6))
+    };
+    let selection = &shown.canvas.selection;
+    if selection.is_empty() {
+        out = out.child(band(
+            "Parameters".into(),
+            String::new(),
+            icons::SLIDERS_HORIZONTAL,
+        ));
+        let mut any = false;
+        for (id, node) in &graph.nodes {
+            if node.kind != "material.parameter" {
+                continue;
+            }
+            any = true;
+            let name = node
+                .payload
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(id)
+                .to_owned();
+            let ty =
+                style::short_type(node.payload.get("ty").and_then(Value::as_str).unwrap_or(""));
+            let (pick, hover) = (id.clone(), c.hover_surface.0);
+            out = out.child(
+                row()
+                    .key(format!("material/param/{id}"))
+                    .h(24.0)
+                    .pad_x(10.0)
+                    .gap(8.0)
+                    .align(Align::Center)
+                    .hovered(move |e| e.fill(hover))
+                    .on_press(move |s: &mut Studio| {
+                        if let Some(shown) = s.graph.shown.as_mut() {
+                            shown.canvas.selection = std::iter::once(pick.clone()).collect();
+                            s.graph.dirty = true;
+                        }
+                    })
+                    .child(el().size(8.0).radius(4.0).fill(c.info.0))
+                    .child(text(name).text_size(12.0).color(c.foreground.0).grow(1.0))
+                    .child(text(ty).text_size(11.0).color(c.muted_foreground.0)),
+            );
+        }
+        if !any {
+            out = out.child(
+                row().pad(10.0).child(
+                    text("No parameters. Add a Parameter node to expose a value to instances.")
+                        .text_size(11.5)
+                        .color(c.muted_foreground.0)
+                        .wrap(3),
+                ),
+            );
+        }
+        return out;
+    }
+    for id in selection {
+        let Some(node) = graph.nodes.get(id) else {
+            continue;
+        };
+        let op = node.kind.strip_prefix("material.").unwrap_or(&node.kind);
+        let ty = node.payload.get("ty").and_then(Value::as_str).unwrap_or("");
+        let name = node
+            .payload
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| style::op_title(op));
+        let kind = match op {
+            "parameter" => format!("Parameter · {}", style::short_type(ty)),
+            "literal" => format!("Constant · {}", style::short_type(ty)),
+            "output" => "Material output".into(),
+            _ => style::op_title(op),
+        };
+        out = out.child(band(name, kind, icons::CONTRAST));
+        let doc_line = match op {
+            "output" => "The material's typed outputs for its domain.",
+            "parameter" => "A value material instances and scripts can change.",
+            "literal" => "A typed constant, folded into the shader.",
+            _ => ara_material::library::get(op).map_or("", |b| b.doc),
+        };
+        if !doc_line.is_empty() {
+            out = out.child(
+                row().pad_x(10.0).pad_y(6.0).child(
+                    text(doc_line)
+                        .text_size(11.5)
+                        .color(c.muted_foreground.0)
+                        .wrap(4),
+                ),
+            );
+        }
+        let value = material.as_ref().and_then(|m| {
+            if let Some(p) = m.parameters.get(id) {
+                ara_json::to_value(&p.default).ok()
+            } else if let Some(ara_material::Expr::Literal { values }) =
+                m.bindings.get(id).map(|b| &b.expr)
+            {
+                Some(json!(values))
+            } else {
+                None
+            }
+        });
+        if let Some(value) = value {
+            let shown = value
+                .as_array()
+                .map(|v| {
+                    v.iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_else(|| value.to_string());
+            let (doc, node_id) = (doc.to_owned(), id.clone());
+            out = out.child(prop(
+                if op == "parameter" { "Default" } else { "Value" }.into(),
+                field(l, Size::Sm, format!("material/value/{id}"), None, "", &shown, move |x| {
+                    x.on_submit(move |s: &mut Studio, t| {
+                        // JSON, or lanes typed as `0.18, 0.42, 0.9`.
+                        let Ok(mut value) = serde_json::from_str::<Value>(t)
+                            .or_else(|_| serde_json::from_str(&format!("[{}]", t.trim())))
+                        else {
+                            return;
+                        };
+                        if value.is_number() {
+                            value = json!([value]);
+                        }
+                        let command = json!({"cmd": "editor.material.value.set", "args": {"node": node_id, "value": value}});
+                        if let Err(error) = s.editor.apply_to(&doc, vec![command], "Edit material node value") {
+                            s.editor.report_failure(&error);
+                        }
+                    })
+                }),
+            ));
+        }
+        let inputs: Vec<_> = node
+            .ports
+            .iter()
+            .filter(|(_, p)| p.direction == ara_graph::Direction::Input)
+            .collect();
+        if !inputs.is_empty() {
+            out = out.child(band("Inputs".into(), String::new(), icons::ARROW_RIGHT));
+        }
+        for (port, socket) in inputs {
+            let source = graph
+                .edges
+                .values()
+                .find(|e| e.to.node == *id && e.to.port == *port)
+                .and_then(|e| graph.nodes.get(&e.from.node))
+                .map(|from| {
+                    from.payload
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| {
+                            style::op_title(from.kind.trim_start_matches("material."))
+                        })
+                });
+            let pin = style::pin_label(node, port, socket.direction, &socket.ty);
+            out = out.child(prop(
+                pin,
+                row()
+                    .gap(6.0)
+                    .align(Align::Center)
+                    .child(
+                        text(source.clone().unwrap_or_else(|| "Not connected".into()))
+                            .text_size(12.0)
+                            .color(if source.is_some() {
+                                c.foreground.0
+                            } else {
+                                c.muted_foreground.0
+                            })
+                            .grow(1.0),
+                    )
+                    .child(
+                        text(style::short_type(&socket.ty))
+                            .text_size(10.5)
+                            .color(c.muted_foreground.0),
+                    ),
+            ));
+        }
+        for (port, socket) in node
+            .ports
+            .iter()
+            .filter(|(_, p)| p.direction == ara_graph::Direction::Output)
+        {
+            let users = graph
+                .edges
+                .values()
+                .filter(|e| e.from.node == *id && e.from.port == *port)
+                .count();
+            let uses = match users {
+                0 => "Unused".to_owned(),
+                1 => "Feeds 1 input".to_owned(),
+                n => format!("Feeds {n} inputs"),
+            };
+            out = out.child(prop(
+                format!("Output · {}", style::short_type(&socket.ty)),
+                text(uses).text_size(12.0).color(if users > 0 {
+                    c.foreground.0
+                } else {
+                    c.muted_foreground.0
+                }),
+            ));
+        }
+    }
+    out
 }
 
 /// Where the canvas is in the window (design px), from the last layout.
