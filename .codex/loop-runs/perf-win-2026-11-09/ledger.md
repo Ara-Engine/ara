@@ -115,3 +115,18 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
   solution build and all 8 JIT host tests pass with the same sample; focused Clippy
   and 114-package formatter pass. This validates shipping API support, not an AOT
   speedup measurement. Raw logs: `target/perf-main-integration-20261109/`.
+
+- Fresh ABI5 kernel packet `target/ecs-kernel-module-abi5-20261109T111347Z` passes
+  actual Game L1 plus cold Kernel L3/dependent relink at one boundary, both workloads,
+  full fields/native identities/tails and unload. Independent review found a cumulative
+  report-proof gap; the test now checks every boundary's report count and both module
+  heat/generation transitions. All 32 small mode/topology/budget cases and focused
+  Clippy/build/disassembly gates pass; no fresh throughput/Unity claim yet.
+  Executable SHA `577f998f61e9db2f5c35974c1b0219def5428cb741b49275b098e012e5fb81e5`.
+  One target-only controller filename error and one packaging syntax error are retained;
+  only the missing direct-mode checks resumed against the correct frozen SIMD controls.
+  No simulations were silently accepted from failed controllers or repeated wholesale.
+- Buffer harness now explicitly selects and isolates baseline/contiguous/SIMD variants;
+  both launch and offline verifier bind command, flags, architecture and archived build
+  bytes. All 49 focused Python contracts pass. Integrated Rust variant builds/tick gates
+  remain pending; prototype timings are not relabeled as combined-main measurements.

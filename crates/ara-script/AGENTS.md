@@ -65,6 +65,8 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   (`ESC_RUNTIME_REJECTED`, `ARA0905`).
 - **L3** anything else (signatures, struct fields, attributes, removals, Ara declarations,
   cold modules, debugger attached) → a new collectible ALC; columns migrate field by field.
+  Editing a cold module heats its new generation; a hot wrapper can retain L1 while its
+  unchanged referenced math module remains cold (`ecs_kernel_bench --kernel-module`).
 - **L4** `RELOAD_L4` + `ARA0926`: engine bindings (`Ara.Runtime.dll`) changed on disk, or a
   retired generation stays alive (`ARA0927`). The last good code keeps running; restarting
   the play process from a snapshot is the play process owner's job. Inventory membership
@@ -118,6 +120,8 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
     `modules`: cascades, relink vs rebuild, breaking edits, cycles. `nondisruption`: the four
     D20 guarantees. `restart`: L4 (runs from a private copy of `Ara.Host`'s output).
   - `aot`: NativeAOT sample. `run_worker`: limits.
+  - `kernel_module_reload`: Game L1 and an atomic cold Kernel L3/dependent relink;
+    full native identities, fields, SIMD tails, heats and generation transitions.
 - Each CLR test file is its own process (one .NET runtime per process); tests in a file
   share it through `support::clr_lock()`. `support::Live` writes inline modules and ticks.
 - Latency: `cargo run -p ara-script --release --example reload_bench [-- --edits 60 --verbose]`
