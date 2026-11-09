@@ -87,7 +87,7 @@ fn connect_card(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let command = format!("ara mcp --root \"{}\"", s.editor.host.root().display());
-    card(l)
+    col().radius(super::style::RADIUS).fill(super::style::tones(l).band)
         .pad(10.0)
         .gap(6.0)
         .child(row().gap(8.0).align(Align::Center).child(icon(icons::BOT).size(15.0).color(c.primary.0)).child(text("No agent connected").text_size(12.5).weight(600).color(c.foreground.0)))
@@ -252,7 +252,10 @@ fn turn_card(s: &Studio, turn: &crate::shell::agents_panel::Turn, now: Instant) 
             ),
         )
     };
-    let mut out = card(l).child(head);
+    let mut out = col()
+        .radius(super::style::RADIUS)
+        .fill(super::style::tones(l).band)
+        .child(head);
     if open {
         let mut diff = col().pad_x(10.0).pad_y(6.0).gap(2.0);
         for op in ops.iter().take(40) {
@@ -277,7 +280,7 @@ fn turn_card(s: &Studio, turn: &crate::shell::agents_panel::Turn, now: Instant) 
                     .color(c.muted_foreground.0),
             );
         }
-        out = out.child(divider(l)).child(diff);
+        out = out.child(diff);
     }
     out
 }
@@ -365,17 +368,13 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         );
     let history = store.history();
     if history.is_empty() {
-        return col()
-            .grow(1.0)
-            .child(toolbar)
-            .child(divider(l))
-            .child(empty(
-                l,
-                icons::CLOCK,
-                "No changes yet",
-                "Every edit, yours or an agent's, lands here as one step you can undo.",
-                None,
-            ));
+        return col().grow(1.0).child(toolbar).child(empty(
+            l,
+            icons::CLOCK,
+            "No changes yet",
+            "Every edit, yours or an agent's, lands here as one step you can undo.",
+            None,
+        ));
     }
     let now = Instant::now();
     let mut list = col().pad(4.0).gap(1.0);
@@ -445,6 +444,5 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
-        .child(divider(l))
         .child(col().h(0.0).grow(1.0).scroll(Axis::Vertical).child(list))
 }

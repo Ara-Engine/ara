@@ -760,9 +760,7 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
         .grow(1.0)
         .min_w(0.0)
         .child(search)
-        .child(divider(l))
         .child(list)
-        .child(divider(l))
         .child(footer(s, b, rows.get(active).copied()));
     row()
         .key("create")
@@ -770,12 +768,10 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
         .h(460.0)
         .radius(l.radius.md)
         .fill(c.popover.0)
-        .border(1.0, c.border.0)
         .shadow_level(stillkit::ShadowLevel::Menu)
         .label("Create")
         .on_key(|s: &mut Studio, key, _| keys(s, key.0))
         .child(cats.fill(c.muted.0.with_alpha(0.5)))
-        .child(el().w(1.0).h_full().fill(c.border.0))
         .child(right)
 }
 

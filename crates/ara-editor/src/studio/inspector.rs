@@ -20,7 +20,7 @@ use crate::inspector::{Field, Provenance, Widget};
 /// The label column's share of a row (Unity's 40/60 split).
 const LABEL: f32 = 0.4;
 /// A field row's height.
-const ROW: f32 = 22.0;
+const ROW: f32 = super::style::ROW;
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
@@ -60,7 +60,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         }
         by_component.entry(component).or_default().push(f);
     }
-    let mut page = col().pad(8.0).gap(6.0).child(header(s));
+    let mut page = col().pad(4.0).gap(3.0).child(header(s));
     // Transform leads, as in every engine; the rest keep their record order.
     order.sort_by_key(|c| c != "Transform");
     for component in order {
@@ -135,13 +135,18 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
     let c = &l.c;
     let folded = s.local.folded.contains(component);
     let name = component.to_owned();
+    let t = super::style::tones(l);
+    let hover = t.hover;
+    // A band a step above the panel, the fields flush under it: no card, no rule.
     let head = row()
         .key(format!("component/{component}"))
-        .h(26.0)
-        .pad_x(6.0)
-        .gap(8.0)
+        .h(22.0)
+        .pad_x(4.0)
+        .gap(6.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
+        .radius(super::style::RADIUS)
+        .fill(t.band)
+        .hovered(move |e| e.fill(hover))
         .color(c.foreground.0)
         .cascade_ink()
         .label(component.to_owned())
@@ -157,28 +162,28 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
             } else {
                 icons::CHEVRON_DOWN
             })
-            .size(12.0)
+            .size(11.0)
             .color(c.muted_foreground.0),
         )
         .child(
             icon(component_icon(component))
-                .size(14.0)
+                .size(13.0)
                 .color(c.info_foreground.0),
         )
         .child(
             text(spaced(component))
-                .text_size(12.5)
+                .text_size(super::style::TEXT)
                 .weight(600)
                 .grow(1.0),
         )
         .child(component_menu(s, component));
-    let mut out = card(l).fill(c.muted.0).child(head);
+    let mut out = col().child(head);
     if !folded {
-        let mut body = col().pad_x(8.0).pad_y(4.0).gap(2.0);
+        let mut body = col().pad_x(6.0).pad_y(3.0).gap(1.0);
         for f in fields {
             body = body.child(field_row(s, f));
         }
-        out = out.child(el().h(1.0).w_full().fill(c.border.0)).child(body);
+        out = out.child(body);
     }
     out
 }
@@ -436,8 +441,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                         .pad_x(2.0)
                         .align(Align::Center)
                         .radius(l.radius.xs)
-                        .fill(c.input.0.with_alpha(0.35))
-                        .border(1.0, c.border.0)
+                        .fill(l.well())
                         .child(tag)
                         .child(
                             number(
@@ -584,8 +588,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 .gap(6.0)
                 .align(Align::Center)
                 .radius(l.radius.xs)
-                .fill(c.input.0.with_alpha(0.35))
-                .border(1.0, c.border.0)
+                .fill(l.well())
                 .child(
                     icon(if matches!(f.widget, Widget::Asset { .. }) {
                         icons::PACKAGE
@@ -634,9 +637,9 @@ fn number(
         .h(ROW)
         .pad_x(6.0)
         .align(Align::Center)
-        .radius(l.radius.xs)
-        .fill(l.c.input.0.with_alpha(0.35))
-        .border(1.0, l.c.border.0)
+        .radius(super::style::RADIUS)
+        .fill(l.well())
+        .border(1.0, stillkit::Rgba::TRANSPARENT)
         .focus_within({
             let ring = l.c.ring.0;
             move |e| e.border(1.0, ring)
@@ -821,7 +824,6 @@ fn add_component(s: &Studio) -> El<Studio> {
         .key("inspector/add/panel")
         .radius(l.radius.md)
         .fill(c.popover.0)
-        .border(1.0, c.border.0)
         .shadow_level(stillkit::ShadowLevel::Menu)
         .on_key(move |s: &mut Studio, key, _| {
             let Some((q, a)) = s.local.add_component.clone() else {
@@ -862,7 +864,6 @@ fn add_component(s: &Studio) -> El<Studio> {
                 .grow(1.0),
             ),
         )
-        .child(divider(l))
         .child(list);
     b = b.overlay(
         popover(panel)

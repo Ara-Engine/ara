@@ -116,11 +116,11 @@ fn assets(s: &Studio) -> El<Studio> {
         |f| f.on_input(|s: &mut Studio, t| s.act("editor.workspace", json!({"assetQuery": t}))),
         |s: &mut Studio| s.act("editor.workspace", json!({"assetQuery": ""})),
     )
-    .h(24.0)
+    .h(22.0)
     .w(200.0);
     let toolbar = row()
-        .h(32.0)
-        .pad_x(6.0)
+        .h(super::style::TOOLBAR)
+        .pad_x(4.0)
         .gap(8.0)
         .align(Align::Center)
         .child(crumbs.grow(1.0))
@@ -227,18 +227,11 @@ fn assets(s: &Studio) -> El<Studio> {
             .child(row().flow_wrap().pad(8.0).gap(4.0).children(tiles))
     };
     // Unity's Project window: the folder tree beside the folder's contents.
-    let right = col()
-        .w(0.0)
-        .grow(1.0)
-        .min_h(0.0)
-        .child(toolbar)
-        .child(divider(l))
-        .child(body);
+    let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
     row()
         .grow(1.0)
         .min_h(0.0)
         .child(folder_tree(s, browser, &folder))
-        .child(el().w(1.0).h_full().fill(c.border.0))
         .child(right)
 }
 
@@ -246,7 +239,6 @@ fn assets(s: &Studio) -> El<Studio> {
 /// show their children. A click opens the folder in the grid.
 fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
     let l = &s.look;
-    let c = &l.c;
     let mut dirs = std::collections::BTreeSet::new();
     for a in &browser.items {
         let path = a.path.trim_end_matches('/');
@@ -312,7 +304,7 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
             glyph,
         ));
     }
-    tree.fill(c.muted.0.with_alpha(0.35))
+    tree.fill(super::style::tones(l).strip)
 }
 
 /// A folder tree row: disclosure (when it has subfolders), icon and name.
@@ -506,8 +498,7 @@ fn tile(
             None => el()
                 .size(52.0)
                 .radius(l.radius.sm)
-                .fill(c.raised.0)
-                .border(1.0, c.border.0)
+                .fill(l.well())
                 .align(Align::Center)
                 .justify(Justify::Center)
                 .child(icon(kind_icon(a)).size(24.0).color(glyph_ink)),
@@ -567,14 +558,6 @@ fn console(s: &Studio) -> El<Studio> {
             } else {
                 stillkit::Rgba::TRANSPARENT
             })
-            .border(
-                1.0,
-                if on {
-                    c.border.0
-                } else {
-                    stillkit::Rgba::TRANSPARENT
-                },
-            )
             .color(if on {
                 c.foreground.0
             } else {
@@ -594,7 +577,7 @@ fn console(s: &Studio) -> El<Studio> {
             .child(text(counts[i].to_string()).text_size(12.0).weight(560))
     };
     let toolbar = row()
-        .h(30.0)
+        .h(super::style::TOOLBAR)
         .pad_x(8.0)
         .gap(4.0)
         .align(Align::Center)
@@ -639,9 +622,8 @@ fn console(s: &Studio) -> El<Studio> {
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
-        .child(divider(l))
         .child(body)
-        .children(detail.map(|d| col().child(divider(l)).child(d)))
+        .children(detail.map(|d| col().child(d)))
 }
 
 /// The chosen record in full (Unity's console detail pane): the message, where it came
@@ -852,22 +834,25 @@ fn problems(s: &Studio) -> El<Studio> {
     }
     let mut out = col().pad(8.0).gap(8.0);
     for (file, rows) in groups {
-        let mut card = card(l).fill(c.muted.0).child(
-            row()
-                .h(30.0)
-                .pad_x(10.0)
-                .gap(8.0)
-                .align(Align::Center)
-                .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
-                .child(
-                    text(file.to_owned())
-                        .text_size(12.0)
-                        .weight(600)
-                        .color(c.foreground.0)
-                        .grow(1.0),
-                )
-                .child(count(l, rows.len(), false)),
-        );
+        let mut card = col()
+            .radius(super::style::RADIUS)
+            .fill(super::style::tones(l).band)
+            .child(
+                row()
+                    .h(30.0)
+                    .pad_x(10.0)
+                    .gap(8.0)
+                    .align(Align::Center)
+                    .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
+                    .child(
+                        text(file.to_owned())
+                            .text_size(12.0)
+                            .weight(600)
+                            .color(c.foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(count(l, rows.len(), false)),
+            );
         for r in rows {
             // Its typed fixes, one click each (the same ones agents apply).
             let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
@@ -901,7 +886,7 @@ fn problems(s: &Studio) -> El<Studio> {
                 }
                 message = message.child(fixes);
             }
-            card = card.child(divider(l)).child(
+            card = card.child(
                 row()
                     .min_h(32.0)
                     .pad_x(10.0)

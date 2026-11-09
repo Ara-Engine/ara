@@ -18,18 +18,9 @@ pub fn view(s: &Studio) -> El<Studio> {
         .key("studio")
         .w_full()
         .h_full()
-        .fill(s.look.c.background.0)
+        .fill(super::style::tones(&s.look).gap)
         .on_key(keys)
         .child(title_bar(s))
-        .children(s.editor.state.playing.map(|playing| {
-            // A thin line under the title bar while Play runs (green) or pauses (amber).
-            let tint = if playing {
-                s.look.c.success.0
-            } else {
-                s.look.c.warning.0
-            };
-            el().h(2.0).w_full().fill(tint)
-        }))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
         .children(drag_chip(s))
@@ -53,7 +44,6 @@ fn drag_chip(s: &Studio) -> Option<El<Studio>> {
             .align(Align::Center)
             .radius(l.radius.sm)
             .fill(c.popover.0)
-            .border(1.0, c.border.0)
             .shadow_level(stillkit::ShadowLevel::Menu)
             .child(icon(icons::BOX).size(13.0).color(c.primary.0))
             .child(text(name.clone()).text_size(12.0).color(c.foreground.0)),
@@ -131,7 +121,7 @@ fn title_bar(s: &Studio) -> El<Studio> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let ring = c.ring.0;
+    let hover = super::style::tones(l).hover;
     let launcher = row()
         .key("launcher")
         .w(220.0)
@@ -139,13 +129,12 @@ fn title_bar(s: &Studio) -> El<Studio> {
         .pad_x(8.0)
         .gap(8.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(1.0, c.border.0)
+        .radius(super::style::RADIUS)
+        .fill(super::style::tones(l).well)
         .color(c.muted_foreground.0)
         .cascade_ink()
         .label("Search or run a command")
-        .hovered(move |e| e.border(1.0, ring.with_alpha(0.35)))
+        .hovered(move |e| e.fill(hover))
         .on_press_with(|s: &mut Studio, tx| {
             s.local.palette = Some((String::new(), 0));
             tx.focus("palette/query");
@@ -200,7 +189,7 @@ fn title_bar(s: &Studio) -> El<Studio> {
         s.frame.inset,
         lead,
         vec![play],
-        vec![crumb, vdivider(l, 16.0), launcher, theme],
+        vec![crumb, launcher, theme],
         s.frame.controls,
     )
 }
@@ -356,21 +345,19 @@ fn play_controls(s: &Studio) -> El<Studio> {
         .color(c.success_foreground.0)
         .on_press(run("play.start"))
     };
+    // While Play runs the group takes the state's tint (green, amber paused), no outline.
+    let fill = match playing {
+        Some(true) => c.success.0.with_alpha(0.22),
+        Some(false) => c.warning.0.with_alpha(0.22),
+        None => super::style::tones(l).well,
+    };
     let mut group = row()
-        .h(28.0)
-        .pad_x(3.0)
-        .gap(2.0)
+        .h(26.0)
+        .pad_x(2.0)
+        .gap(1.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(
-            1.0,
-            if playing.is_some() {
-                c.success.0.with_alpha(0.5)
-            } else {
-                c.border.0
-            },
-        )
+        .radius(super::style::RADIUS)
+        .fill(fill)
         .child(main)
         .child(enabled(
             icon_button(
@@ -435,11 +422,11 @@ fn status_bar(s: &Studio) -> El<Studio> {
         .color(c.muted_foreground.0.with_alpha(0.8));
     row()
         .key("status")
-        .h(24.0)
+        .h(22.0)
         .pad_x(10.0)
         .gap(14.0)
         .align(Align::Center)
-        .fill(c.chrome.0)
+        .fill(super::style::tones(l).gap)
         .child(
             row()
                 .gap(6.0)
@@ -713,12 +700,10 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
         .w(640.0)
         .radius(l.radius.base + 2.0)
         .fill(c.popover.0)
-        .border(1.0, c.separator_strong.0)
         .shadow_level(ShadowLevel::Dialog)
         .role(Role::Dialog)
         .label("Command palette")
         .child(field)
-        .child(divider(l))
         .child(list);
     let placed = col()
         .w_full()

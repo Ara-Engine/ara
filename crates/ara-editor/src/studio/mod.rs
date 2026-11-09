@@ -21,6 +21,7 @@ mod panels;
 mod preferences;
 mod scene;
 pub mod state;
+mod style;
 #[cfg(test)]
 mod tests;
 

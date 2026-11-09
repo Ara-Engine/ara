@@ -14,7 +14,7 @@ use stillkit::el::{
 
 use super::Studio;
 
-const ROW: f32 = 22.0;
+const ROW: f32 = super::style::ROW;
 const INDENT: f32 = 14.0;
 
 /// One visible row.
@@ -198,13 +198,13 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     };
     let root = row()
         .key("hierarchy/scene")
-        .h(26.0)
+        .h(22.0)
         .grow(1.0)
         .pad_x(8.0)
         .gap(6.0)
         .align(Align::Center)
-        .radius(4.0)
-        .fill(c.muted.0)
+        .radius(super::style::RADIUS)
+        .fill(super::style::tones(l).band)
         .child(
             icon(icons::CLAPPERBOARD)
                 .size(13.0)
@@ -221,9 +221,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     col()
         .grow(1.0)
         .min_h(0.0)
-        .pad_y(6.0)
-        .gap(4.0)
-        .child(row().pad_x(6.0).child(search.h(24.0).grow(1.0)))
+        .pad_y(4.0)
+        .gap(3.0)
+        .child(row().pad_x(4.0).child(search.h(22.0).grow(1.0)))
         .child(row().pad_x(4.0).child(root))
         .child(body)
 }

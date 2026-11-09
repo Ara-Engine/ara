@@ -10,7 +10,7 @@ use stillkit::Cursor;
 use stillkit::el::{Align, El, Justify, PointerPhase, col, el, icon, row, text};
 
 use super::state::SplitDrag;
-use super::{Studio, hierarchy, inspector, panels, scene};
+use super::{Studio, hierarchy, inspector, panels, scene, style};
 
 /// Keys of every split container, for the host's rect feedback.
 pub(super) fn rect_keys(root: &DockNode) -> Vec<String> {
@@ -40,9 +40,9 @@ fn split_key(path: &[u8]) -> String {
 }
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
-    // Panels sit 4 px apart: one rhythm for gutters and splitters.
+    // Panels sit 3 px apart on the window's darkest tone: one rhythm for gutters and splitters.
     node(s, &s.editor.state.layout, &mut Vec::new())
-        .pad(4.0)
+        .pad(3.0)
         .gap(0.0)
 }
 
@@ -82,7 +82,7 @@ fn node(s: &Studio, n: &DockNode, path: &mut Vec<u8>) -> El<Studio> {
     }
 }
 
-/// The 6 px gap between two children, a hairline that lights while hovered or dragged.
+/// The 3 px gap between two children; a hairline lights only while hovered or dragged.
 fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
     let l = &s.look;
     let dragging = s.local.drag.as_ref().is_some_and(|d| d.path == path);
@@ -99,9 +99,9 @@ fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
         el().h(1.0).w_full()
     };
     let hit = if horizontal {
-        row().w(4.0).h_full().justify(Justify::Center)
+        row().w(3.0).h_full().justify(Justify::Center)
     } else {
-        col().h(4.0).w_full().justify(Justify::Center)
+        col().h(3.0).w_full().justify(Justify::Center)
     };
     hit.key(key)
         .align(Align::Center)
@@ -187,38 +187,39 @@ pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
     }
 }
 
-/// A tabbed area: its tab strip and its active panel, in a rounded panel surface.
+/// A tabbed area: a tab strip a step above the window's gaps, its active tab joined to the
+/// panel body below it. No borders or rules: tone tells the surfaces apart.
 fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
+    let t = style::tones(l);
     let active_id = tabs
         .get(active)
         .or(tabs.first())
         .cloned()
         .unwrap_or_default();
-    let focused = s.editor.state.focus == active_id;
     let strip = row()
-        .h(30.0)
-        .pad_x(4.0)
-        .gap(2.0)
-        .align(Align::Center)
+        .h(style::STRIP)
+        .pad_x(2.0)
+        .gap(1.0)
+        .align(Align::End)
         .children(tabs.iter().enumerate().map(|(i, tab)| {
             let on = i == active;
             let (title, glyph) = panel_title(tab);
-            let hover = c.foreground.0;
+            let (hover_fill, hover_ink) = (t.hover, c.foreground.0);
             let panel = tab.clone();
-            row()
+            let mut tab_el = row()
                 .key(format!("tab/{tab}"))
-                .h(24.0)
-                .pad_x(8.0)
+                .h(style::STRIP - 3.0)
+                .pad_x(10.0)
                 .gap(6.0)
                 .align(Align::Center)
-                .radius(l.radius.sm)
+                .radius(style::RADIUS)
                 .role(stillkit::Role::Tab)
                 .label(title)
                 .selected(on)
                 .fill(if on {
-                    c.raised.0
+                    t.panel
                 } else {
                     stillkit::Rgba::TRANSPARENT
                 })
@@ -228,16 +229,27 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                     c.muted_foreground.0
                 })
                 .cascade_ink()
-                .hovered(move |e| e.color(hover))
                 .on_press(move |s: &mut Studio| {
                     s.act("editor.layout.show", json!({"panel": panel}))
                 })
-                .child(icon(glyph).size(13.0))
+                .child(icon(glyph).size(12.0))
                 .child(
                     text(title)
-                        .text_size(12.0)
-                        .weight(if on { 580 } else { 500 }),
+                        .text_size(style::TEXT)
+                        .weight(if on { 600 } else { 500 }),
+                );
+            tab_el = if on {
+                // Square off the bottom corners so the tab runs into the body.
+                tab_el.child(
+                    el().absolute(0.0, style::STRIP - 3.0 - style::RADIUS)
+                        .w_full()
+                        .h(style::RADIUS)
+                        .fill(t.panel),
                 )
+            } else {
+                tab_el.hovered(move |e| e.color(hover_ink).fill(hover_fill.with_alpha(0.6)))
+            };
+            tab_el
         }))
         .child(el().grow(1.0))
         .children(area_tools(s, &active_id));
@@ -250,28 +262,20 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
     let surface = if active_id == "scene" {
         c.background.0
     } else {
-        c.card.0
+        t.panel
     };
     col()
         .key(format!("area/{id}"))
         .min_w(0.0)
         .min_h(0.0)
-        .radius(l.radius.md)
-        .fill(c.card.0)
-        .border(
-            1.0,
-            if focused {
-                c.separator_strong.0
-            } else {
-                c.border.0
-            },
-        )
+        .radius(style::RADIUS)
+        .fill(t.strip)
         .child(strip)
-        .child(el().h(1.0).w_full().fill(c.border.0))
         .child(
             col()
                 .grow(1.0)
                 .min_h(0.0)
+                .radius(style::RADIUS)
                 .fill(surface)
                 .child(body.grow(1.0)),
         )

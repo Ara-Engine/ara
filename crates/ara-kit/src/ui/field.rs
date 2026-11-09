@@ -10,22 +10,24 @@ use super::{Size, kbd};
 use crate::icons;
 use crate::look::Look;
 
-/// The well every input shares: input fill, hairline border, focus ring colour on focus.
+/// The well every input shares: an inset fill with no outline; a step lighter under the
+/// pointer, and the focus colour's border only while focus is inside it.
 fn well<S: 'static>(l: &Look, size: Size) -> El<S> {
     let c = &l.c;
     let ring = c.ring.0;
+    let hover = l.well_hover();
     row()
         .h(size.height())
         .pad_x(8.0)
         .gap(6.0)
         .align(Align::Center)
         .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(1.0, c.input.0)
+        .fill(l.well())
+        .border(1.0, stillkit::Rgba::TRANSPARENT)
         .color(c.muted_foreground.0)
         .cascade_ink()
         .motion(token::MOTION_INTERACTIVE)
-        .hovered(move |e| e.border(1.0, ring.with_alpha(0.35)))
+        .hovered(move |e| e.fill(hover))
         .focus_within(move |e| e.border(1.0, ring))
 }
 
@@ -102,7 +104,7 @@ pub fn search<S: 'static>(
 /// it with an overlay menu anchored to `key`).
 pub fn select<S: 'static>(l: &Look, size: Size, key: impl Into<Key>, value: &str) -> El<S> {
     let c = &l.c;
-    let ring = c.ring.0;
+    let hover = l.well_hover();
     row()
         .key(key)
         .h(size.height())
@@ -110,14 +112,13 @@ pub fn select<S: 'static>(l: &Look, size: Size, key: impl Into<Key>, value: &str
         .gap(6.0)
         .align(Align::Center)
         .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(1.0, c.input.0)
+        .fill(l.well())
         .color(c.foreground.0)
         .role(Role::ComboBox)
         .cascade_ink()
         .label(value)
         .motion(token::MOTION_INTERACTIVE)
-        .hovered(move |e| e.border(1.0, ring.with_alpha(0.35)))
+        .hovered(move |e| e.fill(hover))
         .child(text(value).grow(1.0).text_size(12.0))
         .child(
             icon(icons::CHEVRONS_UP_DOWN)
@@ -204,8 +205,7 @@ pub fn segmented<S: 'static, F: Fn(&mut S) + 'static>(
         .pad(2.0)
         .gap(2.0)
         .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(1.0, c.input.0)
+        .fill(l.well())
         .role(Role::RadioGroup)
         .focus_group(stillkit::el::Orientation::Horizontal)
         .select_follows_focus()

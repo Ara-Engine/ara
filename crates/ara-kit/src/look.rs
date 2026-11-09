@@ -225,6 +225,23 @@ const DARK: &str = include_str!("../../../assets/themes/ara-dark.json");
 const LIGHT: &str = include_str!("../../../assets/themes/ara-light.json");
 
 impl Look {
+    /// Inputs' fill: a well set a step into the surface around it, so fields read as
+    /// fields without outlines.
+    pub fn well(&self) -> stillkit::Rgba {
+        let c = &self.c;
+        if self.dark {
+            crate::ui::mix(c.chrome.0, c.card.0, 0.2)
+        } else {
+            crate::ui::mix(c.raised.0, c.chrome.0, 0.45)
+        }
+    }
+
+    /// A well under the pointer: a step lighter (darker in light schemes).
+    pub fn well_hover(&self) -> stillkit::Rgba {
+        let c = &self.c;
+        crate::ui::mix(self.well(), c.hover_surface.0, 0.6)
+    }
+
     /// The built-in dark (`true`) or light scheme.
     pub fn new(dark: bool) -> Self {
         Self::parse(if dark { DARK } else { LIGHT }, dark).expect("the bundled theme tokens parse")

@@ -234,7 +234,6 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         .grow(1.0)
         .min_h(0.0)
         .child(search)
-        .child(divider(l))
         .child(col().h(0.0).grow(1.0).scroll(Axis::Vertical).child(body));
     let window = col()
         .key("settings")
@@ -242,17 +241,14 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         .h(600.0)
         .radius(l.radius.base)
         .fill(c.popover.0)
-        .border(1.0, c.border.0)
         .shadow_level(stillkit::ShadowLevel::Dialog)
         .label("Settings")
         .child(head)
-        .child(divider(l))
         .child(
             row()
                 .h(0.0)
                 .grow(1.0)
                 .child(side.fill(c.muted.0.with_alpha(0.5)))
-                .child(el().w(1.0).h_full().fill(c.border.0))
                 .child(right),
         );
     Some(dialog(window).on_dismiss(|s: &mut Studio| s.local.settings = None))

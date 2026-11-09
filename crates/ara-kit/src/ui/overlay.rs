@@ -73,12 +73,9 @@ pub fn menu_check<S: 'static>(l: &Look, key: &str, label: &str, on: bool) -> El<
         .checked(on)
 }
 
-/// A hairline between menu groups.
-pub fn menu_separator<S: 'static>(l: &Look) -> El<S> {
-    col()
-        .pad_y(4.0)
-        .pad_x(4.0)
-        .child(el().h(1.0).fill(l.c.border.0))
+/// Room between menu groups: spacing, not a rule.
+pub fn menu_separator<S: 'static>(_: &Look) -> El<S> {
+    el().h(7.0)
 }
 
 /// A muted heading inside a menu.
