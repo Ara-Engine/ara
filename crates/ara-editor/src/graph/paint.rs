@@ -86,8 +86,8 @@ impl Canvas {
             // Unreal's comment box: a translucent body under a solid title band.
             let radius = 6. * z;
             let selected = self.selection.contains(key);
-            fill(list, 2, r, radius, alpha(theme.accent, 22));
-            fill(list, 2, head, radius, alpha(theme.accent, 120));
+            fill(list, 2, r, radius, alpha(theme.muted, 20));
+            fill(list, 2, head, radius, alpha(theme.muted, 72));
             fill(
                 list,
                 2,
@@ -97,7 +97,7 @@ impl Canvas {
                     ..head
                 },
                 0.,
-                alpha(theme.accent, 120),
+                alpha(theme.muted, 72),
             );
             border(
                 list,
@@ -108,7 +108,7 @@ impl Canvas {
                 if selected {
                     theme.select
                 } else {
-                    alpha(theme.accent, 150)
+                    alpha(theme.muted, 110)
                 },
             );
             let scale = z * 1.2;
