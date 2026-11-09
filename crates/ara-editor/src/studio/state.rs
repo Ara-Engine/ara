@@ -315,6 +315,8 @@ pub struct Studio {
     /// The latest profiled frames (`profile.start`), copied a few times a second while
     /// recording for the Profiler panel.
     pub profile: Arc<ara_profile::Profile>,
+    /// The Material page's canvas (`studio::graph`).
+    pub graph: super::graph::Page,
 }
 
 impl Studio {
@@ -335,6 +337,7 @@ impl Studio {
             previews: Previews::default(),
             logs: Vec::new(),
             profile: Arc::default(),
+            graph: Default::default(),
         };
         studio.resolve();
         studio

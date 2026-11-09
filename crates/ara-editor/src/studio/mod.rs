@@ -18,8 +18,10 @@ mod create;
 mod dock;
 mod game;
 mod gizmo;
+mod graph;
 mod hierarchy;
 mod inspector;
+mod layer;
 mod lighting;
 mod panels;
 mod preferences;
@@ -159,9 +161,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
     // SAFETY: as the compositor's.
     let mut game = unsafe { game::Game::new(&renderer)? };
+    // SAFETY: as the compositor's.
+    let mut graph_layer = unsafe { layer::Layer::new(&renderer, [])? };
     let mut shown_extent = [0, 0];
     // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
     let mut shown_tag = u64::MAX;
+    // The graph canvas's size when last drawn.
+    let mut graph_extent = [0, 0];
     // A composite is owed (something changed) but has not presented yet.
     let mut composite = false;
     // The Scene's size while a resize is under way, and when it last changed.
@@ -174,6 +180,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut logs_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
     let (mut profile_at, mut was_recording) = (Instant::now(), false);
+    // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
+    if let Some(panel) = &options.panel {
+        let id = format!("window.{panel}");
+        rt.update(|s| commands::run(s, &id, &crate::shell::commands::Target::None));
+    }
     rt.update(|s| {
         let store = s.editor.host.store();
         s.assets = Some(crate::shell::assets::Browser::new(
@@ -513,6 +524,29 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.state().local.game_captured && rt.state().editor.state.playing.is_none() {
             rt.update(|s| s.local.game_captured = false);
         }
+        // The Material page's canvas, in its own layer.
+        let graph_rect = rt
+            .natives()
+            .into_iter()
+            .find(|(n, _)| &**n == graph::GRAPH_LAYER)
+            .map(|(_, r)| r);
+        surface.place_native_layer(graph::GRAPH_LAYER, graph_rect);
+        if let Some(r) = graph_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
+            let extent = [r.width() as u32, r.height() as u32];
+            rt.touch(graph::sync);
+            if (rt.state().graph.dirty || graph_extent != extent) && graph_layer.ready()? {
+                let layer = metal_layer(surface.native_layer(graph::GRAPH_LAYER)?)?;
+                let scale = rt.scale();
+                // SAFETY: the layer is the graph page's own, alive while the window is.
+                let drawn = rt.touch(|s| unsafe {
+                    graph::draw(s, &mut graph_layer, &renderer, layer, extent, scale)
+                });
+                match drawn {
+                    Ok(()) => graph_extent = extent,
+                    Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
+                }
+            }
+        }
         pass.mark("game");
         pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
@@ -571,6 +605,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     }
     renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
+    graph_layer.retire(&renderer);
     compositor.retire(&renderer);
     drop(compositor);
     scene_view
@@ -817,6 +852,7 @@ fn pump(
         let mut keys = dock::rect_keys(&rt.state().editor.state.layout);
         keys.push("scene/view".into());
         keys.push("profiler/track".into());
+        keys.push("graph/view".into());
         let s = rt.scale();
         let rects = keys
             .into_iter()
