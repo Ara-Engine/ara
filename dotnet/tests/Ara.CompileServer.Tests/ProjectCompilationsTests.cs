@@ -79,6 +79,58 @@ public sealed class ProjectCompilationsTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Replacing_all_sources_preserves_fresh_outputs_and_recovers_from_errors(bool hot)
+    {
+        var cache = new ProjectCompilations();
+        var compiler = new ModuleCompiler("game", [typeof(Behaviour).Assembly.Location]);
+        for (var revision = 0; revision < 5; revision++)
+        {
+            var expression = revision == 3 ? "MissingOther" : revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var value = revision == 3 ? "Missing" : revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            (string Path, string Text)[] sources = [
+                ("Core.cs", $"public static class Core {{ public const float Value = {value}; }}"),
+                ("State.cs", $$"""
+                    /// <summary>State revision {{revision}}.</summary>
+                    [Component] public partial struct State {
+                        /// <summary>Accumulated amount.</summary>
+                        public float Amount;
+                    }
+                    """),
+                ("Update.cs", $$"""
+                    public static partial class Update {
+                        [Query] static void Run(ref State state) { state.Amount += Core.Value + {{expression}}; }
+                    }
+                    """)];
+            var actual = cache.Generate("game.dll", "config", compiler, hot, sources, []);
+            var fresh = new ProjectCompilations().Generate("game.dll", "config", compiler, hot, sources, []);
+            Assert.Equal(fresh.Driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Select(s => s.SourceText.ToString()),
+                actual.Driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Select(s => s.SourceText.ToString()));
+            static string[] Keys(IEnumerable<Microsoft.CodeAnalysis.Diagnostic> rows) => rows
+                .Select(d => d.ToString()).Order(StringComparer.Ordinal).ToArray();
+            Assert.Equal(Keys(fresh.Diagnostics), Keys(actual.Diagnostics));
+            var analysis = new AnalyzerSet();
+            Assert.Equal(Keys(analysis.AnalyzeProject(fresh.Final, "gameplay")), Keys(analysis.AnalyzeProject(actual.Final, "gameplay")));
+            var expected = ModuleCompiler.EmitWithDiagnostics(fresh.Final);
+            var emitted = ModuleCompiler.EmitWithDiagnostics(actual.Final);
+            Assert.Equal(Keys(expected.Diagnostics), Keys(emitted.Diagnostics));
+            if (revision == 3)
+            {
+                Assert.Null(emitted.Image);
+                Assert.Contains(emitted.Diagnostics, d => d.Id == "CS0103" && d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+            }
+            else
+            {
+                Assert.NotNull(emitted.Image);
+                Assert.NotNull(expected.Image);
+                Assert.Equal(expected.Image.Pe, emitted.Image.Pe);
+                Assert.Equal(expected.Image.Pdb, emitted.Image.Pdb);
+            }
+        }
+    }
+
     [Fact]
     public void Reused_projects_recheck_dependencies_and_recover_after_errors_and_file_removal()
     {

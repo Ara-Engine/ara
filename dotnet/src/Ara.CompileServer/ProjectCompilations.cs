@@ -28,6 +28,7 @@ internal sealed class ProjectCompilations
     {
         _modules.TryGetValue(output, out var previous);
         var reusable = previous is not null && previous.Configuration == configuration;
+        var unchanged = 0;
         var trees = new Dictionary<string, (string Text, SyntaxTree Tree)>(StringComparer.Ordinal);
         foreach (var source in sources)
         {
@@ -38,7 +39,11 @@ internal sealed class ProjectCompilations
             if (previous is not null && previous.Sources.TryGetValue(source.Path, out var old))
             {
                 tree = ModuleText.Update(source.Path, old.Tree, old.Text, source.Text);
-                if (ReferenceEquals(tree, old.Tree)) text = old.Text;
+                if (ReferenceEquals(tree, old.Tree))
+                {
+                    text = old.Text;
+                    unchanged++;
+                }
             }
             else tree = ModuleCompiler.Parse(source.Path, source.Text);
             trees.Add(source.Path, (text, tree));
@@ -47,11 +52,19 @@ internal sealed class ProjectCompilations
         if (reusable && previous!.Sources.Keys.SequenceEqual(trees.Keys, StringComparer.Ordinal))
         {
             user = previous!.User;
-            foreach (var (path, old) in previous.Sources)
+            if (trees.Count > 1 && unchanged == 0)
             {
-                var now = trees[path];
-                if (!ReferenceEquals(old.Tree, now.Tree)) user = user.ReplaceSyntaxTree(old.Tree, now.Tree);
+                // No authored tree survives this edit. Replace them together while
+                // retaining references, options and the final global-usings tree.
+                var usings = user.SyntaxTrees.Last();
+                user = user.RemoveAllSyntaxTrees().AddSyntaxTrees(trees.Values.Select(s => s.Tree).Append(usings));
             }
+            else
+                foreach (var (path, old) in previous.Sources)
+                {
+                    var now = trees[path];
+                    if (!ReferenceEquals(old.Tree, now.Tree)) user = user.ReplaceSyntaxTree(old.Tree, now.Tree);
+                }
         }
         else
         {

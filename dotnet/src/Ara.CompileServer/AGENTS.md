@@ -21,6 +21,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 - `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
   changes, sharing their existing source strings instead of retaining equal rereads.
   Configuration changes still rebuild semantic compilations and generator drivers.
+  All-source edits replace trees together while retaining references, options and
+  global usings; single-file and partial edits retain incremental replacement.
   `compiler_scale.py --dependency-fanout` measures a shared edit with unchanged consumers.
 - `CodeFixRunner`: `--fix` applies the shipped code-fix providers to immutable input texts,
   returning replacements only. The host commits those through `source.replace` ops.
