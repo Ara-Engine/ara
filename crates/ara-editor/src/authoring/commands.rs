@@ -321,7 +321,9 @@ pub(super) fn register(registry: &mut Registry, db: &mut SchemaDb) {
         .command::<MaterialAdd>(db)
         .command::<AnimationSet>(db)
         .command::<ModuleSet>(db);
-    registry.command::<super::material_fields::Set>(db);
+    registry
+        .command::<super::material_fields::Set>(db)
+        .command::<super::material_duplicate::Duplicate>(db);
 }
 
 fn signature_for(
