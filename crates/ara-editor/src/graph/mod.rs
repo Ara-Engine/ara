@@ -70,10 +70,26 @@ struct Inline {
     text: String,
     swatch: Option<Color>,
 }
-/// Whether `name` is one a material node's generated input default gets (`value_3Input0`).
-fn default_name(name: &str) -> bool {
-    name.rsplit_once("Input")
-        .is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+/// Whether `node`, used by `uses` edges, is a generated input default: a material constant
+/// named as `node.add` names them (`value_3Input0`) feeding at most one input.
+fn generated_default(node: &ara_graph::Node, uses: usize) -> bool {
+    node.kind == "material.literal"
+        && uses <= 1
+        && node
+            .payload
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|name| name.rsplit_once("Input"))
+            .is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+/// Whether node `id` of `graph` is a generated input default, drawn on its consumer's pin
+/// (see [`Inline`]); connecting over it or deleting its consumer removes it.
+pub fn is_default(graph: &Graph, id: &str) -> bool {
+    let uses = graph.edges.values().filter(|e| e.from.node == id).count();
+    graph
+        .nodes
+        .get(id)
+        .is_some_and(|node| generated_default(node, uses))
 }
 struct NodeView {
     id: String,
@@ -278,13 +294,7 @@ impl Canvas {
             .nodes
             .iter()
             .filter(|(id, node)| {
-                node.kind == "material.literal"
-                    && uses.get(id.as_str()).copied().unwrap_or(0) <= 1
-                    && node
-                        .payload
-                        .get("name")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(default_name)
+                generated_default(node, uses.get(id.as_str()).copied().unwrap_or(0))
             })
             .map(|(id, _)| id.clone())
             .collect();

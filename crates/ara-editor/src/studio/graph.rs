@@ -301,7 +301,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
     // no size: a press on the element an overlay hangs from never dismisses it.
     let mut at_point = el().key("graph/search-anchor").absolute(0.0, 0.0).size(0.0);
     if let Some(adding) = s.graph.adding.as_ref().filter(|_| !animation) {
-        let search = stillkit::el::popover(palette(s, &doc, &adding.query))
+        let search = stillkit::el::popover(palette(s, &doc, adding))
             .on_dismiss(|s: &mut Studio| s.graph.adding = None);
         match adding.point {
             Some((x, y)) => at_point = at_point.overlay(search.at(x, y)),
@@ -833,10 +833,16 @@ fn submit(s: &mut Studio, doc: &str, edits: Vec<Edit>) {
             Edit::Move(nodes) => commands.extend(nodes.into_iter().map(|(node, position)| {
                 json!({"cmd": "graph.node.move", "args": {"node": node, "position": position}})
             })),
-            Edit::Connect(from, to) => commands.push(json!({
-                "cmd": "material.connect",
-                "args": {"source": from.node, "node": to.node, "port": to.port}
-            })),
+            Edit::Connect(from, to) => {
+                if let Some(shown) = s.graph.shown.as_ref() {
+                    commands.extend(connect(
+                        shown.canvas.graph(),
+                        &from.node,
+                        &to.node,
+                        &to.port,
+                    ));
+                }
+            }
             Edit::Layout(layout) => {
                 commands.push(json!({"cmd": "graph.editor.set", "args": {"editor": layout}}))
             }
@@ -896,10 +902,12 @@ fn frame(s: &mut Studio) {
 }
 
 /// Add Node: the material library, searched, by category; a pick lands at the view's centre.
-fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
+fn palette(s: &Studio, doc: &str, adding: &Adding) -> El<Studio> {
     use crate::graph::style;
     let l = &s.look;
     let c = &l.c;
+    let query = adding.query.as_str();
+    let wire = wire_type(s, adding);
     let mut list = col()
         .key("material/add/list")
         .max_h(360.0)
@@ -912,6 +920,11 @@ fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
         .iter()
         .flat_map(|r| r.search(""))
         .filter(|k| k.name != "material.output" && k.name != "material.custom")
+        .filter(|k| {
+            wire.is_none_or(|(ty, direction)| {
+                fits(k.name.trim_start_matches("material."), ty, direction)
+            })
+        })
         .filter_map(|k| {
             let op = k.name.trim_start_matches("material.");
             let title = style::op_title(op);
@@ -985,11 +998,59 @@ fn palette(s: &Studio, doc: &str, query: &str) -> El<Studio> {
                 .grow(1.0),
             ),
         )
+        .children(wire.map(|(ty, direction)| {
+            let what = if direction == ara_graph::Direction::Output {
+                "take"
+            } else {
+                "give"
+            };
+            row().h(22.0).pad_x(14.0).align(Align::Center).child(
+                text(format!(
+                    "Nodes that {what} {}",
+                    crate::graph::style::short_type(ty.name())
+                ))
+                .text_size(11.0)
+                .color(c.muted_foreground.0),
+            )
+        }))
         .child(list)
 }
 
+/// The type of the wire a search was opened from, and which end it came from.
+fn wire_type(s: &Studio, adding: &Adding) -> Option<(ara_material::Type, ara_graph::Direction)> {
+    let (pin, direction) = adding.from.as_ref()?;
+    let graph = s.graph.shown.as_ref()?.canvas.graph();
+    let ty = &graph.nodes.get(&pin.node)?.ports.get(&pin.port)?.ty;
+    let ty = ara_material::Type::ALL
+        .iter()
+        .copied()
+        .find(|t| t.name() == ty)?;
+    Some((ty, *direction))
+}
+
+/// Whether operation `op` connects to a wire of type `ty` dragged from an `end` (an output
+/// feeds one of its inputs; an input takes its output), trying the usual shapes: the other
+/// inputs of the same type, or scalars. Constants and parameters are made to fit.
+fn fits(op: &str, ty: ara_material::Type, end: ara_graph::Direction) -> bool {
+    use ara_material::{Type, library::infer};
+    if matches!(op, "literal" | "parameter") {
+        return !ty.is_texture() || end == ara_graph::Direction::Input;
+    }
+    let from_output = end == ara_graph::Direction::Output;
+    (usize::from(from_output)..=4).any(|arity| {
+        (0..1u32 << arity).any(|mask| {
+            let types: Vec<Type> = (0..arity)
+                .map(|i| if mask & 1 << i == 0 { ty } else { Type::Float })
+                .collect();
+            let takes = !from_output || types.contains(&ty);
+            takes && infer(op, &types).is_some_and(|out| from_output || out == ty)
+        })
+    })
+}
+
 /// Adds a `kind` node where the search was opened (else the view's centre); dropped from a
-/// wire, it connects to that pin: its output into the pin, or the pin into its first input.
+/// wire, it is typed for the wire and connects to that pin: its output into the pin, or the
+/// pin into its first input of the wire's type.
 fn add_node(s: &mut Studio, doc: &str, kind: &str) {
     let adding = s.graph.adding.take().unwrap_or_default();
     let rect = view_rect(s);
@@ -998,8 +1059,8 @@ fn add_node(s: &mut Studio, doc: &str, kind: &str) {
             g.canvas.world([rect.w * 0.45, rect.h * 0.4], rect)
         })
     });
-    let command =
-        json!({"cmd": "editor.material.node.add", "args": {"kind": kind, "position": position}});
+    let wire = wire_type(s, &adding).map(|(ty, _)| ty.name());
+    let command = json!({"cmd": "editor.material.node.add", "args": {"kind": kind, "position": position, "ty": wire}});
     let added = match s.editor.apply_to(doc, vec![command], "Add material node") {
         Ok(result) => result["outputs"][0]["id"].as_str().map(str::to_owned),
         Err(error) => {
@@ -1010,34 +1071,56 @@ fn add_node(s: &mut Studio, doc: &str, kind: &str) {
     let (Some(id), Some((pin, direction))) = (added, adding.from) else {
         return;
     };
-    let connect = if direction == ara_graph::Direction::Input {
-        // Dragged from an input: the new node's output feeds it.
-        Some(
-            json!({"cmd": "material.connect", "args": {"source": id, "node": pin.node, "port": pin.port}}),
-        )
-    } else {
-        // Dragged from an output: it feeds the new node's first input.
-        let workspace = s.editor.host.store().workspace();
-        workspace
-            .doc(doc)
-            .and_then(|d| ara_graph::Graph::from_document(d).ok())
-            .and_then(|g| {
-                g.nodes.get(&id).and_then(|n| {
-                    n.ports
-                        .iter()
-                        .find(|(_, p)| p.direction == ara_graph::Direction::Input)
-                        .map(|(port, _)| port.clone())
-                })
-            })
-            .map(|port| json!({"cmd": "material.connect", "args": {"source": pin.node, "node": id, "port": port}}))
+    let Some(graph) = s
+        .editor
+        .host
+        .store()
+        .workspace()
+        .doc(doc)
+        .and_then(|d| ara_graph::Graph::from_document(d).ok())
+    else {
+        return;
     };
-    if let Some(command) = connect
-        && let Err(error) = s
-            .editor
-            .apply_to(doc, vec![command], "Connect material node")
-    {
+    let target = if direction == ara_graph::Direction::Input {
+        // Dragged from an input: the new node's output feeds it.
+        Some((id, pin.node, pin.port))
+    } else {
+        // Dragged from an output: it feeds the new node's first input of the wire's type.
+        graph.nodes.get(&id).and_then(|n| {
+            let inputs = || {
+                n.ports
+                    .iter()
+                    .filter(|(_, p)| p.direction == ara_graph::Direction::Input)
+            };
+            inputs()
+                .find(|(_, p)| Some(p.ty.as_str()) == wire)
+                .or_else(|| inputs().next())
+                .map(|(port, _)| (pin.node.clone(), id.clone(), port.clone()))
+        })
+    };
+    let Some((source, node, port)) = target else {
+        return;
+    };
+    let commands = connect(&graph, &source, &node, &port);
+    if let Err(error) = s.editor.apply_to(doc, commands, "Connect material node") {
         s.editor.report_failure(&error);
     }
+}
+
+/// Connects `source` into `node`'s input `port`, removing the generated default it replaces
+/// (a constant named `…Input<n>` feeding only that input), so none is left behind.
+fn connect(graph: &ara_graph::Graph, source: &str, node: &str, port: &str) -> Vec<Value> {
+    let replaced = graph
+        .edges
+        .values()
+        .find(|e| e.to.node == node && e.to.port == port)
+        .map(|e| e.from.node.as_str())
+        .filter(|from| *from != source && crate::graph::is_default(graph, from));
+    std::iter::once(
+        json!({"cmd": "material.connect", "args": {"source": source, "node": node, "port": port}}),
+    )
+    .chain(replaced.map(|from| json!({"cmd": "graph.node.remove", "args": {"node": from}})))
+    .collect()
 }
 
 /// Sets a constant or parameter's value from typed text: JSON, a number, or lanes typed as
@@ -1114,4 +1197,42 @@ pub(super) fn node_ids(s: &Studio) -> Vec<String> {
         .shown
         .as_ref()
         .map_or_else(Vec::new, |g| g.canvas.node_ids())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{connect, fits};
+    use ara_graph::Direction::{Input, Output};
+    use ara_material::Type;
+
+    #[test]
+    fn the_search_offers_only_nodes_that_fit_the_wire() {
+        // From a colour output: operations taking colours, and constants.
+        assert!(fits("add", Type::ColorLinear, Output));
+        assert!(fits("literal", Type::ColorLinear, Output));
+        assert!(!fits("uv", Type::ColorLinear, Output), "uv takes nothing");
+        // Into a vec2 input: what gives a vec2.
+        assert!(fits("uv", Type::Vec2, Input));
+        assert!(fits("add", Type::Vec2, Input));
+        assert!(!fits("dot", Type::Vec2, Input), "dot gives a scalar");
+    }
+
+    #[test]
+    fn connecting_over_an_inline_default_removes_it() {
+        let text = "material M : surface budget 1 {\n  param r : float = 0.4;\n  let mInput0 : float = 0.5;\n  let m : float = sin(mInput0);\n  output roughness = m;\n}\n";
+        let material = ara_material::dsl::parse(text, "gr_m").expect("parses");
+        let graph = material.to_graph(Default::default()).expect("graph");
+        let id = |name: &str| material.node_id(name).expect(name).to_owned();
+        let commands = connect(&graph, &id("r"), &id("m"), "in0");
+        assert_eq!(commands.len(), 2, "{commands:?}");
+        assert_eq!(commands[1]["cmd"], "graph.node.remove");
+        assert_eq!(commands[1]["args"]["node"], id("mInput0"));
+        // Wiring the default back in removes nothing; nor does replacing a real node.
+        assert_eq!(connect(&graph, &id("mInput0"), &id("m"), "in0").len(), 1);
+        let text = text.replace("sin(mInput0)", "sin(r)");
+        let material = ara_material::dsl::parse(&text, "gr_m").expect("parses");
+        let graph = material.to_graph(Default::default()).expect("graph");
+        let id = |name: &str| material.node_id(name).expect(name).to_owned();
+        assert_eq!(connect(&graph, &id("mInput0"), &id("m"), "in0").len(), 1);
+    }
 }
