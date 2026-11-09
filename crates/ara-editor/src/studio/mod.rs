@@ -167,7 +167,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
     let mut shown_tag = u64::MAX;
     // The graph canvas's size when last drawn.
-    let mut graph_extent = [0, 0];
+    let mut graph_extent = ("", [0, 0]);
     // A composite is owed (something changed) but has not presented yet.
     let mut composite = false;
     // The Scene's size while a resize is under way, and when it last changed.
@@ -524,25 +524,28 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.state().local.game_captured && rt.state().editor.state.playing.is_none() {
             rt.update(|s| s.local.game_captured = false);
         }
-        // The Material page's canvas, in its own layer.
-        let graph_rect = rt
-            .natives()
-            .into_iter()
-            .find(|(n, _)| &**n == graph::GRAPH_LAYER)
-            .map(|(_, r)| r);
-        surface.place_native_layer(graph::GRAPH_LAYER, graph_rect);
-        if let Some(r) = graph_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
+        // The Material and Animation pages' canvases, each in its own layer.
+        for (domain, name) in graph::PAGES {
+            let rect = rt
+                .natives()
+                .into_iter()
+                .find(|(n, _)| &**n == name)
+                .map(|(_, r)| r);
+            surface.place_native_layer(name, rect);
+            let Some(r) = rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) else {
+                continue;
+            };
             let extent = [r.width() as u32, r.height() as u32];
-            rt.touch(graph::sync);
-            if (rt.state().graph.dirty || graph_extent != extent) && graph_layer.ready()? {
-                let layer = metal_layer(surface.native_layer(graph::GRAPH_LAYER)?)?;
+            rt.touch(|s| graph::sync(s, domain));
+            if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
+                let layer = metal_layer(surface.native_layer(name)?)?;
                 let scale = rt.scale();
-                // SAFETY: the layer is the graph page's own, alive while the window is.
+                // SAFETY: the layer is the page's own, alive while the window is.
                 let drawn = rt.touch(|s| unsafe {
                     graph::draw(s, &mut graph_layer, &renderer, layer, extent, scale)
                 });
                 match drawn {
-                    Ok(()) => graph_extent = extent,
+                    Ok(()) => graph_extent = (name, extent),
                     Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
                 }
             }

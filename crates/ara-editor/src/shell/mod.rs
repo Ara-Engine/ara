@@ -51,7 +51,7 @@ pub use testing::MenuRow;
 mod add_component;
 mod agents_connect;
 pub(crate) mod agents_panel;
-mod animation_panel;
+pub(crate) mod animation_panel;
 mod assets_panel;
 mod assets_tree;
 mod file_drag;
