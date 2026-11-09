@@ -99,6 +99,8 @@ struct Shown {
     canvas: Canvas,
     /// Opened and not yet framed to its laid-out size.
     fresh: bool,
+    /// A material's stats at this revision (`None` for a state machine).
+    stats: Option<super::material_stats::Summary>,
 }
 
 /// The document `domain`'s page edits: the selected resource when it is one of its kind,
@@ -187,6 +189,7 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
         .filter(|g| g.domain == domain && g.doc == doc)
     {
         Some(shown) => {
+            shown.stats = (domain == "material").then(|| super::material_stats::summarize(&graph));
             shown.canvas.refresh(graph, text);
             shown.revision = revision;
         }
@@ -195,6 +198,7 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
                 domain,
                 doc,
                 revision,
+                stats: (domain == "material").then(|| super::material_stats::summarize(&graph)),
                 canvas: Canvas::new(graph, text),
                 fresh: true,
             })
@@ -463,6 +467,14 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             .grow(1.0)
             .min_w(0.0)
             .child(canvas)
+            .children(
+                s.graph
+                    .shown
+                    .as_ref()
+                    .and_then(|g| g.stats.as_ref())
+                    .filter(|_| !animation)
+                    .map(|stats| super::material_stats::strip(s, stats)),
+            )
             .child(at_point)
             .child(at_value)
             .children(empty_hint(s, animation)),

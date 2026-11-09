@@ -27,6 +27,7 @@ mod hierarchy;
 mod inspector;
 mod layer;
 mod lighting;
+mod material_stats;
 mod panels;
 mod preferences;
 mod profiler;
