@@ -319,6 +319,15 @@ impl FidelityContent {
             {
                 let _ = self.library.luts.load(source, &id);
             }
+            for id in self
+                .library
+                .light_profiles
+                .ids()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+            {
+                let _ = self.library.light_profiles.load(source, &id);
+            }
             self.materials = Some(materials);
         }
         // Post-process volumes' colour lookup tables (ara_runtime::lut), decoded once each.
@@ -328,6 +337,13 @@ impl FidelityContent {
                     // A missing or non-`lut` import grades without its table.
                     let _ = self.library.luts.load(source, &id);
                 }
+            }
+            // Lights' photometric profiles (ara_runtime::light_profile), decoded once each;
+            // a missing or invalid import shines without its profile.
+            if let Some(id) = ara_runtime::light_profile::record_references(&row.record)
+                && self.library.light_profiles.get(&id).is_none()
+            {
+                let _ = self.library.light_profiles.load(source, &id);
             }
         }
         let transforms = super::transforms_with(view.entities(), poses);

@@ -13,8 +13,41 @@ pub use layout::{MAX_LATTICES, ProbeLattice, ProbeLayout};
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
-/// Static vectors per probe: 64 distance moments, relocation, diagnostics.
-pub const STATIC_VECTORS: usize = 66;
+/// Static vectors per probe: [`MOMENT_VECTORS`] of packed distance moments,
+/// relocation, diagnostics.
+pub const STATIC_VECTORS: usize = MOMENT_VECTORS + 2;
+/// Visibility texels per side of a probe's octahedral distance moments: twice the
+/// cache's, as DDGI keeps its depth finer than its irradiance. Walls thinner than
+/// the probe spacing need it: an 8x8 texel (some 22 degrees) next to a wall's edge
+/// mixes the wall with the open space past it, which passes points behind the wall.
+pub const MOMENT_SIDE: usize = 16;
+/// Static vectors holding the moments: four packed texels each ([`pack_moments`]).
+pub const MOMENT_VECTORS: usize = MOMENT_SIDE * MOMENT_SIDE / 4;
+
+/// Distance (m) as eight bits of its base-2 logarithm, 4 mm to 65 km in steps of
+/// about 7% (`giParallax`, look-gi.slangh, decodes it).
+pub fn log_distance(metres: f32) -> u32 {
+    ((metres.max(1e-6).log2() + 8.) / 24. * 255.)
+        .round()
+        .clamp(0., 255.) as u32
+}
+
+/// Distance (m) the moments of a lattice with `spacing` clamp each ray to, and
+/// normalize by: twice its largest spacing, as DDGI clamps its ray distance (shading
+/// weighs points within one cell of a probe, and a missed ray's far distance would
+/// swamp a texel that also sees a near wall).
+pub fn moment_limit(spacing: [f32; 3]) -> f32 {
+    2. * spacing.iter().copied().fold(0., f32::max)
+}
+
+/// One visibility texel: its rays' mean distance and mean squared distance, each
+/// over `limit` (and its square) as UNORM16, mean in the low bits. Moment vector
+/// `v` of a probe holds the 16x16 texels (2x + i, 2y + j) for cache texel
+/// (x, y) = (v % 8, v / 8) in component i + 2j, as f32 bit patterns (not numbers).
+pub fn pack_moments(mean: f32, squared: f32, limit: f32) -> f32 {
+    let unorm = |v: f32| (v.clamp(0., 1.) * 65535.).round() as u32;
+    f32::from_bits(unorm(mean / limit) | unorm(squared / (limit * limit)) << 16)
+}
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
@@ -32,21 +65,37 @@ const FINE_FALLOFF: f32 = 3.5;
 /// The coarsest lattice fades to the sky over half a cell past its outermost probes.
 const COARSE_FALLOFF: f32 = 0.5;
 
-/// What each probe of a pool sees, from a one-time acquisition.
-#[derive(Debug, Clone, PartialEq)]
+/// What each probe of a pool sees, from a one-time acquisition. Equality compares
+/// the statics bit for bit: packed moments are bit patterns, some of them NaN.
+#[derive(Debug, Clone)]
 pub struct ProbeSurfaces {
     /// The pool's lattices, finest first; probes numbered lattice after lattice.
     pub layout: ProbeLayout,
     /// [`SURFACE_TEXELS`] per probe, octahedral row-major. Packed per texel: x
-    /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y octahedral hit
-    /// normal as two UNORM16; z emissive red and green as f16; w emissive blue and
-    /// mean hit distance (metres) as f16. Albedo, normal, emissive and distance
-    /// average the texel's geometry hits; the sky fraction is the share of misses.
+    /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y the relit hit's
+    /// octahedral normal as two UNORM10, its bake sub-ray (4 bits: (k % 4, k / 4) of the
+    /// texel's 4x4) and the hits' mean distance ([`log_distance`], what reflections
+    /// parallax-correct with); z emissive as RGB9E5; w a mask of the sub-rays (bit k)
+    /// whose hits lie on the relit hit's plane (16 bits; relighting spreads the texel's
+    /// light over those only), then the relit hit's distance along its sub-ray (metres,
+    /// f16). The relit hit is a real one on the nearest surface the texel sees
+    /// (ara-runtime-render `relit_hit`).
+    /// Albedo and emissive average the texel's geometry hits; the sky fraction is the
+    /// share of misses.
     pub texels: Vec<[u32; 4]>,
-    /// [`STATIC_VECTORS`] per probe: 64 octahedral (mean distance, mean squared
-    /// distance) moments, then (relocation offset xyz, active 0/1), then
-    /// acquisition diagnostics.
+    /// [`STATIC_VECTORS`] per probe: [`MOMENT_VECTORS`] of 16x16 octahedral
+    /// distance moments ([`pack_moments`]), then (relocation offset xyz, active
+    /// 0/1), then acquisition diagnostics.
     pub statics: Vec<[f32; 4]>,
+}
+
+impl PartialEq for ProbeSurfaces {
+    fn eq(&self, other: &Self) -> bool {
+        fn bits(s: &ProbeSurfaces) -> &[u32] {
+            bytemuck::cast_slice(&s.statics)
+        }
+        self.layout == other.layout && self.texels == other.texels && bits(self) == bits(other)
+    }
 }
 
 impl ProbeSurfaces {
@@ -70,42 +119,22 @@ impl ProbeSurfaces {
             self.texels.len() == n * SURFACE_TEXELS && self.statics.len() == n * STATIC_VECTORS,
             "Probe surfaces do not match the lattice"
         );
+        // Packed moments are bit patterns; the vectors after them are numbers.
         ensure!(
-            self.statics.iter().flatten().all(|v| v.is_finite()),
+            self.statics
+                .as_chunks::<STATIC_VECTORS>()
+                .0
+                .iter()
+                .flat_map(|probe| probe[MOMENT_VECTORS..].iter().flatten())
+                .all(|v| v.is_finite()),
             "Probe statics must be finite"
         );
         Ok(())
     }
 }
 
-/// Power of the cosine lobe the distance moments are filtered over: about one 8x8
-/// octahedral texel (some 22 degrees) across, as DDGI filters its depth maps. Raw
-/// per-texel moments jump at texel boundaries, so Chebyshev visibility flips where
-/// the direction to a shading point crosses one: sharp straight lines across flat
-/// faces near a probe.
-const MOMENT_LOBE: i32 = 12;
-
-/// Per moment texel, the normalized cosine-lobe weights of all 64 texels; the
-/// mixture of the texels' (mean, mean squared) keeps variance meaningful.
-fn moment_filter() -> &'static [[f32; SURFACE_TEXELS]; SURFACE_TEXELS] {
-    static FILTER: std::sync::OnceLock<[[f32; SURFACE_TEXELS]; SURFACE_TEXELS]> =
-        std::sync::OnceLock::new();
-    FILTER.get_or_init(|| {
-        let directions: [glam::Vec3; SURFACE_TEXELS] = std::array::from_fn(|t| {
-            oct_decode((glam::Vec2::new((t % 8) as f32, (t / 8) as f32) + 0.5) / 8.)
-        });
-        std::array::from_fn(|t| {
-            let mut weights: [f32; SURFACE_TEXELS] =
-                std::array::from_fn(|u| directions[t].dot(directions[u]).max(0.).powi(MOMENT_LOBE));
-            let total: f32 = weights.iter().sum();
-            weights.iter_mut().for_each(|w| *w /= total);
-            weights
-        })
-    })
-}
-
 /// Octahedral decode of `p` in 0..1 (`octDecode`, raster.slangh).
-fn oct_decode(p: glam::Vec2) -> glam::Vec3 {
+pub(crate) fn oct_decode(p: glam::Vec2) -> glam::Vec3 {
     let p = p * 2. - 1.;
     let mut n = glam::Vec3::new(p.x, p.y, 1. - p.x.abs() - p.y.abs());
     let t = (-n.z).clamp(0., 1.);
@@ -149,8 +178,6 @@ impl ProbeUpdate {
             }
         };
         let mut records = Vec::with_capacity(probes.len() * PROBE_RECORD);
-        let filter = moment_filter();
-        let (lattices, bases) = (surfaces.layout.lattices(), surfaces.layout.bases());
         for &id in probes {
             let p = id as usize;
             ensure!(p < surfaces.len(), "probe {id} outside the lattice");
@@ -158,32 +185,9 @@ impl ProbeUpdate {
             records.extend_from_slice(bytemuck::cast_slice(
                 &surfaces.texels[p * SURFACE_TEXELS..(p + 1) * SURFACE_TEXELS],
             ));
-            let mut statics: [[f32; 4]; STATIC_VECTORS] = surfaces.statics
-                [p * STATIC_VECTORS..(p + 1) * STATIC_VECTORS]
-                .try_into()
-                .expect("a probe's statics slice has STATIC_VECTORS entries");
-            // Clamped to twice the probe's lattice spacing, as DDGI clamps its ray
-            // distance: a missed ray's far distance must not pull its neighbours'
-            // means past every shading point (light leaks at silhouettes). Shading
-            // only weighs points within one cell of the probe.
-            let lattice = (0..lattices.len())
-                .rev()
-                .find(|&i| bases[i] <= p)
-                .map_or(lattices[0], |i| lattices[i]);
-            let limit = 2. * lattice.spacing.iter().copied().fold(0., f32::max);
-            let raw: [[f32; 4]; SURFACE_TEXELS] = std::array::from_fn(|t| {
-                let [mean, squared, ..] = statics[t];
-                [mean.min(limit), squared.min(limit * limit), 0., 0.]
-            });
-            for (texel, weights) in statics.iter_mut().zip(filter) {
-                let (mean, squared) = weights
-                    .iter()
-                    .zip(&raw)
-                    .fold((0., 0.), |(m, s), (w, r)| (m + w * r[0], s + w * r[1]));
-                texel[0] = mean;
-                texel[1] = squared;
-            }
-            records.extend_from_slice(bytemuck::cast_slice(&statics));
+            records.extend_from_slice(bytemuck::cast_slice(
+                &surfaces.statics[p * STATIC_VECTORS..(p + 1) * STATIC_VECTORS],
+            ));
         }
         Ok(Self {
             layout: surfaces.layout,
@@ -258,10 +262,18 @@ pub(crate) struct GiGpu {
     pub cache: Buffer,
     /// Relocation offset and active flag per probe.
     pub meta: Buffer,
-    /// Static distance moments (bordered 10x10 tiles).
+    /// Static distance moments (bordered 18x18 tiles of 16x16 texels, RG16 UNORM
+    /// over the lattice's [`moment_limit`]).
     pub moments: Image,
     /// Relit irradiance (bordered 8x8 tiles), ping-ponged.
     pub irradiance: [Image; 2],
+    /// Relit radiance cache (bordered 10x10 tiles): what each probe sees along its 64
+    /// surface cache directions (rgb) and how far (a), filtered over relights in
+    /// place. Probe reflections read it (look-gi.slangh `giProbeReflection`).
+    pub radiance: Image,
+    /// Bindless indices of `radiance`: sampled, storage.
+    pub radiance_indices: [u32; 2],
+    pub radiance_access: Access,
     /// Bindless indices: cache, meta (buffers), moments (sampled).
     pub indices: [u32; 3],
     pub irradiance_sampled: [u32; 2],
@@ -289,6 +301,12 @@ pub(crate) struct GiGpu {
     /// range in one frame, as captures do, and a converged volume shows at once
     /// instead of fading in.
     pub unseen: bool,
+    /// Frames only read the volume: a reflection capture's faces
+    /// (`Renderer::with_capture_view`) declare no relight and do not advance it. Their
+    /// camera's cascades, without the view's virtual shadow pages, relit probes with
+    /// another sun than the view's frames did, so the volume wobbled while captures
+    /// baked (Polar Epic: a fifth of the frame flickered for some 300 frames).
+    pub frozen: bool,
     pub relit_once: bool,
     /// Records of probes `deferred..` (the coarsest lattice) written since the
     /// volume was created; it stays out of shading until they have all landed and
@@ -435,6 +453,7 @@ impl GiGpu {
             self.irradiance_storage[write],
             self.indices[2],
         ];
+        frame.gi_radiance = [self.radiance_indices[0], self.radiance_indices[1], 0, 0];
     }
     /// Advances the ping-pong slot and update window after a completed frame.
     pub(crate) fn advance(&mut self, budget: u32) {
@@ -524,24 +543,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn moments_are_filtered_over_a_cosine_lobe_and_clamped_to_the_lattice() -> Result<()> {
+    fn moments_pack_to_unorm16_over_the_limit_and_upload_bit_for_bit() -> Result<()> {
+        let unpack = |v: f32| {
+            let bits = v.to_bits();
+            [
+                (bits & 0xffff) as f32 / 65535.,
+                (bits >> 16) as f32 / 65535.,
+            ]
+        };
+        // A near wall (mean 0.6 m) under a 3 m limit, and a miss clamped to it.
+        let [mean, squared] = unpack(pack_moments(0.6, 0.37, 3.));
+        assert!((mean * 3. - 0.6).abs() < 1e-4 && (squared * 9. - 0.37).abs() < 1e-3);
+        assert_eq!(unpack(pack_moments(200., 40_000., 3.)), [1., 1.]);
+        assert_eq!(moment_limit([1.5, 0.9, 1.5]), 3.);
+        // Packed moments are bit patterns, not numbers: some are NaN as floats, yet
+        // they validate and upload unchanged.
         let layout = ProbeLayout::single(ProbeLattice {
             origin: [0.; 3],
             spacing: [1.; 3],
             counts: [2; 3],
         });
-        let probes = 8;
+        let probes = layout.probe_count();
         let mut statics = vec![[0.; 4]; probes * STATIC_VECTORS];
+        let nan = f32::from_bits(0xffff_ffff);
+        assert!(nan.is_nan());
         for p in 0..probes {
-            for t in 0..SURFACE_TEXELS {
-                // Probe 0: near geometry in half its texels, missed rays in the rest.
-                statics[p * STATIC_VECTORS + t] = match (p, t < 32) {
-                    (0, true) => [0.5, 0.25, 0., 0.],
-                    (0, false) => [200., 40_000., 0., 0.],
-                    _ => [1., 1., 0., 0.],
-                };
-            }
-            statics[p * STATIC_VECTORS + SURFACE_TEXELS] = [0., 0., 0., 1.];
+            statics[p * STATIC_VECTORS] = [nan; 4];
+            statics[p * STATIC_VECTORS + MOMENT_VECTORS] = [0., 0., 0., 1.];
         }
         let surfaces = ProbeSurfaces {
             layout,
@@ -549,29 +577,12 @@ mod tests {
             statics,
         };
         let update = ProbeUpdate::new(&surfaces, None)?;
-        let moments = |p: usize| -> Vec<[f32; 4]> {
-            let at = p * PROBE_RECORD + 16 + SURFACE_TEXELS * 16;
-            bytemuck::cast_slice(&update.records[at..at + SURFACE_TEXELS * 16]).to_vec()
-        };
-        // A uniform probe keeps its moments.
-        assert!(
-            moments(1)
-                .iter()
-                .all(|m| (m[0] - 1.).abs() < 1e-5 && (m[1] - 1.).abs() < 1e-5)
-        );
-        // Misses clamp to twice the spacing, and texels near the boundary blend both
-        // sides instead of jumping between them.
-        let near_far = moments(0);
-        assert!(
-            near_far
-                .iter()
-                .all(|m| (0.5 - 1e-5..=2. + 1e-5).contains(&m[0]))
-        );
-        assert!(near_far.iter().any(|m| m[0] > 0.6 && m[0] < 1.9));
-        // Relocation and the active flag pass through.
-        let at = PROBE_RECORD + 16 + (SURFACE_TEXELS + SURFACE_TEXELS) * 16;
-        let active: [f32; 4] = bytemuck::pod_read_unaligned(&update.records[at..at + 16]);
-        assert_eq!(active, [0., 0., 0., 1.]);
+        let at = 16 + SURFACE_TEXELS * 16;
+        let first: [u32; 4] = bytemuck::pod_read_unaligned(&update.records[at..at + 16]);
+        assert_eq!(first, [0xffff_ffff; 4]);
+        let mut bad = surfaces.clone();
+        bad.statics[MOMENT_VECTORS] = [nan, 0., 0., 1.];
+        assert!(bad.validate().is_err(), "relocation must be finite");
         Ok(())
     }
 }

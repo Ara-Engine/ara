@@ -77,9 +77,8 @@ impl Ui {
             if n.state.disabled {
                 return Cursor::NotAllowed;
             }
-            if crate::input::numeric::declared(&n.element)
-                && crate::input::numeric::grip(n.rect, position)
-            {
+            // An idle numeric field drags; one being edited shows the text cursor.
+            if !n.state.focus && crate::input::numeric::scrubs(&n.element, n.rect, position) {
                 return Cursor::ResizeEw;
             }
             if captured == Some(i) {

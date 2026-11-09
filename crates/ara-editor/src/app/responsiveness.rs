@@ -111,13 +111,14 @@ impl Typed {
         }
     }
 }
-/// A colour (a material edit) and a position (a transform edit, which patches).
+/// A roughness (a material edit) and a position (a transform edit, which patches).
+/// Colours are swatches that open the picker, so a material number is typed.
 const TYPED: [Typed; 2] = [
     Typed {
-        name: "color",
-        field: "edit-MeshRenderer-color",
-        text: "#3366aa",
-        alternate: "#aa6633",
+        name: "roughness",
+        field: "edit-MeshRenderer-roughness",
+        text: "0.35",
+        alternate: "0.65",
     },
     Typed {
         name: "position",

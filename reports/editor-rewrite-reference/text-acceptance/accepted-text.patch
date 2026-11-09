@@ -1,0 +1,439 @@
+diff --git a/crates/ara-ui-text/src/editing.rs b/crates/ara-ui-text/src/editing.rs
+--- a/crates/ara-ui-text/src/editing.rs
++++ b/crates/ara-ui-text/src/editing.rs
+@@ -93,6 +93,25 @@
+     pub fn value(&self) -> &str {
+         &self.value
+     }
++    /// Acknowledge the current value only after the host accepts its model edit.
++    /// Clears draft Undo/Redo while preserving value, selection and caret. Active
++    /// IME composition is left intact and returns false instead of being accepted.
++    pub fn accept_current(&mut self) -> bool {
++        if self.composition.is_some() {
++            return false;
++        }
++        self.undo.clear();
++        self.redo.clear();
++        true
++    }
++    /// Whether an unaccepted local edit can be undone before host history.
++    pub fn can_undo(&self) -> bool {
++        !self.undo.is_empty()
++    }
++    /// Whether a locally undone draft can be redone before host history.
++    pub fn can_redo(&self) -> bool {
++        !self.redo.is_empty()
++    }
+     /// Selected committed UTF-8 range.
+     pub fn selection(&self) -> Range<usize> {
+         self.anchor.min(self.caret)..self.anchor.max(self.caret)
+diff --git a/crates/ara-ui/src/widgets.rs b/crates/ara-ui/src/widgets.rs
+--- a/crates/ara-ui/src/widgets.rs
++++ b/crates/ara-ui/src/widgets.rs
+@@ -274,6 +274,16 @@
+         }
+         Ok(())
+     }
++    /// Acknowledge a host-accepted authoring value without moving its caret/focus.
++    /// Draft echoes and failed/asynchronous-only submissions must not call this.
++    /// Returns false while the input still has active IME composition.
++    pub fn accept_text(&mut self, index: usize) -> Result<bool> {
++        let id = self.node_id(index)?;
++        let Some(Widget::Input(input)) = self.widgets.get_mut(&id) else {
++            return Err("ARA4044: accepted text requires a text input".into());
++        };
++        Ok(input.accept_current())
++    }
+     /// Move a text caret visually through bidi runs, preserving logical UTF-8 selection.
+     pub fn move_caret(
+         &mut self,
+diff --git a/crates/ara-ui/src/native_input.rs b/crates/ara-ui/src/native_input.rs
+--- a/crates/ara-ui/src/native_input.rs
++++ b/crates/ara-ui/src/native_input.rs
+@@ -135,6 +135,26 @@
+                 return Ok(true);
+             }
+             return Ok(false);
++        }
++        // A host-accepted field has no local draft history. Yield empty Undo/Redo
++        // to the host's typed history instead of swallowing a valid editor chord.
++        // Composition retains ownership even with no local snapshots.
++        if primary
++            && matches!(scancode, 28 | 29)
++            && self.composition.is_none()
++            && let Some(Widget::Input(text)) = field.and_then(|index| {
++                ui.widgets
++                    .get(&crate::source::stable_id(&ui.nodes[index].element.id))
++            })
++        {
++            let redo = scancode == 28 || modifiers.shift;
++            if if redo {
++                !text.can_redo()
++            } else {
++                !text.can_undo()
++            } {
++                return Ok(false);
++            }
+         }
+         let event = match scancode {
+             43 if input.focused().is_some() => Some(InputEvent::Tab {
+diff --git a/crates/ara-editor/src/shell/input.rs b/crates/ara-editor/src/shell/input.rs
+--- a/crates/ara-editor/src/shell/input.rs
++++ b/crates/ara-editor/src/shell/input.rs
+@@ -4,6 +4,9 @@
+ #[cfg(test)]
+ #[path = "input/dock_resize_tests.rs"]
+ mod dock_resize_tests;
++#[cfg(test)]
++#[path = "input/text_acceptance_tests.rs"]
++mod text_acceptance_tests;
+ impl Shell {
+     /// Read-only native semantic state for diagnostics and offscreen verification.
+     pub(crate) fn native_input_state(&self) -> &ara_ui::native_input::Router {
+@@ -875,6 +878,26 @@
+     }
+     /// Commit pending inspector text and slider values as one transaction.
+     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
++        let focused = self.input.focused();
++        let revision = editor.host.store().revision();
++        let committed = self.commit_fields_inner(editor)?;
++        // Reconciliation also echoes unaccepted drafts, so it cannot establish
++        // this boundary. Only a successful, actual authoring commit may do so.
++        if committed
++            && editor.host.store().revision() > revision
++            && let Some(index) = focused.and_then(|id| self.ui.by_id(id))
++            && matches!(
++                self.ui
++                    .widgets
++                    .get(&ara_ui::source::stable_id(&self.ui.nodes[index].element.id)),
++                Some(ara_ui::widgets::Widget::Input(_))
++            )
++        {
++            self.ui.accept_text(index)?;
++        }
++        Ok(committed)
++    }
++    fn commit_fields_inner(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+         if self.commit_play_fields(editor)? {
+             self.rebuild(editor)?;
+             return Ok(true);
+diff --git a/crates/ara-editor/src/shell/graph_input.rs b/crates/ara-editor/src/shell/graph_input.rs
+--- a/crates/ara-editor/src/shell/graph_input.rs
++++ b/crates/ara-editor/src/shell/graph_input.rs
+@@ -60,12 +60,24 @@
+         let Some((doc, source)) = &self.resource_text else {
+             return Ok(());
+         };
++        let revision = editor.host.store().revision();
+         editor.apply_to(
+             doc,
+             vec![json!({"cmd":"material.text.apply","args":{"text":source}})],
+             "Edit material DSL",
+         )?;
+         self.resource_text = None;
++        if editor.host.store().revision() > revision
++            && let Some(index) = self.ui.find("material-source")
++            && matches!(
++                self.ui
++                    .widgets
++                    .get(&ara_ui::source::stable_id("material-source")),
++                Some(ara_ui::widgets::Widget::Input(_))
++            )
++        {
++            self.ui.accept_text(index)?;
++        }
+         Ok(())
+     }
+     pub(super) fn edit_graph_layout(
+diff --git a/crates/ara-ui-text/tests/acceptance.rs b/crates/ara-ui-text/tests/acceptance.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-ui-text/tests/acceptance.rs
+@@ -0,0 +1,86 @@
++use ara_ui_text::{Clipboard, EditEvent, Result, TextInput};
++#[derive(Default)]
++struct Clip;
++impl Clipboard for Clip {
++    fn read(&mut self) -> Result<String> {
++        Ok(String::new())
++    }
++    fn write(&mut self, _: &str) -> Result<()> {
++        Ok(())
++    }
++}
++#[test]
++fn accepted_value_clears_draft_history_without_moving_caret_or_selection() -> Result<()> {
++    let mut input = TextInput::new("abcd");
++    let mut clip = Clip;
++    input.event(
++        EditEvent::Select {
++            anchor: 1,
++            caret: 3,
++        },
++        &mut clip,
++    )?;
++    input.event(EditEvent::Insert("X".into()), &mut clip)?;
++    input.event(
++        EditEvent::Select {
++            anchor: 1,
++            caret: 2,
++        },
++        &mut clip,
++    )?;
++    assert!(input.can_undo());
++    let before = (input.value().to_owned(), input.anchor(), input.caret());
++    assert!(input.accept_current());
++    assert!(!input.can_undo() && !input.can_redo());
++    assert_eq!(
++        (input.value().to_owned(), input.anchor(), input.caret()),
++        before
++    );
++    input.event(EditEvent::Insert("Y".into()), &mut clip)?;
++    assert!(input.can_undo());
++    input.event(EditEvent::Undo, &mut clip)?;
++    assert_eq!(input.value(), before.0);
++    assert!(input.can_redo());
++    Ok(())
++}
++#[test]
++fn active_ime_is_not_acknowledged_or_disturbed() -> Result<()> {
++    let mut input = TextInput::new("abcd");
++    let mut clip = Clip;
++    input.event(
++        EditEvent::Select {
++            anchor: 1,
++            caret: 3,
++        },
++        &mut clip,
++    )?;
++    input.event(EditEvent::Insert("X".into()), &mut clip)?;
++    input.event(EditEvent::ImeStart, &mut clip)?;
++    input.event(
++        EditEvent::ImePreedit {
++            text: "ni".into(),
++            selection: 0..2,
++        },
++        &mut clip,
++    )?;
++    let before = (
++        input.value().to_owned(),
++        input.display(),
++        input.anchor(),
++        input.caret(),
++        input.preedit_range(),
++    );
++    assert!(!input.accept_current());
++    assert!(input.can_undo());
++    assert_eq!(
++        (
++            input.value().to_owned(),
++            input.display(),
++            input.anchor(),
++            input.caret(),
++            input.preedit_range()
++        ),
++        before
++    );
++    Ok(())
++}
+diff --git a/crates/ara-ui/tests/text_acceptance.rs b/crates/ara-ui/tests/text_acceptance.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-ui/tests/text_acceptance.rs
+@@ -0,0 +1,39 @@
++use ara_ui::{Ui, input::InputState, native_input::Router, source::stable_id, widgets::Widget};
++use ara_ui_text::{Clipboard, EditEvent, Result, TextSystem};
++struct Clip;
++impl Clipboard for Clip {
++    fn read(&mut self) -> Result<String> {
++        Ok(String::new())
++    }
++    fn write(&mut self, _: &str) -> Result<()> {
++        Ok(())
++    }
++}
++#[test]
++fn draft_echo_keeps_local_undo_but_explicit_acceptance_yields_empty_history_to_host() -> Result<()>
++{
++    let mut ui = Ui::parse(
++        "<ui id='r'><field id='f' text='old' /></ui>",
++        "",
++        [300., 100.],
++    )?;
++    let mut system = TextSystem::bundled()?;
++    ui.frame(&mut system)?;
++    let mut input = InputState::default();
++    input.focus(&mut ui, stable_id("f"))?;
++    let mut router = Router::default();
++    let mut clip = Clip;
++    let index = ui.find("f").expect("field");
++    ui.edit(index, EditEvent::SelectAll, &mut clip)?;
++    ui.edit(index, EditEvent::Insert("draft".into()), &mut clip)?;
++    ui.reconcile("<ui id='r'><field id='f' text='draft' /></ui>")?;
++    assert!(matches!(ui.widgets.get(&stable_id("f")),Some(Widget::Input(text)) if text.can_undo()));
++    let index = ui.find("f").expect("same field");
++    assert!(ui.accept_text(index)?);
++    let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
++    router.key(&mut ui, &mut input, primary, true, false, &mut clip)?;
++    assert!(!router.key(&mut ui, &mut input, 29, true, false, &mut clip)?);
++    assert!(!router.key(&mut ui, &mut input, 28, true, false, &mut clip)?);
++    assert_eq!(input.focused(), Some(stable_id("f")));
++    Ok(())
++}
+diff --git a/crates/ara-editor/src/shell/input/text_acceptance_tests.rs b/crates/ara-editor/src/shell/input/text_acceptance_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/input/text_acceptance_tests.rs
+@@ -0,0 +1,152 @@
++//! Real Inspector commit and focused keyboard history, with no synthetic authoring shortcut.
++use super::*;
++use ara_ui::{input::InputEvent, source::stable_id, widgets::Widget};
++use ara_ui_text::{Clipboard, EditEvent};
++use std::sync::atomic::{AtomicU64, Ordering};
++struct Clip;
++impl Clipboard for Clip {
++    fn read(&mut self) -> ara_ui_text::Result<String> {
++        Ok(String::new())
++    }
++    fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
++        Ok(())
++    }
++}
++fn open() -> (Editor, Shell) {
++    static NEXT: AtomicU64 = AtomicU64::new(0);
++    let root = crate::test_target().join("text-acceptance").join(format!(
++        "{}-{}",
++        std::process::id(),
++        NEXT.fetch_add(1, Ordering::Relaxed)
++    ));
++    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))
++        .expect("scratch directory");
++    std::fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&json!({"name":"Accepted text","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}))).expect("marker");
++    std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_textaccept","records":{
++ "e_textaccept1":{"name":"First","Transform":{},"MeshRenderer":{"emissiveMaterials":["first0","first1"]},"Light":{"intensity":1000}},
++ "e_textaccept2":{"name":"Second","Transform":{},"MeshRenderer":{"emissiveMaterials":["second0"]},"Light":{"intensity":2000}}}}))).expect("scene");
++    let mut editor =
++        Editor::open_with(&root, Some(root.join(".ara/accept-user.json"))).expect("authority");
++    editor
++        .action(
++            "editor.select",
++            json!({"entities":["e_textaccept1","e_textaccept2"]}),
++        )
++        .expect("selection");
++    editor
++        .action("editor.view", json!({"maximized":"inspector"}))
++        .expect("maximize");
++    editor
++        .action(
++            "editor.search",
++            json!({"panel":"inspector","query":"MeshRenderer.emissiveMaterials"}),
++        )
++        .expect("filter");
++    let mut shell = Shell::new(&mut editor, [1000., 700.]).expect("shell");
++    shell.offscreen = true;
++    shell.frame().expect("layout");
++    (editor, shell)
++}
++fn records(editor: &Editor) -> Value {
++    let doc = editor
++        .host
++        .store()
++        .workspace()
++        .doc(&editor.state.doc)
++        .expect("scene");
++    json!([doc.record("e_textaccept1"), doc.record("e_textaccept2")])
++}
++fn replace(editor: &mut Editor, shell: &mut Shell, id: &str, value: &str) {
++    shell.click(id, &mut Clip).expect("field click");
++    shell
++        .event(InputEvent::Edit(EditEvent::SelectAll), &mut Clip)
++        .expect("select all");
++    shell
++        .event(InputEvent::Edit(EditEvent::Insert(value.into())), &mut Clip)
++        .expect("typing");
++    shell.dispatch(editor).expect("draft dispatch");
++}
++fn chord(editor: &mut Editor, shell: &mut Shell, key: i32) {
++    let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
++    shell
++        .key(editor, primary, true, &mut Clip)
++        .expect("modifier");
++    shell.key(editor, key, true, &mut Clip).expect("key");
++    shell.key(editor, key, false, &mut Clip).expect("key up");
++    shell
++        .key(editor, primary, false, &mut Clip)
++        .expect("modifier up");
++    shell.dispatch(editor).expect("dispatch");
++}
++const FIELD: &str = "nest-edit-MeshRenderer-emissiveMaterials-0";
++#[test]
++fn accepted_enter_keeps_focus_but_one_ctrl_z_and_ctrl_y_use_typed_authoring_history() {
++    let (mut editor, mut shell) = open();
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    replace(&mut editor, &mut shell, FIELD, "accepted");
++    shell
++        .key(&mut editor, 40, true, &mut Clip)
++        .expect("accepted Enter");
++    assert_eq!(editor.host.store().revision(), revision + 1);
++    let after = records(&editor);
++    assert_ne!(after, before);
++    assert_eq!(shell.input.focused(), Some(stable_id(FIELD)));
++    assert!(
++        matches!(shell.ui.widgets.get(&stable_id(FIELD)),Some(Widget::Input(input)) if !input.can_undo() && !input.can_redo())
++    );
++    chord(&mut editor, &mut shell, 29);
++    assert_eq!(editor.host.store().revision(), revision + 2);
++    assert_eq!(records(&editor), before);
++    assert_eq!(shell.input.focused(), Some(stable_id(FIELD)));
++    chord(&mut editor, &mut shell, 28);
++    assert_eq!(editor.host.store().revision(), revision + 3);
++    assert_eq!(records(&editor), after);
++}
++#[test]
++fn uncommitted_draft_undo_and_redo_remain_local_without_model_history() {
++    let (mut editor, mut shell) = open();
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    replace(&mut editor, &mut shell, FIELD, "draft only");
++    chord(&mut editor, &mut shell, 29);
++    assert_eq!(editor.host.store().revision(), revision);
++    assert_eq!(records(&editor), before);
++    assert!(
++        matches!(shell.ui.widgets.get(&stable_id(FIELD)),Some(Widget::Input(input)) if input.value()!="draft only" && input.can_redo())
++    );
++    chord(&mut editor, &mut shell, 28);
++    assert_eq!(editor.host.store().revision(), revision);
++    assert_eq!(records(&editor), before);
++    assert!(
++        matches!(shell.ui.widgets.get(&stable_id(FIELD)),Some(Widget::Input(input)) if input.value()=="draft only")
++    );
++}
++#[test]
++fn rejected_validation_does_not_acknowledge_or_discard_draft_history() {
++    let (mut editor, mut shell) = open();
++    editor
++        .action(
++            "editor.search",
++            json!({"panel":"inspector","query":"Light.intensity"}),
++        )
++        .expect("numeric filter");
++    shell.rebuild(&mut editor).expect("rebuild");
++    shell.frame().expect("frame");
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    let id = "edit-Light-intensity";
++    replace(&mut editor, &mut shell, id, "not-a-number");
++    assert!(shell.key(&mut editor, 40, true, &mut Clip).is_err());
++    assert_eq!(editor.host.store().revision(), revision);
++    assert_eq!(records(&editor), before);
++    assert!(
++        matches!(shell.ui.widgets.get(&stable_id(id)),Some(Widget::Input(input)) if input.can_undo())
++    );
++    chord(&mut editor, &mut shell, 29);
++    assert_eq!(editor.host.store().revision(), revision);
++    assert_eq!(records(&editor), before);
++    assert!(
++        matches!(shell.ui.widgets.get(&stable_id(id)),Some(Widget::Input(input)) if input.value()!="not-a-number")
++    );
++}

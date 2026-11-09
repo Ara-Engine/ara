@@ -55,6 +55,16 @@ pub enum Overlay {
         /// Subtle semantic hover tint.
         color: [f32; 4],
     },
+    /// An uploaded UI image (a white icon) tinted by its alpha, in logical pixels:
+    /// the Scene's light, camera and audio icons.
+    Icon {
+        /// Logical x, y, width and height.
+        rect: [f32; 4],
+        /// Resource handle of the uploaded image (`icon-<name>`).
+        image: u32,
+        /// Semantic tint, in sRGB numeric space.
+        color: [f32; 4],
+    },
     /// Silhouette from the real entity-ID texture.
     Outline {
         /// Compact render index, one-based; with an outline group table

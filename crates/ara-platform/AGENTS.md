@@ -9,6 +9,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
 - `Window`: main-thread-only resizable/high-DPI Vulkan window; owns an SDL video
   subsystem reference. `extensions()` returns owned strings, and `size()` returns
   physical pixels. It is intentionally neither Send nor Sync.
+- `supported_modes` enumerates monitor IDs, physical resolutions and millihertz;
+  `set_display_mode` selects a monitor/refresh policy. Hidden windows never switch modes.
 - `Window::game`: borderless desktop fullscreen by default, explicit Windowed, or
   exclusive Fullscreen (closest display mode, desktop refresh). `set_game_mode`
   switches at runtime (game Settings menus) and `game_mode` reads it back; presenters
@@ -30,6 +32,17 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
 - Custom captions: `Window::enable_custom_chrome` installs native caption/resize hit
   testing. Update `chrome_mut()` after layout in SDL window points. `minimize` and
   `toggle_maximize` retain native actions; other windows keep their existing frames.
+  `WindowChrome::client_resize` reports border zones as client area so the app resizes
+  itself (the editor's live resize; Windows' modal sizing loop blocks polling).
+- Live repaint: `with_live_repaint(repaint, pump)` calls `repaint` for SDL live-resize
+  exposes while a poll/wait blocks in the OS modal loop (the Hub). `out_of_date(err)`
+  flags a swapchain that lost a resize race: `resize` the `Present`, skip the frame.
+- `Present::resize(gpu, window, reach)` recreates the swapchain in place (oldSwapchain,
+  same surface, graphics-queue wait only). vkCreateSwapchainKHR costs ~8 ms (NVIDIA,
+  Windows), so live resizes pass `reach`: with VK_EXT_swapchain_maintenance1 present
+  scaling (`DeviceInfo::present_scaling`) one oversized swapchain is kept per drag and
+  the source blits 1:1 at the top left (cropped by the window); exact swapchains stretch.
+  `crates/ara-editor-gpu/tests/resize_timing.rs` times both paths.
 - Icon: `Window::new` applies the Ara app icon (`assets/brand/png/ara-icon-64.png`,
   embedded; failures are ignored because Wayland has no window icons). Games call
   `set_icon(rgba, [w, h])` or `set_icon_png(png)`. Hosts explicitly select 64 px

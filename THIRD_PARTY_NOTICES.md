@@ -144,3 +144,39 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## Simple Icons 16.36.0: agent client logos (Hub and editor)
+
+`crates/ara-agents/assets/*.svg` are Simple Icons paths (https://simpleicons.org),
+CC0 1.0 Universal. Claude, Codex (OpenAI), Cursor and OpenCode are trademarks of
+their owners; the Hub and editor show them only to identify the client being connected.
+
+## tinybvh (CWBVH builder and traversal, ported to Rust)
+
+`crates/ara-bvh/src/{sbvh,collapse,cwbvh,traverse}.rs` and the traversal in
+`shaders/trace.slangh` are Rust and Slang ports of algorithms from tinybvh
+(`tiny_bvh_base.h` at commit c9be3103cc9693b456b0a0353927c11cac7d710f,
+https://github.com/jbikker/tinybvh): the SBVH builder, the SAH-optimal eight-wide
+collapse, the CWBVH encoding with precomputed triangles, and its CWBVH traversal (via
+the R4-1 tuned GPU kernel). No tinybvh source is vendored; each ported file keeps the
+notice below and lists Ara's changes.
+
+Copyright (c) 2024-2026, Jacco Bikker / Breda University of Applied Sciences.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

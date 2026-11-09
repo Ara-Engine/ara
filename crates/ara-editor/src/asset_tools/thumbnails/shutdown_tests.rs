@@ -35,6 +35,8 @@ fn drop_disconnects_a_blocked_result_sender_and_joins_both_workers() {
         workers: [Some(first), Some(second)],
         requested: BTreeSet::new(),
         pending: BTreeSet::new(),
+        prefabs: Vec::new(),
+        prefab_digests: Default::default(),
     };
     sending_started
         .recv_timeout(Duration::from_secs(3))

@@ -156,7 +156,11 @@ impl Shell {
             Payload::Asset(asset) => json!({"kind":"asset","path":asset.path}),
             Payload::Component(name) => json!({"kind":"component","name":name}),
             Payload::Collection(row) => {
-                json!({"kind":"collection","field":row.field,"pointer":row.pointer})
+                let item = match &row.intent {
+                    collection_adapter::Intent::Select(item) => Some(item),
+                    _ => None,
+                };
+                json!({"kind":"collection","field":row.field,"pointer":row.pointer,"item":item})
             }
         };
         let feedback = match drag.session.feedback() {
@@ -186,7 +190,11 @@ impl Shell {
                         json!({"kind":"material","entity":entity,"primitive":primitive})
                     }
                     Target::Collection { row, after } => {
-                        json!({"kind":"collection","field":row.field,"pointer":row.pointer,"after":after})
+                        let item = match &row.intent {
+                            collection_adapter::Intent::Select(item) => Some(item),
+                            _ => None,
+                        };
+                        json!({"kind":"collection","field":row.field,"pointer":row.pointer,"item":item,"after":after})
                     }
                 };
                 json!({"valid":true,"label":label,"rect":indicator.rect(),"target":target})
@@ -238,8 +246,18 @@ impl Shell {
         self.invalidate_content_drag();
     }
     /// Re-resolve the target and edge scrolling against the live retained tree.
-    /// Call on pointer movement and while a held drag needs scrolling without movement.
+    /// Standalone/release callers may resolve immediately. The native frame owner
+    /// advances first, then resolves once after retained layout has settled.
     pub fn content_drag_over(&mut self, editor: &Editor, seconds: f32) -> ara_ui::Result<bool> {
+        if !self.advance_content_drag(seconds)? {
+            return Ok(false);
+        }
+        self.refresh_content_drag_feedback(editor)
+    }
+
+    /// Advance native pointer capture and edge scroll before row layout. No target
+    /// validation runs here; the owner refreshes feedback once after layout.
+    pub(crate) fn advance_content_drag(&mut self, seconds: f32) -> ara_ui::Result<bool> {
         let mut drag = match self.drag.take() {
             Some(Drag::Content(drag)) => drag,
             other => {
@@ -294,43 +312,134 @@ impl Shell {
                     self.sync_scroll_views()?;
                 }
             }
-            let mut feedback = self.content_target(editor, drag.session.payload())?;
-            let surface_target = matches!(
-                &feedback,
-                Feedback::Accept {
-                    target: Target::Viewport(_),
-                    ..
-                }
-            ) || matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_GROUND);
-            if let Some(hit) = &drag.surface_hit
-                && surface_target
-                && hit.surface == surface
-                && hit.pointer == self.pointer
-                && let Some(rect) = self
-                    .viewport()
-                    .filter(|rect| rect.contains(self.pointer[0], self.pointer[1]))
-            {
-                feedback = accept(
-                    Target::Viewport(hit.position),
-                    Indicator::Inside(rect),
-                    "Place on surface",
-                );
-            }
-            if matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_MATERIAL_TARGET)
-                && let Some(hit) = &drag.material_hit
-                && hit.surface == surface
-                && hit.pointer == self.pointer
-                && let Payload::Asset(asset) = drag.session.payload()
-            {
-                feedback =
-                    self.material_drop_feedback(editor, asset, &hit.entity, hit.primitive)?;
-            }
-            drag.session.preview(feedback);
             Ok(())
         })();
         self.drag = Some(Drag::Content(drag));
         self.invalidate_content_drag();
         result.map(|()| true)
+    }
+    /// Resolve after the active destination's retained layout/row pool has settled.
+    /// This never advances capture, scrolls, queries Inspector values or authors ops.
+    pub(crate) fn refresh_content_drag_feedback(
+        &mut self,
+        editor: &Editor,
+    ) -> ara_ui::Result<bool> {
+        let mut drag = match self.drag.take() {
+            Some(Drag::Content(drag)) => drag,
+            other => {
+                self.drag = other;
+                return Ok(false);
+            }
+        };
+        if !drag.session.active() || drag.session.pointer().surface != surface_id(self) {
+            self.drag = Some(Drag::Content(drag));
+            return Ok(false);
+        }
+        let previous = self.pointer;
+        self.pointer = drag.session.pointer().local;
+        let feedback = self.content_feedback(editor, &drag);
+        self.pointer = previous;
+        let result = match feedback {
+            Ok(feedback) => {
+                drag.session.preview(feedback);
+                Ok(true)
+            }
+            Err(error) => {
+                // A failed refresh cannot leave the previous accepted target visible.
+                drag.session.preview(reject(error.to_string(), None));
+                Err(error)
+            }
+        };
+        self.drag = Some(Drag::Content(drag));
+        self.invalidate_content_drag();
+        result
+    }
+
+    /// Resolve and paint the current destination after the owner's final layout
+    /// updates. Failed validation becomes visible rejection, not a stale accept.
+    pub(crate) fn settle_content_feedback(
+        &mut self,
+        editor: &mut Editor,
+    ) -> ara_ui::Result<ara_ui::Work> {
+        match self.refresh_content_drag_feedback(editor) {
+            Ok(false) => Ok(ara_ui::Work::default()),
+            Ok(true) => self.frame(),
+            Err(error) => {
+                editor.report_failure(&*error);
+                self.frame()
+            }
+        }
+    }
+
+    /// Final floating-surface layout/feedback pass, preserving the existing
+    /// frame_surface enter/leave ownership and restoring it on every result.
+    pub(crate) fn frame_surface_with_content_feedback(
+        &mut self,
+        id: &str,
+        editor: &mut Editor,
+    ) -> ara_ui::Result<ara_ui::Work> {
+        let returning = self.current.clone();
+        if !self.enter(id) {
+            return Ok(ara_ui::Work::default());
+        }
+        let result = (|| {
+            let mut work = self.frame()?;
+            work += self.settle_content_feedback(editor)?;
+            Ok(work)
+        })();
+        self.leave();
+        if let Some(back) = returning {
+            self.enter(&back);
+        }
+        result
+    }
+
+    /// Both live previews and release revalidation use the same typed target resolver.
+    fn content_feedback(
+        &mut self,
+        editor: &Editor,
+        drag: &ContentDrag,
+    ) -> ara_ui::Result<Feedback<Target>> {
+        let surface = surface_id(self);
+        let mut feedback = self.content_target(editor, drag.session.payload())?;
+        let surface_target = matches!(
+            &feedback,
+            Feedback::Accept {
+                target: Target::Viewport(_),
+                ..
+            }
+        ) || matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_GROUND);
+        if let Some(hit) = &drag.surface_hit
+            && surface_target
+            && hit.surface == surface
+            && hit.pointer == self.pointer
+            && let Some(rect) = self
+                .viewport()
+                .filter(|rect| rect.contains(self.pointer[0], self.pointer[1]))
+        {
+            feedback = accept(
+                Target::Viewport(hit.position),
+                Indicator::Inside(rect),
+                "Place on surface",
+            );
+        }
+        if matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_MATERIAL_TARGET)
+            && let Some(hit) = &drag.material_hit
+            && hit.surface == surface
+            && hit.pointer == self.pointer
+            && let Payload::Asset(asset) = drag.session.payload()
+        {
+            feedback = self.material_drop_feedback(editor, asset, &hit.entity, hit.primitive)?;
+        }
+        Ok(feedback)
+    }
+    /// Begin a native re-pick, including a miss at the same pointer. Cached scene
+    /// contacts must not outlive geometry that moved or disappeared underneath it.
+    pub(crate) fn clear_content_surface_pick(&mut self) {
+        if let Some(Drag::Content(drag)) = &mut self.drag {
+            drag.surface_hit = None;
+            drag.material_hit = None;
+        }
     }
     /// Scroll the captured collection rather than its enclosing Inspector. A small
     /// vertical overshoot keeps a held edge drag usable past the final mounted row;

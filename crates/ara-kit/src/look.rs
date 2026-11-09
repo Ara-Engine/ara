@@ -111,6 +111,49 @@ pub struct Colors {
     pub chart_5: Hex,
     /// Chart series 6.
     pub chart_6: Hex,
+    // Satin graphite materials (D31, docs/design/theme.md).
+    /// Keyboard focus: a soft halo outside the control.
+    pub focus_halo: Hex,
+    /// The light along a primary control's top edge.
+    pub primary_highlight: Hex,
+    /// The shade along a primary control's bottom edge.
+    pub primary_lowlight: Hex,
+    /// Ara blue: brand marks, info, links and text selection (never the chosen item).
+    pub brand: Hex,
+    /// A raised control under the pointer.
+    pub raised_hover: Hex,
+    /// Wells: fields, tracks and code, set into the surface.
+    pub well: Hex,
+    /// The shade under a well's top edge.
+    pub well_shade: Hex,
+    /// The light below a well's bottom edge.
+    pub well_lip: Hex,
+    /// The light along a raised surface's top edge.
+    pub edge_highlight: Hex,
+    /// The shade along a raised surface's bottom edge.
+    pub edge_lowlight: Hex,
+    /// The hairline shadow that outlines raised and floating surfaces.
+    pub edge_shadow: Hex,
+    /// The light along a dock's top edge.
+    pub dock_highlight: Hex,
+    /// A floating layer's inner ring.
+    pub float_ring: Hex,
+    /// Docks' drop shadow.
+    pub shadow: Hex,
+    /// Floating layers' drop shadow.
+    pub float_shadow: Hex,
+    /// Glass controls (viewport toolbars) under the pointer.
+    pub glass_hover: Hex,
+    /// Glass controls pressed or on.
+    pub glass_active: Hex,
+    /// The window's own border where the system draws none.
+    pub window_border: Hex,
+    /// The drawn close button under the pointer.
+    pub caption_close: Hex,
+    /// The drawn close button pressed.
+    pub caption_close_pressed: Hex,
+    /// The drawn close button's glyph on its hover fill.
+    pub caption_close_foreground: Hex,
 }
 
 /// A `#rrggbb` or `#rrggbbaa` colour.
@@ -228,12 +271,7 @@ impl Look {
     /// Inputs' fill: a well set a step into the surface around it, so fields read as
     /// fields without outlines.
     pub fn well(&self) -> stillkit::Rgba {
-        let c = &self.c;
-        if self.dark {
-            crate::ui::mix(c.chrome.0, c.card.0, 0.2)
-        } else {
-            crate::ui::mix(c.raised.0, c.chrome.0, 0.45)
-        }
+        self.c.well.0
     }
 
     /// A well under the pointer: a step lighter (darker in light schemes).
@@ -356,8 +394,9 @@ mod tests {
     fn both_bundled_schemes_parse_every_token() {
         let dark = Look::new(true);
         let light = Look::new(false);
-        assert_eq!(dark.c.background.0, Rgba::rgb8([0x0a, 0x0a, 0x0a], 1.0));
-        assert_eq!(dark.c.overlay.0.a, f32::from(0x88_u8) / 255.0);
+        assert_eq!(dark.c.background.0, Rgba::rgb8([0x0c, 0x0c, 0x0e], 1.0));
+        assert_eq!(dark.c.well.0, Rgba::rgb8([0x0e, 0x0e, 0x10], 1.0));
+        assert_eq!(dark.c.overlay.0.a, f32::from(0xa6_u8) / 255.0);
         assert!(dark.theme.dark() && !light.theme.dark());
         assert_eq!(dark.theme.color.label, dark.c.foreground.0);
         assert_eq!(light.theme.metrics.control, light.m.control_size);

@@ -203,6 +203,34 @@ impl Gesture {
         }
         true
     }
+    /// World-space change the preview applied to `id`'s gesture root (else the first
+    /// root) since pointer-down: `after * before⁻¹`. Selected descendants move with
+    /// their root, so this places the drawn gizmo at the previewed pose.
+    pub fn world_delta(&self, id: Option<&str>) -> Mat4 {
+        let id = id
+            .filter(|id| self.initial.contains_key(*id))
+            .or_else(|| self.initial.keys().next().map(String::as_str));
+        let Some(id) = id else {
+            return Mat4::IDENTITY;
+        };
+        let (Some(start), Some(current), Some(parent)) = (
+            self.initial.get(id),
+            self.current.get(id),
+            self.parents.get(id),
+        ) else {
+            return Mat4::IDENTITY;
+        };
+        let before = *parent * *start;
+        if before.determinant().abs() < 1e-12 {
+            return Mat4::IDENTITY;
+        }
+        let delta = *parent * *current * before.inverse();
+        if delta.is_finite() {
+            delta
+        } else {
+            Mat4::IDENTITY
+        }
+    }
     /// One transform.set per affected entity; the caller commits this list as one cmd.apply.
     pub fn commands(&self) -> Vec<Value> {
         self.current.iter().filter(|(id,m)|self.initial.get(*id)!=Some(*m)).map(|(id,matrix)|{

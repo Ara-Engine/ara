@@ -134,6 +134,10 @@ impl FidelityView {
                         (ids[TRANSMITTANCE], Access::ShaderRead),
                     ],
                 )?;
+                // The reference's media (medium.slangh) read the aerial perspective.
+                if pipeline.starts_with("reference") {
+                    graph.accesses(id, [(ids[MULTISCATTER], Access::ShaderRead)])?;
+                }
             }
             recipes.push((id, pipeline, arg, groups));
             Ok(())
@@ -176,17 +180,20 @@ impl FidelityView {
                     (ids[SKYVIEW], Access::Storage),
                 ],
             )?;
-            add(
-                "Atmosphere.Froxels.AerialPerspective",
-                if rt { "fog" } else { "fog_raster" },
-                0,
-                [8, 5, 1],
-                vec![
-                    (ids[TRANSMITTANCE], Access::ShaderRead),
-                    (ids[MULTISCATTER], Access::ShaderRead),
-                    (ids[FROXELS], Access::Storage),
-                ],
-            )?;
+            // The reference traces its fog per pixel (medium.slangh), not on the grid.
+            if !reference {
+                add(
+                    "Atmosphere.Froxels.AerialPerspective",
+                    if rt { "fog" } else { "fog_raster" },
+                    0,
+                    [8, 5, 1],
+                    vec![
+                        (ids[TRANSMITTANCE], Access::ShaderRead),
+                        (ids[MULTISCATTER], Access::ShaderRead),
+                        (ids[FROXELS], Access::Storage),
+                    ],
+                )?;
+            }
         }
         add(
             "Visibility.Motion",
@@ -590,12 +597,16 @@ impl FidelityView {
                     vec![
                         (ids[SKYVIEW], Access::ShaderRead),
                         (ids[TRANSMITTANCE], Access::ShaderRead),
-                        (ids[FROXELS], Access::ShaderRead),
                         (ids[WORLD0 + slot], Access::ShaderRead),
                     ]
                 } else {
                     vec![]
                 })
+                // The froxel fog, which the reference does not composite.
+                .chain(
+                    (self.atmosphere.is_some() && !reference)
+                        .then(|| (ids[FROXELS], Access::ShaderRead)),
+                )
                 .collect(),
             )?;
             let fsr = u32::from(self.settings.upscaler == Upscaler::Fsr1 && render != display);

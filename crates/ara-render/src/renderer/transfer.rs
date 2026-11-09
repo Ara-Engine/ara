@@ -65,7 +65,7 @@ pub(super) fn upload_buffer_on(
     gpu.collect()?;
     result
 }
-pub(super) fn upload_image(
+pub(crate) fn upload_image(
     gpu: &mut GpuDevice,
     size: [u32; 2],
     format: vk::Format,

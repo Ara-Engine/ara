@@ -135,6 +135,16 @@ FfxFloat32 TsrUpsampledWeightScale(FfxFloat32x2 lrUv){
     return lerp(1,tsr().kernel.w,tsrMask(int2(lrUv*float2(MaxRenderSize())),22,10));
 }
 
+// The share of a still pixel's history (under half a 4K pixel of motion, `velocity`
+// FSR's f4KVelocity) kept where rectification would clip it (`still.x`). With a still
+// camera the only per-frame change is the jitter, yet the rectification box follows
+// it, so clipping history to it flickered every thin edge even at full resolution.
+// The rest still clips, so lighting changes on still surfaces resolve (keeping all of
+// it smears them). A longer accumulation steadied it further but softened detail.
+FfxFloat32 TsrStillHistoryKept(FfxFloat32 velocity,FfxFloat32 disocclusion){
+    return tsr().still.x*ffxSaturate(1-2*velocity)*(1-disocclusion);
+}
+
 #ifdef TSR_ARA_HISTORY
 // Ara path reprojection: last frame's display history (sampled, hardware bilinear)
 // through a five-tap Catmull-Rom, as baseline.slang historyCatmullRom, in place of
@@ -175,7 +185,12 @@ float TsrIdDisocclusion(int2 p,float2 uv,float2 motion,float deviceDepth,float d
     TsrConstants c=tsr();
     if(FrameIndex()==0 || !tsrOption(TSR_OPTION_IDS) || !tsrInside(p,c.renderSize.xy))return depthDisocclusion;
     float2 reprojected=uv+motion;if(!IsUvInside(reprojected))return depthDisocclusion;
-    int2 size=PreviousFrameRenderSize();uint id=tsrSurface(p,true).x;
+    int2 size=PreviousFrameRenderSize();
+    // Under half a render pixel of motion (a still or slowly panning camera) nothing
+    // is uncovered that the jitter does not also move: an ID missing from last frame
+    // there is coverage, and resetting history flashed thin edges every cycle.
+    if(all(abs(motion*float2(size))<0.5))return depthDisocclusion;
+    uint id=tsrSurface(p,true).x;
     float z=GetViewSpaceDepth(deviceDepth);
     float separation=c.signals.y*1.37e-05f*length(float2(c.renderSize.xy)*0.5);
     // Fast path (most pixels): the texel the reprojection lands in shows this surface.

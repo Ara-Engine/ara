@@ -86,6 +86,15 @@ pub(crate) struct Ctx<'a> {
     pub probe_capture_blocker: Option<&'a str>,
     /// Cached reason why no owned capture request can be cancelled.
     pub probe_cancel_blocker: Option<&'a str>,
+    /// Last current-Scene renderer capabilities; None is truthfully unavailable.
+    pub probe_debug_capabilities: Option<&'a ara_runtime_render::probes::RenderCapabilities>,
+    /// Owner-channel availability for explicit live C# reload.
+    pub script_recovery_blocker: Option<&'a str>,
+    /// Target-aware Profiler command availability from the retained UI state.
+    pub profiler_target_blocker: Option<&'a str>,
+    pub profiler_freeze_blocker: Option<&'a str>,
+    pub profiler_compare_blocker: Option<&'a str>,
+    pub profiler_compare_active: bool,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -250,6 +259,12 @@ impl Shell {
             pilot: self.pilot_active(),
             probe_capture_blocker: self.probe_capture_blocker(editor, target),
             probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
+            probe_debug_capabilities: self.probe_debug_capabilities(editor),
+            script_recovery_blocker: self.script_recovery_blocker(editor),
+            profiler_target_blocker: self.profiler_target_blocker(),
+            profiler_freeze_blocker: self.profiler_freeze_blocker(),
+            profiler_compare_blocker: self.profiler_compare_blocker(editor),
+            profiler_compare_active: self.profiler_compare_active(editor),
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {

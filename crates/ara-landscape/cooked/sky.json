@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3c4d33e423249527704e05ae7e1237c039c797723ad68c955c2f769445ea78f1",
+  "key": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195",
   "stages": [
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyColor.dxil",
       "dxil_hash": "caeb85fb0a4dac25c9913ebc3f1cbce3a6dfeb4b8b05958a5ac01bb1aeb74ed2",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyColor.metallib",
         "metallib_hash": "6af9961b8cc2ce412a5ff4cfdbb00070890bfa06951cdebb30eefc4111c62d8d",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyColor.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "skyColor",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyColor.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyColor.spv",
       "spirv_entry": "main",
       "spirv_hash": "a1b7367cc757b702de739c19a29336c1e0f3540aedcc1d1f6767da7a2b916a08",
       "stage": "fragment"
     },
     {
-      "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.dxil",
+      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyVertex.dxil",
       "dxil_hash": "8413cecd660b07edb5577f00595fa3790455d5ace7284886b06b7208b78410d6",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.metallib",
+        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyVertex.metallib",
         "metallib_hash": "d05eb6b1e940f3214d97304b8ff93dda1b593bf9838cb6840ccf9231b3ba01b5",
-        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "skyVertex",
-      "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/skyVertex.spv",
+      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/sky/skyVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "fa64d2f8bb05acd064b9eb7a8903fa2072ab3c0c5f9596d54f45d5401797674d",
       "stage": "vertex"

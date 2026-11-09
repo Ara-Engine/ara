@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace Ara.Hosting;
@@ -8,6 +9,38 @@ namespace Ara.Hosting;
 /// </summary>
 public static unsafe class Host
 {
+    internal static HostContext GraphicsContext => RequireExclusive();
+    internal static ulong GraphicsRevision()
+    {
+        var context = RequireExclusive();
+        return context.Init.Api.GraphicsRevision == null ? 0 : context.Init.Api.GraphicsRevision(context.Init.Ctx);
+    }
+
+    internal static byte[] Graphics(ReadOnlySpan<byte> request)
+    {
+        var context = RequireExclusive();
+        if (context.Init.Api.Graphics == null) throw new InvalidOperationException("This host has no graphics settings API");
+        var output = ArrayPool<byte>.Shared.Rent(512 * 1024);
+        try
+        {
+            while (true)
+            {
+                int length;
+                fixed (byte* input = request)
+                fixed (byte* buffer = output)
+                    length = context.Init.Api.Graphics(context.Init.Ctx, input, (uint)request.Length, buffer, (uint)output.Length);
+                if (length > 0 && length <= output.Length) return output.AsSpan(0, length).ToArray();
+                if (length >= 0 || length == int.MinValue || -length > 16 * 1024 * 1024)
+                    throw new InvalidOperationException("Invalid graphics settings host response");
+                var replacement = ArrayPool<byte>.Shared.Rent(-length);
+                ArrayPool<byte>.Shared.Return(output);
+                output = replacement;
+                // The mutation already ran. Read its result with Get; never execute it twice.
+                request = "{\"operation\":\"get\"}"u8;
+            }
+        }
+        finally { ArrayPool<byte>.Shared.Return(output); }
+    }
     /// <summary>Copies scene identity or hierarchy matches from the active ECS world.</summary>
     public static int SceneEntities(uint operation, Entity entity, string selector, Span<Entity> entities)
     {

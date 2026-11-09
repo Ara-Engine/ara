@@ -14,8 +14,16 @@ use ara_gpu::{
 fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/raster-device");
-    let mut gpu = VulkanDevice::new_raster(&[], cache)?;
+    let mut gpu = VulkanDevice::new_raster(&[], &cache)?;
     assert!(!gpu.context().info.ray_tracing);
+    let rt = VulkanDevice::new(&[], cache.join("physical-capabilities"))?;
+    assert_eq!(
+        gpu.info().ray_tracing_supported,
+        rt.info().ray_tracing_supported,
+        "physical GPU support is independent of logical opt-in"
+    );
+    assert_eq!(rt.info().ray_tracing, rt.info().ray_tracing_supported);
+    drop(rt);
     assert!(
         gpu.create_acceleration_structure(&AccelerationDesc::Instances(Vec::new()))
             .is_err()

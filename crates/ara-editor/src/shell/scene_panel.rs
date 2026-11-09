@@ -4,16 +4,27 @@ use super::*;
 
 impl Shell {
     pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str("<panel id='scene-surface' class='scene-surface'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' />");
+        let size = self
+            .scene_frozen
+            .map_or("width:100%;height:100%".to_owned(), |[w, h]| {
+                format!("width:{w}px;height:{h}px;flex-shrink:0")
+            });
+        out.push_str(&format!("<panel id='scene-surface' class='scene-surface'><image id='viewport-image' src='editor-viewport' style='{size}' label='Scene viewport' />"));
         if !editor.state.hide_overlays {
             let width = self
                 .ui
                 .find("scene-surface")
                 .map(|i| self.ui.nodes[i].rect.w)
                 .unwrap_or(self.ui.size[0] * 0.55);
-            let compact = width < 780.;
-            let narrow = width < 1000.;
-            out.push_str("<panel id='scene-tools' class='viewport-tools'><panel id='scene-edit-tools' class='viewport-cluster'>");
+            // Each toolbar is a movable overlay (`scene_toolbars.rs`): its controls are
+            // written into `body`, then docked; vertical ones go icon-only.
+            let host = &mut *out;
+            let mut body = String::new();
+            let out = &mut body;
+            let tools_dock = scene_toolbars::dock(&editor.state, "scene-edit-tools");
+            let view_dock = scene_toolbars::dock(&editor.state, "scene-view-tools");
+            let compact = width < 780. || tools_dock.vertical();
+            let narrow = width < 1000. || view_dock.vertical();
             let tool = editor.state.tool;
             let gizmos = !editor.state.hide_gizmos;
             self.bind_command("tool-select", "view.tool.select", Target::None);
@@ -137,7 +148,8 @@ impl Shell {
                     out.push_str(&format!("<button id='{id}' class='viewport-dropdown' label='{what}' description='{what}: {} · click to choose' action='Dispatch'>{}<text id='{id}-text' class='{tone}' text='{}' />{}</button>",escape(&value),icons::icon_in(id,icon,tone),escape(&value),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-xs")));
                 }
             }
-            out.push_str("</panel><panel id='scene-fill' class='fill' /><panel id='scene-view-tools' class='viewport-cluster'>");
+            self.scene_toolbar(host, "scene-edit-tools", tools_dock, out);
+            out.clear();
             self.viewport_menu(
                 out,
                 "view-camera",
@@ -212,6 +224,15 @@ impl Shell {
                 &mode,
                 "View mode and rendering quality",
             );
+            let gizmos = overlay::gizmos::Settings::read(state).show;
+            self.viewport_menu(
+                out,
+                "view-gizmos",
+                Context::Gizmos,
+                if gizmos { "box" } else { "eye-off" },
+                if narrow { "" } else { "Gizmos" },
+                "Gizmos: show or hide them, icon size and 3D icons, and each component type (Ctrl+Shift+G toggles)",
+            );
             self.viewport_menu(
                 out,
                 "view-show",
@@ -220,7 +241,7 @@ impl Shell {
                 "",
                 "Show: grid, outlines, gizmos and overlays",
             );
-            out.push_str("</panel></panel>");
+            self.scene_toolbar(host, "scene-view-tools", view_dock, out);
         }
         if !editor.state.hide_overlays && !editor.state.hide_orientation && !editor.state.game_view
         {

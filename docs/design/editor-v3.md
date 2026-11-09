@@ -1,6 +1,6 @@
 # The editor, v3: the studio
 
-The studio is Ara's editor window rebuilt on stillkit (D31). The renderer is unchanged: the Scene view is a native GPU layer under the UI. The research behind it is `docs/research/editor-ui-v3/research.md`, and rule numbers below (I09, V05…) refer to it. The code lives in `crates/ara-editor/src/studio/`, and its `AGENTS.md` maps the files.
+The studio is Ara's editor window rebuilt on stillkit (D34). The renderer is unchanged: the Scene view is a native GPU layer under the UI. The research behind it is `docs/research/editor-ui-v3/research.md`, and rule numbers below (I09, V05…) refer to it. The code lives in `crates/ara-editor/src/studio/`, and its `AGENTS.md` maps the files.
 
 ## Principles
 

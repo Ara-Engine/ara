@@ -6,12 +6,16 @@ impl Live {
         &mut self,
         gpu: &mut GpuDevice,
         frame: &RenderFrame,
+        exposure_lock: Option<f32>,
     ) -> Result<GpuFrameCosts> {
-        let look = crate::environment(frame);
+        let look = crate::environment_locked(frame, exposure_lock);
         if self.look != look || self.tick.is_none() {
             self.view.set_environment(&look)?;
             self.look = look;
         }
+        self.view.set_sun_radius(frame.sun_radius)?;
+        self.view
+            .set_light_tables(gpu, &crate::lights::tables(&frame.lights).0)?;
         let textures = self.view.refine_native_textures(gpu)?;
         let camera = camera(frame)?;
         self.temporal = self.temporal.wrapping_add(1);

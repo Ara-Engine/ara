@@ -158,6 +158,20 @@ Fixes:
 - Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
 - Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).
 
+## ARA6009 GPU_REFERENCE_UNSUPPORTED: The path-traced reference needs hardware ray tracing
+owner: ara-runtime-render
+shown as: ARA_GPU_REFERENCE_UNSUPPORTED
+
+An error from presentation: a capture or Play asked for the path-traced reference (`ara capture --reference`, RenderDebug `reference`), but this GPU has no verified hardware ray queries. The reference is the unbiased ground truth the real-time lighting is judged against; it has no raster fallback, since a fallback would not be ground truth.
+
+Causes:
+- The GPU or its driver lacks hardware ray queries (Vulkan `VK_KHR_ray_query`; on Macs, Apple M3 or later).
+- On macOS, `ARA_METAL_RT=0` keeps the Mac on raster.
+
+Fixes:
+- Render the reference on a machine with a ray-tracing GPU and compare the images there.
+- Drop `--reference` to capture the real-time image.
+
 ## ARA6008 GPU_RT_FALLBACK: Ray tracing fell back to raster
 owner: ara-render-fidelity
 shown as: ARA_GPU_RT_FALLBACK

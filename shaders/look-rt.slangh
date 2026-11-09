@@ -8,6 +8,7 @@
 // native_sample.slangh. A pipeline that includes this header uses binding 4 (ray
 // queries): create it only on RT devices (DeviceInfo::ray_tracing).
 #pragma once
+#include "look-glass.slangh"
 BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 // Look record rows (look/frame.rs rt_params, rt_info; written by renderer::rt):
 // rtParams[0]: x reflection roughness cut, y longest ray (m), z ray-cone spread per
@@ -23,7 +24,8 @@ BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 static const uint RT_ENABLED=1,RT_HAS_MASKED=2,RT_SCREEN_AMBIENT=4;
 // Instance masks (renderer::native::rays): opaque geometry, alpha-tested cutouts
 // (resolved in a non-opaque query) and blended/transmissive surfaces.
-static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4;
+// *_SHADOWLESS: geometry that casts no shadow; every query but rtOccluded sees it.
+static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4,RT_OPAQUE_SHADOWLESS=8,RT_MASKED_SHADOWLESS=16;
 // Scene lights a hit evaluates directly (tiled lists only cover the screen).
 static const uint RT_HIT_LIGHTS=64;
 bool rtEnabled(Look l){return (l.rtInfo[1].w&RT_ENABLED)!=0;}
@@ -149,7 +151,8 @@ bool rtAlphaAccept(Look l,uint instance,uint primitive,float2 bary,float width){
 bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit hit,uint mask=RT_OPAQUE|RT_MASKED,float spread=0.002){
     hit=(RtHit)0;hit.distance=tmax;bool found=false;
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=1e-4;ray.TMax=tmax;
-    uint solid=mask&~RT_MASKED;
+    uint solid=(mask&(RT_OPAQUE|RT_TRANSPARENT))|((mask&RT_OPAQUE)!=0?RT_OPAQUE_SHADOWLESS:0);
+    uint cutout=(mask&RT_MASKED)!=0?RT_MASKED|RT_MASKED_SHADOWLESS:0;
     if(solid!=0){
         RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_OPAQUE,solid,ray);
         while(q.Proceed()){}
@@ -158,8 +161,8 @@ bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit 
             hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();hit.objectToWorld=q.CommittedObjectToWorld3x4();found=true;ray.TMax=hit.distance;
         }
     }
-    if((mask&RT_MASKED)!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
-        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE,RT_MASKED,ray);
+    if(cutout!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
+        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE,cutout,ray);
         while(q.Proceed()){
             if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE
                 && rtAlphaAccept(l,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),q.CandidateTriangleRayT()*spread))
@@ -227,23 +230,38 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
     Lobes o=specularLobes(s,v);float3 c=s.emissive+ibl(f,l,s,o,position,v,int2(0,0),false);
     float3 sun=f.sunDirection.xyz;
     if(dot(s.normal,sun)>0 && dot(geometric,sun)>-0.1){
-        float lit=horizonSun(l,position);
+        // The ray below sees every caster within its reach (rtParams[0].y).
+        float lit=horizonSun(l,position,l.rtParams[0].y>=HORIZON_NEAR);
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
-        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit;
+        // Glass and films between the hit and the sun: the translucent sun map.
+        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit*translucentSun(l,position);
     }
-    uint count=min(f.extent.z,RT_HIT_LIGHTS);
+    uint count=min(f.extent.z,RT_HIT_LIGHTS);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++){
-        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-        float3 delta=light.positionRange.xyz-position;float range=light.positionRange.w;
-        if(dot(delta,delta)>=range*range)continue;
-        float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
-        if(dot(s.normal,toLight)<=0)continue;
-        float fade=pow(saturate(1-pow(d/range,4)),2);float spot=1;
-        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
-        if(any(illuminance>0))c+=brdf(s,v,toLight,o)*illuminance*localShadow(l,i,position,s.normal,light.positionRange.xyz);
+        // look-lights.slangh, as deferred pixels shade them.
+        Light light=loadLight(f.lighting.w,i);float size;float3 e=localLight(f,l,s,o,v,position,i,light,area,size);
+        if(any(e>0))c+=e*localShadow(l,i,position,s.normal,light.positionRange.xyz,size,light.positionRange.w);
     }
     return c;
+}
+// Whether a hit's material is see-through: a blended film or transmissive (glass).
+bool rtSeeThrough(RtMaterial m){return m.pbr.flags.x==2 || m.factors.y>0;}
+// A see-through surface met along `d` (rtSeeThrough): its own light towards the ray
+// (rtShadeHit; glass reflects with its IOR's F0 where it transmits, as
+// look-refract.slangh refractSurface, films their lit colour over their coverage),
+// and in `through` the share of what lies behind it that passes, straight on
+// (glassTransmittance: no bending, as the path tracer's shadow rays). Leaving a
+// volume (its outward normal along the ray), the medium absorbed over `inside`
+// metres, the stretch since the ray's previous hit.
+float3 rtSeeThroughHit(Frame f,Look l,RtHit hit,float3 d,float width,float inside,out float3 through){
+    RtTriangle t=rtHitTriangle(l,hit);RtMaterial m=rtMaterial(l,t.material);
+    float3 outward=t.a.normal*t.w.x+t.b.normal*t.w.y+t.c.normal*t.w.z;
+    float3 position,geometric;Surface s=rtSurface(l,hit,d,width,position,geometric);
+    float ior=glassIor(asuint(m.factors.z)),f0=pow((ior-1)/(ior+1),2),coverage=m.pbr.flags.x==2?saturate(s.alpha):1;
+    through=glassTransmittance(coverage,s.transmission,s.albedo,ior,dot(geometric,d));
+    if((asuint(m.factors.z)&0xffff)!=0 && dot(outward,d)>0)through*=exp(-glassAbsorption(asuint(m.factors.w))*inside*coverage*s.transmission);
+    Surface r=s;r.albedo=lerp(s.albedo,float3(f0,f0,f0),s.transmission);r.metal=lerp(s.metal,1.,s.transmission);r.transmission=0;
+    return rtShadeHit(f,l,r,position,geometric,-d)*coverage;
 }
 // The prefiltered sky/environment (ibl's five-level strip) at `level` 0..4.
 float3 rtPrefiltered(Frame f,Look l,float2 uv,float level){

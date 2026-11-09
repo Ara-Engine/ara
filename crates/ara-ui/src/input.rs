@@ -96,6 +96,7 @@ impl InputState {
     }
     /// Release keyboard focus when a native host gives input to a scene/world surface.
     pub fn blur(&mut self, ui: &mut Ui) {
+        self.cancel_numeric(ui);
         self.focus_to(ui, None);
     }
     /// Current pointer-capture identity.
@@ -315,6 +316,35 @@ impl InputState {
             .ok_or("ARA4045: drag requires pointer capture")?;
         self.drag = Some((source, payload));
         Ok(())
+    }
+    /// Re-hit-test hover at the last pointer position after the layout changed under
+    /// a still pointer (a rebuild, a scroll by code, a panel resize), so hover styles
+    /// follow without waiting for the next mouse move. Idle while a control has capture;
+    /// true if hover moved (the caller frames again to restyle).
+    pub fn rehover(&mut self, ui: &mut Ui) -> bool {
+        let Some(p) = ui.pointer else { return false };
+        if self.capture.is_some() {
+            return false;
+        }
+        let hover = (ui.scrollbar_at(p).is_none())
+            .then(|| ui.hit_test(p[0], p[1]).filter(|i| self.in_scope(ui, *i)))
+            .flatten()
+            .map(|i| stable_id(&ui.nodes[i].element.id));
+        if hover == self.hover {
+            return false;
+        }
+        if let Some(i) = self.hover.and_then(|id| ui.by_id(id)) {
+            let mut s = ui.nodes[i].state;
+            s.hover = false;
+            ui.set_state(i, s);
+        }
+        if let Some(i) = hover.and_then(|id| ui.by_id(id)) {
+            let mut s = ui.nodes[i].state;
+            s.hover = true;
+            ui.set_state(i, s);
+        }
+        self.hover = hover;
+        true
     }
     /// Route one input message, preserving hover and focus as independent states.
     pub fn event(

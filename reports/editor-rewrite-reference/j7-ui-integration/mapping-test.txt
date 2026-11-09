@@ -1,0 +1,9 @@
+
+#[cfg(test)]
+mod completed_debug_tests {
+    #[test]
+    fn debug_mode_names_cannot_fall_back_to_lit() {
+        assert_eq!(super::super::view_mode("gi_diffuse"), ara_render::capture::ViewMode::GiDiffuse);
+        assert_eq!(super::super::view_mode("overdraw"), ara_render::capture::ViewMode::Overdraw);
+    }
+}

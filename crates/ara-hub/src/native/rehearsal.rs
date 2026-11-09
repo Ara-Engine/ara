@@ -166,7 +166,7 @@ fn restart_gate(config: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn health(marker: &Path, directory: &Path, config: &Path) -> Result<()> {
-    let mut cap = Capture::new([960, 600], 1.0, os::docs(directory))?;
+    let mut cap = Capture::new([960, 600], 1.0)?;
     let mut hub = Hub::new(Prefs::default(), config.to_path_buf(), None);
     cap.save(&mut hub, &config.join("rehearsal-updated-hub.png"))?;
     ara_update::write_json(

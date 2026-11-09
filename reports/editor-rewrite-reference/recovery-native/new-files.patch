@@ -1,0 +1,1798 @@
+diff --git a/crates/ara-editor/src/app/recovery_verify.rs b/crates/ara-editor/src/app/recovery_verify.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify.rs
+@@ -0,0 +1,354 @@
++//! Real C# fault/recovery proof; measured controls enter through the native SDL router.
++mod fixture;
++pub(super) use fixture::prepare;
++mod input;
++mod observe;
++mod proof;
++use crate::{Editor, gpu::NativeUi, shell::Shell};
++use ara_platform::{Event, Window};
++use ara_ui_text::Clipboard;
++use serde_json::{Value, json};
++use std::{
++    collections::BTreeMap,
++    path::{Path, PathBuf},
++    time::{Duration, Instant},
++};
++
++const PREFIX: &str = "P4 Recovery";
++const ENTITY: &str = "e_recovery_native";
++const STEP_LIMIT: Duration = Duration::from_secs(120);
++const TOTAL_LIMIT: Duration = Duration::from_secs(300);
++const CASES: &[&str] = &[
++    "real-system-command-faults-two-scopes",
++    "console-managed-stack-pdb-source-native",
++    "reload-button-native-and-observed-pending-input",
++    "trusted-retirement-and-console-identity-retention",
++    "later-command-fault-reactivates-problems",
++    "reload-command-palette-native",
++    "reload-then-stop-native-refusal-retains-faults",
++    "retire-owned-worlds-and-restore-editor",
++];
++
++#[derive(Default)]
++struct MemoryClipboard(String);
++impl Clipboard for MemoryClipboard {
++    fn read(&mut self) -> ara_ui_text::Result<String> {
++        Ok(self.0.clone())
++    }
++    fn write(&mut self, value: &str) -> ara_ui_text::Result<()> {
++        self.0 = value.into();
++        Ok(())
++    }
++}
++
++/// One bounded proof, owned by an offscreen loop with a fresh scratch project/profile.
++pub(super) struct RecoveryCheck {
++    output: PathBuf,
++    index: usize,
++    phase: u32,
++    began: Instant,
++    phase_began: Instant,
++    frame: u64,
++    events: usize,
++    case_events: usize,
++    fixture: fixture::Fixture,
++    bus: observe::Bus,
++    baseline: BTreeMap<u64, observe::Identity>,
++    marker: Option<Value>,
++    marker_began: Option<Instant>,
++    request_cursor: u64,
++    refusal_ticket: Option<u64>,
++    command_first: Option<u64>,
++    source_frame: Option<observe::SourceFrame>,
++    source_intent: Option<Value>,
++    pointer: Option<[f32; 2]>,
++    pending_observed: bool,
++    pending_at_typing: bool,
++    ui_pending_at_typing: bool,
++    pending_frames: u64,
++    typing_frame: Option<u64>,
++    pending_max_ms: f64,
++    runtime_job: Option<String>,
++    runtime_after: Option<Value>,
++    requested_capture: Option<&'static str>,
++    complete: Option<Value>,
++    error: Option<String>,
++    results: Vec<Value>,
++    trace: Vec<Value>,
++    clipboard: MemoryClipboard,
++    saved_focus: String,
++    saved_maximized: Option<String>,
++    saved_searches: [String; 2],
++    saved_ide: bool,
++}
++impl RecoveryCheck {
++    pub fn new(editor: &mut Editor, shell: &mut Shell, output: &Path) -> ara_ui::Result<Self> {
++        if !shell.offscreen || !editor.host.root().join(".ara-recovery-fixture").is_file() {
++            return Err("Recovery proof requires the isolated offscreen recovery fixture".into());
++        }
++        if editor.play_world.is_some() || shell.modal_active() || editor.gesture.is_some() {
++            return Err(
++                "Recovery proof requires no preceding Play, modal or authoring gesture".into(),
++            );
++        }
++        let profile =
++            std::env::var_os("ARA_CONFIG_DIR").ok_or("Recovery proof needs an isolated profile")?;
++        if !std::path::absolute(Path::new(&profile))?
++            .starts_with(std::path::absolute(output)?.join(".ara-profile"))
++        {
++            return Err(
++                "Recovery proof refused a profile outside its fresh output directory".into(),
++            );
++        }
++        std::fs::create_dir_all(output)?;
++        shell.leave();
++        let saved_ide = shell.open_ide;
++        shell.open_ide = false;
++        let cursor = editor.action("logs", json!({"limit":1}))?["cursor"]
++            .as_u64()
++            .ok_or("logs cursor missing")?;
++        Ok(Self {
++            output: output.into(),
++            index: 0,
++            phase: 0,
++            began: Instant::now(),
++            phase_began: Instant::now(),
++            frame: 0,
++            events: 0,
++            case_events: 0,
++            fixture: Default::default(),
++            bus: observe::Bus::new(cursor),
++            baseline: BTreeMap::new(),
++            marker: None,
++            marker_began: None,
++            request_cursor: cursor,
++            refusal_ticket: None,
++            command_first: None,
++            source_frame: None,
++            source_intent: None,
++            pointer: None,
++            pending_observed: false,
++            pending_at_typing: false,
++            ui_pending_at_typing: false,
++            pending_frames: 0,
++            typing_frame: None,
++            pending_max_ms: 0.,
++            requested_capture: Some("before"),
++            complete: None,
++            runtime_job: None,
++            runtime_after: None,
++            error: None,
++            results: Vec::new(),
++            trace: Vec::new(),
++            clipboard: Default::default(),
++            saved_focus: editor.state.focus.clone(),
++            saved_maximized: editor.state.maximized.clone(),
++            saved_searches: [
++                editor
++                    .state
++                    .searches
++                    .get("console")
++                    .cloned()
++                    .unwrap_or_default(),
++                editor
++                    .state
++                    .searches
++                    .get("problems")
++                    .cloned()
++                    .unwrap_or_default(),
++            ],
++            saved_ide,
++        })
++    }
++    pub fn finished(&self) -> bool {
++        self.index == CASES.len() || self.error.is_some()
++    }
++    /// Request a fresh target0 draw only for captures or a completed case.
++    pub fn wants_frame(&self) -> bool {
++        !self.finished() && (self.requested_capture.is_some() || self.complete.is_some())
++    }
++    pub fn failures(&self) -> Vec<String> {
++        self.results
++            .iter()
++            .filter(|row| row["ok"] != true)
++            .filter_map(|row| row["journey"].as_str().map(str::to_owned))
++            .collect()
++    }
++    pub fn clipboard(&mut self) -> &mut dyn Clipboard {
++        &mut self.clipboard
++    }
++    fn next(&mut self) {
++        self.phase += 1;
++        self.phase_began = Instant::now();
++    }
++    fn done(&mut self, evidence: Value) {
++        self.complete = Some(evidence);
++    }
++    fn fail(&mut self, error: &str, shell: &Shell) -> ara_ui::Result<()> {
++        self.error = Some(error.into());
++        self.results.push(
++            json!({"journey":CASES.get(self.index),"ok":false,"phase":self.phase,"error":error,
++            "observed":self.snapshot(shell)}),
++        );
++        self.write()
++    }
++    pub fn inject(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        if self.finished() {
++            return Ok(());
++        }
++        self.frame += 1;
++        if self.began.elapsed() >= TOTAL_LIMIT || self.phase_began.elapsed() >= STEP_LIMIT {
++            let message = format!(
++                "Native recovery exceeded its wall-clock bound at {} phase{} (total {:.1}s, phase {:.1}s)",
++                CASES[self.index],
++                self.phase,
++                self.began.elapsed().as_secs_f64(),
++                self.phase_began.elapsed().as_secs_f64()
++            );
++            self.fail(&message, shell)?;
++            return Err(message.into());
++        }
++        if let Some(point) = self.pointer {
++            shell.desktop_pointer = Some(point);
++        }
++        if self.complete.is_some() {
++            return Ok(());
++        }
++        let before = events.len();
++        let result = self
++            .bus
++            .poll(editor)
++            .and_then(|()| self.input(editor, shell, window, scale, events));
++        self.events += events.len() - before;
++        self.case_events += events.len() - before;
++        if let Err(error) = &result {
++            self.fail(&error.to_string(), shell)?;
++        }
++        result
++    }
++    pub fn end(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        gpu: &mut NativeUi,
++        main_ui_submitted: bool,
++        frame_ms: f64,
++    ) -> ara_ui::Result<()> {
++        let result = self.end_frame(editor, shell, gpu, main_ui_submitted, frame_ms);
++        if let Err(error) = &result {
++            self.fail(&error.to_string(), shell)?;
++        }
++        result
++    }
++    fn end_frame(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        gpu: &mut NativeUi,
++        main_ui_submitted: bool,
++        frame_ms: f64,
++    ) -> ara_ui::Result<()> {
++        if self.finished() {
++            return Ok(());
++        }
++        self.bus.poll(editor)?;
++        if shell.script_recovery_busy() {
++            self.pending_observed = true;
++            self.pending_frames += 1;
++            if frame_ms.is_finite() {
++                self.pending_max_ms = self.pending_max_ms.max(frame_ms);
++            }
++        }
++        if !main_ui_submitted {
++            return Ok(());
++        }
++        if let Some(stage) = self.requested_capture.take() {
++            let stage = if stage == "pending" {
++                self.bus.force(editor)?;
++                if !shell.script_recovery_busy()
++                    || self
++                        .bus
++                        .marker(self.request_cursor, self.fixture.a()?)?
++                        .is_some()
++                {
++                    "after-click-completion-already-observed"
++                } else {
++                    stage
++                }
++            } else {
++                stage
++            };
++            self.capture(shell, gpu, stage)?;
++        }
++        if let Some(complete) = self.complete.take() {
++            self.capture(shell, gpu, "after")?;
++            self.results.push(json!({"journey":CASES[self.index],"ok":true,"nativeEvents":self.case_events,"observed":complete,"after":self.snapshot(shell)}));
++            self.index += 1;
++            self.phase = 0;
++            self.case_events = 0;
++            self.phase_began = Instant::now();
++            self.requested_capture = (!self.finished()).then_some("before");
++            self.write()?;
++        }
++        Ok(())
++    }
++    fn capture(&self, shell: &Shell, gpu: &mut NativeUi, stage: &str) -> ara_ui::Result<()> {
++        gpu.select_target(0);
++        let stem = format!(
++            "recovery-{:02}-{}-{stage}",
++            self.index + 1,
++            CASES[self.index]
++        );
++        gpu.pixels()?
++            .save(self.output.join(format!("{stem}.png")))?;
++        std::fs::write(
++            self.output.join(format!("{stem}.layout.json")),
++            ara_json::to_canonical_string(&shell.layout_report()),
++        )?;
++        Ok(())
++    }
++    pub fn validate(&self) -> ara_ui::Result<()> {
++        if self.index != CASES.len() || self.error.is_some() || !self.failures().is_empty() {
++            return Err(format!(
++                "Native recovery incomplete: {:?}; {:?}",
++                self.failures(),
++                self.error
++            )
++            .into());
++        }
++        Ok(())
++    }
++    fn snapshot(&self, shell: &Shell) -> Value {
++        json!({"frame":self.frame,"phase":self.phase,"compileProjection":shell.compile_problem_state(),
++            "recoveryUI":shell.script_recovery_resource_report(),"problemRows":observe::rows(shell,"problem-"),
++            "consoleRows":observe::rows(shell,"log-"),"faults":self.bus.fault_report(),"marker":self.marker,
++            "ideIntent":self.source_intent,"refusalTicket":self.refusal_ticket,"pendingObserved":self.pending_observed,"pendingAtTyping":self.pending_at_typing,"uiPendingAtTyping":self.ui_pending_at_typing,
++            "pendingFrames":self.pending_frames,"typingFrame":self.typing_frame,"pendingMaxFrameMs":self.pending_max_ms})
++    }
++    pub fn write(&self) -> ara_ui::Result<()> {
++        std::fs::write(
++            self.output.join("script-recovery.json"),
++            ara_json::to_canonical_string(&json!({
++                "schema":1,"completed":self.index==CASES.len(),"failed":self.failures().len(),"passed":self.results.iter().filter(|row|row["ok"]==true).count(),
++                "error":self.error,"nativeEvents":self.events,"journeys":self.results,"trace":self.trace,
++                "fixture":self.fixture.report(),"runtimeAfter":self.runtime_after,"pending":{"nativeUiObserved":self.pending_observed,"uiPendingAtTypingInjection":self.ui_pending_at_typing,"noAuthoritativeCompletionObservedAtTypingInjection":self.pending_at_typing,
++                    "frames":self.pending_frames,"maxFrameMs":self.pending_max_ms,"timing":"informal (shared GPU); no frame-time gate",
++                    "coverage":if self.pending_at_typing {"Owned request was pending and no authoritative completion had been observed at native typing injection"} else {"Native backend-pending typing was not established; the controlled seven UI/channel tests cover pending behavior"}},
++                "limits":["Only captured actual C# system/command fault scopes and actual ARA0935 reloaded module batches are assessed; global Problems cleanliness is not claimed.",
++                    "Unchanged requires an empty real module graph; negative-module and Unchanged behavior are covered by the controlled projection suite, not manufactured as native results.",
++                    "Source clicks retain the exact suppressed IDE invocation; no external IDE or desktop window launches.",
++                    "Only a target0 frame submitted in the same loop iteration may be captured."],
++                "bounds":{"stepSeconds":120,"totalSeconds":300,"maxBusRecords":64,"maxTrace":128},
++                "current":{"journey":CASES.get(self.index),"phase":self.phase,"elapsedSeconds":self.began.elapsed().as_secs_f64()}
++            })),
++        )?;
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/fixture.rs b/crates/ara-editor/src/app/recovery_verify/fixture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/fixture.rs
+@@ -0,0 +1,335 @@
++//! Same real ECS/system/nested-command paths as ara-player/tests/csharp.rs.
++use super::*;
++pub(super) const SOURCE: &str = "P4Recovery/RecoveryDraft.cs";
++pub(super) const FINAL_SOURCE: &str = "P4Recovery/RecoveryNative.cs";
++pub(super) const COMMAND: &str = "probe.recovery_native_fail";
++const CODE: &str = r#"using Ara;
++/// <summary>Native recovery proof state, held only in ECS.</summary>
++[Component] public partial struct RecoveryProbe {
++    /// <summary>Preserved update count.</summary>
++    public int Count;
++    /// <summary>Explicit system fault trigger.</summary>
++    public int Fault;
++}
++/// <summary>Real query fault and recovery path.</summary>
++public static partial class RecoveryDraft {
++    [Query] static void Run(ref RecoveryProbe p) {
++        if (p.Fault != 0) throw new System.InvalidOperationException("P4 Recovery system fault");
++        p.Count += 1;
++    }
++}
++/// <summary>Real nested command exception path.</summary>
++[Command("probe.recovery_native_fail")]
++public static partial class RecoveryFail {
++    /// <summary>Reports the original managed exception and inner cause.</summary>
++    /// <param name="ctx">The world command context.</param>
++    public static CommandResult Execute(ref CommandContext ctx) =>
++        throw new System.InvalidOperationException("P4 Recovery command fault", new System.ArgumentException("P4 Recovery inner cause"));
++}
++"#;
++
++/// Make a fresh minimal project before Host exists; no supplied project is touched.
++pub(in crate::app) fn prepare(options: &mut super::super::Options) -> ara_ui::Result<()> {
++    if options.verify_behaviours
++        || options.verify_profiler
++        || options.verify_monkey
++        || options.verify_journey
++        || options.verify_assets
++        || options.verify
++        || options.verify_panels
++        || options.verify_ux
++        || options.verify_docking
++        || options.verify_first_hour
++        || options.verify_responsiveness
++        || options.verify_unpresentable
++        || options.verify_scene_quality
++        || options.verify_loading
++        || options.headless
++        || options.play
++        || options.sample
++        || options.scene.is_some()
++        || options.select.is_some()
++        || options.panel.is_some()
++    {
++        return Err("Run --verify-script-recovery independently with its fresh fixture".into());
++    }
++    let output = std::path::absolute(&options.output)?;
++    std::fs::create_dir_all(&output)?;
++    let root = output.join(format!("recovery-project-{}", std::process::id()));
++    // No stale fixture may accidentally satisfy the source/schema/fault assertions.
++    std::fs::create_dir(&root)?;
++    let levels = root.join(ara_doc::AUTHORING_ROOT).join("levels");
++    std::fs::create_dir_all(&levels)?;
++    std::fs::write(
++        root.join("ara.project.json"),
++        ara_json::to_canonical_string(&json!({
++            "name":"Native C# recovery proof","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"
++        })),
++    )?;
++    std::fs::write(
++        levels.join("main.scene"),
++        ara_json::to_canonical_string(&json!({
++            "$schema":"ara://schema/scene/1","id":"sc_recoverynative","records":{}
++        })),
++    )?;
++    std::fs::write(
++        root.join(".ara-recovery-fixture"),
++        "Ara isolated native C# recovery fixture\n",
++    )?;
++    options.project = root;
++    options.output = output;
++    Ok(())
++}
++#[derive(Default)]
++pub(super) struct Fixture {
++    phase: u32,
++    pending: Option<String>,
++    pub world_a: Option<String>,
++    pub world_b: Option<String>,
++    pub runtime_before: Option<Value>,
++    authored: Option<Value>,
++    writes: Vec<Value>,
++    cleanup_phase: u32,
++}
++impl Fixture {
++    pub fn a(&self) -> ara_ui::Result<&str> {
++        self.world_a
++            .as_deref()
++            .ok_or("Current recovery world missing".into())
++    }
++    pub fn b(&self) -> ara_ui::Result<&str> {
++        self.world_b
++            .as_deref()
++            .ok_or("Preserved recovery world missing".into())
++    }
++    pub fn poll(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        bus: &observe::Bus,
++    ) -> ara_ui::Result<bool> {
++        match self.phase {
++            0 => {
++                let path = format!("{}/{SOURCE}", ara_doc::AUTHORING_ROOT);
++                self.queue(editor.action("cmd.apply",json!({"doc":editor.state.doc,"why":"Native recovery fixture: typed C# creation", "commands":[
++                    {"cmd":"source.replace","args":{"path":path,"baseHash":Value::Null,"text":CODE}}
++                ]}))?)?;
++                self.writes.push(json!({"operation":"source.replace","path":path,"baseHash":Value::Null,"ingress":"typed fixture authoring, not measured native input"}));
++            }
++            1 => {
++                if poll_job(editor, &mut self.pending)?.is_none() {
++                    return Ok(false);
++                }
++                self.queue(editor.action(
++                    "script.rename",
++                    json!({"path":SOURCE,"to":FINAL_SOURCE,"attachTo":[],"doc":editor.state.doc}),
++                )?)?;
++                self.writes.push(json!({"operation":"script.rename","from":SOURCE,"to":FINAL_SOURCE,"compile":true,
++                    "reason":"Normal source authoring job publishes the actual RecoveryProbe schema before creating its entity"}));
++            }
++            2 => {
++                if poll_job(editor, &mut self.pending)?.is_none() {
++                    return Ok(false);
++                }
++                if editor.host.store().schema().get("RecoveryProbe").is_none() {
++                    return Err("Real compiler job did not publish RecoveryProbe".into());
++                }
++                editor.apply(vec![json!({"cmd":"entity.create","args":{"id":ENTITY,"name":"Native recovery probe",
++                    "components":{"RecoveryProbe":{"count":41,"fault":1}}}})],"Native recovery fixture: real ECS probe",None)?;
++                self.authored = Some(authored(editor)?);
++                self.world_b = Some(start(editor)?);
++            }
++            3 => {
++                let world = self.b()?;
++                if !running(editor, world)? {
++                    return Ok(false);
++                }
++                fault(editor, world)?;
++            }
++            4 => {
++                if bus.faults(self.b()?).len() < 2 {
++                    return Ok(false);
++                }
++                self.world_a = Some(start(editor)?);
++            }
++            5 => {
++                let world = self.a()?;
++                if !running(editor, world)? {
++                    return Ok(false);
++                }
++                fault(editor, world)?;
++            }
++            6 => {
++                if bus.faults(self.a()?).len() < 2 {
++                    return Ok(false);
++                }
++                self.queue(editor.action(
++                    "play.patch",
++                    json!({"world":self.a()?,"background":true,
++                    "sets":[{"entity":ENTITY,"path":"RecoveryProbe.fault","value":0}]}),
++                )?)?;
++            }
++            7 => {
++                if poll_job(editor, &mut self.pending)?.is_none() {
++                    return Ok(false);
++                }
++                self.queue(editor.action("play.read",json!({"world":self.a()?,"background":true,
++                    "paths":[format!("{ENTITY}.RecoveryProbe.count"),format!("{ENTITY}.RecoveryProbe.fault")]}))?)?;
++            }
++            8 => {
++                let Some(runtime) = poll_job(editor, &mut self.pending)? else {
++                    return Ok(false);
++                };
++                if runtime["values"][format!("{ENTITY}.RecoveryProbe.count")] != 41
++                    || runtime["values"][format!("{ENTITY}.RecoveryProbe.fault")] != 0
++                {
++                    return Err(format!(
++                        "Real recovery fixture has unexpected ECS values: {runtime}"
++                    )
++                    .into());
++                }
++                self.runtime_before = Some(runtime);
++                // Navigation setup mirrors the actual running, paused world. It
++                // does not simulate a backend success or a measured gesture.
++                editor.action("editor.view", json!({"play":"paused"}))?;
++                shell.read_play_status(editor);
++                shell.rebuild(editor)?;
++            }
++            _ => return Ok(true),
++        }
++        self.phase += 1;
++        Ok(false)
++    }
++    fn queue(&mut self, result: Value) -> ara_ui::Result<()> {
++        self.pending = Some(
++            result["job"]
++                .as_str()
++                .ok_or("Fixture operation did not return its normal background job")?
++                .into(),
++        );
++        Ok(())
++    }
++    pub fn authored_unchanged(&self, editor: &Editor) -> ara_ui::Result<bool> {
++        Ok(self.authored.as_ref() == Some(&authored(editor)?))
++    }
++    pub fn cleanup(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
++        match self.cleanup_phase {
++            0 => {
++                editor.action("play.stop", json!({"world":self.b()?}))?;
++            }
++            1 => {
++                if !retired(editor, self.b()?)? {
++                    return Ok(false);
++                }
++                editor.apply(
++                    vec![json!({"cmd":"entity.delete","args":{"entities":[ENTITY]}})],
++                    "Remove native recovery fixture actor",
++                    None,
++                )?;
++                self.queue(editor.action(
++                    "cmd.apply",
++                    json!({"doc":"ara.project.json","why":"Remove native recovery fixture source",
++                    "commands":[{"cmd":"asset.delete","args":{"source":FINAL_SOURCE}}]}),
++                )?)?;
++            }
++            2 => {
++                if poll_job(editor, &mut self.pending)?.is_none() {
++                    return Ok(false);
++                }
++                if editor
++                    .host
++                    .root()
++                    .join(ara_doc::AUTHORING_ROOT)
++                    .join(FINAL_SOURCE)
++                    .exists()
++                {
++                    return Err(
++                        "Typed cleanup completed before the fixture source was removed".into(),
++                    );
++                }
++            }
++            _ => return Ok(true),
++        }
++        self.cleanup_phase += 1;
++        Ok(false)
++    }
++    pub fn report(&self) -> Value {
++        json!({"source":FINAL_SOURCE,"writes":self.writes,"worldA":self.world_a,"worldB":self.world_b,
++        "runtimeBefore":self.runtime_before,"cleanupPhase":self.cleanup_phase,"setup":"Real compiler/schema publication, actual C# query and nested command faults; no diag.report fixture rows"})
++    }
++}
++fn authored(editor: &Editor) -> ara_ui::Result<Value> {
++    let record = editor
++        .host
++        .store()
++        .workspace()
++        .doc(&editor.state.doc)
++        .and_then(|doc| doc.record(ENTITY))
++        .ok_or("Authored recovery fixture actor missing")?;
++    Ok(json!(record))
++}
++fn start(editor: &mut Editor) -> ara_ui::Result<String> {
++    let result=editor.action("play.start",json!({"scene":editor.state.doc,"background":true,"window":false,"startPaused":true,"hotReload":false,"seed":77123,"tickHz":60}))?;
++    result["world"]
++        .as_str()
++        .map(str::to_owned)
++        .ok_or("Background Play omitted its owned world".into())
++}
++fn running(editor: &mut Editor, world: &str) -> ara_ui::Result<bool> {
++    let status = editor.action("play.status", json!({}))?;
++    let row = status["worlds"]
++        .as_array()
++        .and_then(|rows| rows.iter().find(|row| row["world"] == world))
++        .ok_or("Owned recovery world disappeared while starting")?;
++    if row["status"] == "failed" || !row["fault"].is_null() {
++        return Err(format!("Recovery world failed: {row}").into());
++    }
++    Ok(row["status"] == "running")
++}
++pub(super) fn retired(editor: &mut Editor, world: &str) -> ara_ui::Result<bool> {
++    let status = editor.action("play.status", json!({}))?;
++    Ok(!status["worlds"]
++        .as_array()
++        .into_iter()
++        .flatten()
++        .chain(status["stopping"].as_array().into_iter().flatten())
++        .any(|row| row["world"] == world))
++}
++fn fault(editor: &mut Editor, world: &str) -> ara_ui::Result<()> {
++    editor.action("play.step", json!({"world":world,"ticks":1}))?;
++    command_fault(editor, world)
++}
++pub(super) fn command_fault(editor: &mut Editor, world: &str) -> ara_ui::Result<()> {
++    // Expected runtime errors have already crossed normal Host ingress. Never
++    // report_failure/re-log their returned diagnostics from this verifier.
++    match editor.action(
++        "play.command",
++        json!({"world":world,"name":COMMAND,"params":{}}),
++    ) {
++        Err(_) => Ok(()),
++        Ok(result) if result["ok"] == false || result["isError"] == true => Ok(()),
++        Ok(result) => Err(format!("Real nested command unexpectedly succeeded: {result}").into()),
++    }
++}
++pub(super) fn poll_job(
++    editor: &mut Editor,
++    job: &mut Option<String>,
++) -> ara_ui::Result<Option<Value>> {
++    let id = job
++        .as_deref()
++        .ok_or("Recovery fixture lost its owned job")?;
++    let status = editor.action("jobs.status", json!({"job":id}))?;
++    match status["status"].as_str() {
++        Some("running" | "queued") => Ok(None),
++        Some("done") => {
++            job.take();
++            Ok(Some(
++                status
++                    .get("result")
++                    .ok_or("Completed fixture job omitted its result")?
++                    .clone(),
++            ))
++        }
++        _ => Err(format!("Recovery fixture job failed: {status}").into()),
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/input.rs b/crates/ara-editor/src/app/recovery_verify/input.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/input.rs
+@@ -0,0 +1,67 @@
++//! Measured Reload/Stop, palette, text, expansion and PDB actions use only SDL.
++use super::super::input_verify::native;
++use super::*;
++mod exception;
++mod refusal;
++mod reload;
++mod widgets;
++use widgets::{checked, show, visible};
++
++impl RecoveryCheck {
++    pub(super) fn input(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.index {
++            0 => {
++                if self.fixture.poll(editor, shell, &self.bus)? {
++                    for world in [self.fixture.a()?, self.fixture.b()?] {
++                        for code in ["ARA0910", "ARA0912"] {
++                            let seq = observe::number(&self.bus.fault(world, code)?["seq"])?;
++                            if !observe::active(shell, seq) {
++                                return Ok(());
++                            }
++                        }
++                    }
++                    self.done(json!({"realFixture":self.fixture.report(),"faults":self.bus.fault_report(),
++                        "ingress":"Typed C# create/rename/compile, real paused Play worlds, one real query tick and nested command fault; no synthetic diagnostic rows"}));
++                }
++            }
++            1 => self.exception(editor, shell, window, scale, events)?,
++            2 => self.reload_button(editor, shell, window, scale, events)?,
++            3 => self.history(editor, shell, window, scale, events)?,
++            4 => self.repeated_fault(editor, shell, window, scale, events)?,
++            5 => self.palette_reload(editor, shell, window, scale, events)?,
++            6 => self.refusal(editor, shell, window, scale, events)?,
++            7 => {
++                if self.fixture.cleanup(editor)? {
++                    editor.action(
++                        "editor.search",
++                        json!({"panel":"console","query":self.saved_searches[0]}),
++                    )?;
++                    editor.action(
++                        "editor.search",
++                        json!({"panel":"problems","query":self.saved_searches[1]}),
++                    )?;
++                    editor.action(
++                        "editor.view",
++                        json!({"maximized":self.saved_maximized.as_deref().unwrap_or("")}),
++                    )?;
++                    editor.action("editor.focus", json!({"panel":self.saved_focus}))?;
++                    shell.open_ide = self.saved_ide;
++                    self.pointer = None;
++                    shell.desktop_pointer = None;
++                    shell.rebuild(editor)?;
++                    self.done(json!({"worldsRetired":[self.fixture.a()?,self.fixture.b()?],"cleanup":self.fixture.report(),
++                        "nativeRefusedCoverage":"Reload then Stop batch exercised the ordinary native queue order; no private status injection"}));
++                }
++            }
++            _ => return Err("Recovery journey index outside bounded cases".into()),
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/input/exception.rs b/crates/ara-editor/src/app/recovery_verify/input/exception.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/input/exception.rs
+@@ -0,0 +1,133 @@
++//! Native SDL actions for the real recovery proof.
++use super::*;
++
++impl RecoveryCheck {
++    pub(super) fn exception(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        let row = self.bus.fault(self.fixture.a()?, "ARA0912")?;
++        let seq = observe::number(&row["seq"])?;
++        match self.phase {
++            0 => {
++                show(editor, shell, "console")?;
++                if !checked(shell, "console-errors") {
++                    self.click(shell, window, scale, "console-errors", events)?;
++                }
++                if checked(shell, "console-collapse") {
++                    self.click(shell, window, scale, "console-collapse", events)?;
++                }
++                self.next();
++            }
++            1 => {
++                self.search(
++                    shell,
++                    window,
++                    scale,
++                    "console",
++                    "P4 Recovery command fault",
++                    events,
++                )?;
++                self.next();
++            }
++            2 => {
++                if !observe::rows(shell, "log-").contains(&seq) {
++                    return Ok(());
++                }
++                let id = format!("log-{seq}-row");
++                if self.reveal(shell, window, scale, &id, events)? {
++                    self.click(shell, window, scale, &id, events)?;
++                    self.next();
++                }
++            }
++            3 => {
++                let source = editor
++                    .host
++                    .root()
++                    .join(ara_doc::AUTHORING_ROOT)
++                    .join(fixture::FINAL_SOURCE)
++                    .canonicalize()?;
++                self.source_frame = Some(observe::stack(shell, row, &source)?);
++                self.command_first = Some(observe::number(&row["first"])?);
++                self.requested_capture = Some("full-managed-stack");
++                self.next();
++            }
++            4 => {
++                let id = format!("log-{seq}-stack-type-1");
++                if self.reveal(shell, window, scale, &id, events)? {
++                    self.requested_capture = Some("inner-cause-visible");
++                    self.next();
++                }
++            }
++            5 => {
++                let frame = self
++                    .source_frame
++                    .as_ref()
++                    .ok_or("Original source frame missing")?;
++                let id = format!("log-{seq}-stack-frame-{}-source", frame.index);
++                if self.reveal(shell, window, scale, &id, events)? {
++                    self.click(shell, window, scale, &id, events)?;
++                    self.next();
++                }
++            }
++            _ => {
++                self.source_intent = Some(self.source_intent(shell)?);
++                self.done(json!({"originalDiagnostic":row,"fullStackMounted":true,"pdbSourceIntent":self.source_intent,
++                    "ingress":"native Console search, row expansion, stack scrolling and PDB source click; IDE launch suppressed"}));
++            }
++        }
++        Ok(())
++    }
++    pub(super) fn repeated_fault(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.phase {
++            0 => {
++                fixture::command_fault(editor, self.fixture.a()?)?;
++                show(editor, shell, "problems")?;
++                self.next();
++            }
++            1 => {
++                self.search(shell, window, scale, "problems", PREFIX, events)?;
++                self.next();
++            }
++            _ => {
++                let first = self
++                    .command_first
++                    .ok_or("Original command identity missing")?;
++                let row = self.bus.row(first)?;
++                let before = self
++                    .baseline
++                    .get(&first)
++                    .ok_or("Original command baseline missing")?;
++                let marker = self
++                    .marker
++                    .as_ref()
++                    .ok_or("Prior actual recovery marker missing")?;
++                let seq = observe::number(&row["seq"])?;
++                if seq <= observe::number(&marker["seq"])?
++                    || observe::number(&row["count"])? <= before.count
++                {
++                    return Ok(());
++                }
++                if !observe::active(shell, seq) || !observe::rows(shell, "problem-").contains(&seq)
++                {
++                    return Ok(());
++                }
++                self.done(json!({"first":first,"newSeq":seq,"newCount":row["count"],"oldSeq":before.seq,"oldCount":before.count,
++                    "afterMarker":marker["seq"],"activeProblemsRow":seq,"fault":row,
++                    "ingress":"real C# command executed again after actual activation, not diagnostic reinjection"}));
++            }
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/input/refusal.rs b/crates/ara-editor/src/app/recovery_verify/input/refusal.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/input/refusal.rs
+@@ -0,0 +1,107 @@
++//! Native SDL actions for the real recovery proof.
++use super::*;
++
++impl RecoveryCheck {
++    pub(super) fn refusal(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.phase {
++            0 => {
++                fixture::command_fault(editor, self.fixture.a()?)?;
++                self.next();
++            }
++            1 => {
++                let row = self.bus.fault(self.fixture.a()?, "ARA0912")?;
++                let seq = observe::number(&row["seq"])?;
++                if seq
++                    <= self
++                        .marker
++                        .as_ref()
++                        .and_then(|row| row["seq"].as_u64())
++                        .ok_or("Prior marker missing")?
++                    || !observe::active(shell, seq)
++                {
++                    return Ok(());
++                }
++                self.baseline = self.bus.identities()?;
++                self.request_cursor = self.bus.cursor;
++                self.assert_command(shell, "script-recovery-reload", "tools.cs.reload")?;
++                // Both releases dispatch normally before the frame's service tick.
++                // Stop removes this world before the queued recovery is processed.
++                self.click(shell, window, scale, "script-recovery-reload", events)?;
++                self.click(shell, window, scale, "stop", events)?;
++                self.marker_began = None;
++                self.next();
++            }
++            _ => {
++                if editor.play_world.is_some()
++                    || shell.script_recovery_busy()
++                    || !fixture::retired(editor, self.fixture.a()?)?
++                {
++                    return Ok(());
++                }
++                let resource = shell.script_recovery_resource_report();
++                let terminal = resource["terminalHistory"].as_array().and_then(|rows| {
++                    rows.iter()
++                        .find(|row| row["world"] == self.fixture.a().unwrap_or(""))
++                });
++                let Some(ticket) = terminal.and_then(|row| row["ticket"].as_u64()) else {
++                    return Ok(());
++                };
++                self.refusal_ticket = Some(ticket);
++                let prefix = format!("script-recovery-result-{ticket}-player-");
++                let refused = shell.ui.nodes.iter().any(|node| {
++                    node.element.id.starts_with(&prefix)
++                        && node
++                            .element
++                            .attrs
++                            .get("text")
++                            .is_some_and(|text| text.contains("Refused"))
++                });
++                let rows = self.bus.refusals(self.request_cursor);
++                if !refused || rows.is_empty() {
++                    return Ok(());
++                }
++                if self.marker_began.is_none() {
++                    self.marker_began = Some(Instant::now());
++                    return Ok(());
++                }
++                if self
++                    .marker_began
++                    .is_some_and(|start| start.elapsed() < Duration::from_millis(600))
++                {
++                    return Ok(());
++                }
++                self.bus.force(editor)?;
++                if !self.bus.unchanged(&self.baseline)? {
++                    return Err(
++                        "Refused Status replayed or cleared an original fault identity".into(),
++                    );
++                }
++                let mounted = observe::rows(shell, "problem-");
++                if self.baseline.values().any(|identity| {
++                    observe::active(shell, identity.seq) && !mounted.contains(&identity.seq)
++                }) {
++                    return Ok(());
++                }
++                let current = self.bus.fault(self.fixture.a()?, "ARA0912")?;
++                if !observe::active(shell, observe::number(&current["seq"])?) {
++                    return Err("Refused recovery retired the current repeated fault".into());
++                }
++                let refusals = self.bus.refusals(self.request_cursor);
++                if refusals.iter().any(|row| row["count"] != 1) {
++                    return Err("UI re-logged an already-published local refusal diagnostic".into());
++                }
++                self.done(json!({"ticket":ticket,"renderedOutcome":"Refused","refusalBusRows":refusals,
++                    "faultStoreUnchanged":true,"problemsRows":mounted,"currentFault":current,
++                    "ingress":"same native SDL batch: Reload Scripts button then Stop toolbar; ordinary Host tick processed the invalidated incarnation"}));
++            }
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/input/reload.rs b/crates/ara-editor/src/app/recovery_verify/input/reload.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/input/reload.rs
+@@ -0,0 +1,175 @@
++//! Native SDL actions for the real recovery proof.
++use super::*;
++
++impl RecoveryCheck {
++    pub(super) fn reload_button(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.phase {
++            0 => {
++                show(editor, shell, "problems")?;
++                if !checked(shell, "problems-errors") {
++                    self.click(shell, window, scale, "problems-errors", events)?;
++                }
++                self.arm()?;
++                self.next();
++            }
++            1 => {
++                self.assert_command(shell, "script-recovery-reload", "tools.cs.reload")?;
++                self.click(shell, window, scale, "script-recovery-reload", events)?;
++                self.requested_capture = Some("pending");
++                self.next();
++            }
++            2 => {
++                self.bus.force(editor)?;
++                self.ui_pending_at_typing = shell.script_recovery_busy();
++                self.pending_at_typing = self.ui_pending_at_typing
++                    && self
++                        .bus
++                        .marker(self.request_cursor, self.fixture.a()?)?
++                        .is_none();
++                self.search(shell, window, scale, "problems", PREFIX, events)?;
++                self.typing_frame = Some(self.frame);
++                self.next();
++            }
++            _ => {
++                if editor.state.searches.get("problems").map(String::as_str) != Some(PREFIX) {
++                    return Ok(());
++                }
++                if self.typing_frame.is_none_or(|frame| self.frame <= frame) {
++                    return Ok(());
++                }
++                if !self.retirement_ready(editor, shell)? {
++                    return Ok(());
++                }
++                self.done(json!({"authority":self.retired_evidence(shell),"typingAccepted":true,"nativeFrameAdvanced":true,
++                    "uiPendingAtTyping":self.ui_pending_at_typing,"noCompletionObservedAtTyping":self.pending_at_typing,
++                    "pendingCoverage":if self.pending_at_typing {"observed on real request"}else{"not established natively; controlled pending tests remain explicit coverage"}}));
++            }
++        }
++        Ok(())
++    }
++    pub(super) fn history(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.phase {
++            0 => {
++                if !self.retirement_ready(editor, shell)? {
++                    return Ok(());
++                }
++                self.runtime_job=Some(editor.action("play.read",json!({"world":self.fixture.a()?,"background":true,
++                    "paths":[format!("{ENTITY}.RecoveryProbe.count"),format!("{ENTITY}.RecoveryProbe.fault")]}))?["job"].as_str().ok_or("Runtime verification read omitted job")?.into());
++                self.next();
++            }
++            1 => {
++                let Some(runtime) = fixture::poll_job(editor, &mut self.runtime_job)? else {
++                    return Ok(());
++                };
++                let before = self
++                    .fixture
++                    .runtime_before
++                    .as_ref()
++                    .ok_or("Runtime baseline missing")?;
++                if runtime["tick"] != before["tick"] || runtime["values"] != before["values"] {
++                    return Err(format!("Recovery reset or advanced the paused real ECS state: before {before}, after {runtime}").into());
++                }
++                self.runtime_after = Some(runtime);
++                show(editor, shell, "console")?;
++                self.next();
++            }
++            2 => {
++                self.search(shell, window, scale, "console", PREFIX, events)?;
++                self.next();
++            }
++            3 => {
++                let first = self
++                    .command_first
++                    .ok_or("Original command identity missing")?;
++                let seq = observe::number(&self.bus.row(first)?["seq"])?;
++                if shell.shown_node(&format!("log-{seq}-details")).is_some() {
++                    let id = format!("log-{seq}-row");
++                    if !self.reveal(shell, window, scale, &id, events)? {
++                        return Ok(());
++                    }
++                    self.click(shell, window, scale, &id, events)?;
++                }
++                self.next();
++            }
++            _ => {
++                let mounted = observe::rows(shell, "log-");
++                if self
++                    .baseline
++                    .values()
++                    .any(|identity| !mounted.contains(&identity.seq))
++                {
++                    return Ok(());
++                }
++                if !self.bus.unchanged(&self.baseline)? {
++                    return Err("Console/Status viewing replayed an original runtime fault".into());
++                }
++                self.done(json!({"originalIdentities":self.baseline.values().map(observe::Identity::report).collect::<Vec<_>>(),
++                    "consoleMounted":mounted,"storeUnchanged":true,"runtimeStatePreserved":self.runtime_after,
++                    "ingress":"native Console search; raw Store sequences/counts compared after multiple UI polling cadences"}));
++            }
++        }
++        Ok(())
++    }
++    pub(super) fn palette_reload(
++        &mut self,
++        editor: &mut Editor,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        match self.phase {
++            0 => {
++                self.arm()?;
++                native::shortcut(window, 14, events)?;
++                self.next();
++            }
++            1 => {
++                if !visible(shell, "palette-search") {
++                    return Ok(());
++                }
++                native::shortcut(window, 4, events)?;
++                native::text(window, "Reload Scripts", events)?;
++                self.next();
++            }
++            2 => {
++                let control = shell
++                    .command_bindings()
++                    .into_iter()
++                    .find(|(id, command)| {
++                        id.starts_with("command-")
++                            && command == "tools.cs.reload"
++                            && visible(shell, id)
++                    })
++                    .map(|(id, _)| id);
++                let Some(control) = control else {
++                    return Ok(());
++                };
++                self.assert_command(shell, &control, "tools.cs.reload")?;
++                self.click(shell, window, scale, &control, events)?;
++                self.next();
++            }
++            _ => {
++                if !self.retirement_ready(editor, shell)? {
++                    return Ok(());
++                }
++                self.done(json!({"authority":self.retired_evidence(shell),"ingress":"SDL Ctrl+K, palette text and pointer selection of real Reload Scripts result"}));
++            }
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/input/widgets.rs b/crates/ara-editor/src/app/recovery_verify/input/widgets.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/input/widgets.rs
+@@ -0,0 +1,130 @@
++//! Native SDL actions for the real recovery proof.
++use super::*;
++
++impl RecoveryCheck {
++    pub(super) fn assert_command(
++        &self,
++        shell: &Shell,
++        id: &str,
++        expected: &str,
++    ) -> ara_ui::Result<()> {
++        if !shell
++            .command_bindings()
++            .iter()
++            .any(|(node, command)| node == id && command == expected)
++        {
++            return Err(format!("Measured control {id} is not bound to {expected}").into());
++        }
++        let node = shell
++            .shown_node(id)
++            .ok_or("Measured recovery command is not mounted")?;
++        if shell.ui.nodes[node].state.disabled {
++            return Err(format!("Measured recovery control is disabled: {id}").into());
++        }
++        Ok(())
++    }
++    pub(super) fn search(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        panel: &str,
++        value: &str,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        self.click(shell, window, scale, &format!("search-{panel}"), events)?;
++        native::shortcut(window, 4, events)?;
++        native::text(window, value, events)
++    }
++    pub(super) fn click(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        id: &str,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<()> {
++        if !scale.is_finite() || scale <= 0. {
++            return Err("Native recovery scale must be finite and positive".into());
++        }
++        if self.trace.len() >= 128 {
++            return Err("Native recovery input trace exceeded128 bounded actions".into());
++        }
++        let index = shell
++            .shown_node(id)
++            .ok_or_else(|| format!("Native recovery control missing: {id}"))?;
++        let rect = shell.ui.nodes[index]
++            .rect
++            .intersection(shell.ui.nodes[index].clip);
++        if rect.w < 2. || rect.h < 8. {
++            return Err(format!("Native recovery control is clipped: {id}").into());
++        }
++        let point = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
++        let desktop = window.rect()?;
++        self.pointer = Some([
++            desktop[0] as f32 + point[0] / scale,
++            desktop[1] as f32 + point[1] / scale,
++        ]);
++        shell.desktop_pointer = self.pointer;
++        self.trace.push(json!({"journey":CASES[self.index],"phase":self.phase,"frame":self.frame,"control":id,
++            "pointer":point,"desktop":self.pointer,"scale":scale,"rect":[rect.x,rect.y,rect.w,rect.h],"ingress":"raw SDL pointer"}));
++        native::motion(window, point, scale, events)?;
++        native::button(window, true, events)?;
++        native::button(window, false, events)
++    }
++    pub(super) fn reveal(
++        &mut self,
++        shell: &mut Shell,
++        window: &Window,
++        scale: f32,
++        id: &str,
++        events: &mut Vec<(u32, Event)>,
++    ) -> ara_ui::Result<bool> {
++        if visible(shell, id) {
++            return Ok(true);
++        }
++        let Some(index) = shell.ui.find(id) else {
++            return Ok(false);
++        };
++        let node = &shell.ui.nodes[index];
++        let clip = node.clip;
++        if clip.w > 1. && clip.h > 1. {
++            let delta = if node.rect.y < clip.y { 3. } else { -3. };
++            let point = [clip.x + clip.w * 0.5, clip.y + clip.h * 0.5];
++            let desktop = window.rect()?;
++            self.pointer = Some([
++                desktop[0] as f32 + point[0] / scale,
++                desktop[1] as f32 + point[1] / scale,
++            ]);
++            shell.desktop_pointer = self.pointer;
++            native::motion(window, point, scale, events)?;
++            native::wheel(window, delta, events)?;
++        }
++        Ok(false)
++    }
++}
++
++pub(super) fn show(editor: &mut Editor, shell: &mut Shell, panel: &str) -> ara_ui::Result<()> {
++    shell.leave();
++    editor.action("editor.layout.show", json!({"panel":panel}))?;
++    editor.action("editor.focus", json!({"panel":panel}))?;
++    editor.action("editor.view", json!({"maximized":panel}))?;
++    shell.rebuild(editor)
++}
++pub(super) fn visible(shell: &Shell, id: &str) -> bool {
++    shell.shown_node(id).is_some_and(|index| {
++        let node = &shell.ui.nodes[index];
++        let rect = node.rect.intersection(node.clip);
++        rect.w > 1. && rect.h >= node.rect.h * 0.75
++    })
++}
++pub(super) fn checked(shell: &Shell, id: &str) -> bool {
++    shell
++        .shown_node(id)
++        .and_then(|index| shell.ui.nodes[index].element.attrs.get("class"))
++        .is_some_and(|classes| {
++            classes
++                .split_whitespace()
++                .any(|class| matches!(class, "selected" | "segment-on"))
++        })
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/observe.rs b/crates/ara-editor/src/app/recovery_verify/observe.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/observe.rs
+@@ -0,0 +1,324 @@
++//! Bounded authoritative Store and mounted-row observations; no diagnostic emission.
++use super::*;
++
++#[derive(Clone, Debug, PartialEq)]
++pub(super) struct Identity {
++    pub first: u64,
++    pub seq: u64,
++    pub count: u64,
++    pub module: String,
++    pub scope: Value,
++}
++impl Identity {
++    fn parse(row: &Value) -> ara_ui::Result<Self> {
++        let data = &row["diagnostic"]["data"];
++        let scope = &data["play"];
++        if scope["world"].as_str().is_none_or(str::is_empty)
++            || scope["source"].as_str().is_none_or(str::is_empty)
++            || scope["player"].as_u64().is_none()
++            || scope["binding"].as_u64().is_none_or(|binding| binding == 0)
++        {
++            return Err("Actual C# fault omitted its trusted Play incarnation".into());
++        }
++        Ok(Self {
++            first: number(&row["first"])?,
++            seq: number(&row["seq"])?,
++            count: number(&row["count"])?,
++            module: data["module"]
++                .as_str()
++                .filter(|module| !module.is_empty())
++                .ok_or("Actual C# fault omitted its loaded ModuleSlot name")?
++                .into(),
++            scope: scope.clone(),
++        })
++    }
++    pub fn report(&self) -> Value {
++        json!({"first":self.first,"seq":self.seq,"count":self.count,"module":self.module,"scope":self.scope})
++    }
++}
++
++pub(super) struct Bus {
++    pub cursor: u64,
++    rows: BTreeMap<u64, Value>,
++    next_poll: Option<Instant>,
++}
++impl Bus {
++    pub fn new(cursor: u64) -> Self {
++        Self {
++            cursor,
++            rows: BTreeMap::new(),
++            next_poll: None,
++        }
++    }
++    pub fn force(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.next_poll = None;
++        self.poll(editor)
++    }
++    pub fn poll(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        let now = Instant::now();
++        if self.next_poll.is_some_and(|next| now < next) {
++            return Ok(());
++        }
++        self.next_poll = Some(now + Duration::from_millis(50));
++        let page = editor.action(
++            "logs",
++            json!({"group":false,"severity":"info","since":self.cursor,"limit":500}),
++        )?;
++        let cursor = number(&page["cursor"])?;
++        let raw = page["entries"]
++            .as_array()
++            .ok_or("Recovery logs omitted entries")?;
++        if cursor < self.cursor
++            || page["total"]
++                .as_u64()
++                .is_none_or(|total| total > raw.len() as u64)
++        {
++            return Err(
++                "Recovery evidence lost a diagnostic page; refusing partial retirement/count proof"
++                    .into(),
++            );
++        }
++        for row in raw {
++            let diagnostic = &row["diagnostic"];
++            let code = diagnostic["code"].as_str().unwrap_or("");
++            let message = diagnostic["message"].as_str().unwrap_or("");
++            if (matches!(code, "ARA0910" | "ARA0912") && message.contains(PREFIX))
++                || code == "ARA0935"
++                || message.starts_with("Script recovery refused:")
++            {
++                let first = number(&row["first"])?;
++                if !self.rows.contains_key(&first) && self.rows.len() >= 64 {
++                    return Err("Recovery native diagnostic inventory exceeded64 rows; no rows were silently dropped".into());
++                }
++                self.rows.insert(first, row.clone());
++            }
++        }
++        self.cursor = cursor;
++        Ok(())
++    }
++    pub fn faults(&self, world: &str) -> Vec<&Value> {
++        self.rows
++            .values()
++            .filter(|row| {
++                matches!(
++                    row["diagnostic"]["code"].as_str(),
++                    Some("ARA0910" | "ARA0912")
++                ) && row["diagnostic"]["data"]["play"]["world"] == world
++            })
++            .collect()
++    }
++    pub fn fault(&self, world: &str, code: &str) -> ara_ui::Result<&Value> {
++        self.faults(world)
++            .into_iter()
++            .find(|row| row["diagnostic"]["code"] == code)
++            .ok_or_else(|| {
++                format!("Real {code} for {world} has not reached normal Host ingress").into()
++            })
++    }
++    pub fn row(&self, first: u64) -> ara_ui::Result<&Value> {
++        self.rows
++            .get(&first)
++            .ok_or("Captured diagnostic identity disappeared".into())
++    }
++    pub fn identities(&self) -> ara_ui::Result<BTreeMap<u64, Identity>> {
++        self.rows
++            .values()
++            .filter(|row| {
++                matches!(
++                    row["diagnostic"]["code"].as_str(),
++                    Some("ARA0910" | "ARA0912")
++                )
++            })
++            .map(|row| Identity::parse(row).map(|identity| (identity.first, identity)))
++            .collect()
++    }
++    pub fn unchanged(&self, before: &BTreeMap<u64, Identity>) -> ara_ui::Result<bool> {
++        for (first, identity) in before {
++            if &Identity::parse(self.row(*first)?)? != identity {
++                return Ok(false);
++            }
++        }
++        Ok(true)
++    }
++    pub fn marker(&self, after: u64, world: &str) -> ara_ui::Result<Option<Value>> {
++        let mut matching = self
++            .rows
++            .values()
++            .filter(|row| {
++                row["diagnostic"]["code"] == "ARA0935"
++                    && row["seq"].as_u64().is_some_and(|seq| seq > after)
++                    && row["diagnostic"]["data"]["play"]["world"] == world
++            })
++            .collect::<Vec<_>>();
++        matching.sort_by_key(|row| row["seq"].as_u64());
++        let Some(row) = matching.last() else {
++            return Ok(None);
++        };
++        let recovery = &row["diagnostic"]["data"]["recovery"];
++        if recovery["schema"] != 1
++            || recovery["outcome"] != "reloaded"
++            || recovery["ticket"].as_u64().is_none()
++        {
++            return Err(format!("Actual recovery did not complete as Reloaded: {recovery}").into());
++        }
++        let fault = Identity::parse(self.fault(world, "ARA0912")?)?;
++        if row["diagnostic"]["data"]["play"] != fault.scope
++            || !recovery["modules"].as_array().is_some_and(|modules| {
++                modules
++                    .iter()
++                    .any(|module| module.as_str() == Some(fault.module.as_str()))
++            })
++        {
++            return Err("ARA0935 does not own the fault's actual module/player incarnation".into());
++        }
++        Ok(Some((**row).clone()))
++    }
++    pub fn refusals(&self, after: u64) -> Vec<&Value> {
++        self.rows
++            .values()
++            .filter(|row| {
++                row["seq"].as_u64().is_some_and(|seq| seq > after)
++                    && row["diagnostic"]["message"]
++                        .as_str()
++                        .is_some_and(|message| message.starts_with("Script recovery refused:"))
++            })
++            .collect()
++    }
++    pub fn fault_report(&self) -> Value {
++        json!(self.rows.values().filter(|row|matches!(row["diagnostic"]["code"].as_str(),Some("ARA0910"|"ARA0912")))
++            .map(|row|json!({"first":row["first"],"seq":row["seq"],"count":row["count"],"code":row["diagnostic"]["code"],
++                "module":row["diagnostic"]["data"]["module"],"scope":row["diagnostic"]["data"]["play"]})).collect::<Vec<_>>())
++    }
++}
++pub(super) fn number(value: &Value) -> ara_ui::Result<u64> {
++    value
++        .as_u64()
++        .ok_or("Expected diagnostic sequence/count integer".into())
++}
++
++pub(super) fn text<'a>(shell: &'a Shell, id: &str) -> Option<&'a str> {
++    shell
++        .shown_node(id)
++        .and_then(|index| shell.ui.nodes[index].element.attrs.get("text"))
++        .map(String::as_str)
++}
++pub(super) fn rows(shell: &Shell, prefix: &str) -> Vec<u64> {
++    shell
++        .ui
++        .paint_order
++        .iter()
++        .filter_map(|index| {
++            let node = &shell.ui.nodes[*index];
++            let seq = node.element.id.strip_prefix(prefix)?.parse::<u64>().ok()?;
++            (shell.ui.shown(*index) && node.rect.intersection(node.clip).h > 1.).then_some(seq)
++        })
++        .collect()
++}
++pub(super) fn active(shell: &Shell, seq: u64) -> bool {
++    shell.compile_problem_state()["protectedRuntimeFaultSeqs"]
++        .as_array()
++        .is_some_and(|rows| rows.iter().any(|row| row.as_u64() == Some(seq)))
++}
++
++pub(super) struct SourceFrame {
++    pub index: usize,
++    pub file: String,
++    pub line: u32,
++    pub column: Option<u32>,
++}
++impl SourceFrame {
++    pub fn report(&self) -> Value {
++        json!({"index":self.index,"file":self.file,"line":self.line,"pdbColumn":self.column,"requestedColumn":self.column.unwrap_or(1)})
++    }
++}
++/// Assert that the original bounded exception tree, not a reformatted message,
++/// is mounted. Return a real PDB frame in the authored source for a native click.
++pub(super) fn stack(
++    shell: &Shell,
++    row: &Value,
++    expected_source: &Path,
++) -> ara_ui::Result<SourceFrame> {
++    let seq = number(&row["seq"])?;
++    let exception = &row["diagnostic"]["data"]["exception"];
++    if exception["schema"] != 1
++        || exception["type"] != "System.InvalidOperationException"
++        || exception["message"] != "P4 Recovery command fault"
++        || exception["inners"][0]["type"] != "System.ArgumentException"
++        || exception["inners"][0]["message"] != "P4 Recovery inner cause"
++    {
++        return Err("Real command fault lost its original outer/inner exception metadata".into());
++    }
++    let mut flattened = Vec::new();
++    flatten(exception, &mut flattened, 0)?;
++    if flattened.len() > 16 {
++        return Err("Runtime exception exceeded the agreed16-node bound".into());
++    }
++    let mut frame_index = 0;
++    let mut located = None;
++    for (index, node) in flattened.into_iter().enumerate() {
++        let kind = node["type"].as_str().ok_or("Exception type missing")?;
++        let expected = if index == 0 {
++            kind.to_owned()
++        } else {
++            format!("Caused by: {kind}")
++        };
++        if text(shell, &format!("log-{seq}-stack-type-{index}")) != Some(expected.as_str())
++            || text(shell, &format!("log-{seq}-stack-message-{index}")) != node["message"].as_str()
++        {
++            return Err(
++                "Console did not mount the original full managed exception/inner order".into(),
++            );
++        }
++        for frame in node["frames"]
++            .as_array()
++            .ok_or("Exception frames missing")?
++        {
++            if frame_index >= 64 {
++                return Err("Runtime exception exceeded64 total frames".into());
++            }
++            if text(
++                shell,
++                &format!("log-{seq}-stack-frame-{frame_index}-method"),
++            ) != frame["method"].as_str()
++            {
++                return Err("Console omitted/reordered a managed stack frame".into());
++            }
++            if let (Some(file), Some(line)) = (frame["file"].as_str(), frame["line"].as_u64())
++                && line > 0
++                && Path::new(file).canonicalize().ok().as_deref() == Some(expected_source)
++            {
++                let column = frame["column"]
++                    .as_u64()
++                    .map(u32::try_from)
++                    .transpose()?
++                    .filter(|column| *column > 0);
++                located.get_or_insert(SourceFrame {
++                    index: frame_index,
++                    file: file.into(),
++                    line: u32::try_from(line)?,
++                    column,
++                });
++            }
++            frame_index += 1;
++        }
++    }
++    if text(shell, &format!("log-{seq}-stack-malformed")).is_some()
++        || text(shell, &format!("log-{seq}-stack-truncated")).is_some()
++    {
++        return Err("The small original fixture stack was unexpectedly malformed/truncated".into());
++    }
++    located.ok_or("Real managed exception has no authored PDB source frame to click".into())
++}
++fn flatten<'a>(node: &'a Value, out: &mut Vec<&'a Value>, depth: usize) -> ara_ui::Result<()> {
++    if depth >= 8 || out.len() >= 16 || node["schema"] != 1 || node["truncated"] != false {
++        return Err("Native exception fixture has incomplete or out-of-bound metadata".into());
++    }
++    out.push(node);
++    for inner in node["inners"]
++        .as_array()
++        .ok_or("Exception inners missing")?
++    {
++        flatten(inner, out, depth + 1)?;
++    }
++    Ok(())
++}
+diff --git a/crates/ara-editor/src/app/recovery_verify/proof.rs b/crates/ara-editor/src/app/recovery_verify/proof.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/app/recovery_verify/proof.rs
+@@ -0,0 +1,128 @@
++//! Compare original Store identities, actual ARA0935 authority, and mounted Problems.
++use super::*;
++impl RecoveryCheck {
++    pub(super) fn arm(&mut self) -> ara_ui::Result<()> {
++        self.baseline = self.bus.identities()?;
++        self.request_cursor = self.bus.cursor;
++        self.marker = None;
++        self.marker_began = None;
++        Ok(())
++    }
++    pub(super) fn retirement_ready(
++        &mut self,
++        editor: &Editor,
++        shell: &Shell,
++    ) -> ara_ui::Result<bool> {
++        let world = self.fixture.a()?;
++        if self.marker.is_none() {
++            let Some(marker) = self.bus.marker(self.request_cursor, world)? else {
++                return Ok(false);
++            };
++            self.marker = Some(marker);
++            self.marker_began = Some(Instant::now());
++        }
++        let marker = self.marker.as_ref().ok_or("Recovery marker lost")?;
++        let seq = observe::number(&marker["seq"])?;
++        let data = &marker["diagnostic"]["data"];
++        let modules = data["recovery"]["modules"]
++            .as_array()
++            .ok_or("Recovery module batch missing")?;
++        let mut removed = 0;
++        let projection = shell.compile_problem_state();
++        let recovery = &projection["recovery"];
++        if recovery["invalidMarkers"] != 0
++            || recovery["omittedRecords"] != 0
++            || recovery["gapMarkers"] != 0
++        {
++            return Err(format!(
++                "Recovery projection cannot establish complete captured scope: {recovery}"
++            )
++            .into());
++        }
++        if recovery["lastMarker"]["seq"]
++            .as_u64()
++            .is_none_or(|seen| seen < seq)
++        {
++            return Ok(false);
++        }
++        let mounted = observe::rows(shell, "problem-");
++        for identity in self.baseline.values() {
++            let belongs = identity.scope == data["play"]
++                && modules
++                    .iter()
++                    .any(|module| module.as_str() == Some(identity.module.as_str()))
++                && identity.seq < seq;
++            let active = observe::active(shell, identity.seq);
++            if belongs {
++                removed += 1;
++                if active || mounted.contains(&identity.seq) {
++                    return Ok(false);
++                }
++            } else if !active || !mounted.contains(&identity.seq) {
++                return Err(format!(
++                    "An unrelated module/incarnation fault disappeared from actual Problems: {}",
++                    identity.report()
++                )
++                .into());
++            }
++        }
++        if removed < 1 {
++            return Err(
++                "The actual successful batch did not own any captured earlier runtime fault".into(),
++            );
++        }
++        if shell.script_recovery_busy()
++            || self
++                .marker_began
++                .is_none_or(|start| start.elapsed() < Duration::from_millis(600))
++        {
++            return Ok(false);
++        }
++        if !self.bus.unchanged(&self.baseline)? {
++            return Err("Returned Status diagnostics were replayed or another occurrence changed the paused fixture fault identities/counts".into());
++        }
++        if !self.fixture.authored_unchanged(editor)? {
++            return Err("C# reload changed the authored RecoveryProbe record".into());
++        }
++        Ok(true)
++    }
++    pub(super) fn retired_evidence(&self, shell: &Shell) -> Value {
++        json!({"marker":self.marker,"before":self.baseline.values().map(observe::Identity::report).collect::<Vec<_>>(),
++            "afterStore":self.bus.fault_report(),"problemsMounted":observe::rows(shell,"problem-"),
++            "projection":shell.compile_problem_state(),"statusDisplay":shell.script_recovery_resource_report(),
++            "authority":"original normal-ingress ARA0935 exact module batch + trusted world/player/source/binding; no Status-driven retirement"})
++    }
++    pub(super) fn source_intent(&self, shell: &Shell) -> ara_ui::Result<Value> {
++        let source = self
++            .source_frame
++            .as_ref()
++            .ok_or("Authored PDB frame missing")?;
++        let expected = Path::new(&source.file).canonicalize()?;
++        let expected = expected.to_str().ok_or("PDB source path is not UTF-8")?;
++        let column = source.column.unwrap_or(1);
++        let request = shell.script_ide_request();
++        if request["targetFile"] != expected
++            || request["line"] != source.line
++            || request["column"] != column
++            || request["launchSuppressed"] != true
++            || request["attempted"] != false
++            || request["outcome"] != "suppressed"
++            || !request["error"].is_null()
++        {
++            return Err(format!("Native PDB source click did not retain the exact suppressed file/line/column: {request}").into());
++        }
++        if let Some(fallback) = request.get("fallback").filter(|value| !value.is_null())
++            && (fallback["launchSuppressed"] != true
++                || fallback["attempted"] != false
++                || fallback["outcome"] != "suppressed")
++        {
++            return Err(
++                "PDB source click attempted its external fallback in a hidden verification run"
++                    .into(),
++            );
++        }
++        Ok(
++            json!({"pdb":source.report(),"intent":request,"sink":"existing retained literal IDE request under offscreen suppression; no process launch"}),
++        )
++    }
++}

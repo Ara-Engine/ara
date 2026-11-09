@@ -103,6 +103,7 @@ fn normal_lookup_keeps_bc5_mips_cancellation_and_float_validation() {
                     format: TextureFormat::Bc5,
                     pixels: reference(DynamicImage::ImageRgb8(image.clone()), flip_normal_y),
                     mipmaps: true,
+                    alpha_coverage: None,
                 },
                 &cancellation,
             )

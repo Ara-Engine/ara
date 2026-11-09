@@ -1,0 +1,6 @@
+diff --git a/crates/ara-editor/src/shell/script_recovery_ui/tests.rs b/crates/ara-editor/src/shell/script_recovery_ui/tests.rs
+--- a/crates/ara-editor/src/shell/script_recovery_ui/tests.rs
++++ b/crates/ara-editor/src/shell/script_recovery_ui/tests.rs
+@@ -123,1 +123,1 @@
+-    assert_eq!(retained.diagnostics, [diagnostic.clone()]);
++    assert_eq!(retained.diagnostics.as_slice(), std::slice::from_ref(&diagnostic));

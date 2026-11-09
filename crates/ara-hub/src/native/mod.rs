@@ -142,13 +142,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     if options.new_project {
         hub.intent(Intent::Navigate(View::Create));
     }
-    let docs = os::docs(&exe_dir);
     if let Some(directory) = options.capture.clone() {
-        let mut cap = Capture::new(options.size, options.dpi.unwrap_or(1.0), docs)?;
+        let mut cap = Capture::new(options.size, options.dpi.unwrap_or(1.0))?;
         return capture::run(&mut cap, &mut hub, &directory);
     }
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
-    window(&options, hub, docs, &config, &exe_dir)
+    window(&options, hub, &config, &exe_dir)
 }
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
@@ -179,13 +178,7 @@ fn chrome(surface: &Surface, rt: &Runtime<HubApp>) {
     surface.set_chrome(&parts);
 }
 
-fn window(
-    options: &Options,
-    hub: Hub,
-    docs: Vec<ui::Doc>,
-    config: &Path,
-    exe_dir: &Path,
-) -> anyhow::Result<()> {
+fn window(options: &Options, hub: Hub, config: &Path, exe_dir: &Path) -> anyhow::Result<()> {
     // Window classes and the Wayland app_id read "ara-hub".
     let _ = stillkit::set_identity(stillkit::Identity {
         prefix: "ara-hub",
@@ -219,7 +212,7 @@ fn window(
         wake.clone(),
     );
     let size = surface.client_size();
-    let mut app = HubApp::new(hub, docs, size.0 as f32 / scale);
+    let mut app = HubApp::new(hub, size.0 as f32 / scale);
     app.now_ms = now_ms();
     app.frame = frame(&surface);
     let theme = app.look.theme.clone();
@@ -240,7 +233,11 @@ fn window(
     let mut last_check = Instant::now();
     let mut minute = now_ms() / 60_000;
     let mut health = options.update_health.clone();
-    let mut snippets: Option<std::sync::mpsc::Receiver<(crate::model::AgentClient, String)>> = None;
+    // Agent clients: which are installed and already have Ara, and one-click setups. Each
+    // probe waits on child processes, so it runs on its own thread and wakes the loop.
+    let (send_setup, setups) =
+        std::sync::mpsc::channel::<(crate::model::AgentClient, crate::model::AgentSetup)>();
+    let mut probed = false;
     let mut ara: Option<PathBuf> = None;
     let mut cursor = stillkit::Cursor::Arrow;
     let mut frames: Option<stillkit::AnimationFrames> = None;
@@ -297,11 +294,9 @@ fn window(
                 }
             });
         }
-        if let Some(r) = &snippets {
-            let got: Vec<_> = r.try_iter().collect();
-            if !got.is_empty() {
-                rt.update(|s| s.hub.install.extend(got));
-            }
+        let found: Vec<_> = setups.try_iter().collect();
+        if !found.is_empty() {
+            rt.update(|s| s.hub.agent_setup.extend(found));
         }
         let now = now_ms();
         let ticked = rt.touch(|s| s.hub.tick(Instant::now()));
@@ -355,22 +350,44 @@ fn window(
                 Effect::Reveal(path) => os::reveal(&path),
                 Effect::Open(path) => os::open(&path),
                 Effect::Copy(text) => SystemClipboard.set(&text),
+                Effect::OpenUrl(url) => os::open_url(&url),
+                Effect::SetupAgent(client) => match ara.clone() {
+                    Some(ara) => {
+                        let (send, wake) = (send_setup.clone(), wake.clone());
+                        std::thread::spawn(move || {
+                            let _ = send.send((client, ara_agents::setup(client, &ara)));
+                            wake();
+                        });
+                    }
+                    None => rt.update(|s| {
+                        s.hub.agent_setup.insert(
+                            client,
+                            crate::model::AgentSetup::Failed(
+                                "The Hub service is still connecting; retry in a moment".into(),
+                            ),
+                        );
+                    }),
+                },
             }
         }
-        // Agent setup snippets, printed by the real CLI, once Agents is opened.
-        if snippets.is_none()
-            && rt.state().hub.view == View::Agents
-            && let Some(cli) = ara.clone()
-        {
-            let (send, receive) = std::sync::mpsc::channel();
-            let wake = wake.clone();
-            std::thread::spawn(move || {
-                for snippet in os::install_snippets(&cli) {
-                    let _ = send.send(snippet);
-                    wake();
+        // Once the CLI is known: each client's config entry, and whether it is installed
+        // and already has Ara (the sidebar drops its setup card once one does).
+        if !probed && let Some(cli) = ara.clone() {
+            probed = true;
+            rt.update(|s| {
+                for client in crate::model::AgentClient::ALL {
+                    s.hub
+                        .install
+                        .insert(client, ara_agents::snippet(&cli, client));
                 }
             });
-            snippets = Some(receive);
+            for client in crate::model::AgentClient::ALL {
+                let (send, wake) = (send_setup.clone(), wake.clone());
+                std::thread::spawn(move || {
+                    let _ = send.send((client, ara_agents::detect(client)));
+                    wake();
+                });
+            }
         }
         // Preferences and the theme.
         let current = rt.state().hub.prefs.clone();

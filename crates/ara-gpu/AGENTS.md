@@ -1,7 +1,6 @@
 # ara-gpu
 
-Owns the native GPU boundary. Vulkan uses ash revision
-`f4c2ca3e4f6b998d5254ad101a32f024d87cdec2`, matching S1.
+Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad101a32f024d87cdec2`, matching S1.
 
 ## Public API
 
@@ -9,6 +8,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
   extensions, features or acceleration descriptor capacity, even on an RT GPU.
   `new` retains optional RT. Windowed devices request KHR/EXT HIGH; denial retries MEDIUM.
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
+- `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access; `info()`, `wait_idle()` and `host_wait_stats()` are the portable forms both backends (`GpuDevice`) provide. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.
@@ -57,9 +57,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 ## Contracts
 
-The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled
-images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimum
-128 images/64 buffers), plus 64 storage images and optional 16 acceleration structures.
+The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimum 128 images/64 buffers), plus 64 storage images and optional 16 acceleration structures.
+A full storage heap waits (bounded) for retired storage images' last use, then collects (`reclaim_storage`); Vulkan sRGB images created with STORAGE are MUTABLE_FORMAT|EXTENDED_USAGE with a UNORM `storage_view` (`storage_alias`) that `storage_image` publishes (shaders encode sRGB; Metal still needs the equivalent pixel-format view); window devices enable swapchain_maintenance1 present scaling.
 `DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
 material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
@@ -86,8 +85,7 @@ and handle generations independent; images and shared surfaces do not use this p
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.
-`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile)
-and must lie within the scope's extent.
+`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile) and must lie within the scope's extent.
 Native presentation and raw ash integration remain unsafe, with documented
 lifetime/layout requirements. Never reset a pending native command buffer.
 
@@ -97,14 +95,16 @@ the last completed color/ID pair. `FRAMES_IN_FLIGHT` (2) ended scopes may stay u
 writes busy constants through ordered GPU updates; ordinary `upload` still rejects
 overwrites. A second graphics-family queue isolates Scene work from the native UI
 queue where available; completion publishes a GPU memory dependency to that UI queue.
-Capture/shutdown may use `wait_completion`. `tests/deferred.rs` blocks Scene work
-behind a host gate and checks UI progress, polling and byte-exact ordered updates.
+Capture/shutdown may use `wait_completion`. Tests hold a queue only through `vulkan::QueueGate` (a host
+timeline wait); device teardown waits until no gate is held, as NVIDIA's Windows `vkDestroyDevice` otherwise deadlocks
+under its process-wide lock (`ara-render` AGENTS.md). `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.
 Synchronous presenters use `begin_deferred_completion_on_current_queue`; consecutive
 helpers share one native submit with ordered memory barriers. End the scope before
 host waits. `wait_completion_with` preserves logical pass groups; `submission_stats`
 counts native batches. Failed native submits drain/retire and poison further admission.
 
-Debug creation requires Khronos validation and synchronization validation.
+Debug creation requires Khronos validation and synchronization validation, unless
+`ARA_NO_GPU_VALIDATION` is non-empty (the `ara-dev live` loop sets it; tests never do).
 `assert_clean` rejects warnings and errors; `diagnostics` returns stable codes,
 layer identifiers, severity and message. The diagnostic callback mutex protects
 messages only, never frame resources or gameplay state.

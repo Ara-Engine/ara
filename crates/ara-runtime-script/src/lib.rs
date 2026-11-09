@@ -728,11 +728,12 @@ pub fn apply_replica(
     })
 }
 
-/// The C# command catalog (ara-cmd `Info` shape, `scope: "play"`), or `null`.
+/// The C# command catalog (ara-cmd `Info` shape, `scope: "play"`); empty (an
+/// object, never `null`) when the project has no scripts.
 pub fn catalog(world: &World) -> Value {
     world
         .get_resource::<Scripts>()
-        .map_or(Value::Null, |s| s.host.command_catalog())
+        .map_or_else(|| json!({}), |s| s.host.command_catalog())
 }
 
 /// Compile current source bytes as an agent edit (D20: coalesced behind human work).

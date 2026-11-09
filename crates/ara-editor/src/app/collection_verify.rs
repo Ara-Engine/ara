@@ -166,10 +166,20 @@ impl CollectionCheck {
             return self.write();
         }
         if self.started.elapsed() >= PATIENCE {
+            let context = if self.phase == 4 && ACTS[self.index].drag() {
+                format!(
+                    "; waiting for item100's after-point to enter the neutral scroll band (offset {:.1}, row {:?})",
+                    proof::offset(shell, ACTS[self.index]),
+                    proof::row(shell, ACTS[self.index], 100, false)
+                )
+            } else {
+                String::new()
+            };
             self.pending_error = Some(format!(
-                "Native collection story timed out at phase {} ({})",
+                "Native collection story timed out at phase {} ({}){}",
                 self.phase,
-                ACTS[self.index].label()
+                ACTS[self.index].label(),
+                context
             ));
             return Ok(());
         }

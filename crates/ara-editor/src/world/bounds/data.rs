@@ -104,6 +104,9 @@ mod tests {
                     lods: Vec::new(),
                     material: None,
                     skin: None,
+                    casts_shadows: true,
+                    source_vertices: Vec::new(),
+                    vertex_colors: false,
                 },
                 Primitive {
                     vertices: vertices(vec![[12., 3., 20.], [32., 7., 24.]]),
@@ -111,6 +114,9 @@ mod tests {
                     lods: Vec::new(),
                     material: None,
                     skin: None,
+                    casts_shadows: true,
+                    source_vertices: Vec::new(),
+                    vertex_colors: false,
                 },
             ],
             nodes: BTreeMap::from([(

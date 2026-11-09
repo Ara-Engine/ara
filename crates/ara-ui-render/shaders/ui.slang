@@ -6,7 +6,7 @@ struct Instance { float4 rect; float4 uv; float4 color; float4 parameters; };
 [[vk::binding(0,0)]] StructuredBuffer<Instance> instances;
 [[vk::binding(1,0)]] Texture2D<float4> textures[];
 [[vk::binding(2,0)]] SamplerState linearClamp;
-struct Push { uint firstInstance; uint textureIndex; uint mode; uint reserved; float2 viewport; float2 padding; };
+struct Push { uint firstInstance; uint textureIndex; uint mode; uint reserved; float2 viewport; float dpi; float padding; };
 [[vk::push_constant]] ConstantBuffer<Push> pc;
 struct Varying { float4 position : SV_Position; float2 local : TEXCOORD0; float2 uv : TEXCOORD1; nointerpolation uint instanceId : TEXCOORD2; };
 [shader("vertex")]
@@ -47,6 +47,11 @@ float4 fillColor(Instance i,float2 p,inout float shape){
     float cell=max(i.parameters.z,1);int2 q=int2(floor(p/cell));
     return ((q.x+q.y)&1)==0?i.color:i.uv;
 }
+// Box-shadow edges (mode 10): Abramowitz-Stegun erf, a Gaussian edge for CSS blur radius
+// `blur` (sigma = blur / 2) or a hard antialiased one.
+float erfApprox(float x){float a=abs(x);float t=1+(0.278393+(0.230389+0.078108*a*a)*a)*a;t*=t;return sign(x)*(1-1/(t*t));}
+float edgeCoverage(float d,float blur,float aa){return blur>0?0.5-0.5*erfApprox(d/(blur*0.70710678)):saturate(0.5-d/aa);}
+float boxDistance(float2 p,float4 box,float radius){return all(box.zw>0)?roundedDistance(p-box.xy,box.zw,radius):1e6;}
 [shader("fragment")]
 float4 fragmentMain(Varying input) : SV_Target {
     Instance i=instances[input.instanceId]; float4 color=i.color;
@@ -60,6 +65,33 @@ float4 fragmentMain(Varying input) : SV_Target {
             coverage-=hole;
         }
         color.a*=coverage;
+    } else if(pc.mode==10) {
+        // Outer: rect is the shadow box grown by blur*1.5+1, uv the casting box (excluded).
+        // Inset: rect is the box, uv the hole. parameters: box radius, blur, shadow radius, inset.
+        float blur=i.parameters.y; float2 size=i.rect.zw; float ds; float d;
+        if(i.parameters.w>0.5) { ds=roundedDistance(input.local,size,i.parameters.x); d=boxDistance(input.local,i.uv,i.parameters.z); }
+        else { float m=blur*1.5+1; d=boxDistance(input.local,float4(m,m,size-2*m),i.parameters.z); ds=boxDistance(input.local,i.uv,i.parameters.x); }
+        float aa=max(fwidth(ds),0.0001); float hard=saturate(0.5-ds/aa);
+        color.a*=i.parameters.w>0.5?hard*(1-edgeCoverage(d,blur,aa)):edgeCoverage(d,blur,aa)*(1-hard);
+    } else if(pc.mode==11) {
+        // Glass passes over premultiplied texels (w=0 horizontal into scratch, w=1 vertical
+        // into the target inside the rounded box, saturation z); y is sigma in logical px.
+        Texture2D<float4> t=textures[NonUniformResourceIndex(pc.textureIndex)];
+        uint width,height; t.GetDimensions(width,height); float2 texel=1/float2(width,height);
+        bool vertical=i.parameters.w>0.5; float sigma=max(i.parameters.y*max(pc.dpi,1),0.0001); int reach=int(ceil(3*sigma));
+        float2 step=vertical?float2(0,texel.y):float2(texel.x,0); float2 uv=input.position.xy*texel;
+        float4 sum=t.SampleLevel(linearClamp,uv,0); float total=1; float inv=1/(2*sigma*sigma);
+        for(int k=1;k<=reach;k+=2) {
+            float w0=exp(-float(k*k)*inv); float w1=k+1<=reach?exp(-float((k+1)*(k+1))*inv):0; float w=w0+w1;
+            float o=(k*w0+(k+1)*w1)/w;
+            sum+=(t.SampleLevel(linearClamp,uv+step*o,0)+t.SampleLevel(linearClamp,uv-step*o,0))*w; total+=2*w;
+        }
+        float4 blurred=sum/total;
+        if(vertical) {
+            float luma=dot(blurred.rgb,float3(0.2126,0.7152,0.0722)); blurred.rgb=max(lerp(luma.xxx,blurred.rgb,i.parameters.z),0);
+            float d=roundedDistance(input.local,i.rect.zw,i.parameters.x); blurred*=saturate(0.5-d/max(fwidth(d),0.0001));
+        }
+        return blurred;
     } else if(pc.mode==9) {
         float d=roundedDistance(input.local,i.rect.zw,i.parameters.x);
         float shape=saturate(0.5-d/max(fwidth(d),0.0001));

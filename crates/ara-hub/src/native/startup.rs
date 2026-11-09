@@ -39,11 +39,7 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
         || {},
     );
     let phase = Instant::now();
-    let mut cap = Capture::new(
-        options.size,
-        options.dpi.unwrap_or(1.0),
-        os::docs(directory),
-    )?;
+    let mut cap = Capture::new(options.size, options.dpi.unwrap_or(1.0))?;
     cap.settle(&mut hub);
     let first = now_ms();
     ara_hub_service::startup::record("ui.first_draw", phase.elapsed());

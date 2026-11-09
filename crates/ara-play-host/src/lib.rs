@@ -76,6 +76,8 @@ pub mod codes {
     pub const ASSET_UPGRADED: Code = Code(7306);
     /// An embedded player's shared surface could not be created, shared or resized.
     pub const SURFACE: Code = Code(7307);
+    /// `ara` refused a player or import worker built before its sources changed.
+    pub const STALE_COMPANION: Code = Code(7308);
 }
 
 fn fail(code: Code, message: impl Into<String>) -> Vec<Diagnostic> {
@@ -158,6 +160,8 @@ struct World {
     streaming_assets: bool,
     /// Last read-only import-state revision sent to this world.
     import_revision: u64,
+    /// The scene carries C# modules (without them the command catalog is empty).
+    scripts: bool,
     /// Last published C# catalog, reused when stopping without a player RPC.
     commands: Value,
     /// Preparation timings and process metadata retained for background callers.
@@ -286,6 +290,17 @@ impl PlayService {
                 .is_some_and(|at| std::time::Instant::now() < at)
         {
             return Ok(());
+        }
+        // `ara` refuses a player older than its sources or missing (ARA7308).
+        if let Err(refusal) = ara_companion::verify(&self.config.pool.executable) {
+            return Err(vec![
+                Diagnostic::error(codes::STALE_COMPANION, refusal.to_string()).with_fix(
+                    refusal.fix(),
+                    FixAction::Cli {
+                        args: refusal.fix().split(' ').map(String::from).collect(),
+                    },
+                ),
+            ]);
         }
         if !self.config.pool.executable.exists() {
             return Err(vec![
@@ -614,6 +629,7 @@ impl PlayService {
         first.ok_or_else(|| fail(codes::PLAY, "world has no players"))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn scene_snapshot(
         &mut self,
         workspace: &ara_doc::Workspace,
@@ -621,8 +637,9 @@ impl PlayService {
         scene: Option<&str>,
         seed: u64,
         tick_hz: u32,
+        render_debug: ara_play::RenderDebug,
         progress: Option<&starting::Reporter>,
-    ) -> Result<(String, Vec<u8>), Vec<Diagnostic>> {
+    ) -> Result<(String, Vec<u8>, bool), Vec<Diagnostic>> {
         let wanted = scene
             .map(str::to_owned)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
@@ -672,6 +689,7 @@ impl PlayService {
         let scene = PlayScene {
             ui: game_ui::read(&self.root).map_err(|error| fail(codes::REQUEST, error))?,
             rendering: rendering::read(workspace).map_err(|error| fail(codes::REQUEST, error))?,
+            render_debug,
             format: 1,
             scene: scene_id.clone(),
             documents: PlayScene::documents(workspace)
@@ -696,7 +714,12 @@ impl PlayService {
                 .map(|(id, path)| (id.to_owned(), path.to_owned()))
                 .collect(),
         };
-        Ok((scene_id, scene.encode().map_err(|e| fail(codes::PLAY, e))?))
+        let scripts = scene.scripts.is_some();
+        Ok((
+            scene_id,
+            scene.encode().map_err(|e| fail(codes::PLAY, e))?,
+            scripts,
+        ))
     }
 
     /// Assigns players and starts them. Networked worlds start the authority first;
@@ -924,12 +947,13 @@ impl PlayService {
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| fail(codes::REQUEST, format!("conditions: {e}")))?;
-        let (scene, bytes) = self.scene_snapshot(
+        let (scene, bytes, scripts) = self.scene_snapshot(
             workspace,
             revision,
             p.scene.as_deref().or(main_scene),
             p.seed.unwrap_or(0),
             p.tick_hz.unwrap_or(self.config.tick_hz),
+            p.render_debug.unwrap_or_default(),
             progress,
         )?;
         let prepared = Instant::now();
@@ -994,6 +1018,7 @@ impl PlayService {
                     .as_ref()
                     .is_some_and(|assets| assets.importing()),
                 import_revision: 0,
+                scripts,
                 commands: Value::Null,
                 startup: result.clone(),
                 events: Vec::new(),
@@ -1050,6 +1075,7 @@ impl PlayService {
             hot_reload,
             streaming_assets,
             import_revision,
+            scripts,
             commands,
             startup,
             conditions,
@@ -1085,6 +1111,7 @@ impl PlayService {
                 hot_reload,
                 streaming_assets,
                 import_revision,
+                scripts,
                 commands,
                 startup,
                 events: Vec::new(),
@@ -1184,6 +1211,7 @@ impl PlayService {
                     tick_hz: p.tick_hz,
                     hot_reload: None,
                     conditions: None,
+                    render_debug: None,
                 },
             )?;
             let id = world["world"].as_str().unwrap_or_default().to_owned();
@@ -1276,8 +1304,10 @@ impl Service for PlayService {
             play(Method::new::<PlayDeviceParams>(db, "play.device", "Send raw keyboard/mouse events to one embedded player (the focused Game view); mapped to actions exactly like a windowed player's input."), "device"),
             play(Method::new::<PlayResizeParams>(db, "play.resize", "Resize one embedded player's shared surface; returns the new surface generation (new handles)."), "resize"),
             play(Method::new::<PlayTimescaleParams>(db, "play.timescale", "Set host-time speed; the fixed dt never changes."), "timescale"),
+            play(Method::new::<PlayRenderDebugParams>(db, "play.renderDebug", "Turn ambient occlusion, shadows or temporal jitter off (or full resolution on) in every player of a world, from its next frame, to trace a rendering artifact."), "renderDebug"),
             play(Method::new::<PlayInspectParams>(db, "play.inspect", "Read an entity's runtime components.").read_only(), "inspect"),
             play(Method::new::<PlayReadParams>(db, "play.read", "Read entity.Component.field values at the current tick.").read_only(), "read"),
+            play(Method::new::<PlayGraphicsParams>(db, "play.graphics", "Query/set/apply/revert/reset/save local graphics preferences and GPU/display modes. Never broadcasts to other players."), "graphics"),
             play(Method::new::<PlayPatchParams>(db, "play.patch", "Live-edit authored values; applied at the next tick boundary and acknowledged after it."), "patch"),
             play(Method::new::<PlayViewParams>(db,"play.view","Set this player's spectator camera without editing authored cameras; returns a nonblocking Host job."),"view"),
             play(Method::new::<PlayControlParams>(db,"play.control","Possess or eject a controllable actor through typed ops at one authority boundary; returns a Host job."),"control"),
@@ -1437,11 +1467,12 @@ impl Service for PlayService {
                 }
                 let (target, broadcast) = match method {
                     "play.pause" | "play.resume" | "play.timescale" | "play.input"
-                    | "play.step" => (method, true),
+                    | "play.step" | "play.renderDebug" => (method, true),
                     "play.patch" => (method, false),
-                    "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
-                    | "play.record" | "play.recording" | "play.replay" | "play.diff"
-                    | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
+                    "play.graphics" | "play.inspect" | "play.read" | "play.capture"
+                    | "play.watch" | "play.until" | "play.record" | "play.recording"
+                    | "play.replay" | "play.diff" | "play.debug.crash" | "play.commands"
+                    | "play.captureAudio" => (method, false),
                     // C# commands mutate the world: every player of it runs them.
                     "play.command" => (method, true),
                     other => {

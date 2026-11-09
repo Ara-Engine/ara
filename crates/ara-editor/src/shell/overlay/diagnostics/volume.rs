@@ -10,14 +10,15 @@ pub(super) fn collect(
     view: &DocumentView,
     state: &EditorState,
     transforms: Option<&BTreeMap<String, Mat4>>,
+    (post, probes): (bool, bool),
 ) {
     for id in &state.selection {
         if state.hidden.contains(id) {
             continue;
         }
         let Some(entity) = view.entities().get(id).filter(|entity| {
-            entity.record.contains_key("PostProcessVolume")
-                || entity.record.contains_key("ReflectionProbe")
+            post && entity.record.contains_key("PostProcessVolume")
+                || probes && entity.record.contains_key("ReflectionProbe")
         }) else {
             continue;
         };
@@ -26,6 +27,7 @@ pub(super) fn collect(
             .or_else(|| crate::world::world_transform(view.entities(), id));
         let Some(world) = world else { continue };
         if let Some(volume) = crate::shell::lighting::bounds::from_entity(id, &entity.record, world)
+            .filter(|_| post || !entity.record.contains_key("PostProcessVolume"))
         {
             for [from, to] in volume.segments() {
                 wires.push(Segment {
@@ -39,6 +41,8 @@ pub(super) fn collect(
         }
         // Probe wires share this selected-geometry cache, but do not inflate the
         // PostProcessVolume count or selectedVolumes/blend-distance report.
-        probe::collect(wires, &entity.record, world);
+        if probes {
+            probe::collect(wires, &entity.record, world);
+        }
     }
 }

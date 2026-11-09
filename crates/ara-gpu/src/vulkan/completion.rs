@@ -206,7 +206,11 @@ impl VulkanDevice {
     }
 
     /// Waits for `point` until `deadline`; false on timeout.
-    fn wait_until(&self, point: TimelinePoint, deadline: std::time::Instant) -> Result<bool> {
+    pub(super) fn wait_until(
+        &self,
+        point: TimelinePoint,
+        deadline: std::time::Instant,
+    ) -> Result<bool> {
         crate::cpu_scope!("GPU.timeline_wait_bounded");
         if point.value > self.submitted[point.queue.index()]
             || point.value > self.flushed[point.queue.index()]

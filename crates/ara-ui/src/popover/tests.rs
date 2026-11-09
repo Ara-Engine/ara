@@ -519,3 +519,27 @@ fn flex_scroll_popup_keeps_intrinsic_height_when_clamped_then_recovers_and_shrin
     assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
     Ok(())
 }
+
+/// Unshrinkable content wider than either side's room is clamped once and stays clamped:
+/// re-measuring the clamped box must not unclamp it, regrow it past the window and
+/// oscillate between frames (a cascading submenu near the right edge).
+#[test]
+fn a_clamped_popover_stays_clamped_and_inside_the_window_across_frames() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = "<ui id='r'><button id='row' text='Row' style='position:absolute; left:120px; top:40px; width:120px; height:20px' /><popover id='sub' anchor='row' placement='right-start' offset='0' style='padding:4px'><text id='label' text='A long submenu label that wraps when the room beside its row is short' style='white-space:nowrap' /></popover></ui>";
+    let mut ui = Ui::editor(markup, EDITOR_CSS, WINDOW)?;
+    let mut rects = Vec::new();
+    for _ in 0..6 {
+        ui.frame(&mut text)?;
+        let sub = ui.nodes[ui.find("sub").expect("submenu")].rect;
+        rects.push([sub.x, sub.y, sub.w, sub.h]);
+    }
+    let [x, _, w, _] = rects[5];
+    assert!(
+        x + w <= WINDOW[0] - MARGIN + 0.5,
+        "inside the window: {rects:?}"
+    );
+    assert_eq!(rects[4], rects[5], "stable while idle: {rects:?}");
+    assert_eq!(rects[3], rects[5], "no oscillation: {rects:?}");
+    Ok(())
+}

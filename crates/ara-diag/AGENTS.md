@@ -60,6 +60,7 @@ only); every crate can depend on it.
 | 2000–2099 | the bus, `ara why`, runtime events (2020 reloads, 2030 frames) |
 | 2100 / 2200 / 2400 / 2500 | assets / world streaming / networking / collaboration (`ara-collab`) |
 | 3100 / 3200 / 3300 / 3400 | graphs / materials / render visibility / audio |
+| 3500–3501 | per-user graphics settings validation and persistence |
 | 3600–3699 | terrain, VFX, 2D, 2D physics (3600, 3601 collide: see below) |
 | 6000–6099 | GPU, named `ARA_GPU_*` |
 | 7000s / 7100 / 7400 / 7500 | physics / navigation / localization / saves |

@@ -115,7 +115,7 @@ impl Shell {
                 if row.retained_previous {" · previous valid capture retained"} else {""},
                 if !row.enabled {" · disabled contribution"} else {""}));
             if let Some(receipt) = &row.last_receipt {
-                out.push_str(&format!("<text id='{id}-receipt' class='lighting-help' text='Last receipt: {} px × {} faces · generation {} · renderer revision {} · {}' /><text id='{id}-cache' class='probe-identity' text='{}' /><text id='{id}-hash' class='probe-identity' text='Capture {} · source {}' />",receipt.resolution,receipt.faces,receipt.generation,receipt.source_revision,if receipt.published {"published"}else{"not published"},escape(&receipt.cache_path),escape(&receipt.capture_hash),escape(&receipt.source_hash)));
+                out.push_str(&format!("<text id='{id}-receipt' class='lighting-help' text='Last receipt: {} px × {} faces · generation {} · renderer revision {} · {}' /><text id='{id}-cache' class='probe-identity' text='Cache destination (written asynchronously): {}' /><text id='{id}-hash' class='probe-identity' text='Capture {} · source {}' />",receipt.resolution,receipt.faces,receipt.generation,receipt.source_revision,if receipt.published {"published"}else{"not published"},escape(&receipt.cache_path),escape(&receipt.capture_hash),escape(&receipt.source_hash)));
             } else {
                 out.push_str(&format!("<text id='{id}-no-receipt' class='lighting-help' text='No published capture receipt has been reported.' />"));
             }

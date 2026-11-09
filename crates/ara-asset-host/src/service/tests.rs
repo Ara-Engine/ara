@@ -1,5 +1,4 @@
 //! Disposable authority tests; production workers never touch the user's profile.
-mod deletion_echo;
 mod echo;
 use super::{
     AssetService, bindings::Bindings, import_entries::entry_metadata, inventory::Inventory,
@@ -59,6 +58,7 @@ pub(super) fn bindings(root: &Path) -> Bindings {
         workspace,
         versions: Default::default(),
         preset: Default::default(),
+        policy: Default::default(),
         asset_hashes: Default::default(),
     }
 }

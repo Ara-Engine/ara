@@ -102,6 +102,30 @@ pub enum Draw {
         /// Foreground or glyph tint color.
         color: Color,
     },
+    /// One `box-shadow` layer of the rounded box `rect`: outer layers are cut out under
+    /// the box, inset layers stay inside it. Drawn analytically (Gaussian falloff).
+    Shadow {
+        /// Stable source node identity.
+        node: u64,
+        /// The box casting (or holding) the shadow, in logical pixels.
+        rect: Box2,
+        /// The box's clamped corner radius in logical pixels.
+        radius: f32,
+        /// Offset, blur, spread, color and inset flag.
+        shadow: crate::style::Shadow,
+    },
+    /// Glass: blur and saturate everything already painted behind the rounded box
+    /// `rect`, then composite it inside that shape. Adapters snapshot their target here.
+    Backdrop {
+        /// Stable source node identity.
+        node: u64,
+        /// The glass box in logical pixels.
+        rect: Box2,
+        /// The box's clamped corner radius in logical pixels.
+        radius: f32,
+        /// Blur and saturation.
+        backdrop: crate::style::Backdrop,
+    },
     /// Positioned shaped glyphs in a registered font resource.
     GlyphRun {
         /// Stable source node identity.

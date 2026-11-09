@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/reservoir_trace_atmosphere/reservoirTraceAtmosphere.dxil",
-      "dxil_hash": "8f953762b6ff8315d47b892acf3ab9e637503cd82fbbc74c7f72755296c6693b",
+      "dxil": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.dxil",
+      "dxil_hash": "3fe6c3134dc838323b770363f508eb1ef0a3583c5b9b6384b968bd400aaaac10",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metallib",
-        "metallib_hash": "31c4407d233fae50ae57ada7a82c1739a4c57dae0189fb15a7faba86355e87b8",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metallib",
+        "metallib_hash": "e895c993869ba05b150a7c19d6676b08898de671c5ceb05adba572869a184bea",
+        "reflection": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirTraceAtmosphere",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/reservoir_trace_atmosphere/reservoirTraceAtmosphere.spv",
+      "spirv": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.spv",
       "spirv_entry": "main",
-      "spirv_hash": "17a294ecbfbe277e431aaec7012cea90d084e5c03d974d684623f555af7470bb",
+      "spirv_hash": "1f66319c0597ef927b69d12c58cd4de837added4bc7b70a91492696649948489",
       "stage": "compute"
     }
   ],

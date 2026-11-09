@@ -42,6 +42,57 @@ pub(super) fn downsample(
     output
 }
 
+/// Share of `pixels` whose alpha passes an alpha test at `cutoff`.
+pub(super) fn coverage(pixels: &[[f32; 4]], cutoff: f32) -> f32 {
+    let passing = pixels.iter().filter(|p| p[3] >= cutoff).count();
+    passing as f32 / pixels.len().max(1) as f32
+}
+
+/// Remaps a mip's alpha so `share` of its texels pass the alpha test at `cutoff`,
+/// as the full-size image's do (Castaño 2010, both ways). Averaging a thin grate's
+/// alpha drops whole blocks below the cutoff with distance, and averaging a grate's
+/// holes (a ceiling grating's, a fence's) closes them: it would stand solid where it
+/// should show what lies behind. The remap is monotonic and piecewise linear about the
+/// alpha that should land on the cutoff, and keeps 0 and 1 where they are: only
+/// partial texels move, so solid texels never sit near the cutoff for compression
+/// and filtering error to punch holes through. Partial alphas first shift by up to
+/// 1e-4 in a 4x4 ordered-dither pattern over the level (`width` texels a row), so a
+/// regular grate, whose averages all tie, splits evenly across its area.
+pub(super) fn preserve_coverage(pixels: &mut [[f32; 4]], width: usize, cutoff: f32, share: f32) {
+    const BAYER: [f32; 16] = [
+        0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.,
+    ];
+    let n = pixels.len();
+    let kept = ((share * n as f32).round() as usize).min(n);
+    let passing = (coverage(pixels, cutoff) * n as f32).round() as usize;
+    if kept == 0 || kept == n || passing == kept {
+        return;
+    }
+    for (i, p) in pixels.iter_mut().enumerate() {
+        if p[3] > 0. && p[3] < 1. {
+            let (x, y) = (i % width.max(1), i / width.max(1));
+            p[3] = (p[3] + (BAYER[(y % 4) * 4 + x % 4] / 16. - 0.5) * 1e-4).clamp(1e-6, 1. - 1e-6);
+        }
+    }
+    let mut alphas: Vec<f32> = pixels.iter().map(|p| p[3]).collect();
+    alphas.sort_unstable_by(|a, b| b.total_cmp(a));
+    // The kept-th largest alpha lands on the cutoff; the next one just under it.
+    let (last, next) = (alphas[kept - 1], alphas[kept]);
+    if last <= 0. || next >= 1. || last <= next {
+        // Ties at 0 or 1 (or at the boundary) cannot be split by a remap.
+        return;
+    }
+    let pivot = (last + next) * 0.5;
+    for p in pixels {
+        let a = p[3];
+        p[3] = if a <= pivot {
+            a / pivot * cutoff
+        } else {
+            cutoff + (a - pivot) / (1. - pivot) * (1. - cutoff)
+        };
+    }
+}
+
 fn box_color(pixels: [[f32; 4]; 4]) -> [f32; 4] {
     let mut sum = [0.; 4];
     for p in pixels {

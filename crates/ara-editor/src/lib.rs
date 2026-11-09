@@ -20,6 +20,7 @@ pub use ara_editor_gpu as gpu;
 pub mod inspector;
 mod loading;
 mod native;
+pub mod paint;
 mod persist;
 mod probe_capture;
 mod script_assets;

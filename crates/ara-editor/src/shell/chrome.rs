@@ -32,7 +32,7 @@ impl Shell {
         let agents = editor.state.presence.len();
         let active_agent = editor.activity.agent_active(std::time::Instant::now());
         self.bind_command("status-connection", "window.agents", Target::None);
-        out.push_str(&format!("<panel id='statusbar' class='statusbar'><button id='status-connection' class='chip' label='Connection' description='This editor is the project authority; agents and the ara CLI connect to it' action='Dispatch'><panel id='connection-dot' class='status-dot' /><text id='status' class='caption' text='{}' /></button>",
+        out.push_str(&format!("<panel id='statusbar' class='statusbar'><button id='status-connection' class='chip status-chip' label='Connection' description='This editor is the project authority; agents and the ara CLI connect to it' action='Dispatch'><panel id='connection-dot' class='status-dot' /><text id='status' class='caption' text='{}' /></button>",
             match agents {
                 0 => "Connected".to_owned(),
                 1 => format!("Connected · 1 agent{}", if active_agent { " editing" } else { "" }),
@@ -46,13 +46,13 @@ impl Shell {
             .map(game_panel::StartProgress::title);
         if let Some(text) = starting {
             self.bind_command("status-play", "window.game", Target::None);
-            out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='fg' text='{text}' /></button>",icons::icon_in("status-play","loader-circle","accent")));
+            out.push_str(&format!("<button id='status-play' class='chip status-chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='fg' text='{text}' /></button>",icons::icon_in("status-play","loader-circle","accent")));
         } else if let Some(playing) = editor.state.playing {
             self.bind_command("status-play", "window.game", Target::None);
-            out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='{}' text='{}' /></button>",icons::icon_in("status-play",if playing{"play"}else{"pause"},if playing{"tint-play"}else{"warning"}),if playing{"fg"}else{"warning"},if playing{"Playing"}else{"Paused"}));
+            out.push_str(&format!("<button id='status-play' class='chip status-chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='{}' text='{}' /></button>",icons::icon_in("status-play",if playing{"play"}else{"pause"},if playing{"tint-play"}else{"warning"}),if playing{"fg"}else{"warning"},if playing{"Playing"}else{"Paused"}));
         }
         self.bind_command("status-entities", "window.hierarchy", Target::None);
-        out.push_str(&format!("<button id='status-entities' class='chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='flex-shrink:1;min-width:0px;overflow:hidden;padding-right:12px' />",
+        out.push_str(&format!("<button id='status-entities' class='chip status-chip' label='Entities' action='Dispatch'>{}<text id='status-docs' text='{} entities{}' /></button><text id='status-saved' class='caption' text='{}' style='padding-left:8px' /><panel id='status-fill' class='fill' /><text id='status-hint' class='caption' text='{}' style='flex-shrink:1;min-width:0px;overflow:hidden;padding-right:12px' />",
             icons::icon("status-entities","box"),
             self.entity_count,
             if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())},
@@ -71,7 +71,7 @@ impl Shell {
             Some(_) => "your override",
         };
         let description = format!("Scene quality {quality}: {source}. Change it in the Lit menu");
-        out.push_str(&format!("<button id='status-quality' class='chip' label='Scene quality' description='{}' action='Dispatch'>{}<text id='status-quality-text' text='{}' /></button>",escape(&description),icons::icon("status-quality","sun-medium"),escape(&quality)));
+        out.push_str(&format!("<button id='status-quality' class='chip status-chip' label='Scene quality' description='{}' action='Dispatch'>{}<text id='status-quality-text' text='{}' /></button>",escape(&description),icons::icon("status-quality","sun-medium"),escape(&quality)));
         self.import_chip(editor, out);
         self.bind_command("status-jobs", "window.assets", Target::None);
         // A running build leads (its stage, or cooking counts), then other jobs.
@@ -94,13 +94,13 @@ impl Shell {
         match first {
             Some((name, progress)) => {
                 let more = if count > 1 { format!(" · {} more", count - 1) } else { String::new() };
-                out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='{count} running or queued' action='Dispatch'>{}<text id='status-jobs-text' text='{} {:0.0}%{more}' /><panel id='status-jobs-bar' class='progress'><panel id='status-jobs-fill' class='progress-fill' style='width:{:0.0}%' /></panel></button>",icons::icon_in("status-jobs","activity","accent"),escape(&name),progress*100.,progress*100.));
+                out.push_str(&format!("<button id='status-jobs' class='chip status-chip' label='Jobs' description='{count} running or queued' action='Dispatch'>{}<text id='status-jobs-text' text='{} {:0.0}%{more}' /><panel id='status-jobs-bar' class='progress'><panel id='status-jobs-fill' class='progress-fill' style='width:{:0.0}%' /></panel></button>",icons::icon_in("status-jobs","activity","accent"),escape(&name),progress*100.,progress*100.));
             }
-            None => out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='No imports, cooks or builds running' action='Dispatch'>{}<text id='status-jobs-text' text='Jobs idle' /></button>",icons::icon("status-jobs","circle-check"))),
+            None => out.push_str(&format!("<button id='status-jobs' class='chip status-chip' label='Jobs' description='No imports, cooks or builds running' action='Dispatch'>{}<text id='status-jobs-text' text='Jobs idle' /></button>",icons::icon("status-jobs","circle-check"))),
         }
         self.status_tools(editor, out);
         self.bind_command("status-frame", "window.profiler", Target::None);
-        out.push_str(&format!("<button id='status-frame' class='chip' label='Frame time' description='Open the Profiler' action='Dispatch'>{}<text id='status-timing' text='144 FPS · 6.94 ms' /></button></panel>",icons::icon("status-frame","gauge")));
+        out.push_str(&format!("<button id='status-frame' class='chip status-chip' label='Frame time' description='Open the Profiler' action='Dispatch'>{}<text id='status-timing' text='144 FPS · 6.94 ms' /></button></panel>",icons::icon("status-frame","gauge")));
     }
     /// Compact command search and project-only diagnostics live beside status.
     fn status_tools(&mut self, editor: &mut Editor, out: &mut String) {
@@ -122,7 +122,7 @@ impl Shell {
             self.bind_command("chip-problems", "window.problems", Target::None);
             let tint = if errors > 0 { "destructive" } else { "warning" };
             let warnings = problems.saturating_sub(errors);
-            out.push_str(&format!("<button id='chip-problems' class='chip' label='Problems' description='{errors} errors, {warnings} warnings · open Problems' action='Dispatch'>{}<text id='chip-problems-text' class='{tint}' text='{problems}' /></button>",icons::icon_in("chip-problems","triangle-alert",tint)));
+            out.push_str(&format!("<button id='chip-problems' class='chip status-chip' label='Problems' description='{errors} errors, {warnings} warnings · open Problems' action='Dispatch'>{}<text id='chip-problems-text' class='{tint}' text='{problems}' /></button>",icons::icon_in("chip-problems","triangle-alert",tint)));
         }
         self.bind_command("search-box", "edit.palette", Target::None);
         out.push_str(&format!("<button id='search-box' class='ghost icon-button' label='Search or run a command' description='Search commands, entities and assets · Ctrl+K' action='Dispatch'>{}</button>",icons::icon("search-box","search")));

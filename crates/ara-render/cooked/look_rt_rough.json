@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_rt_rough/rtRoughMain.dxil",
-      "dxil_hash": "4c4c172d3f401daad50418f203792ee0a9908b8f097967344336a9becaee1fde",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_rt_rough/rtRoughMain.dxil",
+      "dxil_hash": "818b220abe0abe7ed59b592b38d297dc27bcae98d5e760b03975736a9ec56f0d",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_rt_rough/rtRoughMain.metallib",
-        "metallib_hash": "e559ac34276e3d7410e21ff48c1c985b0de49018987671e551019a22159b15e8",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_rt_rough/rtRoughMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_rt_rough/rtRoughMain.metallib",
+        "metallib_hash": "e675a48742e962d9cc1e113e64446e59db33b028f000cd263015f9b2f47a6dba",
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_rt_rough/rtRoughMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "rtRoughMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_rt_rough/rtRoughMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_rt_rough/rtRoughMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "5238b58d8238d46e1ac765ed9b54835d14999c938375992df7648d6199a12b7e",
+      "spirv_hash": "94fd7b20927348b54f3724bd5b33d26ff2e91035fa764f42d4519ceb189c6cb9",
       "stage": "compute"
     }
   ],

@@ -34,6 +34,38 @@ pub(super) fn row(shell: &Shell, act: Act, index: usize, full: bool) -> Option<B
     let visible = node.rect.intersection(node.clip);
     (visible.w > 40. && visible.h >= if full { node.rect.h - 1. } else { 8. }).then_some(node.rect)
 }
+
+/// Wait for the intended insertion point to leave the real edge-scroll band.
+/// Keeping the captured pointer stationary outside the viewport continues scrolling;
+/// this read-only condition never reveals an item or edits the model.
+pub(super) fn neutral_after_point(shell: &Shell, act: Act, index: usize) -> Option<[f32; 2]> {
+    neutral_after_point_in(scroll_rect(shell, act)?, row(shell, act, index, true)?)
+}
+
+fn neutral_after_point_in(viewport: Box2, row: Box2) -> Option<[f32; 2]> {
+    if ![
+        viewport.x, viewport.y, viewport.w, viewport.h, row.x, row.y, row.w, row.h,
+    ]
+    .into_iter()
+    .all(f32::is_finite)
+        || viewport.w <= 0.
+        || viewport.h <= 0.
+        || row.w <= 0.
+        || row.h <= 0.
+        || row.intersection(viewport).h < row.h - 1.
+    {
+        return None;
+    }
+    let point = [row.x + row.w * 0.6, row.y + row.h - 1.];
+    // Two logical pixels on either side keep a rounding boundary from restarting
+    // edge scrolling between the injected move and its following release.
+    (viewport.contains(point[0], point[1])
+        && row.contains(point[0], point[1])
+        && [-2., 0., 2.].into_iter().all(|dy| {
+            ara_ui::drag_drop::auto_scroll(viewport, [point[0], point[1] + dy], 0.016) == [0.; 2]
+        }))
+    .then_some(point)
+}
 pub(super) fn pool(shell: &Shell, act: Act) -> usize {
     shell.ui.find(&scroll_id(act)).map_or(0, |index| {
         shell.ui.nodes[index]
@@ -121,7 +153,7 @@ impl CollectionCheck {
                     self.capture("stationary-edge-scroll", editor, shell, gpu)?;
                     self.edge_captured = true;
                 }
-                if row(shell, act, 100, true).is_none() {
+                if neutral_after_point(shell, act, 100).is_none() {
                     self.waiting = true;
                 } else {
                     require(
@@ -143,7 +175,9 @@ impl CollectionCheck {
                 let report = shell.content_drag_report();
                 require(
                     report["feedback"]["valid"] == true
+                        && report["source"]["item"] == json!(act.key(0))
                         && report["feedback"]["target"]["kind"] == "collection"
+                        && report["feedback"]["target"]["item"] == json!(act.key(100))
                         && report["feedback"]["target"]["after"] == true,
                     "Item100 must have an accepted after-row drop indicator",
                 )?;
@@ -226,7 +260,68 @@ impl CollectionCheck {
         self.trace.push(json!({"stage":stage,"prefix":prefix,"phase":self.phase,"revision":editor.host.store().revision(),"selection":editor.state.selection,
             "records":fixture::signature(&fixture::records(editor)?),"field":act.field(),"scrollViewport":scroll_rect(shell,act),"scrollOffset":offset(shell,act),
             "mountedRows":pool(shell,act),"maxMountedRows":self.max_rows,"heldFramesWithoutMotion":self.held_frames,"heldMotionEvents":self.hold_motion_events,
-            "pointer":shell.pointer,"drag":shell.content_drag_report(),"nativeEvents":self.native_events,"pointsToLogical":self.input_scale,"logicalExtent":shell.ui.size}));
+            "pointer":shell.pointer,"drag":shell.content_drag_report(),"item100Row":row(shell,act,100,false),"item100NeutralAfterPoint":neutral_after_point(shell,act,100),"nativeEvents":self.native_events,"pointsToLogical":self.input_scale,"logicalExtent":shell.ui.size}));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neutral_after_point_waits_for_real_scroll_band_and_keeps_exact_item_boundary() {
+        let viewport = Box2 {
+            x: 4.,
+            y: 226.,
+            w: 1432.,
+            h: 240.,
+        };
+        assert_eq!(
+            neutral_after_point_in(
+                viewport,
+                Box2 {
+                    y: 442.,
+                    h: 24.,
+                    ..viewport
+                }
+            ),
+            None
+        );
+        assert_eq!(
+            neutral_after_point_in(
+                viewport,
+                Box2 {
+                    y: 418.,
+                    h: 24.,
+                    ..viewport
+                }
+            ),
+            None,
+            "two-pixel safety margin excludes the neutral-band boundary"
+        );
+        let row = Box2 {
+            y: 410.,
+            h: 24.,
+            ..viewport
+        };
+        let point = neutral_after_point_in(viewport, row).expect("item inside neutral band");
+        assert_eq!(point, [863.2, 433.]);
+        assert_eq!(
+            ara_ui::drag_drop::row_placement(row, point, false),
+            Some(ara_ui::drag_drop::Placement::After)
+        );
+        assert_eq!(
+            ara_ui::drag_drop::auto_scroll(viewport, point, 0.1),
+            [0.; 2]
+        );
+        assert_eq!(
+            neutral_after_point_in(viewport, Box2 { y: f32::NAN, ..row }),
+            None
+        );
+        assert_eq!(
+            neutral_after_point_in(viewport, Box2 { y: 220., ..row }),
+            None
+        );
     }
 }

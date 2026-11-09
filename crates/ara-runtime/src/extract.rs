@@ -3,7 +3,9 @@
 use crate::{
     animation::{AnimatorSlot, Library},
     assets::asset_id,
-    components::{Camera, Environment, Light, LightKind, MeshRenderer, MeshShape, VisualEffect},
+    components::{
+        Camera, Environment, Light, LightKind, LightUnits, MeshRenderer, MeshShape, VisualEffect,
+    },
     math::{Pose, stable_id},
     model::{Model, ModelSelection},
     sync::{PreviousPose, WorldPose},
@@ -59,25 +61,110 @@ pub struct Draw {
     pub material: Option<Arc<crate::material::MaterialAsset>>,
     /// Skin-order palette range in [`RenderFrame::palettes`] for skinned primitives.
     pub skin: Option<Range<usize>>,
+    /// Whether it blocks light (`MeshRenderer::cast_shadows` and the model node's own).
+    pub casts_shadows: bool,
+    /// Whether decals project onto it (`MeshRenderer::receives_decals`).
+    pub receives_decals: bool,
+    /// Per-instance vertex colours ([`crate::paint::VertexPaint`]): one linear RGBA8
+    /// word (red low) per drawn vertex, replacing the geometry's colours for this
+    /// draw only. Shapes carry one per generated vertex.
+    pub paint: Option<Arc<[u32]>>,
 }
 
-/// A point or spot light in world space.
+/// How a directional light meets the sky atmosphere (its `Light` atmosphere fields).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LightView {
-    /// Point or spot.
-    pub kind: LightKind,
-    /// World position.
-    pub position: [f32; 3],
-    /// Unit emission direction (spot).
+pub struct AtmosphereLightView {
+    /// Linear multiplier on the light's disc luminance.
+    pub disc_scale: [f32; 3],
+    /// Tint the light per surface by the air above it (else one global transmittance).
+    pub per_pixel_transmittance: bool,
+}
+impl AtmosphereLightView {
+    fn of(light: &Light) -> Self {
+        Self {
+            disc_scale: light
+                .atmosphere_sun_disk_color_scale
+                .map(|c| if c.is_finite() { c.max(0.) } else { 0. }),
+            per_pixel_transmittance: light.per_pixel_atmosphere_transmittance,
+        }
+    }
+}
+
+/// A directional light in world space (`RenderFrame::other_atmosphere_light`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DirectionalView {
+    /// World direction toward the light.
     pub direction: [f32; 3],
+    /// Linear illuminance above the atmosphere, in lux.
+    pub lux: [f32; 3],
+    /// Angular radius of its disc in radians (half its `sourceAngle`).
+    pub radius: f32,
+    /// Its atmosphere controls; `None` when it is not an atmosphere light.
+    pub atmosphere: Option<AtmosphereLightView>,
+    /// Its volumetric scattering intensity (`Light::volumetric_scattering`).
+    pub volumetric: f32,
+}
+
+/// A local light in world space (points, spots, rects and discs).
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct LightView {
+    /// Point, spot, rect or disc.
+    pub kind: LightKind,
+    /// World position (the emitter's centre).
+    pub position: [f32; 3],
+    /// Unit emission axis, the entity's local -Z: a spot's cone, a rect's or disc's
+    /// normal, a profile's nadir.
+    pub direction: [f32; 3],
+    /// Unit width axis, the entity's local +X: a rect's width, a tube's axis, a
+    /// profile's zero azimuth.
+    pub tangent: [f32; 3],
     /// Linear RGB tint.
     pub color: [f32; 3],
-    /// Luminous flux in lumens.
+    /// Point-equivalent lumens: 4 pi times the luminous intensity in candela, along
+    /// `direction` for rects and discs, in every direction for points and spots (their
+    /// luminous flux), resolved from `Light::units` and the source size.
     pub lumens: f32,
     /// Influence radius in metres.
     pub range: f32,
     /// Inner/outer cone half-angles in degrees.
     pub cone: [f32; 2],
+    /// Volumetric fog scattering intensity (`Light::volumetric_scattering`; 1 physical).
+    pub volumetric: f32,
+    /// Emitter radius in metres: sphere, tube or disc (zero: an ideal point).
+    pub radius: f32,
+    /// Tube length in metres along `tangent` (zero: a sphere).
+    pub length: f32,
+    /// Rect width and height in metres.
+    pub size: [f32; 2],
+    /// Rect barn doors: angle from the normal in degrees and length in metres.
+    pub barn_doors: [f32; 2],
+    /// Photometric profile shaping the intensity by direction (peak 1), if any.
+    pub profile: Option<std::sync::Arc<crate::light_profile::LightProfile>>,
+}
+
+impl LightView {
+    /// Point-equivalent lumens (`lumens`) of `light`'s `intensity` in its units and
+    /// source size.
+    pub fn point_lumens(light: &Light) -> f32 {
+        use std::f32::consts::PI;
+        let i = light.intensity.max(0.);
+        let (r, length) = (light.source_radius.max(0.), light.source_length.max(0.));
+        let area = match light.kind {
+            LightKind::Rect => light.source_width.max(0.) * light.source_height.max(0.),
+            LightKind::Disc => PI * r * r,
+            _ if length > 0. => 2. * r.max(0.001) * length + PI * r * r,
+            _ => PI * r * r,
+        };
+        let surface = matches!(light.kind, LightKind::Rect | LightKind::Disc);
+        4. * PI
+            * match light.units {
+                // A Lambertian surface's on-axis intensity is its flux over pi.
+                LightUnits::Lumens if surface => i / PI,
+                LightUnits::Lumens => i / (4. * PI),
+                LightUnits::Candela => i,
+                LightUnits::Nits => i * area,
+            }
+    }
 }
 
 /// An authored reflection probe with its entity's world pose (interpolated).
@@ -194,6 +281,22 @@ pub struct RenderFrame {
     pub look: ara_components::render::SceneLook,
     /// Directional light: direction toward the light and linear RGB lux.
     pub sun: Option<([f32; 3], [f32; 3])>,
+    /// The directional light's volumetric fog scattering intensity
+    /// (`Light::volumetric_scattering`); `None` is physical (1).
+    pub sun_volumetric: Option<f32>,
+    /// The directional light's angular radius in radians (half its `sourceAngle`).
+    pub sun_radius: Option<f32>,
+    /// How the sun meets the sky atmosphere; `None` when it is not an atmosphere light
+    /// (`Light::atmosphere_sun_light` off).
+    pub sun_atmosphere: Option<AtmosphereLightView>,
+    /// Which atmosphere light the sun is (`Light::atmosphere_sun_light_index`): the sun
+    /// slot is the one shadowed directional light, and holds the second atmosphere light
+    /// (a moon) when it is the only directional light, or while the first is below the
+    /// horizon and it is above.
+    pub sun_atmosphere_index: u32,
+    /// The other atmosphere light (index `1 - sun_atmosphere_index`): it lights the
+    /// sky, the aerial perspective and the sky light, not surfaces directly.
+    pub other_atmosphere_light: Option<DirectionalView>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
     /// Authored reflection probes in stable order (renderers place their own
@@ -201,6 +304,8 @@ pub struct RenderFrame {
     pub reflection_probes: Vec<ProbeView>,
     /// Draws in stable order.
     pub draws: Vec<Draw>,
+    /// Deferred decals in stable order (renderers sort by `Decal::sort_order`).
+    pub decals: Vec<crate::decal::DecalView>,
     /// Flat skinning palettes (model space, skin joint order).
     pub palettes: Vec<Mat4>,
     /// GPU particle effects in stable order.
@@ -209,6 +314,7 @@ pub struct RenderFrame {
     pub terrain: Option<TerrainView>,
     scratch: Vec<Mat4>,
     palette: Vec<Mat4>,
+    paints: crate::paint::PaintCache,
 }
 
 impl RenderFrame {
@@ -221,11 +327,18 @@ impl RenderFrame {
         self.look.sky = None;
         self.look.fog = None;
         self.look.volumes.clear();
+        self.look.fog_volumes.clear();
         self.look.luts.clear();
         self.sun = None;
+        self.sun_volumetric = None;
+        self.sun_radius = None;
+        self.sun_atmosphere = None;
+        self.sun_atmosphere_index = 0;
+        self.other_atmosphere_light = None;
         self.lights.clear();
         self.reflection_probes.clear();
         self.draws.clear();
+        self.decals.clear();
         self.palettes.clear();
         self.effects.clear();
         self.terrain = world
@@ -262,6 +375,19 @@ impl RenderFrame {
             if self.look.fog.is_none() {
                 self.look.fog = entity.get::<ara_components::render::HeightFog>().copied();
             }
+            if let Some(volume) = entity
+                .get::<ara_components::render::LocalFogVolume>()
+                .filter(|v| v.enabled)
+            {
+                self.look
+                    .fog_volumes
+                    .push(ara_components::render::FogVolumeView {
+                        volume: *volume,
+                        translation: pose.translation.to_array(),
+                        rotation: pose.rotation.to_array(),
+                        scale: pose.scale.to_array(),
+                    });
+            }
             if let Some(volume) = entity.get::<ara_components::post::PostProcessVolume>() {
                 // The lookup tables it references, shared from the library.
                 for lut in volume.overrides.iter().filter_map(|o| o.lut.as_ref()) {
@@ -294,7 +420,12 @@ impl RenderFrame {
                 ));
             }
             if let Some(light) = entity.get::<Light>() {
-                self.light(light, &pose);
+                let profile = light
+                    .profile
+                    .as_ref()
+                    .and_then(|p| crate::assets::asset_id(p).ok())
+                    .and_then(|id| library?.light_profiles.get(id).cloned());
+                self.light(light, &pose, profile);
             }
             if let Some(probe) = entity.get::<ara_components::render::ReflectionProbe>() {
                 self.reflection_probes.push(ProbeView {
@@ -328,6 +459,28 @@ impl RenderFrame {
                     position: pose.translation.to_array(),
                     scale: effect.scale,
                     intensity: effect.intensity,
+                });
+            }
+            if let Some(decal) = entity.get::<crate::decal::Decal>() {
+                let name = entity
+                    .get::<SceneMetadata>()
+                    .map(|m| m.name.as_str())
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or("decal");
+                let size = Vec3::from_array(decal.size).max(Vec3::splat(1e-3));
+                self.decals.push(crate::decal::DecalView {
+                    entity: stable_id(address),
+                    address: address.to_owned(),
+                    label: format!("{name} ({address})"),
+                    world: pose.matrix() * Mat4::from_scale(size),
+                    decal: decal.clone(),
+                    material: decal
+                        .material
+                        .as_ref()
+                        .and_then(|m| asset_id(m).ok())
+                        .and_then(|id| library?.materials.get(id))
+                        .filter(|m| m.decal.is_some())
+                        .cloned(),
                 });
             }
             if let Some(renderer) = entity.get::<MeshRenderer>() {
@@ -366,10 +519,26 @@ impl RenderFrame {
                     emissive_factor: None,
                     material,
                     skin: None,
+                    casts_shadows: renderer.cast_shadows,
+                    paint: None,
+                    receives_decals: renderer.receives_decals,
                 };
                 if base.material.is_some() {
                     base.emissive = emission_multiplier(renderer, strength);
                     base.emissive_factor = renderer.emissive_factor;
+                }
+                let painted = entity.get::<crate::paint::VertexPaint>();
+                if renderer.model.is_none()
+                    && let Some(paint) = painted.and_then(|p| p.get(0))
+                {
+                    // Procedural shapes: source vertex i is generated vertex i.
+                    base.paint = self.paints.get(
+                        base.entity,
+                        paint,
+                        ara_asset::Digest([0; 32]),
+                        usize::MAX,
+                        |c| Some(c.iter().map(|&c| u32::from_le_bytes(c)).collect()),
+                    );
                 }
                 let model = renderer
                     .model
@@ -425,6 +594,13 @@ impl RenderFrame {
                         for i in selection.primitives {
                             let primitive = &model.primitives[i];
                             let material = material_override(renderer, i - selection.base, library);
+                            let slot = (i - selection.base) as u32;
+                            let id = base.entity.wrapping_add(i as u64);
+                            let paint = painted.and_then(|p| p.get(slot)).and_then(|paint| {
+                                self.paints.get(id, paint, model.digest, i, |c| {
+                                    crate::paint::cooked(primitive, c)
+                                })
+                            });
                             self.draws.push(Draw {
                                 entity: base.entity.wrapping_add(i as u64),
                                 geometry: Geometry::Model {
@@ -432,12 +608,14 @@ impl RenderFrame {
                                     primitive: i,
                                 },
                                 skin: primitive.skin.and(palette.clone()),
+                                casts_shadows: base.casts_shadows && primitive.casts_shadows,
                                 emissive_factor: emission_override(
                                     renderer,
                                     &model,
                                     primitive.material,
                                 ),
                                 material,
+                                paint,
                                 ..base.clone()
                             });
                         }
@@ -446,13 +624,67 @@ impl RenderFrame {
             }
         }
         self.camera = camera.map(|(_, c)| c);
+        self.assign_sun_slot();
+        self.paints.retain_seen();
     }
 
-    fn light(&mut self, light: &Light, pose: &Pose) {
+    /// Puts the second atmosphere light in the sun slot when no other directional
+    /// light exists, or swaps it with the sun while the sun is below the horizon and it
+    /// is above (a night lit by the moon, with the moon's shadows).
+    fn assign_sun_slot(&mut self) {
+        let Some(second) = self.other_atmosphere_light.take() else {
+            return;
+        };
+        let sun = self.sun.map(|(direction, lux)| DirectionalView {
+            direction,
+            lux,
+            radius: self.sun_radius.unwrap_or(0.),
+            atmosphere: self.sun_atmosphere,
+            volumetric: self.sun_volumetric.unwrap_or(1.),
+        });
+        let swap = sun.is_none_or(|s| {
+            s.atmosphere.is_some() && s.direction[1] < 0. && second.direction[1] > 0.
+        });
+        if !swap {
+            self.other_atmosphere_light = Some(second);
+            return;
+        }
+        self.sun = Some((second.direction, second.lux));
+        self.sun_radius = Some(second.radius);
+        self.sun_atmosphere = second.atmosphere;
+        self.sun_volumetric = Some(second.volumetric);
+        self.sun_atmosphere_index = 1;
+        self.other_atmosphere_light = sun;
+    }
+
+    fn light(
+        &mut self,
+        light: &Light,
+        pose: &Pose,
+        profile: Option<std::sync::Arc<crate::light_profile::LightProfile>>,
+    ) {
         let [r, g, b, _] = light.color.0;
         match light.kind {
+            // The second atmosphere light (`assign_sun_slot` may make it the sun).
+            LightKind::Directional
+                if light.atmosphere_sun_light && light.atmosphere_sun_light_index == 1 =>
+            {
+                if self.other_atmosphere_light.is_none() {
+                    self.other_atmosphere_light = Some(DirectionalView {
+                        direction: (pose.rotation * Vec3::Z).normalize().to_array(),
+                        lux: [r, g, b].map(|c| c * light.intensity),
+                        radius: light.source_angle.max(0.).to_radians() * 0.5,
+                        atmosphere: Some(AtmosphereLightView::of(light)),
+                        volumetric: light.volumetric_scattering,
+                    });
+                }
+            }
             LightKind::Directional => {
                 if self.sun.is_none() {
+                    self.sun_atmosphere = light
+                        .atmosphere_sun_light
+                        .then(|| AtmosphereLightView::of(light));
+                    self.sun_radius = Some(light.source_angle.max(0.).to_radians() * 0.5);
                     // Shines along local -Z; the renderer wants the direction toward it.
                     let toward = (pose.rotation * Vec3::Z).normalize();
                     self.sun = Some((
@@ -463,16 +695,30 @@ impl RenderFrame {
                             b * light.intensity,
                         ],
                     ));
+                    self.sun_volumetric = Some(light.volumetric_scattering);
                 }
             }
             kind => self.lights.push(LightView {
                 kind,
                 position: pose.translation.to_array(),
                 direction: (pose.rotation * Vec3::NEG_Z).normalize().to_array(),
+                tangent: (pose.rotation * Vec3::X).normalize().to_array(),
                 color: [r, g, b],
-                lumens: light.intensity,
+                lumens: match &profile {
+                    // The profile's measured peak, scaled by `intensity`.
+                    Some(p) if light.profile_intensity => {
+                        4. * std::f32::consts::PI * p.peak * light.intensity.max(0.)
+                    }
+                    _ => LightView::point_lumens(light),
+                },
                 range: light.range,
                 cone: [light.inner_angle, light.outer_angle],
+                volumetric: light.volumetric_scattering,
+                radius: light.source_radius.max(0.),
+                length: light.source_length.max(0.),
+                size: [light.source_width, light.source_height],
+                barn_doors: [light.barn_door_angle, light.barn_door_length],
+                profile,
             }),
         }
     }

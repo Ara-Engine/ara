@@ -1,0 +1,88 @@
+Native C# recovery proof draft for Root
+Base for wiring: 26ac630d1 (J7/profiler-linked app, existing shared target0 flag).
+
+Artifacts
+- new-files.patch: nine new app/recovery_verify Rust files. This patch adds no
+  tracked file mutations beyond those new modules when Root applies it.
+- app-hooks.patch: only wants_frame dirty OR plus post-render end/exit hook.
+  Existing main_ui_submitted_this_frame declaration and assignment are context,
+  not changes. Do not add a duplicate bool or set it for floating-window draws.
+- wiring-spec.txt: exact serial Root-owned app/setup.rs, main.rs and app/mod.rs
+  flag/module/fixture/start/inject/both-clipboard/validation insertion anchors.
+
+Run after integration/gates, through the GPU queue and outside gate-test phases:
+  <matching ara-editor> --verify-script-recovery --dpi 1 --size 1440x900 --output <fresh-D-output>
+The supplied project is ignored by this standalone route. prepare() creates a
+new recovery-project-PID with layout v4, content/ via AUTHORING_ROOT, and a marker.
+Options::offscreen/isolate_profile must include the new flag before any thread.
+Do not combine other verification routes or --play/sample/scene/select/panel.
+Do not use --frames to cut the cleanup short. Driver itself bounds phases at120s
+and the whole proof at300s. The fixture directory is refused if it already exists.
+
+Actual proof
+1. Typed source.replace creates an authored C# source. Normal script.rename
+   compiles and publishes RecoveryProbe; typed entity.create creates its ECS data.
+   This follows Gaps' one implicit gameplay-module RecoveryProbe fixture, using a
+   real failing query and a real nested throwing command, not diag.report input.
+2. Two real paused, window:false Play worlds each emit original ARA0910/ARA0912.
+   A is the current Editor Play world. B's distinct actual trusted incarnation is
+   retained as the nonmatching-scope control. A's runtime fault flag is patched to0.
+3. SDL Console search/row expansion/native scroll proves the original managed
+   outer/inner exception order and every bounded frame is mounted. A real authored
+   PDB frame source link is clicked. Its retained literal IDE intent must contain
+   the exact canonical file/line/column (column1 only if absent), suppression=true,
+   attempted=false, outcome=suppressed for both primary and optional fallback.
+4. SDL Reload Scripts button dispatches the actual tools.cs.reload binding.
+   Next-frame SDL typing is accepted; the report records actual UI pending and
+   whether no authoritative completion had yet been observed. No held poll,
+   artificial sleep or fake backend-busy seam is added. Fast completion is reported
+   as native pending not established; controlled UI/channel tests remain coverage.
+5. Only the normal-ingress original ARA0935 reloaded marker authorizes retirement.
+   Its actual module batch and exact world/player/source/binding match the fault.
+   Actual protectedRuntimeFaultSeqs and mounted Problems rows must lose only the
+   older matching contributions; B's rows remain. Incomplete cursor pages, gaps,
+   invalid/omitted recovery metadata fail rather than permit optimistic retirement.
+6. After multiple250ms UI polling cadences, the same original Store first/seq/count
+   identities remain unchanged. Native Console search renders those original rows.
+   Authored RecoveryProbe record, paused ECS values and tick remain unchanged.
+7. Executing the real C# command again after activation increments the original
+   identity's sequence/count beyond the marker and reactivates actual Problems.
+   SDL Ctrl+K/search/pointer selects the real Reload Scripts command again and
+   repeats the authoritative scoped-retirement checks.
+8. A third real command fault is followed by Reload+Stop releases in one native
+   SDL event batch. The production queue order invalidates A before Host tick
+   processes recovery. The actual rendered Refused result and normally published
+   refusal diagnostic are required; latest runtime fault remains active, original
+   Store identities remain unchanged, and the new refusal's count must stay1.
+   This is no private status injection and no restart fallback.
+9. B retires through ordinary play.stop; typed entity.delete and asset.delete
+   remove the owned fixture actor/source. World retirement and physical source
+   absence are observed before the final completed case.
+
+Eight named cases combine these checks. Every capture waits for a successful
+target0 UI submission from that same event-loop iteration. wants_frame() requests
+a draw only for a requested capture or completed case, avoiding idle deadlock or
+per-frame forcing during compiler jobs. Pending frame timings are explicitly
+informal/shared-GPU and do not gate. Bus inventory64 and click trace128 are bounded.
+
+Authority boundaries
+- No Status.diagnostics logging anywhere in the driver. No diagnostic reinjection.
+- No inferred module from text. data.module is the actual loaded ModuleSlot name.
+- No parsing opaque System subject encodings; broker-stamped data.play is the API.
+- Unchanged and wrong/missing-module negative cases are NOT fabricated natively;
+  Root's controlled projection suite covers them. No global Problems-clean claim.
+- No external IDE launch, desktop player window, raw authored filesystem mutation,
+  registry shortcut for either measured Reload gesture, or synthetic completion.
+- Normal source/compiler authoring jobs and Play fixture commands are explicitly
+  setup/control ingress. They are not presented as measured native authoring.
+
+Validation performed by this writer
+Standalone rustfmt (edition2024, skip_children=true) parsed/formatted the nine D
+files. Static review checked the actual UI IDs/bindings, projection/report keys,
+private Play recovery queue, Gaps fixture paths, job wire and source-intent fields.
+No cargo, build, tests, GPU run, repository edit, commit or extra agent was used.
+This is a reviewable uncompiled proof draft, not a green/merge-ready acceptance.
+Root owns typecheck/clippy/tests, native execution and visual inspection.
+
+No new Shell read-only accessor, backend API, registry/MCP/public C# API, diagnostic
+code, reflection type, GPU submission/sync change or dependency is required.

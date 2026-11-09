@@ -1,0 +1,81 @@
+Root integration anchors; baseline 26ac630d1 (J7/profiler-linked app).
+This is a standalone --verify-script-recovery route. Its prepare() refuses other
+verification, headless, auto-Play, sample and explicit scene/select/panel modes.
+Keep the existing main_ui_submitted_this_frame declaration/set exactly as Root
+implemented them; this draft does not add a second flag or alter submission.
+
+1. app/setup.rs
+   After verify_profiler add documented pub verify_script_recovery: bool.
+   Add || self.verify_script_recovery to Options::offscreen().
+   Add verify_script_recovery: false to Default.
+
+2. main.rs parser/help
+   "--verify-script-recovery" => options.verify_script_recovery = true,
+   Help: standalone fresh-project proof of C# recovery, managed stacks/source
+   clicks, scoped Problems retirement, retained Console identities and refusal.
+
+3. app/mod.rs modules and pre-open/fixture initialization
+   mod recovery_verify;
+   before_open_project's early return includes options.verify_script_recovery.
+   At the start of run(), before the profiler prepare block:
+
+   if options.verify_script_recovery {
+       recovery_verify::prepare(&mut options)?;
+   }
+
+   The native.verification_extent and verification extent-print conditions both
+   include options.verify_script_recovery, matching the profiler route.
+
+4. Initialize once beside profiler_check, before content_drags:
+
+   let mut recovery_check = if options.verify_script_recovery {
+       Some(recovery_verify::RecoveryCheck::new(
+           &mut editor, &mut shell, &options.output,
+       )?)
+   } else {
+       None
+   };
+
+5. Event injection, after the profiler inject block, before content_drags inject:
+
+   if let Some(check) = &mut recovery_check {
+       let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+       check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+   }
+
+6. BOTH clipboard chains: event_clipboard and shell.take_clipboard destination.
+   Insert this arm after the script_check arm:
+
+   } else if let Some(check) = recovery_check.as_mut().filter(|check| !check.finished()) {
+       check.clipboard()
+
+7. Dirty request after existing profiler wants_frame near GPU submission counters:
+
+   dirty |= recovery_check
+       .as_ref()
+       .is_some_and(recovery_verify::RecoveryCheck::wants_frame);
+
+8. After draw, before profiler_check.end (NOT the profiler inject block):
+
+   if let Some(check) = &mut recovery_check {
+       check.end(
+           &mut editor, &mut shell, &mut gpu,
+           main_ui_submitted_this_frame,
+           frame_start.elapsed().as_secs_f64() * 1000.,
+       )?;
+       if check.finished() {
+           game.close(&mut editor, &mut gpu)?;
+           break;
+       }
+   }
+
+9. Post-loop validation, before the profiler validation block:
+
+   if let Some(check) = &recovery_check {
+       check.write()?;
+       check.validate()?;
+   }
+
+No full app/mod.rs copy is supplied. No Shell registry/menu/command files change.
+No callbacks re-log returned recovery diagnostics. The only measured recovery
+actions are real pointer Reload Scripts and SDL command-palette activation.

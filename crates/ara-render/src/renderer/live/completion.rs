@@ -27,6 +27,7 @@ impl Live {
             labels: Vec::new(),
             epoch: None,
             written: false,
+            tag: 0,
         };
         self.spare = Some(output(images[0], images[1]));
         self.reserved = Some(output(images[2], images[3]));

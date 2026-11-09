@@ -10,8 +10,13 @@ pub mod look;
 pub mod renderer;
 pub mod scene;
 mod tsr;
+pub use look::transport::solve::{
+    PatchTransport, TransportMedium, TransportOptions, TransportReport,
+};
+pub use look::vsm::sun::{Counters as SunPageStage, SunPageCounters, SunPages};
+pub use look::reflect::{ReflectionCounters, SoftwareReflections};
 pub use renderer::{
-    HdrExposure, NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest,
-    temporal_phases,
+    HdrExposure, NativeContent, NativeSeed, Outlines, ReferenceTrace, ReflectionView, RenderDebug,
+    Renderer, ViewId, ViewOutput, ViewRequest, temporal_phases,
 };
 pub use tsr::Upscaler;

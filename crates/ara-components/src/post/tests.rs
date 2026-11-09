@@ -144,3 +144,17 @@ fn only_the_entry_module_applies_and_preset_values_compose() {
     assert!((post.ao_radius.over(2.) - 1.75).abs() < 1e-6);
     assert_eq!(PresetBlend::default().over(2.), 2.);
 }
+
+#[test]
+fn a_scene_without_volumes_meters_like_the_defaults_but_authored_volumes_stay() {
+    let mut bare = SceneLook::default();
+    bare.meter_without_volumes();
+    let post = bare.post_at([3., 1., 2.]).expect("default volume");
+    assert_eq!(post.exposure, crate::render::ExposureMode::Auto);
+    let mut authored = SceneLook {
+        volumes: vec![global(0., 1., vec![bloom(0.2)])],
+        ..Default::default()
+    };
+    authored.meter_without_volumes();
+    assert_eq!(authored.volumes.len(), 1);
+}

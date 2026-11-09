@@ -33,6 +33,11 @@ impl ViewState {
         self.render == render && self.size == display
     }
 
+    /// The (render, display) extent these targets were allocated at.
+    pub(super) fn extent(&self) -> ([u32; 2], [u32; 2]) {
+        (self.render, self.size)
+    }
+
     pub(super) fn from_prepared(
         renderer: &mut Renderer,
         render: [u32; 2],
@@ -185,6 +190,9 @@ impl ViewState {
         for image in self.look.images.into_iter().flatten() {
             gpu.retire(Resource::Image(image))?;
         }
+        if let Some(edges) = self.look.fog_edges {
+            gpu.retire(Resource::Buffer(edges.buffer))?;
+        }
         if let Some(far) = self.look.far {
             far.destroy(gpu)?;
         }
@@ -200,6 +208,7 @@ impl ViewState {
         if let Some(vsm) = self.look.vsm {
             vsm.destroy(gpu)?;
         }
+        self.look.moments.destroy(gpu)?;
         self.tsr.destroy(gpu)?;
         if let Some(refract) = self.look.refract {
             refract.destroy(gpu)?;
@@ -248,6 +257,10 @@ fn fork_look(
         lut: source.lut,
         lut_index: source.lut_index,
         lut_size: source.lut_size,
+        ltc: source.ltc,
+        sun_radius: source.sun_radius,
+        light_tables: source.light_tables,
+        light_table_words: source.light_table_words.clone(),
         images: source.images.map(|_| None),
         sampled: source.sampled.map(|_| 0),
         storage: source.storage.map(|_| 0),
@@ -263,6 +276,7 @@ fn fork_look(
         frame_motion: false,
         frame_wire: false,
         frame_overdraw: false,
+        frame_outline: false,
         unseen: false,
         deferred_history: None,
         settle: 0,
@@ -273,9 +287,18 @@ fn fork_look(
         local: None,
         horizon: None,
         vsm: None,
+        moments: crate::look::moments::ShadowMoments::default(),
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
         refract: None,
         translucent: None,
+        fog_volumes: source.fog_volumes.clone(),
+        volumetric: None,
+        volumetric_slot: 0,
+        volumetric_frames: 0,
+        fog_edges: None,
+        frame_volumetric: false,
+        frame_screen: false,
+        frame_hiz: false,
     })
 }

@@ -238,6 +238,11 @@ fn open_form(shell: &mut Shell, editor: &mut Editor, command: &str, clip: &mut C
         .unwrap();
     shell.rebuild(editor).unwrap();
     shell.frame().unwrap();
+    assert_eq!(
+        shell.palette_items(editor, &format!(">{command}"))[0].title,
+        command,
+        "An exact engine command ID must precede fuzzy UI command matches"
+    );
     let id = result_id(shell, command);
     shell.click(&id, clip).unwrap();
     shell.dispatch(editor).unwrap();

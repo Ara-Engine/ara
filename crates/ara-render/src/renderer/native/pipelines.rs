@@ -1,4 +1,4 @@
-//! Fifteen native PSOs are retained by the renderer across content generations.
+//! Twenty-one native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -44,6 +44,24 @@ pub(in crate::renderer) struct NativePipelines {
     /// The overdraw view's fragment count (`ViewMode::Overdraw`): the camera draws
     /// again without the depth test, adding one per kept fragment.
     pub overdraw: Pipeline,
+    /// The selection outline mask's whole silhouettes: no depth test (`outline`).
+    pub outline_hidden: Pipeline,
+    /// The selection outline mask's parts in view: against the frame's depth.
+    pub outline_visible: Pipeline,
+    /// The G-buffer fill of draws that read vertex colours (`Batch::paint`):
+    /// vertex-colour tint and vertex-paint layers. Only those draws pay for the
+    /// colour interpolant and the layer blend; terrain never draws through it.
+    pub gbuffer_paint: Pipeline,
+    /// Shadow casters whose alpha test reads vertex colours (`Batch::paint`):
+    /// masked materials with a tint or paint layers.
+    pub shadow_paint: Pipeline,
+    /// The vertex-colour debug views (`ViewMode::vertex_color`): every camera draw
+    /// writes its vertex colour (or one channel) as G-buffer albedo.
+    pub vertex_color: Pipeline,
+    /// Deferred decals (`native/decals.rs`, `shaders/decals.slang`): a 16x16-tile compute
+    /// pass blending every visible decal into the G-buffer between the opaque pass
+    /// and lighting.
+    pub decals: Pipeline,
 }
 
 impl NativePipelines {
@@ -59,7 +77,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 15] = [
+const RECIPES: [&str; 21] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -75,6 +93,12 @@ const RECIPES: [&str; 15] = [
     "native_forward_lit_front",
     "native_forward_high_front",
     "native_overdraw",
+    "native_outline_hidden",
+    "native_outline_visible",
+    "native_gbuffer_paint",
+    "native_shadow_paint",
+    "native_vertex_color",
+    "native_decals",
 ];
 
 #[derive(Default)]
@@ -129,6 +153,12 @@ impl Renderer {
                     forward_lit_front,
                     forward_high_front,
                     overdraw,
+                    outline_hidden,
+                    outline_visible,
+                    gbuffer_paint,
+                    shadow_paint,
+                    vertex_color,
+                    decals,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -148,6 +178,12 @@ impl Renderer {
                     forward_lit_front,
                     forward_high_front,
                     overdraw,
+                    outline_hidden,
+                    outline_visible,
+                    gbuffer_paint,
+                    shadow_paint,
+                    vertex_color,
+                    decals,
                 }));
             }
         }

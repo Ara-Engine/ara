@@ -301,3 +301,24 @@ fn docking_detached_title_and_tabs_redock_between_windows_then_main() {
     drop(editor);
     assert_eq!(Editor::open(&project.0).unwrap().state.layout, expected);
 }
+
+#[test]
+fn double_clicking_a_maximized_panel_title_restores_it() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    shell
+        .execute(
+            &mut editor,
+            "window.maximize",
+            &commands::Target::Panel("scene".into()),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    assert_eq!(editor.state.maximized.as_deref(), Some("scene"));
+    for _ in 0..2 {
+        begin(&mut shell, "scene");
+        shell.finish_tab_drag(&mut editor, None).unwrap();
+    }
+    assert_eq!(editor.state.maximized, None);
+}

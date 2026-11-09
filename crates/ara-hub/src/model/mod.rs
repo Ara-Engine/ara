@@ -108,25 +108,8 @@ pub enum Layout {
     List,
 }
 
-/// Agent client in the onboarding panel.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum AgentClient {
-    /// Claude Code.
-    #[default]
-    Claude,
-    /// OpenAI Codex CLI.
-    Codex,
-}
-impl AgentClient {
-    /// The `--client` value.
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Claude => "claude",
-            Self::Codex => "codex",
-        }
-    }
-}
+/// Agent clients and their setup state, shared with the editor and the `ara` CLI.
+pub use ara_agents::{Client as AgentClient, Setup as AgentSetup};
 
 /// UI preferences persisted beside the registry (`hub-ui.json`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -138,8 +121,6 @@ pub struct Prefs {
     pub sort: Sort,
     /// Cards or rows.
     pub layout: Layout,
-    /// Agent client last shown.
-    pub agent: AgentClient,
     /// Signed Hub release identity explicitly skipped by the user.
     pub skipped_update: Option<String>,
     /// Whether Hub update downloads require a separate action; restarting always does.
@@ -258,8 +239,12 @@ pub enum Effect {
     Reveal(PathBuf),
     /// Open a file or folder with its default application.
     Open(PathBuf),
+    /// Open a web page in the default browser.
+    OpenUrl(String),
     /// Put text on the clipboard.
     Copy(String),
+    /// Register Ara's MCP server with an installed agent client.
+    SetupAgent(AgentClient),
 }
 
 /// Everything a person can do in the Hub.
@@ -380,12 +365,18 @@ pub enum Intent {
     RemoveEngine(usize),
     /// Remove the exact engine build confirmed by the user, even if the list refreshes.
     RemoveEngineBuild(Engine),
-    /// Agents: pick the client shown.
-    Agent(AgentClient),
+    /// Register Ara with one installed agent client.
+    SetupAgent(AgentClient),
+    /// Agents: show this client's manual setup steps, or hide them (None).
+    ManualAgent(Option<AgentClient>),
+    /// Agents: show or hide the connection panel once an agent is connected.
+    ShowAgentSetup(bool),
     /// Copy text (commands, configs).
     Copy(String),
-    /// Open a file, folder or URL with the shell.
+    /// Open a file or folder with the shell.
     OpenPath(PathBuf),
+    /// Open a web page (Learn's docs on GitHub).
+    OpenUrl(String),
     /// Dismiss a notice.
     Dismiss(u64),
     /// Hide this inline notification; new offline incidents/update versions reappear.
@@ -519,6 +510,12 @@ pub struct Hub {
     pub engine_errors: BTreeMap<String, String>,
     /// `ara hub install-mcp` output per client (filled by the native shell).
     pub install: BTreeMap<AgentClient, String>,
+    /// Detected agent clients and their Ara registration (filled by the native shell).
+    pub agent_setup: BTreeMap<AgentClient, AgentSetup>,
+    /// Client whose manual setup steps are expanded.
+    pub agent_manual: Option<AgentClient>,
+    /// Connection panel expanded although an agent is already connected.
+    pub agent_setup_open: bool,
     /// Verified absolute CLI path used by the displayed MCP setup commands.
     pub cli_executable: Option<PathBuf>,
     /// The installed build this Hub ships with; registered on first run.
@@ -567,6 +564,9 @@ impl Hub {
             notices: Vec::new(),
             engine_errors: BTreeMap::new(),
             install: BTreeMap::new(),
+            agent_setup: BTreeMap::new(),
+            agent_manual: None,
+            agent_setup_open: false,
             cli_executable: None,
             local_engine,
             focus: None,
@@ -987,12 +987,27 @@ impl Hub {
                     self.send(Call::EngineRemove(engine));
                 }
             }
-            Intent::Agent(client) => self.prefs.agent = client,
+            Intent::SetupAgent(client) => {
+                if let Some(state) = self.agent_setup.get_mut(&client)
+                    && matches!(state, AgentSetup::Available | AgentSetup::Failed(_))
+                {
+                    *state = AgentSetup::Working;
+                    self.effects.push(Effect::SetupAgent(client));
+                }
+            }
+            Intent::ManualAgent(client) => self.agent_manual = client,
+            Intent::ShowAgentSetup(open) => {
+                self.agent_setup_open = open;
+                if !open {
+                    self.agent_manual = None;
+                }
+            }
             Intent::Copy(text) => {
                 self.effects.push(Effect::Copy(text.clone()));
                 self.copied = Some(text);
             }
             Intent::OpenPath(path) => self.effects.push(Effect::Open(path)),
+            Intent::OpenUrl(url) => self.effects.push(Effect::OpenUrl(url)),
             Intent::Dismiss(id) => {
                 self.notices.retain(|n| n.id != id);
                 if self.dialog == Some(Dialog::Error(id)) {

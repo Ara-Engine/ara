@@ -10,7 +10,7 @@ impl Shell {
             ara_ui::source::stable_id("asset-folder-root"),
             Binding::Protocol("editor.workspace", json!({"folder":""})),
         );
-        out.push_str(&format!("<button id='asset-folder-root' class='folder-row{}' label='Project' action='Dispatch'>{}<text id='asset-folder-root-label' text='Project' /></button>", if folder.is_empty(){" selected"}else{""},icons::icon("asset-folder-root","package-open")));
+        out.push_str(&format!("<button id='asset-folder-root' class='folder-row{}' label='Project' action='Dispatch'>{}<text id='asset-folder-root-label' text='Project' /></button>", if folder.is_empty(){" row-selected"}else{""},icons::icon("asset-folder-root","package-open")));
         let folders = folders(&self.browser.items);
         for path in &folders {
             if !visible(path, &editor.state.asset_expanded_folders) {
@@ -30,7 +30,7 @@ impl Shell {
                 ara_ui::source::stable_id(&format!("{id}-arrow")),
                 Binding::AssetFolder(path.clone(), true),
             );
-            out.push_str(&format!("<panel id='{id}-row' class='row' style='flex-shrink:0;gap:0px;padding-left:{}px'><button id='{id}-arrow' class='ghost icon-button' style='width:18px;min-width:18px;padding:2px' label='{} {}' action='Dispatch'>{}</button><button id='{id}' class='folder-row{}' style='flex-grow:1;min-width:0px;padding-left:2px' label='{}' description='Double-click to expand or collapse; arrow keys navigate folders' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button></panel>",path.matches('/').count()*12,if expanded{"Collapse"}else{"Expand"},escape(path),if children { icons::icon(&format!("{id}-arrow"),if expanded{"chevron-down"}else{"chevron-right"}) }else{String::new()},if selected{" selected"}else{""},escape(path),icons::icon(&id,if expanded{"folder-open"}else{"folder"}),escape(names::file_name(path))));
+            out.push_str(&format!("<panel id='{id}-row' class='row tree-row{}' style='flex-shrink:0;gap:0px;padding-left:{}px'><button id='{id}-arrow' class='ghost icon-button' style='width:18px;min-width:18px;padding:2px' label='{} {}' action='Dispatch'>{}</button><button id='{id}' class='folder-row{}' style='flex-grow:1;min-width:0px;padding-left:2px' label='{}' description='Double-click to expand or collapse; arrow keys navigate folders' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button></panel>",if selected{" row-selected"}else{""},path.matches('/').count()*12,if expanded{"Collapse"}else{"Expand"},escape(path),if children { icons::icon(&format!("{id}-arrow"),if expanded{"chevron-down"}else{"chevron-right"}) }else{String::new()},if selected{" selected"}else{""},escape(path),icons::icon(&id,if expanded{"folder-open"}else{"folder"}),escape(names::file_name(path))));
         }
         out.push_str("</panel></scroll><splitter id='asset-sidebar-splitter' cursor='ew-resize' class='splitter' style='width:5px;min-width:5px;flex-shrink:0' label='Resize folders' action='ResizeAssets' />");
     }

@@ -420,3 +420,53 @@ fn warmed_quality_survives_target_adoption_without_changing_primary_resources() 
     renderer.gpu.assert_clean()?;
     Ok(())
 }
+
+/// A panel drag changes the requested extent while targets allocate: the
+/// allocation in flight is adopted (the camera keeps rendering there) and the
+/// latest extent follows, instead of each change cancelling the last.
+#[test]
+fn a_resize_during_allocation_adopts_it_then_follows_the_latest_extent() -> Result<()> {
+    let mut renderer = Renderer::new_native(
+        &fixture::scene(),
+        Box::new(Textures(Arc::new(AtomicUsize::new(0)))),
+        [128, 80],
+        &[],
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/view-resize"),
+    )?;
+    let camera = CameraSpec::LookAt {
+        position: Vec3::new(0., 0., 3.),
+        target: Vec3::ZERO,
+        vertical_fov: 1.,
+    };
+    let mut view = renderer.create_view()?;
+    let at = |size, render_size| ViewRequest {
+        camera: &camera,
+        size,
+        render_size,
+        quality: *renderer.quality(),
+        exposure: 1.,
+    };
+    let (first, dragged, latest) = (
+        at([96, 60], [64, 40]),
+        at([120, 80], [80, 60]),
+        at([140, 90], [100, 70]),
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !renderer.preallocate_view(&mut view, &first)? {
+        ensure!(Instant::now() < deadline, "first allocation timed out");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(!renderer.preallocate_view(&mut view, &dragged)?);
+    let mut seen = Vec::new();
+    while !renderer.preallocate_view(&mut view, &latest)? {
+        seen.push(renderer.view_extent(&view).context("view keeps targets")?);
+        ensure!(Instant::now() < deadline, "resize allocation timed out");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(seen.contains(&([80, 60], [120, 80])), "{seen:?}");
+    assert_eq!(renderer.view_extent(&view), Some(([100, 70], [140, 90])));
+    renderer.release_view(view)?;
+    renderer.gpu.collect()?;
+    renderer.gpu.assert_clean()?;
+    Ok(())
+}

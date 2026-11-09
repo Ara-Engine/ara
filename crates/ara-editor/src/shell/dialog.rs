@@ -1,5 +1,5 @@
-//! Small modal dialogs: information (About, System Info, Connect an Agent,
-//! "Why this value?") and one-field input (Save Layout As).
+//! Small modal dialogs: information (About, System Info, Connect an Agent in
+//! `agents_connect`, "Why this value?") and one-field input (Save Layout As).
 use super::*;
 
 /// A modal dialog; Esc or Close dismisses it.
@@ -11,6 +11,12 @@ pub(crate) enum Dialog {
         lines: Vec<String>,
         code: Option<String>,
     },
+    /// Ara's identity card: logo, version, build, GPU and credits.
+    About,
+    /// The render device: identity, features and limits; Copy gives the full report.
+    System,
+    /// Connect an agent: per-client detection and setup (`agents_connect`).
+    Agents,
     /// Name a layout to save under `.ara/layouts`.
     SaveLayout { name: String },
     /// Read-only background inventory, followed by an explicit module/IDE choice.
@@ -55,37 +61,7 @@ impl Dialog {
     }
 
     pub fn about() -> Self {
-        Self::Info {
-            title: "About Ara".into(),
-            lines: vec![
-                format!("Ara {}", env!("CARGO_PKG_VERSION")),
-                "A Rust game engine built by agents, for agents and humans.".into(),
-                "Inter and JetBrains Mono (OFL), Lucide icons (ISC). See THIRD_PARTY_NOTICES.md."
-                    .into(),
-            ],
-            code: None,
-        }
-    }
-    pub fn system(device: &str) -> Self {
-        Self::Info {
-            title: "System info".into(),
-            lines: vec!["The editor and every viewport share this Vulkan device.".into()],
-            code: Some(if device.is_empty() {
-                "Device information is not available yet.".into()
-            } else {
-                device.to_owned()
-            }),
-        }
-    }
-    pub fn connect(editor: &Editor) -> Self {
-        Self::Info {
-            title: "Connect an agent".into(),
-            lines: vec![
-                "Claude Code, Codex and other MCP clients use the same commands as this editor (editor.commands).".into(),
-                "Run this in the project folder, or add it to the client's MCP config:".into(),
-            ],
-            code: Some(format!("ara mcp --root \"{}\"", editor.host.root().display())),
-        }
+        Self::About
     }
     pub fn provenance(field: &crate::inspector::Field) -> Self {
         use crate::inspector::Provenance;
@@ -127,30 +103,36 @@ impl Dialog {
             Self::SaveLayout { .. } => Some("dialog-field"),
             Self::ScriptModules { paths, .. } if !paths.is_empty() => Some("script-module-choice"),
             Self::ScriptModules { .. } => Some("dialog-cancel"),
-            Self::Info { .. } => None,
+            Self::Info { .. } | Self::About | Self::System | Self::Agents => None,
         }
     }
 }
 impl Shell {
     pub(super) fn dialog_markup(&mut self, dialog: &Dialog, out: &mut String) {
         let [w, h] = self.ui.size;
-        let width = ara_ui::popover::MAX_WIDTH.min((w - 16.).max(1.));
+        // Wider than popovers: dialogs carry paragraphs, paths and detail tables.
+        let width = 440f32.min((w - 16.).max(1.));
         let height = (h - 16.).max(1.);
         let action = match dialog {
             Dialog::SaveLayout { .. } => "dialog-save",
             Dialog::ScriptModules { .. } => "dialog-script-open",
-            Dialog::Info { .. } => "dialog-close",
+            Dialog::Info { .. } | Dialog::About | Dialog::System | Dialog::Agents => "dialog-close",
         };
         out.push_str(&format!(
             "<modal id='dialog' class='kit-dialog-layer' default-action='{action}' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;align-items:center;justify-content:center'><panel id='dialog-backdrop' class='kit-dialog-backdrop' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;background:var(--overlay)' /><panel id='dialog-body' class='dialog' style='position:relative;width:{width}px;max-height:{height}px;overflow:hidden'>"
         ));
         match dialog {
+            Dialog::About => self.about_markup(out),
+            Dialog::System => self.system_markup(out),
+            Dialog::Agents => self.agents_markup(out),
             Dialog::Info { title, lines, code } => {
                 out.push_str(&format!(
                     "<text id='dialog-title' class='title' text='{}' />",
                     escape(title)
                 ));
-                out.push_str("<scroll id='dialog-content' style='min-height:0px;flex-shrink:1'>");
+                // The dialog sizes to its content, so the scroll keeps its auto basis
+                // (editor scrolls default to 0 px and would collapse here).
+                out.push_str("<scroll id='dialog-content' style='flex-basis:auto;min-height:0px;flex-shrink:1;gap:8px'>");
                 for (n, line) in lines.iter().enumerate() {
                     out.push_str(&format!(
                         "<text id='dialog-line-{n}' class='dialog-text' text='{}' />",
@@ -164,22 +146,7 @@ impl Shell {
                     ));
                 }
                 out.push_str("</scroll>");
-                out.push_str("<panel id='dialog-actions' class='row' style='justify-content:end'>");
-                if code.is_some() {
-                    out.push_str(&self.bind_button(
-                        "dialog-copy",
-                        "Copy",
-                        Binding::DialogAction("copy"),
-                        "",
-                    ));
-                }
-                out.push_str(&self.bind_button(
-                    "dialog-close",
-                    "Close",
-                    Binding::DialogAction("close"),
-                    "primary",
-                ));
-                out.push_str("</panel>");
+                self.dialog_buttons(code.is_some().then_some("Copy"), out);
             }
             Dialog::SaveLayout { name } => {
                 self.bindings.insert(
@@ -291,6 +258,23 @@ impl Shell {
                 self.copy_text(code);
                 self.status_note = Some("Copied to the clipboard".into());
             }
+            ("copy", Some(Dialog::About)) => {
+                self.copy_text(
+                    about_details(&self.device_info)
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(
+                            "
+",
+                        ),
+                );
+                self.status_note = Some("Copied to the clipboard".into());
+            }
+            ("copy", Some(Dialog::System)) => {
+                self.copy_text(self.device_info.clone());
+                self.status_note = Some("Copied the full device report".into());
+            }
             ("save", Some(Dialog::SaveLayout { name })) => {
                 editor.action("editor.layout.save", json!({"name": name.trim()}))?;
                 self.status_note = Some(format!("Saved layout “{}”", name.trim()));
@@ -299,5 +283,271 @@ impl Shell {
             _ => self.dialog = None,
         }
         Ok(())
+    }
+}
+
+/// The renderer's pretty-printed `DeviceInfo` JSON, once a device exists.
+fn parse_device(device: &str) -> Option<Value> {
+    serde_json::from_str::<Value>(device)
+        .ok()
+        .filter(Value::is_object)
+}
+
+/// "Vulkan 1.4.351"; Metal devices already name their API ("Metal 4 (…)").
+fn graphics_api(info: &Value) -> String {
+    let api = info["api_version"].as_str().unwrap_or("");
+    if api.starts_with("Metal") {
+        api.to_owned()
+    } else {
+        format!("Vulkan {api}")
+    }
+}
+
+/// "11.7 GB", "4 GB" or "512 MB".
+fn memory(mib: f64) -> String {
+    let gb = mib / 1024.;
+    if gb < 1. {
+        format!("{mib:.0} MB")
+    } else if (gb - gb.round()).abs() < 0.05 {
+        format!("{gb:.0} GB")
+    } else {
+        format!("{gb:.1} GB")
+    }
+}
+
+/// "65,536".
+fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// The About card's detail rows; Copy puts the same rows on the clipboard.
+fn about_details(device: &str) -> Vec<(&'static str, String)> {
+    let os = match std::env::consts::OS {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "ARM64",
+        other => other,
+    };
+    let mut rows = vec![
+        ("Version", env!("CARGO_PKG_VERSION").to_owned()),
+        (
+            "Build",
+            if cfg!(debug_assertions) {
+                "Development (debug)"
+            } else {
+                "Release"
+            }
+            .to_owned(),
+        ),
+        ("Platform", format!("{os} {arch}")),
+    ];
+    match parse_device(device) {
+        Some(info) => {
+            rows.push(("GPU", info["name"].as_str().unwrap_or("Unknown").to_owned()));
+            rows.push(("Graphics API", graphics_api(&info)));
+        }
+        None => rows.push(("GPU", "Not started yet".into())),
+    }
+    rows
+}
+
+/// One System info row: label, value, and whether it reads as available.
+type Detail = (&'static str, String, bool);
+
+/// What people compare between machines: identity, features and limits. Queue
+/// families, cache UUIDs and the rest stay in the copied full report.
+fn system_sections(info: &Value) -> [(&'static str, &'static str, Vec<Detail>); 3] {
+    let number = |key: &str| info[key].as_u64().unwrap_or(0);
+    let on = |key: &str| info[key].as_bool().unwrap_or(false);
+    let vendor_id = number("vendor_id");
+    let mut device = vec![(
+        "GPU",
+        info["name"].as_str().unwrap_or("Unknown").to_owned(),
+        true,
+    )];
+    let vendor = match vendor_id {
+        0 => None,
+        0x10DE => Some("NVIDIA".to_owned()),
+        0x1002 => Some("AMD".to_owned()),
+        0x8086 => Some("Intel".to_owned()),
+        0x106B => Some("Apple".to_owned()),
+        0x13B5 => Some("Arm".to_owned()),
+        0x5143 => Some("Qualcomm".to_owned()),
+        id => Some(format!("0x{id:04X}")),
+    };
+    if let Some(vendor) = vendor {
+        device.push(("Vendor", vendor, true));
+    }
+    let kind = if on("discrete") {
+        "Discrete"
+    } else if on("unified_device_local") {
+        "Integrated, unified memory"
+    } else {
+        "Integrated"
+    };
+    device.push(("Type", kind.into(), true));
+    device.push((
+        "Video memory",
+        memory(number("device_local_mib") as f64),
+        true,
+    ));
+    device.push(("Graphics API", graphics_api(info), true));
+    // Vendors pack driver versions differently; NVIDIA reads 617.14, not 617.3.0.
+    let driver = number("driver_version") as u32;
+    if driver != 0 {
+        let version = match vendor_id {
+            0x10DE => format!("{}.{:02}", driver >> 22, (driver >> 14) & 0xff),
+            0x8086 if cfg!(windows) => format!("{}.{}", driver >> 14, driver & 0x3fff),
+            _ => format!(
+                "{}.{}.{}",
+                driver >> 22,
+                (driver >> 12) & 0x3ff,
+                driver & 0xfff
+            ),
+        };
+        device.push(("Driver", version, true));
+    }
+    let features = [
+        ("Ray tracing", "ray_tracing"),
+        ("Mesh shaders", "mesh_shading"),
+        ("Wave operations", "wave_ops"),
+        ("64-bit atomics", "buffer_int64_atomics"),
+        ("BC textures", "texture_compression_bc"),
+        ("HDR output", "hdr_metadata"),
+    ]
+    .into_iter()
+    .map(|(label, key)| {
+        let supported = on(key);
+        let value = if supported {
+            "Supported"
+        } else {
+            "Not available"
+        };
+        (label, value.to_owned(), supported)
+    })
+    .collect();
+    let limits = vec![
+        (
+            "Max texture size",
+            format!("{} px", grouped(number("max_image_dimension"))),
+            true,
+        ),
+        (
+            "Texture slots",
+            grouped(number("sampled_image_capacity")),
+            true,
+        ),
+        (
+            "Buffer slots",
+            grouped(number("storage_buffer_capacity")),
+            true,
+        ),
+        (
+            "Largest buffer",
+            memory(number("max_storage_buffer_range") as f64 / 1048576.),
+            true,
+        ),
+    ];
+    [
+        ("system-device", "Device", device),
+        ("system-features", "Features", features),
+        ("system-limits", "Limits", limits),
+    ]
+}
+
+/// A well of label/value rows (`{id}-details`); unavailable values read muted.
+fn details_markup(out: &mut String, id: &str, key_class: &str, rows: Vec<Detail>) {
+    out.push_str(&format!("<panel id='{id}-details' class='about-details'>"));
+    for (n, (key, value, available)) in rows.into_iter().enumerate() {
+        let value_class = if available {
+            "about-value"
+        } else {
+            "about-value about-value-off"
+        };
+        out.push_str(&format!("<panel id='{id}-row-{n}' class='about-row'><text id='{id}-key-{n}' class='{key_class}' text='{key}' /><text id='{id}-value-{n}' class='{value_class}' text='{}' /></panel>", escape(&value)));
+    }
+    out.push_str("</panel>");
+}
+
+impl Shell {
+    /// Close, after an optional Copy that copies what the dialog shows.
+    pub(super) fn dialog_buttons(&mut self, copy: Option<&str>, out: &mut String) {
+        out.push_str(
+            "<panel id='dialog-actions' class='row' style='justify-content:end;flex-shrink:0'>",
+        );
+        if let Some(label) = copy {
+            out.push_str(&self.bind_button(
+                "dialog-copy",
+                label,
+                Binding::DialogAction("copy"),
+                "",
+            ));
+        }
+        out.push_str(&self.bind_button(
+            "dialog-close",
+            "Close",
+            Binding::DialogAction("close"),
+            "primary",
+        ));
+        out.push_str("</panel>");
+    }
+
+    fn about_markup(&mut self, out: &mut String) {
+        out.push_str("<panel id='about-hero' class='about-hero'><image id='about-logo' class='about-logo' src='brand-logo' /><panel id='about-heading' class='about-heading'><text id='dialog-title' class='about-name' text='Ara' />");
+        out.push_str(&format!(
+            "<text id='about-tagline' class='dialog-text' text='{}' /></panel></panel>",
+            escape("A Rust game engine built by agents, for agents and humans.")
+        ));
+        let rows = about_details(&self.device_info)
+            .into_iter()
+            .map(|(key, value)| (key, value, true))
+            .collect();
+        details_markup(out, "about", "about-key", rows);
+        out.push_str(&format!(
+            "<text id='about-credits' class='caption' style='white-space:normal' text='{}' />",
+            escape(
+                "Inter and JetBrains Mono (OFL), Lucide icons (ISC). See THIRD_PARTY_NOTICES.md."
+            )
+        ));
+        self.dialog_buttons(Some("Copy details"), out);
+    }
+
+    fn system_markup(&mut self, out: &mut String) {
+        out.push_str("<text id='dialog-title' class='title' text='System info' />");
+        let Some(info) = parse_device(&self.device_info) else {
+            out.push_str("<text id='dialog-line-0' class='dialog-text' text='The renderer has not started yet, so there is no device to report.' />");
+            self.dialog_buttons(None, out);
+            return;
+        };
+        out.push_str(&format!(
+            "<text id='dialog-line-0' class='dialog-text' text='{}' />",
+            escape(
+                "The editor and every viewport render on this GPU. Copy gives the full device report."
+            )
+        ));
+        // Content height, scrolling only when the window is shorter than the report.
+        out.push_str(
+            "<scroll id='dialog-content' style='flex-basis:auto;min-height:0px;flex-shrink:1;gap:10px'>",
+        );
+        for (id, title, rows) in system_sections(&info) {
+            out.push_str(&format!("<panel id='{id}' class='about-section'><text id='{id}-title' class='about-section-title' text='{title}' />"));
+            details_markup(out, id, "about-key about-key-wide", rows);
+            out.push_str("</panel>");
+        }
+        out.push_str("</scroll>");
+        self.dialog_buttons(Some("Copy full report"), out);
     }
 }

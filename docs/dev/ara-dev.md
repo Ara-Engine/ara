@@ -111,7 +111,9 @@ Build and run checkout editors through the paired development flow:
 .\crates\ara-dev\run.ps1 cargo -- run -p ara-editor --profile perf -- <project> --scene levels/outpost.scene
 ```
 
-The wrapper includes `ara-player` in the same Cargo invocation, retaining every
+The wrapper includes `ara-player`, `ara-import-worker` and the `ara` CLI (which the
+editor finds beside itself for imports and Connect AI agents; `live editor` stages
+all four together) in the same Cargo invocation, retaining every
 selected package, feature, profile and target option. It takes both executable paths
 from Cargo JSON, so custom target/build directories work. A run launches that editor
 directly with the matching `ARA_PLAYER`, avoiding another feature resolution.
@@ -936,6 +938,31 @@ then reloading recovered successfully. A live High-to-Medium swap and the stdio
 MCP status query passed on that same process. Evidence is
 `target/ara-dev/perf-final-probe-results.json` and its before/after/rejection/
 recovery reports. The final capture was visually inspected.
+
+## Live UI iteration (Hub and editor)
+
+```
+cargo run -p ara-dev -- live hub
+cargo run -p ara-dev -- live editor -- <scratch-project>
+```
+
+Debug Hub and editor builds watch their CSS and the two theme files
+(`assets/themes/ara-{dark,light}.json`) in the checkout they were built from. A save
+is validated off the UI thread, then restyles the running window within about
+250 ms; an invalid save keeps the last good styles and prints why. The editor watches
+every `.css` under `crates/ara-editor/src/shell` (file names must stay unique) plus
+ara-ui's dialog and Select CSS. The Hub watches `hub.css` and the Select CSS. The
+editor's open-project and loading screens, and inline CSS constants, are not live.
+
+`live` covers everything else. It rebuilds after Rust, manifest or embedded-resource
+saves (not the app's live CSS). When the executables changed, it stages a copy under
+`target/ara-dev/live/<app>/gen-N`, stops the old process tree and starts the copy.
+Staging keeps Cargo free to relink on Windows, and a failed build leaves the old window
+open. A relaunch discards window state, unsaved editor scenes included. Enter forces a
+relaunch; closing the window keeps watching. The editor build is the same verified
+editor/player pair as `ara-dev cargo -- run -p ara-editor`. The Hub runs with a scratch
+profile at `target/ara-dev/live/ara-hub/config` that persists across relaunches.
+For state-preserving editor panel edits, use the Rust hotpatch lane below.
 
 ## Rust hotpatch (development)
 

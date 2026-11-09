@@ -6,7 +6,6 @@ use ara_asset::{
 };
 use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 mod gpu_input;
 mod mips;
 mod pixels;
@@ -27,62 +26,9 @@ fn encoder_for<'a>(
 }
 mod memo;
 
-/// Semantic texture usage selects transfer functions, mip filtering and BC format.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ara_schema::Schema,
-)]
-#[ara(module = "asset")]
-#[serde(rename_all = "camelCase")]
-pub enum TextureUsage {
-    /// sRGB color (alpha remains linear), BC7 sRGB.
-    #[default]
-    Color,
-    /// Linear RGBA data, BC7 UNORM.
-    Linear,
-    /// Tangent-space normals, normalized mips and BC5 XY.
-    Normal,
-    /// A single linear scalar channel, BC4.
-    Mask,
-    /// Nonnegative linear radiance, BC6H UFLOAT.
-    Hdr,
-    /// A colour lookup table strip (post-process volumes' grading): values kept as
-    /// authored, uncompressed RGBA half floats, without mips.
-    Lut,
-}
-/// Declarative texture import settings.
-#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
-#[ara(module = "asset")]
-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
-pub struct TextureSettings {
-    /// Optional quality override; absent inherits the source/project preset.
-    /// Changing it does not re-encode other texture tasks.
-    pub preset: Option<CookPreset>,
-    /// How color/normal/mask values are interpreted.
-    pub usage: TextureUsage,
-    /// Generate the complete mip chain through 1×1.
-    #[ara(default = true)]
-    pub mipmaps: bool,
-    /// Invert normal Y for DirectX-authored tangent-space inputs.
-    pub flip_normal_y: bool,
-    /// Source channel for BC4, R=0/G=1/B=2/A=3.
-    #[ara(range(min = 0, max = 3))]
-    pub mask_channel: u8,
-    /// Maximum permitted source dimension (decode limits are also enforced).
-    #[ara(default = 16384, range(min = 1, max = 16384))]
-    pub max_dimension: u32,
-}
-impl Default for TextureSettings {
-    fn default() -> Self {
-        Self {
-            preset: None,
-            usage: TextureUsage::Color,
-            mipmaps: true,
-            flip_normal_y: false,
-            mask_channel: 0,
-            max_dimension: 16384,
-        }
-    }
-}
+/// Shared reflected texture settings and usage.
+pub use ara_asset::{TextureSettings, TextureUsage};
+
 /// PNG, JPEG, Radiance HDR and OpenEXR importer with optional worker BCn encoding.
 /// Without an explicit encoding service, compression uses the qualified ISPC path.
 pub struct TextureImporter;
@@ -255,6 +201,8 @@ struct DecodedTexture {
     format: TextureFormat,
     pixels: Vec<[f32; 4]>,
     mipmaps: bool,
+    /// `TextureSettings::alpha_coverage`.
+    alpha_coverage: Option<f32>,
 }
 struct MippedTexture {
     width: u32,
@@ -384,10 +332,18 @@ pub(crate) fn cook_texture_batch_serviced(
         .collect())
 }
 
+/// A decoder for `source` by its signature; TGA has none, so unrecognised bytes are
+/// read as TGA (other data then fails to decode as one).
+fn texture_reader(source: &[u8]) -> std::io::Result<image::ImageReader<std::io::Cursor<&[u8]>>> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(source)).with_guessed_format()?;
+    if reader.format().is_none() {
+        reader.set_format(image::ImageFormat::Tga);
+    }
+    Ok(reader)
+}
 const BATCH_MEMORY_BYTES: usize = 512 * 1024 * 1024;
 fn texture_working_set(source: &[u8]) -> usize {
-    image::ImageReader::new(std::io::Cursor::new(source))
-        .with_guessed_format()
+    texture_reader(source)
         .ok()
         .and_then(|reader| reader.into_dimensions().ok())
         // Float RGBA + full mip chain + native packing/decoder scratch. The
@@ -471,12 +427,16 @@ fn decode_texture(
             "mobile texture profile requires an ASTC texture importer plugin",
         ));
     }
-    if settings.mask_channel > 3 || settings.max_dimension == 0 || settings.max_dimension > 16384 {
+    if settings.mask_channel > 3
+        || settings.max_dimension == 0
+        || settings.max_dimension > 16384
+        || settings
+            .alpha_coverage
+            .is_some_and(|c| !(c.is_finite() && c > 0. && c <= 1.))
+    {
         return Err(invalid("invalid texture settings"));
     }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(source))
-        .with_guessed_format()
-        .map_err(invalid)?;
+    let mut reader = texture_reader(source).map_err(invalid)?;
     let hdr = matches!(
         reader.format(),
         Some(image::ImageFormat::Hdr | image::ImageFormat::OpenExr)
@@ -530,6 +490,9 @@ fn decode_texture(
         pixels,
         // A lookup table is sampled at its texels only.
         mipmaps: settings.mipmaps && usage != TextureUsage::Lut,
+        alpha_coverage: settings
+            .alpha_coverage
+            .filter(|_| matches!(usage, TextureUsage::Color | TextureUsage::Linear)),
     })
 }
 fn generate_mips(
@@ -543,9 +506,13 @@ fn generate_mips(
         format,
         mut pixels,
         mipmaps,
+        alpha_coverage,
     } = decoded;
     let (mut w, mut h) = (width, height);
     let mut mips = Vec::new();
+    // The full-size image's share of texels passing the cutoff, which every smaller
+    // level keeps. Levels filter the unscaled chain, so the scaling never compounds.
+    let coverage = alpha_coverage.map(|cutoff| (cutoff, mips::coverage(&pixels, cutoff)));
     loop {
         cancellation.check()?;
         let next = if mipmaps && (w != 1 || h != 1) {
@@ -560,6 +527,12 @@ fn generate_mips(
         } else {
             None
         };
+        // `next` is already filtered from this level's unscaled alpha.
+        if let Some((cutoff, share)) = coverage
+            && !mips.is_empty()
+        {
+            mips::preserve_coverage(&mut pixels, w as usize, cutoff, share);
+        }
         mips.push((w, h, pixels));
         let Some(next) = next else { break };
         pixels = next;
@@ -629,5 +602,44 @@ mod batch_tests {
         assert_eq!(batch_len(&[1024 * 1024 * 32; 16]), 8);
         assert_eq!(batch_len(&[usize::MAX; 2]), 1);
         assert_eq!(batch_len(&[]), 0);
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    #[test]
+    fn tga_tiff_webp_bmp_and_dds_sources_decode() {
+        let pixels = image::RgbaImage::from_fn(8, 4, |x, y| {
+            image::Rgba([x as u8 * 30, y as u8 * 60, 9, 255])
+        });
+        for format in [
+            image::ImageFormat::Tga,
+            image::ImageFormat::Tiff,
+            image::ImageFormat::WebP,
+            image::ImageFormat::Bmp,
+        ] {
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(pixels.clone())
+                .write_to(&mut bytes, format)
+                .expect("encode");
+            let decoded = texture_reader(bytes.get_ref())
+                .expect("reader")
+                .decode()
+                .unwrap_or_else(|e| panic!("{format:?}: {e}"));
+            assert_eq!((decoded.width(), decoded.height()), (8, 4), "{format:?}");
+            assert_eq!(
+                decoded.to_rgba8().get_pixel(7, 3),
+                pixels.get_pixel(7, 3),
+                "{format:?}"
+            );
+        }
+        for source in ["a.tga", "b.TIF", "c.webp", "d.bmp", "e.dds"] {
+            assert_eq!(
+                crate::commands::importer_for_source(source).ok(),
+                Some("ara.texture"),
+                "{source}"
+            );
+        }
     }
 }

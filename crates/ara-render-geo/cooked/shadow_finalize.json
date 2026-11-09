@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "ef395072aa1d4febc5e66fb814eb6640f868146577b764975f3b1034db23bfd3",
+  "key": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1",
   "stages": [
     {
-      "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFinalize.dxil",
+      "dxil": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_finalize/shadowFinalize.dxil",
       "dxil_hash": "56ed357495aa10748c9a09dfefb9f22c4abd9cc6c4942f99297cf143b612f065",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFinalize.metallib",
+        "metallib": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_finalize/shadowFinalize.metallib",
         "metallib_hash": "9ee8cac705c3e6bce187e68d11e0f602fc2a80aa48ab6c5d3fab48c8a8761173",
-        "reflection": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFinalize.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_finalize/shadowFinalize.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "shadowFinalize",
-      "spirv": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFinalize.spv",
+      "spirv": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_finalize/shadowFinalize.spv",
       "spirv_entry": "main",
       "spirv_hash": "5795f941589b961617855e447a34e73cff57290f9f2fc56b5bdbccad2f5dc053",
       "stage": "compute"

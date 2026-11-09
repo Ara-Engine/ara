@@ -9,7 +9,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{vk, vulkan::Context as Gpu};
 use ara_platform::{Present, Window};
 use ara_ui::paint::Box2;
-use ara_ui_render::gpu::{Batch, Clip, Instance, TextureUpload, UiGpu};
+use ara_ui_render::gpu::{Batch, Clip, Instance, Pipeline, TextureUpload, UiGpu, backdrop_band};
 use resources::{Buffer, Image, Memory};
 pub use shared::PlaySurface;
 use std::collections::BTreeMap;
@@ -41,6 +41,14 @@ struct PendingUpload {
     offset: u64,
     /// The image is new (undefined contents) rather than one being updated.
     fresh: bool,
+}
+/// The horizontal pass of a glass draw: its band instance and physical scissor, drawn
+/// into `scratch` (sampling the target) just before draw `index`.
+#[derive(Clone, Copy)]
+struct BackdropPass {
+    index: usize,
+    first: u32,
+    scissor: vk::Rect2D,
 }
 #[derive(Clone, Copy)]
 struct Draw {
@@ -91,6 +99,10 @@ pub struct NativeUi {
     instances: Vec<Instance>,
     masks: Vec<[f32; 4]>,
     draws: Vec<Draw>,
+    backdrops: Vec<BackdropPass>,
+    /// Same-size blur scratch for glass, and the heap slots of the target and scratch.
+    scratch: Option<Image>,
+    backdrop_slots: Option<[u32; 2]>,
     /// Time spent waiting for submitted UI work since `take_gpu_wait` (≈ GPU time,
     /// since every submission waits for its fence, at once or deferred).
     gpu_wait: std::cell::Cell<std::time::Duration>,
@@ -98,7 +110,10 @@ pub struct NativeUi {
     deferred: bool,
     /// A submission whose fence `wait_previous` has not waited yet.
     in_flight: std::cell::Cell<bool>,
-    logical: [u32; 2],
+    /// The target's extent in logical pixels (its physical size over `dpi`).
+    logical: [f32; 2],
+    /// The next target's exact pixel size (`pin_target_size`).
+    pinned: Option<[u32; 2]>,
     dpi: f32,
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
@@ -140,10 +155,14 @@ impl NativeUi {
             instances: Vec::new(),
             masks: Vec::new(),
             draws: Vec::new(),
+            backdrops: Vec::new(),
+            scratch: None,
+            backdrop_slots: None,
             gpu_wait: Default::default(),
             deferred: false,
             in_flight: Default::default(),
-            logical: [1, 1],
+            logical: [1., 1.],
+            pinned: None,
             dpi: 1.,
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
@@ -163,6 +182,13 @@ impl NativeUi {
     /// Current logical-to-physical pixel density.
     pub fn dpi(&self) -> f32 {
         self.dpi
+    }
+    /// Render the next frame (the next `begin`) at exactly `size` pixels, the window's
+    /// drawable size: the integer logical size times `dpi` can miss it by a pixel, and
+    /// presenting would then rescale the whole UI (pixelated text). Ignored unless
+    /// within a pixel or so of that rounded size.
+    pub fn pin_target_size(&mut self, size: [u32; 2]) {
+        self.pinned = Some(size);
     }
     /// Set the logical-to-physical scale when moving between monitors.
     pub fn set_dpi(&mut self, dpi: f32) -> Result<()> {
@@ -313,6 +339,35 @@ impl NativeUi {
         self.textures.insert(texture.id, Texture { image, slot });
         Ok(())
     }
+    /// Physical scissor covering logical `rect`, clamped at the target origin.
+    fn scissor(&self, rect: Box2) -> vk::Rect2D {
+        let x = (rect.x * self.dpi).floor().max(0.) as i32;
+        let y = (rect.y * self.dpi).floor().max(0.) as i32;
+        let right = ((rect.x + rect.w) * self.dpi).ceil() as i32;
+        let bottom = ((rect.y + rect.h) * self.dpi).ceil() as i32;
+        vk::Rect2D {
+            offset: vk::Offset2D { x, y },
+            extent: vk::Extent2D {
+                width: (right - x).max(0) as u32,
+                height: (bottom - y).max(0) as u32,
+            },
+        }
+    }
+    /// Heap slots for glass: the target (sampled by the horizontal pass) and the scratch
+    /// (sampled by the vertical pass), reserved on first use.
+    fn backdrop_slots(&mut self) -> Result<[u32; 2]> {
+        if let Some(slots) = self.backdrop_slots {
+            return Ok(slots);
+        }
+        let mut slot = || {
+            self.free_slots
+                .pop()
+                .ok_or_else(|| anyhow::anyhow!("UI texture heap exhausted"))
+        };
+        let slots = [slot()?, slot()?];
+        self.backdrop_slots = Some(slots);
+        Ok(slots)
+    }
     fn write_texture(&self, slot: u32, view: vk::ImageView) {
         let info = [vk::DescriptorImageInfo::default()
             .image_view(view)
@@ -336,15 +391,24 @@ impl UiGpu for NativeUi {
         self.upload_inner(texture).map_err(Into::into)
     }
     fn begin(&mut self, size: [u32; 2]) -> ara_ui::Result<()> {
-        self.logical = size;
         self.instances.clear();
         self.masks.clear();
         self.draws.clear();
-        let physical = size.map(|v| (v as f32 * self.dpi).round().max(1.) as u32);
+        self.backdrops.clear();
+        let rounded = size.map(|v| (v as f32 * self.dpi).round().max(1.) as u32);
+        // A pin within a pixel or so of the rounded size is the window's real extent.
+        let near = self.dpi.ceil() as u32 + 1;
+        let physical = match self.pinned.take() {
+            Some(pin) if pin.iter().zip(rounded).all(|(p, r)| p.abs_diff(r) <= near) => pin,
+            _ => rounded,
+        };
+        self.logical = physical.map(|v| v as f32 / self.dpi);
         if self.target.as_ref().is_none_or(|t| t.size != physical) {
             self.target = Some(self.memory.image(
                 physical,
-                vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+                vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::SAMPLED,
             )?);
             self.target_ready = false;
         }
@@ -374,8 +438,8 @@ impl UiGpu for NativeUi {
         let mut rect = Box2 {
             x: 0.,
             y: 0.,
-            w: self.logical[0] as f32,
-            h: self.logical[1] as f32,
+            w: self.logical[0],
+            h: self.logical[1],
         };
         let mut current = Some(batch.clip);
         let offset = self.masks.len() as u32;
@@ -389,22 +453,33 @@ impl UiGpu for NativeUi {
             }
             current = clip.parent;
         }
-        let x = (rect.x * self.dpi).floor().max(0.) as i32;
-        let y = (rect.y * self.dpi).floor().max(0.) as i32;
-        let right = ((rect.x + rect.w) * self.dpi).ceil() as i32;
-        let bottom = ((rect.y + rect.h) * self.dpi).ceil() as i32;
+        let mut texture = texture;
+        if batch.pipeline == Pipeline::Backdrop {
+            let [_, scratch] = self.backdrop_slots()?;
+            texture = scratch;
+            let band = backdrop_band(
+                instances.first().ok_or("empty backdrop batch")?,
+                self.logical[1],
+                self.dpi,
+            );
+            self.backdrops.push(BackdropPass {
+                index: self.draws.len(),
+                first: self.instances.len() as u32,
+                scissor: self.scissor(Box2 {
+                    x: band.rect[0],
+                    y: band.rect[1],
+                    w: band.rect[2],
+                    h: band.rect[3],
+                }),
+            });
+            self.instances.push(band);
+        }
         self.draws.push(Draw {
             first,
             count: instances.len() as u32,
             texture,
             mode: batch.pipeline as u32,
-            scissor: vk::Rect2D {
-                offset: vk::Offset2D { x, y },
-                extent: vk::Extent2D {
-                    width: (right - x).max(0) as u32,
-                    height: (bottom - y).max(0) as u32,
-                },
-            },
+            scissor: self.scissor(rect),
             mask_offset: offset,
             mask_count: (self.masks.len() as u32 - offset) / 2,
         });
@@ -467,6 +542,47 @@ impl NativeUi {
         let (image, size) = self.output()?;
         // SAFETY: the UI submission completed; the target is CopySource; owners are live.
         unsafe { present.display(gpu, image, size) }
+    }
+    /// Match `present` to its window's current size. The swapchain is recreated in
+    /// place without a device idle wait (`Present::resize`); during a live window
+    /// resize pass `reach` (the largest size the gesture can reach, in pixels) so one
+    /// oversized swapchain, presented 1:1, serves every frame where the driver
+    /// supports it. A failed recreation falls back to a fresh presentation after
+    /// idle. A blit still pending leaves it unchanged; a later present retries.
+    /// # Safety
+    /// `gpu` is the adapter's device and created `present` for `window`; this thread
+    /// owns its graphics queue.
+    pub unsafe fn resize_present(
+        &self,
+        gpu: &UiDevice,
+        present: &mut Present,
+        window: &Window,
+        reach: Option<[u32; 2]>,
+    ) -> Result<()> {
+        // SAFETY: forwarded caller contract.
+        if unsafe { present.resize(gpu, window, reach) }.is_err() {
+            self.wait_idle(gpu)?;
+            // SAFETY: the device is idle; the old presentation is not used again.
+            unsafe {
+                present.destroy(gpu);
+                *present = Present::new(gpu, window)?;
+            }
+        }
+        Ok(())
+    }
+    /// Wait for vertical blank (`vsync`) or present at once (`Present::set_vsync`);
+    /// cheap when unchanged, so callers pass the setting every frame.
+    /// # Safety
+    /// As [`Self::resize_present`].
+    pub unsafe fn set_vsync(
+        &self,
+        gpu: &UiDevice,
+        present: &mut Present,
+        window: &Window,
+        vsync: bool,
+    ) -> Result<bool> {
+        // SAFETY: forwarded caller contract.
+        unsafe { present.set_vsync(gpu, window, vsync) }
     }
     /// Destroy window presentation; wait for the device first ([`Self::wait_idle`]).
     /// # Safety

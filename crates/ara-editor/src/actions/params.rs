@@ -299,6 +299,34 @@ pub(super) struct EditorLayout {
     /// Split fraction, constrained to 0.1 through 0.9.
     pub ratio: Option<f32>,
 }
+/// Parameters of `editor.paint`: Mesh Paint's mode, tool, colours and brush.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorPaint {
+    /// Live protocol session.
+    #[expect(
+        dead_code,
+        reason = "Host validates the session before service dispatch"
+    )]
+    pub session: String,
+    /// Turn Mesh Paint on or off; other fields turn it on.
+    pub enabled: Option<bool>,
+    /// `brush`, `erase`, `fill`, `flood` or `pick`.
+    pub tool: Option<String>,
+    /// Linear RGBA paint colour.
+    pub color: Option<[f32; 4]>,
+    /// Linear RGBA erase colour.
+    pub erase: Option<[f32; 4]>,
+    /// Brush radius in metres.
+    pub radius: Option<f32>,
+    /// Brush strength, 0 to 1.
+    pub strength: Option<f32>,
+    /// Share of the radius the brush fades over, 0 to 1.
+    pub falloff: Option<f32>,
+    /// Written channels R, G, B, A (four flags).
+    pub channels: Option<Vec<bool>>,
+}
 /// Parameters for spatial handle settings.
 #[derive(Schema, Deserialize)]
 #[ara(params)]

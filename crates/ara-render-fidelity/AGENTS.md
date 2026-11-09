@@ -20,7 +20,10 @@ No authoritative gameplay or authoring state lives here.
 - `Settings`, `FrameInput`, `UpscalerInput`: validated temporal/physical contracts.
 - `ProbeVolume`, `BakedProbes`: automatic DDGI volume (`automatic_within` sizes one to a probe count) and offline fallback data.
 - `scene::GpuScene`: stable instance IDs, masked ray-query material inputs, AS cache.
-- `Reference`: high-sample, undenoised reference transport, shared shader semantics.
+- `Reference`: high-sample, undenoised reference transport, shared shader semantics. Fog and
+  atmosphere are traced per pixel on camera-visible segments (`shaders/medium.slangh`: jittered
+  strata with sun shadow rays, one ambient ray, one equiangular sample per local light), not
+  composited from the 64x36 froxel grid; post and the froxel pass skip reference frames.
 - `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
 - `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
 - `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
@@ -33,10 +36,13 @@ No authoritative gameplay or authoring state lives here.
 - `set_deferred_post`: live views with particles leave bloom/post/upscale/output to
   `post_process` (otherwise the chain ran twice per frame).
 - `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
+- Local lights (`shaders/local-lights.slangh`): every `scene::Light` kind sampled exactly (sphere cones,
+  tube surfaces, rect areas through their barn doors, discs); the reference adds MIS-weighted area-light
+  hits for small exact-estimator scenes. `set_light_tables` (profiles, frame row 9), `set_sun_radius`.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
   `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
-  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TAAU; D29: High/Epic keep
+  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TSR/TAAU (`raster_scale_for`: the 1440p pixel budget, for editor Game views); D29: High/Epic keep
   `quality.ray_queries` only on RT devices, `RasterPlan::hybrid`) or, with `RenderOptions::ray_tracing` on an RT device,
   `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
   creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
@@ -50,6 +56,12 @@ No authoritative gameplay or authoring state lives here.
   `ground_sun()` the attenuated sun. Volume DoF and motion blur switch the fidelity view to
   `Quality::Cinematic` (`PostSettings::f_number`: the thin lens for the camera's FOV);
   lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
+  `HeightFog`'s volumetric fields map onto both renderers' fog (the fidelity froxel fog takes
+  emission, extinction scale and per-light `parameters.w`); `fog_volumes()` sorts the scene's
+  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now). `sky_model` maps `SkyAtmosphere`
+  (Unreal units) onto `ara_render::look::atmosphere::Atmosphere`; `set_atmosphere_lights` takes the sun's and the
+  second light's settings. `shaders/atmosphere-model.slangh` is a byte copy of ara-render's (a test checks it):
+  edit the root `shaders/` one, copy it here and cook both cohorts.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
@@ -65,6 +77,15 @@ Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 
 ## Contracts
 Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
+The opaque GGX lobe is energy-compensated for multiple scattering (`ggxMultipleScale`, Kulla-Conty as Cycles'
+Principled v2 and the raster's `specularLobes`, the same fits); keep the two in step.
+Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassReflection`),
+absorbing over each stretch inside a volume; transmissive instances take TLAS masks
+16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
+ara-render's `look-glass.slangh`); BSDF paths through glass count no light hits.
+Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance. Texels
+record emissive as RGB9E5 and a mask of the sub-rays on the relit hit's plane, exactly as
+`ara-runtime-render`'s `gi_cpu` (surface version 14).
 Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
 history. Light edits retain geometric history, use responsive radiance weights,
 and update more probes with 16 rays each inside the same per-frame ray budget.

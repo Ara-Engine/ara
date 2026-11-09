@@ -32,6 +32,40 @@ pub enum Pipeline {
     /// thickness or checker cell, flags (1 vertical, 2 linear light); `color` is the
     /// first colour and `uv` the second.
     Fill = 9,
+    /// Analytic `box-shadow` layer ([`ara_ui::paint::Draw::Shadow`]). Outer: `rect` is the
+    /// shadow box grown by [`shadow_margin`], `uv` the casting box relative to `rect`.
+    /// Inset: `rect` is the box, `uv` the hole (offset, shrunk box) relative to it.
+    /// `params` = box radius, blur, shadow radius, 1 for inset.
+    Shadow = 10,
+    /// Glass ([`ara_ui::paint::Draw::Backdrop`]), one instance per batch: the adapter
+    /// blurs what its target already holds behind `rect` and composites it in the
+    /// rounded shape. `params` = radius, blur standard deviation (logical px),
+    /// saturation, pass (0 horizontal into scratch, 1 vertical into the target).
+    Backdrop = 11,
+}
+/// Margin around an outer shadow's box that covers its Gaussian falloff (3 sigma).
+pub fn shadow_margin(blur: f32) -> f32 {
+    blur * 1.5 + 1.
+}
+/// The horizontal glass pass of a [`Pipeline::Backdrop`] instance: the box's columns,
+/// grown vertically by the Gaussian's 3-sigma reach (in physical pixels at `dpi`) so the
+/// vertical pass has input, clamped to the `logical` target height. Adapters draw it
+/// into their scratch image, sampling the target, before the instance itself.
+pub fn backdrop_band(instance: &Instance, logical_height: f32, dpi: f32) -> Instance {
+    let reach = (3. * instance.params[1] * dpi).ceil() / dpi;
+    let [x, y, w, h] = instance.rect;
+    let top = (y - reach).max(0.);
+    let bottom = (y + h + reach).min(logical_height);
+    Instance {
+        rect: [x, top, w, (bottom - top).max(0.)],
+        params: [
+            instance.params[0],
+            instance.params[1],
+            instance.params[2],
+            0.,
+        ],
+        ..*instance
+    }
 }
 /// Exact 64-byte Slang instance ABI, four float4 records, alignment 16.
 #[repr(C, align(16))]
@@ -88,6 +122,8 @@ pub trait UiGpu {
     /// Begin a transparent logical-pixel target; host sets viewport/DPI and composition policy.
     fn begin(&mut self, size: [u32; 2]) -> Result<()>;
     /// Submit one ordered batch, installing its intersected scissor/stencil clip chain.
+    /// A [`Pipeline::Backdrop`] batch (one instance) reads what the target holds so far:
+    /// blur it horizontally into a scratch image, then vertically back inside the shape.
     fn draw(&mut self, batch: &Batch, instances: &[Instance], clips: &[Clip]) -> Result<()>;
     /// End target commands and make it available for screen or world-surface composition.
     fn end(&mut self) -> Result<()>;
@@ -177,6 +213,7 @@ impl Renderer {
         let index = self.instances.len();
         self.instances.push(instance);
         if let Some(last) = self.batches.last_mut()
+            && pipeline != Pipeline::Backdrop
             && last.pipeline == pipeline
             && last.texture == texture
             && last.clip == clip
@@ -185,7 +222,9 @@ impl Renderer {
             return;
         }
         let cause = self.batches.last().map_or("first draw", |last| {
-            if last.clip != clip {
+            if pipeline == Pipeline::Backdrop {
+                "backdrop snapshot"
+            } else if last.clip != clip {
                 "clip change"
             } else if last.pipeline != pipeline {
                 "pipeline change"
@@ -307,6 +346,44 @@ impl Renderer {
                         _ => {}
                     }
                     self.push(Pipeline::Shape, 0, clip, instance);
+                }
+                Draw::Shadow {
+                    rect: r,
+                    radius,
+                    shadow,
+                    ..
+                } => {
+                    let r = rect(*r);
+                    let s = shadow.spread;
+                    instance.color = color_array(shadow.color);
+                    if shadow.inset {
+                        instance.rect = array(r);
+                        instance.uv = [
+                            shadow.offset[0] + s,
+                            shadow.offset[1] + s,
+                            r.w - 2. * s,
+                            r.h - 2. * s,
+                        ];
+                        instance.params = [*radius, shadow.blur, (radius - s).max(0.), 1.];
+                    } else {
+                        let m = shadow_margin(shadow.blur);
+                        let x = r.x + shadow.offset[0] - s - m;
+                        let y = r.y + shadow.offset[1] - s - m;
+                        instance.rect = [x, y, r.w + 2. * (s + m), r.h + 2. * (s + m)];
+                        instance.uv = [r.x - x, r.y - y, r.w, r.h];
+                        instance.params = [*radius, shadow.blur, (radius + s).max(0.), 0.];
+                    }
+                    self.push(Pipeline::Shadow, 0, clip, instance);
+                }
+                Draw::Backdrop {
+                    rect: r,
+                    radius,
+                    backdrop,
+                    ..
+                } => {
+                    instance.rect = array(rect(*r));
+                    instance.params = [*radius, backdrop.blur, backdrop.saturate, 1.];
+                    self.push(Pipeline::Backdrop, 0, clip, instance);
                 }
                 Draw::Fill {
                     rect: r,

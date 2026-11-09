@@ -53,6 +53,8 @@ pub(super) fn title(panel: &str) -> &str {
         "animation" => "Animation",
         "profiler" => "Profiler",
         "lighting" => "Lighting",
+        "render-debug" => "Rendering Debug",
+        "mesh-paint" => "Mesh Paint",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",
@@ -81,6 +83,8 @@ pub(super) fn keep_alive(panel: &str) -> bool {
             | "agents"
             | "settings"
             | "lighting"
+            | "render-debug"
+            | "mesh-paint"
             | "history"
     )
 }
@@ -94,6 +98,8 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "animation" => "person-standing",
         "profiler" => "gauge",
         "lighting" => "sun",
+        "render-debug" => "scan-eye",
+        "mesh-paint" => "palette",
         "hierarchy" => "list-tree",
         "inspector" => "sliders-horizontal",
         "assets" => "folder",
@@ -147,7 +153,7 @@ impl Shell {
                 } else {
                     // Only the main-axis size is set: the cross axis stretches, so the
                     // splitter spans its split (an explicit 0 there left nothing to grab).
-                    out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='{}:4px; flex-shrink:0' action='ResizeDock' />",if row{"width"}else{"height"}));
+                    out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='{}:6px; flex-shrink:0' action='ResizeDock' />",if row{"width"}else{"height"}));
                 }
                 out.push_str(&format!(
                     "<panel id='dock-second-{path}' style='{}'>",
@@ -331,6 +337,8 @@ impl Shell {
             "vfx" => self.vfx_panel(editor, out)?,
             "profiler" => self.profiler_panel(editor, out)?,
             "lighting" => self.lighting_panel(editor, out)?,
+            "render-debug" => self.render_debug_panel(editor, out),
+            "mesh-paint" => self.mesh_paint_panel(editor, out),
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
             "assets" => {

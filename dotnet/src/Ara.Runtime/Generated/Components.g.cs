@@ -1265,9 +1265,153 @@ public enum ColliderKind2d : uint
 }
 
 /// <summary>
-/// Procedural sky radiance and camera exposure. The first in stable-ID order wins.
+/// Projects a decal-domain material onto the opaque surfaces inside a box: the box is <c>size</c> metres around the entity, projecting along its local -Z (surfaces facing +Z receive it). Writes base colour, normal, roughness, metallic, emissive and ambient occlusion with per-channel opacity before lighting, so every light, shadow, reflection and GI term sees it. Translucent surfaces and renderers whose <c>MeshRenderer.receivesDecals</c> is off do not receive.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 56)]
+[EngineComponent("Decal", Module = "render")]
+public partial struct Decal : IComponent<Decal>
+{
+    /// <summary>
+    /// Decal-domain material graph or material instance (<c>@path#id</c>); without one the decal draws nothing.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Material;
+    /// <summary>
+    /// Box size in metres: width (local X), height (local Y) and projection depth (local Z), centred on the entity. Entity scale multiplies it.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [Unit("m"), Min(0.001), Default(1, 1, 1)]
+    public Vector3 Size;
+    /// <summary>
+    /// Linear multiplier on the material's base colour; alpha scales every channel's opacity (Unreal's DecalColor).
+    /// </summary>
+    /// <remarks>
+    /// Default: [1,1,1,1].
+    /// </remarks>
+    [Default(1, 1, 1, 1)]
+    public Color Color;
+    /// <summary>
+    /// How strongly the decal replaces the surface's base colour.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float BaseColorOpacity;
+    /// <summary>
+    /// How strongly the decal's normal (blended in the surface's tangent frame) replaces the surface normal.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float NormalOpacity;
+    /// <summary>
+    /// How strongly the decal replaces roughness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float RoughnessOpacity;
+    /// <summary>
+    /// How strongly the decal replaces metalness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float MetallicOpacity;
+    /// <summary>
+    /// How strongly the decal's specular level applies. The G-buffer has no specular channel yet (dielectric F0 is fixed at 4%); the value is kept for it.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float SpecularOpacity;
+    /// <summary>
+    /// How strongly the decal's emission replaces the surface's.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float EmissiveOpacity;
+    /// <summary>
+    /// How strongly the decal replaces material ambient occlusion.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float OcclusionOpacity;
+    /// <summary>
+    /// Camera distance where the decal starts fading out (metres; with <c>fadeEndDistance</c> zero it never fades by distance).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0)]
+    public float FadeStartDistance;
+    /// <summary>
+    /// Camera distance where the decal has faded out and is no longer drawn.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0)]
+    public float FadeEndDistance;
+    /// <summary>
+    /// Surfaces turned more than this many degrees from the projection axis start fading (stretching along steep sides stays hidden).
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 180]. Default: 60.
+    /// </remarks>
+    [Unit("deg"), Range(0, 180), Default(60)]
+    public float FadeAngleStart;
+    /// <summary>
+    /// Surfaces turned this many degrees or more no longer receive the decal.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 180]. Default: 80.
+    /// </remarks>
+    [Unit("deg"), Range(0, 180), Default(80)]
+    public float FadeAngleEnd;
+    /// <summary>
+    /// Draw order among overlapping decals: higher draws on top (Unreal's SortOrder).
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public int SortOrder;
+    /// <summary>
+    /// Below this share of the screen height the decal fades out and is skipped (Unreal's FadeScreenSize); zero always draws.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.002.
+    /// </remarks>
+    [Range(0, 1), Default(0.002)]
+    public float FadeScreenSize;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 19;
+    /// <inheritdoc/>
+    public static ref Decal Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadDecal, EngineValueCodecs.WriteDecal);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in Decal value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteDecal));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Procedural sky radiance and camera exposure. The first in stable-ID order wins. Above the horizon the sky is <c>lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff</c> with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it fades to <c>ground</c> within 15°.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 84)]
 [EngineComponent("Environment", Module = "render")]
 public partial struct Environment : IComponent<Environment>
 {
@@ -1280,7 +1424,7 @@ public partial struct Environment : IComponent<Environment>
     [FieldOffset(0), Default(0.22, 0.32, 0.6, 1)]
     public Color Sky;
     /// <summary>
-    /// Horizon sky color (linear).
+    /// Sky color at the horizon (linear).
     /// </summary>
     /// <remarks>
     /// Default: [0.95,0.62,0.4,1].
@@ -1288,12 +1432,36 @@ public partial struct Environment : IComponent<Environment>
     [FieldOffset(16), Default(0.95, 0.62, 0.4, 1)]
     public Color Horizon;
     /// <summary>
+    /// How quickly the zenith color gives way to the horizon color toward the horizon: higher keeps the zenith color lower down.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 64]. Default: 3.
+    /// </remarks>
+    [FieldOffset(32), Range(0.1, 64), Default(3)]
+    public float SkyFalloff;
+    /// <summary>
+    /// Extra light added in a band just above the horizon (linear; black for none), such as a sunset glow.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0,1].
+    /// </remarks>
+    [FieldOffset(36), Default(0, 0, 0, 1)]
+    public Color Glow;
+    /// <summary>
+    /// Narrowness of the <c>glow</c> band: higher hugs the horizon more tightly.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 64]. Default: 10.
+    /// </remarks>
+    [FieldOffset(52), Range(0.1, 64), Default(10)]
+    public float GlowFalloff;
+    /// <summary>
     /// Ground color seen below the horizon (linear).
     /// </summary>
     /// <remarks>
     /// Default: [0.18,0.16,0.14,1].
     /// </remarks>
-    [FieldOffset(32), Default(0.18, 0.16, 0.14, 1)]
+    [FieldOffset(56), Default(0.18, 0.16, 0.14, 1)]
     public Color Ground;
     /// <summary>
     /// Sky radiance scale in candela per square metre.
@@ -1301,24 +1469,56 @@ public partial struct Environment : IComponent<Environment>
     /// <remarks>
     /// Unit: cd. Range: [0, ∞]. Default: 900.
     /// </remarks>
-    [FieldOffset(48), Unit("cd"), Min(0), Default(900)]
+    [FieldOffset(72), Unit("cd"), Min(0), Default(900)]
     public float Intensity;
+    /// <summary>
+    /// How strongly the sky lights the scene (ambient light, reflections, bounce and fog) relative to how bright it looks; 1 is physical. Lower it to calm sky fill indoors without dimming the sky itself (Unreal's sky light intensity).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 16]. Default: 1.
+    /// </remarks>
+    [FieldOffset(76), Range(0, 16), Default(1)]
+    public float SkyLight;
     /// <summary>
     /// Linear camera exposure multiplier, applied before tone mapping.
     /// </summary>
     /// <remarks>
     /// Range: [1e-7, ∞]. Default: 0.0015.
     /// </remarks>
-    [FieldOffset(52), Min(0.0000001), Default(0.0015)]
+    [FieldOffset(80), Min(0.0000001), Default(0.0015)]
     public float Exposure;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 19;
+    public static uint TypeIndex => 20;
     /// <inheritdoc/>
     public static ref Environment Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadEnvironment, EngineValueCodecs.WriteEnvironment);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in Environment value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteEnvironment));
     /// <inheritdoc/>
     public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// One key of an exposure compensation curve: at scene brightness <c>ev100</c> (the metered EV100), add <c>stops</c> of compensation.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+public partial struct ExposureKey
+{
+    /// <summary>
+    /// Metered scene brightness (EV100) this key applies at.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-10, 24]. Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Range(-10, 24), Default(0)]
+    public float Ev100;
+    /// <summary>
+    /// Compensation in stops at that brightness; +1 doubles the image brightness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-8, 8]. Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Range(-8, 8), Default(0)]
+    public float Stops;
 }
 
 /// <summary>
@@ -1367,7 +1567,7 @@ public partial struct Flipbook : IComponent<Flipbook>
     [Default(false)]
     public bool Looping;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 20;
+    public static uint TypeIndex => 21;
     /// <inheritdoc/>
     public static ref Flipbook Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadFlipbook, EngineValueCodecs.WriteFlipbook);
     /// <inheritdoc/>
@@ -1397,6 +1597,21 @@ public partial struct FlipbookFrame
     /// </remarks>
     [Default(0)]
     public uint Ticks;
+}
+
+/// <summary>
+/// The shape of a [<c>LocalFogVolume</c>].
+/// </summary>
+public enum FogVolumeShape : uint
+{
+    /// <summary>
+    /// An ellipsoid filling <c>size</c>.
+    /// </summary>
+    Sphere = 0,
+    /// <summary>
+    /// A box of <c>size</c>.
+    /// </summary>
+    Box = 1,
 }
 
 /// <summary>
@@ -1462,7 +1677,7 @@ public partial struct FollowCamera : IComponent<FollowCamera>
     [Default(1)]
     public ulong Player;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 21;
+    public static uint TypeIndex => 22;
     /// <inheritdoc/>
     public static ref FollowCamera Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadFollowCamera, EngineValueCodecs.WriteFollowCamera);
     /// <inheritdoc/>
@@ -1491,9 +1706,9 @@ public enum GridLayout : uint
 }
 
 /// <summary>
-/// Exponential height fog lit by the sun, the sky and local lights (volumetric shafts where shadows cut the beams). Density halves every <c>falloff × ln 2</c> metres above <c>baseHeight</c>. The first entity in ID order wins.
+/// Exponential height fog lit by the sun, the sky and local lights. Volumetric fog (the default) casts shafts where shadows cut the beams, lets lamps glow in it and renders the near field at screen-tile detail from the Medium preset up (Unreal's volumetric fog). Density halves every <c>falloff × ln 2</c> metres above <c>baseHeight</c>. The first entity in ID order wins.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 32)]
+[StructLayout(LayoutKind.Explicit, Size = 56)]
 [EngineComponent("HeightFog", Module = "render")]
 public partial struct HeightFog : IComponent<HeightFog>
 {
@@ -1537,8 +1752,40 @@ public partial struct HeightFog : IComponent<HeightFog>
     /// </remarks>
     [FieldOffset(28), Range(0, 0.9), Default(0.3)]
     public float Anisotropy;
+    /// <summary>
+    /// Volumetric fog: shadows cut sun shafts and lamp cones into the fog (and into local fog volumes) and local lights scatter in it. Off, the fog is plain height fog: unshadowed sun glow and sky light only.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(32), Default(true)]
+    public bool Volumetric;
+    /// <summary>
+    /// How far from the camera the detailed (froxel) volumetric fog reaches; beyond it a coarser grid carries the fog. Larger distances spread the same slices thinner.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [1, 1000]. Default: 60.
+    /// </remarks>
+    [FieldOffset(36), Unit("m"), Range(1, 1000), Default(60)]
+    public float VolumetricDistance;
+    /// <summary>
+    /// Light the fog itself emits (linear radiance per metre of fog at <c>density</c>, following the height falloff), for glowing haze. Black emits none.
+    /// </summary>
+    /// <remarks>
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(40), ColorPicker(Hdr = true), Min(0), Default(0, 0, 0)]
+    public Vector3 VolumetricEmissive;
+    /// <summary>
+    /// Scales how much light the fog absorbs (not how much it scatters): above 1 the fog darkens what lies behind it more for the same glow.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 10]. Default: 1.
+    /// </remarks>
+    [FieldOffset(52), Range(0.1, 10), Default(1)]
+    public float VolumetricExtinctionScale;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 22;
+    public static uint TypeIndex => 23;
     /// <inheritdoc/>
     public static ref HeightFog Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadHeightFog, EngineValueCodecs.WriteHeightFog);
     /// <inheritdoc/>
@@ -1635,7 +1882,7 @@ public partial struct Joint : IComponent<Joint>
     [FieldOffset(100), Unit("rad"), Range(-3.1415928, 3.1415928), Default(0, 0, 0)]
     public Vector3 RotationMax;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 23;
+    public static uint TypeIndex => 24;
     /// <inheritdoc/>
     public static ref Joint Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadJoint, EngineValueCodecs.WriteJoint);
     /// <inheritdoc/>
@@ -1678,17 +1925,16 @@ public enum JointKind : uint
 /// <summary>
 /// A light at the entity's world position. Edits apply live in play.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 36)]
 [EngineComponent("Light", Module = "render")]
 public partial struct Light : IComponent<Light>
 {
     /// <summary>
-    /// Point, spot or directional.
+    /// Point, spot, directional, rect or disc.
     /// </summary>
     /// <remarks>
     /// Default: "point".
     /// </remarks>
-    [FieldOffset(0), Default("point")]
+    [Default("point")]
     public LightKind Kind;
     /// <summary>
     /// Linear RGB tint (alpha is ignored).
@@ -1696,23 +1942,31 @@ public partial struct Light : IComponent<Light>
     /// <remarks>
     /// Colour picker supports temperature in Kelvin. Default: [1,1,1,1].
     /// </remarks>
-    [FieldOffset(4), ColorPicker(Temperature = true), Default(1, 1, 1, 1)]
+    [ColorPicker(Temperature = true), Default(1, 1, 1, 1)]
     public Color Color;
     /// <summary>
-    /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
+    /// Brightness: illuminance in lux for a directional light, otherwise in <c>units</c>.
     /// </summary>
     /// <remarks>
     /// Range: [0, ∞]. Default: 800.
     /// </remarks>
-    [FieldOffset(20), Min(0), Default(800)]
+    [Min(0), Default(800)]
     public float Intensity;
     /// <summary>
-    /// Influence radius of point and spot lights.
+    /// What a local light's <c>intensity</c> measures: lumens, candela or nits.
+    /// </summary>
+    /// <remarks>
+    /// Default: "lumens".
+    /// </remarks>
+    [Default("lumens")]
+    public LightUnits Units;
+    /// <summary>
+    /// Influence radius of local lights, from the light's centre; their light fades to zero there.
     /// </summary>
     /// <remarks>
     /// Unit: m. Range: [0.01, ∞]. Default: 10.
     /// </remarks>
-    [FieldOffset(24), Unit("m"), Min(0.01), Default(10)]
+    [Unit("m"), Min(0.01), Default(10)]
     public float Range;
     /// <summary>
     /// Spot inner cone half-angle.
@@ -1720,7 +1974,7 @@ public partial struct Light : IComponent<Light>
     /// <remarks>
     /// Unit: deg. Range: [0, 89]. Default: 20.
     /// </remarks>
-    [FieldOffset(28), Unit("deg"), Range(0, 89), Default(20)]
+    [Unit("deg"), Range(0, 89), Default(20)]
     public float InnerAngle;
     /// <summary>
     /// Spot outer cone half-angle.
@@ -1728,10 +1982,122 @@ public partial struct Light : IComponent<Light>
     /// <remarks>
     /// Unit: deg. Range: [0.1, 89]. Default: 30.
     /// </remarks>
-    [FieldOffset(32), Unit("deg"), Range(0.1, 89), Default(30)]
+    [Unit("deg"), Range(0.1, 89), Default(30)]
     public float OuterAngle;
+    /// <summary>
+    /// How strongly the light scatters in volumetric fog (Unreal's volumetric scattering intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its shafts and glow. Surfaces are lit the same either way.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 16]. Default: 1.
+    /// </remarks>
+    [Range(0, 16), Default(1)]
+    public float VolumetricScattering;
+    /// <summary>
+    /// Radius of the emitter: a point's or spot's sphere (or tube, with <c>sourceLength</c>) or the disc. Larger sources give broader highlights and softer shadows; zero is an ideal point (Unreal's Source Radius).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0)]
+    public float SourceRadius;
+    /// <summary>
+    /// Length of a point's or spot's tube along the entity's local X axis, capped by <c>sourceRadius</c>; zero is a sphere (Unreal's Source Length).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0)]
+    public float SourceLength;
+    /// <summary>
+    /// Rect width along the entity's local X axis (Unreal's Source Width).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.64.
+    /// </remarks>
+    [Unit("m"), Min(0.001), Default(0.64)]
+    public float SourceWidth;
+    /// <summary>
+    /// Rect height along the entity's local Y axis (Unreal's Source Height).
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.001, ∞]. Default: 0.64.
+    /// </remarks>
+    [Unit("m"), Min(0.001), Default(0.64)]
+    public float SourceHeight;
+    /// <summary>
+    /// Angle of the rect's four barn doors from its normal: 0 points them straight ahead (the narrowest beam), 90 folds them flat (no effect).
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 90]. Default: 88.
+    /// </remarks>
+    [Unit("deg"), Range(0, 90), Default(88)]
+    public float BarnDoorAngle;
+    /// <summary>
+    /// Length of the rect's barn doors; zero has none.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 0.2.
+    /// </remarks>
+    [Unit("m"), Min(0), Default(0.2)]
+    public float BarnDoorLength;
+    /// <summary>
+    /// Photometric light profile (an imported IES file) shaping a point's, spot's or rect's intensity by direction, about the entity's local -Z axis.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Profile;
+    /// <summary>
+    /// Take the brightness from the profile's own candela instead of <c>intensity</c> (Unreal's Use IES Intensity); <c>intensity</c> then scales it (one is as measured).
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool ProfileIntensity;
+    /// <summary>
+    /// Angular diameter of a directional light's disc: wider suns cast softer shadow edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 20]. Default: 0.5357.
+    /// </remarks>
+    [Unit("deg"), Range(0, 20), Default(0.5357)]
+    public float SourceAngle;
+    /// <summary>
+    /// Whether a directional light lights the sky atmosphere: scatters in it (the sky's colour), draws its disc and is tinted by the air on the way to surfaces (Unreal's Atmosphere Sun Light).
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool AtmosphereSunLight;
+    /// <summary>
+    /// Which of the two atmosphere lights this is: 0 the sun (it casts the shadows), 1 a second light such as a moon, which lights the sky, the aerial perspective and the sky light but not surfaces directly (Unreal's Atmosphere Sun Light Index).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 0.
+    /// </remarks>
+    [Range(0, 1), Default(0)]
+    public uint AtmosphereSunLightIndex;
+    /// <summary>
+    /// Multiplies the luminance of the light's disc in the sky (linear; Unreal's Atmosphere Sun Disk Color Scale); black hides the disc.
+    /// </summary>
+    /// <remarks>
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [ColorPicker(Hdr = true), Min(0), Default(1, 1, 1)]
+    public Vector3 AtmosphereSunDiskColorScale;
+    /// <summary>
+    /// Tint the light on each surface by the air above that surface, with the planet's shadow at sunset (Unreal's Per Pixel Atmosphere Transmittance); off, one transmittance 500 m above the ground applies everywhere, as Unreal's default.
+    /// </summary>
+    /// <remarks>
+    /// Default: false.
+    /// </remarks>
+    [Default(false)]
+    public bool PerPixelAtmosphereTransmittance;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 24;
+    public static uint TypeIndex => 25;
     /// <inheritdoc/>
     public static ref Light Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadLight, EngineValueCodecs.WriteLight);
     /// <inheritdoc/>
@@ -1780,7 +2146,7 @@ public partial struct Light2d : IComponent<Light2d>
     [FieldOffset(28), Default(false)]
     public bool Shadows;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 25;
+    public static uint TypeIndex => 26;
     /// <inheritdoc/>
     public static ref Light2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadLight2d, EngineValueCodecs.WriteLight2d);
     /// <inheritdoc/>
@@ -1795,17 +2161,44 @@ public partial struct Light2d : IComponent<Light2d>
 public enum LightKind : uint
 {
     /// <summary>
-    /// Omnidirectional point light.
+    /// Omnidirectional point light; a source radius makes it a sphere, and a source length a tube along the entity's local X axis.
     /// </summary>
     Point = 0,
     /// <summary>
-    /// Cone light aimed along the entity's local -Z axis.
+    /// Cone light aimed along the entity's local -Z axis; a source radius or length sizes its emitter as for a point.
     /// </summary>
     Spot = 1,
     /// <summary>
     /// Sun-like light shining along the entity's local -Z axis; casts cascaded shadows.
     /// </summary>
     Directional = 2,
+    /// <summary>
+    /// One-sided rectangle emitting along the entity's local -Z axis: <c>sourceWidth</c> along local X, <c>sourceHeight</c> along local Y, with optional barn doors.
+    /// </summary>
+    Rect = 3,
+    /// <summary>
+    /// One-sided disc of radius <c>sourceRadius</c> emitting along the entity's local -Z axis.
+    /// </summary>
+    Disc = 4,
+}
+
+/// <summary>
+/// The unit of a local light's <c>intensity</c> (directional lights always take lux).
+/// </summary>
+public enum LightUnits : uint
+{
+    /// <summary>
+    /// Luminous flux in lumens: everything a point emits (a spot's cone masks a point of that flux, as Unreal's spot lumens), or a rect's or disc's over its front hemisphere.
+    /// </summary>
+    Lumens = 0,
+    /// <summary>
+    /// Luminous intensity in candela: in every direction for points and spots, along the normal for rects and discs.
+    /// </summary>
+    Candela = 1,
+    /// <summary>
+    /// Luminance of the emitting surface in nits (candela per square metre); a light without a source size emits nothing.
+    /// </summary>
+    Nits = 2,
 }
 
 /// <summary>
@@ -1837,6 +2230,95 @@ public enum LinkKind : uint
     /// Instant relocation (portals, spawn tubes).
     /// </summary>
     Teleport = 5,
+}
+
+/// <summary>
+/// A local volume of fog, mist or smoke placed by the entity's transform (Unreal's Local Fog Volume). It is lit like height fog (sun shafts, lamps, the sky or probe GI) and rendered in the volumetric fog; overlapping volumes add up. At most 16 render at once: the highest priority first, then the nearest to the camera.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 64)]
+[EngineComponent("LocalFogVolume", Module = "render")]
+public partial struct LocalFogVolume : IComponent<LocalFogVolume>
+{
+    /// <summary>
+    /// Whether the volume renders.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [FieldOffset(0), Default(true)]
+    public bool Enabled;
+    /// <summary>
+    /// Sphere (an ellipsoid filling <c>size</c>) or box.
+    /// </summary>
+    /// <remarks>
+    /// Default: "sphere".
+    /// </remarks>
+    [FieldOffset(4), Default("sphere")]
+    public FogVolumeShape Shape;
+    /// <summary>
+    /// Full size along the entity's axes, centred on its origin and scaled by its transform.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.02, 100000]. Default: [10,10,10].
+    /// </remarks>
+    [FieldOffset(8), Unit("m"), Range(0.02, 100000), Default(10, 10, 10)]
+    public Vector3 Size;
+    /// <summary>
+    /// Extinction at the centre, per metre: 0.05 is a light mist (visibility about 60 m), 1 a thick smoke (about 3 m).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 10]. Default: 0.1.
+    /// </remarks>
+    [FieldOffset(20), Range(0, 10), Default(0.1)]
+    public float Density;
+    /// <summary>
+    /// Share of the radius, from the edge inwards, over which the fog thins to nothing: 0 is a hard edge, 1 fades all the way from the centre.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [FieldOffset(24), Range(0, 1), Default(1)]
+    public float RadialFalloff;
+    /// <summary>
+    /// How fast density falls with height above the centre (and rises below it), per metre: 0 is uniform; around 0.5 the fog pools near the bottom.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 10]. Default: 0.
+    /// </remarks>
+    [FieldOffset(28), Range(0, 10), Default(0)]
+    public float HeightFalloff;
+    /// <summary>
+    /// Scattering colour (single-scattering albedo, linear).
+    /// </summary>
+    /// <remarks>
+    /// Default: [0.9,0.9,0.9,1].
+    /// </remarks>
+    [FieldOffset(32), Default(0.9, 0.9, 0.9, 1)]
+    public Color Albedo;
+    /// <summary>
+    /// Light the fog emits (linear radiance per metre at the centre's density), for glowing haze. Black emits none.
+    /// </summary>
+    /// <remarks>
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(48), ColorPicker(Hdr = true), Min(0), Default(0, 0, 0)]
+    public Vector3 Emissive;
+    /// <summary>
+    /// Which volumes render when more than 16 are in view: higher first, then nearer the camera.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-1000, 1000]. Default: 0.
+    /// </remarks>
+    [FieldOffset(60), Range(-1000, 1000), Default(0)]
+    public int Priority;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 27;
+    /// <inheritdoc/>
+    public static ref LocalFogVolume Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadLocalFogVolume, EngineValueCodecs.WriteLocalFogVolume);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in LocalFogVolume value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteLocalFogVolume));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
 }
 
 /// <summary>
@@ -2031,8 +2513,24 @@ public partial struct MeshRenderer : IComponent<MeshRenderer>
     /// </remarks>
     [Default(Json = "[]")]
     public string?[] EmissiveMaterials;
+    /// <summary>
+    /// Whether this geometry blocks light: off, it is still drawn, reflected and bounces light, but casts no shadow. Model nodes whose glTF <c>extras</c> set <c>castShadows: false</c> never cast, whatever this says.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool CastShadows;
+    /// <summary>
+    /// Whether decals project onto this geometry (Unreal's bReceivesDecals). Off for characters or moving props a level's decals should not stick to.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool ReceivesDecals;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 26;
+    public static uint TypeIndex => 28;
     /// <inheritdoc/>
     public static ref MeshRenderer Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadMeshRenderer, EngineValueCodecs.WriteMeshRenderer);
     /// <inheritdoc/>
@@ -2141,7 +2639,7 @@ public partial struct MusicSource : IComponent<MusicSource>
     [Default("")]
     public string? Segment;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 27;
+    public static uint TypeIndex => 29;
     /// <inheritdoc/>
     public static ref MusicSource Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadMusicSource, EngineValueCodecs.WriteMusicSource);
     /// <inheritdoc/>
@@ -2214,7 +2712,7 @@ public partial struct NavAgent : IComponent<NavAgent>
     [FieldOffset(24), Unit("m"), Range(0.001, 10), Default(0.1)]
     public float StoppingDistance;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 28;
+    public static uint TypeIndex => 30;
     /// <inheritdoc/>
     public static ref NavAgent Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavAgent, EngineValueCodecs.WriteNavAgent);
     /// <inheritdoc/>
@@ -2294,7 +2792,7 @@ public partial struct NavAgentType : IComponent<NavAgentType>
     [Default(65535)]
     public ushort AreaMask;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 29;
+    public static uint TypeIndex => 31;
     /// <inheritdoc/>
     public static ref NavAgentType Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavAgentType, EngineValueCodecs.WriteNavAgentType);
     /// <inheritdoc/>
@@ -2334,7 +2832,7 @@ public partial struct NavArea : IComponent<NavArea>
     [Range(1, 1000000), Default(1)]
     public float Cost;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 30;
+    public static uint TypeIndex => 32;
     /// <inheritdoc/>
     public static ref NavArea Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavArea, EngineValueCodecs.WriteNavArea);
     /// <inheritdoc/>
@@ -2431,7 +2929,7 @@ public partial struct NavLink : IComponent<NavLink>
     [FieldOffset(44), Unit("m"), Range(0, 100), Default(0.5)]
     public float ArcHeight;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 31;
+    public static uint TypeIndex => 33;
     /// <inheritdoc/>
     public static ref NavLink Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavLink, EngineValueCodecs.WriteNavLink);
     /// <inheritdoc/>
@@ -2495,7 +2993,7 @@ public partial struct NavMeshSurface : IComponent<NavMeshSurface>
     [Range(8, 256), Default(64)]
     public ushort TileSize;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 32;
+    public static uint TypeIndex => 34;
     /// <inheritdoc/>
     public static ref NavMeshSurface Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavMeshSurface, EngineValueCodecs.WriteNavMeshSurface);
     /// <inheritdoc/>
@@ -2544,7 +3042,7 @@ public partial struct NavObstacle : IComponent<NavObstacle>
     [FieldOffset(20), Range(0, 15), Default(0)]
     public byte Area;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 33;
+    public static uint TypeIndex => 35;
     /// <inheritdoc/>
     public static ref NavObstacle Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadNavObstacle, EngineValueCodecs.WriteNavObstacle);
     /// <inheritdoc/>
@@ -2570,6 +3068,37 @@ public enum ObstacleMode : uint
     /// No rebake: local avoidance only (moving carts, temporary crowds).
     /// </summary>
     Avoid = 2,
+}
+
+/// <summary>
+/// One primitive's painted colours.
+/// </summary>
+public partial struct PaintedPrimitive
+{
+    /// <summary>
+    /// Zero-based primitive within the selected subtree, before <c>primitive</c> filtering.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Primitive;
+    /// <summary>
+    /// Source vertices the colours cover (the imported primitive's vertex count). A re-import that changes it leaves the primitive unpainted until repainted.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [Default(0)]
+    public uint Vertices;
+    /// <summary>
+    /// Linear RGBA8 per source vertex: zlib-compressed, then standard base64.
+    /// </summary>
+    /// <remarks>
+    /// Default: "".
+    /// </remarks>
+    [Default("")]
+    public string? Colors;
 }
 
 /// <summary>
@@ -2636,7 +3165,7 @@ public partial struct Perceiver : IComponent<Perceiver>
     [FieldOffset(24), Unit("s"), Range(0, 3600), Default(8)]
     public float Memory;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 34;
+    public static uint TypeIndex => 36;
     /// <inheritdoc/>
     public static ref Perceiver Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPerceiver, EngineValueCodecs.WritePerceiver);
     /// <inheritdoc/>
@@ -2661,7 +3190,7 @@ public partial struct PhysicsId : IComponent<PhysicsId>
     [FieldOffset(0), Min(0), Default(0)]
     public ulong Value;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 35;
+    public static uint TypeIndex => 37;
     /// <inheritdoc/>
     public static ref PhysicsId Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsId, EngineValueCodecs.WritePhysicsId);
     /// <inheritdoc/>
@@ -2694,7 +3223,7 @@ public partial struct PhysicsPose : IComponent<PhysicsPose>
     [FieldOffset(12), Replicate(Audience.Relevant, Interpolate = Interpolate.Slerp, Rollback = true), Default(0, 0, 0, 1)]
     public Quaternion Rotation;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 36;
+    public static uint TypeIndex => 38;
     /// <inheritdoc/>
     public static ref PhysicsPose Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsPose, EngineValueCodecs.WritePhysicsPose);
     /// <inheritdoc/>
@@ -2727,7 +3256,7 @@ public partial struct PhysicsPose2d : IComponent<PhysicsPose2d>
     [FieldOffset(8), Unit("rad"), Replicate(Audience.Relevant, Interpolate = Interpolate.Linear, Rollback = true), Default(0)]
     public float Rotation;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 37;
+    public static uint TypeIndex => 39;
     /// <inheritdoc/>
     public static ref PhysicsPose2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsPose2d, EngineValueCodecs.WritePhysicsPose2d);
     /// <inheritdoc/>
@@ -2799,7 +3328,7 @@ public partial struct PlayerControl : IComponent<PlayerControl>
     [Default(Json = "null")]
     public string? Camera;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 38;
+    public static uint TypeIndex => 40;
     /// <inheritdoc/>
     public static ref PlayerControl Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPlayerControl, EngineValueCodecs.WritePlayerControl);
     /// <inheritdoc/>
@@ -2916,6 +3445,14 @@ public partial struct PostOverride
     /// </remarks>
     [Range(0.1, 20), Default(Json = "null")]
     public float? AdaptationSpeed;
+    /// <summary>
+    /// Extra compensation that follows the metered scene brightness (automatic exposure), as Unreal's exposure compensation curve: keys of scene EV100 and stops, linear between them and flat beyond the ends (at most eight). Lifting dark scenes more than bright ones keeps interiors readable without washing out daylight.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public ExposureKey[]? CompensationCurve;
     /// <summary>
     /// Display transform that compresses scene radiance into the screen's range.
     /// </summary>
@@ -3133,7 +3670,7 @@ public partial struct PostProcessVolume : IComponent<PostProcessVolume>
     [Default(Json = "[]")]
     public PostOverride[] Overrides;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 39;
+    public static uint TypeIndex => 41;
     /// <inheritdoc/>
     public static ref PostProcessVolume Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPostProcessVolume, EngineValueCodecs.WritePostProcessVolume);
     /// <inheritdoc/>
@@ -3166,7 +3703,7 @@ public partial struct PrimitiveMaterialOverride
 }
 
 /// <summary>
-/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any gets automatic captures over its content only with the look-development opt-in <c>ARA_REFLECTION_CAPTURES=1</c>.
+/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any places captures itself where its probe volume saw enclosed open space (<c>ARA_REFLECTION_CAPTURES=0</c> turns that off).
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 68)]
 [EngineComponent("ReflectionProbe", Module = "render")]
@@ -3245,7 +3782,7 @@ public partial struct ReflectionProbe : IComponent<ReflectionProbe>
     [FieldOffset(64), Range(0, 8), Default(1)]
     public float Intensity;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 40;
+    public static uint TypeIndex => 42;
     /// <inheritdoc/>
     public static ref ReflectionProbe Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReflectionProbe, EngineValueCodecs.WriteReflectionProbe);
     /// <inheritdoc/>
@@ -3365,7 +3902,7 @@ public partial struct ReverbZone : IComponent<ReverbZone>
     [Default(true)]
     public bool UseBaked;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 41;
+    public static uint TypeIndex => 43;
     /// <inheritdoc/>
     public static ref ReverbZone Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReverbZone, EngineValueCodecs.WriteReverbZone);
     /// <inheritdoc/>
@@ -3414,7 +3951,7 @@ public partial struct RigidBody : IComponent<RigidBody>
     [FieldOffset(9), Default(false)]
     public bool Continuous;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 42;
+    public static uint TypeIndex => 44;
     /// <inheritdoc/>
     public static ref RigidBody Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody, EngineValueCodecs.WriteRigidBody);
     /// <inheritdoc/>
@@ -3471,7 +4008,7 @@ public partial struct RigidBody2d : IComponent<RigidBody2d>
     [FieldOffset(10), Default(false)]
     public bool LockRotation;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 43;
+    public static uint TypeIndex => 45;
     /// <inheritdoc/>
     public static ref RigidBody2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody2d, EngineValueCodecs.WriteRigidBody2d);
     /// <inheritdoc/>
@@ -3481,14 +4018,14 @@ public partial struct RigidBody2d : IComponent<RigidBody2d>
 }
 
 /// <summary>
-/// A physical sky and aerial perspective lit by the scene's directional light. The sun's elevation sets the time of day; without this component the scene uses its <c>Environment</c> gradient. The first entity in ID order wins.
+/// A physical sky and aerial perspective (Unreal's SkyAtmosphere, value for value: the same parameters, units and defaults). Lit by the directional lights marked as atmosphere lights (the sun, and a second light such as a moon); the sun's elevation sets the time of day. Without this component the scene uses its <c>Environment</c> gradient. The first entity in ID order wins. Distances are in kilometres and coefficients per kilometre, as in Unreal; colours are linear.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 16)]
+[StructLayout(LayoutKind.Explicit, Size = 168)]
 [EngineComponent("SkyAtmosphere", Module = "render")]
 public partial struct SkyAtmosphere : IComponent<SkyAtmosphere>
 {
     /// <summary>
-    /// World altitude of the planet surface (sea level); the sky and fog measure height from here.
+    /// World altitude of the planet's surface (sea level); the sky and fog measure height from here (Unreal's planet top at the absolute world origin or at the component).
     /// </summary>
     /// <remarks>
     /// Unit: m. Default: 0.
@@ -3496,20 +4033,212 @@ public partial struct SkyAtmosphere : IComponent<SkyAtmosphere>
     [FieldOffset(0), Unit("m"), Default(0)]
     public float SeaLevel;
     /// <summary>
-    /// Aerosol (haze, dust) density relative to clear Earth air. Raise it for dusty or humid skies: a whiter horizon, a wider sun glow and stronger aerial perspective.
+    /// Radius from the planet's centre to the ground (Unreal's Ground Radius).
     /// </summary>
     /// <remarks>
-    /// Range: [0, 20]. Default: 1.
+    /// Unit: km. Range: [0.1, 10000]. Default: 6360.
     /// </remarks>
-    [FieldOffset(4), Range(0, 20), Default(1)]
-    public float Aerosols;
+    [FieldOffset(4), Unit("km"), Range(0.1, 10000), Default(6360)]
+    public float BottomRadius;
+    /// <summary>
+    /// Colour of the ground lighting the atmosphere from below through multiple scattering, and of the planet seen below the horizon (linear; Unreal's sRGB 170 grey).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: [0.401978,0.401978,0.401978].
+    /// </remarks>
+    [FieldOffset(8), ColorPicker, Range(0, 1), Default(0.401978, 0.401978, 0.401978)]
+    public Vector3 GroundAlbedo;
+    /// <summary>
+    /// Thickness of the atmosphere above the ground.
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0.1, 10000]. Default: 60.
+    /// </remarks>
+    [FieldOffset(20), Unit("km"), Range(0.1, 10000), Default(60)]
+    public float AtmosphereHeight;
+    /// <summary>
+    /// How much light scatters more than once: 0 is single scattering only (a darker, more saturated sky), 1 physical.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 100]. Default: 1.
+    /// </remarks>
+    [FieldOffset(24), Range(0, 100), Default(1)]
+    public float MultiScattering;
+    /// <summary>
+    /// Scales the number of samples the sky's ray marches take: more removes banding in thick or tall atmospheres at a higher LUT cost.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.25, 8]. Default: 1.
+    /// </remarks>
+    [FieldOffset(28), Range(0.25, 8), Default(1)]
+    public float TraceSampleCountScale;
+    /// <summary>
+    /// Rayleigh (air molecule) scattering at the ground, per kilometre, times <c>rayleighScattering</c>: the blue of the sky.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 2]. Default: 0.0331.
+    /// </remarks>
+    [FieldOffset(32), Range(0, 2), Default(0.0331)]
+    public float RayleighScatteringScale;
+    /// <summary>
+    /// Rayleigh scattering colour (linear), times <c>rayleighScatteringScale</c>.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: [0.175287,0.409607,1].
+    /// </remarks>
+    [FieldOffset(36), ColorPicker, Min(0), Default(0.175287, 0.409607, 1)]
+    public Vector3 RayleighScattering;
+    /// <summary>
+    /// Altitude over which Rayleigh density falls by a factor of e.
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0.001, 20]. Default: 8.
+    /// </remarks>
+    [FieldOffset(48), Unit("km"), Range(0.001, 20), Default(8)]
+    public float RayleighExponentialDistribution;
+    /// <summary>
+    /// Mie (aerosol: haze, dust, pollution) scattering at the ground, per kilometre, times <c>mieScattering</c>: a whiter horizon and a wider glow around the sun.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 5]. Default: 0.003996.
+    /// </remarks>
+    [FieldOffset(52), Range(0, 5), Default(0.003996)]
+    public float MieScatteringScale;
+    /// <summary>
+    /// Mie scattering colour (linear), times <c>mieScatteringScale</c>.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [FieldOffset(56), ColorPicker, Min(0), Default(1, 1, 1)]
+    public Vector3 MieScattering;
+    /// <summary>
+    /// Mie absorption at the ground, per kilometre, times <c>mieAbsorption</c>: darker, browner haze.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 5]. Default: 0.000444.
+    /// </remarks>
+    [FieldOffset(68), Range(0, 5), Default(0.000444)]
+    public float MieAbsorptionScale;
+    /// <summary>
+    /// Mie absorption colour (linear), times <c>mieAbsorptionScale</c>.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [FieldOffset(72), ColorPicker, Min(0), Default(1, 1, 1)]
+    public Vector3 MieAbsorption;
+    /// <summary>
+    /// How strongly aerosols scatter forward: 0 evenly in all directions, towards 1 a tight bright halo around the sun.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 0.999]. Default: 0.8.
+    /// </remarks>
+    [FieldOffset(84), Range(0, 0.999), Default(0.8)]
+    public float MieAnisotropy;
+    /// <summary>
+    /// Altitude over which Mie density falls by a factor of e.
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0.001, 10]. Default: 1.2.
+    /// </remarks>
+    [FieldOffset(88), Unit("km"), Range(0.001, 10), Default(1.2)]
+    public float MieExponentialDistribution;
+    /// <summary>
+    /// Absorption of a layer such as ozone, per kilometre at its peak, times <c>absorption</c>: deepens the twilight blue (Unreal's Absorption Scale).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 0.2]. Default: 0.001881.
+    /// </remarks>
+    [FieldOffset(92), Range(0, 0.2), Default(0.001881)]
+    public float AbsorptionScale;
+    /// <summary>
+    /// Absorption colour (linear), times <c>absorptionScale</c>.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, ∞]. Default: [0.345561,1,0.045189].
+    /// </remarks>
+    [FieldOffset(96), ColorPicker, Min(0), Default(0.345561, 1, 0.045189)]
+    public Vector3 Absorption;
+    /// <summary>
+    /// Altitude of the absorbing layer's peak (Unreal's tent distribution tip altitude).
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0, 60]. Default: 25.
+    /// </remarks>
+    [FieldOffset(108), Unit("km"), Range(0, 60), Default(25)]
+    public float AbsorptionTipAltitude;
+    /// <summary>
+    /// Density at the absorbing layer's peak (Unreal's tent tip value).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [FieldOffset(112), Range(0, 1), Default(1)]
+    public float AbsorptionTipValue;
+    /// <summary>
+    /// Altitude over which the layer's density falls from its peak to zero, above and below it (Unreal's tent width); 0 removes the layer.
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0, 20]. Default: 15.
+    /// </remarks>
+    [FieldOffset(116), Unit("km"), Range(0, 20), Default(15)]
+    public float AbsorptionWidth;
+    /// <summary>
+    /// Multiplies the luminance of the sky itself (and so the sky light it casts), not the aerial perspective (linear).
+    /// </summary>
+    /// <remarks>
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [FieldOffset(120), ColorPicker(Hdr = true), Min(0), Default(1, 1, 1)]
+    public Vector3 SkyLuminanceFactor;
+    /// <summary>
+    /// Multiplies the luminance of the sky and of the aerial perspective (linear).
+    /// </summary>
+    /// <remarks>
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: [1,1,1].
+    /// </remarks>
+    [FieldOffset(132), ColorPicker(Hdr = true), Min(0), Default(1, 1, 1)]
+    public Vector3 SkyAndAerialPerspectiveLuminanceFactor;
+    /// <summary>
+    /// Makes the aerial perspective look thicker by scaling distances from the camera to surfaces (not to the sky).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 3]. Default: 1.
+    /// </remarks>
+    [FieldOffset(144), Range(0, 3), Default(1)]
+    public float AerialPerspectiveViewDistanceScale;
+    /// <summary>
+    /// Scales the sun and sky light the height fog scatters beyond the volumetric fog (Unreal's sky atmosphere contribution to exponential height fog).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [FieldOffset(148), Range(0, 1), Default(1)]
+    public float HeightFogContribution;
+    /// <summary>
+    /// The lowest sun elevation used for the sunlight on surfaces: keeps a setting sun lighting and shadowing the scene. -90 is physical. The sky is unaffected.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [-90, 90]. Default: -90.
+    /// </remarks>
+    [FieldOffset(152), Unit("deg"), Range(-90, 90), Default(-90)]
+    public float TransmittanceMinLightElevationAngle;
+    /// <summary>
+    /// Distance from the camera where the aerial perspective starts.
+    /// </summary>
+    /// <remarks>
+    /// Unit: km. Range: [0.001, 10]. Default: 0.1.
+    /// </remarks>
+    [FieldOffset(156), Unit("km"), Range(0.001, 10), Default(0.1)]
+    public float AerialPerspectiveStartDepth;
     /// <summary>
     /// Fraction of the sky covered by the lit cloud layer; 0 disables clouds.
     /// </summary>
     /// <remarks>
     /// Range: [0, 1]. Default: 0.
     /// </remarks>
-    [FieldOffset(8), Range(0, 1), Default(0)]
+    [FieldOffset(160), Range(0, 1), Default(0)]
     public float CloudCoverage;
     /// <summary>
     /// Altitude of the cloud layer above sea level.
@@ -3517,10 +4246,10 @@ public partial struct SkyAtmosphere : IComponent<SkyAtmosphere>
     /// <remarks>
     /// Unit: m. Range: [500, 20000]. Default: 2200.
     /// </remarks>
-    [FieldOffset(12), Unit("m"), Range(500, 20000), Default(2200)]
+    [FieldOffset(164), Unit("m"), Range(500, 20000), Default(2200)]
     public float CloudHeight;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 44;
+    public static uint TypeIndex => 46;
     /// <inheritdoc/>
     public static ref SkyAtmosphere Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSkyAtmosphere, EngineValueCodecs.WriteSkyAtmosphere);
     /// <inheritdoc/>
@@ -3632,7 +4361,7 @@ public partial struct Sprite : IComponent<Sprite>
     [Default(1, 1)]
     public Vector2 Parallax;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 45;
+    public static uint TypeIndex => 47;
     /// <inheritdoc/>
     public static ref Sprite Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSprite, EngineValueCodecs.WriteSprite);
     /// <inheritdoc/>
@@ -3672,7 +4401,7 @@ public partial struct Stimulus : IComponent<Stimulus>
     [Range(0, 10), Default(1)]
     public float Visibility;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 46;
+    public static uint TypeIndex => 48;
     /// <inheritdoc/>
     public static ref Stimulus Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStimulus, EngineValueCodecs.WriteStimulus);
     /// <inheritdoc/>
@@ -3696,7 +4425,7 @@ public partial struct StreamedWorld : IComponent<StreamedWorld>
     [Default(Json = "null")]
     public string? World;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 47;
+    public static uint TypeIndex => 49;
     /// <inheritdoc/>
     public static ref StreamedWorld Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStreamedWorld, EngineValueCodecs.WriteStreamedWorld);
     /// <inheritdoc/>
@@ -3728,7 +4457,7 @@ public partial struct Terrain : IComponent<Terrain>
     [Default(Json = "null")]
     public string? Foliage;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 48;
+    public static uint TypeIndex => 50;
     /// <inheritdoc/>
     public static ref Terrain Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrain, EngineValueCodecs.WriteTerrain);
     /// <inheritdoc/>
@@ -3761,7 +4490,7 @@ public partial struct TerrainChunk : IComponent<TerrainChunk>
     [FieldOffset(4), Default(0)]
     public int Z;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 49;
+    public static uint TypeIndex => 51;
     /// <inheritdoc/>
     public static ref TerrainChunk Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrainChunk, EngineValueCodecs.WriteTerrainChunk);
     /// <inheritdoc/>
@@ -3785,7 +4514,7 @@ public partial struct TileColliderSource2d : IComponent<TileColliderSource2d>
     [Default(Json = "null")]
     public string? Owner;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 50;
+    public static uint TypeIndex => 52;
     /// <inheritdoc/>
     public static ref TileColliderSource2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTileColliderSource2d, EngineValueCodecs.WriteTileColliderSource2d);
     /// <inheritdoc/>
@@ -3999,7 +4728,7 @@ public partial struct Tilemap : IComponent<Tilemap>
     [Default(Json = "[]")]
     public TileRule[] Rules;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 51;
+    public static uint TypeIndex => 53;
     /// <inheritdoc/>
     public static ref Tilemap Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTilemap, EngineValueCodecs.WriteTilemap);
     /// <inheritdoc/>
@@ -4178,7 +4907,7 @@ public partial struct Vehicle : IComponent<Vehicle>
     [FieldOffset(52), Range(1, 15), Default(1)]
     public uint Layer;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 52;
+    public static uint TypeIndex => 54;
     /// <inheritdoc/>
     public static ref Vehicle Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicle, EngineValueCodecs.WriteVehicle);
     /// <inheritdoc/>
@@ -4227,7 +4956,7 @@ public partial struct VehicleInput : IComponent<VehicleInput>
     [FieldOffset(12), Range(0, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
     public float HandBrake;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 53;
+    public static uint TypeIndex => 55;
     /// <inheritdoc/>
     public static ref VehicleInput Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleInput, EngineValueCodecs.WriteVehicleInput);
     /// <inheritdoc/>
@@ -4268,7 +4997,7 @@ public partial struct VehicleTelemetry : IComponent<VehicleTelemetry>
     [FieldOffset(8), Replicate(Audience.Relevant, Rollback = true), Default(0)]
     public int Gear;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 54;
+    public static uint TypeIndex => 56;
     /// <inheritdoc/>
     public static ref VehicleTelemetry Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleTelemetry, EngineValueCodecs.WriteVehicleTelemetry);
     /// <inheritdoc/>
@@ -4301,7 +5030,7 @@ public partial struct Velocity : IComponent<Velocity>
     [FieldOffset(12), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0, 0, 0)]
     public Vector3 Angular;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 55;
+    public static uint TypeIndex => 57;
     /// <inheritdoc/>
     public static ref Velocity Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity, EngineValueCodecs.WriteVelocity);
     /// <inheritdoc/>
@@ -4334,11 +5063,35 @@ public partial struct Velocity2d : IComponent<Velocity2d>
     [FieldOffset(8), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0)]
     public float Angular;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 56;
+    public static uint TypeIndex => 58;
     /// <inheritdoc/>
     public static ref Velocity2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity2d, EngineValueCodecs.WriteVelocity2d);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in Velocity2d value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVelocity2d));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// Vertex colours painted onto this entity's <c>MeshRenderer</c> (its instance only; the shared model stays untouched). Materials read them as <c>vertexColor()</c>: glTF materials multiply base colour by them, graph materials blend layers by them.
+/// </summary>
+[EngineComponent("VertexPaint", Module = "render")]
+public partial struct VertexPaint : IComponent<VertexPaint>
+{
+    /// <summary>
+    /// Painted primitives by subtree-local slot (as <c>MeshRenderer.materialOverrides</c>); unlisted primitives keep their imported colours.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public PaintedPrimitive[] Primitives;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 59;
+    /// <inheritdoc/>
+    public static ref VertexPaint Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVertexPaint, EngineValueCodecs.WriteVertexPaint);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in VertexPaint value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVertexPaint));
     /// <inheritdoc/>
     public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
 }
@@ -4374,7 +5127,7 @@ public partial struct VisualEffect : IComponent<VisualEffect>
     [Range(0, 50), Default(1)]
     public float Intensity;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 57;
+    public static uint TypeIndex => 60;
     /// <inheritdoc/>
     public static ref VisualEffect Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVisualEffect, EngineValueCodecs.WriteVisualEffect);
     /// <inheritdoc/>
@@ -4450,7 +5203,7 @@ public partial struct Wanderer : IComponent<Wanderer>
     [FieldOffset(40), Default(0)]
     public uint Goals;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 58;
+    public static uint TypeIndex => 61;
     /// <inheritdoc/>
     public static ref Wanderer Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadWanderer, EngineValueCodecs.WriteWanderer);
     /// <inheritdoc/>
@@ -4478,7 +5231,7 @@ public enum ZoneShape : uint
 public static class EngineComponents
 {
     /// <summary>Schema names by TypeIndex.</summary>
-    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReflectionProbe", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
+    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Decal", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "LocalFogVolume", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReflectionProbe", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VertexPaint", "VisualEffect", "Wanderer"];
     internal static readonly string[] DefaultJson = [
         "{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}",
         "{\"a\":\"\",\"b\":\"\",\"position\":[0,0,0],\"width\":1,\"height\":2,\"open\":1}",
@@ -4499,14 +5252,16 @@ public static class EngineComponents
         "{\"grounded\":false,\"groundNormal\":[0,0]}",
         "{\"kind\":\"box\",\"center\":[0,0,0],\"halfExtents\":[0.5,0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"asset\":null,\"node\":null,\"primitive\":null,\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
         "{\"kind\":\"box\",\"halfExtents\":[0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"points\":[],\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
-        "{\"sky\":[0.22,0.32,0.6,1],\"horizon\":[0.95,0.62,0.4,1],\"ground\":[0.18,0.16,0.14,1],\"intensity\":900,\"exposure\":0.0015}",
+        "{\"material\":null,\"size\":[1,1,1],\"color\":[1,1,1,1],\"baseColorOpacity\":1,\"normalOpacity\":1,\"roughnessOpacity\":1,\"metallicOpacity\":1,\"specularOpacity\":1,\"emissiveOpacity\":1,\"occlusionOpacity\":1,\"fadeStartDistance\":0,\"fadeEndDistance\":0,\"fadeAngleStart\":60,\"fadeAngleEnd\":80,\"sortOrder\":0,\"fadeScreenSize\":0.002}",
+        "{\"sky\":[0.22,0.32,0.6,1],\"horizon\":[0.95,0.62,0.4,1],\"skyFalloff\":3,\"glow\":[0,0,0,1],\"glowFalloff\":10,\"ground\":[0.18,0.16,0.14,1],\"intensity\":900,\"skyLight\":1,\"exposure\":0.0015}",
         "{\"frames\":[],\"startTick\":0,\"looping\":false}",
         "{\"target\":null,\"distance\":5,\"height\":0.8,\"yaw\":0,\"pitch\":20,\"sensitivity\":2.5,\"player\":1}",
-        "{\"density\":0.002,\"baseHeight\":0,\"falloff\":60,\"albedo\":[0.9,0.9,0.9,1],\"anisotropy\":0.3}",
+        "{\"density\":0.002,\"baseHeight\":0,\"falloff\":60,\"albedo\":[0.9,0.9,0.9,1],\"anisotropy\":0.3,\"volumetric\":true,\"volumetricDistance\":60,\"volumetricEmissive\":[0,0,0],\"volumetricExtinctionScale\":1}",
         "{\"kind\":\"fixed\",\"connectedBody\":0,\"anchorA\":[0,0,0],\"anchorB\":[0,0,0],\"axis\":[1,0,0],\"normal\":[0,1,0],\"translationMin\":[0,0,0],\"translationMax\":[0,0,0],\"rotationMin\":[0,0,0],\"rotationMax\":[0,0,0]}",
-        "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"range\":10,\"innerAngle\":20,\"outerAngle\":30}",
+        "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"units\":\"lumens\",\"range\":10,\"innerAngle\":20,\"outerAngle\":30,\"volumetricScattering\":1,\"sourceRadius\":0,\"sourceLength\":0,\"sourceWidth\":0.64,\"sourceHeight\":0.64,\"barnDoorAngle\":88,\"barnDoorLength\":0.2,\"profile\":null,\"profileIntensity\":false,\"sourceAngle\":0.5357,\"atmosphereSunLight\":true,\"atmosphereSunLightIndex\":0,\"atmosphereSunDiskColorScale\":[1,1,1],\"perPixelAtmosphereTransmittance\":false}",
         "{\"position\":[0,0,0],\"color\":[1,1,1],\"radius\":5,\"shadows\":false}",
-        "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[]}",
+        "{\"enabled\":true,\"shape\":\"sphere\",\"size\":[10,10,10],\"density\":0.1,\"radialFalloff\":1,\"heightFalloff\":0,\"albedo\":[0.9,0.9,0.9,1],\"emissive\":[0,0,0],\"priority\":0}",
+        "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[],\"castShadows\":true,\"receivesDecals\":true}",
         "{\"music\":null,\"bus\":\"music\",\"intensity\":0,\"segment\":\"\"}",
         "{\"profile\":0,\"radius\":0.3,\"height\":1.8,\"maxSpeed\":3,\"acceleration\":8,\"areaMask\":65535,\"stoppingDistance\":0.1}",
         "{\"profile\":0,\"name\":\"\",\"radius\":0.3,\"height\":1.8,\"climb\":0.4,\"slope\":45,\"areaCosts\":[],\"areaMask\":65535}",
@@ -4524,7 +5279,7 @@ public static class EngineComponents
         "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
-        "{\"seaLevel\":0,\"aerosols\":1,\"cloudCoverage\":0,\"cloudHeight\":2200}",
+        "{\"seaLevel\":0,\"bottomRadius\":6360,\"groundAlbedo\":[0.401978,0.401978,0.401978],\"atmosphereHeight\":60,\"multiScattering\":1,\"traceSampleCountScale\":1,\"rayleighScatteringScale\":0.0331,\"rayleighScattering\":[0.175287,0.409607,1],\"rayleighExponentialDistribution\":8,\"mieScatteringScale\":0.003996,\"mieScattering\":[1,1,1],\"mieAbsorptionScale\":0.000444,\"mieAbsorption\":[1,1,1],\"mieAnisotropy\":0.8,\"mieExponentialDistribution\":1.2,\"absorptionScale\":0.001881,\"absorption\":[0.345561,1,0.045189],\"absorptionTipAltitude\":25,\"absorptionTipValue\":1,\"absorptionWidth\":15,\"skyLuminanceFactor\":[1,1,1],\"skyAndAerialPerspectiveLuminanceFactor\":[1,1,1],\"aerialPerspectiveViewDistanceScale\":1,\"heightFogContribution\":1,\"transmittanceMinLightElevationAngle\":-90,\"aerialPerspectiveStartDepth\":0.1,\"cloudCoverage\":0,\"cloudHeight\":2200}",
         "{\"atlas\":null,\"region\":\"\",\"normalAtlas\":null,\"size\":[0,0],\"tint\":[1,1,1,1],\"sortingLayer\":0,\"order\":0,\"flipX\":false,\"flipY\":false,\"nineSlice\":false,\"lit\":false,\"parallax\":[1,1]}",
         "{\"kind\":\"\",\"height\":1.2,\"visibility\":1}",
         "{\"world\":null}",
@@ -4537,6 +5292,7 @@ public static class EngineComponents
         "{\"wheelsInContact\":0,\"engineRpm\":0,\"gear\":0}",
         "{\"linear\":[0,0,0],\"angular\":[0,0,0]}",
         "{\"linear\":[0,0],\"angular\":0}",
+        "{\"primitives\":[]}",
         "{\"effect\":\"campfire\",\"scale\":1,\"intensity\":1}",
         "{\"min\":[0,0,0],\"max\":[0,0,0],\"pauseTicks\":45,\"resumeTick\":0,\"goals\":0}",
     ];
@@ -5463,13 +6219,118 @@ internal static class EngineValueCodecs
         ColliderKind2d.Polygon => "polygon",
         _ => throw new JsonException("unknown enum value")
     });
+    internal static Decal ReadDecal(JsonElement v)
+        => new()
+        {
+            Material = Field(v, "material", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "material", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "material", "null").GetString()),
+            Size = new Vector3(Field(v, "size", "[1,1,1]")[0].GetSingle(), Field(v, "size", "[1,1,1]")[1].GetSingle(), Field(v, "size", "[1,1,1]")[2].GetSingle()),
+            Color = new Color(Field(v, "color", "[1,1,1,1]")[0].GetSingle(), Field(v, "color", "[1,1,1,1]")[1].GetSingle(), Field(v, "color", "[1,1,1,1]")[2].GetSingle(), Field(v, "color", "[1,1,1,1]")[3].GetSingle()),
+            BaseColorOpacity = Field(v, "baseColorOpacity", "1").GetSingle(),
+            NormalOpacity = Field(v, "normalOpacity", "1").GetSingle(),
+            RoughnessOpacity = Field(v, "roughnessOpacity", "1").GetSingle(),
+            MetallicOpacity = Field(v, "metallicOpacity", "1").GetSingle(),
+            SpecularOpacity = Field(v, "specularOpacity", "1").GetSingle(),
+            EmissiveOpacity = Field(v, "emissiveOpacity", "1").GetSingle(),
+            OcclusionOpacity = Field(v, "occlusionOpacity", "1").GetSingle(),
+            FadeStartDistance = Field(v, "fadeStartDistance", "0").GetSingle(),
+            FadeEndDistance = Field(v, "fadeEndDistance", "0").GetSingle(),
+            FadeAngleStart = Field(v, "fadeAngleStart", "60").GetSingle(),
+            FadeAngleEnd = Field(v, "fadeAngleEnd", "80").GetSingle(),
+            SortOrder = Field(v, "sortOrder", "0").GetInt32(),
+            FadeScreenSize = Field(v, "fadeScreenSize", "0.002").GetSingle(),
+        };
+    internal static void WriteDecal(Utf8JsonWriter w, Decal v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("material");
+        {
+        if (v.Material is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("size");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Size.X);
+        WriteFloat(w, v.Size.Y);
+        WriteFloat(w, v.Size.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("color");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Color.R);
+        WriteFloat(w, v.Color.G);
+        WriteFloat(w, v.Color.B);
+        WriteFloat(w, v.Color.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("baseColorOpacity");
+        {
+        WriteFloat(w, v.BaseColorOpacity);
+        }
+        w.WritePropertyName("normalOpacity");
+        {
+        WriteFloat(w, v.NormalOpacity);
+        }
+        w.WritePropertyName("roughnessOpacity");
+        {
+        WriteFloat(w, v.RoughnessOpacity);
+        }
+        w.WritePropertyName("metallicOpacity");
+        {
+        WriteFloat(w, v.MetallicOpacity);
+        }
+        w.WritePropertyName("specularOpacity");
+        {
+        WriteFloat(w, v.SpecularOpacity);
+        }
+        w.WritePropertyName("emissiveOpacity");
+        {
+        WriteFloat(w, v.EmissiveOpacity);
+        }
+        w.WritePropertyName("occlusionOpacity");
+        {
+        WriteFloat(w, v.OcclusionOpacity);
+        }
+        w.WritePropertyName("fadeStartDistance");
+        {
+        WriteFloat(w, v.FadeStartDistance);
+        }
+        w.WritePropertyName("fadeEndDistance");
+        {
+        WriteFloat(w, v.FadeEndDistance);
+        }
+        w.WritePropertyName("fadeAngleStart");
+        {
+        WriteFloat(w, v.FadeAngleStart);
+        }
+        w.WritePropertyName("fadeAngleEnd");
+        {
+        WriteFloat(w, v.FadeAngleEnd);
+        }
+        w.WritePropertyName("sortOrder");
+        {
+        w.WriteNumberValue(v.SortOrder);
+        }
+        w.WritePropertyName("fadeScreenSize");
+        {
+        WriteFloat(w, v.FadeScreenSize);
+        }
+        w.WriteEndObject();
+    }
     internal static Environment ReadEnvironment(JsonElement v)
         => new()
         {
             Sky = new Color(Field(v, "sky", "[0.22,0.32,0.6,1]")[0].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[1].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[2].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[3].GetSingle()),
             Horizon = new Color(Field(v, "horizon", "[0.95,0.62,0.4,1]")[0].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[1].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[2].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[3].GetSingle()),
+            SkyFalloff = Field(v, "skyFalloff", "3").GetSingle(),
+            Glow = new Color(Field(v, "glow", "[0,0,0,1]")[0].GetSingle(), Field(v, "glow", "[0,0,0,1]")[1].GetSingle(), Field(v, "glow", "[0,0,0,1]")[2].GetSingle(), Field(v, "glow", "[0,0,0,1]")[3].GetSingle()),
+            GlowFalloff = Field(v, "glowFalloff", "10").GetSingle(),
             Ground = new Color(Field(v, "ground", "[0.18,0.16,0.14,1]")[0].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[1].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[2].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[3].GetSingle()),
             Intensity = Field(v, "intensity", "900").GetSingle(),
+            SkyLight = Field(v, "skyLight", "1").GetSingle(),
             Exposure = Field(v, "exposure", "0.0015").GetSingle(),
         };
     internal static void WriteEnvironment(Utf8JsonWriter w, Environment v)
@@ -5493,6 +6354,23 @@ internal static class EngineValueCodecs
         WriteFloat(w, v.Horizon.A);
         w.WriteEndArray();
         }
+        w.WritePropertyName("skyFalloff");
+        {
+        WriteFloat(w, v.SkyFalloff);
+        }
+        w.WritePropertyName("glow");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Glow.R);
+        WriteFloat(w, v.Glow.G);
+        WriteFloat(w, v.Glow.B);
+        WriteFloat(w, v.Glow.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("glowFalloff");
+        {
+        WriteFloat(w, v.GlowFalloff);
+        }
         w.WritePropertyName("ground");
         {
         w.WriteStartArray();
@@ -5506,9 +6384,32 @@ internal static class EngineValueCodecs
         {
         WriteFloat(w, v.Intensity);
         }
+        w.WritePropertyName("skyLight");
+        {
+        WriteFloat(w, v.SkyLight);
+        }
         w.WritePropertyName("exposure");
         {
         WriteFloat(w, v.Exposure);
+        }
+        w.WriteEndObject();
+    }
+    internal static ExposureKey ReadExposureKey(JsonElement v)
+        => new()
+        {
+            Ev100 = Field(v, "ev100", "0").GetSingle(),
+            Stops = Field(v, "stops", "0").GetSingle(),
+        };
+    internal static void WriteExposureKey(Utf8JsonWriter w, ExposureKey v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("ev100");
+        {
+        WriteFloat(w, v.Ev100);
+        }
+        w.WritePropertyName("stops");
+        {
+        WriteFloat(w, v.Stops);
         }
         w.WriteEndObject();
     }
@@ -5573,6 +6474,19 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
+    internal static FogVolumeShape ReadFogVolumeShape(JsonElement v)
+        => v.GetString() switch
+        {
+            "sphere" => FogVolumeShape.Sphere,
+            "box" => FogVolumeShape.Box,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteFogVolumeShape(Utf8JsonWriter w, FogVolumeShape v) => w.WriteStringValue(v switch
+    {
+        FogVolumeShape.Sphere => "sphere",
+        FogVolumeShape.Box => "box",
+        _ => throw new JsonException("unknown enum value")
+    });
     internal static FollowCamera ReadFollowCamera(JsonElement v)
         => new()
         {
@@ -5643,6 +6557,10 @@ internal static class EngineValueCodecs
             Falloff = Field(v, "falloff", "60").GetSingle(),
             Albedo = new Color(Field(v, "albedo", "[0.9,0.9,0.9,1]")[0].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[1].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[2].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[3].GetSingle()),
             Anisotropy = Field(v, "anisotropy", "0.3").GetSingle(),
+            Volumetric = Field(v, "volumetric", "true").GetBoolean(),
+            VolumetricDistance = Field(v, "volumetricDistance", "60").GetSingle(),
+            VolumetricEmissive = new Vector3(Field(v, "volumetricEmissive", "[0,0,0]")[0].GetSingle(), Field(v, "volumetricEmissive", "[0,0,0]")[1].GetSingle(), Field(v, "volumetricEmissive", "[0,0,0]")[2].GetSingle()),
+            VolumetricExtinctionScale = Field(v, "volumetricExtinctionScale", "1").GetSingle(),
         };
     internal static void WriteHeightFog(Utf8JsonWriter w, HeightFog v)
     {
@@ -5671,6 +6589,26 @@ internal static class EngineValueCodecs
         w.WritePropertyName("anisotropy");
         {
         WriteFloat(w, v.Anisotropy);
+        }
+        w.WritePropertyName("volumetric");
+        {
+        w.WriteBooleanValue(v.Volumetric);
+        }
+        w.WritePropertyName("volumetricDistance");
+        {
+        WriteFloat(w, v.VolumetricDistance);
+        }
+        w.WritePropertyName("volumetricEmissive");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.VolumetricEmissive.X);
+        WriteFloat(w, v.VolumetricEmissive.Y);
+        WriteFloat(w, v.VolumetricEmissive.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("volumetricExtinctionScale");
+        {
+        WriteFloat(w, v.VolumetricExtinctionScale);
         }
         w.WriteEndObject();
     }
@@ -5792,9 +6730,24 @@ internal static class EngineValueCodecs
             Kind = ReadLightKind(Field(v, "kind", "\"point\"")),
             Color = new Color(Field(v, "color", "[1,1,1,1]")[0].GetSingle(), Field(v, "color", "[1,1,1,1]")[1].GetSingle(), Field(v, "color", "[1,1,1,1]")[2].GetSingle(), Field(v, "color", "[1,1,1,1]")[3].GetSingle()),
             Intensity = Field(v, "intensity", "800").GetSingle(),
+            Units = ReadLightUnits(Field(v, "units", "\"lumens\"")),
             Range = Field(v, "range", "10").GetSingle(),
             InnerAngle = Field(v, "innerAngle", "20").GetSingle(),
             OuterAngle = Field(v, "outerAngle", "30").GetSingle(),
+            VolumetricScattering = Field(v, "volumetricScattering", "1").GetSingle(),
+            SourceRadius = Field(v, "sourceRadius", "0").GetSingle(),
+            SourceLength = Field(v, "sourceLength", "0").GetSingle(),
+            SourceWidth = Field(v, "sourceWidth", "0.64").GetSingle(),
+            SourceHeight = Field(v, "sourceHeight", "0.64").GetSingle(),
+            BarnDoorAngle = Field(v, "barnDoorAngle", "88").GetSingle(),
+            BarnDoorLength = Field(v, "barnDoorLength", "0.2").GetSingle(),
+            Profile = Field(v, "profile", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "profile", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "profile", "null").GetString()),
+            ProfileIntensity = Field(v, "profileIntensity", "false").GetBoolean(),
+            SourceAngle = Field(v, "sourceAngle", "0.5357").GetSingle(),
+            AtmosphereSunLight = Field(v, "atmosphereSunLight", "true").GetBoolean(),
+            AtmosphereSunLightIndex = Field(v, "atmosphereSunLightIndex", "0").GetUInt32(),
+            AtmosphereSunDiskColorScale = new Vector3(Field(v, "atmosphereSunDiskColorScale", "[1,1,1]")[0].GetSingle(), Field(v, "atmosphereSunDiskColorScale", "[1,1,1]")[1].GetSingle(), Field(v, "atmosphereSunDiskColorScale", "[1,1,1]")[2].GetSingle()),
+            PerPixelAtmosphereTransmittance = Field(v, "perPixelAtmosphereTransmittance", "false").GetBoolean(),
         };
     internal static void WriteLight(Utf8JsonWriter w, Light v)
     {
@@ -5816,6 +6769,10 @@ internal static class EngineValueCodecs
         {
         WriteFloat(w, v.Intensity);
         }
+        w.WritePropertyName("units");
+        {
+        WriteLightUnits(w, v.Units);
+        }
         w.WritePropertyName("range");
         {
         WriteFloat(w, v.Range);
@@ -5827,6 +6784,69 @@ internal static class EngineValueCodecs
         w.WritePropertyName("outerAngle");
         {
         WriteFloat(w, v.OuterAngle);
+        }
+        w.WritePropertyName("volumetricScattering");
+        {
+        WriteFloat(w, v.VolumetricScattering);
+        }
+        w.WritePropertyName("sourceRadius");
+        {
+        WriteFloat(w, v.SourceRadius);
+        }
+        w.WritePropertyName("sourceLength");
+        {
+        WriteFloat(w, v.SourceLength);
+        }
+        w.WritePropertyName("sourceWidth");
+        {
+        WriteFloat(w, v.SourceWidth);
+        }
+        w.WritePropertyName("sourceHeight");
+        {
+        WriteFloat(w, v.SourceHeight);
+        }
+        w.WritePropertyName("barnDoorAngle");
+        {
+        WriteFloat(w, v.BarnDoorAngle);
+        }
+        w.WritePropertyName("barnDoorLength");
+        {
+        WriteFloat(w, v.BarnDoorLength);
+        }
+        w.WritePropertyName("profile");
+        {
+        if (v.Profile is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("profileIntensity");
+        {
+        w.WriteBooleanValue(v.ProfileIntensity);
+        }
+        w.WritePropertyName("sourceAngle");
+        {
+        WriteFloat(w, v.SourceAngle);
+        }
+        w.WritePropertyName("atmosphereSunLight");
+        {
+        w.WriteBooleanValue(v.AtmosphereSunLight);
+        }
+        w.WritePropertyName("atmosphereSunLightIndex");
+        {
+        w.WriteNumberValue(v.AtmosphereSunLightIndex);
+        }
+        w.WritePropertyName("atmosphereSunDiskColorScale");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.AtmosphereSunDiskColorScale.X);
+        WriteFloat(w, v.AtmosphereSunDiskColorScale.Y);
+        WriteFloat(w, v.AtmosphereSunDiskColorScale.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("perPixelAtmosphereTransmittance");
+        {
+        w.WriteBooleanValue(v.PerPixelAtmosphereTransmittance);
         }
         w.WriteEndObject();
     }
@@ -5873,6 +6893,8 @@ internal static class EngineValueCodecs
             "point" => LightKind.Point,
             "spot" => LightKind.Spot,
             "directional" => LightKind.Directional,
+            "rect" => LightKind.Rect,
+            "disc" => LightKind.Disc,
             _ => throw new JsonException("unknown enum variant")
         };
     internal static void WriteLightKind(Utf8JsonWriter w, LightKind v) => w.WriteStringValue(v switch
@@ -5880,6 +6902,23 @@ internal static class EngineValueCodecs
         LightKind.Point => "point",
         LightKind.Spot => "spot",
         LightKind.Directional => "directional",
+        LightKind.Rect => "rect",
+        LightKind.Disc => "disc",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static LightUnits ReadLightUnits(JsonElement v)
+        => v.GetString() switch
+        {
+            "lumens" => LightUnits.Lumens,
+            "candela" => LightUnits.Candela,
+            "nits" => LightUnits.Nits,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteLightUnits(Utf8JsonWriter w, LightUnits v) => w.WriteStringValue(v switch
+    {
+        LightUnits.Lumens => "lumens",
+        LightUnits.Candela => "candela",
+        LightUnits.Nits => "nits",
         _ => throw new JsonException("unknown enum value")
     });
     internal static LinkKind ReadLinkKind(JsonElement v)
@@ -5903,6 +6942,73 @@ internal static class EngineValueCodecs
         LinkKind.Teleport => "teleport",
         _ => throw new JsonException("unknown enum value")
     });
+    internal static LocalFogVolume ReadLocalFogVolume(JsonElement v)
+        => new()
+        {
+            Enabled = Field(v, "enabled", "true").GetBoolean(),
+            Shape = ReadFogVolumeShape(Field(v, "shape", "\"sphere\"")),
+            Size = new Vector3(Field(v, "size", "[10,10,10]")[0].GetSingle(), Field(v, "size", "[10,10,10]")[1].GetSingle(), Field(v, "size", "[10,10,10]")[2].GetSingle()),
+            Density = Field(v, "density", "0.1").GetSingle(),
+            RadialFalloff = Field(v, "radialFalloff", "1").GetSingle(),
+            HeightFalloff = Field(v, "heightFalloff", "0").GetSingle(),
+            Albedo = new Color(Field(v, "albedo", "[0.9,0.9,0.9,1]")[0].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[1].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[2].GetSingle(), Field(v, "albedo", "[0.9,0.9,0.9,1]")[3].GetSingle()),
+            Emissive = new Vector3(Field(v, "emissive", "[0,0,0]")[0].GetSingle(), Field(v, "emissive", "[0,0,0]")[1].GetSingle(), Field(v, "emissive", "[0,0,0]")[2].GetSingle()),
+            Priority = Field(v, "priority", "0").GetInt32(),
+        };
+    internal static void WriteLocalFogVolume(Utf8JsonWriter w, LocalFogVolume v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("enabled");
+        {
+        w.WriteBooleanValue(v.Enabled);
+        }
+        w.WritePropertyName("shape");
+        {
+        WriteFogVolumeShape(w, v.Shape);
+        }
+        w.WritePropertyName("size");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Size.X);
+        WriteFloat(w, v.Size.Y);
+        WriteFloat(w, v.Size.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("density");
+        {
+        WriteFloat(w, v.Density);
+        }
+        w.WritePropertyName("radialFalloff");
+        {
+        WriteFloat(w, v.RadialFalloff);
+        }
+        w.WritePropertyName("heightFalloff");
+        {
+        WriteFloat(w, v.HeightFalloff);
+        }
+        w.WritePropertyName("albedo");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Albedo.R);
+        WriteFloat(w, v.Albedo.G);
+        WriteFloat(w, v.Albedo.B);
+        WriteFloat(w, v.Albedo.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("emissive");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Emissive.X);
+        WriteFloat(w, v.Emissive.Y);
+        WriteFloat(w, v.Emissive.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("priority");
+        {
+        w.WriteNumberValue(v.Priority);
+        }
+        w.WriteEndObject();
+    }
     internal static LocomotionClip ReadLocomotionClip(JsonElement v)
         => new()
         {
@@ -5970,6 +7076,8 @@ internal static class EngineValueCodecs
             EmissiveStrength = Field(v, "emissiveStrength", "1").GetSingle(),
             EmissiveFactor = Field(v, "emissiveFactor", "null").ValueKind == JsonValueKind.Null ? null : (Vector3?)(new Vector3(Field(v, "emissiveFactor", "null")[0].GetSingle(), Field(v, "emissiveFactor", "null")[1].GetSingle(), Field(v, "emissiveFactor", "null")[2].GetSingle())),
             EmissiveMaterials = Field(v, "emissiveMaterials", "[]").EnumerateArray().Select(static item0 => item0.ValueKind == JsonValueKind.Null ? null : item0.GetString()).ToArray(),
+            CastShadows = Field(v, "castShadows", "true").GetBoolean(),
+            ReceivesDecals = Field(v, "receivesDecals", "true").GetBoolean(),
         };
     internal static void WriteMeshRenderer(Utf8JsonWriter w, MeshRenderer v)
     {
@@ -6068,6 +7176,14 @@ internal static class EngineValueCodecs
         w.WriteStringValue(item0);
         }
         w.WriteEndArray();
+        }
+        w.WritePropertyName("castShadows");
+        {
+        w.WriteBooleanValue(v.CastShadows);
+        }
+        w.WritePropertyName("receivesDecals");
+        {
+        w.WriteBooleanValue(v.ReceivesDecals);
         }
         w.WriteEndObject();
     }
@@ -6442,6 +7558,30 @@ internal static class EngineValueCodecs
         ObstacleMode.Avoid => "avoid",
         _ => throw new JsonException("unknown enum value")
     });
+    internal static PaintedPrimitive ReadPaintedPrimitive(JsonElement v)
+        => new()
+        {
+            Primitive = Field(v, "primitive", "0").GetUInt32(),
+            Vertices = Field(v, "vertices", "0").GetUInt32(),
+            Colors = Field(v, "colors", "\"\"").ValueKind == JsonValueKind.Null ? null : Field(v, "colors", "\"\"").GetString(),
+        };
+    internal static void WritePaintedPrimitive(Utf8JsonWriter w, PaintedPrimitive v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("primitive");
+        {
+        w.WriteNumberValue(v.Primitive);
+        }
+        w.WritePropertyName("vertices");
+        {
+        w.WriteNumberValue(v.Vertices);
+        }
+        w.WritePropertyName("colors");
+        {
+        w.WriteStringValue(v.Colors);
+        }
+        w.WriteEndObject();
+    }
     internal static Perceiver ReadPerceiver(JsonElement v)
         => new()
         {
@@ -6636,6 +7776,7 @@ internal static class EngineValueCodecs
             MinEv100 = Field(v, "minEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "minEv100", "null").GetSingle()),
             MaxEv100 = Field(v, "maxEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "maxEv100", "null").GetSingle()),
             AdaptationSpeed = Field(v, "adaptationSpeed", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "adaptationSpeed", "null").GetSingle()),
+            CompensationCurve = Field(v, "compensationCurve", "null").ValueKind == JsonValueKind.Null ? null : (ExposureKey[]?)(Field(v, "compensationCurve", "null").EnumerateArray().Select(static item1 => ReadExposureKey(item1)).ToArray()),
             ToneMapping = Field(v, "toneMapping", "null").ValueKind == JsonValueKind.Null ? null : (ToneMapping?)(ReadToneMapping(Field(v, "toneMapping", "null"))),
             Bloom = Field(v, "bloom", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "bloom", "null").GetSingle()),
             WhiteBalance = Field(v, "whiteBalance", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "whiteBalance", "null").GetSingle()),
@@ -6705,6 +7846,18 @@ internal static class EngineValueCodecs
         if (v.AdaptationSpeed is { } option0)
         {
         WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("compensationCurve");
+        {
+        if (v.CompensationCurve is { } option0)
+        {
+        w.WriteStartArray();
+        if (option0 is not null) foreach (var item1 in option0)
+        {
+        WriteExposureKey(w, item1);
+        }
+        w.WriteEndArray();
         } else w.WriteNullValue();
         }
         w.WritePropertyName("toneMapping");
@@ -7160,7 +8313,31 @@ internal static class EngineValueCodecs
         => new()
         {
             SeaLevel = Field(v, "seaLevel", "0").GetSingle(),
-            Aerosols = Field(v, "aerosols", "1").GetSingle(),
+            BottomRadius = Field(v, "bottomRadius", "6360").GetSingle(),
+            GroundAlbedo = new Vector3(Field(v, "groundAlbedo", "[0.401978,0.401978,0.401978]")[0].GetSingle(), Field(v, "groundAlbedo", "[0.401978,0.401978,0.401978]")[1].GetSingle(), Field(v, "groundAlbedo", "[0.401978,0.401978,0.401978]")[2].GetSingle()),
+            AtmosphereHeight = Field(v, "atmosphereHeight", "60").GetSingle(),
+            MultiScattering = Field(v, "multiScattering", "1").GetSingle(),
+            TraceSampleCountScale = Field(v, "traceSampleCountScale", "1").GetSingle(),
+            RayleighScatteringScale = Field(v, "rayleighScatteringScale", "0.0331").GetSingle(),
+            RayleighScattering = new Vector3(Field(v, "rayleighScattering", "[0.175287,0.409607,1]")[0].GetSingle(), Field(v, "rayleighScattering", "[0.175287,0.409607,1]")[1].GetSingle(), Field(v, "rayleighScattering", "[0.175287,0.409607,1]")[2].GetSingle()),
+            RayleighExponentialDistribution = Field(v, "rayleighExponentialDistribution", "8").GetSingle(),
+            MieScatteringScale = Field(v, "mieScatteringScale", "0.003996").GetSingle(),
+            MieScattering = new Vector3(Field(v, "mieScattering", "[1,1,1]")[0].GetSingle(), Field(v, "mieScattering", "[1,1,1]")[1].GetSingle(), Field(v, "mieScattering", "[1,1,1]")[2].GetSingle()),
+            MieAbsorptionScale = Field(v, "mieAbsorptionScale", "0.000444").GetSingle(),
+            MieAbsorption = new Vector3(Field(v, "mieAbsorption", "[1,1,1]")[0].GetSingle(), Field(v, "mieAbsorption", "[1,1,1]")[1].GetSingle(), Field(v, "mieAbsorption", "[1,1,1]")[2].GetSingle()),
+            MieAnisotropy = Field(v, "mieAnisotropy", "0.8").GetSingle(),
+            MieExponentialDistribution = Field(v, "mieExponentialDistribution", "1.2").GetSingle(),
+            AbsorptionScale = Field(v, "absorptionScale", "0.001881").GetSingle(),
+            Absorption = new Vector3(Field(v, "absorption", "[0.345561,1,0.045189]")[0].GetSingle(), Field(v, "absorption", "[0.345561,1,0.045189]")[1].GetSingle(), Field(v, "absorption", "[0.345561,1,0.045189]")[2].GetSingle()),
+            AbsorptionTipAltitude = Field(v, "absorptionTipAltitude", "25").GetSingle(),
+            AbsorptionTipValue = Field(v, "absorptionTipValue", "1").GetSingle(),
+            AbsorptionWidth = Field(v, "absorptionWidth", "15").GetSingle(),
+            SkyLuminanceFactor = new Vector3(Field(v, "skyLuminanceFactor", "[1,1,1]")[0].GetSingle(), Field(v, "skyLuminanceFactor", "[1,1,1]")[1].GetSingle(), Field(v, "skyLuminanceFactor", "[1,1,1]")[2].GetSingle()),
+            SkyAndAerialPerspectiveLuminanceFactor = new Vector3(Field(v, "skyAndAerialPerspectiveLuminanceFactor", "[1,1,1]")[0].GetSingle(), Field(v, "skyAndAerialPerspectiveLuminanceFactor", "[1,1,1]")[1].GetSingle(), Field(v, "skyAndAerialPerspectiveLuminanceFactor", "[1,1,1]")[2].GetSingle()),
+            AerialPerspectiveViewDistanceScale = Field(v, "aerialPerspectiveViewDistanceScale", "1").GetSingle(),
+            HeightFogContribution = Field(v, "heightFogContribution", "1").GetSingle(),
+            TransmittanceMinLightElevationAngle = Field(v, "transmittanceMinLightElevationAngle", "-90").GetSingle(),
+            AerialPerspectiveStartDepth = Field(v, "aerialPerspectiveStartDepth", "0.1").GetSingle(),
             CloudCoverage = Field(v, "cloudCoverage", "0").GetSingle(),
             CloudHeight = Field(v, "cloudHeight", "2200").GetSingle(),
         };
@@ -7171,9 +8348,133 @@ internal static class EngineValueCodecs
         {
         WriteFloat(w, v.SeaLevel);
         }
-        w.WritePropertyName("aerosols");
+        w.WritePropertyName("bottomRadius");
         {
-        WriteFloat(w, v.Aerosols);
+        WriteFloat(w, v.BottomRadius);
+        }
+        w.WritePropertyName("groundAlbedo");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.GroundAlbedo.X);
+        WriteFloat(w, v.GroundAlbedo.Y);
+        WriteFloat(w, v.GroundAlbedo.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("atmosphereHeight");
+        {
+        WriteFloat(w, v.AtmosphereHeight);
+        }
+        w.WritePropertyName("multiScattering");
+        {
+        WriteFloat(w, v.MultiScattering);
+        }
+        w.WritePropertyName("traceSampleCountScale");
+        {
+        WriteFloat(w, v.TraceSampleCountScale);
+        }
+        w.WritePropertyName("rayleighScatteringScale");
+        {
+        WriteFloat(w, v.RayleighScatteringScale);
+        }
+        w.WritePropertyName("rayleighScattering");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.RayleighScattering.X);
+        WriteFloat(w, v.RayleighScattering.Y);
+        WriteFloat(w, v.RayleighScattering.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("rayleighExponentialDistribution");
+        {
+        WriteFloat(w, v.RayleighExponentialDistribution);
+        }
+        w.WritePropertyName("mieScatteringScale");
+        {
+        WriteFloat(w, v.MieScatteringScale);
+        }
+        w.WritePropertyName("mieScattering");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.MieScattering.X);
+        WriteFloat(w, v.MieScattering.Y);
+        WriteFloat(w, v.MieScattering.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("mieAbsorptionScale");
+        {
+        WriteFloat(w, v.MieAbsorptionScale);
+        }
+        w.WritePropertyName("mieAbsorption");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.MieAbsorption.X);
+        WriteFloat(w, v.MieAbsorption.Y);
+        WriteFloat(w, v.MieAbsorption.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("mieAnisotropy");
+        {
+        WriteFloat(w, v.MieAnisotropy);
+        }
+        w.WritePropertyName("mieExponentialDistribution");
+        {
+        WriteFloat(w, v.MieExponentialDistribution);
+        }
+        w.WritePropertyName("absorptionScale");
+        {
+        WriteFloat(w, v.AbsorptionScale);
+        }
+        w.WritePropertyName("absorption");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Absorption.X);
+        WriteFloat(w, v.Absorption.Y);
+        WriteFloat(w, v.Absorption.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("absorptionTipAltitude");
+        {
+        WriteFloat(w, v.AbsorptionTipAltitude);
+        }
+        w.WritePropertyName("absorptionTipValue");
+        {
+        WriteFloat(w, v.AbsorptionTipValue);
+        }
+        w.WritePropertyName("absorptionWidth");
+        {
+        WriteFloat(w, v.AbsorptionWidth);
+        }
+        w.WritePropertyName("skyLuminanceFactor");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.SkyLuminanceFactor.X);
+        WriteFloat(w, v.SkyLuminanceFactor.Y);
+        WriteFloat(w, v.SkyLuminanceFactor.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("skyAndAerialPerspectiveLuminanceFactor");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.SkyAndAerialPerspectiveLuminanceFactor.X);
+        WriteFloat(w, v.SkyAndAerialPerspectiveLuminanceFactor.Y);
+        WriteFloat(w, v.SkyAndAerialPerspectiveLuminanceFactor.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("aerialPerspectiveViewDistanceScale");
+        {
+        WriteFloat(w, v.AerialPerspectiveViewDistanceScale);
+        }
+        w.WritePropertyName("heightFogContribution");
+        {
+        WriteFloat(w, v.HeightFogContribution);
+        }
+        w.WritePropertyName("transmittanceMinLightElevationAngle");
+        {
+        WriteFloat(w, v.TransmittanceMinLightElevationAngle);
+        }
+        w.WritePropertyName("aerialPerspectiveStartDepth");
+        {
+        WriteFloat(w, v.AerialPerspectiveStartDepth);
         }
         w.WritePropertyName("cloudCoverage");
         {
@@ -7787,6 +9088,25 @@ internal static class EngineValueCodecs
         w.WritePropertyName("angular");
         {
         WriteFloat(w, v.Angular);
+        }
+        w.WriteEndObject();
+    }
+    internal static VertexPaint ReadVertexPaint(JsonElement v)
+        => new()
+        {
+            Primitives = Field(v, "primitives", "[]").EnumerateArray().Select(static item0 => ReadPaintedPrimitive(item0)).ToArray(),
+        };
+    internal static void WriteVertexPaint(Utf8JsonWriter w, VertexPaint v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("primitives");
+        {
+        w.WriteStartArray();
+        if (v.Primitives is not null) foreach (var item0 in v.Primitives)
+        {
+        WritePaintedPrimitive(w, item0);
+        }
+        w.WriteEndArray();
         }
         w.WriteEndObject();
     }

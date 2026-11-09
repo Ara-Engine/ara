@@ -169,3 +169,75 @@ fn color_ktx2_bytes_match_the_original_filter_for_both_presets() {
         }
     }
 }
+
+#[test]
+fn coverage_preserving_mips_keep_masked_texels_solid_at_a_distance() {
+    // Sparse thin features: alpha r^3 of a uniform r, so about a fifth of the
+    // full-size texels pass a 0.5 cutoff while 16-texel averages almost never do.
+    let mut state = 0x9e37_79b9u32;
+    let pixels: Vec<[f32; 4]> = (0..64 * 64)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            let r = state as f32 / u32::MAX as f32;
+            [0.2, 0.4, 0.6, r * r * r]
+        })
+        .collect();
+    let share = coverage(&pixels, 0.5);
+    assert!((0.15..0.25).contains(&share), "{share}");
+    let level = downsample(&pixels, 64, 64, 32, 32, TextureUsage::Color);
+    let level = downsample(&level, 32, 32, 16, 16, TextureUsage::Color);
+    assert!(
+        coverage(&level, 0.5) < share / 4.,
+        "plain averages lose coverage"
+    );
+    let mut kept = level.clone();
+    preserve_coverage(&mut kept, 16, 0.5, share);
+    assert!(
+        (coverage(&kept, 0.5) - share).abs() <= 1. / 256.,
+        "{}",
+        coverage(&kept, 0.5)
+    );
+    assert!(kept.iter().zip(&level).all(|(a, b)| a[..3] == b[..3]));
+}
+
+#[test]
+fn coverage_preserving_mips_reopen_a_grate_and_keep_solid_texels() {
+    // Left half solid, right half a one-texel checkerboard grate (a ceiling grating):
+    // plain averages close the grate (0.5 everywhere passes 0.333), so the level
+    // covers more than the full-size image. Half the grate's texels reopen, spread by
+    // the dither, and solid texels keep alpha 1.
+    let pixels: Vec<[f32; 4]> = (0..16 * 16)
+        .map(|i: usize| {
+            let (x, y) = (i % 16, i / 16);
+            let solid = x < 8 || (x + y) % 2 == 0;
+            [0.5, 0.5, 0.5, if solid { 1. } else { 0. }]
+        })
+        .collect();
+    let share = coverage(&pixels, 0.333);
+    let level = downsample(&pixels, 16, 16, 8, 8, TextureUsage::Color);
+    assert_eq!(
+        coverage(&level, 0.333),
+        1.,
+        "plain averages close the grate"
+    );
+    let mut kept = level.clone();
+    preserve_coverage(&mut kept, 8, 0.333, share);
+    assert!(
+        (coverage(&kept, 0.333) - share).abs() <= 1. / 64.,
+        "{}",
+        coverage(&kept, 0.333)
+    );
+    for (i, (a, b)) in kept.iter().zip(&level).enumerate() {
+        assert_eq!(a[..3], b[..3]);
+        if b[3] == 1. {
+            assert_eq!(a[3], 1., "solid texel {i} moved");
+        }
+    }
+    // The reopened texels spread over the grate's rows, not one block.
+    let open_rows = (0..8)
+        .filter(|y| (4..8).any(|x| kept[y * 8 + x][3] < 0.333))
+        .count();
+    assert!(open_rows >= 6, "{open_rows} rows reopened");
+}

@@ -23,7 +23,10 @@
 //! reflections own the pixel (screen-space confidence edges are half resolution and
 //! move with the jitter: they would flicker); screen-space ones fill only the band
 //! where traced ones fade out towards the cut, and everything rougher.
-use super::native::{Native, rays::RAY_MASKED};
+use super::native::{
+    Native,
+    rays::{RAY_MASKED, RAY_MASKED_SHADOWLESS},
+};
 use super::*;
 use crate::graph::{Graph, PassId, ResourceId};
 use anyhow::Context;
@@ -361,7 +364,7 @@ impl Rays {
             for i in 0..tables.instances {
                 let (_, entry, mask) = native.ray_instance(i);
                 supported &= geometry.triangles(entry).is_some();
-                masked |= mask == RAY_MASKED;
+                masked |= mask == RAY_MASKED || mask == RAY_MASKED_SHADOWLESS;
                 entries.push(entry);
             }
             self.content = Some(Content {

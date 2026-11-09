@@ -1,5 +1,6 @@
 use super::*;
 use ara_runtime::{
+    components::LightKind,
     extract::{Draw, LightView},
     model::{ModelLod, ModelMaterial},
 };
@@ -20,6 +21,9 @@ fn draw(geometry: Geometry) -> Draw {
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     }
 }
 
@@ -40,6 +44,9 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             }],
             material: Some(0),
             skin: None,
+            casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         materials: vec![ModelMaterial {
             name: "Source material".into(),
@@ -66,6 +73,7 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             double_sided: false,
             alpha_mode: 1,
             alpha_cutoff: 0.4,
+            vertex_color_tint: true,
         }],
         textures: Vec::new(),
         skins: Vec::new(),
@@ -111,8 +119,10 @@ fn all_local_lights_and_environment_survive_the_adapter() {
             direction: [0.0, -1.0, 0.0],
             color: [1.0, 0.5, 0.2],
             lumens: 500.0,
+            volumetric: 1.0,
             range: 10.0,
             cone: [15.0, 30.0],
+            ..LightView::default()
         })
         .collect();
     let (scene, stats) = scene(
@@ -148,6 +158,9 @@ fn materialless_models_have_zero_source_emission_and_allow_an_explicit_factor() 
             lods: Vec::new(),
             material: None,
             skin: None,
+            casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         nodes: BTreeMap::new(),
         node_names: BTreeMap::new(),
@@ -227,6 +240,7 @@ fn every_pbr_map_is_resolved_once_per_model_generation() {
         double_sided: false,
         alpha_mode: 2,
         alpha_cutoff: 0.5,
+        vertex_color_tint: true,
     };
     let mut builder = Builder::default();
     for _ in 0..2 {

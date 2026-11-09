@@ -36,7 +36,7 @@ fn blocked_secondary_retains_images_and_defers_shared_writes_and_release() -> Re
     let shown = renderer
         .view_output(&view)?
         .expect("completed first Game frame");
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     scene.instances[0].world = Mat4::from_translation(Vec3::new(0.4, 0., 0.));
     let waits = renderer.gpu().host_wait_stats().calls;
     let output = renderer
@@ -117,7 +117,7 @@ fn blocked_secondary_retains_images_and_defers_shared_writes_and_release() -> Re
         renderer.wait_scene_frame()?;
         assert!(renderer.view_output(&view)?.is_some());
     }
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     renderer.submit_secondary(&mut view, &request, |_, _| Ok(true))?;
     renderer.release_view(view)?;
     assert!(

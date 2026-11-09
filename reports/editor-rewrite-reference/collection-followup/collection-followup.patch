@@ -1,0 +1,618 @@
+diff --git a/crates/ara-editor/src/app/collection_verify/input.rs b/crates/ara-editor/src/app/collection_verify/input.rs
+index 09eaa8a..d8e9035 100644
+--- a/crates/ara-editor/src/app/collection_verify/input.rs
++++ b/crates/ara-editor/src/app/collection_verify/input.rs
+@@ -94,15 +94,10 @@ impl CollectionCheck {
+                 native::button(window, false, events)?;
+             }
+             5 if act.drag() => {
+-                let row = proof::row(shell, act, 100, true)
+-                    .ok_or("Native drag destination item100 is no longer visible")?;
+-                self.drag_motion(
+-                    shell,
+-                    window,
+-                    [row.x + row.w * 0.6, row.y + row.h - 1.],
+-                    scale,
+-                    events,
++                let point = proof::neutral_after_point(shell, act, 100).ok_or(
++                    "Native drag destination item100 left the neutral scroll band before release",
+                 )?;
++                self.drag_motion(shell, window, point, scale, events)?;
+             }
+             5 => {
+                 native::shortcut(window, 4, events)?;
+diff --git a/crates/ara-editor/src/app/collection_verify/proof.rs b/crates/ara-editor/src/app/collection_verify/proof.rs
+index 53f0e31..9069dca 100644
+--- a/crates/ara-editor/src/app/collection_verify/proof.rs
++++ b/crates/ara-editor/src/app/collection_verify/proof.rs
+@@ -34,6 +34,38 @@ pub(super) fn row(shell: &Shell, act: Act, index: usize, full: bool) -> Option<B
+     let visible = node.rect.intersection(node.clip);
+     (visible.w > 40. && visible.h >= if full { node.rect.h - 1. } else { 8. }).then_some(node.rect)
+ }
++
++/// Wait for the intended insertion point to leave the real edge-scroll band.
++/// Keeping the captured pointer stationary outside the viewport continues scrolling;
++/// this read-only condition never reveals an item or edits the model.
++pub(super) fn neutral_after_point(shell: &Shell, act: Act, index: usize) -> Option<[f32; 2]> {
++    neutral_after_point_in(scroll_rect(shell, act)?, row(shell, act, index, true)?)
++}
++
++fn neutral_after_point_in(viewport: Box2, row: Box2) -> Option<[f32; 2]> {
++    if ![
++        viewport.x, viewport.y, viewport.w, viewport.h, row.x, row.y, row.w, row.h,
++    ]
++    .into_iter()
++    .all(f32::is_finite)
++        || viewport.w <= 0.
++        || viewport.h <= 0.
++        || row.w <= 0.
++        || row.h <= 0.
++        || row.intersection(viewport).h < row.h - 1.
++    {
++        return None;
++    }
++    let point = [row.x + row.w * 0.6, row.y + row.h - 1.];
++    // Two logical pixels on either side keep a rounding boundary from restarting
++    // edge scrolling between the injected move and its following release.
++    (viewport.contains(point[0], point[1])
++        && row.contains(point[0], point[1])
++        && [-2., 0., 2.].into_iter().all(|dy| {
++            ara_ui::drag_drop::auto_scroll(viewport, [point[0], point[1] + dy], 0.016) == [0.; 2]
++        }))
++    .then_some(point)
++}
+ pub(super) fn pool(shell: &Shell, act: Act) -> usize {
+     shell.ui.find(&scroll_id(act)).map_or(0, |index| {
+         shell.ui.nodes[index]
+@@ -121,7 +153,7 @@ impl CollectionCheck {
+                     self.capture("stationary-edge-scroll", editor, shell, gpu)?;
+                     self.edge_captured = true;
+                 }
+-                if row(shell, act, 100, true).is_none() {
++                if neutral_after_point(shell, act, 100).is_none() {
+                     self.waiting = true;
+                 } else {
+                     require(
+@@ -143,7 +175,9 @@ impl CollectionCheck {
+                 let report = shell.content_drag_report();
+                 require(
+                     report["feedback"]["valid"] == true
++                        && report["source"]["item"] == json!(act.key(0))
+                         && report["feedback"]["target"]["kind"] == "collection"
++                        && report["feedback"]["target"]["item"] == json!(act.key(100))
+                         && report["feedback"]["target"]["after"] == true,
+                     "Item100 must have an accepted after-row drop indicator",
+                 )?;
+@@ -226,7 +260,68 @@ impl CollectionCheck {
+         self.trace.push(json!({"stage":stage,"prefix":prefix,"phase":self.phase,"revision":editor.host.store().revision(),"selection":editor.state.selection,
+             "records":fixture::signature(&fixture::records(editor)?),"field":act.field(),"scrollViewport":scroll_rect(shell,act),"scrollOffset":offset(shell,act),
+             "mountedRows":pool(shell,act),"maxMountedRows":self.max_rows,"heldFramesWithoutMotion":self.held_frames,"heldMotionEvents":self.hold_motion_events,
+-            "pointer":shell.pointer,"drag":shell.content_drag_report(),"nativeEvents":self.native_events,"pointsToLogical":self.input_scale,"logicalExtent":shell.ui.size}));
++            "pointer":shell.pointer,"drag":shell.content_drag_report(),"item100Row":row(shell,act,100,false),"item100NeutralAfterPoint":neutral_after_point(shell,act,100),"nativeEvents":self.native_events,"pointsToLogical":self.input_scale,"logicalExtent":shell.ui.size}));
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn neutral_after_point_waits_for_real_scroll_band_and_keeps_exact_item_boundary() {
++        let viewport = Box2 {
++            x: 4.,
++            y: 226.,
++            w: 1432.,
++            h: 240.,
++        };
++        assert_eq!(
++            neutral_after_point_in(
++                viewport,
++                Box2 {
++                    y: 442.,
++                    h: 24.,
++                    ..viewport
++                }
++            ),
++            None
++        );
++        assert_eq!(
++            neutral_after_point_in(
++                viewport,
++                Box2 {
++                    y: 418.,
++                    h: 24.,
++                    ..viewport
++                }
++            ),
++            None,
++            "two-pixel safety margin excludes the neutral-band boundary"
++        );
++        let row = Box2 {
++            y: 410.,
++            h: 24.,
++            ..viewport
++        };
++        let point = neutral_after_point_in(viewport, row).expect("item inside neutral band");
++        assert_eq!(point, [863.2, 433.]);
++        assert_eq!(
++            ara_ui::drag_drop::row_placement(row, point, false),
++            Some(ara_ui::drag_drop::Placement::After)
++        );
++        assert_eq!(
++            ara_ui::drag_drop::auto_scroll(viewport, point, 0.1),
++            [0.; 2]
++        );
++        assert_eq!(
++            neutral_after_point_in(viewport, Box2 { y: f32::NAN, ..row }),
++            None
++        );
++        assert_eq!(
++            neutral_after_point_in(viewport, Box2 { y: 220., ..row }),
++            None
++        );
++    }
++}
+diff --git a/crates/ara-editor/src/app/collection_verify.rs b/crates/ara-editor/src/app/collection_verify.rs
+index 8658134..8113f4f 100644
+--- a/crates/ara-editor/src/app/collection_verify.rs
++++ b/crates/ara-editor/src/app/collection_verify.rs
+@@ -166,10 +166,20 @@ impl CollectionCheck {
+             return self.write();
+         }
+         if self.started.elapsed() >= PATIENCE {
++            let context = if self.phase == 4 && ACTS[self.index].drag() {
++                format!(
++                    "; waiting for item100's after-point to enter the neutral scroll band (offset {:.1}, row {:?})",
++                    proof::offset(shell, ACTS[self.index]),
++                    proof::row(shell, ACTS[self.index], 100, false)
++                )
++            } else {
++                String::new()
++            };
+             self.pending_error = Some(format!(
+-                "Native collection story timed out at phase {} ({})",
++                "Native collection story timed out at phase {} ({}){}",
+                 self.phase,
+-                ACTS[self.index].label()
++                ACTS[self.index].label(),
++                context
+             ));
+             return Ok(());
+         }
+diff --git a/crates/ara-editor/src/shell/drag_drop.rs b/crates/ara-editor/src/shell/drag_drop.rs
+index aebc5a4..f11f6ec 100644
+--- a/crates/ara-editor/src/shell/drag_drop.rs
++++ b/crates/ara-editor/src/shell/drag_drop.rs
+@@ -156,7 +156,11 @@ impl Shell {
+             Payload::Asset(asset) => json!({"kind":"asset","path":asset.path}),
+             Payload::Component(name) => json!({"kind":"component","name":name}),
+             Payload::Collection(row) => {
+-                json!({"kind":"collection","field":row.field,"pointer":row.pointer})
++                let item = match &row.intent {
++                    collection_adapter::Intent::Select(item) => Some(item),
++                    _ => None,
++                };
++                json!({"kind":"collection","field":row.field,"pointer":row.pointer,"item":item})
+             }
+         };
+         let feedback = match drag.session.feedback() {
+@@ -186,7 +190,11 @@ impl Shell {
+                         json!({"kind":"material","entity":entity,"primitive":primitive})
+                     }
+                     Target::Collection { row, after } => {
+-                        json!({"kind":"collection","field":row.field,"pointer":row.pointer,"after":after})
++                        let item = match &row.intent {
++                            collection_adapter::Intent::Select(item) => Some(item),
++                            _ => None,
++                        };
++                        json!({"kind":"collection","field":row.field,"pointer":row.pointer,"item":item,"after":after})
+                     }
+                 };
+                 json!({"valid":true,"label":label,"rect":indicator.rect(),"target":target})
+@@ -238,8 +246,18 @@ impl Shell {
+         self.invalidate_content_drag();
+     }
+     /// Re-resolve the target and edge scrolling against the live retained tree.
+-    /// Call on pointer movement and while a held drag needs scrolling without movement.
++    /// Standalone/release callers may resolve immediately. The native frame owner
++    /// advances first, then resolves once after retained layout has settled.
+     pub fn content_drag_over(&mut self, editor: &Editor, seconds: f32) -> ara_ui::Result<bool> {
++        if !self.advance_content_drag(seconds)? {
++            return Ok(false);
++        }
++        self.refresh_content_drag_feedback(editor)
++    }
++
++    /// Advance native pointer capture and edge scroll before row layout. No target
++    /// validation runs here; the owner refreshes feedback once after layout.
++    pub(crate) fn advance_content_drag(&mut self, seconds: f32) -> ara_ui::Result<bool> {
+         let mut drag = match self.drag.take() {
+             Some(Drag::Content(drag)) => drag,
+             other => {
+@@ -294,44 +312,135 @@ impl Shell {
+                     self.sync_scroll_views()?;
+                 }
+             }
+-            let mut feedback = self.content_target(editor, drag.session.payload())?;
+-            let surface_target = matches!(
+-                &feedback,
+-                Feedback::Accept {
+-                    target: Target::Viewport(_),
+-                    ..
+-                }
+-            ) || matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_GROUND);
+-            if let Some(hit) = &drag.surface_hit
+-                && surface_target
+-                && hit.surface == surface
+-                && hit.pointer == self.pointer
+-                && let Some(rect) = self
+-                    .viewport()
+-                    .filter(|rect| rect.contains(self.pointer[0], self.pointer[1]))
+-            {
+-                feedback = accept(
+-                    Target::Viewport(hit.position),
+-                    Indicator::Inside(rect),
+-                    "Place on surface",
+-                );
+-            }
+-            if matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_MATERIAL_TARGET)
+-                && let Some(hit) = &drag.material_hit
+-                && hit.surface == surface
+-                && hit.pointer == self.pointer
+-                && let Payload::Asset(asset) = drag.session.payload()
+-            {
+-                feedback =
+-                    self.material_drop_feedback(editor, asset, &hit.entity, hit.primitive)?;
+-            }
+-            drag.session.preview(feedback);
+             Ok(())
+         })();
+         self.drag = Some(Drag::Content(drag));
+         self.invalidate_content_drag();
+         result.map(|()| true)
+     }
++    /// Resolve after the active destination's retained layout/row pool has settled.
++    /// This never advances capture, scrolls, queries Inspector values or authors ops.
++    pub(crate) fn refresh_content_drag_feedback(
++        &mut self,
++        editor: &Editor,
++    ) -> ara_ui::Result<bool> {
++        let mut drag = match self.drag.take() {
++            Some(Drag::Content(drag)) => drag,
++            other => {
++                self.drag = other;
++                return Ok(false);
++            }
++        };
++        if !drag.session.active() || drag.session.pointer().surface != surface_id(self) {
++            self.drag = Some(Drag::Content(drag));
++            return Ok(false);
++        }
++        let previous = self.pointer;
++        self.pointer = drag.session.pointer().local;
++        let feedback = self.content_feedback(editor, &drag);
++        self.pointer = previous;
++        let result = match feedback {
++            Ok(feedback) => {
++                drag.session.preview(feedback);
++                Ok(true)
++            }
++            Err(error) => {
++                // A failed refresh cannot leave the previous accepted target visible.
++                drag.session.preview(reject(error.to_string(), None));
++                Err(error)
++            }
++        };
++        self.drag = Some(Drag::Content(drag));
++        self.invalidate_content_drag();
++        result
++    }
++
++    /// Resolve and paint the current destination after the owner's final layout
++    /// updates. Failed validation becomes visible rejection, not a stale accept.
++    pub(crate) fn settle_content_feedback(
++        &mut self,
++        editor: &mut Editor,
++    ) -> ara_ui::Result<ara_ui::Work> {
++        match self.refresh_content_drag_feedback(editor) {
++            Ok(false) => Ok(ara_ui::Work::default()),
++            Ok(true) => self.frame(),
++            Err(error) => {
++                editor.report_failure(&*error);
++                self.frame()
++            }
++        }
++    }
++
++    /// Final floating-surface layout/feedback pass, preserving the existing
++    /// frame_surface enter/leave ownership and restoring it on every result.
++    pub(crate) fn frame_surface_with_content_feedback(
++        &mut self,
++        id: &str,
++        editor: &mut Editor,
++    ) -> ara_ui::Result<ara_ui::Work> {
++        let returning = self.current.clone();
++        if !self.enter(id) {
++            return Ok(ara_ui::Work::default());
++        }
++        let result = (|| {
++            let mut work = self.frame()?;
++            work += self.settle_content_feedback(editor)?;
++            Ok(work)
++        })();
++        self.leave();
++        if let Some(back) = returning {
++            self.enter(&back);
++        }
++        result
++    }
++
++    /// Both live previews and release revalidation use the same typed target resolver.
++    fn content_feedback(
++        &mut self,
++        editor: &Editor,
++        drag: &ContentDrag,
++    ) -> ara_ui::Result<Feedback<Target>> {
++        let surface = surface_id(self);
++        let mut feedback = self.content_target(editor, drag.session.payload())?;
++        let surface_target = matches!(
++            &feedback,
++            Feedback::Accept {
++                target: Target::Viewport(_),
++                ..
++            }
++        ) || matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_GROUND);
++        if let Some(hit) = &drag.surface_hit
++            && surface_target
++            && hit.surface == surface
++            && hit.pointer == self.pointer
++            && let Some(rect) = self
++                .viewport()
++                .filter(|rect| rect.contains(self.pointer[0], self.pointer[1]))
++        {
++            feedback = accept(
++                Target::Viewport(hit.position),
++                Indicator::Inside(rect),
++                "Place on surface",
++            );
++        }
++        if matches!(&feedback, Feedback::Reject { reason, .. } if reason == NO_MATERIAL_TARGET)
++            && let Some(hit) = &drag.material_hit
++            && hit.surface == surface
++            && hit.pointer == self.pointer
++            && let Payload::Asset(asset) = drag.session.payload()
++        {
++            feedback = self.material_drop_feedback(editor, asset, &hit.entity, hit.primitive)?;
++        }
++        Ok(feedback)
++    }
++    /// Begin a native re-pick, including a miss at the same pointer. Cached scene
++    /// contacts must not outlive geometry that moved or disappeared underneath it.
++    pub(crate) fn clear_content_surface_pick(&mut self) {
++        if let Some(Drag::Content(drag)) = &mut self.drag {
++            drag.surface_hit = None;
++            drag.material_hit = None;
++        }
++    }
+     /// Scroll the captured collection rather than its enclosing Inspector. A small
+     /// vertical overshoot keeps a held edge drag usable past the final mounted row;
+     /// moving elsewhere or leaving this surface never scrolls a hidden collection.
+diff --git a/crates/ara-editor/src/shell/drag_drop_material.rs b/crates/ara-editor/src/shell/drag_drop_material.rs
+index 51d5548..8e8720d 100644
+--- a/crates/ara-editor/src/shell/drag_drop_material.rs
++++ b/crates/ara-editor/src/shell/drag_drop_material.rs
+@@ -38,7 +38,8 @@ fn picked_slot(draw: &ara_runtime::extract::Draw, renderer: &Value) -> ara_ui::R
+     }
+ }
+ impl Shell {
+-    /// Resolve a picked native draw to its subtree-local material slot. Source geometry is borrowed.
++    /// Cache a picked native draw's subtree-local material slot. Source geometry
++    /// is borrowed; target validation runs after layout and again on release.
+     pub fn content_material_hit(
+         &mut self,
+         editor: &Editor,
+@@ -58,10 +59,14 @@ impl Shell {
+             };
+             if !drag.session.active()
+                 || !is_material(asset)
+-                || !matches!(drag.session.feedback(), Some(Feedback::Reject { reason, .. }) if reason == NO_MATERIAL_TARGET)
++                || drag.session.pointer().surface != surface
++                || !self
++                    .viewport()
++                    .is_some_and(|rect| rect.contains(self.pointer[0], self.pointer[1]))
+             {
+                 return Ok(false);
+             }
++            drag.material_hit = None;
+             let resolved = self.resolved(editor)?;
+             let Some(renderer) = resolved
+                 .get(&draw.address)
+@@ -72,16 +77,12 @@ impl Shell {
+             let Some(primitive) = picked_slot(draw, renderer)? else {
+                 return Ok(false);
+             };
+-            let feedback = self.material_drop_feedback(editor, asset, &draw.address, primitive)?;
+-            if matches!(feedback, Feedback::Accept { .. }) {
+-                drag.material_hit = Some(MaterialPlacement {
+-                    surface,
+-                    pointer: self.pointer,
+-                    entity: draw.address.to_owned(),
+-                    primitive,
+-                });
+-            }
+-            drag.session.preview(feedback);
++            drag.material_hit = Some(MaterialPlacement {
++                surface,
++                pointer: self.pointer,
++                entity: draw.address.to_owned(),
++                primitive,
++            });
+             Ok(true)
+         })();
+         self.drag = Some(Drag::Content(drag));
+diff --git a/crates/ara-editor/src/shell/drag_drop_tests.rs b/crates/ara-editor/src/shell/drag_drop_tests.rs
+index e6e7dd0..ea45529 100644
+--- a/crates/ara-editor/src/shell/drag_drop_tests.rs
++++ b/crates/ara-editor/src/shell/drag_drop_tests.rs
+@@ -66,11 +66,18 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
+         .unwrap();
+     let mut target = None;
+     let mut max_pool = 0;
+-    for _ in 0..120 {
++    for _ in 0..400 {
+         // No more PointerMove events: the held edge itself must keep scrolling.
+-        shell.content_drag_over(&editor, 0.1).unwrap();
++        shell.advance_content_drag(0.016).unwrap();
+         shell.dispatch(&mut editor).unwrap();
+         shell.frame().unwrap();
++        assert!(
++            shell
++                .settle_content_feedback(&mut editor)
++                .unwrap()
++                .paint_nodes
++                > 0
++        );
+         assert_eq!(shell.pointer, edge);
+         assert_eq!(editor.host.store().revision(), revision);
+         max_pool = max_pool.max(
+@@ -109,10 +116,91 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
+     shell
+         .event(InputEvent::PointerMove(target), &mut clipboard)
+         .unwrap();
+-    shell.content_drag_over(&editor, 0.).unwrap();
++    // Native order: edge scroll advances at nonzero dt, then dispatch and layout
++    // recycle/move the rows. The preview must resolve again against that layout.
++    let before_scroll = shell
++        .ui
++        .scroll_position(shell.ui.find(&scroll).unwrap())
++        .unwrap()[1];
++    shell.advance_content_drag(0.016).unwrap();
++    shell.dispatch(&mut editor).unwrap();
++    shell.frame().unwrap();
++    let settled_scroll = shell
++        .ui
++        .scroll_position(shell.ui.find(&scroll).unwrap())
++        .unwrap()[1];
++    assert!(
++        settled_scroll > before_scroll + 2.,
++        "fixture must exercise real same-frame scrolling"
++    );
++    assert!(
++        shell
++            .settle_content_feedback(&mut editor)
++            .unwrap()
++            .paint_nodes
++            > 0
++    );
++    assert_eq!(
++        shell
++            .ui
++            .scroll_position(shell.ui.find(&scroll).unwrap())
++            .unwrap()[1],
++        settled_scroll,
++        "post-layout feedback refresh must not scroll for a second time"
++    );
++    assert_eq!(editor.host.store().revision(), revision);
++    assert_eq!(
++        collection_value(&editor),
++        json!(original),
++        "preview remains read-only"
++    );
++    let Some(Drag::Content(drag)) = &shell.drag else {
++        panic!("retained content capture");
++    };
++    let Some(Feedback::Accept {
++        target: Target::Collection { row, after },
++        indicator,
++        ..
++    }) = drag.session.feedback()
++    else {
++        panic!("accepted typed collection target");
++    };
++    let collection_adapter::Intent::Select(key) = &row.intent else {
++        panic!("stable collection row key");
++    };
++    assert_eq!(key, &ara_ui::collection::ItemKey::Index(101));
++    assert!(
++        !*after,
++        "scroll moved the pointer from after item100 to before item101, the same insertion slot"
++    );
++    let target_node = shell
++        .collection_item_node(&row.field, &row.pointer, key, false)
++        .unwrap();
++    let target_rect = shell.ui.nodes[target_node].rect;
++    assert!(
++        target_rect.contains(shell.pointer[0], shell.pointer[1]),
++        "typed target must be under the current pointer"
++    );
++    let expected_indicator = kit::row_indicator(target_rect, Placement::Before).rect();
++    assert_eq!(
++        indicator.rect(),
++        expected_indicator,
++        "feedback must use the current row geometry"
++    );
++    assert!(shell.ui.display.commands.iter().any(|draw|
++        matches!(draw,Draw::Rect{node,rect,..} if *node==stable_id("content-drop-preview") && *rect==expected_indicator)),
++        "native display must paint that same authoritative insertion indicator");
+     let feedback = shell.content_drag_report();
+     assert_eq!(feedback["feedback"]["valid"], true, "{feedback}");
+-    assert_eq!(feedback["feedback"]["target"]["after"], true);
++    assert_eq!(
++        feedback["source"]["item"],
++        json!(ara_ui::collection::ItemKey::Index(0))
++    );
++    assert_eq!(
++        feedback["feedback"]["target"]["item"],
++        json!(ara_ui::collection::ItemKey::Index(101))
++    );
++    assert_eq!(feedback["feedback"]["target"]["after"], false);
+     assert!(shell.drop_at(&mut editor).unwrap());
+     shell
+         .event(InputEvent::PointerUp(target), &mut clipboard)
+@@ -125,8 +213,10 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
+     assert_eq!(editor.host.store().revision(), revision + 1);
+     editor.action("history.undo", json!({})).unwrap();
+     assert_eq!(collection_value(&editor), json!(original));
++    assert_eq!(editor.host.store().revision(), revision + 2);
+     editor.action("history.redo", json!({})).unwrap();
+     assert_eq!(collection_value(&editor), json!(expected));
++    assert_eq!(editor.host.store().revision(), revision + 3);
+ }
+ 
+ #[test]
+@@ -727,3 +817,34 @@ fn surface_snap_survives_release_revalidation_and_reference_drop_crosses_surface
+         IDS[1]
+     );
+ }
++
++#[test]
++fn native_surface_pick_miss_cannot_reuse_previous_contact_at_the_same_pointer() {
++    let (mut editor, mut shell) = open();
++    show_asset(&mut editor, &mut shell);
++    let revision = editor.host.store().revision();
++    let mut clipboard = Clipboard::default();
++    begin_asset(&mut shell, &mut clipboard);
++    let point = centre(shell.viewport().unwrap());
++    move_to(&mut shell, &editor, point, &mut clipboard);
++    shell.content_surface_hit([123., 456., 789.]);
++    assert_eq!(
++        shell.content_drag_report()["surfaceHit"],
++        json!([123., 456., 789.])
++    );
++    // The native owner starts every re-pick with this, even when no draw is hit.
++    shell.clear_content_surface_pick();
++    assert!(shell.refresh_content_drag_feedback(&editor).unwrap());
++    let report = shell.content_drag_report();
++    assert_eq!(report["surfaceHit"], Value::Null);
++    assert_ne!(
++        report["feedback"]["target"]["position"],
++        json!([123., 456., 789.])
++    );
++    assert_eq!(shell.pointer, point);
++    assert_eq!(
++        editor.host.store().revision(),
++        revision,
++        "pick/preview never authors a transaction"
++    );
++}

@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.dxil",
-      "dxil_hash": "a283c8e800ba6b0382ef4169f98a8c9a6e7e9734418bca144ee54e374970a978",
+      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.dxil",
+      "dxil_hash": "cc16ced876cb540df58dc9a20a12dccb7738358c1213e42774a56194f6705e37",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metallib",
+        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metallib",
         "metallib_hash": "f20512b5f7718fb587ea52032466f9ac7759146d9fa731de08c98853d87a909b",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "aoBitmaskDenoiseMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.spv",
+      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "1bf3a160cf82ce2ae141d756414ebf60b13ad036d49ed5a8d053654b906c6aaa",
+      "spirv_hash": "b313182d2793ff0d0247f367eb4ebe7fab5ad073a0ef788ef260cf6b499888ee",
       "stage": "compute"
     }
   ],
