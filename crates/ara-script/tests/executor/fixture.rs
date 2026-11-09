@@ -17,6 +17,12 @@ const ONE: &str = r#"
     /// <summary>Value published at the command boundary.</summary>
     public int Value;
 }
+/// <summary>Independent state that keeps a genuine fork in the schedule.</summary>
+[Component] public partial struct IndependentCounter
+{
+    /// <summary>Number of independent visits.</summary>
+    public int Value;
+}
 /// <summary>Writes each new row once, then publishes its marker.</summary>
 public static partial class Writer
 {
@@ -38,6 +44,15 @@ public static partial class Reader
 }
 "#;
 
+const INDEPENDENT: &str = r#"
+/// <summary>Runs independently of the counter/stamp dependency chain.</summary>
+public static partial class Independent
+{
+    [Query(Order = 20)]
+    static void Run(ref IndependentCounter counter) { counter.Value++; }
+}
+"#;
+
 /// Fresh process selects a real worker budget before ScriptHost initializes it.
 pub fn exercise(workers: usize) {
     let _clr = support::clr_lock();
@@ -50,6 +65,7 @@ pub fn exercise(workers: usize) {
     assert_eq!(pool.thread_num(), workers);
     let mut live = support::Live::start("executor-transition", &[("Game", ONE, &[])]);
     let entity = live.spawn(&[("Counter", json!({"value": 0}))]);
+    let independent = live.spawn(&[("IndependentCounter", json!({"value": 0}))]);
     live.run();
     assert_eq!(live.int(entity, "Counter", "value"), 1);
     assert_eq!(
@@ -80,16 +96,40 @@ pub fn exercise(workers: usize) {
     assert_eq!(live.int(new_entity, "Counter", "value"), 11);
 
     let previous = live.reports.len();
-    live.edit("Game", READER, "");
-    live.until("second system removed", |live| {
+    let fork = format!("{READER}{INDEPENDENT}");
+    live.edit("Game", READER, &fork);
+    live.until("independent system registered", |live| {
+        live.reports[previous..].iter().any(|r| r.kind == RELOAD_L3)
+    });
+    let before = live.int(independent, "IndependentCounter", "value");
+    let dependent_before = live.int(entity, "Counter", "value");
+    live.run();
+    assert_eq!(
+        live.int(independent, "IndependentCounter", "value"),
+        before + 1
+    );
+    assert_eq!(live.int(entity, "Counter", "value"), dependent_before + 10);
+    let fork_entity = live.spawn(&[("Counter", json!({"value": 0}))]);
+    live.run();
+    assert_eq!(live.int(fork_entity, "Stamp", "value"), 1);
+    assert_eq!(live.int(fork_entity, "Counter", "value"), 11);
+
+    let previous = live.reports.len();
+    live.edit("Game", &fork, "");
+    live.until("dependent and independent systems removed", |live| {
         live.reports[previous..].iter().any(|r| r.kind == RELOAD_L3)
     });
     let before = live.int(entity, "Counter", "value");
+    let independent_before = live.int(independent, "IndependentCounter", "value");
     live.run();
     assert_eq!(
         live.int(entity, "Counter", "value"),
         before,
         "removed system stays removed"
+    );
+    assert_eq!(
+        live.int(independent, "IndependentCounter", "value"),
+        independent_before
     );
     assert!(
         live.world.get_entity(entity).is_ok(),

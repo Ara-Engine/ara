@@ -4,6 +4,6 @@ mod fixture;
 mod support;
 
 #[test]
-fn caller_dispatch_preserves_commands_and_one_two_one_system_transitions() {
+fn caller_dispatch_preserves_commands_across_chain_fork_and_single_systems() {
     fixture::exercise(2);
 }

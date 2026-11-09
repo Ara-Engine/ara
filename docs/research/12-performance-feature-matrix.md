@@ -26,6 +26,23 @@ A12/A13 and S8 in [the decisions](../decisions.md).
 The baseline inventory below remains a snapshot of `20e8ccdbc`. These subsequent
 changes have executable evidence:
 
+- [C# schedule construction](../../benchmarks/iteration/script_dependency_graph_mac_2026-11-09.json)
+  now tracks last writers and active readers instead of comparing every system
+  pair. Mixed-graph reachability, real CLR deferred writes and chain/fork reload
+  transitions pass. An opt-in developer-profile Bevy probe reduces 512 ordered
+  jobs' schedule initialization from 79.64 to 11.08 ms; 2,048-node dependency
+  planning drops from 4.02 to 0.126 ms. These are one-process alternating samples
+  of the schedule phase, excluding Roslyn, scene loading and complete Play latency.
+  Independent systems retain parallel scheduling; ordered chains keep their caller
+  available for row work.
+- [Feature timing phase A](../../benchmarks/iteration/unity/features/feature_timed_phase_a_mac_2026-11-09.json)
+  contains 12 valid first-order pairs with full 100k-row, 420-step independent
+  integer oracles. Six meet the margin. Query-64 serial narrowly misses; dirty
+  parallel, both DAG cases and both four-word buffer cases remain open. The
+  [phase B recovery record](../../benchmarks/iteration/unity/features/feature_timed_phase_b_recovery_mac_2026-11-09.json)
+  preserves Unity's native Burst crash and exact settings restoration. Its failed
+  pair is unaccepted; 24 planned pairs remain pending. These are native features,
+  with C# buffer and explicit job APIs still separate gaps.
 - [Actual C# versus Unity](../../benchmarks/iteration/csharp_unity_mac_2026-11-09.json)
   now covers optimized public Span/Vector128 W1 and W3 gameplay over 1M rows,
   serial and parallel, in two reversed fresh-process rounds. Every 48 MB output

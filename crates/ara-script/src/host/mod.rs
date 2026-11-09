@@ -11,6 +11,7 @@
 mod bindings;
 mod command;
 mod ctx;
+mod dependencies;
 mod register;
 mod registry;
 mod scene;
@@ -555,9 +556,9 @@ impl ScriptHost {
             .collect();
         systems.sort_by(|a, b| (a.order, &a.name, a.id).cmp(&(b.order, &b.name, b.id)));
         let mut schedule = Schedule::default();
-        let mut scheduled = 0usize;
+        let mut dependencies = dependencies::Dependencies::default();
         let comp = |i: u32| reg.components.get(i as usize);
-        for (k, s) in systems.iter().enumerate() {
+        for s in &systems {
             let columns: Option<Vec<_>> = s
                 .columns
                 .iter()
@@ -612,29 +613,17 @@ impl ScriptHost {
                     q.run(&tick.0)
                 },
             );
-            let conflicts = |a: &registry::SystemDecl, b: &registry::SystemDecl| {
-                let clash = |x: &[(u32, bool)], y: &[(u32, bool)]| {
-                    x.iter()
-                        .any(|(i, w)| y.iter().any(|(j, v)| i == j && (*w || *v)))
-                };
-                clash(&a.columns, &b.columns) || clash(&a.resources, &b.resources)
-            };
             let mut config = system.in_set(ScriptSet(s.id)).into_configs();
-            // Structural systems never overlap: their entity reservations stay in a deterministic order.
-            for earlier in systems[..k]
-                .iter()
-                .filter(|e| conflicts(e, s) || (e.structural && s.structural))
-            {
-                config = config.after(ScriptSet(earlier.id));
+            for earlier in dependencies.push(s) {
+                config = config.after(ScriptSet(earlier));
             }
             schedule.add_systems(config);
-            scheduled += 1;
         }
-        // One system already parallelizes its rows. Run its outer schedule on the
-        // caller instead of relaying it through a worker and stranding the caller.
+        // A chain already parallelizes its rows and has no outer concurrency.
+        // Keep its caller available instead of relaying each stage to a worker.
         // With no workers, the outer schedule has no system-level parallelism to
         // exploit either; its tasks would be drained by the caller regardless.
-        if scheduled <= 1 || ComputeTaskPool::get().thread_num() == 0 {
+        if dependencies.is_chain() || ComputeTaskPool::get().thread_num() == 0 {
             schedule.set_executor(SingleThreadedExecutor::new());
         } else {
             schedule.set_executor(MultiThreadedExecutor::new());

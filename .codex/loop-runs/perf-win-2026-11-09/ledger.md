@@ -8,6 +8,9 @@ Constraints: Mac only, Windows untouched; user authorized continuing on battery,
 Ownership:
 - root: ara-sim native kernels/benchmarks, production runtime changes and integration/evidence.
 - ecs_research: benchmarks/iteration/unity/ control harness/evidence only. Source-only until root CPU grant. Original S8 C#/MacBatch frozen, use explicit new guarded fixture family for fresh comparisons; no marker spoofing.
+- batch_queries: C# kernel example/helpers and direct_kernel_reload test only; source-only outside explicit shared CPU grants.
+- allocation_pipeline_review: target/feature-buffer-candidate prototype only; measured feature fixture sources remain frozen until baseline completion or explicit handover.
+- current_comparison_review and script_executor_review: read-only independent evidence/code review, no heavy work during another timing grant.
 
 ## Slices
 
@@ -18,11 +21,12 @@ Attempts: existing cached executable W2 phase profile; next native SIMD neighbou
 Blockers: none currently.
 
 ### Feature timings beyond independent rows
-Status: planned
+Status: implementing
 Acceptance: strict timed query/change/structural/dependency/buffer lanes after the completed50 independent-oracle correctness pairs. Any observed losses drive implementation, not a completion claim.
+Progress: 12/36R1pairs valid,6targetwins6misses, full100k420independentoracles. Remaining24pendingafterUnitySIGBUS; exactknownsettings recovered, oldcache/failedattempt preserved. Freshownedcache-isolation diagnostic proposed, noautomaticbenchmarkretry.
 
 ### Actual C# and data/runtime integration
-Status: planned
+Status: implementing
 Acceptance: profile and reduce real dispatcher/serialization/buffer/compile-to-first-tick costs, preserve state/reload/authoring, measure actual runtime benefits separately from native fixture changes.
 
 ### Checkpoints
@@ -50,3 +54,6 @@ Commit/push verified improvements as they pass. Do not stop simply because a fix
 - Next: representativefeaturetimings, realHotDebugdirectintrinsics experiment under EnC, sampleMovementSpan actualNativeAOT gate. Source-only.NET10review rejects DebuggableAttribute/AggressiveOptimization bypass as unsupported; noheat/qualitycontractchanged.
 - Pushed8652e54d6 mergedXspans. C004cached12bitkeys+conservativey/zslabbounds independentreviewpasses, adversarialplanes+1003/20k/50kall4bitgates pass. All8freshparallelbeforeafterfull420stephashes/guardsagree;20k .605/.607->.594/.594ms,50k2.378/2.378->2.323/2.315. AlltargetClippypass. Furtherforceinlineexperiment no gainandrejected; source/binary/proofretained. MatchedW2stillpending, no20%leadclaimfromoldUnityruns.
 - Hotdirectintrinsics candidatepassedactualL1/partialtailbitproofanddisasmconfirmsEnC/MinOpts, butreviewcaughtalignmentcontractgap. Fixedbytebases+ReadUnaligned/WriteUnaligned sourceclosesP2; newactualgatesrunning, oldcandidateproofimmutable. NoHotperformanceclaimyet; nativeW2/featuresremainactive.
+- Pushed55956bd14 featureR1timings+SIGBUS/recoveryevidence;6missesstayvisible. First64wordUnitycompilationcrash-10 hasunknowncause, sameBufferJobas4words; exactcheckpoint2ad1... recovery03ad... restoredallknownflags/prefs, noacceptedPhaseBpair/nobenchmarkretry. Narrowtempderivation preservesuf-t/ufx-t andisolatesnewufi-t;40mocktestspass. Originalkernel/template mathunchanged.
+- ProductionC#dependencyplanner nowuseslastwriter/activereaders+laststructural insteadallpairs; totalchains usecaller, forksparallel. 1024mixedgraphreachabilitychecks+10kwriter/structuralcasespass, independentreviewno mustfix. All15CLRgatespass; strengthenedforkfreshCounterStampvisibility+zero-pool2reruns pass, alltargetClippyandworkspacefmt109pass. Opt-in graphprobe acceptedAC/quiet/sourcefrozen:512jobBevyinitialize79.638->11.075ms;2048nodeplan4.020->.126ms. Oneprocessalternating6/20samples, test/devprofile, notRoslyn/fullPlaylatency. InitialteststdoutJSONprefixparserfixedbyreparsingpreservedrawonly; no measurementrerun/modification.
+- Nextsourcecandidatesremainunverified: cached9neighbourspansperoccupiedcell+diagonalradiusvalidation; native-ISAHotdirectC#hardwaremathqualitygates; contiguous/NEON4SmallVecprototypeundertarget; actualSpanMovementNativeAOTexecution. Keepworkingonlossesafterthisgraphcheckpoint.
