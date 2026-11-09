@@ -78,30 +78,48 @@ impl Canvas {
     }
 
     fn groups(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
-        for group in self.graph.editor.groups.values() {
-            let mut bounds = None::<Box2>;
-            for node in self.nodes.iter().filter(|n| group.nodes.contains(&n.id)) {
-                let r = self.node_rect(node, rect);
-                bounds = Some(bounds.map_or(r, |b| union(b, r)));
-            }
-            if let Some(b) = bounds {
-                let r = Box2 {
-                    x: b.x - 16.,
-                    y: b.y - 38.,
-                    w: b.w + 32.,
-                    h: b.h + 54.,
-                };
-                fill(list, 2, r, 10., alpha(theme.accent, 14));
-                border(list, 2, r, 10., 1., theme.separator);
-                self.labels.paint(
-                    list,
-                    2,
-                    &group.label,
-                    [r.x + 12., r.y + 10.],
-                    1.,
-                    theme.muted,
-                );
-            }
+        let z = self.camera.zoom;
+        for (key, group) in &self.graph.editor.groups {
+            let Some((r, head)) = self.group_rect(group, rect) else {
+                continue;
+            };
+            // Unreal's comment box: a translucent body under a solid title band.
+            let radius = 6. * z;
+            let selected = self.selection.contains(key);
+            fill(list, 2, r, radius, alpha(theme.accent, 22));
+            fill(list, 2, head, radius, alpha(theme.accent, 120));
+            fill(
+                list,
+                2,
+                Box2 {
+                    y: head.y + head.h - radius,
+                    h: radius,
+                    ..head
+                },
+                0.,
+                alpha(theme.accent, 120),
+            );
+            border(
+                list,
+                2,
+                r,
+                radius,
+                if selected { 2. } else { 1. },
+                if selected {
+                    theme.select
+                } else {
+                    alpha(theme.accent, 150)
+                },
+            );
+            let scale = z * 1.2;
+            self.labels.paint(
+                list,
+                2,
+                &group.label,
+                [head.x + 12. * z, head.y + (head.h - 16. * scale) * 0.5],
+                scale,
+                theme.foreground,
+            );
         }
     }
 

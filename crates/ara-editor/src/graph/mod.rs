@@ -425,8 +425,14 @@ impl Canvas {
         for group in self.graph.editor.groups.values() {
             self.labels.prepare(&group.label, text);
         }
-        self.selection
-            .retain(|id| self.graph.nodes.contains_key(id));
+        // Picks that still exist stay picked: nodes, wires, comments and groups.
+        let editor = &self.graph.editor;
+        self.selection.retain(|id| {
+            self.graph.nodes.contains_key(id)
+                || self.graph.edges.contains_key(id)
+                || editor.groups.contains_key(id)
+                || editor.comments.contains_key(id)
+        });
         self.previews
             .retain(|id, _| self.graph.nodes.contains_key(id));
     }
@@ -669,6 +675,25 @@ impl Canvas {
             w: self.labels.width(&inline.text) * small + (12. + chip) * z,
             h: 16. * z,
         }
+    }
+    /// A group's box around its nodes on screen, and its title band (where it is dragged
+    /// and picked); `None` when none of its nodes is shown.
+    fn group_rect(&self, group: &ara_graph::Group, rect: Box2) -> Option<(Box2, Box2)> {
+        let z = self.camera.zoom;
+        let b = self
+            .nodes
+            .iter()
+            .filter(|n| group.nodes.contains(&n.id))
+            .map(|n| self.node_rect(n, rect))
+            .reduce(paint::union)?;
+        let (pad, head) = (16. * z, 34. * z);
+        let whole = Box2 {
+            x: b.x - pad,
+            y: b.y - pad - head,
+            w: b.w + pad * 2.,
+            h: b.h + pad * 2. + head,
+        };
+        Some((whole, Box2 { h: head, ..whole }))
     }
     fn node_rect(&self, node: &NodeView, rect: Box2) -> Box2 {
         let position = if let Some(interaction::Drag::Nodes {

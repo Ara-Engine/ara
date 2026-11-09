@@ -93,25 +93,10 @@ impl Canvas {
             }
         }
         for (key, group) in &self.graph.editor.groups {
-            let mut bounds = None::<Box2>;
-            for node in self.nodes.iter().filter(|n| group.nodes.contains(&n.id)) {
-                let r = self.node_rect(node, rect);
-                bounds = Some(bounds.map_or(r, |b| Box2 {
-                    x: b.x.min(r.x),
-                    y: b.y.min(r.y),
-                    w: (b.x + b.w).max(r.x + r.w) - b.x.min(r.x),
-                    h: (b.y + b.h).max(r.y + r.h) - b.y.min(r.y),
-                }));
-            }
-            if bounds.is_some_and(|r| {
-                (Box2 {
-                    x: r.x - 16.,
-                    y: r.y - 38.,
-                    w: r.w + 32.,
-                    h: 38.,
-                })
-                .contains(p[0], p[1])
-            }) {
+            if self
+                .group_rect(group, rect)
+                .is_some_and(|(_, head)| head.contains(p[0], p[1]))
+            {
                 self.selection = group.nodes.iter().cloned().collect();
                 self.selection.insert(key.clone());
                 self.drag = Some(Drag::Nodes {
