@@ -8,8 +8,8 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Ara.CompileServer;
 
 /// <summary>
-/// Runs the Ara analyzers (ARA0001-ARA0506) over the files an edit touched, so a reload
-/// with an analyzer error is refused like a compile error (the last good code keeps running).
+/// Runs the Ara analyzers (ARA0001-ARA0506) over touched method trees or the full module
+/// when declarations or references change. Analyzer errors retain the last good code.
 /// The module's profile (<c>gameplay</c> or <c>editor</c>) selects the API allowlist.
 /// </summary>
 internal sealed class AnalyzerSet : IAnalysis
@@ -36,6 +36,10 @@ internal sealed class AnalyzerSet : IAnalysis
     /// <summary>Analyzes a full project in one Roslyn request, allowing work across files to run concurrently.</summary>
     internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile) =>
         WithAnalyzers(compilation, profile).GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <inheritdoc/>
+    public ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) =>
+        AnalyzeProject(compilation, profile);
 
     CompilationWithAnalyzers WithAnalyzers(Compilation compilation, string profile)
     {

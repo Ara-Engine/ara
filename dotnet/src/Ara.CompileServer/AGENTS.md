@@ -58,6 +58,9 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 - `ModuleWatcher`: one pump thread for every module folder (1 ms spin settle).
 - `AnalyzerSet`: the Ara analyzers over changed trees, with the module's API profile
   (`build_property.AraModuleProfile`). `Diagnostics`: Roslyn → ara-diag JSON.
+  Images, additive/declaration/accessor/directive edits and changed references use
+  full compilation analysis: changes can invalidate another partial file. Repeating
+  per-tree requests is insufficient for some partial-property symbol diagnostics.
 
 ## Runtime config
 

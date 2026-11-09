@@ -307,3 +307,46 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Remainingbottleneck: analyzer/compiler validation dominates measuredL1serverwork.
   Inspect precisebody-scopedanalysisanddiagnosticcoverage beforechanginganything;
   do not weakenallowlist/state/determinism/AOT rules orclearunchangederrors.
+
+
+### Whole-module analyzer coverage prerequisite (fix under final gates)
+
+- Incremental parsing/benchmark slice committed and pushed4591ef7bf. Source clean
+  before starting this next correctness prerequisite for an ordinary-method span prototype.
+- Review found C#14 field-backed property edits can create new state diagnostics at
+  another declaration, so accessors/properties cannot use a method-only span fastpath.
+  No scoped analyzer optimization has been enabled in production.
+- Actual pre-fix reproduction: partial A gains :Behaviour, unchanged B has a field
+  without[Transient]. Existing server incorrectly sendsReload instead ofARA0101.
+  Red log compiler-analysis-coverage-20261109/repro-before.log retained.
+- Expanding all-user-tree Analyze fixed base/Simulation/overload cases but stillmissed
+  partial-property backing fields: per-tree Roslyn requests omitted ARA0100 that a
+  full GetAnalyzerDiagnosticsAsync request found. Actual symbol/full-project diagnosis
+  retained in property-diagnosis.log. No StateAnalyzer rule relaxation/change.
+- IAnalysis.AnalyzeModule defaults to full-tree custom-provider fallback; real
+  AnalyzerSet uses existing full compilation AnalyzeProject. All image builds validate
+  exact start.Trees, including committed-code rebuilds. Additive/nonordinary method/
+  doc/directive/reference changes use module analysis; ordinarymethod L1 still uses
+  existing full-changed-tree analysis. No span narrowing yet, no cached trust assumed.
+- Four focused regression cases nowpass: Behaviourbasefield,Simulationattribute with
+  untouched Stopwatch body, added overload causing dynamic dispatch in untouched
+  caller, C#14partialproperty field storage. Preserve last-good and verify repairs.
+  Full172compiler suite passes and fresh solution build haszero warnings/errors.
+  Runtime levels/modules/nondisruption/lifecycle gates running, thencommit+push.
+- One array.Length compile correction and a stale no-build focused attempt after
+  failed build retained; stale result is not accepted. Matching rebuilt tests pass.
+- Batch_queries owns only target/compiler-body-analysis-prototype-20261109/source
+  preparation: clean baseline and full-vs-method-span differential/timing plan;
+  no prototype build/run grant yet. Reviewer found ordinarymethod-only seam plausible
+  with unchanged declarations/refs/no directives, but requires differential proof and
+  full-module clean provenance. Target only; keep production checks conservative.
+
+- Coverage fix final gates pass: fresh0warning/error solution build, full172 compiler
+  tests andnine actualruntime tests acrosslevels/modules/nondisruption/compile+project
+  lifecycle. Reference-only validation nowalsochoosesfullmodule; afterthat small
+  changefull172andthetwo module/cascade runtimecases passagain. Reviewer foundno
+  mustfix; AnalyzerSetsummary updated. No productionsemanticspan fastpath enabled.
+- Body-analysis prototype source nowfrozen in target/compiler-body-analysis-prototype-
+  20261109 (fourfilesplusplan), privateSDKonly, globallycleanbaseline, eight exact
+  diagnostic differentials plusineligiblepropertycounterexample. Unbuilt/unrun; Root
+  willgrant isolatedqualityafterthisverifiedcorrectnesssliceispushed.
