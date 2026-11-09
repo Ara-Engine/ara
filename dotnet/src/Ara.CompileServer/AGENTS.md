@@ -61,6 +61,11 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   Images, additive/declaration/accessor/directive edits and changed references use
   full compilation analysis: changes can invalidate another partial file. Repeating
   per-tree requests is insufficient for some partial-property symbol diagnostics.
+  Ordinary L1 methods may narrow semantic requests only from a globally clean
+  built-in analyzer snapshot. `ModuleState.AnalyzerClean` is immutable, adopted at
+  atomic commit, revoked by warnings/reference changes and never imported from PE
+  publications. Unknown/custom providers keep full-tree analysis. Request-level
+  exception callbacks retain failures Roslyn omits from tree/span results.
 
 ## Runtime config
 
@@ -83,3 +88,5 @@ capabilities, new/removed files), `SessionTests` (cold → hot, L1, L2, errors, 
 declarations, unknown references, L4), `CascadeTests` (local L1, relink, rebuild, breaking
 edits, dependents seeing L2 members), `SchedulingTests` (agent coalescing and priority),
 `Published*Tests` (snapshot integrity, first-edit state, read-only supplied images).
+`AnalyzerBodyTests` and `AnalyzerProvenanceTests` cover exact scoped diagnostics,
+warnings, failed saves, baseline trust, rebinds and actual analyzer exceptions.
