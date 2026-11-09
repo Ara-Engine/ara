@@ -757,6 +757,35 @@ fn click_cost() {
             t.elapsed() - framed
         );
     }
+    // What opening a menu repaints: its own area, not the window.
+    let area = |rt: &Runtime<Studio>| rt.damage().map_or(0.0, |d| d.width() * d.height());
+    for (name, key) in [
+        ("dropdown", "field/MeshRenderer.shape"),
+        ("add component", "inspector/add"),
+    ] {
+        rt.frame(FRAME);
+        let at = rt.find(key).unwrap();
+        rt.pointer_down(at.center().x, at.center().y);
+        rt.pointer_up(at.center().x, at.center().y);
+        let (mut total, mut regions) = (0.0, 0.0_f32);
+        for _ in 0..20 {
+            let before = rt.list().clone();
+            rt.frame(FRAME);
+            total = f32::max(total, area(&rt));
+            let parts: Vec<_> = rt.list().damage_regions(&before);
+            regions = regions.max(parts.iter().map(|d| d.width() * d.height()).sum());
+        }
+        let window = 2984.0 * 1884.0;
+        eprintln!(
+            "DAMAGE {name}: union {:.0}%, regions {:.0}% of the window",
+            total / window * 100.0,
+            regions / window * 100.0
+        );
+        rt.key(0x1B);
+        for _ in 0..20 {
+            rt.frame(FRAME);
+        }
+    }
     // A dropdown: the press, then each frame of its opening until it settles.
     let at = rt.find("field/MeshRenderer.shape").unwrap();
     let t = std::time::Instant::now();
