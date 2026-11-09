@@ -36,7 +36,7 @@ fn click(app: &mut App, id: &str) -> Vec<Intent> {
 fn setup() -> (App, Hub) {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
-    let mut app = App::new([1440., 900.], Vec::new()).expect("app");
+    let mut app = App::new([1440., 900.]).expect("app");
     app.rebuild(&mut hub, capture::NOW).expect("rebuild");
     (app, hub)
 }

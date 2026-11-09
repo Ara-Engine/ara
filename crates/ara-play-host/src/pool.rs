@@ -585,7 +585,10 @@ impl Pool {
         } else if self.graphics_prewarm {
             command.arg("--prewarm-graphics");
         }
-        command.arg(format!("--ray-tracing={}", self.rendering.ray_tracing));
+        command.arg(format!(
+            "--prewarm-ray-tracing={}",
+            self.rendering.ray_tracing
+        ));
         if let Some(scripts) = &self.scripts {
             command.env("ARA_PLAY_SCRIPTS", serde_json::to_string(scripts)?);
         }

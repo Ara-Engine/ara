@@ -1,0 +1,84 @@
+{
+  "base": "5b4c39d61",
+  "preservedWip": "dd0adc3bf",
+  "sequence": [
+    {
+      "name": "01-import-defaults",
+      "path": "D:\\AraBuild\\ux-editor-target\\orchestration\\later-slices\\01-import-defaults.patch",
+      "sha256": "3fdc8defa59d2d2da4c01ba406cc4bbb42d676a6cffeb777c87efaebb97568a7",
+      "files": [
+        "crates/ara-asset-host/src/service/bindings.rs",
+        "crates/ara-asset-host/src/service/bindings/defaults_tests.rs",
+        "crates/ara-asset-host/src/service/import_entries.rs",
+        "crates/ara-asset-host/src/service/prepare.rs",
+        "crates/ara-asset-host/src/service/tests.rs",
+        "crates/ara-asset/src/import_defaults.rs",
+        "crates/ara-asset/src/lib.rs",
+        "crates/ara-asset/src/project_settings.rs",
+        "crates/ara-asset/src/source.rs",
+        "crates/ara-asset/tests/contracts.rs",
+        "crates/ara-asset/tests/import_defaults.rs",
+        "crates/ara-editor/src/shell/choices.rs",
+        "crates/ara-editor/src/shell/commands/table.rs",
+        "crates/ara-editor/src/shell/import_batch.rs",
+        "crates/ara-editor/src/shell/import_batch/commands.rs",
+        "crates/ara-editor/src/shell/import_batch/defaults.rs",
+        "crates/ara-editor/src/shell/import_batch/tests.rs",
+        "crates/ara-editor/src/shell/import_batch/view.rs",
+        "crates/ara-editor/src/shell/import_panel.rs",
+        "crates/ara-editor/src/shell/input.rs",
+        "crates/ara-editor/src/shell/inspector_panel.rs",
+        "crates/ara-editor/src/shell/mod.rs",
+        "crates/ara-hub-service/tests/registry.rs",
+        "crates/ara-import-worker/tests/process.rs",
+        "crates/ara-importers/src/audio.rs",
+        "crates/ara-importers/src/commands.rs",
+        "crates/ara-importers/src/commands/project_defaults_tests.rs",
+        "crates/ara-importers/src/mesh.rs",
+        "crates/ara-importers/src/texture.rs",
+        "crates/ara-play-host/src/assets.rs"
+      ],
+      "applyCheck": "PASS",
+      "appliedTreeContents": "exact expected intermediate state"
+    },
+    {
+      "name": "02-package",
+      "path": "D:\\AraBuild\\ux-editor-target\\orchestration\\later-slices\\02-package.patch",
+      "sha256": "284c83aebf76aff9df94e423cb41070e6859ebdedba0871d61d922001a1b3cf3",
+      "files": [
+        "crates/ara-editor/src/shell/build.rs",
+        "crates/ara-editor/src/shell/build_options.rs",
+        "crates/ara-editor/src/shell/build_options/tests.rs",
+        "crates/ara-editor/src/shell/choices.rs",
+        "crates/ara-editor/src/shell/commands/table.rs",
+        "crates/ara-editor/src/shell/mod.rs"
+      ],
+      "applyCheck": "PASS",
+      "appliedTreeContents": "exact expected intermediate state"
+    },
+    {
+      "name": "03-profiler-ui",
+      "path": "D:\\AraBuild\\ux-editor-target\\orchestration\\later-slices\\03-profiler-ui.patch",
+      "sha256": "072be48e9a182761689096be69a0c4100d88cde4c520814c63bfebc8f30fc6d5",
+      "files": [
+        "crates/ara-editor/src/actions.rs",
+        "crates/ara-editor/src/editor.rs",
+        "crates/ara-editor/src/shell/choices.rs",
+        "crates/ara-editor/src/shell/commands/mod.rs",
+        "crates/ara-editor/src/shell/commands/table.rs",
+        "crates/ara-editor/src/shell/mod.rs",
+        "crates/ara-editor/src/shell/monkey_support.rs",
+        "crates/ara-editor/src/shell/profiler_panel.rs",
+        "crates/ara-editor/src/shell/profiler_targets.rs",
+        "crates/ara-editor/src/shell/profiler_targets/backend.rs",
+        "crates/ara-editor/src/shell/profiler_targets/controls.rs",
+        "crates/ara-editor/src/shell/profiler_targets/tests.rs",
+        "crates/ara-editor/src/shell/profiler_targets/tests/fixture.rs",
+        "crates/ara-editor/src/shell/profiler_targets/view.rs"
+      ],
+      "applyCheck": "PASS",
+      "appliedTreeContents": "exact expected intermediate state"
+    }
+  ],
+  "sourceFileCount": 44
+}

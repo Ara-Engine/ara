@@ -7,7 +7,7 @@ struct Root{uint source;uint output;uint width;uint height;uint mode;uint paper;
 ConstantBuffer<Root> root:register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[]:register(t0,space1);
-BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
+BIND(3) RWTexture2D<float4> images[128]:register(u0,space3);
 float3 outputSrgb(float3 v){v=saturate(v);return select(v<=.0031308,12.92*v,1.055*pow(v,float3(1./2.4))-.055);}
 float3 outputPq(float3 nits){float3 y=pow(saturate(nits/10000.),float3(2610./16384.));return pow((3424./4096.+2413./128.*y)/(1.+2392./128.*y),float3(2523./32.));}
 [shader("compute")][numthreads(8,8,1)]

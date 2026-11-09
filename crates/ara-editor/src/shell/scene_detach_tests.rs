@@ -11,15 +11,11 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
-        let root = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("target"))
-            .join("scene-detach")
-            .join(format!(
-                "{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+        let root = crate::test_target().join("scene-detach").join(format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         for (path, value) in [
             (
@@ -163,7 +159,9 @@ fn scene_tab_drag_cancels_then_detaches_resizes_and_redocks_without_authoring_op
     assert!(resized.w > first.w && resized.h > first.h);
     let cube = shell.ui.nodes[shell.shown_node("view-cube").unwrap()].rect;
     assert!((cube.x + cube.w - (resized.x + resized.w - 12.)).abs() <= 0.5);
-    assert!((cube.y - (resized.y + 12.)).abs() <= 0.5);
+    // Top-right, below the View options toolbar docked in that corner (never over it).
+    let toolbar = shell.ui.nodes[shell.shown_node("scene-view-tools").unwrap()].rect;
+    assert!((cube.y - (toolbar.y + toolbar.h + 4.)).abs() <= 0.5);
 
     begin(&mut shell, "scene");
     shell.leave();

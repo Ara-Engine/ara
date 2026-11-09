@@ -15,10 +15,12 @@ pub mod geometry;
 mod gi;
 mod gi_cpu;
 mod gpu_costs;
+pub mod graphics;
 pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
+mod lights;
 mod material;
 mod placeholders;
 mod presentation;
@@ -41,7 +43,7 @@ use ara_render::{
     scene::{self, CameraSpec, Scene, Vertex},
 };
 use ara_runtime::{
-    components::{Environment, LightKind},
+    components::Environment,
     extract::{Draw, Geometry, RenderFrame},
 };
 use geometry::Source;
@@ -94,6 +96,8 @@ pub struct PresentStats {
 
 /// Owns the renderer and the per-draw upload state.
 pub struct Presenter {
+    graphics: Option<ara_graphics_settings::Settings>,
+    graphics_plan_key: Option<([u32; 2], bool, bool, Option<u64>)>,
     live: Option<presentation::Live>,
     raster: Option<RasterView>,
     published: Option<presentation::Published>,
@@ -141,6 +145,10 @@ pub struct Presenter {
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
     /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
     render_scale: Option<f32>,
+    /// Below 1440p, render the preset's 1440p pixel budget (`set_pixel_budget`).
+    pixel_budget: bool,
+    /// Effects a debug view turned off (`set_debug`), applied to every raster frame.
+    debug: ara_render::RenderDebug,
     /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
     /// `ARA_RAY_QUERIES=0` at creation starts with them off, for A/B captures).
     ray_queries: bool,
@@ -221,6 +229,8 @@ impl Presenter {
             choice: QualityChoice::Auto,
             plan: None,
             published_quality: None,
+            graphics: None,
+            graphics_plan_key: None,
             failure: None,
             renderer: None,
             initial_device: None,
@@ -250,6 +260,8 @@ impl Presenter {
             environment: None,
             look_override: None,
             render_scale: None,
+            pixel_budget: false,
+            debug: ara_render::RenderDebug::default(),
             ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
             lut: None,
             frames_in_flight: false,
@@ -277,6 +289,18 @@ impl Presenter {
     /// Callers that submit or read back through it first `drain` a frame in flight.
     pub fn renderer_mut(&mut self) -> Option<&mut Renderer> {
         self.renderer.as_mut()
+    }
+
+    /// The linear exposure multiplier `frame` was last rendered with: the adapted
+    /// multiplier under automatic metering (read between completed frames, so call it
+    /// after a capture), else the manual or `--ev100`-locked value. `None` before the
+    /// first metered frame.
+    pub fn applied_exposure(&self, frame: &RenderFrame) -> Option<f32> {
+        let look = self.frame_look(frame);
+        match look.ev100 {
+            Some(_) => Some(look.manual_exposure(frame.environment.exposure)),
+            None => self.renderer.as_ref()?.exposure().ok().flatten(),
+        }
     }
 
     /// Final GPU-composited window image, in CopySource state.
@@ -313,7 +337,21 @@ impl Presenter {
         &self,
         frame: &RenderFrame,
     ) -> ara_render_fidelity::environment::FrameEnvironment {
-        self.look_override.unwrap_or_else(|| environment(frame))
+        let mut look = self
+            .look_override
+            .unwrap_or_else(|| environment_locked(frame, self.debug.exposure));
+        if let Some(settings) = &self.graphics {
+            if !settings.bloom {
+                look.bloom = 0.;
+            }
+            if !settings.motion_blur {
+                look.lens.motion_blur = 0.;
+            }
+            if !settings.depth_of_field {
+                look.lens.depth_of_field = None;
+            }
+        }
+        look
     }
 
     /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
@@ -380,6 +418,7 @@ impl Presenter {
             renderer.set_look(look)?;
         }
         apply_lut(renderer, frame, &environment, &mut self.lut)?;
+        apply_fog_volumes(renderer, frame)?;
         self.stats.prepare = started.elapsed();
         Ok(resolved)
     }
@@ -875,7 +914,7 @@ impl Presenter {
             || lights
                 .iter()
                 .zip(&self.lights)
-                .any(|(a, b)| bytes(a) != bytes(b))
+                .any(|(a, b)| bytemuck::bytes_of(a) != bytemuck::bytes_of(b))
         {
             renderer.set_lights(&lights)?;
             self.lights = lights;
@@ -888,23 +927,11 @@ impl Presenter {
             )?;
             self.sun = sun;
         }
+        renderer.set_sun_radius(frame.sun_radius)?;
+        let shown = &frame.lights[..frame.lights.len().min(64)];
+        renderer.set_light_tables(&lights::tables(shown).0)?;
         Ok(())
     }
-}
-
-fn bytes(light: &scene::Light) -> [u32; 16] {
-    let mut out = [0; 16];
-    for (i, v) in light
-        .position_range
-        .iter()
-        .chain(&light.color_lumens)
-        .chain(&light.direction_outer)
-        .chain(&light.parameters)
-        .enumerate()
-    {
-        out[i] = v.to_bits();
-    }
-    out
 }
 
 /// The frame's sun, or a dim default so the renderer always has a directional light.
@@ -913,49 +940,83 @@ fn sun(frame: &RenderFrame) -> ([f32; 3], [f32; 3]) {
 }
 
 fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
-    frame
-        .lights
-        .iter()
-        .take(64)
-        .map(|l| {
-            let [x, y, z] = l.position;
-            let [dx, dy, dz] = l.direction;
-            let spot = l.kind == LightKind::Spot;
-            scene::Light {
-                position_range: [x, y, z, l.range],
-                color_lumens: [l.color[0], l.color[1], l.color[2], l.lumens],
-                direction_outer: [
-                    dx,
-                    dy,
-                    dz,
-                    if spot {
-                        l.cone[1].to_radians().cos()
-                    } else {
-                        0.0
-                    },
-                ],
-                parameters: if spot {
-                    [1.0, l.cone[0].to_radians().cos(), 0.0, 0.0]
-                } else {
-                    [0.0; 4]
-                },
-            }
-        })
-        .collect()
+    lights::scene_lights(&frame.lights[..frame.lights.len().min(64)])
 }
 
 /// Where [`camera`] looks from when the world has no camera.
 const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
 
-/// The frame's authored look as seen from [`camera`]: post-process volumes blend by
-/// that eye position.
+/// The frame's authored look as seen from [`camera`] ([`environment_at`] its eye).
 pub fn environment(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
     let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
-    ara_render_fidelity::environment::FrameEnvironment::resolve(
-        &frame.look,
-        glam30::Vec3::from_array(eye),
-        frame.environment.exposure,
-    )
+    environment_at(frame, glam30::Vec3::from_array(eye))
+}
+
+/// [`environment`] under a diagnostic exposure lock (`RenderDebug::exposure`, EV100):
+/// manual exposure without compensation or its curve, over every volume.
+pub fn environment_locked(
+    frame: &RenderFrame,
+    lock: Option<f32>,
+) -> ara_render_fidelity::environment::FrameEnvironment {
+    let mut look = environment(frame);
+    if let Some(ev100) = lock {
+        look.ev100 = Some(ev100.clamp(-24., 32.));
+        look.compensation = 0.;
+        look.compensation_curve = Default::default();
+    }
+    look
+}
+
+/// The frame's authored look as seen from `eye` (an editor's Scene view camera):
+/// post-process volumes blend by that position; the sky light comes from the
+/// frame's `Environment`, the atmosphere lights from its directional lights. Every
+/// view resolves its look here, so none misses a term.
+pub fn environment_at(
+    frame: &RenderFrame,
+    eye: glam30::Vec3,
+) -> ara_render_fidelity::environment::FrameEnvironment {
+    use ara_render::look::atmosphere::{AtmosphereLight, LightAtmosphere};
+    let settings = |a: ara_runtime::extract::AtmosphereLightView| LightAtmosphere {
+        disc_scale: a.disc_scale,
+        per_pixel_transmittance: a.per_pixel_transmittance,
+    };
+    let mut environment = ara_render_fidelity::environment::FrameEnvironment {
+        sky_light: frame.environment.sky_light,
+        sun_scattering: frame.sun_volumetric.unwrap_or(1.),
+        ..ara_render_fidelity::environment::FrameEnvironment::resolve(
+            &frame.look,
+            eye,
+            frame.environment.exposure,
+        )
+    };
+    environment.set_atmosphere_lights(
+        frame.sun.and(frame.sun_atmosphere).map(settings),
+        frame.sun_atmosphere_index == 1,
+        frame.other_atmosphere_light.and_then(|o| {
+            Some(AtmosphereLight {
+                direction: glam30::Vec3::from_array(o.direction),
+                lux: glam30::Vec3::from_array(o.lux),
+                radius: o.radius.clamp(0., 0.2),
+                settings: settings(o.atmosphere?),
+            })
+        }),
+    );
+    environment
+}
+
+/// Hands the raster renderer `frame`'s local fog volumes (priority, then distance to
+/// the frame's camera; `ara_render_fidelity::environment::fog_volumes`) when they change.
+pub fn apply_fog_volumes(renderer: &mut Renderer, frame: &RenderFrame) -> Result<()> {
+    if frame.look.fog_volumes.is_empty() && renderer.fog_volumes().is_empty() {
+        return Ok(());
+    }
+    let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
+    let volumes =
+        ara_render_fidelity::environment::fog_volumes(&frame.look, glam30::Vec3::from_array(eye));
+    if renderer.fog_volumes() != volumes.as_slice() {
+        renderer.set_fog_volumes(&volumes)?;
+    }
+    Ok(())
 }
 
 /// Hands the raster renderer the colour lookup table `look` selects from `frame`'s
@@ -1002,22 +1063,27 @@ pub fn camera(frame: &RenderFrame) -> Result<CameraSpec> {
     })
 }
 
-/// A small equirectangular sky gradient (zenith, horizon, ground) in cd/m².
+/// A small equirectangular sky gradient in cd/m², graded as [`Environment`] documents
+/// (Unreal's sky-dome form: m = 1 − sin(elevation) blends zenith into horizon and
+/// shapes the additive glow band). 128 rows keep a narrow glow band resolved.
 pub fn sky(env: &Environment) -> ([u32; 2], Vec<[f32; 4]>) {
     const W: u32 = 64;
-    const H: u32 = 32;
+    const H: u32 = 128;
     let sky = Vec3::from_slice(&env.sky.0[..3]);
     let horizon = Vec3::from_slice(&env.horizon.0[..3]);
+    let glow = Vec3::from_slice(&env.glow.0[..3]);
     let ground = Vec3::from_slice(&env.ground.0[..3]);
+    let at_horizon = horizon + glow;
     let mut pixels = Vec::with_capacity((W * H) as usize);
     for y in 0..H {
         let elevation =
             std::f32::consts::FRAC_PI_2 - (y as f32 + 0.5) / H as f32 * std::f32::consts::PI;
         let s = elevation.sin();
         let c = if s >= 0.0 {
-            horizon.lerp(sky, s.powf(0.6))
+            let m = 1.0 - s;
+            sky.lerp(horizon, m.powf(env.sky_falloff)) + glow * m.powf(env.glow_falloff)
         } else {
-            horizon.lerp(ground, (-s * 4.0).min(1.0))
+            at_horizon.lerp(ground, (-s * 4.0).min(1.0))
         } * env.intensity;
         for _ in 0..W {
             pixels.push([c.x.max(0.0), c.y.max(0.0), c.z.max(0.0), 1.0]);

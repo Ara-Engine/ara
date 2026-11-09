@@ -43,7 +43,7 @@ fn incremental_lanes_and_runtime_theme_switch() -> Result<()> {
     assert_eq!(work.layout_passes, 0);
     assert_eq!(
         ui.nodes[0].computed.background,
-        ara_ui::style::Color(252, 252, 252, 255)
+        ara_ui::style::Color(241, 241, 243, 255)
     );
     assert_eq!(ui.frame(&mut text)?.paint_nodes, 0);
     let error = Ui::editor(
@@ -452,5 +452,37 @@ fn accessibility_lists_a_repeated_element_id_once() -> Result<()> {
     }
     assert!(ids.contains(&accesskit::NodeId(stable_id("dup"))));
     assert!(ids.contains(&accesskit::NodeId(stable_id("ok"))));
+    Ok(())
+}
+#[test]
+fn glass_and_shadows_paint_in_css_order_around_the_background() -> Result<()> {
+    use ara_ui::paint::Draw;
+    let mut ui = Ui::editor(
+        "<ui id='r'><panel id='menu' /></ui>",
+        "ui { width:100%; height:100%; } panel { width:120px; height:80px; background:var(--popover); border-radius:8px; backdrop-filter:blur(20px); box-shadow: inset 0 1px 0 var(--edge-highlight), 0 0 0 1px var(--edge-shadow), 0 14px 34px var(--float-shadow); }",
+        [400.0, 300.0],
+    )?;
+    ui.frame(&mut TextSystem::bundled()?)?;
+    let menu = stable_id("menu");
+    let order: Vec<_> = ui
+        .display
+        .commands
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Backdrop { node, .. } if *node == menu => Some("glass".to_string()),
+            Draw::Shadow { node, shadow, .. } if *node == menu => Some(format!(
+                "{}{}",
+                if shadow.inset { "inset " } else { "outer " },
+                shadow.blur
+            )),
+            Draw::RoundedRect { node, .. } if *node == menu => Some("background".into()),
+            _ => None,
+        })
+        .collect();
+    // The first CSS layer is on top: outer layers reverse below the background.
+    assert_eq!(
+        order,
+        ["glass", "outer 34", "outer 0", "background", "inset 0"]
+    );
     Ok(())
 }

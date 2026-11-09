@@ -75,14 +75,21 @@ impl Shell {
     }
     fn titlebar_markup(&mut self, s: &TitlebarState, out: &mut String) {
         self.bind_command("brand", "help.about", Target::None);
-        out.push_str("<panel id='menubar' class='menubar' label='Title bar'><panel id='titlebar-left' class='titlebar-side'><button id='brand' class='brand' label='About Ara' description='About Ara' action='Dispatch'><image id='brand-logo' class='brand-logo' src='brand-logo' /></button><panel id='menu-titles' class='titlebar-menus'>");
+        out.push_str("<panel id='menubar' class='menubar' label='Title bar'><panel id='titlebar-left' class='titlebar-side titlebar-left'><button id='brand' class='brand' label='About Ara' description='About Ara' action='Dispatch'><image id='brand-logo' class='brand-logo' src='brand-logo' /></button><panel id='menu-titles' class='titlebar-menus'>");
         for menu in MENUS {
             let id = menu::bar_id(menu.title, s.generation.as_deref());
             self.bindings.insert(
                 ara_ui::source::stable_id(&id),
                 Binding::MenuBar(menu.title.into()),
             );
-            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' description='Alt+{}' action='Dispatch'><text id='{id}-text' text='{}' />",if s.open.as_deref() == Some(menu.title) { " menu-title-open" } else { "" },menu.title,menu.mnemonic,menu.title));
+            // An open menu drops its Alt+key tooltip, which would cover the menu's filter.
+            let open = s.open.as_deref() == Some(menu.title);
+            let tip = if open {
+                String::new()
+            } else {
+                format!(" description='Alt+{}'", menu.mnemonic)
+            };
+            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu'{tip} action='Dispatch'><text id='{id}-text' text='{}' />",if open { " menu-title-open" } else { "" },menu.title,menu.title));
             if s.mnemonics {
                 let width = match menu.mnemonic {
                     'W' => 10.,
@@ -110,18 +117,27 @@ impl Shell {
             out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");
         }
         out.push_str("</panel><panel id='caption-buttons' class='caption-buttons'>");
-        for (id, command, label, glyph) in [
-            ("window-minimize", "window.minimize", "Minimize", "−"),
+        for (id, command, label, icon) in [
+            (
+                "window-minimize",
+                "window.minimize",
+                "Minimize",
+                "caption-minimize",
+            ),
             (
                 "window-maximize",
                 "window.maximize_window",
                 if s.maximized { "Restore" } else { "Maximize" },
-                if s.maximized { "▣" } else { "□" },
+                if s.maximized {
+                    "caption-restore"
+                } else {
+                    "caption-maximize"
+                },
             ),
-            ("window-close", "file.exit", "Close", "×"),
+            ("window-close", "file.exit", "Close", "caption-close"),
         ] {
             self.bind_command(id, command, Target::None);
-            out.push_str(&format!("<button id='{id}' class='caption-button{}' label='{label}' description='{label}' action='Dispatch'><text id='{id}-glyph' class='caption-glyph' text='{glyph}' /></button>",if id == "window-close" { " caption-close" } else { "" }));
+            out.push_str(&format!("<button id='{id}' class='caption-button{}' label='{label}' description='{label}' action='Dispatch'>{}</button>",if id == "window-close" { " caption-close" } else { "" },icons::icon_in(id, icon, "caption-glyph")));
         }
         out.push_str("</panel></panel></panel>");
     }

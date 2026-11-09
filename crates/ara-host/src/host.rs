@@ -225,6 +225,14 @@ impl Host {
         ws.insert(crate::project::MARKER, settings);
         let name = project.name();
         let main = project.main_scene();
+        // Import failures persisted for assets that no longer exist (moved without their
+        // sidecar, deleted) are dropped on load; a live asset's stay until it imports
+        // (`ASSET_IMPORTED`, `pump_bus`).
+        let assets: std::collections::BTreeSet<String> = project
+            .index
+            .imports()
+            .map(|(id, _)| format!("@{id}"))
+            .collect();
         let Project {
             root,
             db,
@@ -235,7 +243,10 @@ impl Host {
         } = project;
         let consumer = bus::attach();
         let mut diag = DiagStore::new(config.diagnostics);
-        let (diag_file, unreadable) = crate::diag::Persist::open(&state_dir, &mut diag);
+        let (mut diag_file, unreadable) = crate::diag::Persist::open(&state_dir, &mut diag);
+        if diag.clear_import_failures(|asset| !assets.contains(asset)) > 0 {
+            diag_file.removed();
+        }
         if unreadable > 0 {
             diag.push(
                 Diagnostic::warning(
@@ -731,6 +742,24 @@ impl State {
     pub(crate) fn pump_bus(&mut self) {
         let mut events = Vec::new();
         let lost = self.bus.drain(&mut events);
+        // `ASSET_IMPORTED` is a signal, not a record: it retires the asset's earlier
+        // import failures (persisted ones included).
+        let (imported, events): (Vec<_>, Vec<_>) = events
+            .into_iter()
+            .partition(|e| e.diagnostic.code == codes::ASSET_IMPORTED);
+        let imported: Vec<String> = imported
+            .into_iter()
+            .flat_map(|e| e.diagnostic.subjects)
+            .map(|s| s.value)
+            .collect();
+        if !imported.is_empty()
+            && self
+                .diag
+                .clear_import_failures(|asset| imported.iter().any(|a| a == asset))
+                > 0
+        {
+            self.diag_file.removed();
+        }
         let mut touched = self.diag.ingest(events);
         touched.extend(self.diag.absorb(&lost));
         self.diag.expire();

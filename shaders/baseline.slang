@@ -47,13 +47,20 @@ FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;floa
 // `rays` the hybrid path's ray-traced reflections (renderer::rt, D29), `gi` the
 // gi_diffuse view: the diffuse indirect light shading samples (ibl's diffuse share),
 // without direct light, emission, specular reflection, fog or the background.
-float4 lighting(FullscreenVarying v,bool high,bool rays=false,bool gi=false){
+// `refl`: the reflection debug views (ibl's `view`; LOOK_REFLECTION_SOURCES picks
+// sources over the reflected light alone).
+float4 lighting(FullscreenVarying v,bool high,bool rays=false,bool gi=false,bool refl=false){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
     if(!covered)return float4(gi?0:exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;
     // The material's occlusion map only where the frame has no dynamic occlusion (dynamicOcclusion).
     s.ao=min(dynamicOcclusion(l)?1:a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz),high));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
     if(gi){float3 v=normalize(f.camera.xyz-world);return float4(exposeHdr(f,l,ibl(f,l,s,specularLobes(s,v),world,v,p,true,high,rays,true)),1);}
+    if(refl){
+        float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);
+        float3 c=(l.flags.y&LOOK_REFLECTION_SOURCES)!=0?ibl(f,l,s,o,world,v,p,true,high,rays,false,2):ibl(f,l,s,o,world,v,p,true,high,rays,false,1);
+        return float4(exposeHdr(f,l,c),1);
+    }
     return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv)),1);
 }
 [shader("fragment")]
@@ -68,6 +75,11 @@ float4 lightingHighRtFragment(FullscreenVarying v):SV_Target0 {return lighting(v
 float4 lightingGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false,false,true);}
 [shader("fragment")]
 float4 lightingHighGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,false,true);}
+// The reflection debug views (RenderDebug::reflections), per tier.
+[shader("fragment")]
+float4 lightingReflFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false,false,false,true);}
+[shader("fragment")]
+float4 lightingHighReflFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,false,false,true);}
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
 ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),hdrExposure(f,l));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}
@@ -89,7 +101,7 @@ void prefilterMain(uint3 t:SV_DispatchThreadID){if(t.x>=256||t.y>=640)return;Fra
 [numthreads(64,1,1)]
 void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*TILE_STRIDE;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
     for(uint i=0;i<f.extent.z;i++){
-        Light l=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
+        Light l=loadLight(f.lighting.w,i);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
         bool include=clip.w<=range;
         if(!include){float2 centre=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5)*float2(f.extent.xy);float radius=range*max(abs(f.vp[0][0]),abs(f.vp[1][1]))*max(f.extent.x,f.extent.y)/max(clip.w-range,0.1);include=all(centre+radius>=tileMin)&&all(centre-radius<=tileMax);}
         if(include && count<TILE_LIGHTS){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
@@ -192,12 +204,48 @@ float3 overdrawHeat(float count){
     float t=clamp(log2(count),0,4);float3 blue=float3(0,0,1),green=float3(0,1,0),yellow=float3(1,1,0),orange=float3(1,0.2122,0),red=float3(1,0,0);
     return t<1?lerp(blue,green,t):t<2?lerp(green,yellow,t-1):t<3?lerp(yellow,orange,t-2):lerp(orange,red,t-3);
 }
+// The light complexity view (ViewMode::LightComplexity): the cost-weighted count of
+// the tile's local lights reaching render pixel `r`'s opaque surface (`g`: the record
+// at render size): one each, three for an area light, one more with a local shadow.
+float lightComplexity(Frame g,int2 r){
+    bool covered;float3 w=gbufferWorld(g,r,covered);if(!covered)return 0;
+    Look l=look(g);uint tilesX=(g.extent.x+15)/16;uint tile=(uint(r.y)/16*tilesX+uint(r.x)/16)*TILE_STRIDE;
+    uint count=buffers[NonUniformResourceIndex(g.lighting.z)].Load(tile*4);float cost=0;
+    for(uint i=0;i<count;i++){
+        uint index=buffers[NonUniformResourceIndex(g.lighting.z)].Load((tile+1+i)*4);Light light=loadLight(g.lighting.w,index);
+        if(all(lightIntensity(g,l,light,index,w)<=0))continue;
+        cost+=lightHasArea(light)?3:1;
+        if(l.localShadows.y!=0&&buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8).y!=0)cost+=1;
+    }
+    return cost;
+}
+// The penumbra view (ViewMode::ShadowPenumbra): the widest soft-shadow kernel at render
+// pixel `r`'s opaque surface (half-width; the sun's and every shadowed local light's in
+// its tile, look-shadow.slangh) on the overdraw legend, as sqrt(width / 1 cm): 1 cm blue,
+// 4 cm green, 16 cm yellow, 64 cm orange, 2.56 m red; grey where no blocker is near;
+// shaded by the darkest of their visibilities.
+float3 shadowPenumbraView(Frame f,Frame g,int2 r){
+    bool covered;float3 w=gbufferWorld(g,r,covered);if(!covered)return 0;
+    Look l=look(g);float3 n=gbufferNormal(g,r);float widest=0,lit=1;
+    if(dot(n,f.sunDirection.xyz)>0){bool mapped;float p;lit=mapVisibility(f,l,w,n,mapped,p);widest=p;}
+    uint tilesX=(g.extent.x+15)/16;uint tile=(uint(r.y)/16*tilesX+uint(r.x)/16)*TILE_STRIDE;
+    uint count=buffers[NonUniformResourceIndex(g.lighting.z)].Load(tile*4);
+    for(uint i=0;i<count;i++){
+        uint index=buffers[NonUniformResourceIndex(g.lighting.z)].Load((tile+1+i)*4);Light light=loadLight(g.lighting.w,index);
+        if(all(lightIntensity(g,l,light,index,w)<=0))continue;
+        float p,v=localShadowShape(l,index,w,n,light.positionRange.xyz,light.positionRange.w,localShadowLight(g,light,index,w),p);
+        widest=max(widest,p);lit=min(lit,v);
+    }
+    return (widest>0?overdrawHeat(sqrt(max(widest/0.01,1))):float3(0.5,0.5,0.5))*(0.2+0.8*lit);
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
     // Debug views read the render-size G-buffer pixel `r` under this display pixel.
     Frame g=f;g.extent.xy=f.sizes.xy;int2 r=int2((float2(p)+0.5)*float2(f.sizes.xy)/float2(f.extent.xy));
-    if(f.temporal.z==1)color=gbufferAlbedo(g,r).rgb;
+    // albedo, the vertex-colour views (11-15) and the decal coverage view (16), which
+    // draw their colours as albedo.
+    if(f.temporal.z==1 || (f.temporal.z>=11 && f.temporal.z<=16))color=gbufferAlbedo(g,r).rgb;
     else if(f.temporal.z==2)color=gbufferDepth(g,r)>0?gbufferNormal(g,r)*0.5+0.5:0.5;
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,r).x,0.25));
     else if(f.temporal.z==4)color=float3(gbufferMaterial(g,r),0);
@@ -210,7 +258,37 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==9)color=max(color,0);
     // overdraw: root word 1 is the render-size fragment count (`Overdraw.Count`).
     else if(f.temporal.z==10)color=overdrawHeat(pixel(root.materials,r).x);
+    else if(f.temporal.z==17)color=overdrawHeat(lightComplexity(g,r));
+    else if(f.temporal.z==18)color=shadowPenumbraView(f,g,r);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
+}
+// Editor selection outlines (renderer/outline.rs) over the display output. The mask
+// (root word 1, render size, nativeOutlineFragment) holds each pixel's outline group,
+// plus 128 where that group's surface is in view. A pixel within the band (root word 5,
+// display pixels each side, as float bits) of a texel of another group is outlined in
+// the colour (root word 7's table, sRGB) of the group on the inside of that edge: full
+// strength where the inside is in view, root word 6's opacity where it is hidden. Edges
+// follow the silhouette only: in-view and hidden parts of one group join seamlessly.
+[shader("compute")]
+[numthreads(8,8,1)]
+void outlineCompositeMain(uint3 t:SV_DispatchThreadID){
+    Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);
+    float2 scale=float2(f.sizes.xy)/float2(f.extent.xy);int2 last=int2(f.sizes.xy)-1;
+    int2 centre=int2((float2(p)+0.5)*scale);
+    uint here=uint(pixel(root.materials,centre).x+0.5);uint group=here&127;
+    float band=asfloat(root.mode);int reach=min(int(ceil((band+1)*max(scale.x,scale.y))),4);
+    float nearest=1e9;uint inside=0;bool seen=false;
+    for(int y=-reach;y<=reach;y++)for(int x=-reach;x<=reach;x++){
+        uint there=uint(pixel(root.materials,clamp(centre+int2(x,y),0,last)).x+0.5);
+        if((there&127)==group)continue;
+        float d=length(float2(x,y)/scale);if(d>=nearest)continue;
+        nearest=d;inside=group!=0?group:there&127;seen=group!=0?here>=128:there>=128;
+    }
+    float cover=saturate(band+1-nearest);if(inside==0||cover<=0)return;
+    float4 colour=buffers[NonUniformResourceIndex(root.flags)].Load<float4>((inside-1)*16);
+    float alpha=saturate(colour.a*cover*(seen?1:asfloat(root.sample)));
+    float4 under=images[NonUniformResourceIndex(f.post.w)][p];
+    images[NonUniformResourceIndex(f.post.w)][p]=float4(lerp(under.rgb,colour.rgb,alpha),1);
 }
 // Wireframe view modes: the wire mask (root word 1, render size, nativeWireFragment)
 // over the display output (Frame.post.w, sRGB). Over the lit image (root word 5 set)

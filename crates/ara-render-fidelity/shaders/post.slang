@@ -147,7 +147,10 @@ void postMain(uint3 tid:SV_DispatchThreadID){
         float other=sampleImage(f,DEPTH,uv+offset).x;float w=abs(other-depth)<max(0.1,depth*0.1)?1:0;sum+=sampleImage(f,FILTER0,uv+offset).rgb*w;total+=w;}c=sum/total;}
     c=lerp(c,bloom(f,uv),f.post.z);
     float3 direction=cameraRay(f,float2(p)+0.5);
-    if(f.display.w!=0){
+    // The path-traced reference (transport.x 1) traced its media per pixel
+    // (medium.slangh) and the sun's disc; other frames composite the froxel fog here.
+    if(f.transport.x==1){}
+    else if(f.display.w!=0){
         // The physical sky already integrates the whole atmosphere along sky rays;
         // under an environment map, sky pixels take the fog of the full froxel range.
         if(depth==0 && (f.display.w&2)!=0)c=atmosphereEnvironment(f,direction,true);

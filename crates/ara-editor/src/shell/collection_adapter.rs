@@ -298,7 +298,8 @@ impl Shell {
         count: usize,
     ) -> (String, ara_ui::collection::Window, Option<ItemKey>, f32) {
         let id = id(field, pointer);
-        let row = if editor.state.comfortable() { 28. } else { 24. };
+        // Property rows: 22 px controls with room above and below (editor.css).
+        let row = if editor.state.comfortable() { 30. } else { 26. };
         let height = (count as f32 * row).clamp(row, 10. * row);
         let viewport = Viewport::new(row, height)
             .expect("collection rows and viewport have positive fixed metrics");
@@ -453,7 +454,11 @@ impl Shell {
             else {
                 continue;
             };
-            self.ui.scroll_to(container, [0., target])?;
+            // Short collections render inline (a panel, not a scroll view); the
+            // editable's own scroll ancestor brings the new item into view below.
+            if self.ui.scroll_position(container).is_some() {
+                self.ui.scroll_to(container, [0., target])?;
+            }
             let Some(detail) = self.shown_node(&format!("{id}-detail")) else {
                 continue;
             };

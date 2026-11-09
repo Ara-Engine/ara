@@ -6,7 +6,7 @@ use super::*;
 fn native_full_editor_overlay_quality_captures() {
     let output = std::env::var_os("ARA_EDITOR_QUALITY_CAPTURE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/editor-quality/captures"));
+        .unwrap_or_else(|| crate::test_target().join("editor-quality/captures"));
     std::fs::create_dir_all(&output).unwrap();
     let project = Project::new();
     let device = ara_gpu::GpuDevice::new_raster(&[], output.join("gpu-cache")).unwrap();
@@ -42,7 +42,7 @@ fn native_full_editor_overlay_quality_captures() {
         gpu.pixels().unwrap().save(&path).unwrap();
         captures.push(json!({"file":path.file_name().unwrap().to_string_lossy(),"dpi":dpi,"logical":shell.ui.size,"physical":physical}));
     };
-    let sweep = run_sweep(&project, &mut capture);
+    let sweep = run_sweep(&project, &super::SIZES, &mut capture);
     sweep.write(&output);
     std::fs::write(
         output.join("capture-index.json"),

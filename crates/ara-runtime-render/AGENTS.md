@@ -1,21 +1,21 @@
 # ara-runtime-render
 
-Raster presentation queues view, particles and post inside one completion scope,
-then waits before publication. The final particle tick shares its draw graph.
-Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
+Raster presentation queues view, particles and post inside one completion scope, then waits before publication. The final particle tick shares its draw graph. Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
 
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
 device and per-view upload state; no simulation, window or process code.
 
 ## Public API
+- `graphics::plan` composes user scalability overrides (screen GI follows the GI group); `Presenter::set_graphics_settings` adopts them at frame boundaries. Texture/foliage budgets replace native content; unchanged preferences reuse the plan. See `docs/dev/graphics-settings.md`.
 
 - `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the renderer is
   created on the first frame (headless when `window_extensions` is empty).
 - `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
-  the project default or user override. `set_render_options` selects experimental
+  the project default or user override. `set_pixel_budget` (editor Game views) renders the preset's 1440p pixel count below 1440p. `set_render_options` selects experimental
   RT before device creation; otherwise no RT presentation resources are enabled.
-  Rendering failures retain the completed image and expose `presentation_error`.
+  Lights convert once (`lights::scene_lights`, profiles in `lights::tables`, set with the sun radius each frame).
+  Rendering failures retain the completed image and expose `presentation_error`. `set_debug`: `RenderDebug::reference` forces the path-traced reference (Epic fidelity plan, full res, ARA6009 without RT; captures present until its samples accumulate); `exposure` locks EV100 via `environment_locked` on every path.
 - `RasterView`: caller-owned renderer/device view shared by editor Scene and
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
@@ -38,10 +38,10 @@ device and per-view upload state; no simulation, window or process code.
   fade over 12 presented frames using material rows only; captures finish the fade.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; its early layout lets `preallocate_startup_resources` reserve and prime the volume/staging behind loading.
   Live frames poll; initial GI bounces use bounded 4096-probe windows, then relight at the preset budget. Readiness still waits for all bounces/fade. `wait_probe_gi` drains pending clears at an explicit capture boundary.
-- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed textures, instance poses and changed skin palettes.
+- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed textures, instance poses and changed skin palettes. Vertex colours map into `Vertex::color`; `Draw.paint` becomes `Instance::paint` (shapes only when it covers every vertex), live edits stream as `Changes::paint`; graph paint layers (`MaterialAsset::paint_layers`, `Source::Layer`) become layer material rows (`fidelity/native/tests/paint.rs`). Decals (`fidelity/native/decals.rs`) become native decals plus one material row (opacity map in slot 5, decal colour folded in); poses/parameters stream as `Changes::decals`, new/removed/re-materialled decals or colour edits rebuild.
   The resolver reads published terrain/material/prefab assets only on structural changes; model-only callers use `prepare` / `present`.
 - `probes::ProbeCaptures` (J7; `RasterView::probes`/`probes_mut`, `Presenter::set_probe_scene`): authored `ReflectionProbe` capture jobs (`recapture`, `cancel`, `job`, `snapshot`; derived work, no ops), ticked in `prepare`: bounded bake steps, readbacks without waits, `<sourceHash>.capture` written and read off-thread under `.ara/cache/probes`.
-  `sourceHash` is portable (content, lighting, probe settings and pose). A job completes on its hashed receipt; the cache file follows (a write failure is a row diagnostic; `is_busy` and retirement wait for outstanding writes); an image that never arrives is read back again after 120 frames and fails the generation after 240. Editors request; presenter views (Play, exports) capture what the cache lacks. `poll_probe_retirement` retires a replaced view's work. Authored probes always bake at High/Epic; `ARA_REFLECTION_CAPTURES=1` gates only automatic placement (`captures.rs`). Tests: `raster/tests/probes.rs`; `raster/tests/views.rs` checks the gi_diffuse and overdraw views (overdraw against CPU ray counts).
+  `sourceHash` is portable (content, lighting, probe settings and pose). A job completes on its hashed receipt; the cache file follows (a write failure is a row diagnostic; `is_busy` and retirement wait for outstanding writes); an image that never arrives is read back again after 120 frames and fails the generation after 240. Editors request; presenter views (Play, exports) capture what the cache lacks. `poll_probe_retirement` retires a replaced view's work. Authored probes always bake at High/Epic; Automatic placement is on unless `ARA_REFLECTION_CAPTURES=0` (`captures.rs`: from the delivered probes once they arrive, re-placed at a capture boundary). Tests: `raster/tests/probes.rs`; `raster/tests/views.rs` checks the gi_diffuse and overdraw views (overdraw against CPU ray counts).
 - `output()` is a completed CopySource image independent of view targets; always
   pair it with `output_size()`. `size()` is the requested extent, which can differ
   while a failed replacement retains the last good output. The raster `renderer()`
@@ -74,11 +74,12 @@ device and per-view upload state; no simulation, window or process code.
   nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in. `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
   Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
   worker thread samples each emitter's triangles through its emissive map into
-  0.75 m patches and casts rays against its own mesh: the flux escaping the
-  fixture (shades, sockets) and its lobe become spot or point lights (two-sided
-  only for open sheets, as in the path tracer), clustered until they fit
-  `Quality::emitter_lights`. They follow their instances, ride after the scene's
-  own lights and stay out of fog. Probe bakes zero those materials' emission.
+  0.75 m patches and casts rays against its own mesh: escaping flux (shades, sockets)
+  and its lobe become spot or point lights (two-sided only for open sheets). Flat even
+  faces (0.01 m2+, a filled rect or disc, escaping the mesh) become rect/disc area lights
+  first (`Panel`); patches cluster into the rest of `Quality::emitter_lights`. They follow their instances, ride after the scene's
+  own lights and stay out of fog. Probe bakes zero those materials' emission; the
+  threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI and capture faces also skip.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy
@@ -146,4 +147,4 @@ GPU tests need the Vulkan SDK layers: `source .sn/env.sh` (bash) or
 `RUST_TEST_THREADS=1 cargo test -p ara-runtime-render`: `tests/headless.rs` renders
 the demo scene, walks the Fox, checks streaming updates, a live light edit and that
 validation (including synchronization validation) stays clean. Captures land in
-`.sn/runtime-render/`. `cargo clippy -p ara-runtime-render --all-targets -- -D warnings`.
+`.sn/runtime-render/`. `tests/soft_shadows.rs`: penumbra widths vs the path tracer (`--ignored`: every light kind at Medium and High); `examples/shadow_costs.rs`: shadow GPU cost per preset. `cargo clippy -p ara-runtime-render --all-targets -- -D warnings`.

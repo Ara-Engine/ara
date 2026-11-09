@@ -21,8 +21,8 @@ pub const ARGUMENT_TABLE_BUFFERS: usize = VERTEX_BUFFER_BIND_POINT + 1;
 pub const TEXTURES: u32 = 65_536;
 /// Storage-buffer table capacity (`RWByteAddressBuffer[] : register(u0, space2)`).
 pub const BUFFERS: u32 = 4_096;
-/// Storage-image table capacity (`RWTexture2D[64] : register(u0, space3)`).
-pub const STORAGE_IMAGES: u32 = 64;
+/// Storage-image table capacity (`RWTexture2D[128] : register(u0, space3)`).
+pub const STORAGE_IMAGES: u32 = 128;
 /// Acceleration-structure table capacity (`RaytracingAccelerationStructure[16] : t0, space4`).
 pub const ACCELERATIONS: u32 = 16;
 /// Static samplers of the root signature (`SamplerState s0..s2 : space0`).

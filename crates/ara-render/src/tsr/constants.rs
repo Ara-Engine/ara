@@ -64,6 +64,9 @@ pub(crate) struct TsrConstants {
     pub kernel: [f32; 4],
     /// x `OPTION_*` flags, y last frame's display history (sampled; Ara path).
     pub options: [u32; 4],
+    /// x the share of a still pixel's history kept against rectification
+    /// (`Tuning::still`).
+    pub still: [f32; 4],
 }
 
 /// `TsrConstants::options` flags (tsr.slangh TSR_OPTION_*): prepare inputs computes
@@ -118,8 +121,8 @@ mod tests {
     }
 
     #[test]
-    fn record_is_twenty_five_rows() {
-        assert_eq!(std::mem::size_of::<TsrConstants>(), 25 * 16);
+    fn record_is_twenty_six_rows() {
+        assert_eq!(std::mem::size_of::<TsrConstants>(), 26 * 16);
     }
 
     #[test]

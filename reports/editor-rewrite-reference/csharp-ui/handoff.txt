@@ -1,0 +1,85 @@
+C# recovery UI / runtime Problems projection -- prepared, not gated
+
+Patch: D:/AraBuild/ux-editor-target/orchestration/csharp-ui/csharp-recovery-ui.patch
+SHA-256: F40AB7DB8061BD49EDABF6A51CBFEC2EE5DA85EBB31533191C5A18598FD595D2
+Last read-only git apply --check: PASS against b7fedff4b39feaabdbbb15547bb0030f87d5450c.
+Standalone rustfmt parsed/formatted the six new draft Rust files. No cargo, build,
+test, runtime, native capture or commit was executed by this writer. No tracked
+file was edited. Current source copies/patch live only under the D: directory.
+
+Prerequisite
+Real-merge Gaps' usable private ScriptRecovery* checkpoint first. Do not add a fake
+handle or fallback restart. The patch uses exactly the agreed root re-exports:
+PlayService::script_recovery(), ScriptRecoveryHandle, ScriptRecoveryRequest,
+ScriptRecoveryTicket, ScriptRecoveryStatus, ScriptRecoveryOutcome,
+ScriptRecoveryPlayerResult. The agreed fields and request/poll signatures are
+used directly. ARA0935/catalog remains the backend owner's work.
+
+Integration footprint (Root serial application)
+- Editor: retain one owned handle obtained before moving PlayService into Host.
+- Shell: new script_recovery_ui module and State; poll in rebuild_if_stale (the
+  accepted b7 fix already calls this each frame). Poll is a bool-only presentation
+  function; it cannot return Status diagnostics to generic error reporting.
+- Commands: turn existing tools.cs.reload / Ctrl+R into a real action. A private
+  Ctx reason preserves truthful menu/palette/toolbar availability. Add its value
+  to BOTH Ctx constructors (Shell and actions.rs); no public registry/MCP change.
+- Problems: small scrollable Reload Scripts/result area plus Console link.
+- Compile projection: ingest ARA0935 before other classification, independent of
+  display filters; prune matching protected fault contributions and filter the
+  ordinary bus-tail fallback through the same retirement ledger.
+- Monkey resource report includes owned recovery tickets, even after changing
+  world or stopping Play. Ages are whole-second, not changing every frame.
+
+Semantics
+- UI displays Status.diagnostics and player diagnostics only. No Cx::log,
+  diagnostic bus emit or Editor::report_failure call is made for returned Status.
+  Finished status is not a retirement authorization; only the original trusted
+  bus row authorizes that. Backend publication-before-finished is relied on.
+- Only ARA0935 schema=1/outcome=reloaded on a clean cursor page authorizes retiring
+  older-sequence error rows 910..=912, matching exact world/player/source/binding
+  and actual data.module in the successful modules batch. All other results,
+  compile success, malformed metadata and missing provenance retain faults.
+- Latest Store sequence is used, not first/count. An identical fault repeated
+  after the marker becomes active again. Console records are never changed.
+- Markers on incomplete cursor pages do not retire. A later clean exact marker
+  can retire its scope/modules. Historical uncertainty remains explicit.
+- Ledger bounded at 128 incarnations / 4096 module records. Overflow retains
+  unknown faults and exposes a notice. Report is compact and does not copy logs.
+- UI owns <=64 pending tickets / 8 finished statuses; polls <=8 tickets per 250ms
+  in round-robin order. Requests coalesce per world and old-world ownership is
+  retained to a matching terminal reply. Mismatched ticket/world cannot retarget.
+- View mounts <=8 pending cards, 8 terminal cards, <=16 player rows per result and
+  <=16 diagnostic rows per result. Extra results/diagnostics point to Console.
+  Widget IDs use row indices to tolerate malformed duplicate-player results.
+  Painting borrows retained state; it does not temporarily remove owned tickets.
+- Idle/start/restart availability is explicit. Paused live Play may recover.
+  No approval modal, restart fallback, inferred success or timeout-to-success.
+
+Prepared tests (NOT RUN)
+8 projection tests in shell/log_panels/compile/recovery/tests.rs:
+  exact scoped retirement + Console retention; negative results/compile success;
+  dedup repeat after marker; cursor gap then clean marker; malformed/unscoped and
+  future fault families; ordinary fallback; module cap; incarnation cap.
+7 owned-channel/view tests in shell/script_recovery_ui/tests.rs:
+  same-world coalescing/old-world ownership; mismatch/missing reply; 4Hz bounded
+  round-robin; original rich diagnostics preserved for display; duplicate ticket
+  and transport refusal; pending/terminal caps; escaping and visible row bounds.
+
+Root gates after real backend merge and application
+1. ara-dev fmt (new files are formatted; integration hunks intentionally keep
+   narrow context and need normal repository formatting).
+2. cargo check -p ara-editor --all-targets; focused tests script_recovery_ui and
+   shell::log_panels::compile, plus existing editor library and UX/script_assets.
+3. strict all-target ara-editor/ara-play-host Clippy; backend's Play suite.
+4. Windows C# Play check and actual native editor Reload Scripts route, showing
+   pending UI accepts pointer/key typing, matching Reloaded retirement, negative
+   outcome retention, later repeated fault reactivation and Console stack history.
+5. Extend acceptance leaf/proof as Root chooses; this preparation contains no
+   native proof and establishes no merge-ready SHA on its own.
+
+Collision note
+The later dd0 WIP modifies commands Ctx and monkey_support for profiling. Apply
+this patch serially, preserving those fields rather than replacing whole files.
+prepare-integration.ps1 regenerates the patch from current read-only repository
+anchors and the D-only draft sources; do not run it after Root changes the target
+files unless a deliberate rebase/regeneration is desired.

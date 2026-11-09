@@ -40,6 +40,7 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   pinned Kenney ZIPs to `sample-assets-v1`; agents do not upload release assets.
 - `kit`: generated glTF geometry over fetched texture sets, and the graphite suit
   palette image. Original models stay immutable; the importer merges opacity maps.
+  `Material::glass` is a blended film; `Material::solid_glass` real transmissive glass.
 - `build/`: `Ctx` (CLI batches, document lifecycle, project main, shared imports),
   `place` (props with centered colliders and ground sampling), `native` (source-node
   prefabs and lamp emission), `bounds` (source-pivot bounds), `materials` (native

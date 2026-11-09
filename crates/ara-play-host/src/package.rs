@@ -137,6 +137,7 @@ fn package(
         cache: assets.cache.to_string_lossy().into_owned(),
         nav_cache: None,
         rendering: crate::rendering::read(&workspace)?,
+        render_debug: ara_play::RenderDebug::default(),
         scripts,
         imports: workspace
             .index()

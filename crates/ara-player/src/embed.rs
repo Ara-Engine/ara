@@ -122,6 +122,7 @@ pub struct Embedded {
     pub(crate) game_ui: Option<crate::game_ui::Surface>,
     ring: ExportRing,
     interval: Duration,
+    owner_interval: Duration,
     last: Option<Instant>,
     /// Render the next frame even if nothing paced it (new surface).
     dirty: bool,
@@ -159,6 +160,8 @@ impl Embedded {
         };
         presenter.set_quality(quality);
         presenter.set_render_options(options);
+        // An editor Game view: sharp at the panel's size within a 1440p frame's cost.
+        presenter.set_pixel_budget(true);
         presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
         presenter.set_probe_gi(true);
@@ -174,6 +177,7 @@ impl Embedded {
                 game_ui: None,
                 ring,
                 interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
+                owner_interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
                 last: None,
                 dirty: true,
                 pending: None,
@@ -263,6 +267,16 @@ impl Embedded {
             && (self.dirty || self.entering() || self.last.is_none_or(|l| now - l >= self.interval))
     }
 
+    /// Apply the local user's cap to this embedded surface cadence.
+    pub(crate) fn set_graphics_cap(&mut self, cap: u32) {
+        self.interval = if cap == 0 {
+            self.owner_interval
+        } else {
+            self.owner_interval
+                .max(Duration::from_secs_f64(1. / f64::from(cap.clamp(15, 1000))))
+        };
+    }
+
     /// Renders a due `frame` into a free slot; the notice to send once it returns.
     pub fn render(
         &mut self,
@@ -271,7 +285,7 @@ impl Embedded {
         resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
     ) -> Result<Option<FrameReady>> {
         let started = Instant::now();
-        self.last = Some(started);
+        self.last = Some(paced(self.last, started, self.interval));
         if frame.draws.is_empty() {
             // Nothing to light: an entry would never become ready.
             self.entry = Entry::Open;
@@ -418,9 +432,40 @@ pub(crate) fn prewarm(
     Ok(presenter)
 }
 
+/// When a frame that began at `started` counts as rendered for the frame cap: one
+/// interval after the last one was *due* when it is on time, not when it began, so each
+/// poll's lateness (the loop sleeps 0.5 ms and Windows rounds up) never accumulates
+/// (a 60 FPS cap showed about 57). Early (dirty) or long-late frames restart the cadence.
+fn paced(last: Option<Instant>, started: Instant, interval: Duration) -> Instant {
+    match last {
+        Some(last) if started >= last + interval && started < last + interval * 2 => {
+            last + interval
+        }
+        _ => started,
+    }
+}
+
 #[cfg(test)]
 mod params_tests {
     use super::*;
+
+    #[test]
+    fn the_frame_cap_keeps_its_cadence_when_polls_run_late() {
+        let interval = Duration::from_secs_f64(1. / 60.);
+        let (begin, mut last) = (Instant::now(), None);
+        let late = Duration::from_micros(1500);
+        let mut now = begin;
+        for _ in 0..600 {
+            last = Some(paced(last, now, interval));
+            // Each frame begins 1.5 ms after it is due.
+            now = last.expect("paced") + interval + late;
+        }
+        let rate = 600. / (now - begin).as_secs_f64();
+        assert!(rate > 59.5, "{rate:.1} FPS");
+        // A long stall restarts from now instead of bursting to catch up.
+        let resumed = now + interval * 5;
+        assert_eq!(paced(last, resumed, interval), resumed);
+    }
 
     #[test]
     fn embed_and_resize_carry_an_optional_game_ui_scale() -> Result<()> {
@@ -560,8 +605,8 @@ mod tests {
             let renderer = presenter.renderer().context("warmed embedded renderer")?;
             let rt = renderer.gpu().info().ray_tracing;
             if !options.ray_tracing {
-                // D29: the default device keeps optional ray tracing for the hybrid
-                // High/Epic raster path; it still renders native raster geometry.
+                // The default device keeps optional ray tracing for the opt-in;
+                // without it every preset renders native raster geometry.
                 assert!(
                     renderer.is_native(),
                     "default embedding must use native raster geometry"

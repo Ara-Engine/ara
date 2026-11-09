@@ -1,69 +1,5 @@
 use super::*;
-use ara_gpu::vk::TaggedStructure;
-
-struct Gate {
-    device: ash::Device,
-    semaphore: vk::Semaphore,
-}
-
-impl Gate {
-    fn new(gpu: &GpuDevice) -> Result<Self> {
-        let device = gpu.context().device.clone();
-        // SAFETY: The timeline lives until the queue has drained in Drop; the
-        // creating device is retained by the test and outlives this guard.
-        let semaphore = unsafe {
-            let mut timeline =
-                vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-            device.create_semaphore(
-                &vk::SemaphoreCreateInfo::default().push(&mut timeline),
-                None,
-            )?
-        };
-        let result = Self { device, semaphore };
-        // SAFETY: This test serializes the queue. The wait is released even when
-        // an assertion fails, before its device is destroyed.
-        unsafe {
-            let waits = [vk::SemaphoreSubmitInfo::default()
-                .semaphore(semaphore)
-                .value(1)
-                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
-            result.device.queue_submit2(
-                gpu.context().graphics,
-                &[vk::SubmitInfo2::default().wait_semaphore_infos(&waits)],
-                vk::Fence::null(),
-            )?;
-        }
-        Ok(result)
-    }
-    fn open(&self) -> Result<()> {
-        // SAFETY: Host signal of this test-owned timeline's only wait.
-        unsafe {
-            self.device.signal_semaphore(
-                &vk::SemaphoreSignalInfo::default()
-                    .semaphore(self.semaphore)
-                    .value(1),
-            )?;
-        }
-        Ok(())
-    }
-}
-impl Drop for Gate {
-    fn drop(&mut self) {
-        // SAFETY: Drop releases the test wait before waiting for and destroying
-        // its semaphore; this guard is always dropped before the GPU owner.
-        unsafe {
-            if self
-                .device
-                .get_semaphore_counter_value(self.semaphore)
-                .is_ok_and(|value| value == 0)
-            {
-                let _ = self.open();
-            }
-            let _ = self.device.device_wait_idle();
-            self.device.destroy_semaphore(self.semaphore, None);
-        }
-    }
-}
+use ara_gpu::vulkan::QueueGate;
 
 #[test]
 fn preallocated_table_is_gpu_ordered_after_an_earlier_inflight_submission() -> Result<()> {
@@ -80,7 +16,7 @@ fn preallocated_table_is_gpu_ordered_after_an_earlier_inflight_submission() -> R
         );
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-    let gate = Gate::new(&gpu)?;
+    let mut gate = QueueGate::new(gpu.context(), gpu.context().graphics)?;
     gpu.begin_deferred_completion_on_current_queue()?;
     let mut earlier = gpu.begin(Queue::Graphics);
     earlier.push(Command::BeginPass("Test.EarlierGeometry".into()));

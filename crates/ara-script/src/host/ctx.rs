@@ -164,6 +164,8 @@ impl HostCtx {
             navigate: host_navigate,
             character_stop: host_character_stop,
             animation_bool: host_animation_bool,
+            graphics: super::graphics::host_graphics,
+            graphics_revision: super::graphics::host_graphics_revision,
         }
     }
 }

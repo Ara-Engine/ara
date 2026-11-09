@@ -1,17 +1,18 @@
-//! Sun shadows of blended (alpha-film) casters (look-translucent.slangh). The
+//! Coloured sun shadows of blended films and glass (look-translucent.slangh). The
 //! cascades, far map, local faces and virtual pages draw opaque casters only; a
-//! High/Epic frame with blended casters also draws those from the sun into a map
-//! fitted to their bounds: their nearest depth (D32), then the product of
-//! (1 - opacity) over every film (R16F cleared to one, blended ONE,
-//! ONE_MINUS_SRC_ALPHA from a zero colour), so a closed film's two sides pass
-//! (1 - a)^2 as a path tracer's alpha shadows do, without dither or noise.
-//! Receivers behind the nearest film (the virtual page projection and the High
-//! tier's lighting and forward shading) take the filtered transmittance. Frames
-//! without blended casters declare nothing; the map is allocated on first use and
-//! redrawn only when its fit (the sun, the bounds of the casters near the camera)
-//! changes, a blended caster moved or changed material (the native content's
-//! blended-caster revision), or the content was replaced. Opaque casters never
-//! invalidate it: it holds blended casters alone.
+//! High/Epic frame with blended or transmissive casters also draws those from the
+//! sun into a map fitted to their bounds: their nearest depth (D32), then the
+//! optical depth along the sun's rays summed over every face (RGBA16F cleared to
+//! zero, added through ONE, ONE_MINUS_SRC_ALPHA with zero alpha): films stop their
+//! coverage, glass passes its tint less Fresnel and its medium absorbs over the
+//! chord between its faces, exactly what the path tracer's shadow rays take through
+//! the same surfaces, without dither or noise. Receivers behind the nearest caster
+//! (the High tier's lighting and forward shading, hybrid ray hits, volumetric fog)
+//! take exp(-depth), filtered. Frames without such casters declare nothing; the map
+//! is allocated on first use and redrawn only when its fit (the sun, the bounds of
+//! the casters near the camera) changes, a caster moved or changed material (the
+//! native content's translucent-caster revision), or the content was replaced.
+//! Opaque casters never invalidate it: it holds blended and transmissive casters alone.
 use super::{frame::LookFrame, gpu::LookGpu};
 use crate::graph::{Graph, ResourceId, State};
 use anyhow::Result;
@@ -136,10 +137,11 @@ impl TranslucentSun {
                 vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             )?;
             owned.push(Resource::Image(depth));
+            // Optical depth per channel (native_shadow_translucent's colour format).
             let transmittance = gpu.create_image(
                 RESOLUTION,
                 RESOLUTION,
-                vk::Format::R16_SFLOAT,
+                vk::Format::R16G16B16A16_SFLOAT,
                 vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::COLOR_ATTACHMENT,
             )?;
             owned.push(Resource::Image(transmittance));

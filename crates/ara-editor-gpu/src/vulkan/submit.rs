@@ -15,6 +15,14 @@ const COLOR: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
     vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
     vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
 );
+// A loaded attachment (glass resumes the target) is read before it is written.
+const COLOR_LOAD: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
+    vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+    vk::AccessFlags2::from_raw(
+        vk::AccessFlags2::COLOR_ATTACHMENT_READ.as_raw()
+            | vk::AccessFlags2::COLOR_ATTACHMENT_WRITE.as_raw(),
+    ),
+);
 impl NativeUi {
     fn start(&self) -> Result<()> {
         self.wait_previous()?;
@@ -291,6 +299,24 @@ impl NativeUi {
                 &[],
             );
         }
+        // Glass needs a same-size scratch, and the target and scratch in the heap.
+        let backdrop_slots = self.backdrop_slots.filter(|_| !self.backdrops.is_empty());
+        if let Some([target_slot, scratch_slot]) = backdrop_slots {
+            let size = target.size;
+            if self.scratch.as_ref().is_none_or(|s| s.size != size) {
+                // The previous submission is complete (`wait_previous` above).
+                self.scratch = Some(self.memory.image(
+                    size,
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+                )?);
+            }
+            let scratch = self
+                .scratch
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("UI glass scratch"))?;
+            self.write_texture(target_slot, target.view);
+            self.write_texture(scratch_slot, scratch.view);
+        }
         let mut before = Vec::with_capacity(self.external_images.len() + 1);
         for image in self.external_images.values() {
             before.push(barrier(
@@ -322,27 +348,49 @@ impl NativeUi {
                 self.command,
                 &vk::DependencyInfo::default().image_memory_barriers(&before),
             );
-            let attachments = [vk::RenderingAttachmentInfo::default()
-                .image_view(target.view)
-                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(vk::ClearValue {
-                    color: vk::ClearColorValue { float32: [0.; 4] },
-                })];
-            device.cmd_begin_rendering(
-                self.command,
-                &vk::RenderingInfo::default()
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D::default(),
-                        extent: vk::Extent2D {
-                            width: target.size[0],
-                            height: target.size[1],
-                        },
-                    })
-                    .layer_count(1)
-                    .color_attachments(&attachments),
-            );
+            let begin = |view: vk::ImageView, load: vk::AttachmentLoadOp| {
+                let attachments = [vk::RenderingAttachmentInfo::default()
+                    .image_view(view)
+                    .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .load_op(load)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        color: vk::ClearColorValue { float32: [0.; 4] },
+                    })];
+                device.cmd_begin_rendering(
+                    self.command,
+                    &vk::RenderingInfo::default()
+                        .render_area(vk::Rect2D {
+                            offset: vk::Offset2D::default(),
+                            extent: vk::Extent2D {
+                                width: target.size[0],
+                                height: target.size[1],
+                            },
+                        })
+                        .layer_count(1)
+                        .color_attachments(&attachments),
+                );
+            };
+            let push = |first: u32, texture: u32, mode: u32, masks: [u32; 2]| {
+                let words = [
+                    first,
+                    texture,
+                    mode,
+                    masks[0],
+                    self.logical[0].to_bits(),
+                    self.logical[1].to_bits(),
+                    masks[1],
+                    self.dpi.to_bits(),
+                ];
+                device.cmd_push_constants(
+                    self.command,
+                    self.pipeline_layout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    bytemuck::cast_slice(&words),
+                );
+            };
+            begin(target.view, vk::AttachmentLoadOp::CLEAR);
             device.cmd_bind_pipeline(self.command, vk::PipelineBindPoint::GRAPHICS, self.pipeline);
             device.cmd_bind_descriptor_sets(
                 self.command,
@@ -364,27 +412,73 @@ impl NativeUi {
                     max_depth: 1.,
                 }],
             );
-            for draw in &self.draws {
+            let mut passes = self.backdrops.iter().peekable();
+            for (index, draw) in self.draws.iter().enumerate() {
+                let pass = passes.next_if(|pass| pass.index == index);
                 if draw.scissor.extent.width == 0 || draw.scissor.extent.height == 0 {
                     continue;
                 }
+                if let (Some(pass), Some([target_slot, _]), Some(scratch)) =
+                    (pass, backdrop_slots, self.scratch.as_ref())
+                {
+                    // Glass: pause the target, blur it horizontally into scratch, then
+                    // resume the target (loaded) for the vertical pass below.
+                    device.cmd_end_rendering(self.command);
+                    let to_passes = [
+                        barrier(
+                            target.image,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            COLOR,
+                            SAMPLE,
+                        ),
+                        barrier(
+                            scratch.image,
+                            vk::ImageLayout::UNDEFINED,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            (vk::PipelineStageFlags2::NONE, vk::AccessFlags2::NONE),
+                            COLOR,
+                        ),
+                    ];
+                    device.cmd_pipeline_barrier2(
+                        self.command,
+                        &vk::DependencyInfo::default().image_memory_barriers(&to_passes),
+                    );
+                    begin(scratch.view, vk::AttachmentLoadOp::CLEAR);
+                    if pass.scissor.extent.width > 0 && pass.scissor.extent.height > 0 {
+                        device.cmd_set_scissor(self.command, 0, &[pass.scissor]);
+                        push(pass.first, target_slot, draw.mode, [0, 0]);
+                        device.cmd_draw(self.command, 6, 1, 0, 0);
+                    }
+                    device.cmd_end_rendering(self.command);
+                    let to_target = [
+                        barrier(
+                            scratch.image,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            COLOR,
+                            SAMPLE,
+                        ),
+                        barrier(
+                            target.image,
+                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            SAMPLE,
+                            COLOR_LOAD,
+                        ),
+                    ];
+                    device.cmd_pipeline_barrier2(
+                        self.command,
+                        &vk::DependencyInfo::default().image_memory_barriers(&to_target),
+                    );
+                    begin(target.view, vk::AttachmentLoadOp::LOAD);
+                }
                 device.cmd_set_scissor(self.command, 0, &[draw.scissor]);
-                let words = [
+                push(
                     draw.first,
                     draw.texture,
                     draw.mode,
-                    draw.mask_offset,
-                    (self.logical[0] as f32).to_bits(),
-                    (self.logical[1] as f32).to_bits(),
-                    draw.mask_count,
-                    self.dpi.to_bits(),
-                ];
-                device.cmd_push_constants(
-                    self.command,
-                    self.pipeline_layout,
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0,
-                    bytemuck::cast_slice(&words),
+                    [draw.mask_offset, draw.mask_count],
                 );
                 device.cmd_draw(self.command, 6, draw.count, 0, 0);
             }

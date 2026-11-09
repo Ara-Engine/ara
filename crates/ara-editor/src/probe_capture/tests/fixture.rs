@@ -266,6 +266,8 @@ pub(super) fn snapshot(task: &Task, version: u64) -> ProbeSnapshot {
                 ("overdraw".into(), "Not available on this owner".into()),
             ]
             .into(),
+            vertex_colors: false,
+            decals: false,
         },
         probes: vec![ProbeRow {
             doc: task.doc.clone(),

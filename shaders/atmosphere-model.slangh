@@ -1,0 +1,297 @@
+// The physical sky atmosphere, shared by the raster look (look.slangh) and
+// ara-render-fidelity (its atmosphere.slangh includes a byte-identical copy, checked by
+// its tests): an independent implementation of Hillaire's LUT model (EGSR 2020) over a
+// spherical planet, parameterised exactly as Unreal's SkyAtmosphere component (the
+// record is ara_render::look::atmosphere::AtmosphereModel::record). Include after the
+// bindless `textures`/`samplers` declarations and PI.
+//
+// Planet space: origin at the planet's centre, metres; renderers put the centre straight
+// below the camera (atmospherePosition), so the sky-view LUT and aerial perspective see
+// the same planet. LUTs (sizes in ATMOSPHERE_*):
+// - transmittance (256x64) to the top of the atmosphere by radius and light cosine,
+//   Bruneton's horizon-aware mapping; the planet's shadow is analytic (atmosphereLit);
+// - multiple scattering (32x32), Hillaire's isotropic Psi_ms by light cosine and altitude;
+// - sky view (192x108) at the camera's radius: absolute azimuth (u wraps, sample it with
+//   the repeating environment sampler), latitude concentrated at the horizon.
+struct AtmosphereModel {
+    float4 planet;          // x bottom radius, y top radius (m), z multi-scattering factor, w Mie anisotropy
+    float4 rayleigh;        // rgb scattering (1/m), w density exponent (-1/scale height, 1/m)
+    float4 mieScattering;   // rgb scattering (1/m), w density exponent
+    float4 mieExtinction;   // rgb scattering + absorption (1/m), w trace sample count scale
+    float4 absorption;      // rgb tent-layer absorption at density 1 (1/m), w tip altitude (m)
+    float4 tent;            // x tip density, y half width (m; 0 none), z sine of the transmittance's minimum light elevation, w aerial perspective start depth (m)
+    float4 ground;          // rgb ground albedo, w aerial perspective view distance scale
+    float4 skyFactor;       // rgb sky luminance factor, w height fog contribution
+    float4 apFactor;        // rgb sky and aerial perspective luminance factor, w sea level (world y, m)
+    // The two atmosphere lights (Unreal's atmosphere sun light index 0 and 1).
+    float4 light0Direction; // xyz toward the light (world), w angular radius (rad)
+    float4 light0Lux;       // rgb illuminance above the atmosphere (lux; 0 none), w 1: per-pixel transmittance on surfaces
+    float4 light0Ground;    // rgb transmittance to surfaces (global mode, as Unreal: 500 m above the ground), w 1: the renderer's sun (shadowed, lights surfaces)
+    float4 light0Disk;      // rgb disc luminance scale (Unreal's atmosphere sun disk colour scale), w 1 draws the disc
+    float4 light1Direction;
+    float4 light1Lux;
+    float4 light1Ground;
+    float4 light1Disk;
+};
+static const uint2 ATMOSPHERE_TRANSMITTANCE=uint2(256,64),ATMOSPHERE_MULTISCATTER=uint2(32,32),ATMOSPHERE_SKY_VIEW=uint2(192,108);
+struct AtmosphereLight {float3 direction;float3 lux;float radius;};
+AtmosphereLight atmosphereLight0(AtmosphereModel a){AtmosphereLight l;l.direction=a.light0Direction.xyz;l.lux=a.light0Lux.rgb;l.radius=a.light0Direction.w;return l;}
+AtmosphereLight atmosphereLight1(AtmosphereModel a){AtmosphereLight l;l.direction=a.light1Direction.xyz;l.lux=a.light1Lux.rgb;l.radius=a.light1Direction.w;return l;}
+bool atmosphereHasLight1(AtmosphereModel a){return any(a.light1Lux.rgb>0);}
+float atmosphereBottom(AtmosphereModel a){return a.planet.x;}
+float atmosphereTop(AtmosphereModel a){return a.planet.y;}
+
+// Planet-space position of world point `world` seen from a camera at `camera`: the
+// planet's centre lies straight below the camera, its surface at the sea level.
+float3 atmospherePosition(AtmosphereModel a,float3 camera,float3 world){
+    return float3(world.x-camera.x,a.planet.x+world.y-a.apFactor.w,world.z-camera.z);
+}
+// The camera's planet-space position, kept inside the atmosphere (the LUTs assume it).
+float3 atmosphereCamera(AtmosphereModel a,float3 camera){
+    return float3(0,clamp(a.planet.x+camera.y-a.apFactor.w,a.planet.x+1,a.planet.y-1),0);
+}
+
+// Extinction and the two scattering coefficients at `altitude` above the ground (m).
+struct AtmosphereMedium {float3 rayleigh;float3 mie;float3 extinction;};
+AtmosphereMedium atmosphereMedium(AtmosphereModel a,float altitude){
+    float h=max(altitude,0),dr=exp(a.rayleigh.w*h),dm=exp(a.mieScattering.w*h);
+    float tent=a.tent.y>0?clamp(a.tent.x*(1-abs(h-a.absorption.w)/a.tent.y),0.,1.):0;
+    AtmosphereMedium m;m.rayleigh=a.rayleigh.rgb*dr;m.mie=a.mieScattering.rgb*dm;
+    m.extinction=m.rayleigh+a.mieExtinction.rgb*dm+a.absorption.rgb*tent;return m;
+}
+float atmospherePhaseRayleigh(float cosine){return 3*(1+cosine*cosine)/(16*PI);}
+float atmospherePhaseMie(float cosine,float g){return (1-g*g)/(4*PI*pow(max(1+g*g-2*g*cosine,1e-4),1.5));}
+
+// Ray/sphere distances (near, far) about the planet's centre; both negative on a miss.
+float2 atmosphereSphere(float3 p,float3 d,float radius){
+    float b=dot(p,d),q=b*b-dot(p,p)+radius*radius;if(q<0)return float2(-1,-1);
+    float s=sqrt(q);return float2(-b-s,-b+s);
+}
+// Distance along `d` to the ground (negative: none).
+float atmosphereGround(AtmosphereModel a,float3 p,float3 d){
+    float2 t=atmosphereSphere(p,d,a.planet.x);if(t.x>=0)return t.x;
+    return dot(p,p)<a.planet.x*a.planet.x?0:-1;
+}
+// The segment of the ray inside the atmosphere: (start, end), ending at the ground when
+// it hits it; end <= start when it misses the atmosphere.
+float2 atmosphereSegment(AtmosphereModel a,float3 p,float3 d,out bool ground){
+    float2 top=atmosphereSphere(p,d,a.planet.y);float hit=atmosphereGround(a,p,d);
+    ground=hit>=0;float start=max(top.x,0),end=ground?min(hit,top.y):top.y;
+    return float2(start,max(end,start));
+}
+
+// Bruneton's transmittance mapping: (light cosine, radius) <-> uv over the rays that
+// reach the top of the atmosphere without hitting the ground.
+float atmosphereTexel(float x,uint size){return 0.5/size+x*(1-1./size);}
+float atmosphereUntexel(float u,uint size){return saturate((u-0.5/size)/(1-1./size));}
+float2 atmosphereTransmittanceUv(AtmosphereModel a,float r,float mu){
+    float bottom=a.planet.x,top=a.planet.y,H=sqrt(max(top*top-bottom*bottom,0)),rho=sqrt(max(r*r-bottom*bottom,0));
+    float d=max(-r*mu+sqrt(max(r*r*(mu*mu-1)+top*top,0)),0),dmin=max(top-r,0),dmax=rho+H;
+    return float2(atmosphereTexel(saturate((d-dmin)/max(dmax-dmin,1e-3)),ATMOSPHERE_TRANSMITTANCE.x),atmosphereTexel(rho/max(H,1e-3),ATMOSPHERE_TRANSMITTANCE.y));
+}
+// The inverse: (radius, cosine) of a transmittance texel's centre.
+float2 atmosphereTransmittanceTexel(AtmosphereModel a,float2 uv){
+    float bottom=a.planet.x,top=a.planet.y,H=sqrt(max(top*top-bottom*bottom,0));
+    float rho=H*atmosphereUntexel(uv.y,ATMOSPHERE_TRANSMITTANCE.y),r=sqrt(rho*rho+bottom*bottom);
+    float dmin=top-r,dmax=rho+H,d=dmin+atmosphereUntexel(uv.x,ATMOSPHERE_TRANSMITTANCE.x)*(dmax-dmin);
+    float mu=d<=0?1:clamp((H*H-rho*rho-d*d)/(2*r*d),-1.,1.);
+    return float2(r,mu);
+}
+// Transmittance from radius `r` along cosine `mu` to space, ignoring the planet (the
+// LUT clamps below-horizon rays to the horizon; atmosphereLit adds the planet).
+float3 atmosphereTransmittance(AtmosphereModel a,uint lut,float r,float mu){
+    return textures[NonUniformResourceIndex(lut)].SampleLevel(samplers[2],atmosphereTransmittanceUv(a,r,mu),0).rgb;
+}
+// The share of a light disc of angular radius `radius` above the planet's horizon,
+// seen from radius `r` at light cosine `mu`: a smooth terminator instead of a step.
+float atmosphereLit(AtmosphereModel a,float r,float mu,float radius){
+    float horizon=-sqrt(max(1-a.planet.x*a.planet.x/(r*r),0));
+    float elevation=asin(clamp(mu,-1.,1.))-asin(horizon),soft=max(radius,0.001);
+    return saturate(0.5+0.5*elevation/soft);
+}
+// Light transmittance including the planet's shadow.
+float3 atmosphereToLight(AtmosphereModel a,uint lut,float r,float mu,float radius){
+    float lit=atmosphereLit(a,r,mu,radius);return lit>0?atmosphereTransmittance(a,lut,r,mu)*lit:0;
+}
+// The transmittance a surface at `altitude` receives from a light at cosine `mu` (the
+// light's illuminance multiplier for surface lighting): Unreal's global value (light
+// row Ground) or, in per-pixel mode, the LUT at the surface with the planet's shadow.
+// Both honour the minimum light elevation (tent.z).
+float3 atmosphereSurfaceLight(AtmosphereModel a,uint lut,float4 lux,float3 global,float radius,float altitude,float mu){
+    if(lux.w<0.5)return global;
+    float r=a.planet.x+max(altitude,0);mu=max(mu,a.tent.z);
+    return atmosphereToLight(a,lut,r,mu,radius);
+}
+// The surface transmittance of the renderer's sun (the shadowed directional light, at
+// light cosine `mu`): the atmosphere light whose Ground row is flagged (light 1 when a
+// moon holds the sun slot), or 1 when the sun is not an atmosphere light.
+float3 atmosphereSunSurface(AtmosphereModel a,uint lut,float radius,float altitude,float mu){
+    if(a.light1Ground.w>0.5)return atmosphereSurfaceLight(a,lut,a.light1Lux,a.light1Ground.rgb,radius,altitude,mu);
+    if(a.light0Ground.w>0.5)return atmosphereSurfaceLight(a,lut,a.light0Lux,a.light0Ground.rgb,radius,altitude,mu);
+    return 1;
+}
+
+// Multiple-scattering LUT: x light cosine, y altitude over the atmosphere's height.
+float2 atmosphereMultiScatterUv(AtmosphereModel a,float r,float mu){
+    return float2(atmosphereTexel(mu*0.5+0.5,ATMOSPHERE_MULTISCATTER.x),atmosphereTexel(saturate((r-a.planet.x)/(a.planet.y-a.planet.x)),ATMOSPHERE_MULTISCATTER.y));
+}
+float3 atmosphereMultiScatter(AtmosphereModel a,uint lut,float r,float mu){
+    return textures[NonUniformResourceIndex(lut)].SampleLevel(samplers[2],atmosphereMultiScatterUv(a,r,mu),0).rgb;
+}
+
+// Sky view LUT: u the absolute azimuth about +Y (environmentUv's), v the zenith angle,
+// zenith to horizon over [0, 0.5] and horizon to nadir over [0.5, 1], both packed
+// quadratically towards the horizon (where the sky changes fastest).
+float atmosphereHorizonZenith(AtmosphereModel a,float r){return PI-acos(sqrt(max(r*r-a.planet.x*a.planet.x,0))/r);}
+float2 atmosphereSkyViewUv(AtmosphereModel a,float r,float3 d){
+    float zenith=acos(clamp(d.y,-1.,1.)),horizon=atmosphereHorizonZenith(a,r),v;
+    if(zenith<horizon)v=0.5*(1-sqrt(saturate(1-zenith/horizon)));
+    else v=0.5+0.5*sqrt(saturate((zenith-horizon)/max(PI-horizon,1e-4)));
+    return float2(atan2(d.z,d.x)/(2*PI)+0.5,atmosphereTexel(v,ATMOSPHERE_SKY_VIEW.y));
+}
+float3 atmosphereSkyViewDirection(AtmosphereModel a,float r,float2 uv){
+    float v=atmosphereUntexel(uv.y,ATMOSPHERE_SKY_VIEW.y),horizon=atmosphereHorizonZenith(a,r),zenith;
+    if(v<0.5){float s=1-2*v;zenith=(1-s*s)*horizon;}
+    else{float s=2*v-1;zenith=horizon+s*s*(PI-horizon);}
+    float phi=(uv.x-0.5)*2*PI;return float3(cos(phi)*sin(zenith),cos(zenith),sin(phi)*sin(zenith));
+}
+// Sky radiance along `d` from the LUT, before the sky luminance factor.
+float3 atmosphereSkyView(AtmosphereModel a,uint lut,float r,float3 d){
+    return textures[NonUniformResourceIndex(lut)].SampleLevel(samplers[1],atmosphereSkyViewUv(a,r,d),0).rgb;
+}
+
+// Light scattered towards a point at planet-space `p` from direction -`d` (unit cosine
+// `view` between the view ray and the light): single scattering through the LUT
+// transmittance (also returned alone as `single`, which callers may shadow) plus multiple
+// scattering (Psi_ms from LUT `ms`) when `multiple`; per metre of ray, per lux of `light`.
+float3 atmosphereInScatter(AtmosphereModel a,uint transmittance,uint ms,bool multiple,AtmosphereMedium m,float3 p,float3 d,AtmosphereLight light,bool isotropic,out float3 single){
+    float r=length(p),mu=dot(p/r,light.direction),cosine=dot(d,light.direction);
+    float3 t=atmosphereToLight(a,transmittance,r,mu,light.radius),scattering=m.rayleigh+m.mie;
+    float3 phase=isotropic?scattering/(4*PI):m.rayleigh*atmospherePhaseRayleigh(cosine)+m.mie*atmospherePhaseMie(cosine,a.planet.w);
+    single=t*phase;
+    return multiple?single+scattering*atmosphereMultiScatter(a,ms,r,mu):single;
+}
+// Integrates the atmosphere along planet-space ray `p` + t `d` over [t0, t1] in `steps`
+// quadratically spaced segments (dense near the camera): the in-scattered radiance from
+// the atmosphere lights (`lights` 1 or 2; scaled by their lux, or per lux of light 0 when
+// `unit`) and the throughput. `ground` adds the lit ground at t1 (albedo, Lambert).
+// `distanceScale` stretches optical depth (Unreal's aerial perspective view distance
+// scale). Deterministic: the same steps every frame, no jitter.
+float3 atmosphereIntegrate(AtmosphereModel a,uint transmittance,uint ms,bool multiple,float3 p,float3 d,float t0,float t1,uint steps,uint lights,bool unit,bool isotropic,bool ground,float distanceScale,out float3 throughput,out float3 scatterTransfer){
+    float3 sum=0;throughput=1;scatterTransfer=0;float previous=0;float length_=max(t1-t0,0);
+    AtmosphereLight l0=atmosphereLight0(a),l1=atmosphereLight1(a);
+    float3 lux0=unit?1:l0.lux,lux1=l1.lux;
+    for(uint i=0;i<steps;i++){
+        float x=float(i+1)/steps,end=length_*x*x,ds=end-previous;
+        float3 at=p+d*(t0+previous+ds*0.5);previous=end;
+        AtmosphereMedium m=atmosphereMedium(a,length(at)-a.planet.x);
+        float3 e=m.extinction*distanceScale,segment=exp(-e*ds),weight=(1-segment)/max(e,1e-12);
+        float3 single;float3 source=lux0*atmosphereInScatter(a,transmittance,ms,multiple,m,at,d,l0,isotropic,single);
+        if(lights>1)source+=lux1*atmosphereInScatter(a,transmittance,ms,multiple,m,at,d,l1,isotropic,single);
+        sum+=throughput*source*distanceScale*weight;
+        scatterTransfer+=throughput*(m.rayleigh+m.mie)*distanceScale*weight;
+        throughput*=segment;
+    }
+    if(ground && length_>0){
+        float3 at=p+d*t1,n=normalize(at);float r=length(at);
+        float3 lit=lux0*atmosphereToLight(a,transmittance,r,dot(n,l0.direction),l0.radius)*saturate(dot(n,l0.direction));
+        if(lights>1)lit+=lux1*atmosphereToLight(a,transmittance,r,dot(n,l1.direction),l1.radius)*saturate(dot(n,l1.direction));
+        sum+=throughput*lit*a.ground.rgb/PI;
+    }
+    return sum;
+}
+// Steps for a ray of `length` metres: 8 to 64 over 150 km, times the trace scale.
+uint atmosphereSteps(AtmosphereModel a,float length_,float least,float most){
+    return uint(clamp(lerp(least,most,saturate(length_/150000))*a.mieExtinction.w,4.,256.));
+}
+
+// LUT texels. Transmittance: optical depth to the top of the atmosphere.
+float3 atmosphereTransmittanceTexelValue(AtmosphereModel a,float2 uv){
+    float2 rm=atmosphereTransmittanceTexel(a,uv);float3 p=float3(0,rm.x,0),d=float3(sqrt(max(1-rm.y*rm.y,0)),rm.y,0);
+    float t=max(atmosphereSphere(p,d,a.planet.y).y,0);uint steps=uint(clamp(40*a.mieExtinction.w,10.,320.));float3 optical=0;
+    for(uint i=0;i<steps;i++)optical+=atmosphereMedium(a,length(p+d*(t*(i+0.5)/steps))-a.planet.x).extinction;
+    return exp(-optical*(t/steps));
+}
+// Multiple scattering (Hillaire's Psi_ms) as Unreal's default LUT forms it, so skies
+// match it value for value: the isotropic second-order luminance and transfer f_ms
+// averaged over two rays (straight up, and down to the lit ground), and the series of
+// higher orders summed to its fifth term (1 + f + ... + f^4), times the multi-scattering
+// factor. A 64-direction average gives a brighter, bluer sky than Unreal's.
+float3 atmosphereMultiScatterTexelValue(AtmosphereModel a,uint transmittance,float2 uv){
+    float mu=atmosphereUntexel(uv.x,ATMOSPHERE_MULTISCATTER.x)*2-1,h=atmosphereUntexel(uv.y,ATMOSPHERE_MULTISCATTER.y)*(a.planet.y-a.planet.x);
+    float3 p=float3(0,a.planet.x+max(h,1),0);
+    AtmosphereModel unit=a;unit.light0Direction=float4(sqrt(max(1-mu*mu,0)),mu,0,0);unit.light0Lux=float4(1,1,1,0);unit.light1Lux=0;
+    uint steps=uint(clamp(15*a.mieExtinction.w,4.,120.));float3 luminance=0,transfer=0;
+    for(uint j=0;j<2;j++){
+        float3 d=float3(0,j==0?1:-1,0);
+        bool ground;float2 segment=atmosphereSegment(unit,p,d,ground);float3 throughput,f;
+        luminance+=atmosphereIntegrate(unit,transmittance,0,false,p,d,segment.x,segment.y,steps,1,true,true,ground,1,throughput,f);
+        transfer+=f;
+    }
+    luminance*=0.5;transfer*=0.5;
+    float3 f2=transfer*transfer;
+    return luminance*(1+transfer+f2+transfer*f2+f2*f2)*a.planet.z;
+}
+// Sky view texel at camera radius `r`: both lights, multiple scattering, the lit planet
+// below the horizon, times the sky and aerial perspective luminance factor (the sky
+// luminance factor applies when drawing the sky, atmosphereSky).
+float3 atmosphereSkyViewTexelValue(AtmosphereModel a,uint transmittance,uint ms,float r,float2 uv){
+    float3 d=atmosphereSkyViewDirection(a,r,uv),p=float3(0,r,0);bool ground;float2 segment=atmosphereSegment(a,p,d,ground);
+    float3 throughput,f;uint lights=atmosphereHasLight1(a)?2:1;
+    float3 light=atmosphereIntegrate(a,transmittance,ms,true,p,d,segment.x,segment.y,atmosphereSteps(a,segment.y-segment.x,12,48),lights,false,false,ground,1,throughput,f);
+    return light*a.apFactor.rgb;
+}
+
+// A light's disc radiance along `d` from planet-space `p` (cd/m2): its illuminance
+// spread over the disc's solid angle with linear limb darkening (normalised, so the
+// disc delivers exactly its illuminance times the disc scale), through the atmosphere.
+float3 atmosphereDisc(AtmosphereModel a,uint transmittance,float3 p,float3 d,float4 direction,float3 lux,float4 disc){
+    float radius=direction.w,cosine=dot(d,direction.xyz);
+    if(disc.w<0.5 || radius<=0 || cosine<cos(radius) || !any(lux>0))return 0;
+    float r=length(p),mu=dot(p/r,d);if(atmosphereGround(a,p,d)>=0)return 0;
+    float angle=acos(clamp(cosine,-1.,1.)),limb=1-0.6*(1-sqrt(saturate(1-angle*angle/(radius*radius))));
+    float solid=2*PI*(1-cos(radius));
+    return lux*disc.rgb*atmosphereTransmittance(a,transmittance,r,mu)*limb/(0.8*solid);
+}
+// The visible sky along `d` from the camera: the LUT times the sky luminance factor,
+// plus the light discs when `discs`.
+float3 atmosphereSky(AtmosphereModel a,uint transmittance,uint skyView,float3 camera,float3 d,bool discs){
+    float3 p=atmosphereCamera(a,camera);
+    float3 c=atmosphereSkyView(a,skyView,p.y,d)*a.skyFactor.rgb;
+    if(discs){
+        c+=atmosphereDisc(a,transmittance,p,d,a.light0Direction,a.light0Lux.rgb,a.light0Disk);
+        c+=atmosphereDisc(a,transmittance,p,d,a.light1Direction,a.light1Lux.rgb,a.light1Disk);
+    }
+    return c;
+}
+// Aerial perspective over a view segment [t0, t1] (metres from the camera along `d`)
+// in one step: its in-scattered radiance (both lights, multiple scattering, times the
+// sky and aerial perspective luminance factor) and extinction, starting at the start
+// depth and stretched by the view distance scale, all per metre of the segment: callers
+// add them to their medium. `sun` is the renderer's sun's single scattering (the flagged
+// light; callers shadow it), `source` the rest (multiple scattering, which shadows do not
+// cut, and the other light).
+// `world` is the segment's midpoint.
+struct AtmosphereSegment {float3 sun;float3 source;float3 extinction;};
+// The medium at one world point, weighted by `share` (the part of its segment past
+// the start depth).
+AtmosphereSegment atmosphereAerialPoint(AtmosphereModel a,uint transmittance,uint ms,float3 camera,float3 d,float3 world,float share){
+    AtmosphereSegment s;s.sun=0;s.source=0;s.extinction=0;if(share<=0)return s;
+    float3 p=atmospherePosition(a,camera,world);
+    AtmosphereMedium m=atmosphereMedium(a,length(p)-a.planet.x);
+    share*=a.ground.w;float3 single;
+    float3 light=a.light0Lux.rgb*atmosphereInScatter(a,transmittance,ms,true,m,p,d,atmosphereLight0(a),false,single);
+    if(a.light0Ground.w>0.5)s.sun=a.light0Lux.rgb*single;
+    if(atmosphereHasLight1(a)){
+        light+=a.light1Lux.rgb*atmosphereInScatter(a,transmittance,ms,true,m,p,d,atmosphereLight1(a),false,single);
+        if(a.light1Ground.w>0.5)s.sun=a.light1Lux.rgb*single;
+    }
+    light-=s.sun;
+    float3 scale=a.apFactor.rgb*share;
+    s.extinction=m.extinction*share;s.sun*=scale;s.source=light*scale;return s;
+}
+AtmosphereSegment atmosphereAerial(AtmosphereModel a,uint transmittance,uint ms,float3 camera,float3 d,float t0,float t1,float3 world){
+    float start=a.tent.w,lo=max(t0,start),hi=max(t1,start);
+    if(hi<=lo || t1<=t0)return atmosphereAerialPoint(a,transmittance,ms,camera,d,world,0);
+    return atmosphereAerialPoint(a,transmittance,ms,camera,d,world+d*(0.5*(lo+hi)-0.5*(t0+t1)),(hi-lo)/(t1-t0));
+}

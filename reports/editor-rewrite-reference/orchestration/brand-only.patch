@@ -1,0 +1,136 @@
+diff --git a/crates/ara-editor/src/loading/loading.css b/crates/ara-editor/src/loading/loading.css
+index 4ad3b9e7..c546c946 100644
+--- a/crates/ara-editor/src/loading/loading.css
++++ b/crates/ara-editor/src/loading/loading.css
+@@ -11,7 +11,7 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
+ /* The window is one card in the Hub's language: brand row, project, progress, footer. */
+ .root { width:100%; height:100%; padding:24px; padding-top:20px; padding-bottom:20px; gap:0px; }
+ .head { flex-direction:row; align-items:center; gap:10px; height:30px; flex-shrink:0; }
+-.wordmark { width:64px; height:30px; flex-shrink:0; }
++.engine-icon { width:30px; height:30px; flex-shrink:0; }
+ .tag { height:20px; padding-left:7px; padding-right:7px; align-items:center; justify-content:center; flex-shrink:0; border-radius:var(--radius-xs); background:var(--raised); color:var(--muted-foreground); font-size:11px; }
+ .project { gap:4px; padding-top:22px; flex-shrink:0; }
+ .name { font-size:20px; color:var(--foreground); }
+diff --git a/crates/ara-editor/src/loading/mod.rs b/crates/ara-editor/src/loading/mod.rs
+index 3b8566d6..784292e7 100644
+--- a/crates/ara-editor/src/loading/mod.rs
++++ b/crates/ara-editor/src/loading/mod.rs
+@@ -309,7 +309,7 @@ impl Splash {
+         ui_gpu.set_dpi(dpi)?;
+         let mut renderer = Renderer::default();
+         crate::shell::icons::install(&mut renderer, dpi).map_err(|e| anyhow::anyhow!("{e}"))?;
+-        install_wordmarks(&mut renderer, dpi)?;
++        install_engine_icon(&mut renderer, dpi)?;
+         let mut splash = Self {
+             ui_gpu,
+             present: None,
+@@ -573,48 +573,38 @@ fn rounded(window: &Window, light: bool) {
+     }
+ }
+ 
+-/// The Hub's wordmark for both themes, at 2× the device scale (64 × 30 logical).
+-fn install_wordmarks(renderer: &mut Renderer, dpi: f32) -> anyhow::Result<()> {
++/// The engine icon for both themes, at 2× the device scale (30 × 30 logical).
++fn install_engine_icon(renderer: &mut Renderer, dpi: f32) -> anyhow::Result<()> {
+     let scale = dpi.max(1.) * 2.;
+-    let size = [(64. * scale).round() as u32, (30. * scale).round() as u32];
+-    for (name, svg) in [
+-        (
+-            "loading-wordmark",
+-            include_str!("../../../../assets/brand/ara-wordmark.svg"),
+-        ),
+-        (
+-            "loading-wordmark-light",
+-            include_str!("../../../../assets/brand/ara-wordmark-light.svg"),
+-        ),
+-    ] {
+-        let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default())?;
+-        let mut pixels =
+-            resvg::tiny_skia::Pixmap::new(size[0], size[1]).context("wordmark extent")?;
+-        let fit = (size[0] as f32 / tree.size().width()).min(size[1] as f32 / tree.size().height());
+-        resvg::render(
+-            &tree,
+-            resvg::tiny_skia::Transform::from_scale(fit, fit),
+-            &mut pixels.as_mut(),
+-        );
+-        // tiny-skia stores premultiplied pixels; UI images are straight alpha.
+-        let mut rgba = pixels.take();
+-        for pixel in rgba.as_chunks_mut::<4>().0 {
+-            if pixel[3] > 0 {
+-                for n in 0..3 {
+-                    pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;
+-                }
++    let size = [(30. * scale).round() as u32; 2];
++    let svg = include_str!("../../../../assets/brand/icons/engine/ara-engine.svg");
++    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default())?;
++    let mut pixels =
++        resvg::tiny_skia::Pixmap::new(size[0], size[1]).context("engine icon extent")?;
++    let fit = (size[0] as f32 / tree.size().width()).min(size[1] as f32 / tree.size().height());
++    resvg::render(
++        &tree,
++        resvg::tiny_skia::Transform::from_scale(fit, fit),
++        &mut pixels.as_mut(),
++    );
++    // tiny-skia stores premultiplied pixels; UI images are straight alpha.
++    let mut rgba = pixels.take();
++    for pixel in rgba.as_chunks_mut::<4>().0 {
++        if pixel[3] > 0 {
++            for n in 0..3 {
++                pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;
+             }
+         }
+-        renderer
+-            .image(
+-                stable_id(name) as u32 & 0x7fff_ffff,
+-                Image {
+-                    width: size[0],
+-                    height: size[1],
+-                    rgba,
+-                },
+-            )
+-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+     }
++    renderer
++        .image(
++            stable_id("loading-engine") as u32 & 0x7fff_ffff,
++            Image {
++                width: size[0],
++                height: size[1],
++                rgba,
++            },
++        )
++        .map_err(|e| anyhow::anyhow!("{e}"))?;
+     Ok(())
+ }
+diff --git a/crates/ara-editor/src/loading/view.rs b/crates/ara-editor/src/loading/view.rs
+index e20f0115..afd45b3d 100644
+--- a/crates/ara-editor/src/loading/view.rs
++++ b/crates/ara-editor/src/loading/view.rs
+@@ -114,10 +114,9 @@ const FAILURE_TEXT: f32 = CONTENT - 22. - 16. - 10.;
+ pub(crate) fn markup(status: &Status, measure: &mut dyn Measure) -> String {
+     let stage = status.stage();
+     let mut out = String::from("<ui id='loading'><panel id='loading-root' class='root'>");
+-    // The Hub's brand row: wordmark and a version tag.
++    // Engine branding and the current release version.
+     out.push_str(&format!(
+-        "<panel id='loading-head' class='head'><image id='loading-wordmark' class='wordmark' src='{}' /><panel id='loading-version' class='tag'><text id='loading-version-text' text='{}' /></panel></panel>",
+-        if status.light { "loading-wordmark-light" } else { "loading-wordmark" },
++        "<panel id='loading-head' class='head'><image id='loading-engine' class='engine-icon' src='loading-engine' /><panel id='loading-version' class='tag'><text id='loading-version-text' text='{}' /></panel></panel>",
+         escape(env!("CARGO_PKG_VERSION"))
+     ));
+     out.push_str(&format!(
+diff --git a/crates/ara-editor/src/shell/icons.rs b/crates/ara-editor/src/shell/icons.rs
+index 6a1dd423..ac548730 100644
+--- a/crates/ara-editor/src/shell/icons.rs
++++ b/crates/ara-editor/src/shell/icons.rs
+@@ -73,8 +73,8 @@ pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
+     renderer.set_raster_scale(dpi)?;
+     Ok(())
+ }
+-/// The Ara app icon (`assets/brand/ara-icon.svg`, 64-unit view box).
+-const BRAND: &str = include_str!("../../../../assets/brand/ara-icon.svg");
++/// The engine's small-size icon, authored for compact native chrome (64-unit view box).
++const BRAND: &str = include_str!("../../../../assets/brand/icons/engine/ara-engine-small.svg");
+ const ASSETS: &[(&str, &str)] = &[
+     ("activity", include_str!("../../assets/icons/activity.svg")),
+     (

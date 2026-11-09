@@ -164,6 +164,7 @@ public sealed unsafe class ScriptRuntime
             SetIndexes(root, "resources", m.Module.Resources);
             SetIndexes(root, "cues", m.Module.Cues);
             var slot = SlotOf(m.Slot) ?? AddSlot(m.Slot, m.Name);
+            Context.GraphicsHandlers.RemoveAll(row => row.Module == m.Slot);
             slot.Tables = BuildTables(m.Module, slot.Tables);
             slot.Generation = generations[i];
             slot.Deltas = 0;
@@ -294,8 +295,11 @@ public sealed unsafe class ScriptRuntime
         }
         var data = (byte*)call->Data;
         var previous = Host.EnterExclusive();
+        var previousModule = Context.GraphicsModule;
+        Context.GraphicsModule = id >> 16;
         try
         {
+            GraphicsSettings.Poll();
             if (call->Phase == AbiConst.PhaseSweep)
             {
                 var status = AbiConst.RunOk;
@@ -365,6 +369,7 @@ public sealed unsafe class ScriptRuntime
         }
         finally
         {
+            Context.GraphicsModule = previousModule;
             Host.ExitExclusive(previous);
         }
     }
@@ -377,6 +382,8 @@ public sealed unsafe class ScriptRuntime
         var entry = all[id & 0xFFFF];
         if (Volatile.Read(ref entry.Faulted) != 0) return AbiConst.RunDisabled;
         var previous = Host.EnterExclusive();
+        var previousModule = Context.GraphicsModule;
+        Context.GraphicsModule = id >> 16;
         try
         {
             var result = entry.Invoke(call);
@@ -394,6 +401,7 @@ public sealed unsafe class ScriptRuntime
         }
         finally
         {
+            Context.GraphicsModule = previousModule;
             Host.ExitExclusive(previous);
         }
     }
@@ -403,6 +411,7 @@ public sealed unsafe class ScriptRuntime
         _stopped = true;
         // Drop the tables (delegates, behaviour objects) first: they keep module ALCs alive.
         _slots = [];
+        Context.GraphicsHandlers.Clear();
         _pending.Clear();
         try { return _loader.Shutdown(); }
         finally { Context.Detached = true; _pending.Clear(); Context.Indexes.Clear(); }

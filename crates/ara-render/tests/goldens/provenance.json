@@ -11,7 +11,9 @@
     "driver_version": 2588114944,
     "external_memory": true,
     "geometry_shader": true,
+    "global_priority_extension": null,
     "graphics_family": 0,
+    "graphics_global_priority": "medium",
     "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
     "hdr_metadata": false,
     "identity": {
@@ -52,8 +54,8 @@
         129
       ],
       "luid": [
-        2,
-        13,
+        112,
+        49,
         1,
         0,
         0,
@@ -63,6 +65,7 @@
       ]
     },
     "max_image_dimension": 32768,
+    "max_storage_buffer_range": 4294967295,
     "mesh_dispatch": [
       4194304,
       65535,
@@ -71,6 +74,7 @@
     ],
     "mesh_shading": true,
     "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "packed_integer_dot_accelerated": true,
     "pipeline_cache_uuid": [
       100,
       75,
@@ -89,8 +93,12 @@
       32,
       126
     ],
+    "present_scaling": false,
     "ray_tracing": true,
+    "ray_tracing_supported": true,
     "sampled_image_capacity": 65536,
+    "shader_integer_dot_product": true,
+    "storage_buffer_capacity": 128,
     "task_dispatch": [
       4194304,
       65535,
@@ -98,12 +106,15 @@
       4194304
     ],
     "texture_compression_bc": true,
+    "timestamp_clock": "VK_KHR_calibrated_timestamps",
     "timestamp_period_ns": 1.0,
     "timestamp_valid_bits": [
       64,
       64
     ],
-    "vendor_id": 4318
+    "unified_device_local": false,
+    "vendor_id": 4318,
+    "wave_ops": true
   },
   "entity_map": [
     [
@@ -204,67 +215,145 @@
     ],
     "tick": 0
   },
-  "scene_hash": "8986a2d23f1704e264c7cb5bf27c00cbc5f6aede564d14d49c9071bd7f6eebac",
+  "scene_hash": "c3526791d0fc8ab2e495e5cadaa81d0d065bb662854a467ea5990bd58698943f",
   "shaders": {
-    "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+    "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "be775fc658dc5902e42eb60180b791cba653db55a4d67a2b6d27d3757f697850"
+    "content_key": "565f96aeb5046b8920be29ac86ee2e13db18cd0cb851faad864d94f4655fe4b5"
   },
   "timings": [
     {
-      "milliseconds": 0.015872,
+      "end_ms": 289.152352,
+      "milliseconds": 0.010335999999995238,
       "pass": "ShadowAtlas.Cascades",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.142016
     },
     {
-      "milliseconds": 0.0256,
+      "end_ms": 289.157472,
+      "milliseconds": 0.005119999999976699,
+      "pass": "ShadowMoments.0",
+      "queue": "Graphics",
+      "start_ms": 289.152352
+    },
+    {
+      "end_ms": 289.15952,
+      "milliseconds": 0.002048000000002048,
+      "pass": "ShadowMoments.1",
+      "queue": "Graphics",
+      "start_ms": 289.157472
+    },
+    {
+      "end_ms": 289.16054399999996,
+      "milliseconds": 0.0010239999999726024,
+      "pass": "ShadowMoments.2",
+      "queue": "Graphics",
+      "start_ms": 289.15952
+    },
+    {
+      "end_ms": 289.161568,
+      "milliseconds": 0.0010240000000294458,
+      "pass": "ShadowMoments.3",
+      "queue": "Graphics",
+      "start_ms": 289.16054399999996
+    },
+    {
+      "end_ms": 289.163616,
+      "milliseconds": 0.0010240000000294458,
+      "pass": "ShadowMoments.4",
+      "queue": "Graphics",
+      "start_ms": 289.16259199999996
+    },
+    {
+      "end_ms": 289.165664,
+      "milliseconds": 0.002048000000002048,
+      "pass": "ShadowMoments.5",
+      "queue": "Graphics",
+      "start_ms": 289.163616
+    },
+    {
+      "end_ms": 289.16668799999997,
+      "milliseconds": 0.0010239999999726024,
+      "pass": "ShadowMoments.6",
+      "queue": "Graphics",
+      "start_ms": 289.165664
+    },
+    {
+      "end_ms": 289.183072,
+      "milliseconds": 0.016384000000016385,
       "pass": "GBuffer",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.16668799999997
     },
     {
-      "milliseconds": 0.006592,
+      "end_ms": 289.188192,
+      "milliseconds": 0.005120000000033542,
       "pass": "TiledLightCull",
-      "queue": "Compute"
+      "queue": "Graphics",
+      "start_ms": 289.183072
     },
     {
-      "milliseconds": 0.045312,
+      "end_ms": 289.25167999999996,
+      "milliseconds": 0.0634879999999498,
       "pass": "DeferredLighting",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.188192
     },
     {
-      "milliseconds": 0.012288,
+      "end_ms": 289.262944,
+      "milliseconds": 0.011264000000039687,
       "pass": "ForwardTransparency",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.25167999999996
     },
     {
-      "milliseconds": 0.006144,
+      "end_ms": 289.269088,
+      "milliseconds": 0.0061440000000061445,
       "pass": "TemporalResolve",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.262944
     },
     {
-      "milliseconds": 0.002048,
+      "end_ms": 289.271136,
+      "milliseconds": 0.0010240000000294458,
       "pass": "Exposure.Histogram",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.270112
     },
     {
-      "milliseconds": 0.007168,
+      "end_ms": 289.27216,
+      "milliseconds": 0.0010239999999726024,
+      "pass": "Exposure.Meter",
+      "queue": "Graphics",
+      "start_ms": 289.271136
+    },
+    {
+      "end_ms": 289.280352,
+      "milliseconds": 0.008192000000008193,
       "pass": "Post.Grade.ToneMap",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.27216
     },
     {
-      "milliseconds": 0.00512,
+      "end_ms": 289.280352,
+      "milliseconds": 0.0,
       "pass": "PresentationReady",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.280352
     },
     {
-      "milliseconds": 0.000064,
+      "end_ms": 289.280352,
+      "milliseconds": 0.0,
       "pass": "TileOwnershipReturn",
-      "queue": "Compute"
+      "queue": "Graphics",
+      "start_ms": 289.280352
     },
     {
-      "milliseconds": 0.074912,
+      "end_ms": 289.614688,
+      "milliseconds": 0.08067199999999275,
       "pass": "CaptureReadback",
-      "queue": "Graphics"
+      "queue": "Graphics",
+      "start_ms": 289.534016
     }
   ]
 }

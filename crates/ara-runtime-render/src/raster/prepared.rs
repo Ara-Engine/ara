@@ -56,6 +56,7 @@ impl RasterContent {
                 sun_lux: glam30::Vec3::ZERO,
                 environment: vec![[0., 0., 0., 1.]],
                 environment_size: [1, 1],
+                decals: Vec::new(),
             },
         );
         let native = ara_render::NativeContent::new(scene, Box::new(textures), seed)?;

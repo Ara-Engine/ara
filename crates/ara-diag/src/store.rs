@@ -590,10 +590,32 @@ impl Store {
 
     /// Removes the records matching `f` (ignoring `limit`); returns how many.
     pub fn clear(&mut self, f: &Filter) -> usize {
+        self.remove_where(|seq, r| seq > f.since && f.accepts(r))
+    }
+
+    /// Removes import failures (ARA2101–ARA2103) about an asset `stale` names (its
+    /// `@id` subject): one that imported since, or one that no longer exists.
+    pub fn clear_import_failures(&mut self, mut stale: impl FnMut(&str) -> bool) -> usize {
+        use crate::codes::{ASSET_IMPORT_FAILED, ASSET_SOURCE_MISSING, ASSET_WORKER_FAILED};
+        self.remove_where(|_, r| {
+            [
+                ASSET_IMPORT_FAILED,
+                ASSET_SOURCE_MISSING,
+                ASSET_WORKER_FAILED,
+            ]
+            .contains(&r.diagnostic.code)
+                && r.diagnostic
+                    .subjects
+                    .iter()
+                    .any(|s| s.kind == crate::SubjectKind::Asset && stale(&s.value))
+        })
+    }
+
+    fn remove_where(&mut self, mut doomed: impl FnMut(u64, &Record) -> bool) -> usize {
         let doomed: Vec<u64> = self
             .records
-            .range((Bound::Excluded(f.since), Bound::Unbounded))
-            .filter(|(_, r)| f.accepts(r))
+            .iter()
+            .filter(|(seq, r)| doomed(**seq, r))
             .map(|(seq, _)| *seq)
             .collect();
         for seq in &doomed {

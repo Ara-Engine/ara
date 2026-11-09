@@ -1,6 +1,7 @@
 # ara-importers
 
-Production pure glTF/GLB, FBX, image and audio importers for ara-import-worker.
+Production pure glTF/GLB, FBX, image, audio and IES (`ies`, LM-63 type C profiles resampled to
+64 x 1 or 32 normalised samples, `profile.bin`) importers for ara-import-worker.
 Public API: registry, Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
 `TextureUsage::Lut` cooks colour lookup table strips uncompressed (RGBA16F, one level, values as authored).
@@ -57,6 +58,9 @@ sum/sqrt/division order. Preserve bits, alpha, Y-flip and cancellation; small,
 Power-of-two color mips specialize the original four unit-weight samples, keeping
 their accumulation order and alpha cutoff. NPOT/one-axis/data/normal/HDR mips keep
 the area filter; do not generate levels independently from LOD0 or reorder sums.
+Alpha-coverage mips (`TextureSettings::alpha_coverage`, masked base colours) remap
+partial alpha both ways about the cutoff, 0 and 1 fixed, ties split by a 4x4 dither, so
+each level passes the full-size share: thin cards stay solid, grate holes stay open.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.

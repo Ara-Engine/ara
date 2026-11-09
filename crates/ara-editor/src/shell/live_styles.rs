@@ -1,6 +1,7 @@
 //! Development resources are read on a worker; the UI only receives complete,
 //! validated snapshots. Release builds use the embedded resources exclusively.
 use super::*;
+#[cfg(any(test, not(debug_assertions)))]
 use ara_ui::theme::EditorTheme;
 #[cfg(debug_assertions)]
 use ara_ui::theme::tokens_from_json;
@@ -9,7 +10,7 @@ type Tokens = BTreeMap<String, String>;
 #[cfg(debug_assertions)]
 type Updates = std::sync::mpsc::Receiver<Result<Snapshot, String>>;
 #[cfg(debug_assertions)]
-type Stop = std::sync::mpsc::Sender<()>;
+use ara_ui::live::Stop;
 
 /// Last good resources, shared by all retained editor surfaces.
 pub(super) struct LiveStyles {
@@ -28,18 +29,47 @@ struct Snapshot {
     tokens: [Tokens; 2],
 }
 
+/// The shell stylesheets. Release builds compile them in; debug builds compile none
+/// (a CSS edit never recompiles the editor) and `LiveStyles` reads the checkout
+/// before the first frame and after every save instead.
+pub(super) mod embedded {
+    macro_rules! sheet {
+        ($name:ident, $path:literal) => {
+            #[cfg(not(debug_assertions))]
+            pub(in crate::shell) const $name: &str = include_str!($path);
+            #[cfg(debug_assertions)]
+            pub(in crate::shell) const $name: &str = "";
+        };
+    }
+    sheet!(EDITOR, "editor.css");
+    sheet!(VIEWPORT, "viewport.css");
+    sheet!(INSPECTOR, "inspector.css");
+    sheet!(COMFORTABLE, "editor-comfortable.css");
+    sheet!(TITLEBAR, "editor-titlebar.css");
+    sheet!(HISTORY, "history_panel/history.css");
+    sheet!(LIGHTING, "lighting/lighting.css");
+    sheet!(PROBES, "probes/probes.css");
+}
+
 impl LiveStyles {
     pub(super) fn new() -> ara_ui::Result<Self> {
         #[cfg(debug_assertions)]
-        let (updates, _stop) = watch(
-            std::env::var_os("ARA_EDITOR_STYLE_ROOT")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-                }),
-        )?;
+        let root = std::env::var_os("ARA_EDITOR_STYLE_ROOT")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+        // Debug builds embed no shell CSS, so the first snapshot is read now.
+        #[cfg(debug_assertions)]
+        let first = read_snapshot(&root).map_err(|e| format!("editor styles: {e}"))?;
+        #[cfg(debug_assertions)]
+        let (updates, _stop) = watch(root)?;
         Ok(Self {
+            #[cfg(debug_assertions)]
+            css: first.css,
+            #[cfg(debug_assertions)]
+            tokens: first.tokens,
+            #[cfg(not(debug_assertions))]
             css: BTreeMap::new(),
+            #[cfg(not(debug_assertions))]
             tokens: [EditorTheme::Dark.tokens()?, EditorTheme::Light.tokens()?],
             #[cfg(debug_assertions)]
             updates,
@@ -95,32 +125,38 @@ impl Shell {
     }
 }
 
+/// Both themes, every CSS file under the shell (panel subfolders included) and the
+/// shared ara-ui dialog/select CSS, sorted. Snapshots key CSS by file name, so those
+/// names must stay unique; `read_snapshot` rejects a duplicate.
 #[cfg(debug_assertions)]
-fn resource_files(
-    root: &std::path::Path,
-) -> Vec<(std::path::PathBuf, Option<std::time::SystemTime>, u64)> {
+fn resource_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut paths = vec![
         root.join("assets/themes/ara-dark.json"),
         root.join("assets/themes/ara-light.json"),
     ];
-    if let Ok(files) = std::fs::read_dir(root.join("crates/ara-editor/src/shell")) {
-        paths.extend(
-            files
-                .flatten()
-                .map(|f| f.path())
-                .filter(|p| p.extension().is_some_and(|e| e == "css")),
-        );
+    paths.extend(
+        ["dialogs/dialogs.css", "select/select.css"]
+            .map(|file| root.join("crates/ara-ui/src").join(file))
+            .into_iter()
+            .filter(|path| path.is_file()),
+    );
+    let mut directories = vec![root.join("crates/ara-editor/src/shell")];
+    while let Some(directory) = directories.pop() {
+        for path in std::fs::read_dir(directory)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+        {
+            if path.is_dir() {
+                directories.push(path);
+            } else if path.extension().is_some_and(|e| e == "css") {
+                paths.push(path);
+            }
+        }
     }
     paths.sort();
     paths
-        .into_iter()
-        .map(|p| {
-            let metadata = p.metadata().ok();
-            let modified = metadata.as_ref().and_then(|m| m.modified().ok());
-            let len = metadata.map_or(0, |m| m.len());
-            (p, modified, len)
-        })
-        .collect()
 }
 
 #[cfg(debug_assertions)]
@@ -135,13 +171,16 @@ fn read_snapshot(root: &std::path::Path) -> Result<Snapshot, String> {
     };
     let tokens = [parse("ara-dark.json")?, parse("ara-light.json")?];
     let mut css = BTreeMap::new();
-    for (path, _, _) in resource_files(root) {
+    for path in resource_files(root) {
         if path.extension().is_some_and(|e| e == "css") {
             let source = read(&path)?;
             ara_ui::theme::check_editor("<ui id='style-validation' />", &source)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
             if let Some(name) = path.file_name() {
-                css.insert(name.to_string_lossy().into_owned(), source);
+                let name = name.to_string_lossy().into_owned();
+                if css.insert(name.clone(), source).is_some() {
+                    return Err(format!("two live stylesheets are named {name}"));
+                }
             }
         }
     }
@@ -162,29 +201,16 @@ fn read_snapshot(root: &std::path::Path) -> Result<Snapshot, String> {
     Ok(Snapshot { css, tokens })
 }
 
+/// The editor loop polls every frame, so the worker needs no wake.
 #[cfg(debug_assertions)]
 fn watch(root: std::path::PathBuf) -> std::io::Result<(Updates, Stop)> {
-    let (tx, updates) = std::sync::mpsc::channel();
-    let (stop, stopped) = std::sync::mpsc::channel();
-    std::thread::Builder::new()
-        .name("editor-styles".into())
-        .spawn(move || {
-            let mut fingerprint = Vec::new();
-            loop {
-                let next = resource_files(&root);
-                if next != fingerprint {
-                    fingerprint = next;
-                    if tx.send(read_snapshot(&root)).is_err() {
-                        break;
-                    }
-                }
-                match stopped.recv_timeout(std::time::Duration::from_millis(250)) {
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-                    _ => break,
-                }
-            }
-        })?;
-    Ok((updates, stop))
+    let files = root.clone();
+    ara_ui::live::watch(
+        "editor-styles",
+        move || resource_files(&files),
+        move || read_snapshot(&root),
+        || {},
+    )
 }
 
 #[cfg(all(test, debug_assertions))]

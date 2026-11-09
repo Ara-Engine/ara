@@ -72,20 +72,38 @@ impl Shell {
         }
     }
 
-    /// Keep the orientation aid in its Scene host after docking or resizing.
+    /// Keep the orientation aid in its Scene host's top-right corner after docking or
+    /// resizing, clear of the Scene toolbars: below a horizontal toolbar over that
+    /// corner, left of a vertical one.
     pub(super) fn position_axis(&mut self) {
         let (Some(root), Some(viewport)) = (self.shown_node("view-cube"), self.viewport()) else {
             return;
         };
+        let mut at = [viewport.x + viewport.w - SIZE - 12., viewport.y + 12.];
+        let toolbars = self.toolbar_rects();
+        // Twice: moving clear of one toolbar can meet another.
+        for _ in 0..2 {
+            for toolbar in &toolbars {
+                let overlaps = at[0] < toolbar.x + toolbar.w
+                    && toolbar.x < at[0] + SIZE
+                    && at[1] < toolbar.y + toolbar.h
+                    && toolbar.y < at[1] + SIZE;
+                if !overlaps {
+                    continue;
+                }
+                if toolbar.h > toolbar.w {
+                    at[0] = toolbar.x - SIZE - 4.;
+                } else {
+                    at[1] = toolbar.y + toolbar.h + 4.;
+                }
+            }
+        }
         let node = &mut self.ui.nodes[root];
         let base = [
             node.rect.x - node.paint_offset[0],
             node.rect.y - node.paint_offset[1],
         ];
-        let offset = [
-            viewport.x + viewport.w - SIZE - 12. - base[0],
-            viewport.y + 12. - base[1],
-        ];
+        let offset = [at[0] - base[0], at[1] - base[1]];
         if node.paint_offset != offset {
             node.paint_offset = offset;
             node.dirty.paint = true;

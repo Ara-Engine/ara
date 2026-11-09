@@ -59,9 +59,10 @@ fn layout() -> ProbeLayout {
 }
 
 fn update() -> Result<ProbeUpdate> {
-    let mut statics = vec![[1., 1., 0., 0.]; 8 * crate::look::gi::STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; 8 * crate::look::gi::STATIC_VECTORS];
     for p in 0..8 {
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
     }
     ProbeUpdate::new(
         &ProbeSurfaces {
@@ -148,9 +149,10 @@ fn initial_bounces_use_a_bounded_window_then_restore_the_preset_budget() -> Resu
     renderer.set_quality(quality)?;
     let counts = [32, 16, 16];
     let probes = 8192;
-    let mut statics = vec![[1., 1., 0., 0.]; probes * crate::look::gi::STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; probes * crate::look::gi::STATIC_VECTORS];
     for p in 0..probes {
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
     }
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
         layout: ProbeLayout::single(crate::look::gi::ProbeLattice {
@@ -193,9 +195,10 @@ fn unseen_frames_converge_whole_bounces_and_show_the_volume_without_a_fade() -> 
     renderer.set_quality(quality)?;
     renderer.set_unseen(true);
     let probes = 8192;
-    let mut statics = vec![[1., 1., 0., 0.]; probes * crate::look::gi::STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; probes * crate::look::gi::STATIC_VECTORS];
     for p in 0..probes {
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
     }
     renderer.set_probe_surfaces(Some(&ProbeSurfaces {
         layout: ProbeLayout::single(crate::look::gi::ProbeLattice {
@@ -293,9 +296,10 @@ fn a_two_lattice_pool_reserves_before_delivery_and_accepts_packets_across_its_bo
     }
     // Loading renders also allocate the gather targets, before any delivery.
     let usage_after_clear = renderer.gpu.descriptor_usage();
-    let mut statics = vec![[1., 1., 0., 0.]; 20 * crate::look::gi::STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; 20 * crate::look::gi::STATIC_VECTORS];
     for p in 0..20 {
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
     }
     let update = ProbeUpdate::new(
         &ProbeSurfaces {
@@ -345,9 +349,10 @@ fn a_pool_is_ready_on_its_coarse_lattice_and_cross_fades_the_fine_one_in_later()
     while !renderer.preallocate_probe_volume(layout, 6)? {
         renderer.render_view(&camera(), 1., ViewMode::Lit)?;
     }
-    let mut statics = vec![[1., 1., 0., 0.]; 20 * crate::look::gi::STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; 20 * crate::look::gi::STATIC_VECTORS];
     for p in 0..20 {
         statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
     }
     let surfaces = ProbeSurfaces {
         layout,
@@ -477,9 +482,10 @@ fn a_budgeted_relight_copies_only_the_last_window_forward_and_keeps_both_atlases
 -> Result<()> {
     let mut renderer = renderer("relight-window")?;
     let statics = || {
-        let mut statics = vec![[1., 1., 0., 0.]; 8 * crate::look::gi::STATIC_VECTORS];
+        let mut statics = vec![[f32::from_bits(u32::MAX); 4]; 8 * crate::look::gi::STATIC_VECTORS];
         for p in 0..8 {
             statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+            statics[p * crate::look::gi::STATIC_VECTORS + 65] = [0.; 4];
         }
         statics
     };
@@ -497,7 +503,14 @@ fn a_budgeted_relight_copies_only_the_last_window_forward_and_keeps_both_atlases
     // Every texel now sees an emitter (no sky, black albedo): each probe relights
     // to pi times its radiance once its window comes round, two probes a frame.
     let emissive = [2., 1., 0.5];
-    let texel = [0, 0, 0x3c00_4000, 0x3c00_3800];
+    // Emissive (2, 1, 0.5) as RGB9E5 (exponent 17: steps of 1/128); every sub-ray on
+    // the relit plane, a hit distance of 1 (f16 0x3c00).
+    let texel = [
+        0,
+        0,
+        256 | 128 << 9 | 64 << 18 | 17 << 27,
+        0xffff | 0x3c00 << 16,
+    ];
     let update = ProbeUpdate::new(
         &ProbeSurfaces {
             layout: layout(),

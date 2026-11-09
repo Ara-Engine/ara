@@ -12,7 +12,7 @@ pub(super) static COMMANDS: LazyLock<Vec<Spec>> = LazyLock::new(build);
 /// (`EditorState::render_quality`), checked while active.
 macro_rules! viewport_quality {
     ($id:literal, $title:literal, $value:literal, $summary:literal) => {
-        cmd($id, $title, "", "", $summary, |_, e, _| {
+        cmd($id, $title, "gauge", "", $summary, |_, e, _| {
             set(e, "viewport.quality", json!($value))
         })
         .when(|c| is(c, "viewport.quality", $value))
@@ -239,8 +239,33 @@ fn is(c: &Ctx, key: &str, value: &str) -> Avail {
 fn mode(c: &Ctx, mode: &str) -> Avail {
     Avail::Checked(c.state.view_mode == mode)
 }
+fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
+    let Some(caps) = c.probe_debug_capabilities else {
+        return Avail::Blocked("Waiting for this Scene renderer's debug-view capabilities".into());
+    };
+    let (available, key) = match name {
+        "gi_diffuse" => (caps.gi_diffuse, "giDiffuse"),
+        "overdraw" => (caps.overdraw, "overdraw"),
+        "vertexColor" | "vertexColorRed" | "vertexColorGreen" | "vertexColorBlue"
+        | "vertexColorAlpha" => (caps.vertex_colors, "vertexColors"),
+        "decalCoverage" => (caps.decals, "decals"),
+        _ => return Avail::Blocked("Unknown renderer debug view".into()),
+    };
+    if available {
+        mode(c, name)
+    } else {
+        Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(|| {
+            "This renderer does not currently provide the requested debug view".into()
+        }))
+    }
+}
+
 fn flag(c: &Ctx, key: &str) -> Avail {
     Avail::Checked(setting(c, key).as_bool().unwrap_or(false))
+}
+/// [`flag`] for a setting that is on when unset.
+fn flag_on(c: &Ctx, key: &str) -> Avail {
+    Avail::Checked(setting(c, key).as_bool().unwrap_or(true))
 }
 /// The selection is a `Camera` entity (prefab-resolved entities are checked when run).
 fn selected_camera(c: &Ctx) -> Avail {
@@ -304,8 +329,28 @@ fn toggle(e: &mut Editor, key: &str) -> R {
         .unwrap_or(false);
     set(e, key, json!(!current))
 }
+/// [`toggle`] for a setting that is on when unset.
+fn toggle_on(e: &mut Editor, key: &str) -> R {
+    let current = e
+        .state
+        .settings
+        .get(key)
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    set(e, key, json!(!current))
+}
 fn view(e: &mut Editor, params: Value) -> R {
     act(e, "editor.view", params)
+}
+/// Flip one Rendering Debug switch (session state): the Scene view reads it every
+/// frame, a running Play world gets it at once, and each Play start carries it.
+fn render_debug(e: &mut Editor, flip: fn(&mut ara_render::RenderDebug)) -> R {
+    flip(&mut e.state.render_debug);
+    if e.play_world.is_some() {
+        let debug = e.state.render_debug;
+        play(e, "play.renderDebug", json!({ "renderDebug": debug }))?;
+    }
+    Ok(())
 }
 fn camera(e: &mut Editor, yaw: f32, pitch: f32) -> R {
     let c = e.state.camera;
@@ -410,6 +455,11 @@ fn play_params(e: &Editor) -> Value {
         params["clients"] = json!(clients);
         params["conditions"] = json!(crate::shell::play_controls::conditions(s, clients));
     }
+    // View > Rendering Debug: only sent when something is turned off.
+    let debug = e.state.render_debug;
+    if debug != ara_render::RenderDebug::default() {
+        params["renderDebug"] = json!(debug);
+    }
     params
 }
 fn simulate(s: &mut Shell, e: &mut Editor) -> R {
@@ -478,6 +528,19 @@ fn can_undo(c: &Ctx, redo: bool) -> Avail {
     } else {
         Avail::Blocked(format!("Nothing to {}", if redo { "redo" } else { "undo" }))
     }
+}
+/// Edits Mesh Paint's settings, turning the mode on.
+fn paint(e: &mut Editor, edit: impl FnOnce(&mut crate::paint::PaintSettings)) -> R {
+    let mut settings = e.state.paint.unwrap_or_default();
+    edit(&mut settings);
+    e.state.paint = Some(settings);
+    Ok(())
+}
+fn paint_tool(c: &Ctx, tool: crate::paint::PaintTool) -> Avail {
+    Avail::Checked(c.state.paint.is_some_and(|p| p.tool == tool))
+}
+fn paint_channel(c: &Ctx, channel: usize) -> Avail {
+    Avail::Checked(c.state.paint.unwrap_or_default().channels[channel])
 }
 fn panel_open(c: &Ctx, panel: &str) -> Avail {
     Avail::Checked(crate::state::panel_visible(c.state, panel))
@@ -599,7 +662,9 @@ fn build() -> Vec<Spec> {
             BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
             _ => Avail::Ready,
         }),
-        later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
+        cmd("build.package", "Package…", "package", "", "Choose an export profile, package format and output envelope.", |s,e,_|s.open_package_options(e)),
+        cmd("build.package.confirm", "Create Package", "package", "", "Save the authored project, then export the selected package format.", |s,e,_|s.package_selected(e)).when(|c|if c.build.running {Avail::Blocked("A build is running".into())} else {Avail::Ready}),
+        cmd("build.package.reveal", "Reveal Package", "folder", "", "Reveal an actual artifact from the completed export manifest.", |s,_,t|s.reveal_package(t)),
         cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
             let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
             std::fs::create_dir_all(&folder)?;
@@ -672,7 +737,7 @@ fn build() -> Vec<Spec> {
             s.copy_text(reference(e, &entity));
             Ok(())
         }).when(has_entity),
-        cmd("edit.select_all", "Select All", "", "Ctrl+A", "Select every entity in the scene.", |_, e, _| {
+        cmd("edit.select_all", "Select All", "mouse-pointer", "Ctrl+A", "Select every entity in the scene.", |_, e, _| {
             let all = resolved(e)?.keys().cloned().collect();
             select(e, all)
         }).when(scene_doc),
@@ -681,35 +746,35 @@ fn build() -> Vec<Spec> {
             select(e, vec![id.clone()])?;
             act(e, "editor.frame", json!({}))
         }),
-        cmd("edit.deselect", "Deselect", "", "Ctrl+Shift+A", "Clear the selection.", |_, e, _| select(e, Vec::new())),
-        cmd("edit.invert_selection", "Invert Selection", "", "Ctrl+I", "Select every entity that is not selected.", |_, e, _| {
+        cmd("edit.deselect", "Deselect", "x", "Ctrl+Shift+A", "Clear the selection.", |_, e, _| select(e, Vec::new())),
+        cmd("edit.invert_selection", "Invert Selection", "git-compare", "Ctrl+I", "Select every entity that is not selected.", |_, e, _| {
             let all = resolved(e)?.keys().filter(|id| !e.state.selection.contains(id)).cloned().collect();
             select(e, all)
         }).when(scene_doc),
-        cmd("select.children", "Select Children", "", "", "Select the direct children of the selected entities.", |_, e, t| {
+        cmd("select.children", "Select Children", "list-tree", "", "Select the direct children of the selected entities.", |_, e, t| {
             let parents = t.entities(&e.state);
             let kids = resolved(e)?.iter().filter(|(_, x)| x.parent.as_ref().is_some_and(|p| parents.contains(p))).map(|(id, _)| id.clone()).collect();
             select(e, kids)
         }).when(has_entity),
-        cmd("select.parent", "Select Parent", "", "", "Select the parent of the selected entity.", |_, e, t| {
+        cmd("select.parent", "Select Parent", "arrow-up-down", "", "Select the parent of the selected entity.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             let parent = resolved(e)?.get(&entity).and_then(|x| x.parent.clone()).ok_or("the entity is at the scene root")?;
             select(e, vec![parent])
         }).when(has_entity),
-        cmd("select.siblings", "Select Siblings", "", "", "Select entities that share the selected entity's parent.", |_, e, t| {
+        cmd("select.siblings", "Select Siblings", "users", "", "Select entities that share the selected entity's parent.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             let all = resolved(e)?;
             let parent = all.get(&entity).and_then(|x| x.parent.clone());
             select(e, all.iter().filter(|(_, x)| x.parent == parent).map(|(id, _)| id.clone()).collect())
         }).when(has_entity),
-        cmd("select.same_type", "Select Same Type", "", "", "Select entities with the same component set.", |_, e, t| {
+        cmd("select.same_type", "Select Same Type", "layers", "", "Select entities with the same component set.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             let all = resolved(e)?;
             let kinds = |r: &ara_doc::Record| r.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect::<Vec<_>>();
             let wanted = all.get(&entity).map(|x| kinds(&x.record)).unwrap_or_default();
             select(e, all.iter().filter(|(_, x)| kinds(&x.record) == wanted).map(|(id, _)| id.clone()).collect())
         }).when(has_entity),
-        cmd("select.same_asset", "Select Same Asset", "", "", "Select entities that draw the same model.", |_, e, t| {
+        cmd("select.same_asset", "Select Same Asset", "package", "", "Select entities that draw the same model.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             let all = resolved(e)?;
             let model = |r: &ara_doc::Record| r.get("MeshRenderer").map(|m| (m.get("model").cloned(), m.get("shape").cloned()));
@@ -740,16 +805,16 @@ fn build() -> Vec<Spec> {
         cmd("snap.surface", "Surface Snap", "magnet", "", "Snap translated geometry onto the actual surface under the pointer.",|_,e,_|toggle(e,"viewport.surfaceSnap")).when(|c|flag(c,"viewport.surfaceSnap")),
         cmd("snap.vertex", "Vertex Snap (hold V)", "magnet", "", "Snap source and target mesh vertices; hold V temporarily in the Scene.",|_,e,_|toggle(e,"viewport.vertexSnap")).when(|c|flag(c,"viewport.vertexSnap")),
         cmd("snap.settings", "Snap Settings…", "settings-2", "", "Open snap and viewport preferences.", |s, e, _| s.open_settings(e, "user", "Viewport")),
-        cmd("transform.reset_position", "Reset Position", "", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
-        cmd("transform.reset_rotation", "Reset Rotation", "", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
-        cmd("transform.reset_scale", "Reset Scale", "", "", "Reset scale to the default or prefab value.", |_, e, t| transform_reset(e, t, "scale")).when(has_entity),
+        cmd("transform.reset_position", "Reset Position", "rotate-ccw", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
+        cmd("transform.reset_rotation", "Reset Rotation", "rotate-ccw", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
+        cmd("transform.reset_scale", "Reset Scale", "rotate-ccw", "", "Reset scale to the default or prefab value.", |_, e, t| transform_reset(e, t, "scale")).when(has_entity),
         later("transform.align_view", "Align to View", "", "", "Aligning rotation to the camera needs a view-matrix to Euler command."),
-        cmd("transform.move_to_view", "Move to View", "", "", "Move the selection to the camera's focus point.", |_, e, t| {
+        cmd("transform.move_to_view", "Move to View", "video", "", "Move the selection to the camera's focus point.", |_, e, t| {
             let p = e.state.camera.target;
             let commands = crate::inspector::edit_commands(&t.entities(&e.state), "Transform.position", &json!([p.x, p.y, p.z]));
             apply(e, commands, "Move to view")
         }).when(has_entity),
-        cmd("edit.transform.drop", "Drop to Surface", "", "End", "Drop selected geometry onto real mesh support below it in one undoable action.",|s,e,_| {
+        cmd("edit.transform.drop", "Drop to Surface", "magnet", "End", "Drop selected geometry onto real mesh support below it in one undoable action.",|s,e,_| {
             if e.state.selection.is_empty() {return Err("Select geometry before dropping it to a surface".into());}
             s.viewport_request=Some(super::super::ViewportRequest::DropToSurface {doc:e.state.doc.clone(),selection:e.state.selection.clone()});
             Ok(())
@@ -771,7 +836,8 @@ fn build() -> Vec<Spec> {
         cmd("edit.lock_descendants", "Lock Selection and Descendants", "lock", "", "Protect the clicked or selected branches from viewport picking.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(true))).when(has_entity),
         cmd("edit.unlock_descendants", "Unlock Selection and Descendants", "unlock", "", "Allow viewport picking of the clicked or selected branches.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(false))).when(has_entity),
         cmd("hierarchy.reveal", "Reveal in Hierarchy", "list-tree", "", "Expand and reveal the clicked or selected entities while retaining selection.",|s,e,t|s.reveal_hierarchy_entities(e,t)).when(has_entity),
-        cmd("hierarchy.filter.save", "Save Hierarchy Search", "save", "", "Name the current hierarchy query and retain it in your preferences.",|s,e,t|s.save_hierarchy_filter(e,t)),
+        cmd("hierarchy.filter.save", "Save Hierarchy Search", "save", "", "Name the current hierarchy query and retain it in your preferences.",|s,e,t|s.save_hierarchy_filter(e,t))
+            .when(|c| if c.state.searches.get("hierarchy").is_some_and(|q| !q.trim().is_empty()) { Avail::Ready } else { Avail::Blocked("Type a hierarchy search first".into()) }),
         cmd("hierarchy.filter.apply", "Apply Saved Hierarchy Filter", "funnel", "", "Choose a saved hierarchy query.",|s,e,t|s.use_hierarchy_filter(e,t,false)),
         cmd("hierarchy.filter.remove", "Delete Saved Hierarchy Filter", "trash", "", "Remove a saved hierarchy query from your preferences.",|s,e,t|s.use_hierarchy_filter(e,t,true)),
         cmd("prefab.open", "Open Prefab", "package-open", "", "Edit the prefab itself in the Scene view; every instance follows.", |_, e, t| {
@@ -825,12 +891,12 @@ fn build() -> Vec<Spec> {
             let entity = t.entity(&e.state).ok_or("select a Camera entity")?.to_owned();
             act(e, "editor.camera", json!({"entity": entity}))
         }).when(selected_camera),
-        cmd("view.camera.top", "Top", "", "Num7", "Look straight down.", |_, e, _| camera(e, 0., 1.54)),
-        cmd("view.camera.bottom", "Bottom", "", "Ctrl+Num7", "Look straight up.", |_, e, _| camera(e, 0., -1.54)),
-        cmd("view.camera.front", "Front", "", "Num1", "Look along −Z.", |_, e, _| camera(e, 0., 0.)),
-        cmd("view.camera.back", "Back", "", "Ctrl+Num1", "Look along +Z.", |_, e, _| camera(e, std::f32::consts::PI, 0.)),
-        cmd("view.camera.left", "Left", "", "Ctrl+Num3", "Look along +X.", |_, e, _| camera(e, -std::f32::consts::FRAC_PI_2, 0.)),
-        cmd("view.camera.right", "Right", "", "Num3", "Look along −X.", |_, e, _| camera(e, std::f32::consts::FRAC_PI_2, 0.)),
+        cmd("view.camera.top", "Top", "camera", "Num7", "Look straight down.", |_, e, _| camera(e, 0., 1.54)),
+        cmd("view.camera.bottom", "Bottom", "camera", "Ctrl+Num7", "Look straight up.", |_, e, _| camera(e, 0., -1.54)),
+        cmd("view.camera.front", "Front", "camera", "Num1", "Look along −Z.", |_, e, _| camera(e, 0., 0.)),
+        cmd("view.camera.back", "Back", "camera", "Ctrl+Num1", "Look along +Z.", |_, e, _| camera(e, std::f32::consts::PI, 0.)),
+        cmd("view.camera.left", "Left", "camera", "Ctrl+Num3", "Look along +X.", |_, e, _| camera(e, -std::f32::consts::FRAC_PI_2, 0.)),
+        cmd("view.camera.right", "Right", "camera", "Num3", "Look along −X.", |_, e, _| camera(e, std::f32::consts::FRAC_PI_2, 0.)),
         cmd("view.frame", "Frame Selected", "focus", "F", "Frame the selection, or the scene when nothing is selected.", |s, e, _| {
             if s.graph_visible() { s.frame_graph(e) } else { act(e, "editor.frame", json!({"aspect":s.viewport().map(|r|r.w/r.h)})) }
         }),
@@ -845,10 +911,10 @@ fn build() -> Vec<Spec> {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
-        cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
-        cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
-        cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
-        cmd("view.camera.bookmarks", "Camera Bookmarks…", "", "", "Recall a named camera view from this scene.",|s,e,_|s.choose_camera_bookmark(e,false)),
+        cmd("view.camera.speed.slow", "Slow · 1 m/s", "gauge", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
+        cmd("view.camera.speed.normal", "Normal · 4 m/s", "gauge", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
+        cmd("view.camera.speed.fast", "Fast · 16 m/s", "gauge", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
+        cmd("view.camera.bookmarks", "Camera Bookmarks…", "bookmark", "", "Recall a named camera view from this scene.",|s,e,_|s.choose_camera_bookmark(e,false)),
         cmd("view.camera.bookmark.save", "Save Camera Bookmark…", "save", "", "Name and save this camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"save","name":name})),_=>s.name_camera_bookmark(e)}),
         cmd("view.camera.bookmark.recall", "Recall Camera Bookmark…", "camera", "", "Choose a named camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"recall","name":name})),_=>s.choose_camera_bookmark(e,false)}),
         cmd("view.camera.bookmark.delete", "Delete Camera Bookmark…", "trash", "", "Remove a saved view from this scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"delete","name":name})),_=>s.choose_camera_bookmark(e,true)}),
@@ -867,7 +933,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.unlit",
             "Unlit",
-            "sun",
+            "sun-dim",
             "",
             "Show material base color without lighting.",
             |_, e, _| view(e, json!({"viewMode":"baseColor"})),
@@ -885,7 +951,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.normals",
             "Normals",
-            "",
+            "arrow-up-from-dot",
             "",
             "World normals.",
             |_, e, _| view(e, json!({"viewMode": "normals"})),
@@ -894,7 +960,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.depth",
             "Depth",
-            "",
+            "layers",
             "",
             "Reversed-Z depth.",
             |_, e, _| view(e, json!({"viewMode": "depth"})),
@@ -903,7 +969,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.roughness_metal",
             "Roughness / Metal",
-            "",
+            "contrast",
             "",
             "Red roughness, green metallic.",
             |_, e, _| view(e, json!({"viewMode": "roughnessMetal"})),
@@ -912,7 +978,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.entity_ids",
             "Entity IDs",
-            "",
+            "hash",
             "",
             "Stable pseudocolors per entity.",
             |_, e, _| view(e, json!({"viewMode": "entityIds"})),
@@ -921,7 +987,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.shadow_cascades",
             "Shadow Cascades",
-            "",
+            "layers-2",
             "",
             "Cascade selection times shadow visibility.",
             |_, e, _| view(e, json!({"viewMode": "shadowCascades"})),
@@ -930,7 +996,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.wireframe",
             "Wireframe",
-            "",
+            "wireframe",
             "",
             "Triangle edges over a dark background, coloured per entity.",
             |_, e, _| view(e, json!({"viewMode": "wireframe"})),
@@ -939,7 +1005,7 @@ fn build() -> Vec<Spec> {
         cmd(
             "view.mode.lit_wireframe",
             "Lit Wireframe",
-            "",
+            "lit-wireframe",
             "",
             "The lit image with its triangle edges drawn over it.",
             |_, e, _| view(e, json!({"viewMode": "litWireframe"})),
@@ -947,15 +1013,65 @@ fn build() -> Vec<Spec> {
         .when(|c| mode(c, "litWireframe")),
     ]);
     c.extend([
-        later("view.mode.overdraw", "Overdraw", "", "", "ara-render has no overdraw visualisation yet."),
-        later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
+        cmd("view.mode.vertex_color", "Vertex Color", "palette", "", "Each surface's vertex colour (imported or painted), unlit and as stored: 0.5 shows mid-grey.", |_,e,_|view(e,json!({"viewMode":"vertexColor"}))).when(|c|renderer_debug_mode(c,"vertexColor")),
+        cmd("view.mode.vertex_color_red", "Vertex Color: Red", "palette", "", "The vertex colour's red channel alone, as grey (paint-layer masks).", |_,e,_|view(e,json!({"viewMode":"vertexColorRed"}))).when(|c|renderer_debug_mode(c,"vertexColorRed")),
+        cmd("view.mode.vertex_color_green", "Vertex Color: Green", "palette", "", "The vertex colour's green channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorGreen"}))).when(|c|renderer_debug_mode(c,"vertexColorGreen")),
+        cmd("view.mode.vertex_color_blue", "Vertex Color: Blue", "palette", "", "The vertex colour's blue channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorBlue"}))).when(|c|renderer_debug_mode(c,"vertexColorBlue")),
+        cmd("view.mode.vertex_color_alpha", "Vertex Color: Alpha", "palette", "", "The vertex colour's alpha channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorAlpha"}))).when(|c|renderer_debug_mode(c,"vertexColorAlpha")),
+        cmd("view.mode.decal_coverage", "Decal Coverage", "image", "", "Deferred decals per pixel over the dimmed scene (1 blue, 2 green, 4 yellow, 8 orange, 16+ red); surfaces that refuse decals stay grey.", |_,e,_|view(e,json!({"viewMode":"decalCoverage"}))).when(|c|renderer_debug_mode(c,"decalCoverage")),
+        cmd("view.mode.overdraw", "Overdraw", "flame", "", "Native opaque and alpha-tested fragments before depth rejection; transparent and VFX passes are excluded. Heat legend: 0 black, 1 blue, 2 green, 4 yellow, 8 orange, 16+ red.", |_,e,_|view(e,json!({"viewMode":"overdraw"}))).when(|c|renderer_debug_mode(c,"overdraw")),
+        cmd("view.mode.light_complexity", "Light Complexity", "lightbulb", "", "Local-light shading cost per pixel on the overdraw legend: each light reaching the surface counts 1, an area light 3, a shadowed light 1 more. 0 black, 1 blue, 2 green, 4 yellow, 8 orange, 16+ red.", |_,e,_|view(e,json!({"viewMode":"lightComplexity"}))).when(|c|mode(c,"lightComplexity")),
+        cmd("view.mode.shadow_penumbra", "Shadow Penumbra", "sun-dim", "", "Soft-shadow penumbra half-width per pixel (the sun's and every shadowed local light's) on the overdraw legend: 1 cm blue, 4 cm green, 16 cm yellow, 64 cm orange, 2.5 m red; grey where no blocker is near.", |_,e,_|view(e,json!({"viewMode":"shadowPenumbra"}))).when(|c|mode(c,"shadowPenumbra")),
+        cmd("view.mode.gi_debug", "GI Diffuse", "sparkles", "", "Native diffuse indirect light on opaque surfaces; background black. The actual renderer explains unavailable data instead of showing Lit.", |_,e,_|view(e,json!({"viewMode":"gi_diffuse"}))).when(|c|renderer_debug_mode(c,"gi_diffuse")),
+        cmd("view.debug.ambient_occlusion", "Ambient Occlusion", "contrast", "", "Rendering debug: untick to turn ambient occlusion off in the Scene view now and in Play from its next start.", |_,e,_|render_debug(e,|d|d.ambient_occlusion = !d.ambient_occlusion)).when(|c|Avail::Checked(c.state.render_debug.ambient_occlusion)),
+        cmd("view.debug.shadows", "Shadows", "sun-dim", "", "Rendering debug: untick to turn sun and local-light shadows off in the Scene view now and in Play from its next start.", |_,e,_|render_debug(e,|d|d.shadows = !d.shadows)).when(|c|Avail::Checked(c.state.render_debug.shadows)),
+        cmd("view.debug.soft_shadows", "Soft Shadows", "sun-dim", "", "Rendering debug: untick to shadow every light as a point (the narrowest filter), to see what source-sized penumbrae add.", |_,e,_|render_debug(e,|d|d.soft_shadows = !d.soft_shadows)).when(|c|Avail::Checked(c.state.render_debug.soft_shadows)),
+        cmd("view.debug.screen_reflections", "Screen Reflections", "scan-eye", "", "Rendering debug: untick to turn screen-space reflections off; reflection captures, probes and sky reflect instead.", |_,e,_|render_debug(e,|d|d.screen_reflections = !d.screen_reflections)).when(|c|Avail::Checked(c.state.render_debug.screen_reflections)),
+        cmd("view.debug.reflection_captures", "Reflection Captures", "globe", "", "Rendering debug: untick to turn reflection captures off; probes and sky reflect instead.", |_,e,_|render_debug(e,|d|d.reflection_captures = !d.reflection_captures)).when(|c|Avail::Checked(c.state.render_debug.reflection_captures)),
+        cmd("view.debug.screen_gi", "Screen GI", "sun", "", "Rendering debug: untick to turn High/Epic screen probe GI off; the probe volume and ambient occlusion light everything, as on Medium.", |_,e,_|render_debug(e,|d|d.screen_gi = !d.screen_gi)).when(|c|Avail::Checked(c.state.render_debug.screen_gi)),
+        cmd("view.debug.global_illumination", "Global Illumination", "sun", "", "Rendering debug: untick to turn probe global illumination off; the sky lights everything, as with no probe volume.", |_,e,_|render_debug(e,|d|d.global_illumination = !d.global_illumination)).when(|c|Avail::Checked(c.state.render_debug.global_illumination)),
+        cmd("view.debug.volumetric_fog", "Volumetric Fog", "cloud-fog", "", "Rendering debug: untick to drop the detailed volumetric fog near the camera (shafts, lamp cones, local fog volumes) in the Scene view now and in Play from its next start; fog keeps its coarse far grid, as on Low.", |_,e,_|render_debug(e,|d|d.volumetric_fog = !d.volumetric_fog)).when(|c|Avail::Checked(c.state.render_debug.volumetric_fog)),
+        cmd("view.debug.temporal_jitter", "Temporal Anti-Aliasing Jitter", "focus", "", "Rendering debug: untick to stop the sub-pixel camera jitter that temporal anti-aliasing accumulates. Edges alias but hold still, so flicker that remains comes from something else.", |_,e,_|render_debug(e,|d|d.temporal_jitter = !d.temporal_jitter)).when(|c|Avail::Checked(c.state.render_debug.temporal_jitter)),
+        cmd("view.debug.reflections", "Reflections Only", "sparkles", "", "Rendering debug: show only the reflected light, exposed like the lit image, to judge reflections on their own.", |_,e,_|render_debug(e,|d|d.reflections = if d.reflections == ara_render::ReflectionView::Reflections {ara_render::ReflectionView::Lit} else {ara_render::ReflectionView::Reflections})).when(|c|Avail::Checked(c.state.render_debug.reflections == ara_render::ReflectionView::Reflections)),
+        cmd("view.debug.reflection_sources", "Reflection Sources", "layers", "", "Rendering debug: colour each pixel by where its reflection comes from: on-screen trace green, capture trace blue, screen probes yellow, box-projected captures cyan, probes orange, sky magenta. Surfaces too rough to trace are dimmed.", |_,e,_|render_debug(e,|d|d.reflections = if d.reflections == ara_render::ReflectionView::Sources {ara_render::ReflectionView::Lit} else {ara_render::ReflectionView::Sources})).when(|c|Avail::Checked(c.state.render_debug.reflections == ara_render::ReflectionView::Sources)),
+        cmd("view.debug.full_resolution", "Full Resolution in Play", "maximize", "", "Rendering debug: render Play at display resolution instead of the preset's upscaled scale, from its next start. The Scene view already renders at full resolution.", |_,e,_|render_debug(e,|d|d.full_resolution = !d.full_resolution)).when(|c|Avail::Checked(c.state.render_debug.full_resolution)),
+        cmd("view.debug.reset", "Turn Every Effect Back On", "rotate-ccw", "", "Rendering debug: restore ambient occlusion, shadows and temporal jitter, and Play's preset resolution.", |_,e,_|render_debug(e,|d|*d = ara_render::RenderDebug::default())).when(|c|if c.state.render_debug == ara_render::RenderDebug::default() {Avail::Blocked("Every effect is on".into())} else {Avail::Ready}),
         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),
-        cmd("view.show.outline", "Selection Outline", "", "", "Outline selected entities.", |_, e, _| toggle(e, "viewport.outline")).when(|c| flag(c, "viewport.outline")),
+        cmd("view.show.outline", "Selection Outline", "focus", "", "Outline selected entities.", |_, e, _| toggle(e, "viewport.outline")).when(|c| flag(c, "viewport.outline")),
         cmd("view.show.gizmos", "Transform Gizmo", "move-3d", "", "Show transform handles on the selection.", |_, e, _| view(e, json!({"gizmos": e.state.hide_gizmos}))).when(|c| Avail::Checked(!c.state.hide_gizmos)),
         cmd("view.show.orientation", "Orientation Widget", "globe", "", "Show the axis widget in the top-right corner.", |_, e, _| view(e, json!({"orientation": e.state.hide_orientation}))).when(|c| Avail::Checked(!c.state.hide_orientation)),
         cmd("view.show.bounds", "Bounds", "box", "", "Show actual world bounds of current native meshes.", |_,e,_|toggle(e,"viewport.bounds")).when(|c|flag(c,"viewport.bounds")),
         cmd("view.show.colliders", "Colliders", "box", "", "Show authored primitive collider shapes and identify unavailable cooked shapes.", |_,e,_|toggle(e,"viewport.colliders")).when(|c|flag(c,"viewport.colliders")),
         cmd("view.show.stats", "Stats Overlay", "gauge", "", "Show last completed CPU and renderer samples.", |_,e,_|toggle(e,"viewport.stats")).when(|c|flag(c,"viewport.stats")),
+        // The Scene toolbar's Gizmos menu (Unity's): component gizmos, icons and types.
+        cmd("view.gizmos.toggle", "Show Gizmos", "box", "Ctrl+Shift+G", "Show component gizmos and icons: light ranges, camera view volumes, audio ranges, colliders, navigation and more.", |_, e, _| toggle_on(e, "viewport.gizmos")).when(|c| flag_on(c, "viewport.gizmos")),
+        cmd("view.gizmos.icons", "Icons", "lightbulb", "", "Show billboard icons for lights, cameras, audio, probes, volumes and effects.", |_, e, _| toggle_on(e, "viewport.icons")).when(|c| flag_on(c, "viewport.icons")),
+        cmd("view.gizmos.icons3d", "3D Icons", "scaling", "", "Icons shrink with distance, within limits, instead of keeping one screen size.", |_, e, _| toggle_on(e, "viewport.icons3d")).when(|c| flag_on(c, "viewport.icons3d")),
+        cmd("view.gizmos.icon_size.small", "Small Icons", "minus", "", "Gizmo icons at 60 %. Settings › Viewport › Icon size sets any size.", |_, e, _| set(e, "viewport.iconSize", json!(60))).when(|c| Avail::Checked(setting(c, "viewport.iconSize").as_f64().unwrap_or(100.) == 60.)),
+        cmd("view.gizmos.icon_size.medium", "Medium Icons", "circle", "", "Gizmo icons at their default size.", |_, e, _| set(e, "viewport.iconSize", json!(100))).when(|c| Avail::Checked(setting(c, "viewport.iconSize").as_f64().unwrap_or(100.) == 100.)),
+        cmd("view.gizmos.icon_size.large", "Large Icons", "plus", "", "Gizmo icons at 140 %.", |_, e, _| set(e, "viewport.iconSize", json!(140))).when(|c| Avail::Checked(setting(c, "viewport.iconSize").as_f64().unwrap_or(100.) == 140.)),
+        cmd("view.gizmos.icon_size.huge", "Huge Icons", "maximize", "", "Gizmo icons at 200 %.", |_, e, _| set(e, "viewport.iconSize", json!(200))).when(|c| Avail::Checked(setting(c, "viewport.iconSize").as_f64().unwrap_or(100.) == 200.)),
+        cmd("view.gizmos.all_types", "Show Every Type", "eye", "", "Turn every gizmo type back on.", |_, e, _| set(e, "viewport.gizmoTypes", json!({}))).when(|c| {
+            if setting(c, "viewport.gizmoTypes").as_object().is_some_and(|m| !m.is_empty()) { Avail::Ready } else { Avail::Blocked("Every gizmo type is shown".into()) }
+        }),
+        cmd("view.gizmos.type", "Gizmo Type", "box", "", "Show or hide one component type's gizmos and icons.", |_, e, t| {
+            let Target::Component(key) = t else { return Err("choose a gizmo type in the Gizmos menu".into()) };
+            let mut types = e.state.settings.get("viewport.gizmoTypes").and_then(Value::as_object).cloned().unwrap_or_default();
+            if types.remove(key).is_none_or(|v| v != "off") {
+                types.insert(key.clone(), json!("off"));
+            }
+            set(e, "viewport.gizmoTypes", Value::Object(types))
+        }).when(|c| match &c.target {
+            Target::Component(key) => Avail::Checked(setting(c, "viewport.gizmoTypes").get(key).and_then(Value::as_str) != Some("off")),
+            _ => Avail::Blocked("Choose a gizmo type in the Gizmos menu".into()),
+        }),
+        cmd("view.overlays.reset", "Reset Toolbar Layout", "rotate-ccw", "", "Return the Scene toolbars to their default corners, expanded.", |_, e, _| set(e, "viewport.overlays", json!({}))).when(|c| {
+            if setting(c, "viewport.overlays").as_object().is_some_and(|m| !m.is_empty()) { Avail::Ready } else { Avail::Blocked("The Scene toolbars are in their default layout".into()) }
+        }),
+        cmd("view.overlays.collapse", "Collapse Toolbar", "chevron-left", "", "Collapse a Scene toolbar to its grip, or expand it again.", |s, e, t| {
+            let Target::Panel(id) = t else { return Err("choose a Scene toolbar".into()) };
+            s.toggle_overlay_collapsed(e, id)
+        }).when(|c| if matches!(c.target, Target::Panel(_)) { Avail::Ready } else { Avail::Blocked("Use a Scene toolbar's grip".into()) }),
         cmd("view.game", "Game View", "play", "G", "Hide every editor visual in the viewport.", |_, e, _| view(e, json!({"gameView": !e.state.game_view}))).when(|c| Avail::Checked(c.state.game_view)),
         cmd("view.hide_overlays", "Hide Overlays", "eye-off", "Shift+G", "Hide the viewport toolbar and widgets.", |_, e, _| view(e, json!({"hideOverlays": !e.state.hide_overlays}))).when(|c| Avail::Checked(c.state.hide_overlays)),
         cmd("view.fidelity", "Fidelity Rendering", "sun", "", "Switch between the project's quality (ray-traced Fidelity) and the Low raster preview.", |_, e, _| {
@@ -971,8 +1087,8 @@ fn build() -> Vec<Spec> {
                 None => "Auto".into(),
             }),
         viewport_quality!("view.quality.low", "Low", "low", "Raster lighting with temporal antialiasing; no ray tracing."),
-        viewport_quality!("view.quality.medium", "Medium", "medium", "Ray-traced lighting at half resolution, upscaled temporally; no ReSTIR."),
-        viewport_quality!("view.quality.high", "High", "high", "Ray-traced lighting at two-thirds resolution; ReSTIR in scenes lit by emissives or many lights."),
+        viewport_quality!("view.quality.medium", "Medium", "medium", "Ray-traced lighting; no ReSTIR. Play and exports render at half resolution, upscaled temporally; the Scene view stays native."),
+        viewport_quality!("view.quality.high", "High", "high", "Ray-traced lighting; ReSTIR in scenes lit by emissives or many lights. Play renders at 0.6 scale, upscaled; the Scene view stays native."),
         viewport_quality!("view.quality.epic", "Epic", "epic", "Native-resolution ray tracing with ReSTIR everywhere. The most expensive."),
         later("view.environment", "Environment Preview", "sun", "", "Time-of-day and weather previews need the sky system in the editor."),
         later("view.layout_quad", "Viewport Layout", "grid-2x2", "", "Several viewports need one render target per view; quad view is not built yet."),
@@ -993,12 +1109,12 @@ fn build() -> Vec<Spec> {
             let v = e.state.settings.get("appearance.uiScale").and_then(Value::as_f64).unwrap_or(1.);
             set(e, "appearance.uiScale", json!((((v - 0.1) * 20.).round() / 20.).clamp(0.75, 2.)))
         }),
-        cmd("view.zoom_reset", "Reset Zoom", "", "Ctrl+0", "Restore 100% UI scale.", |_, e, _| set(e, "appearance.uiScale", json!(1.))),
-        cmd("view.density.compact", "Compact", "", "", "22 px rows; the default.", |_, e, _| set(e, "appearance.density", json!("compact"))).when(|c| is(c, "appearance.density", "compact")),
-        cmd("view.density.comfortable", "Comfortable", "", "", "26 px rows and roomier controls.", |_, e, _| set(e, "appearance.density", json!("comfortable"))).when(|c| is(c, "appearance.density", "comfortable")),
+        cmd("view.zoom_reset", "Reset Zoom", "search", "Ctrl+0", "Restore 100% UI scale.", |_, e, _| set(e, "appearance.uiScale", json!(1.))),
+        cmd("view.density.compact", "Compact", "minimize", "", "22 px rows; the default.", |_, e, _| set(e, "appearance.density", json!("compact"))).when(|c| is(c, "appearance.density", "compact")),
+        cmd("view.density.comfortable", "Comfortable", "maximize", "", "26 px rows and roomier controls.", |_, e, _| set(e, "appearance.density", json!("comfortable"))).when(|c| is(c, "appearance.density", "comfortable")),
         cmd("view.theme.dark", "Dark", "moon", "", "Ara Dark.", |_, e, _| set(e, "appearance.theme", json!("dark"))).when(|c| is(c, "appearance.theme", "dark")),
         cmd("view.theme.light", "Light", "sun", "", "Ara Light.", |_, e, _| set(e, "appearance.theme", json!("light"))).when(|c| is(c, "appearance.theme", "light")),
-        cmd("view.reduce_motion", "Reduce Motion", "", "", "Turn off decorative transitions.", |_, e, _| toggle(e, "appearance.reduceMotion")).when(|c| flag(c, "appearance.reduceMotion")),
+        cmd("view.reduce_motion", "Reduce Motion", "pause", "", "Turn off decorative transitions.", |_, e, _| toggle(e, "appearance.reduceMotion")).when(|c| flag(c, "appearance.reduceMotion")),
         cmd("view.tool.select", "Select Tool", "mouse-pointer", "Q", "Pick and box-select without handles.", |_, e, _| view(e, json!({"gizmos": false}))).when(|c| Avail::Checked(c.state.hide_gizmos)),
         cmd("view.tool.move", "Move Tool", "move-3d", "W", "Translate along axes or planes.", |_, e, _| {
             view(e, json!({"gizmos": true}))?;
@@ -1023,6 +1139,41 @@ fn build() -> Vec<Spec> {
             act(e, "editor.tool", json!({"tool": e.state.tool, "centre": !e.state.centre}))
         }).when(|c| Avail::Checked(c.state.centre)),
     ]);
+    // Mesh Paint (`crate::paint`, `shell/mesh_paint_panel.rs`).
+    {
+        use crate::paint::PaintTool as T;
+        c.extend([
+            cmd("paint.mode", "Mesh Paint", "palette", "", "Paint per-instance vertex colours on the selected meshes (Unreal's mesh paint); the shared model never changes.", |_, e, _| {
+                e.state.paint = if e.state.paint.is_some() { None } else { Some(Default::default()) };
+                if e.state.paint.is_some() {
+                    act(e, "editor.layout.show", json!({"panel": "mesh-paint"}))?;
+                }
+                Ok(())
+            }).when(|c| Avail::Checked(c.state.paint.is_some())),
+            cmd("window.mesh_paint", "Mesh Paint", "palette", "", "Brush, colours and channels of Mesh Paint.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "mesh-paint"}))).when(|c| panel_open(c, "mesh-paint")),
+            cmd("paint.tool.brush", "Paint Brush", "palette", "", "Blend the paint colour in under the brush.", |_, e, _| paint(e, |p| p.tool = T::Brush)).when(|c| paint_tool(c, T::Brush)),
+            cmd("paint.tool.erase", "Erase Brush", "palette", "", "Blend the erase colour in under the brush.", |_, e, _| paint(e, |p| p.tool = T::Erase)).when(|c| paint_tool(c, T::Erase)),
+            cmd("paint.tool.fill", "Fill Mesh", "palette", "", "Click a selected mesh to set every vertex to the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Fill)).when(|c| paint_tool(c, T::Fill)),
+            cmd("paint.tool.flood", "Flood Island", "palette", "", "Click a selected mesh to set its connected island to the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Flood)).when(|c| paint_tool(c, T::Flood)),
+            cmd("paint.tool.pick", "Pick Colour", "pipette", "", "Click a mesh to take its vertex colour as the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Pick)).when(|c| paint_tool(c, T::Pick)),
+            cmd("paint.channel.red", "Paint Red", "palette", "", "Write the red channel.", |_, e, _| paint(e, |p| p.channels[0] = !p.channels[0])).when(|c| paint_channel(c, 0)),
+            cmd("paint.channel.green", "Paint Green", "palette", "", "Write the green channel.", |_, e, _| paint(e, |p| p.channels[1] = !p.channels[1])).when(|c| paint_channel(c, 1)),
+            cmd("paint.channel.blue", "Paint Blue", "palette", "", "Write the blue channel.", |_, e, _| paint(e, |p| p.channels[2] = !p.channels[2])).when(|c| paint_channel(c, 2)),
+            cmd("paint.channel.alpha", "Paint Alpha", "palette", "", "Write the alpha channel.", |_, e, _| paint(e, |p| p.channels[3] = !p.channels[3])).when(|c| paint_channel(c, 3)),
+            cmd("paint.radius.up", "Larger Brush", "palette", "", "Grow the brush radius by a quarter.", |_, e, _| paint(e, |p| p.radius = (p.radius * 1.25).min(100.))),
+            cmd("paint.radius.down", "Smaller Brush", "palette", "", "Shrink the brush radius by a fifth.", |_, e, _| paint(e, |p| p.radius = (p.radius / 1.25).max(0.005))),
+            cmd("paint.strength.up", "Stronger Brush", "palette", "", "Raise brush strength by 0.1.", |_, e, _| paint(e, |p| p.strength = (p.strength + 0.1).min(1.))),
+            cmd("paint.strength.down", "Weaker Brush", "palette", "", "Lower brush strength by 0.1.", |_, e, _| paint(e, |p| p.strength = (p.strength - 0.1).max(0.))),
+            cmd("paint.falloff.up", "Softer Brush", "palette", "", "Widen the brush's fading edge by 0.1.", |_, e, _| paint(e, |p| p.falloff = (p.falloff + 0.1).min(1.))),
+            cmd("paint.falloff.down", "Harder Brush", "palette", "", "Narrow the brush's fading edge by 0.1.", |_, e, _| paint(e, |p| p.falloff = (p.falloff - 0.1).max(0.))),
+            cmd("paint.swap", "Swap Paint and Erase Colours", "palette", "", "Exchange the paint and erase colours.", |_, e, _| paint(e, |p| std::mem::swap(&mut p.color, &mut p.erase))),
+            cmd("paint.color.white", "Paint White", "palette", "", "Paint opaque white.", |_, e, _| paint(e, |p| p.color = [1., 1., 1., 1.])),
+            cmd("paint.color.black", "Paint Black", "palette", "", "Paint opaque black.", |_, e, _| paint(e, |p| p.color = [0., 0., 0., 1.])),
+            cmd("paint.color.red", "Paint Red Colour", "palette", "", "Paint red (the R mask of layer blends).", |_, e, _| paint(e, |p| p.color = [1., 0., 0., 1.])),
+            cmd("paint.color.green", "Paint Green Colour", "palette", "", "Paint green.", |_, e, _| paint(e, |p| p.color = [0., 1., 0., 1.])),
+            cmd("paint.color.blue", "Paint Blue Colour", "palette", "", "Paint blue.", |_, e, _| paint(e, |p| p.color = [0., 0., 1., 1.])),
+        ]);
+    }
     // Create
     c.extend([
         cmd("create.empty", "Empty Entity", "layers", "Ctrl+Shift+N", "Create an entity with only a Transform.", |_, e, _| create(e, &Target::None, "Entity", json!({}), false)).when(scene_doc),
@@ -1038,13 +1189,16 @@ fn build() -> Vec<Spec> {
         cmd("create.light.sun", "Sun", "sun", "", "Directional light with cascaded shadows.", |_, e, t| create(e, t, "Sun", json!({"Light": {"kind": "directional", "intensity": 3}, "Transform": {"position": [0, 6, 0], "rotation": [-50, 30, 0]}}), false)).when(|c| with_components(c, &["Light"])),
         cmd("create.light.point", "Point Light", "lightbulb", "", "Omnidirectional light.", |_, e, t| create(e, t, "Point light", json!({"Light": {"kind": "point"}}), matches!(t, Target::Entity(_)))).when(|c| with_components(c, &["Light"])),
         cmd("create.light.spot", "Spot Light", "lightbulb", "", "Cone light along −Z.", |_, e, t| create(e, t, "Spot light", json!({"Light": {"kind": "spot"}}), false)).when(|c| with_components(c, &["Light"])),
+        cmd("create.light.rect", "Rect Light", "square", "", "One-sided rectangular area light along −Z, with barn doors.", |_, e, t| create(e, t, "Rect light", json!({"Light": {"kind": "rect"}, "Transform": {"position": [0, 3, 0], "rotation": [-90, 0, 0]}}), false)).when(|c| with_components(c, &["Light"])),
+        cmd("create.light.disc", "Disc Light", "circle", "", "One-sided round area light along −Z.", |_, e, t| create(e, t, "Disc light", json!({"Light": {"kind": "disc", "sourceRadius": 0.25}, "Transform": {"position": [0, 3, 0], "rotation": [-90, 0, 0]}}), false)).when(|c| with_components(c, &["Light"])),
         cmd("create.light.sky", "Sky & Atmosphere", "sun", "", "Procedural sky and exposure.", |_, e, t| create(e, t, "Sky", json!({"Environment": {}}), false)).when(|c| with_components(c, &["Environment"])),
         cmd("create.light.probe", "Reflection Probe", "sun", "", "Create an authored reflection probe; renderer capabilities determine capture availability.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Probe)).when(|c|with_components(c,&["ReflectionProbe"])),
         cmd("create.probe", "Create Reflection Probe", "sun", "", "Create an authored reflection probe with schema defaults.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Probe)).when(|c|with_components(c,&["ReflectionProbe"])),
         cmd("create.camera", "Camera", "camera", "", "Viewpoint along −Z.", |_, e, t| create(e, t, "Camera", json!({"Camera": {}}), false)).when(|c| with_components(c, &["Camera"])),
         cmd("create.vfx", "VFX System", "sparkles", "", "Entity that plays a VFX graph.", |_, e, t| create(e, t, "VFX", json!({"VisualEffect": {}}), false)).when(|c| with_components(c, &["VisualEffect"])),
-        later("create.decal", "Decal", "", "", "Decals are not in the renderer schema yet."),
+        cmd("create.decal", "Decal", "image", "", "Project a decal material onto the surfaces below (a 1 m box facing down at the view target; assign a decal-domain material).", |_, e, t| { let p = e.state.camera.target; create(e, t, "Decal", json!({"Decal": {}, "Transform": {"position": [p.x, p.y.max(0.), p.z], "rotation": [-90, 0, 0]}}), false) }).when(|c| with_components(c, &["Decal"])),
         cmd("create.fog", "Height Fog", "sun", "", "Create global height fog; the first entity by identity supplies the scene fog.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::HeightFog)).when(|c|with_components(c,&["HeightFog"])),
+        cmd("create.fog_volume", "Local Fog Volume", "cloud-fog", "", "Create a local volume of fog, mist or smoke at the view pivot: a 10 m sphere lit like height fog, shown in the volumetric fog. Scale or switch it to a box in Inspector.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::FogVolume)).when(|c|with_components(c,&["LocalFogVolume"])),
         cmd("create.post.global", "Global Post-process Volume", "sliders-horizontal", "", "Create scene-wide post-process overrides.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Global)).when(|c|with_components(c,&["PostProcessVolume"])),
         cmd("create.post.box", "Local Post-process Box", "box", "", "Create a box whose overrides blend near the camera.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Box)).when(|c|with_components(c,&["PostProcessVolume"])),
         cmd("create.post.sphere", "Local Post-process Sphere", "circle", "", "Create a sphere whose overrides blend near the camera.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Sphere)).when(|c|with_components(c,&["PostProcessVolume"])),
@@ -1149,7 +1303,9 @@ fn build() -> Vec<Spec> {
             Ok(())
         }),
         later("assets.clear_cache", "Clear Cache", "trash", "", "Clearing caches while jobs run is unsafe; delete .ara/cache with the editor closed."),
-        later("assets.import_defaults", "Import Defaults…", "settings-2", "", "Per-type import defaults arrive with the Assets settings page."),
+        cmd("assets.import_defaults", "Import Defaults…", "settings-2", "", "Edit project-wide texture quality and typed per-importer defaults.", |s,e,_|s.import_defaults(e)),
+        cmd("assets.import_defaults.close", "Back to Selection", "arrow-left", "", "Close import defaults and return to the current Inspector selection.", |s,e,_|s.close_import_defaults(e)),
+        cmd("assets.import_defaults.reset", "Reset Import Type Defaults", "rotate-ccw", "", "Remove the selected importer's project defaults in one undoable action.", |s,e,t|s.reset_import_defaults(e,t)),
     ]);
     // Play
     c.extend([
@@ -1466,6 +1622,7 @@ fn build() -> Vec<Spec> {
     // Tools
     c.extend([
         cmd("window.profiler", "Profiler", "gauge", "Alt+8", "Record and compare editor frames.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "profiler"}))).when(|c| panel_open(c, "profiler")),
+        cmd("window.render_debug", "Rendering Debug", "scan-eye", "", "Switches that turn ambient occlusion, shadows or temporal jitter off (or Play's full resolution on) to trace flicker and other artifacts.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "render-debug"}))).when(|c| panel_open(c, "render-debug")),
         later("tools.gpu_capture", "GPU Frame Capture", "camera", "", "GPU captures run through RenderDoc for now; the integrated capture viewer is not built."),
         cmd("tools.why", "Diagnostics: Why?", "search", "", "Explain a diagnostic, reference or entity using the project's diagnostic service.", |s,e,t|s.explain_problem(e,t)),
         cmd("tools.references", "Reference Viewer", "link", "", "Inspect the real Uses and Used by links of an authored asset.", |s,e,t|s.show_asset_references(e,t)),
@@ -1476,7 +1633,8 @@ fn build() -> Vec<Spec> {
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
         cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Discover modules in the background, then choose which one to open in the configured IDE.", |s, e, _|s.open_script_solution(e)).when(|_| Avail::Ready),
-        later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
+        cmd("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "Reload the current Play world's C# modules without restarting; inspect each player's authoritative result.", |s,e,_|s.reload_scripts(e))
+            .when(|c|c.script_recovery_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
             let Target::Text(agent) = t else { return Err("choose an agent".into()) };
@@ -1528,8 +1686,8 @@ fn build() -> Vec<Spec> {
             }
             Ok(())
         }),
-        cmd("agents.connect", "Connect an Agent (MCP)…", "bot", "", "Show how to connect Claude Code, Codex or another MCP client.", |s, e, _| {
-            s.dialog = Some(super::super::Dialog::connect(e));
+        cmd("agents.connect", "Connect an Agent (MCP)…", "bot", "", "Connect Claude Code, Codex, Cursor or OpenCode to Ara.", |s, _, _| {
+            s.open_agents();
             Ok(())
         }),
         later("tools.vcs", "Version Control", "", "", "Use git; the in-editor changes view is not built yet."),
@@ -2213,9 +2371,9 @@ fn build() -> Vec<Spec> {
             "System Info",
             "gauge",
             "",
-            "GPU, driver and Vulkan details.",
+            "GPU, driver, features and limits.",
             |s, _, _| {
-                s.dialog = Some(super::super::Dialog::system(&s.device_info));
+                s.dialog = Some(super::super::Dialog::System);
                 Ok(())
             },
         ),
@@ -2297,7 +2455,7 @@ fn build() -> Vec<Spec> {
         cmd("graph.comment", "Add Comment", "file-plus", "", "Add a comment at the pointer.", |s, e, _| s.edit_graph_layout(e, "comment")).when(graph_open),
         cmd("graph.group", "Group Selection", "layout-grid", "", "Group the selected nodes.", |s, e, _| s.edit_graph_layout(e, "group")).when(graph_open),
         cmd("graph.reroute", "Add Reroute", "git-compare", "", "Add a reroute point to a wire.", |s, e, _| s.edit_graph_layout(e, "reroute")).when(graph_open),
-        cmd("graph.select_all", "Select All Nodes", "", "", "Select every node.", |s, e, _| s.select_all_nodes(e)).when(graph_open),
+        cmd("graph.select_all", "Select All Nodes", "mouse-pointer", "", "Select every node.", |s, e, _| s.select_all_nodes(e)).when(graph_open),
         cmd("vfx.module.up", "Move Module Up", "chevron-up", "Alt+Up", "Move the module earlier in its stage.", |s, e, t| vfx_module(s, e, t, "up")).when(vfx_module_target),
         cmd("vfx.module.down", "Move Module Down", "chevron-down", "Alt+Down", "Move the module later in its stage.", |s, e, t| vfx_module(s, e, t, "down")).when(vfx_module_target),
         cmd("vfx.module.duplicate", "Duplicate Module", "copy", "", "Insert a copy after the module.", |s, e, t| vfx_module(s, e, t, "duplicate")).when(vfx_module_target),
@@ -2343,17 +2501,20 @@ fn build() -> Vec<Spec> {
             s.copy_text(text.clone());
             Ok(())
         }),
-        cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
-        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
-        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
+        cmd("profiler.record", "Record", "circle-dot", "", "Start or stop recording the selected Profiler target.", |s,e,_|s.profiler_record_target(e)).when(|c|c.profiler_target_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze the selected target's completed frames.", |s,e,_|s.profiler_freeze_target(e,false)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze an explicitly scoped comparison baseline.", |s,e,_|s.profiler_freeze_target(e,true)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.snapshot", "Follow Profiler Target", "refresh-cw", "", "Read completed target frames without stopping recording.", |s,e,_|s.profiler_snapshot_target(e)),
+        cmd("profiler.refresh", "Refresh Profiler Targets", "refresh-cw", "", "Refresh live player targets without changing the selected scope.", |s,e,_|s.refresh_profiler_targets(e)),
+        cmd("profiler.frame", "Inspect Profiler Frame", "chart-no-axes-combined", "", "Inspect a frame from its exact target and capture incarnation.", |s,e,t|s.choose_profiler_frame(e,t)),
         cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
             if let Target::Text(label) = t {
                 s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
             }
             Ok(())
         }),
-        cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
-            .when(|c| Avail::Checked(c.state.profiler_compare)),
+        cmd("profiler.compare", "Compare", "git-compare", "", "Compare explicitly scoped frozen captures.", |s,e,_|s.compare_profiler_targets(e))
+            .when(|c|c.profiler_compare_blocker.map_or(Avail::Checked(c.profiler_compare_active),|reason|Avail::Blocked(reason.into()))),
         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),
     ]);
     c

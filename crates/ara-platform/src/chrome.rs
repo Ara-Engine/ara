@@ -13,6 +13,9 @@ pub struct WindowChrome {
     pub border: f32,
     /// Interactive rectangles [x, y, width, height] excluded from caption dragging.
     pub controls: Vec<[f32; 4]>,
+    /// The app resizes from the border itself (live, no OS modal sizing loop): border
+    /// zones report as client area instead of native resize regions.
+    pub client_resize: bool,
 }
 impl WindowChrome {
     /// Native hit-test result at a point; corners take priority over caption controls.
@@ -24,6 +27,9 @@ impl WindowChrome {
             let right = x >= size[0] - b;
             let top = y < b;
             let bottom = y >= size[1] - b;
+            if self.client_resize && (left || right || top || bottom) {
+                return SDL_HITTEST_NORMAL;
+            }
             match (left, right, top, bottom) {
                 (true, _, true, _) => return SDL_HITTEST_RESIZE_TOPLEFT,
                 (_, true, true, _) => return SDL_HITTEST_RESIZE_TOPRIGHT,
@@ -90,6 +96,10 @@ impl Window {
         self.chrome = Some(chrome);
         Ok(())
     }
+    /// The custom caption geometry, when enabled.
+    pub fn chrome(&self) -> Option<&WindowChrome> {
+        self.chrome.as_deref()
+    }
     /// Mutable geometry reused after UI layout; no per-frame allocation is needed.
     pub fn chrome_mut(&mut self) -> Option<&mut WindowChrome> {
         self.chrome.as_deref_mut()
@@ -132,6 +142,7 @@ mod tests {
             height: 36.,
             border: 5.,
             controls: vec![[10., 6., 300., 30.], [680., 6., 120., 30.]],
+            client_resize: false,
         };
         let hit = |point, maximized| chrome.hit_test(point, [800., 600.], maximized).0;
         assert_eq!(hit([400., 20.], false), SDL_HITTEST_DRAGGABLE.0);
@@ -152,5 +163,14 @@ mod tests {
         }
         assert_eq!(hit([400., 1.], true), SDL_HITTEST_DRAGGABLE.0);
         assert_eq!(hit([1., 300.], true), SDL_HITTEST_NORMAL.0);
+        // App-driven resizing: border zones are client area, even on the caption.
+        let app = WindowChrome {
+            client_resize: true,
+            ..chrome
+        };
+        let hit = |point| app.hit_test(point, [800., 600.], false).0;
+        assert_eq!(hit([400., 1.]), SDL_HITTEST_NORMAL.0);
+        assert_eq!(hit([1., 300.]), SDL_HITTEST_NORMAL.0);
+        assert_eq!(hit([400., 20.]), SDL_HITTEST_DRAGGABLE.0);
     }
 }

@@ -134,6 +134,8 @@ impl Domain {
                 "normal",
                 "emissive",
                 "opacity",
+                "specular",
+                "ambientOcclusion",
             ],
             Self::Unlit => &["color", "opacity", "opacityMask"],
             Self::Ui => &["color", "opacity", "clip"],
@@ -162,6 +164,8 @@ impl Domain {
                 ("normal", Vec3),
                 ("emissive", ColorLinear),
                 ("opacity", Float),
+                ("specular", Float),
+                ("ambientOcclusion", Float),
             ],
             Self::Unlit => &[
                 ("color", ColorLinear),

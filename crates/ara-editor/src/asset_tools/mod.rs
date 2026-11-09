@@ -5,6 +5,7 @@ pub(crate) mod cooked_mesh;
 pub(crate) mod material_preview;
 pub(crate) mod node_preview;
 pub(crate) mod paths;
+pub(crate) mod prefab_preview;
 mod studio;
 pub(crate) mod thumbnails;
 mod vfx_preview;

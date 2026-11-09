@@ -11,6 +11,7 @@ mod editor_control;
 mod embed;
 mod game_app;
 mod game_ui;
+mod graphics;
 mod group;
 #[cfg(all(test, windows))]
 mod icon_tests;
@@ -44,6 +45,8 @@ use world::{PendingPatch, World};
 #[command(name = "ara-player", about = "Ara game player and editor Play process")]
 struct Args {
     #[command(flatten)]
+    graphics: graphics::Options,
+    #[command(flatten)]
     game: game_app::Options,
     /// Owner's live-link port on 127.0.0.1.
     #[arg(long)]
@@ -55,17 +58,20 @@ struct Args {
     #[arg(long)]
     window: bool,
     /// Window or capture size, `WIDTHxHEIGHT`.
-    #[arg(long, default_value = "1280x720")]
-    size: String,
+    #[arg(long)]
+    size: Option<String>,
     /// Persistent pipeline-cache directory.
     #[arg(long, default_value_os_t = default_gpu_cache())]
     gpu_cache: PathBuf,
     /// Override project quality: auto, low, medium, high or epic.
     #[arg(long)]
     quality: Option<QualityChoice>,
-    /// Experimental hardware ray tracing; omit to use the project setting.
+    /// Hardware ray tracing opt-in; omit to use saved user/project preferences.
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     ray_tracing: Option<bool>,
+    /// Internal warm-up policy, distinct from a user's persistent graphics preference.
+    #[arg(long, hide = true, default_value_t = false, action = clap::ArgAction::Set)]
+    prewarm_ray_tracing: bool,
     /// Internal pool warm-up; only services with a Surfaces attachment request it.
     #[arg(long, hide = true)]
     prewarm_graphics: bool,
@@ -162,6 +168,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 struct Player {
     quality: QualityChoice,
     render_options: RenderOptions,
+    /// Effects the Play start turned off for diagnosis (`PlayScene::render_debug`).
+    render_debug: ara_render::RenderDebug,
     link: Link,
     args: Args,
     size: [u32; 2],
@@ -210,7 +218,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         return standalone::run(args, launched);
     }
     let init = launched;
-    let size = parse_size(&args.size)?;
+    let size = parse_size(args.size.as_deref().unwrap_or("1280x720"))?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
     let prewarmed = match std::env::var("ARA_PLAY_SCRIPTS") {
         Ok(text) => {
@@ -244,14 +252,14 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         } else {
             device::Windowed::open
         };
-        let (window, presenter) = open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(false) })
+        let (window, presenter) = open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing) })
             .context("ARA_GPU_BACKEND: cannot open the player renderer; run `ara doctor` and check the Vulkan loader, Vulkan 1.3 GPU/driver, and validation layers")?;
         (Some(window), Some(presenter))
     } else if args.prewarm_graphics {
         let presenter = embed::prewarm(
             &args.gpu_cache,
             RenderOptions {
-                ray_tracing: args.ray_tracing.unwrap_or(false),
+                ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing),
             },
         )?;
         (None, Some(presenter))
@@ -275,8 +283,9 @@ fn run(args: Args, launched: Instant) -> Result<()> {
     let mut player = Player {
         quality: args.quality.unwrap_or_default(),
         render_options: RenderOptions {
-            ray_tracing: args.ray_tracing.unwrap_or(false),
+            ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing),
         },
+        render_debug: ara_render::RenderDebug::default(),
         link,
         args,
         size,
@@ -467,6 +476,15 @@ impl Player {
                 let result = serde_json::to_value(world.patched(patch.tick, &patch.sets))?;
                 self.link.respond(patch.id, Ok(result))?;
             }
+            world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
+            if let Some(embed) = &mut self.embed {
+                let settings = world
+                    .runtime
+                    .world()
+                    .resource::<ara_graphics_settings::Service>()
+                    .state();
+                embed.set_graphics_cap(settings.applied.frame_rate_cap);
+            }
             // Windowed players present every iteration (vsync paces them), embedded
             // ones when a frame is due (their frame cap), headless ones never.
             let present = self.window.is_some() || self.embed.as_ref().is_some_and(|e| e.due(now));
@@ -503,6 +521,9 @@ impl Player {
                 (&mut self.presenter, world.probe_scene())
             {
                 presenter.set_probe_scene(doc, cache);
+            }
+            if let Some(presenter) = &mut self.presenter {
+                presenter.set_debug(self.render_debug);
             }
             let listener = world::listener(&self.frame);
             let simulation = world.runtime.world();
@@ -977,6 +998,17 @@ impl Player {
                 world.runtime.set_timescale(value)?;
                 json!({"timescale": value})
             }
+            method::RENDER_DEBUG => {
+                #[derive(serde::Deserialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Update {
+                    render_debug: ara_play::RenderDebug,
+                }
+                let update: Update = parse(params)?;
+                // The presenter takes it before the next presented frame.
+                self.render_debug = render_debug(update.render_debug);
+                json!({"renderDebug": update.render_debug})
+            }
             method::STEP => {
                 let step: ara_play::Step = parse(params)?;
                 serde_json::to_value(world.step(step.ticks, &step.inputs, &mut alive)?)?
@@ -1007,6 +1039,16 @@ impl Player {
                 world.watch(&watch.paths, watch.every)?;
                 json!({"watching": watch.paths.len()})
             }
+            method::GRAPHICS => {
+                world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
+                let request = parse(
+                    params
+                        .get("request")
+                        .cloned()
+                        .unwrap_or_else(|| json!({"operation":"get"})),
+                )?;
+                world.graphics(request, self.presenter.as_ref())?
+            }
             method::CAPTURE => {
                 let params: ara_play::CaptureParams = parse(params)?;
                 if params.path.is_some() {
@@ -1022,15 +1064,29 @@ impl Player {
                 let presenter2d = self
                     .presenter2d
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
+                world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
                 if let Some(presenter) = &mut self.presenter {
-                    presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                    if let Some(preset) = params.preset {
+                        presenter.set_quality(preset.into());
+                    }
+                    presenter.set_debug(self.render_debug);
                 }
-                serde_json::to_value(world.capture(
+                let captured = world.capture(
                     &params,
                     self.presenter.as_mut(),
                     Some(presenter2d),
                     &mut self.frame,
-                )?)?
+                );
+                if params.preset.is_some()
+                    && let Some(presenter) = &mut self.presenter
+                {
+                    let service = world
+                        .runtime
+                        .world()
+                        .resource::<ara_graphics_settings::Service>();
+                    presenter.set_graphics_settings(&service.state().applied);
+                }
+                serde_json::to_value(captured?)?
             }
             method::RECORD => {
                 world.runtime.play_mut().record()?;
@@ -1102,6 +1158,7 @@ impl Player {
         self.render_options = RenderOptions {
             ray_tracing: self.args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
         };
+        self.render_debug = render_debug(scene.render_debug);
         if let Some(presenter) = &mut self.presenter {
             presenter.set_quality(self.quality);
             presenter.set_render_options(self.render_options);
@@ -1116,6 +1173,13 @@ impl Player {
             self.prewarmed.take(),
         )?;
         world.imports(self.pending_imports.take().unwrap_or_default());
+        world.configure_graphics(
+            &self.args.graphics,
+            self.args.quality,
+            self.args.ray_tracing,
+            self.args.size.as_deref(),
+            self.args.standalone.windowed,
+        )?;
         let mut handshake = None;
         if start.role == ara_play::Role::Client {
             let t = Instant::now();
@@ -1152,6 +1216,7 @@ impl Player {
                 Err(error) => eprintln!("ara-player: no audio: {error:#}"),
             }
         }
+        world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
         let mut started = world.start(start.start_paused, decode_ms + build_ms)?;
         for diagnostic in world.runtime.asset_diagnostics() {
             self.link.notify(
@@ -1168,6 +1233,57 @@ impl Player {
         self.last_advance = Instant::now();
         self.world = Some(world);
         Ok(started)
+    }
+}
+
+/// The renderer's switches for a Play start's `renderDebug` (one field each).
+fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
+    ara_render::RenderDebug {
+        ambient_occlusion: debug.ambient_occlusion,
+        shadows: debug.shadows,
+        soft_shadows: debug.soft_shadows,
+        volumetric_fog: debug.volumetric_fog,
+        temporal_jitter: debug.temporal_jitter,
+        full_resolution: debug.full_resolution,
+        reflections: match debug.reflections {
+            ara_play::ReflectionView::Lit => ara_render::ReflectionView::Lit,
+            ara_play::ReflectionView::Reflections => ara_render::ReflectionView::Reflections,
+            ara_play::ReflectionView::Sources => ara_render::ReflectionView::Sources,
+        },
+        screen_reflections: debug.screen_reflections,
+        reflection_captures: debug.reflection_captures,
+        global_illumination: debug.global_illumination,
+        screen_gi: debug.screen_gi,
+        reference: debug.reference.map(|r| ara_render::ReferenceTrace {
+            samples: r.samples.clamp(8, 65536),
+            bounces: r.bounces.clamp(1, 16),
+        }),
+        exposure: debug.exposure.filter(|ev| ev.is_finite()),
+        view: {
+            use ara_play::DebugView as D;
+            use ara_render::capture::ViewMode as V;
+            match debug.view {
+                D::Lit => V::Lit,
+                D::Albedo => V::Albedo,
+                D::Normals => V::Normals,
+                D::Depth => V::Depth,
+                D::RoughnessMetal => V::RoughnessMetal,
+                D::EntityIds => V::EntityIds,
+                D::ShadowCascades => V::ShadowCascades,
+                D::Wireframe => V::Wireframe,
+                D::LitWireframe => V::LitWireframe,
+                D::GiDiffuse => V::GiDiffuse,
+                D::Overdraw => V::Overdraw,
+                D::VertexColor => V::VertexColor,
+                D::VertexColorRed => V::VertexColorRed,
+                D::VertexColorGreen => V::VertexColorGreen,
+                D::VertexColorBlue => V::VertexColorBlue,
+                D::VertexColorAlpha => V::VertexColorAlpha,
+                D::DecalCoverage => V::DecalCoverage,
+                D::LightComplexity => V::LightComplexity,
+                D::ShadowPenumbra => V::ShadowPenumbra,
+            }
+        },
     }
 }
 
@@ -1218,5 +1334,42 @@ mod cli_tests {
     fn game_and_standalone_arguments_form_one_valid_command() {
         use clap::CommandFactory;
         super::Args::command().debug_assert();
+    }
+
+    /// The editor sends `ara_render::RenderDebug` as `play.start` `renderDebug`;
+    /// the protocol's copy must read every switch back unchanged.
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn render_debug_survives_the_play_start_wire() {
+        for debug in [
+            ara_render::RenderDebug::default(),
+            ara_render::RenderDebug {
+                ambient_occlusion: false,
+                shadows: false,
+                soft_shadows: false,
+                volumetric_fog: false,
+                temporal_jitter: false,
+                full_resolution: true,
+                reflections: ara_render::ReflectionView::Sources,
+                screen_reflections: false,
+                reflection_captures: false,
+                global_illumination: false,
+                screen_gi: false,
+                reference: Some(ara_render::ReferenceTrace {
+                    samples: 2048,
+                    bounces: 6,
+                }),
+                exposure: Some(-2.5),
+                view: ara_render::capture::ViewMode::GiDiffuse,
+            },
+        ] {
+            let wire: ara_play::RenderDebug =
+                serde_json::from_value(serde_json::to_value(debug).unwrap()).unwrap();
+            assert_eq!(super::render_debug(wire), debug);
+        }
+        let partial: ara_play::RenderDebug =
+            serde_json::from_value(serde_json::json!({"shadows": false})).unwrap();
+        assert!(partial.ambient_occlusion && !partial.shadows && !partial.full_resolution);
+        assert!(partial.volumetric_fog);
     }
 }

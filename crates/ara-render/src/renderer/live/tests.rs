@@ -1,7 +1,7 @@
 use super::*;
 use crate::renderer::views::tests::fixture;
 use crate::{capture::ViewMode, instanced};
-use ara_gpu::vk::TaggedStructure;
+use ara_gpu::vulkan::QueueGate;
 
 struct Textures;
 impl instanced::Textures for Textures {
@@ -22,71 +22,23 @@ impl instanced::Textures for Textures {
         Ok(())
     }
 }
-struct Gate {
-    device: ash::Device,
-    semaphore: vk::Semaphore,
-    opened: bool,
+/// Holds `queue` of the renderer's device busy until the gate opens or drops
+/// (`ara_gpu::vulkan::QueueGate`); Graphics blocks the Scene queue. Declare it after
+/// the renderer: no device may be dropped while it is held (a driver deadlock).
+fn block_queue(gpu: &GpuDevice, queue: Queue) -> Result<QueueGate> {
+    let context = gpu.context();
+    QueueGate::new(
+        context,
+        match queue {
+            Queue::Graphics => context.scene_graphics,
+            Queue::Compute => context.compute,
+        },
+    )
 }
 
 mod resize;
 mod secondary;
 mod skin;
-
-impl Gate {
-    fn new(gpu: &GpuDevice, queue: Queue) -> Result<Self> {
-        // SAFETY: New test-owned semaphore. Only this thread submits or signals it.
-        unsafe {
-            let device = gpu.context().device.clone();
-            let mut kind =
-                vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
-            let semaphore = device
-                .create_semaphore(&vk::SemaphoreCreateInfo::default().push(&mut kind), None)?;
-            let gate = Self {
-                device,
-                semaphore,
-                opened: false,
-            };
-            gate.device.queue_submit2(
-                match queue {
-                    Queue::Graphics => gpu.context().scene_graphics,
-                    Queue::Compute => gpu.context().compute,
-                },
-                &[vk::SubmitInfo2::default().wait_semaphore_infos(&[
-                    vk::SemaphoreSubmitInfo::default()
-                        .semaphore(semaphore)
-                        .value(1)
-                        .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS),
-                ])],
-                vk::Fence::null(),
-            )?;
-            Ok(gate)
-        }
-    }
-    fn open(&mut self) -> Result<()> {
-        if !self.opened {
-            // SAFETY: The only host signal for this semaphore; it releases its queue.
-            unsafe {
-                self.device.signal_semaphore(
-                    &vk::SemaphoreSignalInfo::default()
-                        .semaphore(self.semaphore)
-                        .value(1),
-                )?;
-            }
-            self.opened = true;
-        }
-        Ok(())
-    }
-}
-impl Drop for Gate {
-    fn drop(&mut self) {
-        let _ = self.open();
-        // SAFETY: Also on assertion failure, signal precedes idle and destruction.
-        unsafe {
-            let _ = self.device.device_wait_idle();
-            self.device.destroy_semaphore(self.semaphore, None);
-        }
-    }
-}
 
 #[test]
 fn scene_probe_content_and_skin_uploads_share_the_deferred_frame() -> Result<()> {
@@ -112,7 +64,7 @@ fn scene_probe_content_and_skin_uploads_share_the_deferred_frame() -> Result<()>
         },
         None,
     )?;
-    let mut gate = Gate::new(renderer.gpu(), Queue::Compute)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Compute)?;
     scene.geometry[0].revision += 1;
     scene.geometry[0].vertices[0].position[0] += 0.01;
     renderer.submit_scene_frame(|renderer| {
@@ -248,7 +200,7 @@ fn scene_submission_retains_completed_color_ids_and_pick_while_gpu_is_blocked() 
             ..Default::default()
         },
     )?;
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     renderer.submit_scene_frame(|r| r.render_view(&camera, 1., ViewMode::Lit))?;
     assert!(renderer.scene_frame_pending());
     assert!(

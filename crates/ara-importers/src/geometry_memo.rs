@@ -47,6 +47,7 @@ pub(crate) fn load(
         .ok_or_else(|| crate::invalid("geometry memo lacks metadata"))?;
     let meta = hit.output.artifacts.remove(index);
     let meshes = serde_json::from_slice(&meta.bytes)?;
+    crate::mesh::patch_service::import_artifacts(Some(memo), &hit.output.artifacts)?;
     Ok(Some(Geometry {
         artifacts: hit.output.artifacts,
         meshes,
@@ -58,6 +59,7 @@ pub(crate) fn store(
     artifacts: &[Artifact],
     meshes: &[Value],
 ) -> Result<()> {
+    crate::mesh::patch_service::import_artifacts(memo, artifacts)?;
     if let (Some(memo), Some(key)) = (memo, key) {
         let mut artifacts = artifacts.to_vec();
         artifacts.push(Artifact {

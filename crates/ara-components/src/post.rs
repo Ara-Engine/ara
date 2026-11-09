@@ -67,6 +67,20 @@ pub enum PostModule {
     Reflections,
 }
 
+/// One key of an exposure compensation curve: at scene brightness `ev100` (the
+/// metered EV100), add `stops` of compensation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExposureKey {
+    /// Metered scene brightness (EV100) this key applies at.
+    #[ara(range(min = -10, max = 24), example = 0)]
+    pub ev100: f32,
+    /// Compensation in stops at that brightness; +1 doubles the image brightness.
+    #[ara(range(min = -8, max = 8), example = 0.5)]
+    pub stops: f32,
+}
+
 /// One group of settings a post-process volume overrides: pick the group in `module`,
 /// then tick the properties to change. Unticked properties are left to
 /// lower-priority volumes and the defaults.
@@ -95,6 +109,13 @@ pub struct PostOverride {
     /// How fast automatic exposure adapts, per second; higher reacts faster.
     #[ara(range(min = 0.1, max = 20), example = 2, editor(show_if(field = "module", one_of = ["exposure"])))]
     pub adaptation_speed: Option<f32>,
+    /// Extra compensation that follows the metered scene brightness (automatic
+    /// exposure), as Unreal's exposure compensation curve: keys of scene EV100 and
+    /// stops, linear between them and flat beyond the ends (at most eight). Lifting
+    /// dark scenes more than bright ones keeps interiors readable without washing out
+    /// daylight.
+    #[ara(editor(show_if(field = "module", one_of = ["exposure"])))]
+    pub compensation_curve: Option<Vec<ExposureKey>>,
     /// Display transform that compresses scene radiance into the screen's range.
     #[ara(example = "filmic", editor(show_if(field = "module", one_of = ["toneMapping"])))]
     pub tone_mapping: Option<ToneMapping>,

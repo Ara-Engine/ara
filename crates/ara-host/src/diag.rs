@@ -454,15 +454,24 @@ impl Service for DiagService {
 
 /// The engine's runtime diagnostics, kept in `.ara/diagnostics.jsonl` so `ara why`
 /// still sees what a play process or an import worker reported after the host
-/// restarts. Call errors belong to their session and are not kept. Lines are
-/// appended as records change; the newest line per record wins, and the file is
-/// rewritten once it holds four times more lines than records. This prepares each
+/// restarts. Call errors and the editor's own failures belong to their session and
+/// are not kept; import failures leave once their asset imports or disappears. Lines
+/// are appended as records change; the newest line per record wins, and the file is
+/// rewritten once it holds four times more lines than records, or after removals. This prepares each
 /// write; the host's file thread (`file_io`) performs it.
 pub(crate) struct Persist {
     path: PathBuf,
     dirty: BTreeSet<u64>,
     lines: usize,
     last: Instant,
+    /// Records were removed (resolved import failures): the next flush rewrites.
+    rewrite_due: bool,
+}
+
+/// The editor's own failures (`ARA4500`–`ARA4599`: an action, a style sheet, a file
+/// picker) belong to the session that saw them; a restart does not bring them back.
+fn session_only(code: ara_diag::Code) -> bool {
+    (4500..4600).contains(&code.0)
 }
 
 /// How often changed records are appended.
@@ -483,21 +492,30 @@ impl Persist {
             }
         }
         let lines = saved.len();
+        // Files written before editor failures became session-only still hold some.
+        saved.retain(|s| !session_only(s.record.diagnostic.code));
+        let rewrite_due = saved.len() < lines;
         store.restore(saved);
         let persist = Persist {
             path,
             dirty: BTreeSet::new(),
             lines,
             last: Instant::now(),
+            rewrite_due,
         };
         (persist, bad)
     }
 
     /// Marks a record as changed if it is the engine's.
     pub(crate) fn mark(&mut self, record: &Record) {
-        if record.origin == Origin::Engine {
+        if record.origin == Origin::Engine && !session_only(record.diagnostic.code) {
             self.dirty.insert(record.seq);
         }
+    }
+
+    /// Records left the store without a `diag.clear`: rewrite the file on the next flush.
+    pub(crate) fn removed(&mut self) {
+        self.rewrite_due = true;
     }
 
     /// Marks records changed again after their write failed.
@@ -508,11 +526,14 @@ impl Persist {
     /// The append of changed records (at most every `PERSIST_EVERY` unless `now`),
     /// or a rewrite when the file has grown; None when nothing is due.
     pub(crate) fn flush(&mut self, store: &DiagStore, now: bool) -> Option<DiagWrite> {
-        if self.dirty.is_empty() || (!now && self.last.elapsed() < PERSIST_EVERY) {
+        if (self.dirty.is_empty() && !self.rewrite_due)
+            || (!now && self.last.elapsed() < PERSIST_EVERY)
+        {
             return None;
         }
         self.last = Instant::now();
-        if self.lines + self.dirty.len() > 4 * store.len() + 256 {
+        if self.rewrite_due || self.lines + self.dirty.len() > 4 * store.len() + 256 {
+            self.rewrite_due = false;
             return Some(self.rewrite(store));
         }
         let mut text = String::new();
@@ -540,6 +561,7 @@ impl Persist {
         let mut lines = 0;
         for r in store.query(&Filter::default()) {
             if r.origin == Origin::Engine
+                && !session_only(r.diagnostic.code)
                 && let Some(saved) = store.save(r.seq)
             {
                 text.push_str(&serde_json::to_string(&saved).unwrap_or_default());

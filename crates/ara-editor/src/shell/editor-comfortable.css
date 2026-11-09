@@ -4,7 +4,8 @@
 .tab { height:32px; }
 .toolbar { height:32px; }
 .viewport-bar { height:32px; }
-.statusbar { height:28px; }
+.statusbar { height:38px; }
+.status-chip { height:26px; }
 button { height:26px; }
 .small { height:26px; }
 .icon-button { width:28px; height:28px; padding:6px; }
@@ -17,8 +18,8 @@ dropdown { height:26px; padding-top:3px; }
 .search-icon { top:5px; }
 .placeholder { top:4px; }
 .virtual-row { height:26px; }
-.prop-row { height:auto; min-height:28px; }
-.prop-label { height:28px; }
+.prop-row { height:auto; min-height:30px; }
+.prop-label { height:30px; }
 .component-header { height:30px; }
 .menu-item { min-height:30px; }
 .module-row { height:28px; }

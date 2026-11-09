@@ -1,0 +1,123 @@
+--- a/crates/ara-net/src/conditions.rs
++++ b/crates/ara-net/src/conditions.rs
+@@ -53,7 +53,7 @@
+ }
+ 
+ /// Counts offered/delivered encrypted UDP payload, including transport headers and ACKs.
+-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
++#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct DirectionStats {
+     /// Datagrams received from the sender.
+     pub packets: u64,
+@@ -128,6 +128,11 @@
+         down.validate()?;
+         self.conditions = [up, down];
+         Ok(())
++    }
++    /// Current validated conditions used by this proxy, ordered upstream/downstream.
++    /// Already queued packets retain the delays assigned when they arrived.
++    pub fn applied_conditions(&self) -> [Conditions; 2] {
++        self.conditions
+     }
+     fn random(&mut self) -> u64 {
+         self.random_state ^= self.random_state << 13;
+@@ -218,3 +223,23 @@
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++mod inspection_tests {
++    use super::*;
++
++    #[test]
++    fn inspection_reports_live_directional_conditions_and_rejected_changes_leave_them_intact() {
++        let mut link = Link::new(7, Conditions::default()).unwrap();
++        let up = Conditions { latency_ms: 200, jitter_ms: 50, loss: 200, ..Conditions::default() };
++        let down = Conditions { latency_ms: 17, bandwidth: 32000, ..Conditions::default() };
++        assert_eq!(link.applied_conditions(), [Conditions::default(); 2]);
++        link.conditions(up, down).unwrap();
++        assert_eq!(link.applied_conditions(), [up, down]);
++        let invalid = Conditions { loss: 10001, ..Conditions::default() };
++        assert!(link.conditions(Conditions::default(), invalid).is_err());
++        assert_eq!(link.applied_conditions(), [up, down]);
++        assert_eq!(link.up.packets, 0);
++        assert_eq!(link.down.delivered_bytes, 0);
++    }
++}
+--- a/crates/ara-runtime-net/src/host.rs
++++ b/crates/ara-runtime-net/src/host.rs
+@@ -2,7 +2,7 @@
+ use super::*;
+ use ara_input::Injection;
+ use ara_net::{
+-    AdapterRef, Authoritative, Conditions, JoinToken, Link, PolicyRegistry, Server, ServerConfig,
++    AdapterRef, Authoritative, Conditions, DirectionStats, JoinToken, Link, PolicyRegistry, Server, ServerConfig,
+ };
+ use ara_sim::{SessionAdapter, SessionMode, TickRecord};
+ use std::{net::SocketAddr, time::Instant};
+@@ -50,6 +50,24 @@
+     /// One entry per client (players 2, 3, ...): simulated link conditions, if any.
+     /// Every client joins through its own `Link` proxy, which also measures traffic.
+     pub clients: Vec<Option<Conditions>>,
++}
++
++/// One live authority proxy; client identity matches the launch/join order.
++#[derive(Debug, Clone, PartialEq, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct ClientLinkStats {
++    /// Zero-based client link index, independent of rendering-player indices.
++    pub client_index: usize,
++    /// Runtime player identity assigned by the authority to this client.
++    pub player: u64,
++    /// Validated upstream conditions currently used by the live proxy.
++    pub up: Conditions,
++    /// Validated downstream conditions currently used by the live proxy.
++    pub down: Conditions,
++    /// Actual upstream datagram counters from that same proxy.
++    pub up_stats: DirectionStats,
++    /// Actual downstream datagram counters from that same proxy.
++    pub down_stats: DirectionStats,
+ }
+ 
+ /// Authority-side numbers for reports and `play.status`.
+@@ -72,6 +90,10 @@
+     pub down_packets: u64,
+     /// Datagrams dropped by simulated loss, both directions.
+     pub dropped: u64,
++    /// Per-client conditions and counters read from each actual live proxy.
++    /// Empty is omitted so the existing no-client wire shape remains unchanged.
++    #[serde(skip_serializing_if = "Vec::is_empty")]
++    pub links: Vec<ClientLinkStats>,
+ }
+ 
+ /// The play world's [`Runtime`] owned by a Lightyear server. The server's timeline
+@@ -265,7 +287,16 @@
+             payload_bytes: self.server.profile().values().map(|f| f.bytes).sum(),
+             ..Default::default()
+         };
+-        for link in &self.links {
++        for (client_index, link) in self.links.iter().enumerate() {
++            let [up, down] = link.applied_conditions();
++            stats.links.push(ClientLinkStats {
++                client_index,
++                player: HOST_PLAYER + 1 + client_index as u64,
++                up,
++                down,
++                up_stats: link.up,
++                down_stats: link.down,
++            });
+             stats.down_bytes += link.down.delivered_bytes;
+             stats.up_bytes += link.up.delivered_bytes;
+             stats.down_packets += link.down.packets;
+--- a/crates/ara-runtime-net/src/lib.rs
++++ b/crates/ara-runtime-net/src/lib.rs
+@@ -24,7 +24,7 @@
+ pub use locomotion::{Locomotion, MotorInput, NetMotor};
+ 
+ pub use ara_net::{Conditions, JoinToken};
+-pub use host::{HostConfig, HostStats, NetHost};
++pub use host::{ClientLinkStats, HostConfig, HostStats, NetHost};
+ pub use mirror::{MirrorStats, NetMirror};
+ 
+ use ara_components::Transform;

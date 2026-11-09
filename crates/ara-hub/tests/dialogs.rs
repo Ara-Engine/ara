@@ -158,7 +158,7 @@ fn choosing_a_project_engine_opens_confirmation_and_cancel_restores_the_pin_sele
 fn setup() -> (App, Hub) {
     let mut hub = Hub::new(Prefs::default(), "target/hub-dialog-tests".into(), None);
     capture::seed(&mut hub);
-    let mut app = App::new([1280., 720.], vec![]).expect("native UI");
+    let mut app = App::new([1280., 720.]).expect("native UI");
     app.rebuild(&mut hub, capture::NOW).expect("initial frame");
     (app, hub)
 }

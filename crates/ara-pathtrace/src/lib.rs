@@ -22,6 +22,17 @@ pub struct Reference {
     target: u32,
 }
 impl Reference {
+    /// Wrap a native-instanced reference view without flattening geometry or
+    /// losing native material extensions. Rejects non-reference transport modes.
+    pub fn from_view(view: FidelityView) -> Result<Self> {
+        let Mode::Reference { samples, .. } = view.settings().mode else {
+            anyhow::bail!("Reference requires an undenoised reference-mode view");
+        };
+        Ok(Self {
+            view,
+            target: samples,
+        })
+    }
     /// Use the physical sky as transport illumination for an outdoor reference.
     pub fn set_atmosphere(
         &mut self,

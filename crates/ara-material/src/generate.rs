@@ -118,6 +118,10 @@ fn expression(op: &str, args: &[String], types: &[Type]) -> String {
         "srgb" | "color" => args[0].clone(),
         "rgb" => format!("{}.rgb", args[0]),
         "alpha" => format!("{}.a", args[0]),
+        "red" => format!("{}.x", args[0]),
+        "green" => format!("{}.y", args[0]),
+        "blue" => format!("{}.z", args[0]),
+        "vertexColor" => "input.vertexColor".into(),
         "luminance" => format!("dot({}, float3(0.2126, 0.7152, 0.0722))", args[0]),
         "normalBlend" => format!("ara_normal_blend({a})"),
         "normalStrength" => format!("ara_normal_strength({a})"),
@@ -184,6 +188,10 @@ pub fn generate(m: &Material, instance: &Instance) -> Result<Generated, Vec<Diag
         }
     }
     source.push_str("\nAraSurface ara_evaluate(AraMaterialInput input) {\n    AraSurface result;\n    result.baseColor = float3(1);\n    result.metallic = 0;\n    result.roughness = 0.5;\n    result.normal = float3(0, 0, 1);\n    result.emissive = float3(0);\n    result.opacityMask = 1;\n    result.clearCoat = 0;\n    result.clearCoatRoughness = 0.1;\n    result.transmission = 0;\n    result.color = float3(1);\n    result.opacity = 1;\n    result.clip = 1;\n");
+    // Decal-only outputs: other domains' evaluators (and embedders' AraSurface copies) never see them.
+    if m.domain == Domain::Decal {
+        source.push_str("    result.specular = 0.5;\n    result.ambientOcclusion = 1;\n");
+    }
     for id in checked
         .order
         .iter()
@@ -244,7 +252,7 @@ pub fn generate(m: &Material, instance: &Instance) -> Result<Generated, Vec<Diag
         });
     }
     source.push_str("    return result;\n}\n");
-    source.push_str("\n// Offline verification entry. Renderer passes call ara_evaluate directly.\nstruct AraValidationInput {\n    float4 position : SV_Position;\n    float2 uv : TEXCOORD0;\n    float3 worldPosition : TEXCOORD1;\n    float3 worldNormal : TEXCOORD2;\n    float3 worldTangent : TEXCOORD3;\n    float3 worldBitangent : TEXCOORD4;\n    float3 viewDirection : TEXCOORD5;\n};\n[shader(\"fragment\")]\nfloat4 fragmentMain(AraValidationInput v) : SV_Target {\n    AraMaterialInput input;\n    input.uv = v.uv; input.worldPosition = v.worldPosition;\n    input.worldNormal = v.worldNormal; input.worldTangent = v.worldTangent;\n    input.worldBitangent = v.worldBitangent; input.viewDirection = v.viewDirection;\n    AraSurface s = ara_evaluate(input);\n");
+    source.push_str("\n// Offline verification entry. Renderer passes call ara_evaluate directly.\nstruct AraValidationInput {\n    float4 position : SV_Position;\n    float2 uv : TEXCOORD0;\n    float3 worldPosition : TEXCOORD1;\n    float3 worldNormal : TEXCOORD2;\n    float3 worldTangent : TEXCOORD3;\n    float3 worldBitangent : TEXCOORD4;\n    float3 viewDirection : TEXCOORD5;\n};\n[shader(\"fragment\")]\nfloat4 fragmentMain(AraValidationInput v) : SV_Target {\n    AraMaterialInput input;\n    input.uv = v.uv; input.worldPosition = v.worldPosition;\n    input.worldNormal = v.worldNormal; input.worldTangent = v.worldTangent;\n    input.worldBitangent = v.worldBitangent; input.viewDirection = v.viewDirection;\n    input.vertexColor = float4(1, 1, 1, 1);\n    AraSurface s = ara_evaluate(input);\n");
     source.push_str(match m.domain {
         Domain::Surface=>"    clip(s.opacityMask - 0.5);\n    return float4(ara_engine_light(s, input, float3(0, 1, 0), float3(1), float3(0.03)), 1);\n",
         Domain::Decal=>"    return float4(s.baseColor + s.emissive, saturate(s.opacity));\n",

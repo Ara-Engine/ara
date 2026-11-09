@@ -1,0 +1,82 @@
+{
+  "source": "82eaead1",
+  "scope": "saved native artifacts; no rerun or mutation",
+  "results": {
+    "passed": 2,
+    "failed": 1,
+    "completed": false
+  },
+  "failure": "One native Undo did not restore every selected object's exact collection values",
+  "phase": 9,
+  "lastTransaction": {
+    "id": "tx_kzdtamr1",
+    "base": 120,
+    "result": 121,
+    "author": "human",
+    "why": "Edit inspector values",
+    "label": "editor.property.nested.edit"
+  },
+  "lastTransactionOpCount": 1,
+  "changedField": {
+    "doc": "sc_behave01",
+    "entity": "e_collectionnative1",
+    "path": "MeshRenderer.emissiveMaterials",
+    "oldLength": 160,
+    "newLength": 160,
+    "changedIndices": [
+      100
+    ],
+    "oldItem100": "item100",
+    "newItem100": "item 100 changed through native input"
+  },
+  "afterAndFailureTrace": [
+    {
+      "stage": "after",
+      "phase": 7,
+      "revision": 121,
+      "records": {
+        "algorithm": "BLAKE3",
+        "encoding": "Ara canonical JSON UTF-8",
+        "bytes": 29625,
+        "digest": "a4fd327cbd25086e7c62630e465e08f02d4b5a9158e6c5d520c8ad7081b56459"
+      },
+      "selection": [
+        "e_collectionnative1",
+        "e_collectionnative2"
+      ],
+      "nativeEvents": 124
+    },
+    {
+      "stage": "failure",
+      "phase": 9,
+      "revision": 121,
+      "records": {
+        "algorithm": "BLAKE3",
+        "encoding": "Ara canonical JSON UTF-8",
+        "bytes": 29625,
+        "digest": "a4fd327cbd25086e7c62630e465e08f02d4b5a9158e6c5d520c8ad7081b56459"
+      },
+      "selection": [
+        "e_collectionnative1",
+        "e_collectionnative2"
+      ],
+      "nativeEvents": 128
+    }
+  ],
+  "focus": {
+    "after": {
+      "focusedId": 6283418570522422699,
+      "fieldId": "nest-edit-MeshRenderer-emissiveMaterials-100",
+      "stableId": 6283418570522422699,
+      "text": "item 100 changed through native input"
+    },
+    "failure": {
+      "focusedId": 6283418570522422699,
+      "fieldId": "nest-edit-MeshRenderer-emissiveMaterials-100",
+      "stableId": 6283418570522422699,
+      "text": "item100"
+    }
+  },
+  "journalMaximumRevision": 121,
+  "kernelUndoTransactionAfterCommit": false
+}

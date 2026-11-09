@@ -26,7 +26,7 @@ fn headers_keep_an_icon_only_accessible_close_inside_long_title_layouts() {
         );
         capture::seed(&mut hub);
         hub.releases.jobs.clear();
-        let mut app = App::new([1280., 720.], vec![]).expect("UI");
+        let mut app = App::new([1280., 720.]).expect("UI");
         for (dialog, long) in [
             (Dialog::Update, false),
             (Dialog::Update, true),
@@ -115,7 +115,7 @@ fn managed_removal_always_paints_its_destination_on_any_capture_host() {
         .expect("managed fixture")
         .clone();
     hub.dialog = Some(Dialog::UninstallEngine(engine));
-    let mut app = App::new([1280., 720.], vec![]).expect("UI");
+    let mut app = App::new([1280., 720.]).expect("UI");
     app.rebuild(&mut hub, capture::NOW).expect("removal dialog");
     let destination = app
         .ui

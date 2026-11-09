@@ -48,7 +48,11 @@ pub(super) fn sidebar(p: &mut Page, hub: &Hub) {
             );
         }
         p.leaf("fill");
-        if !update_card(p, hub) && hub.view != View::Agents && agents == 0 {
+        if !update_card(p, hub)
+            && hub.view != View::Agents
+            && agents == 0
+            && !super::agents::connected(hub)
+        {
             p.panel("side-card", |p| {
                 p.panel("row", |p| {
                     p.icon("plug", "accent");
@@ -175,12 +179,13 @@ fn subtitle(hub: &Hub) -> String {
             "Engine builds install side by side. Each project pins one version.".into()
         }
         View::Agents => "Connect agents once; they work in any project registered here.".into(),
-        View::Learn => "Samples to explore and the docs that ship with Ara.".into(),
+        View::Learn => "Samples to explore and the docs on GitHub.".into(),
         View::Settings => "Hub updates, release channel and download source.".into(),
     }
 }
 
-/// A quiet update indicator opens release notes; it never starts a transfer.
+/// The sidebar's update card: which version, how far a download is, and one
+/// button that opens the release notes. It never starts a transfer itself.
 fn update_card(p: &mut Page, hub: &Hub) -> bool {
     let Some(release) = &hub.releases.hub else {
         return false;
@@ -191,22 +196,56 @@ fn update_card(p: &mut Page, hub: &Hub) -> bool {
     {
         return false;
     }
-    p.panel("row", |p| {
-        let label = if hub.releases.prepared().is_some() {
-            "Update ready to restart"
-        } else if hub.releases.running("hub", &release.version).is_some() {
-            "Downloading update…"
+    let ready = hub.releases.prepared().is_some();
+    let job = hub.releases.running("hub", &release.version);
+    p.panel("side-card", |p| {
+        p.panel("row", |p| {
+            p.image("brand-hub", "update-mark");
+            p.panel("col update-text fill", |p| {
+                let title = if ready {
+                    "Update ready"
+                } else if job.is_some() {
+                    "Downloading update"
+                } else {
+                    "Update available"
+                };
+                p.text("side-title", title);
+                p.text("tiny muted", &format!("Ara Hub {}", release.version));
+            });
+            dismiss_banner(p, "dismiss-update", format!("update-{}", release.version));
+        });
+        if let Some(job) = job {
+            let percent = job
+                .progress
+                .as_ref()
+                .and_then(|progress| (progress.received * 100).checked_div(progress.total))
+                .unwrap_or(0)
+                .min(100);
+            p.panel("download-track", |p| {
+                p.panel_styled("download-fill", &format!("width:{percent}%"), |_| {})
+            });
+        } else if ready {
+            p.text("side-copy", "Restart the Hub when you're ready to finish.");
+        }
+        let label = if ready {
+            "Review and restart"
+        } else if job.is_some() {
+            "View progress"
         } else {
-            "Update available"
+            "See what's new"
+        };
+        let class = if ready || job.is_none() {
+            "primary compact"
+        } else {
+            "compact"
         };
         p.action(
             "update-available",
-            "update-indicator fill",
-            "download",
+            class,
+            "",
             label,
             Some(Intent::Dialog(crate::model::Dialog::Update)),
         );
-        dismiss_banner(p, "dismiss-update", format!("update-{}", release.version));
     });
     true
 }

@@ -1,6 +1,6 @@
-//! Scene overlays (grid, gizmo lines and quads, hover, outline) as UI instances, with
-//! the same encoding as the Vulkan adapter (shader modes 5 to 8), clipped to the
-//! viewport rect.
+//! Scene overlays (grid, gizmo lines and quads, icons, hover, outline) as UI instances,
+//! with the same encoding as the Vulkan adapter (shader modes 2 and 5 to 8), clipped to
+//! the viewport rect.
 use super::{Draw, NativeUi};
 use crate::Overlay;
 use anyhow::{Context, Result};
@@ -25,6 +25,7 @@ impl NativeUi {
             .map_or(0., |slot| (slot + 1) as f32 * 2.);
         let ids = self.outline_texture.and_then(|id| self.slot(id));
         let blank = self.slot(0).context("blank UI texture")?;
+        let start = self.draws.len();
         for overlay in &self.overlays {
             let draw = |texture, mode, first| Draw {
                 first,
@@ -100,6 +101,20 @@ impl NativeUi {
                     };
                     (quad, 8, blank)
                 }
+                // Mode 2 multiplies the tint's alpha by the image's.
+                Overlay::Icon { rect, image, color } => {
+                    let icon = Instance {
+                        rect: *rect,
+                        uv: [0., 0., 1., 1.],
+                        color: *color,
+                        params: [0.; 4],
+                    };
+                    // Icons install with the UI images; none yet, none drawn.
+                    let Some(slot) = self.slot(*image) else {
+                        continue;
+                    };
+                    (icon, 2, slot)
+                }
                 Overlay::Hover { uv, color } => {
                     let hover = Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],
@@ -119,7 +134,20 @@ impl NativeUi {
                     (outline, 5, ids.context("outline texture missing")?)
                 }
             };
-            self.draws.push(draw(texture, mode, first));
+            // Consecutive lines, quads and icons of one image share a draw (as on Vulkan).
+            let batched = self.draws.len() > start;
+            match self.draws.last_mut() {
+                Some(last)
+                    if batched
+                        && matches!(mode, 2 | 6 | 8)
+                        && last.mode == mode
+                        && last.texture == texture
+                        && last.first + last.count == first =>
+                {
+                    last.count += 1
+                }
+                _ => self.draws.push(draw(texture, mode, first)),
+            }
             self.instances.push(instance);
         }
         Ok(())

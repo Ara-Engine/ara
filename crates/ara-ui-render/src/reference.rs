@@ -69,7 +69,11 @@ impl UiGpu for CpuGpu {
         let height = target.height();
         let texture = if matches!(
             batch.pipeline,
-            Pipeline::Shape | Pipeline::Line | Pipeline::Fill
+            Pipeline::Shape
+                | Pipeline::Line
+                | Pipeline::Fill
+                | Pipeline::Shadow
+                | Pipeline::Backdrop
         ) {
             None
         } else {
@@ -81,6 +85,12 @@ impl UiGpu for CpuGpu {
         };
         if batch.clip >= clips.len() {
             return Err("ARA4052: invalid clip chain".into());
+        }
+        if batch.pipeline == Pipeline::Backdrop {
+            for i in instances {
+                backdrop(target, i, batch.clip, clips)?;
+            }
+            return Ok(());
         }
         for i in instances {
             let r = Box2 {
@@ -124,6 +134,7 @@ impl UiGpu for CpuGpu {
                             color[3] *= (i.params[0] - distance + 0.5).clamp(0., 1.);
                         }
                         Pipeline::Fill => color = fill_sample(i, r, p),
+                        Pipeline::Shadow => color[3] *= shadow_coverage(i, r, p),
                         Pipeline::Shape => {
                             let outer = (0.5 - distance(r, i.params[0], p)).clamp(0.0, 1.0);
                             let coverage = if i.params[1] > 0.0 {
@@ -288,4 +299,143 @@ fn distance(r: Box2, radius: f32, p: [f32; 2]) -> f32 {
         (p[1] - r.y - r.h / 2.0).abs() - r.h / 2.0 + radius,
     ];
     q[0].max(0.0).hypot(q[1].max(0.0)) + q[0].max(q[1]).min(0.0) - radius
+}
+/// Coverage of a rounded box edge at signed distance `d` in pixels: a hard, antialiased
+/// edge, or a Gaussian one for CSS blur radius `blur` (sigma = blur / 2).
+pub(crate) fn edge(d: f32, blur: f32) -> f32 {
+    if blur > 0.0 {
+        0.5 - 0.5 * erf(d / (blur * 0.5 * std::f32::consts::SQRT_2))
+    } else {
+        (0.5 - d).clamp(0.0, 1.0)
+    }
+}
+/// Abramowitz-Stegun 7.1.27 (max error 5e-4), the shader's approximation.
+fn erf(x: f32) -> f32 {
+    let a = x.abs();
+    let t = 1.0 + (0.278_393 + (0.230_389 + 0.078_108 * a * a) * a) * a;
+    let t2 = t * t;
+    x.signum() * (1.0 - 1.0 / (t2 * t2))
+}
+/// What `Pipeline::Shadow` covers at pixel centre `p` of instance rect `r` (the shader's
+/// mode 10); see [`crate::gpu::Pipeline::Shadow`] for the instance layout.
+pub(crate) fn shadow_coverage(i: &Instance, r: Box2, p: [f32; 2]) -> f32 {
+    let boxed = |b: [f32; 4], radius: f32| {
+        if b[2] > 0.0 && b[3] > 0.0 {
+            let b = Box2 {
+                x: r.x + b[0],
+                y: r.y + b[1],
+                w: b[2],
+                h: b[3],
+            };
+            distance(b, radius, p)
+        } else {
+            f32::INFINITY
+        }
+    };
+    let blur = i.params[1];
+    if i.params[3] > 0.5 {
+        edge(distance(r, i.params[0], p), 0.0) * (1.0 - edge(boxed(i.uv, i.params[2]), blur))
+    } else {
+        let m = crate::gpu::shadow_margin(blur);
+        let shadow = boxed([m, m, r.w - 2.0 * m, r.h - 2.0 * m], i.params[2]);
+        edge(shadow, blur) * (1.0 - edge(boxed(i.uv, i.params[0]), 0.0))
+    }
+}
+/// Normalized one-sided Gaussian weights for standard deviation `sigma` (index = tap
+/// distance), truncated at 3 sigma as the shader's mode 11 is.
+fn gaussian(sigma: f32) -> Vec<f32> {
+    let sigma = sigma.max(0.0001);
+    let radius = (3.0 * sigma).ceil() as usize;
+    let weights: Vec<f32> = (0..=radius)
+        .map(|k| (-((k * k) as f32) / (2.0 * sigma * sigma)).exp())
+        .collect();
+    let total = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
+    weights.into_iter().map(|w| w / total).collect()
+}
+/// `Pipeline::Backdrop` on the CPU: a horizontal Gaussian of the current target into a
+/// scratch band, a vertical one back inside the rounded shape (saturated, clipped,
+/// premultiplied over), exactly the GPU adapters' two passes.
+fn backdrop(
+    target: &mut tiny_skia::Pixmap,
+    i: &Instance,
+    clip: usize,
+    clips: &[Clip],
+) -> Result<()> {
+    let (width, height) = (target.width() as i32, target.height() as i32);
+    let r = Box2 {
+        x: i.rect[0],
+        y: i.rect[1],
+        w: i.rect[2],
+        h: i.rect[3],
+    };
+    let weights = gaussian(i.params[1]);
+    let reach = weights.len() as i32 - 1;
+    let x0 = (r.x.floor() as i32).max(0);
+    let x1 = ((r.x + r.w).ceil() as i32).min(width);
+    let y0 = (r.y.floor() as i32).max(0);
+    let y1 = ((r.y + r.h).ceil() as i32).min(height);
+    if x0 >= x1 || y0 >= y1 {
+        return Ok(());
+    }
+    let (band0, band1) = ((y0 - reach).max(0), (y1 + reach).min(height));
+    let source = target.data().to_vec();
+    let texel = |x: i32, y: i32| {
+        let o = ((y.clamp(0, height - 1) * width + x.clamp(0, width - 1)) * 4) as usize;
+        [0, 1, 2, 3].map(|c| source[o + c] as f32 / 255.0)
+    };
+    let columns = (x1 - x0) as usize;
+    let mut band = vec![[0.0f32; 4]; columns * (band1 - band0) as usize];
+    for y in band0..band1 {
+        for x in x0..x1 {
+            let mut sum = [0.0; 4];
+            for k in -reach..=reach {
+                let w = weights[k.unsigned_abs() as usize];
+                let t = texel(x + k, y);
+                for c in 0..4 {
+                    sum[c] += t[c] * w;
+                }
+            }
+            band[(y - band0) as usize * columns + (x - x0) as usize] = sum;
+        }
+    }
+    let data = target.data_mut();
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let p = [x as f32 + 0.5, y as f32 + 0.5];
+            let mut visible = true;
+            let mut current = Some(clip);
+            while let Some(c) = current {
+                let c = clips.get(c).ok_or("ARA4052: invalid clip parent")?;
+                if !c.rect.contains(p[0], p[1]) || distance(c.rect, c.radius, p) > 0.0 {
+                    visible = false;
+                    break;
+                }
+                current = c.parent;
+            }
+            let coverage = (0.5 - distance(r, i.params[0], p)).clamp(0.0, 1.0);
+            if !visible || coverage <= 0.0 {
+                continue;
+            }
+            let mut c = [0.0; 4];
+            for k in -reach..=reach {
+                let w = weights[k.unsigned_abs() as usize];
+                let row = (y + k).clamp(band0, band1 - 1);
+                let t = band[(row - band0) as usize * columns + (x - x0) as usize];
+                for n in 0..4 {
+                    c[n] += t[n] * w;
+                }
+            }
+            let luma = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+            for channel in &mut c[..3] {
+                *channel = (luma + (*channel - luma) * i.params[2]).max(0.0);
+            }
+            let offset = ((y * width + x) * 4) as usize;
+            let alpha = (c[3] * coverage).clamp(0.0, 1.0);
+            for n in 0..4 {
+                let value = c[n] * coverage + data[offset + n] as f32 / 255.0 * (1.0 - alpha);
+                data[offset + n] = (value * 255.0).round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+    Ok(())
 }

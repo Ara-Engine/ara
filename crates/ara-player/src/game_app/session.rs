@@ -95,6 +95,40 @@ impl App {
                 let mut world = prepared.world.map_runtime(|runtime| {
                     Play::new(runtime, prepared.role, prepared.net.as_ref())
                 })?;
+                world.configure_graphics(
+                    &self.graphics.options,
+                    self.graphics.quality,
+                    self.graphics.ray_tracing,
+                    self.graphics.size.as_deref(),
+                    self.graphics.windowed,
+                )?;
+                world.sync_graphics(Some(&mut self.presenter), self.window.as_mut())?;
+                if self.graphics.save_on_start {
+                    world
+                        .runtime
+                        .play_mut()
+                        .session_mut()
+                        .world_mut()
+                        .resource_mut::<ara_graphics_settings::Service>()
+                        .request(ara_graphics_settings::Request::Save)
+                        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+                    self.graphics.save_on_start = false;
+                }
+                let graphics = world
+                    .runtime
+                    .world()
+                    .resource::<ara_graphics_settings::Service>()
+                    .state();
+                self.settings.quality = graphics.applied.tier(&graphics.capabilities).index();
+                self.settings.resolution = Settings::SIZES
+                    .iter()
+                    .position(|s| *s == [graphics.applied.width, graphics.applied.height])
+                    .unwrap_or(self.settings.resolution);
+                self.settings.window_mode = match graphics.applied.window_mode {
+                    ara_graphics_settings::WindowMode::Windowed => 0,
+                    ara_graphics_settings::WindowMode::Borderless => 1,
+                    ara_graphics_settings::WindowMode::Fullscreen => 2,
+                };
                 world.start(true, prepared.build_ms)?;
                 if let Some(ui) = &world.ui {
                     let (size, scale) = match &self.window {

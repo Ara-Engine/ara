@@ -25,7 +25,8 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara history [--doc] [--by author] [--limit]`, `ara review` | `history.list`, `review.list` | |
 | `ara undo [txn]`, `ara redo` | `history.undo/redo` for `--author` | nothing to undo, conflicts |
 | `ara run [--scene s] [--ticks n\|--duration seconds]` | headless fixed simulation with hash, logs and diagnostics | invalid request or runtime fault |
-| `ara capture [--scene s] [--camera id] [--path png] [--width n] [--height n] [--preset low\|medium\|high\|epic]` | offscreen scene PNG | render failure |
+| `ara capture [--scene s] [--camera id] [--path png] [--width n] [--height n] [--preset low\|medium\|high\|epic]` | offscreen scene PNG; diagnosis: `--without ambient-occlusion|shadows|soft-shadows|temporal-jitter|screen-reflections|reflection-captures|global-illumination|volumetric-fog`, `--reflections`, `--reference [spp] --bounces n` (path-traced ground truth, RT GPUs), `--ev100 v` (locks exposure so renderers compare; without it, scenes with no post-process volume meter automatically and the capture JSON `exposure` is the linear multiplier applied), `--view albedo|normals|depth|roughness-metal|entity-ids|shadow-cascades|wireframe|lit-wireframe|gi-diffuse|overdraw|vertex-color[-red|-green|-blue|-alpha]|decal-coverage|light-complexity|shadow-penumbra` (buffer visualization) | render failure |
+| `ara graphics [get\|set\|apply\|revert\|resetToDefaults\|save\|autoDetect] [--settings @file.json] [--world id] [--player n]` | local player preferences through `play.graphics`; never broadcasts | invalid settings/capability or storage failure |
 | `ara accept [txn] [--entity e] [--all]`, `ara revert [txn] [--entity e]` | `review.accept/revert` | nothing to review |
 | `ara logs [--since] [--code].. [--severity] [--entity] [--subject].. [--origin] [--grep] [--all] [--budget] [--limit]` | `logs`: grouped by code (`--all`: one by one) | |
 | `ara why <question..> [--doc d] [--list]` | `why`: ranked causes, evidence, runnable fixes (`name:Crate not visible`, `ARA1302`, `@meshes/x.glb`, `is the frame slow`) | |
@@ -66,6 +67,10 @@ with ARA1901 and a `Cli ["init", dir]` fix. Scans skip hidden dirs (`.git`,
 
 ## Gotchas
 
+- Captures, Play and imports run in the sibling `ara-player` and `ara-import-worker`.
+  In a source checkout `ara` refuses (`ARA7308`) one older than its sources or missing;
+  build them together: `cargo build -p ara -p ara-player -p ara-import-worker` (same
+  profile). `ara-companion` has the rules and the `ARA_ALLOW_STALE_COMPANIONS=1` escape.
 - Protocol commands each begin and end a session; offline they replay the
   journal, so history, review and undo persist between runs.
 - `ara mcp --root` without a daemon becomes the project daemon. Global `ara mcp`
@@ -107,5 +112,5 @@ activity/install-mcp` manage the user service. Install output is one-time global
 `ara hub register-engine/unregister-engine` register this exact installed build;
 `ara hub shutdown` stops the service without closing user projects.
 `register-engine/unregister-engine --no-start` reuse RPC or lock the registry offline;
-they never spawn a service. `install-mcp` prints the current absolute executable path.
-Claude JSON or Codex TOML. Wire API and UI contract: ../ara-hub-service/AGENTS.md.
+they never spawn a service. `install-mcp` prints `ara_agents::snippet` for this executable:
+Claude/Cursor JSON, Codex TOML or OpenCode JSON. Wire API and UI contract: ../ara-hub-service/AGENTS.md.

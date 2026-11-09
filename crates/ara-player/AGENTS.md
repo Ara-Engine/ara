@@ -4,6 +4,9 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
 `--dedicated --headless` hosts four clients; `--connect IP:PORT` joins. `--bot --evidence DIR` drives headless bots and writes scratch evidence.
 
 ## Command line
+- `--graphics-settings FILE`, `--resolution-scale`, `--frame-rate-cap`, `--vsync`, `--window-mode`, `--monitor`: launch overrides.
+  `play.graphics`/C# share a local service outside gameplay snapshots. Save is explicit; RT changes require restart.
+  See [graphics settings](../../docs/dev/graphics-settings.md) and `tests/graphics.rs`.
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
 [--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
@@ -32,7 +35,6 @@ start API, `_COLD=1` skips copied caches. Surface-attached pools prewarm a 64x64
 presenter before hello and reuse its device at embed; surface-less services allocate no GPU.
 
 ## Modules
-
 - `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling. Windowed UI lays out in window points (SDL pointer units) and renders at the pixel density (2 on Retina); offscreen snapshots use scale 1.
 - `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
@@ -57,7 +59,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
   the one mapping windowed and embedded players share (WASD/arrows Move, Space Jump
   once per press, Left Shift Sprint, right-drag Look; focus loss releases all).
 - `embed.rs`: embedded players (D19): `play.embed {width, height, maxFps?}` before
-  `play.start` → headless presenter + `ExportRing` (3 slots); due frames render, copy,
+  `play.start` → headless presenter (`set_pixel_budget`) + `ExportRing` (3 slots); due frames render, copy,
   fence, announce (`play.frame`). Play entry publishes nothing (local sims hold) until
   `readiness().is_ready()` or 1.5 s (logged; frames unseen, so GI skips its fade). `play.release`, `play.device`,
   `play.resize` (a request answers the surface; a coalesced notice gets `play.surface`).
@@ -90,7 +92,6 @@ presenter before hello and reuse its device at embed; surface-less services allo
   otherwise wait behind the upload. Independent liveness still runs throughout.
 
 ## Semantics
-
 - Patches apply at the next tick boundary. Running: acked after that tick. Paused:
   the player steps exactly one tick to reach it, then acks.
 - Device input and agent `play.input` both go through `Session::inject`, so they are

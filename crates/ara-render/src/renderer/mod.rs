@@ -1,5 +1,6 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
 mod capabilities;
+mod debug;
 mod edit;
 mod frame;
 mod gi;
@@ -8,14 +9,18 @@ mod hash;
 mod lab;
 mod live;
 mod native;
+mod outline;
 mod passes;
 pub mod post;
 mod readback;
 mod readiness;
 mod rt;
+#[path = "../look/reflect/renderer.rs"]
+mod software_reflect;
 mod submission;
 mod targets;
 mod transfer;
+pub(crate) use transfer::upload_image;
 mod upload;
 mod views;
 use crate::{
@@ -27,9 +32,11 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
+pub use debug::{ReferenceTrace, ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};
+pub use outline::Outlines;
 use std::path::{Path, PathBuf};
 pub use views::{ViewId, ViewOutput, ViewRequest};
 
@@ -47,7 +54,10 @@ const MOTION: usize = 10;
 /// Wireframe view modes' edge mask, or the overdraw view's fragment count (R16F,
 /// render size; `ViewMode::wire`, `ViewMode::Overdraw`).
 const WIRE: usize = 11;
-const TARGET_COUNT: usize = 12;
+/// Editor selection outlines' mask: each pixel's outline group, plus 128 where it is
+/// in view (R16F, render size; `outline`).
+const OUTLINE: usize = 12;
+const TARGET_COUNT: usize = 13;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -85,11 +95,17 @@ struct Pipelines {
     /// The gi_diffuse view's deferred lighting, per tier (`ViewMode::GiDiffuse`).
     lighting_gi: Pipeline,
     lighting_high_gi: Pipeline,
+    /// The reflection debug views' deferred lighting, per tier
+    /// ([`RenderDebug::reflections`]).
+    lighting_refl: Pipeline,
+    lighting_high_refl: Pipeline,
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
     /// Draws the wire mask over the display image (`ViewMode::wire`).
     wire_composite: Pipeline,
+    /// Draws the selection outlines over the display image (`outline`).
+    outline_composite: Pipeline,
 }
 
 /// Pre-exposure of the raster HDR target (look.slangh `hdrExposure`): radiance is
@@ -130,6 +146,10 @@ pub struct Renderer {
     frame_number: u32,
     /// A fixed sample offset for every frame (`set_jitter_override`).
     jitter_override: Option<[f32; 2]>,
+    /// Effects a debug view turned off (`set_debug`).
+    debug: RenderDebug,
+    /// The quality last requested (`set_quality`), before `debug` removes effects.
+    requested_quality: Option<crate::look::Quality>,
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
@@ -141,15 +161,116 @@ pub struct Renderer {
     native_pipelines: native::pipelines::Pipelines,
     /// Hybrid ray queries over the native content (High/Epic on RT devices; D29).
     rays: rt::Rays,
+    /// Explicit software secondary transport; absent in the default path.
+    software_reflections: Option<software_reflect::Reflections>,
+    /// Explicit opt-in patch readout; absent on every default renderer.
+    patch_transport: Option<crate::look::transport::solve::ReadoutGpu>,
+    /// Explicit opt-in render-v3 sun page service (`set_sun_pages`); absent on every
+    /// default renderer, where today's virtual shadow maps are the A/B control.
+    sun_pages: Option<crate::look::vsm::sun::SunPages>,
     views: views::Views,
     secondary_active: bool,
     live: Option<live::Live>,
     entity_epoch: u64,
     /// The selected temporal upscaler and Ara TSR's state (primary view only).
     tsr: crate::tsr::Tsr,
+    /// Editor selection outlines (`set_outlines`).
+    outlines: outline::Outlines,
+    /// The host's tag for the next Scene frames (`set_frame_tag`).
+    frame_tag: u64,
 }
 
 impl Renderer {
+    /// Publish the opt-in patch bounce at a completed frame boundary. `None`
+    /// restores the existing probe/screen-GI path. Direct and specular controls
+    /// stay in the same renderer; transport never reads its screen colour.
+    pub fn set_patch_transport(
+        &mut self,
+        transport: Option<&crate::PatchTransport>,
+        scene: &crate::instanced::Scene,
+    ) -> Result<()> {
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "publish patch transport at a completed frame boundary"
+        );
+        match (transport, &mut self.patch_transport) {
+            (Some(transport), Some(gpu)) => gpu.update(&mut self.gpu, transport, scene)?,
+            (Some(transport), None) => {
+                self.patch_transport = Some(crate::look::transport::solve::ReadoutGpu::new(
+                    &mut self.gpu,
+                    &self.artifacts,
+                    transport,
+                    scene,
+                )?);
+            }
+            (None, _) => {
+                if let Some(gpu) = self.patch_transport.take() {
+                    gpu.destroy(&mut self.gpu)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Select the render-v3 sun page service (`look::vsm::sun`, council-v3 3.1/3.5) for
+    /// the virtual shadow maps, or `None` for today's pages (the default and the A/B
+    /// control). It takes effect where `Quality::virtual_shadows` is set (High/Epic) and
+    /// re-keys the map. Call at a completed frame boundary.
+    pub fn set_sun_pages(&mut self, pages: Option<crate::SunPages>) -> Result<()> {
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "select sun pages at a completed frame boundary"
+        );
+        if pages == self.sun_pages {
+            return Ok(());
+        }
+        self.sun_pages = pages;
+        if let Some(old) = self.look.vsm.take() {
+            let settings = old.settings;
+            old.destroy(&mut self.gpu)?;
+            self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
+                &mut self.gpu,
+                settings,
+                self.sun_pages.map(|s| {
+                    (
+                        s,
+                        self.artifacts.as_path(),
+                        self.shader_metadata.content_key.as_str(),
+                    )
+                }),
+            )?);
+        }
+        Ok(())
+    }
+
+    /// The sun page service's counters of the last planned frame (T1 lab `sun_pages` and
+    /// `dynamic_pages` rows; GPU ms come from `timings`: `VSM.Pages`,
+    /// `VSM.Pages.Dynamic`); `None` without the service.
+    pub fn sun_page_counters(&self) -> Option<&crate::SunPageCounters> {
+        self.look.vsm.as_ref()?.sun_counters()
+    }
+
+    /// GPU readout allocation, added to the host transport report for peak residency.
+    pub fn patch_transport_gpu_bytes(&self) -> usize {
+        self.patch_transport.as_ref().map_or(0, |p| p.bytes)
+    }
+
+    /// Lab-only publication of an independent current-geometry solution. This
+    /// does not mutate the capped solver's residual queue, debt or generations.
+    #[cfg(feature = "fidelity-lab")]
+    pub fn set_patch_transport_reference(
+        &mut self,
+        transport: &crate::PatchTransport,
+        scene: &crate::instanced::Scene,
+        values: &[[f32; 3]],
+    ) -> Result<()> {
+        self.set_patch_transport(Some(transport), scene)?;
+        self.patch_transport
+            .as_mut()
+            .expect("reference readout allocated")
+            .reference(&mut self.gpu, transport, scene, values)
+    }
+
     /// Read-only GPU diagnostics and native presentation integration.
     pub fn gpu(&self) -> &GpuDevice {
         &self.gpu
@@ -198,9 +319,10 @@ impl Renderer {
         Self::new_device(scene, size, extensions, cache.into(), true)
     }
     /// Raster bootstrap like `new_raster`, on a device that also enables hardware
-    /// ray queries where the GPU has them (D29): High/Epic then add ray-traced
-    /// reflections (`Quality::ray_queries`) without recreating the device when the
-    /// preset changes. Other GPUs get the same raster-only device as `new_raster`.
+    /// ray queries where the GPU has them (D29), so a quality with
+    /// `Quality::ray_queries` (the ray-tracing opt-in) adds ray-traced reflections
+    /// without recreating the device. Other GPUs get the same raster-only device as
+    /// `new_raster`.
     pub fn new_hybrid(
         scene: Scene,
         size: [u32; 2],
@@ -260,10 +382,13 @@ impl Renderer {
             lighting_high: load("lighting_high")?,
             lighting_gi: load("lighting_gi")?,
             lighting_high_gi: load("lighting_high_gi")?,
+            lighting_refl: load("lighting_refl")?,
+            lighting_high_refl: load("lighting_high_refl")?,
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,
             wire_composite: load("wire_composite")?,
+            outline_composite: load("outline_composite")?,
         };
         let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(
@@ -439,6 +564,34 @@ impl Renderer {
         let value = f32::from_le_bytes(state[..4].try_into()?);
         Ok((value.is_finite() && value > 0.).then_some(value))
     }
+    /// Whether automatic exposure has reached its meter as of the last completed
+    /// frame: within 1% (0.014 EV, invisible) of where it is adapting to. Manual
+    /// exposure is always settled. `None` while a frame that writes the exposure is in
+    /// flight, or before any metered frame. Views that stop redrawing once still
+    /// (the editor Scene) keep rendering until it holds, so they never freeze halfway
+    /// through an adaptation and resume it on the next input.
+    pub fn exposure_settled(&self) -> Option<bool> {
+        let Some(metering) = self.look.look.auto_exposure else {
+            return Some(true);
+        };
+        let state = self.gpu.read(self.look.state).ok()?;
+        let word = |i: usize| -> Option<f32> {
+            Some(f32::from_le_bytes(
+                state.get(i * 4..i * 4 + 4)?.try_into().ok()?,
+            ))
+        };
+        let (applied, previous) = (word(0)?, word(1)?);
+        if !(applied.is_finite() && previous.is_finite() && applied > 0. && previous > 0.) {
+            return None;
+        }
+        // Each frame moves `step` of the way to the target (look-post.slang
+        // exposureMain), so the last move over `step` is how far the target still is.
+        let step = 1. - (-metering.adaptation * crate::look::frame::FRAME_SECONDS).exp();
+        if step <= 0. {
+            return Some(true);
+        }
+        Some(((applied - previous) / step).abs() <= 0.01 * applied)
+    }
     /// Start the next frame's exposure from `multiplier` (a linear exposure, as
     /// `exposure` returns): automatic exposure adapts from it at the look's rate
     /// instead of snapping to its first meter, and history pre-exposes with it.
@@ -463,6 +616,16 @@ impl Renderer {
         self.look.look = look;
         Ok(())
     }
+    /// Sets the local fog volumes rendered from the next frame (Unreal's Local Fog
+    /// Volumes), in priority order: at most [`crate::look::MAX_FOG_VOLUMES`], the first
+    /// kept. Never allocates past the first call.
+    pub fn set_fog_volumes(&mut self, volumes: &[crate::look::FogVolume]) -> Result<()> {
+        self.look.set_fog_volumes(volumes)
+    }
+    /// The local fog volumes rendered (`set_fog_volumes`).
+    pub fn fog_volumes(&self) -> &[crate::look::FogVolume] {
+        &self.look.fog_volumes
+    }
     /// Sets the colour lookup table graded through last (`Grading::lut_contribution`
     /// of it): `(size, texels)`, `size` steps per channel (2 to 32) and `size`³ RGBA8
     /// texels in strip order (red + blue × size across, green down; sRGB in and out),
@@ -482,6 +645,49 @@ impl Renderer {
         self.look.lut_size = size;
         Ok(())
     }
+    /// Replace the light tables `scene::Light::tables` offsets address (photometric
+    /// profiles; word 0 reserved): host words, written in place; the buffer grows only
+    /// when a larger table arrives.
+    pub fn set_light_tables(&mut self, words: &[u32]) -> Result<()> {
+        if (words.len() <= 1 && self.look.light_tables.is_none())
+            || self.look.light_table_words == words
+        {
+            return Ok(());
+        }
+        let fits = self
+            .look
+            .light_tables
+            .is_some_and(|(_, _, capacity)| words.len() <= capacity);
+        if !fits {
+            let capacity = words.len().next_power_of_two().max(4096);
+            let buffer = self.gpu.create_buffer(
+                (capacity * 4) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?;
+            let index = self.gpu.storage_buffer(buffer)?.index;
+            // The superseded buffer stays alive: secondary views copied its handle at
+            // creation, and growth is power-of-two, so few ever exist.
+            self.look.light_tables = Some((buffer, index, capacity));
+        }
+        if let Some((buffer, _, _)) = self.look.light_tables {
+            self.gpu
+                .upload_queued(buffer, bytemuck::cast_slice(words))?;
+        }
+        self.look.light_table_words = words.to_vec();
+        Ok(())
+    }
+    /// The directional light's angular radius in radians (half its source angle), or
+    /// `None` for the look's sky default: it widens the sun's contact-hardened shadows
+    /// (`Look.sunLux.w`) and its disc.
+    pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
+        ensure!(
+            radius.is_none_or(|r| r.is_finite() && (0.0..=0.2).contains(&r)),
+            "a sun radius is 0 to 0.2 radians"
+        );
+        self.look.sun_radius = radius;
+        Ok(())
+    }
     /// The look applied to rendered frames.
     pub fn look(&self) -> &crate::look::Look {
         &self.look.look
@@ -491,6 +697,8 @@ impl Renderer {
     pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
         ara_gpu::cpu_scope!("Raster.set_quality");
         quality.validate()?;
+        self.requested_quality = Some(quality);
+        let quality = self.debug.apply(quality);
         let previous = std::mem::replace(&mut self.look.quality, quality);
         // The preset's upscaler, unless `ARA_UPSCALER` forces one (A/B runs).
         self.tsr
@@ -529,6 +737,13 @@ impl Renderer {
                 self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
                     &mut self.gpu,
                     settings,
+                    self.sun_pages.map(|s| {
+                        (
+                            s,
+                            self.artifacts.as_path(),
+                            self.shader_metadata.content_key.as_str(),
+                        )
+                    }),
                 )?);
             }
         }
@@ -545,6 +760,8 @@ impl Renderer {
             }
         }
         self.look.quality = quality;
+        self.look
+            .retile_screen_probes(&mut self.gpu, previous.screen_gi)?;
         Ok(())
     }
     /// One cached map per cascade (look::cascades) at the quality's budget.
@@ -579,6 +796,20 @@ impl Renderer {
     /// the captures (upscaler studies); live views never set it.
     pub fn set_jitter_override(&mut self, jitter: Option<[f32; 2]>) {
         self.jitter_override = jitter;
+    }
+    /// Turns effects off (or back on) from the next frame, for diagnosis; the
+    /// requested quality is kept and restored when an effect returns.
+    pub fn set_debug(&mut self, debug: RenderDebug) -> Result<()> {
+        if debug == self.debug {
+            return Ok(());
+        }
+        self.debug = debug;
+        let quality = self.requested_quality.unwrap_or(self.look.quality);
+        self.set_quality(quality)
+    }
+    /// The effects a debug view has turned off (`set_debug`).
+    pub fn debug(&self) -> RenderDebug {
+        self.debug
     }
     /// Selects the temporal upscaler from the next frame (`set_quality` applies the
     /// preset's `Quality::upscaler`, or `ARA_UPSCALER` when set). TSR resolves

@@ -141,9 +141,13 @@ impl Rows for VirtualTable {
         }
     }
 }
-/// A row cell's style: its column width and the row height.
+/// A row cell's style: its column width and the row height. Content is centred
+/// vertically without vertical padding: 13 px text has a 19.5 px line box, which
+/// 3 px top/bottom padding in a 22 px row would clip.
 fn cell_style(width: f32, row_height: f32) -> String {
-    format!("width:{width}px; height:{row_height}px; padding:3px; overflow:hidden; font-size:13px")
+    format!(
+        "width:{width}px; height:{row_height}px; padding-left:3px; padding-right:3px; justify-content:center; overflow:hidden; font-size:13px"
+    )
 }
 /// A viewport height and column widths a view can lay out.
 fn valid(viewport: f32, columns: &[f32]) -> bool {

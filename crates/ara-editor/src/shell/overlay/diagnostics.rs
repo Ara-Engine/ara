@@ -13,6 +13,7 @@ use crate::{
 };
 use ara_ui::{paint::Box2, style::Sheet};
 use glam::Vec3;
+pub(in crate::shell::overlay) use projection::clip;
 use serde_json::{Value, json};
 pub(crate) use stats::StatsSample;
 use std::time::Duration;
@@ -42,6 +43,9 @@ struct Flags {
     colliders: bool,
     stats: bool,
     volumes: bool,
+    /// Gizmo types shown (`viewport.gizmoTypes`): post-process volumes, reflection probes.
+    post: bool,
+    probes: bool,
 }
 impl Flags {
     fn read(state: &EditorState) -> Self {
@@ -53,11 +57,14 @@ impl Flags {
                 .unwrap_or(false)
         };
         let visible = !state.game_view && !state.hide_overlays;
+        let gizmos = super::gizmos::Settings::read(state);
         Self {
             bounds: visible && on("viewport.bounds"),
             colliders: visible && on("viewport.colliders"),
             stats: visible && on("viewport.stats"),
-            volumes: visible && !state.hide_gizmos,
+            volumes: visible && !state.hide_gizmos && gizmos.show,
+            post: gizmos.shows("PostProcessVolume"),
+            probes: gizmos.shows("ReflectionProbe"),
         }
     }
 }
@@ -179,6 +186,7 @@ impl Diagnostics {
                     view,
                     state,
                     transforms.as_ref(),
+                    (flags.post, flags.probes),
                 );
             }
             self.geometry_key = Some(GeometryKey {

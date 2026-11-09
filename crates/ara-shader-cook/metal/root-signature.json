@@ -53,7 +53,7 @@
             {
               "BaseShaderRegister": 0,
               "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
-              "NumDescriptors": 64,
+              "NumDescriptors": 128,
               "OffsetInDescriptorsFromTableStart": 0,
               "RangeType": "IRDescriptorRangeTypeUAV",
               "RegisterSpace": 3

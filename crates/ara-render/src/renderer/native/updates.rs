@@ -35,11 +35,19 @@ pub(super) struct Updates {
     skins: Indices,
     casters: Indices,
     unions: Vec<[Vec3; 2]>,
+    /// Per row: the transform before this frame's first rigid move; `None` once a skin
+    /// pose, material or paint change touched the caster.
+    moved_from: Vec<Option<Mat4>>,
     header: Option<[Mat4; 2]>,
     all: bool,
     materials: usize,
     pub caster_all: bool,
     pub caster_bounds: Vec<[Vec3; 2]>,
+    /// `caster_bounds`' rows and their transforms before this frame's rigid moves, in the
+    /// same order (the sun page service's dynamic layer bounds displacement from them,
+    /// look::vsm::sun; `None`: no bound).
+    pub caster_rows: Vec<usize>,
+    pub caster_moved_from: Vec<Option<Mat4>>,
     pub work: FrameWork,
 }
 impl Updates {
@@ -66,21 +74,38 @@ impl Updates {
             skins: Indices::new(count),
             casters: Indices::new(count),
             unions: vec![[Vec3::ZERO; 2]; count],
+            moved_from: vec![None; count],
             header: None,
             all: true,
             materials: 0,
             caster_all: true,
             caster_bounds: Vec::new(),
+            caster_rows: Vec::new(),
+            caster_moved_from: Vec::new(),
             work: FrameWork::default(),
         }
     }
+    /// A caster changed in a way no displacement bounds (a pose, material or paint).
     fn caster(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2]) {
+        self.union(index, old, new);
+        self.moved_from[index] = None;
+    }
+    /// A caster moved rigidly from transform `from` (kept from its first move this frame).
+    fn caster_moved(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2], from: Mat4) {
+        if self.union(index, old, new) {
+            self.moved_from[index] = Some(from);
+        }
+    }
+    /// Joins `old` and `new` into the caster's union; whether it is new this frame.
+    fn union(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2]) -> bool {
         let bounds = [old[0].min(new[0]), old[1].max(new[1])];
         if self.casters.insert(index) {
             self.unions[index] = bounds;
+            true
         } else {
             self.unions[index][0] = self.unions[index][0].min(bounds[0]);
             self.unions[index][1] = self.unions[index][1].max(bounds[1]);
+            false
         }
     }
 }
@@ -121,6 +146,14 @@ impl Native {
                     discovered.geometries.push(i);
                 }
             }
+            for (i, instance) in scene.instances.iter().enumerate() {
+                if let (Some(next), Some(known)) = (&instance.paint, &self.paint_sources[i])
+                    && !std::sync::Arc::ptr_eq(next, known)
+                    && next != known
+                {
+                    discovered.paint.push(i);
+                }
+            }
         }
         let changes = changes.unwrap_or(&discovered);
         // Validate every candidate before touching any published row.
@@ -154,6 +187,19 @@ impl Native {
         for &i in &changes.geometries {
             ensure!(i < scene.geometry.len(), "Invalid native geometry row");
         }
+        if changes.decals {
+            scene.validate_decals()?;
+        }
+        for &i in &changes.paint {
+            let instance = scene.instances.get(i).context("Invalid native paint row")?;
+            self.groups.validate_instance(i, instance)?;
+            ensure!(
+                instance.paint.as_ref().is_some_and(|paint| {
+                    paint.len() == scene.geometry[instance.geometry].vertices.len()
+                }),
+                "Native paint must keep one colour per vertex"
+            );
+        }
         if snapshot || !changes.geometries.is_empty() {
             if let Some(pose) = self.pool.prepare_pose(gpu, scene)? {
                 self.update_gpu_ms = pose.milliseconds;
@@ -165,7 +211,7 @@ impl Native {
                 for n in 0..self.groups.geometry_instances[geometry].len() {
                     let i = self.groups.geometry_instances[geometry][n];
                     self.changes.skins.insert(i);
-                    self.update_bounds(i, scene);
+                    self.update_bounds(i, scene, None);
                 }
             }
         }
@@ -196,23 +242,63 @@ impl Native {
             if self.rows[i].world == scene.instances[i].world {
                 continue;
             }
-            self.rows[i] = row(&scene.instances[i], self.presented[i]);
+            let old = self.rows[i].world;
+            self.rows[i] = row(
+                &scene.instances[i],
+                self.presented[i],
+                self.paint_index,
+                self.paint_offsets[i],
+            );
             self.changes.rows.insert(i);
-            self.update_bounds(i, scene);
+            self.update_bounds(i, scene, Some(old));
+        }
+        for &i in &changes.paint {
+            let paint = scene.instances[i]
+                .paint
+                .as_ref()
+                .expect("validated paint rows carry paint");
+            self.paint_sources[i] = Some(paint.clone());
+            gpu.upload_queued_range(
+                self.paint,
+                u64::from(self.paint_offsets[i]) * 4,
+                bytemuck::cast_slice(paint),
+            )?;
+            use sha2::Digest;
+            let mut digest = sha2::Sha256::new();
+            digest.update(self.paint_digest);
+            digest.update((i as u64).to_le_bytes());
+            digest.update(bytemuck::cast_slice::<u32, u8>(paint));
+            self.paint_digest = digest.finalize().into();
+            self.paint_dirty = true;
+            // Masked casters' alpha test reads the colours.
+            if self.groups.groups[self.groups.instance_group[i]].paint_shadow {
+                self.changes.caster(i, self.bounds[i], self.bounds[i]);
+            }
+        }
+        // Snapshot callers report no rows: their decals rewrite (a few records).
+        if changes.decals || (snapshot && !scene.decals.is_empty()) {
+            scene.validate_decals()?;
+            self.decals.update(gpu, &scene.decals)?;
         }
         if !changes.instances.is_empty()
             || !changes.materials.is_empty()
             || !changes.geometries.is_empty()
+            || !changes.paint.is_empty()
         {
             self.view_revision = self.view_revision.wrapping_add(1);
         }
         Ok(())
     }
 
-    fn update_bounds(&mut self, i: usize, scene: &NativeScene) {
+    /// `moved`: the row's previous transform when only its transform changed (a rigid
+    /// move, whose displacement bound the sun page service reads).
+    fn update_bounds(&mut self, i: usize, scene: &NativeScene, moved: Option<Mat4>) {
         let instance = &scene.instances[i];
         let next = instance.bounds(&scene.geometry[instance.geometry]);
-        self.changes.caster(i, self.bounds[i], next);
+        match moved {
+            Some(old) => self.changes.caster_moved(i, self.bounds[i], next, old),
+            None => self.changes.caster(i, self.bounds[i], next),
+        }
         self.bounds[i] = next;
         self.culling.instance(&self.groups, i, instance.world, next);
         if self.groups.groups[self.groups.instance_group[i]].translucent {
@@ -237,11 +323,11 @@ impl Native {
         // instances are not serialized or visited again on idle frames.
         for i in self.changes.settle.drain(..) {
             self.rows[i].previous = self.presented[i];
-            self.rows[i].meta[1] = 0;
+            self.rows[i].meta[1] &= !1;
             self.changes.rows.insert(i);
         }
         for &i in &self.changes.skins.list {
-            self.rows[i].meta[1] = 1;
+            self.rows[i].meta[1] |= 1;
             self.changes.rows.insert(i);
         }
         self.changes.rows.list.sort_unstable();
@@ -274,8 +360,14 @@ impl Native {
         let budgets_changed = self.culling.configure(quality);
         self.changes.caster_all = self.changes.all || budgets_changed;
         self.changes.caster_bounds.clear();
+        self.changes.caster_rows.clear();
+        self.changes.caster_moved_from.clear();
         for &i in &self.changes.casters.list {
             self.changes.caster_bounds.push(self.changes.unions[i]);
+            self.changes.caster_rows.push(i);
+            self.changes
+                .caster_moved_from
+                .push(self.changes.moved_from[i]);
         }
         self.culling.prepare(
             gpu,
@@ -298,7 +390,7 @@ impl Native {
         for &i in &self.changes.rows.list {
             let row = &self.rows[i];
             self.presented[i] = row.world;
-            if row.previous != row.world || row.meta[1] != 0 {
+            if row.previous != row.world || row.meta[1] & 1 != 0 {
                 self.changes.settle.push(i);
             }
         }
@@ -309,6 +401,8 @@ impl Native {
         self.changes.materials = 0;
         self.previous_vp = Some(camera.projection * camera.view);
         self.material_dirty = false;
+        self.paint_dirty = false;
+        self.decals.dirty = false;
         if advance_geometry {
             self.pool.presented();
         }

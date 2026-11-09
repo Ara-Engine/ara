@@ -40,7 +40,8 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
     assert_eq!(
         fs::read_to_string(blank.join(PROJECT_IMPORT_SETTINGS_FILE)).expect("policy"),
         ProjectImportSettings {
-            preset: CookPreset::Balanced
+            preset: CookPreset::Balanced,
+            ..Default::default()
         }
         .canonical_text()
         .expect("canonical")
@@ -54,6 +55,7 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
     .expect("marker");
     let text = ProjectImportSettings {
         preset: CookPreset::HighQuality,
+        ..Default::default()
     }
     .canonical_text()
     .expect("canonical");

@@ -10,6 +10,7 @@ use ara_texture_stream::NativeResidency;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 
+mod decals;
 mod document;
 mod geometry;
 pub use document::{document_frame, document_frame_selected};
@@ -56,6 +57,7 @@ pub struct Prepared {
 }
 
 struct Builder {
+    foliage_percent: u32,
     scene: Scene,
     textures: NativeResidency,
     texture_keys: BTreeMap<(String, usize), u32>,
@@ -69,10 +71,22 @@ struct Builder {
 /// Prepares one content generation. Repeated static draws share the original
 /// model-space allocation; this operation is not the per-frame motion update.
 pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> Result<Prepared> {
+    prepare_with_foliage(frame, content, config, 100)
+}
+
+/// Prepare residency with a stable subset of authored foliage. Selection never
+/// changes the authoritative scatter or any gameplay/collision instance.
+pub fn prepare_with_foliage(
+    frame: &RenderFrame,
+    content: Content,
+    config: NativeConfig,
+    foliage_percent: u32,
+) -> Result<Prepared> {
     ara_gpu::cpu_scope!("Native.prepare_scene");
     let (size, pixels) = crate::sky(&frame.environment);
     let (direction, lux) = frame.sun.unwrap_or(([0.3, 1.0, 0.2], [0.0; 3]));
     let mut builder = Builder {
+        foliage_percent: foliage_percent.min(100),
         scene: Scene {
             geometry: Vec::new(),
             instances: Vec::new(),
@@ -83,6 +97,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
             sun_lux: glam30::Vec3::from_array(lux),
             environment: pixels,
             environment_size: size,
+            decals: Vec::new(),
         },
         textures: NativeResidency::new(config)?,
         texture_keys: BTreeMap::new(),
@@ -107,6 +122,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
     if let Some(terrain) = &frame.terrain {
         builder.terrain(terrain, &content)?;
     }
+    builder.decals(&frame.decals)?;
     if let Some(environment) = content.environment {
         builder.scene.environment = environment.pixels;
         builder.scene.environment_size = environment.size;
@@ -125,6 +141,12 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
             .map(|(asset, materials)| (asset, materials.into_values().collect()))
             .collect(),
     })
+}
+
+/// A draw's per-instance paint when it covers every vertex of its geometry
+/// (procedural shapes carry one colour per generated vertex; a mismatch draws unpainted).
+pub(super) fn paint(draw: &Draw, vertices: usize) -> Option<Arc<[u32]>> {
+    draw.paint.clone().filter(|paint| paint.len() == vertices)
 }
 
 impl Builder {
@@ -177,6 +199,9 @@ impl Builder {
             material,
             world,
             previous_world: world,
+            casts_shadows: draw.casts_shadows,
+            paint: paint(draw, self.scene.geometry[geometry].vertices.len()),
+            receives_decals: draw.receives_decals,
         });
         Ok(())
     }

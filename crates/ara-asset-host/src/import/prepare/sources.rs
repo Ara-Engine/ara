@@ -40,6 +40,7 @@ pub(in crate::import) fn sources(
     let resolver = prepared_resolver.as_deref().unwrap_or(context.importers);
     let mut result = Vec::new();
     let mut footprint = 0u64;
+    let mut pending: Vec<(String, SourceAsset, ImportInput, Option<Vec<u8>>)> = Vec::new();
     for entry in entries {
         cancel.check()?;
         if entry.kind != EntryKind::File
@@ -192,22 +193,13 @@ pub(in crate::import) fn sources(
         if !cook {
             continue;
         }
-        progress(Progress {
-            phase: Phase::Cooking,
-            received: total,
-            total,
-            entries: result.len(),
-            path: Some(entry.destination.clone()),
-        });
-        let output = context.worker.cook(input.clone(), cancel, &mut |_| {
-            progress(Progress {
-                phase: Phase::Cooking,
-                received: total,
-                total,
-                entries: result.len(),
-                path: Some(entry.destination.clone()),
-            })
-        })?;
+        pending.push((entry.destination.clone(), binding, input, foreign_sidecar));
+    }
+    // Every file of a drop cooks at once (the worker pool admits as many processes as
+    // it allows); outputs are then checked in drop order, as before.
+    let outputs = cook_all(&pending, context.worker, cancel, total, progress);
+    for ((path, binding, input, foreign_sidecar), output) in pending.into_iter().zip(outputs) {
+        let output = output?;
         output.validate()?;
         footprint = output
             .artifacts
@@ -232,7 +224,7 @@ pub(in crate::import) fn sources(
             )?,
         )?;
         result.push(PreparedSource {
-            path: entry.destination.clone(),
+            path,
             binding,
             input,
             output,
@@ -243,6 +235,55 @@ pub(in crate::import) fn sources(
         Sources::Complete(result, footprint)
     } else {
         Sources::Inspected(footprint)
+    })
+}
+
+/// Cooks every pending input on its own thread and returns the outputs in order.
+/// Progress (which file is cooking, how many finished) is reported on this thread.
+fn cook_all(
+    pending: &[(String, SourceAsset, ImportInput, Option<Vec<u8>>)],
+    worker: &dyn SourceWorker,
+    cancel: &Cancellation,
+    total: u64,
+    progress: &mut dyn FnMut(Progress),
+) -> Vec<Result<ImportOutput>> {
+    std::thread::scope(|scope| {
+        // (file index, finished) for every update a cook makes.
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, bool)>();
+        let cooks: Vec<_> = pending
+            .iter()
+            .enumerate()
+            .map(|(index, (_, _, input, _))| {
+                let tx = tx.clone();
+                scope.spawn(move || {
+                    let _ = tx.send((index, false));
+                    let output = worker.cook(input.clone(), cancel, &mut |_| {
+                        let _ = tx.send((index, false));
+                    });
+                    let _ = tx.send((index, true));
+                    output
+                })
+            })
+            .collect();
+        drop(tx);
+        let mut finished = 0;
+        for (index, done) in rx {
+            finished += usize::from(done);
+            progress(Progress {
+                phase: Phase::Cooking,
+                received: total,
+                total,
+                entries: finished,
+                path: Some(pending[index].0.clone()),
+            });
+        }
+        cooks
+            .into_iter()
+            .map(|cook| {
+                cook.join()
+                    .unwrap_or_else(|_| Err(Error::Worker("an import cook thread panicked".into())))
+            })
+            .collect()
     })
 }
 

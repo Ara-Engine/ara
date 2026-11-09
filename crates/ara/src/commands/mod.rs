@@ -6,6 +6,7 @@ mod docs;
 mod edit;
 pub mod fix;
 mod fmt;
+pub mod graphics;
 pub mod headless;
 pub mod hub;
 mod init;

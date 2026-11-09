@@ -157,6 +157,14 @@ pub(crate) fn run(args: Args) -> Result<()> {
         None
     };
     let mut app = App {
+        graphics: crate::graphics::LaunchOverrides {
+            save_on_start: false,
+            options: args.graphics,
+            quality: args.quality,
+            ray_tracing: args.ray_tracing,
+            size: args.size,
+            windowed: args.standalone.windowed,
+        },
         root,
         project: args.game.project.is_some(),
         settings,
@@ -233,6 +241,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
 }
 
 struct App {
+    graphics: crate::graphics::LaunchOverrides,
     root: PathBuf,
     project: bool,
     settings: Settings,
@@ -337,6 +346,7 @@ impl App {
                 world.runtime.input(0, inputs)?;
             }
             world.runtime.advance(elapsed)?;
+            world.sync_graphics(Some(&mut self.presenter), self.window.as_mut())?;
             world.mark();
             if let Some(bot) = &mut self.bot {
                 bot.drive(world)?;

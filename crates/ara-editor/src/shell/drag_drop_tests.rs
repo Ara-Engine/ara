@@ -31,6 +31,9 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     shell.frame().unwrap();
+    // Rows size from the last layout; settle at the maximized width.
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
     let scroll = collection_adapter::id("MeshRenderer.emissiveMaterials", "");
     let scroll_index = shell.ui.find(&scroll).unwrap();
     shell.ui.scroll_into_view(scroll_index).unwrap();
@@ -66,11 +69,18 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
         .unwrap();
     let mut target = None;
     let mut max_pool = 0;
-    for _ in 0..120 {
+    for _ in 0..400 {
         // No more PointerMove events: the held edge itself must keep scrolling.
-        shell.content_drag_over(&editor, 0.1).unwrap();
+        shell.advance_content_drag(0.016).unwrap();
         shell.dispatch(&mut editor).unwrap();
         shell.frame().unwrap();
+        assert!(
+            shell
+                .settle_content_feedback(&mut editor)
+                .unwrap()
+                .paint_nodes
+                > 0
+        );
         assert_eq!(shell.pointer, edge);
         assert_eq!(editor.host.store().revision(), revision);
         max_pool = max_pool.max(
@@ -109,10 +119,91 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
     shell
         .event(InputEvent::PointerMove(target), &mut clipboard)
         .unwrap();
-    shell.content_drag_over(&editor, 0.).unwrap();
+    // Native order: edge scroll advances at nonzero dt, then dispatch and layout
+    // recycle/move the rows. The preview must resolve again against that layout.
+    let before_scroll = shell
+        .ui
+        .scroll_position(shell.ui.find(&scroll).unwrap())
+        .unwrap()[1];
+    shell.advance_content_drag(0.016).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.frame().unwrap();
+    let settled_scroll = shell
+        .ui
+        .scroll_position(shell.ui.find(&scroll).unwrap())
+        .unwrap()[1];
+    assert!(
+        settled_scroll > before_scroll + 2.,
+        "fixture must exercise real same-frame scrolling"
+    );
+    assert!(
+        shell
+            .settle_content_feedback(&mut editor)
+            .unwrap()
+            .paint_nodes
+            > 0
+    );
+    assert_eq!(
+        shell
+            .ui
+            .scroll_position(shell.ui.find(&scroll).unwrap())
+            .unwrap()[1],
+        settled_scroll,
+        "post-layout feedback refresh must not scroll for a second time"
+    );
+    assert_eq!(editor.host.store().revision(), revision);
+    assert_eq!(
+        collection_value(&editor),
+        json!(original),
+        "preview remains read-only"
+    );
+    let Some(Drag::Content(drag)) = &shell.drag else {
+        panic!("retained content capture");
+    };
+    let Some(Feedback::Accept {
+        target: Target::Collection { row, after },
+        indicator,
+        ..
+    }) = drag.session.feedback()
+    else {
+        panic!("accepted typed collection target");
+    };
+    let collection_adapter::Intent::Select(key) = &row.intent else {
+        panic!("stable collection row key");
+    };
+    assert_eq!(key, &ara_ui::collection::ItemKey::Index(101));
+    assert!(
+        !*after,
+        "scroll moved the pointer from after item100 to before item101, the same insertion slot"
+    );
+    let target_node = shell
+        .collection_item_node(&row.field, &row.pointer, key, false)
+        .unwrap();
+    let target_rect = shell.ui.nodes[target_node].rect;
+    assert!(
+        target_rect.contains(shell.pointer[0], shell.pointer[1]),
+        "typed target must be under the current pointer"
+    );
+    let expected_indicator = kit::row_indicator(target_rect, Placement::Before).rect();
+    assert_eq!(
+        indicator.rect(),
+        expected_indicator,
+        "feedback must use the current row geometry"
+    );
+    assert!(shell.ui.display.commands.iter().any(|draw|
+        matches!(draw,Draw::Rect{node,rect,..} if *node==stable_id("content-drop-preview") && *rect==expected_indicator)),
+        "native display must paint that same authoritative insertion indicator");
     let feedback = shell.content_drag_report();
     assert_eq!(feedback["feedback"]["valid"], true, "{feedback}");
-    assert_eq!(feedback["feedback"]["target"]["after"], true);
+    assert_eq!(
+        feedback["source"]["item"],
+        json!(ara_ui::collection::ItemKey::Index(0))
+    );
+    assert_eq!(
+        feedback["feedback"]["target"]["item"],
+        json!(ara_ui::collection::ItemKey::Index(101))
+    );
+    assert_eq!(feedback["feedback"]["target"]["after"], false);
     assert!(shell.drop_at(&mut editor).unwrap());
     shell
         .event(InputEvent::PointerUp(target), &mut clipboard)
@@ -125,8 +216,10 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
     assert_eq!(editor.host.store().revision(), revision + 1);
     editor.action("history.undo", json!({})).unwrap();
     assert_eq!(collection_value(&editor), json!(original));
+    assert_eq!(editor.host.store().revision(), revision + 2);
     editor.action("history.redo", json!({})).unwrap();
     assert_eq!(collection_value(&editor), json!(expected));
+    assert_eq!(editor.host.store().revision(), revision + 3);
 }
 
 #[test]
@@ -725,5 +818,36 @@ fn surface_snap_survives_release_revalidation_and_reference_drop_crosses_surface
     assert_eq!(
         resolved["e_camera01"].record["FollowCamera"]["target"],
         IDS[1]
+    );
+}
+
+#[test]
+fn native_surface_pick_miss_cannot_reuse_previous_contact_at_the_same_pointer() {
+    let (mut editor, mut shell) = open();
+    show_asset(&mut editor, &mut shell);
+    let revision = editor.host.store().revision();
+    let mut clipboard = Clipboard::default();
+    begin_asset(&mut shell, &mut clipboard);
+    let point = centre(shell.viewport().unwrap());
+    move_to(&mut shell, &editor, point, &mut clipboard);
+    shell.content_surface_hit([123., 456., 789.]);
+    assert_eq!(
+        shell.content_drag_report()["surfaceHit"],
+        json!([123., 456., 789.])
+    );
+    // The native owner starts every re-pick with this, even when no draw is hit.
+    shell.clear_content_surface_pick();
+    assert!(shell.refresh_content_drag_feedback(&editor).unwrap());
+    let report = shell.content_drag_report();
+    assert_eq!(report["surfaceHit"], Value::Null);
+    assert_ne!(
+        report["feedback"]["target"]["position"],
+        json!([123., 456., 789.])
+    );
+    assert_eq!(shell.pointer, point);
+    assert_eq!(
+        editor.host.store().revision(),
+        revision,
+        "pick/preview never authors a transaction"
     );
 }

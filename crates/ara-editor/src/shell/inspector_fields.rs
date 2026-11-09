@@ -30,7 +30,14 @@ impl Shell {
             field.provenance,
             Provenance::Authored | Provenance::Override | Provenance::AgentChanged
         );
-        out.push_str(&format!("<panel id='prop-{id}' class='prop-row'>"));
+        // Narrow inspectors put a vector's axis fields on their own line.
+        let stacked = self.stacked_rows
+            && matches!(field.widget, Widget::Vector { color: false, .. })
+            && !(field.value.is_null() && !field.mixed);
+        out.push_str(&format!(
+            "<panel id='prop-{id}' class='prop-row{}'>",
+            if stacked { " prop-row-stacked" } else { "" }
+        ));
         if modified {
             out.push_str(&format!(
                 "<panel id='mark-{id}' class='prop-marker{}' />",
@@ -42,7 +49,9 @@ impl Shell {
             ));
         }
         let unit = field.unit.as_deref().unwrap_or("");
-        let label = if optional {
+        // An optional property's set/unset toggle leads its value column, so labels
+        // stay aligned with every other row.
+        let toggle = optional.then(|| {
             let id = format!("override-{id}");
             let binding = if original.value.is_null()
                 && field.fallback.is_null()
@@ -65,11 +74,8 @@ impl Shell {
             };
             self.bindings
                 .insert(ara_ui::source::stable_id(&id), binding);
-            out.push_str(&format!("<panel id='{id}-gutter' class='override-gutter'><toggle id='{id}' class='override-toggle' checked='{}' label='Override {}' description='{} · Uncheck to leave this property unset' action='Dispatch' /></panel>", !original.value.is_null(), escape(&sentence(&field.label)), escape(&field.doc)));
-            (label - 22.).max(48.)
-        } else {
-            label
-        };
+            format!("<toggle id='{id}' class='override-toggle' checked='{}' label='Override {}' description='{} · Uncheck to leave this property unset' action='Dispatch' />", !original.value.is_null(), escape(&sentence(&field.label)), escape(&field.doc))
+        });
         let probe_resolution = field.path == "ReflectionProbe.captureResolution";
         let scrub = matches!(field.widget, Widget::Number { .. })
             && !probe_resolution
@@ -94,7 +100,10 @@ impl Shell {
         } else {
             format!("{name} · ")
         };
-        out.push_str(&format!("<{tag} id='field-{id}' class='prop-label{}' style='width:{label}px' description='{}{}{}' {}><text id='label-{id}' text='{}' /></{tag}><panel id='value-{id}' class='prop-value'>",if scrub {" scrubbable"} else {""},escape(&full),escape(&field.doc),if scrub {" · Drag to scrub; Shift: fine, Ctrl: coarse; Esc cancels."} else {""},if scrub {"cursor='ew-resize' action='Dispatch'"} else {""},escape(&shown)));
+        out.push_str(&format!("<{tag} id='field-{id}' class='prop-label{}' style='{}' description='{}{}{}' {}><text id='label-{id}' text='{}' /></{tag}><panel id='value-{id}' class='prop-value{}'>",if scrub {" scrubbable"} else {""},if stacked {"width:100%".to_owned()} else {format!("width:{label}px")},escape(&full),escape(&field.doc),if scrub {" · Drag to scrub; Shift: fine, Ctrl: coarse; Esc cancels."} else {""},if scrub {"cursor='ew-resize' action='Dispatch'"} else {""},escape(&shown),if stacked {" prop-value-stacked"} else {""}));
+        if let Some(toggle) = toggle {
+            out.push_str(&toggle);
+        }
         let value_start = out.len();
         match &field.widget {
             // An unset optional vector (`emissiveFactor`): None until set.
@@ -131,13 +140,13 @@ impl Shell {
                         },
                     ),
                 );
-                out.push_str(&format!("<button id='swatch-{id}' class='swatch inspector-swatch' label='Pick colour' description='Open the colour picker' action='Dispatch' />"));
-                // An HDR colour shows its base colour's hex and its intensity in stops.
+                // One long swatch: hex, alpha and HDR intensity live in the picker,
+                // and the tooltip reads them out.
                 let channel = |n: usize| field.value[n].as_f64().unwrap_or(1.);
                 let (base, stops) =
                     super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
-                let hex = if field.mixed {
-                    "—".to_owned()
+                let mut about = if field.mixed {
+                    "Mixed colours".to_owned()
                 } else {
                     format!(
                         "#{}",
@@ -147,29 +156,16 @@ impl Shell {
                         )
                     )
                 };
-                let widget = format!("edit-{id}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&widget),
-                    Binding::Field(field.path.clone(), None),
-                );
-                out.push_str(&format!("<field id='{widget}' class='mono' style='flex-grow:1;flex-basis:0px' text='{}' label='{} hex' description='sRGB hex; alpha keeps its value' action='Dispatch' />",escape(&hex),escape(&field.path)));
+                if !field.mixed && *count > 3 && channel(3) < 1. {
+                    about.push_str(&format!(" · alpha {}", display(&json!(channel(3)))));
+                }
                 if !field.mixed && stops > 0.005 {
-                    out.push_str(&format!("<text id='stops-{id}' class='caption inspector-unit' text='{:+.1} EV' description='Intensity: the colour is its base times 2^{:.2}' />",stops,stops));
+                    about.push_str(&format!(" · {stops:+.1} EV"));
                 }
-                if *count > 3 {
-                    let alpha = format!("edit-{id}-3");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&alpha),
-                        Binding::Field(field.path.clone(), Some(3)),
-                    );
-                    let alpha_value = field
-                        .channels
-                        .get(3)
-                        .filter(|v| !v.is_null())
-                        .map(display)
-                        .unwrap_or_else(|| "—".into());
-                    out.push_str(&format!("<field id='{alpha}' class='number' min='0' max='1' step='0.01' style='width:52px' text='{}' label='Alpha' description='Opacity 0–1' action='Dispatch' />",escape(&alpha_value)));
-                }
+                out.push_str(&format!("<button id='swatch-{id}' class='swatch inspector-swatch' label='Pick colour' description='{} · Click to edit in the colour picker' action='Dispatch' />",escape(&about)));
+                out.push_str(&format!(
+                    "<text id='unit-{id}' class='inspector-unit unit-slot' text='' />"
+                ));
             }
             Widget::Vector {
                 count,
@@ -197,12 +193,11 @@ impl Shell {
                     out.push_str(&format!("<field id='{widget}' class='number vector-input' step='0.01' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
                     out.push_str("</panel>");
                 }
-                if !unit.is_empty() {
-                    out.push_str(&format!(
-                        "<text id='unit-{id}' class='inspector-unit' text='{}' />",
-                        escape(unit)
-                    ));
-                }
+                // Always present, fixed width: rows with and without units align.
+                out.push_str(&format!(
+                    "<text id='unit-{id}' class='inspector-unit unit-slot' text='{}' />",
+                    escape(unit)
+                ));
             }
             Widget::Bool => {
                 let widget = format!("edit-{id}");
@@ -223,6 +218,7 @@ impl Shell {
             }
             Widget::Number { .. } if probe_resolution => self.probe_resolution_select(field, out),
             Widget::Enum { options } => {
+                let start = out.len();
                 self.choice_button(
                     &format!("enum-{id}"),
                     &field.label,
@@ -240,6 +236,14 @@ impl Shell {
                     },
                     out,
                 );
+                // Inspector selects fill the value column, like fields.
+                let markup = out[start..].replacen(
+                    "kit-select-compact'",
+                    "kit-select-compact kit-select-fill'",
+                    1,
+                );
+                out.truncate(start);
+                out.push_str(&markup);
             }
             Widget::Asset { kind } => {
                 let reference = field.value.as_str().unwrap_or("");
@@ -259,7 +263,7 @@ impl Shell {
                 );
                 let preview = source.and_then(|source| self.thumbnail_slots.get(source)).map(|slot| format!("<image id='asset-field-{id}-thumbnail' src='{}' style='width:20px;height:20px' />", crate::asset_tools::thumbnails::image_name(*slot))).unwrap_or_else(|| {
                     if let Some(source) = source.filter(|source| !source.is_empty())
-                        && matches!(source.rsplit('.').next(), Some("material" | "graph" | "png" | "jpg" | "jpeg" | "hdr" | "exr" | "glb" | "gltf" | "fbx")) {
+                        && crate::asset_tools::thumbnails::has_thumbnail(source) {
                             self.thumbnails.request(source);
                         }
                     icons::icon(&format!("asset-field-{id}"), "package")
@@ -314,20 +318,17 @@ impl Shell {
                     ara_ui::source::stable_id(&widget),
                     Binding::Field(field.path.clone(), None),
                 );
-                if let Widget::Number {
-                    min: Some(min),
-                    max: Some(max),
-                    slider: true,
-                    step,
-                } = &field.widget
-                {
-                    let slider = format!("slider-{id}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&slider),
-                        Binding::Field(field.path.clone(), None),
-                    );
-                    out.push_str(&format!("<slider id='{slider}' style='flex-grow:1;flex-basis:0px;min-width:24px' min='{min}' max='{max}' step='{step}' value='{}' label='{}' description='{}' action='Dispatch' />",field.value.as_f64().unwrap_or((*min+*max)*0.5).clamp(*min,*max),escape(&sentence(&field.label)),escape(&field.doc)));
-                }
+                // A bounded number is one slider field: it fills to its value, drags
+                // across its range and types like any number.
+                let slider = matches!(
+                    field.widget,
+                    Widget::Number {
+                        min: Some(_),
+                        max: Some(_),
+                        slider: true,
+                        ..
+                    }
+                );
                 let numeric = matches!(field.widget, Widget::Number { .. });
                 let bounds = if let Widget::Number { min, max, step, .. } = field.widget {
                     format!(
@@ -338,13 +339,12 @@ impl Shell {
                 } else {
                     String::new()
                 };
-                out.push_str(&format!("<field id='{widget}' class='{}' {bounds} style='{}' text='{}' action='Dispatch' description='{}' label='{}' />",if numeric{"number"}else{""},if numeric && matches!(field.widget, Widget::Number{slider:true,..}){"width:64px"}else{"flex-grow:1;flex-basis:0px"},escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path)));
-                if !unit.is_empty() {
-                    out.push_str(&format!(
-                        "<text id='unit-{id}' class='inspector-unit' text='{}' />",
-                        escape(unit)
-                    ));
-                }
+                out.push_str(&format!("<field id='{widget}' class='{}' {bounds} style='{}' text='{}' action='Dispatch' description='{}' label='{}' />",if slider{"number slider"}else if numeric{"number"}else{""},"flex-grow:1;flex-basis:0px;min-width:0px",escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path)));
+                // Always present, fixed width: rows with and without units align.
+                out.push_str(&format!(
+                    "<text id='unit-{id}' class='inspector-unit unit-slot' text='{}' />",
+                    escape(unit)
+                ));
             }
         }
         if inactive && !matches!(field.widget, Widget::Asset { .. } | Widget::Entity) {

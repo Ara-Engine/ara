@@ -404,3 +404,79 @@ fn engine_diagnostics_survive_a_restart_with_their_causes() {
         "{text}"
     );
 }
+
+#[test]
+fn stale_import_failures_and_editor_failures_do_not_outlive_their_cause() {
+    let _g = serial();
+    let mut h = open("import-stale");
+    std::thread::spawn(|| {
+        for asset in ["@ms_crate001", "@as_moved01"] {
+            Diagnostic::error(
+                codes::ASSET_IMPORT_FAILED,
+                format!("`{asset}` did not import"),
+            )
+            .subject(Subject::asset(asset))
+            .emit();
+        }
+    })
+    .join()
+    .expect("worker");
+    let s = begin(&mut h, "human");
+    call(
+        &mut h,
+        ConnId::LOCAL,
+        "diag.report",
+        json!({ "session": s, "engine": true, "diagnostics": [
+            {"code":"ARA4500","severity":"error","message":"a menu action failed"}
+        ]}),
+    );
+    h.tick();
+    let root = h.root().to_path_buf();
+    drop(h);
+    let reopen = |seed| {
+        let config = HostConfig {
+            seed: Some(seed),
+            ..HostConfig::default()
+        };
+        Host::open(Project::open(&root).expect("project"), config).expect("reopen")
+    };
+    let failures = |h: &mut Host, codes: &str| {
+        let s = begin(h, "human");
+        call(
+            h,
+            ConnId::LOCAL,
+            "logs",
+            json!({ "session": s, "codes": [codes], "group": false }),
+        )["total"]
+            .clone()
+    };
+    let mut h = reopen(8);
+    // The moved asset's failure is gone; the live crate's stays until it imports.
+    assert_eq!(failures(&mut h, "ARA2101"), 1);
+    assert_eq!(
+        failures(&mut h, "ARA4500"),
+        0,
+        "editor failures are session-only"
+    );
+    std::thread::spawn(|| {
+        Diagnostic::info(codes::ASSET_IMPORTED, "`ms_crate001` imported")
+            .subject(Subject::asset("@ms_crate001"))
+            .emit();
+    })
+    .join()
+    .expect("worker");
+    h.tick();
+    assert_eq!(
+        failures(&mut h, "ARA2101"),
+        0,
+        "a successful import retires it"
+    );
+    assert_eq!(failures(&mut h, "ARA2105"), 0, "the signal is not a record");
+    h.tick();
+    drop(h);
+    assert_eq!(
+        failures(&mut reopen(9), "ARA2101"),
+        0,
+        "and the file forgets it"
+    );
+}

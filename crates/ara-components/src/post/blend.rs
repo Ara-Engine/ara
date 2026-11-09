@@ -113,6 +113,9 @@ pub struct PostValues {
     pub max_ev100: f32,
     /// Automatic adaptation rate, per second.
     pub adaptation_speed: f32,
+    /// Compensation by metered brightness (`PostOverride::compensation_curve`);
+    /// empty adds none.
+    pub compensation_curve: Vec<super::ExposureKey>,
     /// Display transform.
     pub tone_mapping: ToneMapping,
     /// Bloom energy fraction.
@@ -165,6 +168,7 @@ impl Default for PostValues {
             min_ev100: -2.,
             max_ev100: 16.,
             adaptation_speed: 2.,
+            compensation_curve: Vec::new(),
             tone_mapping: ToneMapping::Filmic,
             bloom: 0.04,
             white_balance: 6500.,
@@ -204,6 +208,10 @@ impl PostValues {
                 mix(&mut self.min_ev100, o.min_ev100, w);
                 mix(&mut self.max_ev100, o.max_ev100, w);
                 mix(&mut self.adaptation_speed, o.adaptation_speed, w);
+                // A curve is picked whole, like the tone mapping: keys do not blend.
+                if let Some(curve) = &o.compensation_curve {
+                    self.compensation_curve.clone_from(curve);
+                }
             }
             PostModule::ToneMapping => pick(&mut self.tone_mapping, o.tone_mapping),
             PostModule::Bloom => mix(&mut self.bloom, o.bloom, w),
@@ -263,6 +271,21 @@ fn pick<T: Copy>(value: &mut T, target: Option<T>) {
 }
 
 impl SceneLook {
+    /// Gives a scene without any post-process volume one global volume with no
+    /// overrides, so it renders with the volume defaults (automatic metering) like a
+    /// scene that placed one, instead of the legacy manual `Environment.exposure`.
+    /// Captures do this by default; a scene that has volumes is left alone.
+    pub fn meter_without_volumes(&mut self) {
+        if self.volumes.is_empty() {
+            self.volumes.push(PostVolume {
+                volume: PostProcessVolume::default(),
+                translation: [0.; 3],
+                rotation: [0., 0., 0., 1.],
+                scale: [1.; 3],
+            });
+        }
+    }
+
     /// Post-processing for a camera at `camera` (a world position in metres): `None`
     /// when the scene has no post-process volume (renderers keep their legacy
     /// exposure), otherwise the defaults with every volume that has weight there

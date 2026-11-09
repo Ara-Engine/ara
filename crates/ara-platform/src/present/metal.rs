@@ -25,6 +25,18 @@ pub struct Present {
 }
 
 impl Present {
+    /// Portable device form of `set_vsync`, used by game settings on either backend.
+    /// # Safety
+    /// The caller retains this presentation's device and window on their owner thread.
+    pub unsafe fn set_vsync_device(
+        &mut self,
+        gpu: &ara_gpu::GpuDevice,
+        window: &Window,
+        enabled: bool,
+    ) -> Result<bool> {
+        // SAFETY: the forwarded contract retains the same native owners.
+        unsafe { self.set_vsync(gpu, window, enabled) }
+    }
     /// Opt-in overlap, as on Vulkan: `present_image` returns once its copy is
     /// committed (GPU-ordered after the device's submitted work), and the next present
     /// waits for it first. Turning it off waits now.
@@ -36,6 +48,21 @@ impl Present {
             .context("presentation retired")?
             .set_frames_in_flight(enabled)?;
         Ok(())
+    }
+    /// As on Vulkan (`displaySyncEnabled`); takes effect at once, so always true.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn set_vsync(
+        &mut self,
+        _gpu: &GpuDevice,
+        _window: &Window,
+        vsync: bool,
+    ) -> Result<bool> {
+        self.presenter
+            .as_mut()
+            .context("presentation retired")?
+            .set_vsync(vsync);
+        Ok(true)
     }
     /// As on Vulkan, but always true: Metal's copies never wait on the display (a
     /// drawable is writable once acquired, and `present_image` bounds that wait and

@@ -775,7 +775,7 @@ impl Verification {
                 "scene-hover",
                 GizmoState {
                     hover: Some(Handle::Axis(0)),
-                    active: None,
+                    ..Default::default()
                 },
             ),
             (
@@ -783,6 +783,7 @@ impl Verification {
                 GizmoState {
                     hover: None,
                     active: Some(Handle::Plane(1)),
+                    ..Default::default()
                 },
             ),
         ] {
@@ -888,6 +889,21 @@ impl Verification {
         }
         // A frame boundary, as in the window loop: the agent turns get their time.
         editor.tick();
+        // Create > Decal (its box gizmo selected) and the Mesh Paint panel, on.
+        shell.run_command(
+            editor,
+            "create.decal",
+            &crate::shell::commands::Target::None,
+        )?;
+        editor.action(
+            "editor.paint",
+            json!({"enabled": true, "tool": "brush", "color": [1, 0.25, 0, 1], "radius": 0.75, "channels": [true, true, true, false]}),
+        )?;
+        editor.action("editor.layout.show", json!({"panel": "mesh-paint"}))?;
+        editor.action("editor.focus", json!({"panel": "mesh-paint"}))?;
+        shell.rebuild(editor)?;
+        self.capture_pair("mesh-paint", editor, shell, gpu, ui, renderer, scene_view)?;
+        editor.action("editor.paint", json!({"enabled": false}))?;
         for (panel, name) in [
             ("console", "console"),
             ("problems", "problems"),

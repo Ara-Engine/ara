@@ -103,15 +103,32 @@ public sealed class DevModuleLoader : IModuleLoader
                 m = new Module((uint)_modules.Count, name, refs, profile) { Dir = dir, Hot = hot, Watch = watch };
                 _modules.Add(m);
             }
-            if (assembly is not null && !watch)
+            // A watched module whose published assembly is newer than its sources starts from
+            // that image; the compile server watches without rebuilding it (Play start used to
+            // recompile every module the editor had just published).
+            var prebuilt = assembly is not null && (!watch || server is not null && Current(dir, assembly));
+            if (prebuilt && watch)
+            {
+                try
+                {
+                    _client ??= new CompileClient(server!, this, checked(++_compileBinding));
+                    _client.Watch(m.Slot, name, dir, hot, refs, profile, watch, initial: false, generation: 1);
+                }
+                catch (Exception e)
+                {
+                    Diag.ReportException(AraCodes.CompileServer, "error", $"compile server: {e.Message}", e);
+                    return 1;
+                }
+            }
+            if (prebuilt)
             {
                 // Modules arrive in dependency order: what this one references is staged (or failed) first.
                 foreach (var dep in refs.Select(Find)) dep?.Ready.Wait(TimeSpan.FromMinutes(3));
                 var report = new ReloadReport { Kind = AbiConst.ReloadInitial, TReceived = Host.Now() };
                 try
                 {
-                    var pdbPath = Path.ChangeExtension(assembly, ".pdb");
-                    Stage([(m, File.ReadAllBytes(assembly), File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : [], 0, hot, report)]);
+                    var pdbPath = Path.ChangeExtension(assembly!, ".pdb");
+                    Stage([(m, File.ReadAllBytes(assembly!), File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : [], 0, hot, report)]);
                 }
                 catch (Exception e)
                 {
@@ -152,6 +169,32 @@ public sealed class DevModuleLoader : IModuleLoader
             else if (m.Failed) rc = 1;
         }
         return rc;
+    }
+
+    /// <summary>
+    /// True when <paramref name="assembly"/> was written after every source the module's
+    /// <c>module.inputs.json</c> lists (no inputs file or an unreadable one: false, compile).
+    /// </summary>
+    static bool Current(string dir, string assembly)
+    {
+        try
+        {
+            var inputs = Path.Combine(dir, "module.inputs.json");
+            if (!File.Exists(inputs) || !File.Exists(assembly)) return false;
+            using var doc = JsonDocument.Parse(File.ReadAllText(inputs));
+            var project = doc.RootElement.GetProperty("project").GetString() ?? "";
+            var built = File.GetLastWriteTimeUtc(assembly);
+            foreach (var source in doc.RootElement.GetProperty("sources").EnumerateArray())
+            {
+                var path = Path.Combine(project, source.GetProperty("storagePath").GetString() ?? "");
+                if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) > built) return false;
+            }
+            return true;
+        }
+        catch (Exception e) when (e is IOException or JsonException or KeyNotFoundException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     Module? Find(uint slot)

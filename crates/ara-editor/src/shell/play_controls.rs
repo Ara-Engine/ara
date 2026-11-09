@@ -311,8 +311,8 @@ impl Shell {
         if !self.play_controls.options {
             return;
         }
-        out.push_str("<scroll id='play-options' style='max-height:260px;flex-basis:auto;flex-shrink:1;min-height:0px'><panel id='play-options-body' style='flex-direction:column;padding:8px;gap:6px'>");
-        out.push_str("<panel id='play-mode-row' class='row' style='gap:8px'><text id='play-mode-label' class='caption' text='Play mode' />");
+        out.push_str("<scroll id='play-options' class='play-options'><panel id='play-options-body' class='play-options-body'><text id='play-options-title' class='form-section' text='Play' />");
+        out.push_str("<panel id='play-mode-row' class='form-row'><text id='play-mode-label' class='form-label' text='Play mode' />");
         self.choice_button(
             "play-options-mode",
             "Play mode",
@@ -338,7 +338,7 @@ impl Shell {
             .get("play.mode")
             .and_then(Value::as_str)
             .unwrap_or("local");
-        out.push_str("</panel><panel id='play-process-row' class='row' style='gap:8px'><text id='play-process-label' class='caption' text='Processes' />");
+        out.push_str("</panel><panel id='play-process-row' class='form-row'><text id='play-process-label' class='form-label' text='Processes' />");
         self.choice_button(
             "play-process-mode",
             "Process mode",
@@ -357,7 +357,7 @@ impl Shell {
             },
             out,
         );
-        out.push_str("</panel><panel id='play-run-options' class='row' style='gap:8px'>");
+        out.push_str("</panel>");
         if mode != "local" {
             self.bindings.insert(
                 ara_ui::source::stable_id("play-client-count"),
@@ -369,13 +369,13 @@ impl Shell {
                 .get("play.clients")
                 .and_then(Value::as_f64)
                 .unwrap_or(1.);
-            out.push_str(&format!("<text id='play-clients-label' class='caption' text='Clients' /><field id='play-client-count' class='number' style='width:76px' min='0' max='16' step='1' text='{clients:.0}' label='Client count' description='Additional client processes. Type a count or drag the grip.' action='Dispatch' />"));
+            out.push_str(&format!("<panel id='play-run-options' class='form-row'><text id='play-clients-label' class='form-label' text='Clients' /><field id='play-client-count' class='number' style='width:76px' min='0' max='16' step='1' text='{clients:.0}' label='Client count' description='Additional client processes. Type a count or drag the grip.' action='Dispatch' /></panel>"));
         }
         self.bindings.insert(
             ara_ui::source::stable_id("play-start-paused"),
             Binding::Setting("play.startPaused".into()),
         );
-        out.push_str(&format!("<toggle id='play-start-paused' checked='{}' label='Start paused' action='Dispatch' /></panel>",editor.state.settings.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false)));
+        out.push_str(&format!("<panel id='play-paused-row' class='form-row'><text id='play-paused-label' class='form-label' text='Start paused' /><toggle id='play-start-paused' checked='{}' label='Start paused' description='Play starts paused on its first frame' action='Dispatch' /></panel>",editor.state.settings.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false)));
         if mode != "local" {
             self.play_network_markup(editor, out);
         }

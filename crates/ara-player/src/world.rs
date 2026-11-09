@@ -7,7 +7,6 @@ use ara_input::{ActionValue, Injection, PlayerId};
 use ara_play::{
     Captured, Input, Mark, Patch, Patched, PlayScene, Sample, Set, Started, Stepped, unhex,
 };
-use ara_render::capture::ViewMode;
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
@@ -29,6 +28,8 @@ use std::{
 };
 mod editor_control;
 mod feedback;
+mod stability;
+mod video;
 pub(crate) use editor_control::PendingControl;
 
 /// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
@@ -46,6 +47,7 @@ pub struct PendingPatch {
 
 /// The assigned world.
 pub struct World<R = Play> {
+    pub(crate) graphics_revision: u64,
     /// Portable native game UI; render state stays with the main-thread surface.
     pub ui: Option<ara_play::GameUi>,
     /// The simulation and presentation source, in its (network) role.
@@ -92,6 +94,7 @@ impl<R> World<R> {
     /// Attach the runtime's main-thread role without copying its ECS or metadata.
     pub(crate) fn map_runtime<T>(self, attach: impl FnOnce(R) -> Result<T>) -> Result<World<T>> {
         Ok(World {
+            graphics_revision: self.graphics_revision,
             ui: self.ui,
             runtime: attach(self.runtime)?,
             fault: self.fault,
@@ -271,7 +274,9 @@ impl World {
             .map(|(k, v)| Ok((k.clone(), Digest(unhex(v).map_err(|e| anyhow!(e))?))))
             .collect::<Result<BTreeMap<_, _>>>()?;
         let cache = PathBuf::from(&scene.cache);
-        let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = Vec::new();
+        let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = vec![Box::new(
+            crate::graphics::Plugin::new(&scene.rendering, id.as_str()),
+        )];
         if net.is_some() {
             plugins.push(Box::new(ara_runtime_net::NetPlugin));
         }
@@ -363,6 +368,7 @@ impl World {
         )?;
         Ok((
             World {
+                graphics_revision: 0,
                 ui: scene.ui,
                 runtime,
                 fault: None,
@@ -796,12 +802,14 @@ impl World {
         frame: &mut RenderFrame,
     ) -> Result<Captured> {
         let mut marks = Vec::new();
+        let mut stability = None;
         if let Some(path) = &params.path {
             let size = [params.width, params.height];
             let marks_wanted = (params.marks > 0).then_some(params.marks);
             let tick = self.runtime.tick();
             let source = self.asset_source()?;
             let world = self.runtime.play_mut().session_mut().world_mut();
+            let mut applied = None;
             // A Camera2d makes it a 2D scene: ara-render2d draws it.
             let capture = if two_d::camera(world).is_some() {
                 let atlases = two_d::atlases(world, source.as_ref())?;
@@ -825,23 +833,58 @@ impl World {
                         .map_err(|error| anyhow!(error))?,
                     );
                 }
-                presenter.context("no presenter")?.capture_with(
-                    frame,
-                    &ara_render::capture::CaptureRequest {
-                        camera: ara_runtime_render::camera(frame)?,
-                        size,
-                        mode: ViewMode::Lit,
-                        deterministic: true,
-                        exposure: frame.environment.exposure,
-                        settle_frames: 16,
-                        tick: frame.tick,
-                        seed: self.seed,
-                        marks: marks_wanted,
-                    },
-                    || self.fidelity_content(frame),
-                )?
+                let presenter = presenter.context("no presenter")?;
+                // Without a post-process volume, meter like the volume defaults do
+                // (the settle frames snap the meter, so captures stay deterministic)
+                // instead of the legacy daylight exposure; `--ev100` still locks over it.
+                frame.look.meter_without_volumes();
+                let request = ara_render::capture::CaptureRequest {
+                    camera: ara_runtime_render::camera(frame)?,
+                    size,
+                    // `ara capture --view` (renderDebug.view); Lit by default.
+                    mode: presenter.debug().view,
+                    deterministic: true,
+                    exposure: frame.environment.exposure,
+                    settle_frames: 16,
+                    tick: frame.tick,
+                    seed: self.seed,
+                    marks: marks_wanted,
+                };
+                let capture =
+                    presenter.capture_with(frame, &request, || self.fidelity_content(frame))?;
+                applied = presenter.applied_exposure(frame);
+                if let Some(frames) = params.stability {
+                    let live = std::path::Path::new(path).with_extension("live.png");
+                    stability = Some(stability::measure(
+                        presenter,
+                        frame,
+                        &request,
+                        frames.clamp(1, 600),
+                        &live,
+                        || self.fidelity_content(frame),
+                    )?);
+                }
+                if let Some(frames) = params.video {
+                    video::record(
+                        presenter,
+                        frame,
+                        &request,
+                        video::Clip {
+                            frames: frames.clamp(1, 3600),
+                            travel: params.video_move.unwrap_or_default(),
+                            yaw: params.video_yaw.unwrap_or_default(),
+                        },
+                        &std::path::Path::new(path).with_extension("video"),
+                        |frame| self.fidelity_content(frame),
+                    )?;
+                }
+                capture
             };
             let mut capture = capture;
+            // The metadata echoes the request's legacy multiplier; report what rendered.
+            if let Some(exposure) = applied {
+                capture.metadata.request.exposure = exposure;
+            }
             if let Some(ui) = &self.ui {
                 crate::game_ui::capture(
                     ui,
@@ -867,6 +910,7 @@ impl World {
             entities: self.entities(),
             image: params.path.clone(),
             marks,
+            stability,
         })
     }
 

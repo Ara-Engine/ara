@@ -12,60 +12,63 @@ pub(crate) fn decorations(
     widget: Option<&Widget>,
     text: Option<&ara_ui_text::Text>,
     focused: bool,
-    numeric: bool,
     rect: Box2,
     origin: [f32; 2],
     node: u64,
     accent: Color,
     list: &mut DisplayList,
 ) {
-    let mut draw = |r: Box2, color: Color| {
-        list.commands.push(Draw::Rect {
-            node,
-            rect: r,
-            color,
-        })
-    };
     match widget {
         Some(Widget::Toggle(checked)) => {
-            // Centred vertically; 28 px toggles keep their 7 px inset.
-            let x = rect.x + rect.w - 22.0;
-            let y = rect.y + ((rect.h - 14.0) * 0.5).max(0.0);
-            draw(
-                Box2 {
-                    x,
-                    y,
-                    w: 14.0,
-                    h: 14.0,
-                },
-                if *checked {
-                    accent
+            // A 14 px rounded check box, centred in toggles up to 28 px wide and
+            // right-aligned (7 px inset) in wider ones. Neutral translucent colours read on both
+            // themes; checked boxes fill with the accent and carry an antialiased tick.
+            let r = Box2 {
+                x: if rect.w <= 28.0 {
+                    rect.x + (rect.w - 14.0) * 0.5
                 } else {
-                    Color(100, 100, 100, 100)
+                    rect.x + rect.w - 21.0
                 },
-            );
+                y: rect.y + ((rect.h - 14.0) * 0.5).max(0.0),
+                w: 14.0,
+                h: 14.0,
+            };
+            let (fill, ring) = if *checked {
+                (accent, Color(255, 255, 255, 46))
+            } else {
+                (Color(128, 128, 128, 34), Color(128, 128, 128, 120))
+            };
+            list.commands.push(Draw::RoundedRect {
+                node,
+                rect: r,
+                radius: 4.0,
+                color: fill,
+            });
+            list.commands.push(Draw::Border {
+                node,
+                rect: r,
+                radius: 4.0,
+                width: 1.0,
+                color: ring,
+            });
             if *checked {
-                // A white check mark stamped from 2 px squares along its two strokes.
-                for (a, b) in [([3.5, 7.0], [6.0, 9.5]), ([6.0, 9.5], [10.5, 4.5])] {
-                    for i in 0..=6 {
-                        let t = i as f32 / 6.0;
-                        draw(
-                            Box2 {
-                                x: x + a[0] + (b[0] - a[0]) * t - 1.0,
-                                y: y + a[1] + (b[1] - a[1]) * t - 1.0,
-                                w: 2.0,
-                                h: 2.0,
-                            },
-                            Color(255, 255, 255, 255),
-                        );
-                    }
+                for (a, b) in [([3.6, 7.2], [6.0, 9.6]), ([6.0, 9.6], [10.6, 4.6])] {
+                    list.commands.push(Draw::Line {
+                        node,
+                        from: [r.x + a[0], r.y + a[1]],
+                        to: [r.x + b[0], r.y + b[1]],
+                        width: 1.8,
+                        color: Color(255, 255, 255, 255),
+                    });
                 }
             }
         }
         Some(Widget::Slider {
             value, min, max, ..
         }) => {
-            draw(
+            fill(
+                list,
+                node,
                 Box2 {
                     x: rect.x + 6.0,
                     y: rect.y + rect.h / 2.0 - 2.0,
@@ -84,7 +87,9 @@ pub(crate) fn decorations(
                     Cursor::from_byte_index(&text.layout, r.end, Affinity::Upstream),
                 );
                 selection.geometry_with(&text.layout, |b, _| {
-                    draw(
+                    fill(
+                        list,
+                        node,
                         Box2 {
                             x: origin[0] + b.x0 as f32,
                             y: origin[1]
@@ -109,7 +114,9 @@ pub(crate) fn decorations(
                     Affinity::Downstream,
                 )
                 .geometry(&text.layout, 1.0);
-                draw(
+                fill(
+                    list,
+                    node,
                     Box2 {
                         x: origin[0] + c.x0 as f32,
                         y: origin[1] + c.y0 as f32,
@@ -122,27 +129,9 @@ pub(crate) fn decorations(
         }
         _ => {}
     }
-    if numeric {
-        let color = Color(accent.0, accent.1, accent.2, 150);
-        for offset in [-3., 0., 3.] {
-            draw(
-                Box2 {
-                    x: rect.x + rect.w - 9.,
-                    y: rect.y + rect.h * 0.5 + offset,
-                    w: 2.,
-                    h: 1.,
-                },
-                color,
-            );
-            draw(
-                Box2 {
-                    x: rect.x + rect.w - 5.,
-                    y: rect.y + rect.h * 0.5 + offset,
-                    w: 2.,
-                    h: 1.,
-                },
-                color,
-            );
-        }
-    }
+}
+
+/// Push one solid rectangle for `node`.
+fn fill(list: &mut DisplayList, node: u64, rect: Box2, color: Color) {
+    list.commands.push(Draw::Rect { node, rect, color });
 }

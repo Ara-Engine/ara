@@ -119,6 +119,18 @@ impl Builtins {
             .collect();
         sources.insert(texture("brand-hub"), Source::Brand(HUB_ICON));
         sources.insert(texture("brand-engine"), Source::Brand(ENGINE_ICON));
+        // Agent client marks (`ara-agents`): Claude keeps its brand colour; the
+        // monochrome marks are tinted like Lucide icons.
+        for client in ara_agents::Client::ALL {
+            let (src, source) = match client {
+                ara_agents::Client::Claude => ("brand-claude".into(), Source::Brand(client.logo())),
+                other => (
+                    format!("icon-agent-{}", other.id()),
+                    Source::Icon(other.logo()),
+                ),
+            };
+            sources.insert(texture(&src), source);
+        }
         sources.insert(texture("template-starter"), Source::Starter);
         Self {
             sources,
@@ -192,7 +204,7 @@ mod tests {
     #[test]
     fn first_frame_prepares_only_visible_assets_and_later_pages_keep_their_images() {
         let mut hub = Hub::new(Prefs::default(), "target/hub-assets-tests".into(), None);
-        let mut app = App::new([1440., 900.], Vec::new()).expect("app");
+        let mut app = App::new([1440., 900.]).expect("app");
         let mut assets = Builtins::new(1.);
         let mut renderer = Renderer::default();
         app.rebuild(&mut hub, crate::capture::NOW)

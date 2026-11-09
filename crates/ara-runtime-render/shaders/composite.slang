@@ -9,7 +9,7 @@ ConstantBuffer<Root> root : register(b0,space0);
 #endif
 BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[] : register(u0,space2);
-BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
+BIND(3) RWTexture2D<float4> images[128] : register(u0,space3);
 // Landscape publishes gamma-2.2 display color. Undo its ACES fitted curve and its
 // manual exposure, then pre-expose like the scene HDR (ara_render::HdrExposure:
 // the exposure state's applied multiplier, plus one in `exposureState`; without

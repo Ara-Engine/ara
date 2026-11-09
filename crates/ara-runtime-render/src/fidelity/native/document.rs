@@ -109,6 +109,22 @@ pub fn document_frame_selected(
             })?;
             entity.insert(renderer);
         }
+        insert::<ara_runtime::paint::VertexPaint>(&mut entity, &row.record, "VertexPaint")?;
+        if let Some(value) = row.record.get("Decal") {
+            let decal: ara_runtime::decal::Decal = serde_json::from_value(value.to_owned())
+                .with_context(|| format!("{address}.Decal"))?;
+            if let Some(reference) = &decal.material {
+                let id = ara_runtime::assets::asset_id(reference)?;
+                if library.materials.get(id).is_none() {
+                    // A missing or failing decal material draws nothing (the
+                    // component remains); the material library reports it.
+                    let _ = when_published(source, |source| {
+                        Ok(library.materials.load(workspace, source, id)?)
+                    });
+                }
+            }
+            entity.insert(decal);
+        }
     }
     world.insert_resource(std::mem::take(library));
     let result = (|| {
