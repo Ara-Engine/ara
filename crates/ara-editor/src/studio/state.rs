@@ -209,6 +209,8 @@ pub struct Local {
     pub rename: Option<(String, String)>,
     /// Inspector components folded shut, by component name.
     pub folded: std::collections::BTreeSet<String>,
+    /// Compound Inspector fields (lists, maps, structs) folded open, by field path.
+    pub unfolded: std::collections::BTreeSet<String>,
     /// The field being typed into, and its draft text.
     pub editing: Option<(String, String)>,
     /// The Scene view's renderer status.

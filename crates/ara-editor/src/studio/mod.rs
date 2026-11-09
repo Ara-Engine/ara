@@ -17,6 +17,7 @@ mod chrome;
 mod commands;
 mod components;
 mod compositor;
+mod compound;
 mod create;
 mod dock;
 mod game;

@@ -187,6 +187,43 @@ fn a_reference_field_searches_and_picks_an_entity() {
 }
 
 #[test]
+fn a_list_field_adds_edits_and_removes_elements_in_place() {
+    let mut rt = open();
+    settle(&mut rt);
+    let overrides = |rt: &Runtime<Studio>| {
+        rt.state().resolved["e_box"].record["MeshRenderer"]["materialOverrides"].clone()
+    };
+    press(&mut rt, "compound/MeshRenderer.materialOverrides/add");
+    assert_eq!(
+        overrides(&rt),
+        json!([{"primitive": 0, "material": null}]),
+        "Add appends a default element"
+    );
+    assert!(
+        rt.find("compound/MeshRenderer.materialOverrides#/0")
+            .is_some(),
+        "and unfolds the list"
+    );
+    let field = "compound/MeshRenderer.materialOverrides#/0/primitive/value";
+    press(&mut rt, field);
+    rt.type_text("2");
+    rt.key(0x0D);
+    settle(&mut rt);
+    assert_eq!(
+        overrides(&rt)[0]["primitive"],
+        json!(2),
+        "a nested number types in"
+    );
+    assert!(
+        rt.find("field/MeshRenderer.materialOverrides#/0/material")
+            .is_some(),
+        "a nested asset is an object field"
+    );
+    press(&mut rt, "compound/MeshRenderer.materialOverrides#/0/remove");
+    assert_eq!(overrides(&rt), json!([]), "remove takes it out");
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

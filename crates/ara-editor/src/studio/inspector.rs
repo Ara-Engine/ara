@@ -187,6 +187,9 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
         let mut body = col().pad_x(6.0).pad_y(3.0).gap(1.0);
         for f in fields {
             body = body.child(field_row(s, f));
+            if let Widget::Compound { ty, .. } = &f.widget {
+                body = body.children(super::compound::rows(s, f, ty));
+            }
         }
         out = out.child(body);
     }
@@ -668,12 +671,12 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
         Widget::Asset { .. } | Widget::Entity if !f.read_only => {
             super::references::field(s, f, commit)
         }
-        Widget::Asset { .. } | Widget::Entity | Widget::Compound { .. } => {
+        Widget::Compound { ty, .. } => super::compound::head(s, f, ty),
+        // Read-only references show what they point at.
+        Widget::Asset { .. } | Widget::Entity => {
             let shown = match &f.value {
                 Value::String(s) => s.rsplit('/').next().unwrap_or(s).to_owned(),
                 Value::Null => "None".to_owned(),
-                Value::Array(a) => format!("{} items", a.len()),
-                Value::Object(o) => format!("{} fields", o.len()),
                 other => other.to_string(),
             };
             row()
