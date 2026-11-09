@@ -1,0 +1,645 @@
+{
+  "date": "2026-11-09",
+  "scope": "Incomplete compiler-only timing campaign; all clocks rejected. Retained for audit, never a speed claim.",
+  "baseline_source_commit": "1e04fe5dd9d04ede28592597dace9c0c06a15f9a",
+  "current_source_commit": "24b78830c4dd50369b0ec083ba88fbb538a0e8fc",
+  "handoff_sha256": "c30441412175551edffd88dea2963be045e34b5b45b5098a3f1da19cc712cb20",
+  "sensor_identity_read_after_execution": {
+    "/sys/class/hwmon/hwmon2/name": "k10temp",
+    "scope": "Read after the completed campaign; not an additional observation during timing."
+  },
+  "raw_handoff": {
+    "status": "failed",
+    "exit": 1,
+    "timings_accepted": false,
+    "invocations": 1,
+    "cpu_slot_returned": true,
+    "completed_cells": 4,
+    "started_cells": 5,
+    "planned_cells": 12,
+    "completed_total_requests": 111,
+    "completed_measured_requests": 86,
+    "planned_total_requests": 300,
+    "planned_measured_requests": 240,
+    "revision_archives": 111,
+    "metadata_jobs_executed": 0,
+    "parity_batch_executed": false,
+    "freeze_before_after_equal": true,
+    "final_failure": null,
+    "first_hardware_failure": {
+      "cell": "all/0/baseline",
+      "path": "/sys/class/hwmon/hwmon2/temp1_input",
+      "value_millicelsius": 80000,
+      "cycle": 48,
+      "begin_ns": 5327768100552888,
+      "end_ns": 5327768100614131,
+      "reason": "temperature >=80C"
+    },
+    "propagated_campaign_failure": "Traceback (most recent call last):\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 688, in run\n    raise failure\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 630, in run\n    sampler.check_hardware()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 273, in check_hardware\n    require(not problems, repr(problems))\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 27, in require\n    raise RuntimeError(message)\nRuntimeError: ['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\n",
+    "cells": [
+      {
+        "case": "full",
+        "slot": 0,
+        "arm": "baseline",
+        "requests": 25,
+        "measured": 20,
+        "raw_ms": [
+          1101.378385,
+          1107.298617,
+          1087.464558,
+          1079.689729,
+          1115.390692,
+          1095.949958,
+          1085.637841,
+          1078.914449,
+          1086.886523,
+          1098.148962,
+          1103.141284,
+          1100.302612,
+          1092.702063,
+          1093.212343,
+          1101.381912,
+          1116.053344,
+          1096.692999,
+          1099.390781,
+          1097.315228,
+          1121.99201
+        ],
+        "p50_ms": 1097.7320949999998,
+        "p95_nearest_rank_ms": 1116.053344,
+        "statistics_complete": true,
+        "cold_first_ms": 3605.921507,
+        "wait4_peak_rss_bytes": 296640512,
+        "child_exit": 0,
+        "cell_admitted": true,
+        "timings_accepted": false,
+        "preflight": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "telemetry": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "foreign_cpu": {
+          "aggregate_bound": {
+            "aggregate_nonidle_ticks": 11577,
+            "interior_owned_ticks_lower_bound": 11536,
+            "quantization_margin_ticks": 10,
+            "foreign_upper_ticks": 51,
+            "foreign_upper_fraction": 0.001935430020620541,
+            "source": "https://docs.kernel.org/filesystems/proc.html#miscellaneous-kernel-statistics-in-proc-stat"
+          },
+          "foreign_ticks": 77,
+          "hz": 100,
+          "fraction": 0.0029221198350545424,
+          "threshold": 0.02,
+          "measured_seconds": 21.958944289999998,
+          "capacity_cpu_seconds": 263.50733147999995,
+          "cell_observed_seconds": 35.80554576,
+          "max_gap_seconds": 0.078149841,
+          "errors": [],
+          "admitted": true,
+          "quantization_margin_ticks": 784,
+          "upper_fraction": 0.03267461270106442,
+          "tick_seconds": 0.01,
+          "quantization": "per-PID bound retained; admission additionally requires independent aggregate non-idle bound with ten-tick margin",
+          "limitations": [
+            "Tasks born AND exited between observations are invisible.",
+            "Observed foreign exits have unknown terminal CPU and reject.",
+            "All host CPU counted, including CPUs outside 0..11."
+          ]
+        },
+        "hardware": {
+          "initial_ns": 5327366219469540,
+          "initial_deadline_ns": 5327368185393591,
+          "paths": [
+            "/sys/class/hwmon/hwmon0/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp2_input",
+            "/sys/class/hwmon/hwmon1/temp3_input",
+            "/sys/class/hwmon/hwmon2/temp1_input",
+            "/sys/class/hwmon/hwmon3/temp1_input",
+            "/sys/class/hwmon/hwmon4/temp1_input",
+            "/sys/class/hwmon/hwmon5/temp1_input",
+            "/sys/class/hwmon/hwmon6/temp1_input",
+            "/sys/class/hwmon/hwmon7/temp1_input",
+            "/sys/class/hwmon/hwmon8/temp1_input",
+            "/sys/class/thermal/thermal_zone0/temp"
+          ],
+          "completed_cycles": 36,
+          "eof": {
+            "fast": true,
+            "hardware": true
+          },
+          "errors": [],
+          "raw_receipts": "hardware.jsonl",
+          "limitation": "Only a complete unchanged empty category is unavailable AMD telemetry; no cool-host claim.",
+          "temperature_available": true,
+          "throttle_available": false
+        },
+        "failures": {},
+        "cleanup_errors": []
+      },
+      {
+        "case": "full",
+        "slot": 1,
+        "arm": "candidate",
+        "requests": 25,
+        "measured": 20,
+        "raw_ms": [
+          418.484037,
+          423.925347,
+          433.942741,
+          412.123815,
+          434.70162,
+          413.780689,
+          415.61582,
+          427.767098,
+          404.977863,
+          425.242605,
+          431.820088,
+          421.470292,
+          423.234243,
+          405.622151,
+          414.040117,
+          423.602051,
+          419.001892,
+          407.248669,
+          445.282472,
+          419.323004
+        ],
+        "p50_ms": 420.396648,
+        "p95_nearest_rank_ms": 434.70162,
+        "statistics_complete": true,
+        "cold_first_ms": 2538.172883,
+        "wait4_peak_rss_bytes": 473116672,
+        "child_exit": 0,
+        "cell_admitted": true,
+        "timings_accepted": false,
+        "preflight": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "telemetry": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "foreign_cpu": {
+          "aggregate_bound": {
+            "aggregate_nonidle_ticks": 8543,
+            "interior_owned_ticks_lower_bound": 8520,
+            "quantization_margin_ticks": 10,
+            "foreign_upper_ticks": 33,
+            "foreign_upper_fraction": 0.0032655652877916666,
+            "source": "https://docs.kernel.org/filesystems/proc.html#miscellaneous-kernel-statistics-in-proc-stat"
+          },
+          "foreign_ticks": 65,
+          "hz": 100,
+          "fraction": 0.006432174051710858,
+          "threshold": 0.02,
+          "measured_seconds": 8.421206614,
+          "capacity_cpu_seconds": 101.05447936800002,
+          "cell_observed_seconds": 17.365060891,
+          "max_gap_seconds": 0.085114342,
+          "errors": [],
+          "admitted": true,
+          "quantization_margin_ticks": 784,
+          "upper_fraction": 0.08401408876773106,
+          "tick_seconds": 0.01,
+          "quantization": "per-PID bound retained; admission additionally requires independent aggregate non-idle bound with ten-tick margin",
+          "limitations": [
+            "Tasks born AND exited between observations are invisible.",
+            "Observed foreign exits have unknown terminal CPU and reject.",
+            "All host CPU counted, including CPUs outside 0..11."
+          ]
+        },
+        "hardware": {
+          "initial_ns": 5327464138697566,
+          "initial_deadline_ns": 5327466104653486,
+          "paths": [
+            "/sys/class/hwmon/hwmon0/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp2_input",
+            "/sys/class/hwmon/hwmon1/temp3_input",
+            "/sys/class/hwmon/hwmon2/temp1_input",
+            "/sys/class/hwmon/hwmon3/temp1_input",
+            "/sys/class/hwmon/hwmon4/temp1_input",
+            "/sys/class/hwmon/hwmon5/temp1_input",
+            "/sys/class/hwmon/hwmon6/temp1_input",
+            "/sys/class/hwmon/hwmon7/temp1_input",
+            "/sys/class/hwmon/hwmon8/temp1_input",
+            "/sys/class/thermal/thermal_zone0/temp"
+          ],
+          "completed_cycles": 18,
+          "eof": {
+            "fast": true,
+            "hardware": true
+          },
+          "errors": [],
+          "raw_receipts": "hardware.jsonl",
+          "limitation": "Only a complete unchanged empty category is unavailable AMD telemetry; no cool-host claim.",
+          "temperature_available": true,
+          "throttle_available": false
+        },
+        "failures": {},
+        "cleanup_errors": []
+      },
+      {
+        "case": "full",
+        "slot": 2,
+        "arm": "candidate",
+        "requests": 25,
+        "measured": 20,
+        "raw_ms": [
+          399.356472,
+          412.015935,
+          410.833216,
+          405.481601,
+          400.360873,
+          408.765834,
+          408.486921,
+          432.129389,
+          417.713316,
+          405.467666,
+          419.377945,
+          402.868025,
+          427.737263,
+          398.9431,
+          424.750728,
+          402.058372,
+          408.047591,
+          407.752768,
+          420.683281,
+          423.318378
+        ],
+        "p50_ms": 408.6263775,
+        "p95_nearest_rank_ms": 427.737263,
+        "statistics_complete": true,
+        "cold_first_ms": 2531.885328,
+        "wait4_peak_rss_bytes": 473116672,
+        "child_exit": 0,
+        "cell_admitted": false,
+        "timings_accepted": false,
+        "preflight": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "telemetry": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "foreign_cpu": {
+          "aggregate_bound": {
+            "aggregate_nonidle_ticks": 8447,
+            "interior_owned_ticks_lower_bound": 8466,
+            "quantization_margin_ticks": 10,
+            "foreign_upper_ticks": 10,
+            "foreign_upper_fraction": 0.00101179976991432,
+            "source": "https://docs.kernel.org/filesystems/proc.html#miscellaneous-kernel-statistics-in-proc-stat"
+          },
+          "foreign_ticks": 31,
+          "hz": 100,
+          "fraction": 0.003136579286734392,
+          "threshold": 0.02,
+          "measured_seconds": 8.236148674,
+          "capacity_cpu_seconds": 98.83378408800002,
+          "cell_observed_seconds": 17.142539569,
+          "max_gap_seconds": 0.078200249,
+          "errors": [
+            {
+              "unknown_exit_lifetime": "4010970:532620639",
+              "last_observed_ticks": 0
+            },
+            {
+              "unknown_exit_lifetime": "4016955:532691249",
+              "last_observed_ticks": 0
+            },
+            {
+              "unknown_exit_lifetime": "4006206:532586835",
+              "last_observed_ticks": 0
+            }
+          ],
+          "admitted": false,
+          "quantization_margin_ticks": 784,
+          "upper_fraction": 0.08246168124801709,
+          "tick_seconds": 0.01,
+          "quantization": "per-PID bound retained; admission additionally requires independent aggregate non-idle bound with ten-tick margin",
+          "limitations": [
+            "Tasks born AND exited between observations are invisible.",
+            "Observed foreign exits have unknown terminal CPU and reject.",
+            "All host CPU counted, including CPUs outside 0..11."
+          ]
+        },
+        "hardware": {
+          "initial_ns": 5327543487127745,
+          "initial_deadline_ns": 5327545453690894,
+          "paths": [
+            "/sys/class/hwmon/hwmon0/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp2_input",
+            "/sys/class/hwmon/hwmon1/temp3_input",
+            "/sys/class/hwmon/hwmon2/temp1_input",
+            "/sys/class/hwmon/hwmon3/temp1_input",
+            "/sys/class/hwmon/hwmon4/temp1_input",
+            "/sys/class/hwmon/hwmon5/temp1_input",
+            "/sys/class/hwmon/hwmon6/temp1_input",
+            "/sys/class/hwmon/hwmon7/temp1_input",
+            "/sys/class/hwmon/hwmon8/temp1_input",
+            "/sys/class/thermal/thermal_zone0/temp"
+          ],
+          "completed_cycles": 18,
+          "eof": {
+            "fast": true,
+            "hardware": true
+          },
+          "errors": [],
+          "raw_receipts": "hardware.jsonl",
+          "limitation": "Only a complete unchanged empty category is unavailable AMD telemetry; no cool-host claim.",
+          "temperature_available": true,
+          "throttle_available": false
+        },
+        "failures": {},
+        "cleanup_errors": []
+      },
+      {
+        "case": "full",
+        "slot": 3,
+        "arm": "baseline",
+        "requests": 25,
+        "measured": 20,
+        "raw_ms": [
+          1092.64122,
+          1105.405237,
+          1097.738817,
+          1108.287359,
+          1114.944319,
+          1098.363467,
+          1106.451295,
+          1124.433269,
+          1110.957601,
+          1122.417825,
+          1102.932378,
+          1116.924369,
+          1108.579528,
+          1111.554732,
+          1121.243931,
+          1106.421991,
+          1091.822311,
+          1097.967708,
+          1101.726597,
+          1104.333702
+        ],
+        "p50_ms": 1106.436643,
+        "p95_nearest_rank_ms": 1122.417825,
+        "statistics_complete": true,
+        "cold_first_ms": 3593.376482,
+        "wait4_peak_rss_bytes": 473116672,
+        "child_exit": 0,
+        "cell_admitted": false,
+        "timings_accepted": false,
+        "preflight": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "telemetry": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "foreign_cpu": {
+          "aggregate_bound": {
+            "aggregate_nonidle_ticks": 11634,
+            "interior_owned_ticks_lower_bound": 11538,
+            "quantization_margin_ticks": 10,
+            "foreign_upper_ticks": 106,
+            "foreign_upper_fraction": 0.003988834696679041,
+            "source": "https://docs.kernel.org/filesystems/proc.html#miscellaneous-kernel-statistics-in-proc-stat"
+          },
+          "foreign_ticks": 90,
+          "hz": 100,
+          "fraction": 0.003386746440576544,
+          "threshold": 0.02,
+          "measured_seconds": 22.145147656000002,
+          "capacity_cpu_seconds": 265.741771872,
+          "cell_observed_seconds": 35.26303358,
+          "max_gap_seconds": 0.080804058,
+          "errors": [
+            {
+              "unknown_exit_lifetime": "4021869:532765062",
+              "last_observed_ticks": 0
+            },
+            {
+              "unknown_exit_lifetime": "3956299:531833459",
+              "last_observed_ticks": 26
+            }
+          ],
+          "admitted": false,
+          "quantization_margin_ticks": 768,
+          "upper_fraction": 0.03228698273349639,
+          "tick_seconds": 0.01,
+          "quantization": "per-PID bound retained; admission additionally requires independent aggregate non-idle bound with ten-tick margin",
+          "limitations": [
+            "Tasks born AND exited between observations are invisible.",
+            "Observed foreign exits have unknown terminal CPU and reject.",
+            "All host CPU counted, including CPUs outside 0..11."
+          ]
+        },
+        "hardware": {
+          "initial_ns": 5327622605698485,
+          "initial_deadline_ns": 5327624567942803,
+          "paths": [
+            "/sys/class/hwmon/hwmon0/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp2_input",
+            "/sys/class/hwmon/hwmon1/temp3_input",
+            "/sys/class/hwmon/hwmon2/temp1_input",
+            "/sys/class/hwmon/hwmon3/temp1_input",
+            "/sys/class/hwmon/hwmon4/temp1_input",
+            "/sys/class/hwmon/hwmon5/temp1_input",
+            "/sys/class/hwmon/hwmon6/temp1_input",
+            "/sys/class/hwmon/hwmon7/temp1_input",
+            "/sys/class/hwmon/hwmon8/temp1_input",
+            "/sys/class/thermal/thermal_zone0/temp"
+          ],
+          "completed_cycles": 36,
+          "eof": {
+            "fast": true,
+            "hardware": true
+          },
+          "errors": [],
+          "raw_receipts": "hardware.jsonl",
+          "limitation": "Only a complete unchanged empty category is unavailable AMD telemetry; no cool-host claim.",
+          "temperature_available": true,
+          "throttle_available": false
+        },
+        "failures": {},
+        "cleanup_errors": []
+      },
+      {
+        "case": "all",
+        "slot": 0,
+        "arm": "baseline",
+        "requests": 11,
+        "measured": 6,
+        "raw_ms": [
+          3331.28146,
+          3280.767162,
+          3298.203802,
+          3285.432692,
+          3341.64371,
+          3355.987568
+        ],
+        "p50_ms": 3314.742631,
+        "p95_nearest_rank_ms": 3355.987568,
+        "statistics_complete": false,
+        "cold_first_ms": 6048.155568,
+        "wait4_peak_rss_bytes": 488046592,
+        "child_exit": -9,
+        "cell_admitted": false,
+        "timings_accepted": false,
+        "preflight": {
+          "errors": [],
+          "available": {
+            "temperature": false,
+            "throttle": false
+          },
+          "limitation": "Missing AMD thermal/throttle telemetry accepted as unavailable; no cool-host claim.",
+          "compile_cpu_psi": "context only; not foreign CPU admission"
+        },
+        "telemetry": null,
+        "foreign_cpu": {},
+        "hardware": {
+          "initial_ns": 5327720055483420,
+          "initial_deadline_ns": 5327721995557394,
+          "paths": [
+            "/sys/class/hwmon/hwmon0/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp1_input",
+            "/sys/class/hwmon/hwmon1/temp2_input",
+            "/sys/class/hwmon/hwmon1/temp3_input",
+            "/sys/class/hwmon/hwmon2/temp1_input",
+            "/sys/class/hwmon/hwmon3/temp1_input",
+            "/sys/class/hwmon/hwmon4/temp1_input",
+            "/sys/class/hwmon/hwmon5/temp1_input",
+            "/sys/class/hwmon/hwmon6/temp1_input",
+            "/sys/class/hwmon/hwmon7/temp1_input",
+            "/sys/class/hwmon/hwmon8/temp1_input",
+            "/sys/class/thermal/thermal_zone0/temp"
+          ],
+          "completed_cycles": 48,
+          "eof": {
+            "fast": true,
+            "hardware": true
+          },
+          "errors": [
+            "hardware: RuntimeError(\"['/sys/class/hwmon/hwmon2/temp1_input: temperature >=80C']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "hardware health: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")",
+            "fast: RuntimeError('unchanged >100ms CPU coverage rejection')",
+            "final hardware: RuntimeError(\"['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\")"
+          ],
+          "raw_receipts": "hardware.jsonl",
+          "limitation": "Only a complete unchanged empty category is unavailable AMD telemetry; no cool-host claim.",
+          "temperature_available": true,
+          "throttle_available": false
+        },
+        "failures": {
+          "failure": "Traceback (most recent call last):\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 630, in run\n    sampler.check_hardware()\n    ~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 273, in check_hardware\n    require(not problems, repr(problems))\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 27, in require\n    raise RuntimeError(message)\nRuntimeError: ['stale/incomplete discovery', 'stale path: /sys/class/hwmon/hwmon0/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp1_input', 'stale path: /sys/class/hwmon/hwmon1/temp2_input', 'stale path: /sys/class/hwmon/hwmon1/temp3_input', 'stale path: /sys/class/hwmon/hwmon2/temp1_input', 'stale path: /sys/class/hwmon/hwmon3/temp1_input', 'stale path: /sys/class/hwmon/hwmon4/temp1_input', 'stale path: /sys/class/hwmon/hwmon5/temp1_input', 'stale path: /sys/class/hwmon/hwmon6/temp1_input', 'stale path: /sys/class/hwmon/hwmon7/temp1_input', 'stale path: /sys/class/hwmon/hwmon8/temp1_input', 'stale path: /sys/class/thermal/thermal_zone0/temp']\n",
+          "cleanup_failure": "Traceback (most recent call last):\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 648, in run\n    require(not row['cleanup']['errors'], 'compiler shutdown rejection')\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 25, in require\n    raise RuntimeError(message)\nRuntimeError: compiler shutdown rejection\n",
+          "finalization_failure": "Traceback (most recent call last):\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/campaign.py\", line 663, in run\n    sampler.close()  # Final endpoint AFTER shutdown and complete artifact archive.\n    ~~~~~~~~~~~~~^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 358, in close\n    require(not self.errors, 'sampler rejected: ' + repr(self.errors))\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/split_sampler.py\", line 27, in require\n    raise RuntimeError(message)\nRuntimeError: sampler rejected: ['hardware: RuntimeError(\"[\\'/sys/class/hwmon/hwmon2/temp1_input: temperature >=80C\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', 'hardware health: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")', \"fast: RuntimeError('unchanged >100ms CPU coverage rejection')\", 'final hardware: RuntimeError(\"[\\'stale/incomplete discovery\\', \\'stale path: /sys/class/hwmon/hwmon0/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp2_input\\', \\'stale path: /sys/class/hwmon/hwmon1/temp3_input\\', \\'stale path: /sys/class/hwmon/hwmon2/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon3/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon4/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon5/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon6/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon7/temp1_input\\', \\'stale path: /sys/class/hwmon/hwmon8/temp1_input\\', \\'stale path: /sys/class/thermal/thermal_zone0/temp\\']\")']\n"
+        },
+        "cleanup_errors": [
+          "child shutdown failed"
+        ]
+      }
+    ],
+    "limitations": [
+      "Absent AMD throttle telemetry; no cool-host claim.",
+      "Incomplete campaign; all raw clocks UNACCEPTED, no performance improvement claim.",
+      "Baseline serial/current max2 module scheduling; same CPU capacity and dependencies do not mean equal active workers.",
+      "No Unity/Unreal/FPS/L1/time-to-play/unpromoted-stream-hash measurement."
+    ],
+    "evidence": "/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109/CAMPAIGN-SOURCE-02/execution"
+  }
+}
