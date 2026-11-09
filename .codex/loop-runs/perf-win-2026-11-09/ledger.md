@@ -502,3 +502,54 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Fixed4 helper-v3 transparentfrontend/source-onlyregistry prepared, oldplan/v2/archive
   unchanged. Independentreviewfound null/NaN lifetime receipt gap; ownerSOURCEfixing.
   No test/probe/helper/engine grant yet, no accepted performance result.
+
+### Active after c9789fa06
+
+- c9789fa06 exact-source-read slice committed+pushed. Source-only helpers remain
+  under target; no timing acceptance or universal ECS comparison implied.
+- Root reproduced actual Mac scheduling trap in disposable nonroot child: original
+  nice0→BelowNormal nice10; Normal restoration denied errno13, stayednice10. Separate
+  rawDarwinBG children restore processbackground withoutchanging observednice0 or10,
+  preservepre-establishedBG1forhuman, finallyrestoreownBG. Parentunchanged.
+- Rootowns NEW CompilePriority.cs. It usesMac self-processBG with capturedbaseline,
+  leavesBSDnice alone, keepsanyactivehuman'slaunchbudget acrossworkers, andseparates
+  workerthreadhint failures. OtherplatformsrestorecapturedlaunchClass asbest-effort.
+  ACTUALclass isolatedfourchild proof passes default/nice-n10/baselineBG1/overlapping
+  human+agent+idle; no failuremessages/nicechanges,parentsunchanged. Allresults/source/
+  app/runtime/commands in target/compiler-priority-production-20261109; earlierraw
+  control retainedin compiler-priority-proof-20261109. Thisisstateproof,notlatency.
+- Batch_queries nowowns product AnalyzerSet.cs,ModuleSession.cs,Coordinator.cs,new
+  cancellationhelper/tests andcancellationAGENTSparagraph. SOURCE-onlyuntilRootCPU
+  grant. Compatibletokenadapters; ct-throughrequests+Problems; linkedL3tasklifetime/
+  observation/drain; genuineOCEfilters; CTSdisposeafterdrain; prewarmfinally; queue
+  preemption. Preserveallsource-read/diagnostic/atomicitygates. RootownsCompilePriority
+  andwillnoteditworkerfiles. CoordinatorinstancePriority nowroutesApply andlogsactual
+  failuresonce; startuppriorityinsideLooptry. No globalbuild/testyetforcurrentWIP.
+- Ecs_research owns fixed4 helper-v3/sourceonly. Independentreview caught malformed
+  clocks/exitnull permittingstalehelperownership; SOURCEfix+newfreeze pending. No
+  v3tests/probes/helpers/engines/CPU grant. Oldplan/v1/v2/22+30passinglogs preserved.
+- RootCPU idleafteritsfourprioritychildren. AllworkersremainSOURCE-only. Next finish
+  v3mock+non-timinghelper-readiness gates or grantcurrent C# source quality afterstable
+  workerhandoff; NEVER parallelizebuilds/benchmarks. Strict foreignload blocks timings.
+- Scheduling final quality: all11newfocusedcases passed first attempt, actualRoslyn
+  in-flight tree/body/module cancellation asserted exactcaller tokens; wrong/unrequested
+  OCE retainederror. Fullsolution0warning/errors,full213compiler tests,14actualCLR
+  tests across7suites,all-target ara-scriptClippy andfmt114pass. Independentreview
+  found Program startup STILL directlyBelowNormal beforecapture; RootfixedallCLI
+  modesviaCompilePriority.Apply(null), keepingbackgroundstartup/protocolstdoutclean.
+- Added actual--pipe entry regression. InitialfixturebuildSystem.Environment shadow
+  corrected; Unixpipe-pathmaxlength correctedwithoutweakeningoracle. Normal-budget
+  actualentry thenfailed Expectednice0Actual10, provingmissedstartupintegration.
+  MatchingfreshbuildafterProgramfix passes initial/human/agent/human/shutdown;
+  full213suite also passes. RedPE notseparatelyarchived, redlog/source retained.
+- Sourcefreeze/workergates are7ownedfilesplusRootpriority; RootaddedProgram+entrytest
+  anddocpriorityclarification afterward. Finalpubliccompiler_scheduling packetbinds
+  currentallsource/DLL/runtime/commands andproofs,explicitlyno throughput/latencywin.
+- Rootread-onlyPython observation confirms brewlogicalsys.executable wrapper differs
+  fromactualframeworksys.orig_argv[0]/psargv0. Helper-v3ownerSOURCEbinding explicit
+  logical-launch→actualactor mapping; no genericargv0ignore/pathwhitelist. Ownproof
+  in scheduling/python-launcher-observation.json. No helper/engine/timing execution.
+- AllocationPipeline owns NEW target/compiler-source-buffer-pool-20261109 sourceonly:
+  installedRuntime10.0.14 sourceconfirms unpooledFileStream4KiB buffer under1KiB
+  StreamReader. Exploring pooledread-aheadwithoutcustomdecoder/extraIOcalls; no
+  build/test/benchmark/productchanges/grantyet. RootCPU idleaftergates.

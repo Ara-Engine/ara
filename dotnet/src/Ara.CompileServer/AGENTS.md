@@ -21,12 +21,16 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 
 - `Coordinator`: the scheduler. Modules and their reference graph (a module is watched
   after the modules it references), the work queues and the one worker thread.
-  - Human work (watcher saves, heat, rebuilds) runs first, in order, at normal process
-    priority; queued saves of one module merge.
+  - Human work (watcher saves, heat, rebuilds) runs first, in order, at the helper's
+    launch priority; queued saves of one module merge.
   - Agent edits (`Change` with `OriginAgent`, and watcher events on paths an agent claimed)
     coalesce per module until quiet for `AgentQuiet` (150 ms), run only with no human work
     queued, below normal priority, and are cancelled and requeued when a human edit arrives.
     A human save of the same module absorbs them (D20).
+  - `CompilePriority` captures the launch budget before startup backgrounding in all
+    CLI modes. macOS uses reversible self-process background policy, preserving BSD
+    nice and inherited background state. Any active human retains the launch budget;
+    failed scheduling hints are logged, and never repaired by forcing higher nice.
   - An image (L3) cascades to every dependent in dependency order: relink (same image and EnC
     chain, `Escalation.Relink`) when the dependency's public surface is unchanged, rebuild
     (`Escalation.Dependency`) otherwise. The cascade is one `Reload` message, or nothing
@@ -45,6 +49,10 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   - Compile: classify; L1/L2 → `EmitDifference` (the generator runs only for inserts and doc
     edits, and any change in its output is L3); L3 → generator + full emit with the analyzers
     in parallel. Errors (compiler, generator, analyzers) are diagnostics; nothing commits.
+  - Cancellation reaches analyzer requests. `PendingAnalysis` drains the Ara-owned task on
+    every L3 exit before the worker yields or reports idle. Legacy providers stop at call
+    boundaries; Roslyn's private callback workers have a separate lifetime. Shutdown requests
+    cancellation while the host retains its bounded helper-process fallback.
 - `EditClassifier`: member-level diff. L1 bodies keep S2's rules (no closures, state machines,
   constructors, primary-constructor types). L2 inserts: methods/operators/non-auto properties,
   class fields and auto-properties without initializers, consts, new non-generic non-partial
