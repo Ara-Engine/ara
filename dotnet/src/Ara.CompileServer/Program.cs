@@ -152,5 +152,10 @@ sealed class PipeSink(Stream pipe) : IMessageSink
     {
         try { Protocol.Send(pipe, kind, payload); }
         catch (IOException) { Environment.Exit(0); } // the host is gone
+        catch (ObjectDisposedException)
+        {
+            // Main owns this pipe and may close it while cancelled work finishes.
+            // Let main preserve its own exit status, including protocol failures.
+        }
     }
 }
