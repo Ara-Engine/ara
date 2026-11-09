@@ -33,7 +33,10 @@ impl Compositor {
     /// The renderer outlives the compositor; one thread submits for both.
     pub unsafe fn new(renderer: &ara_render::Renderer, light: bool) -> Result<Self> {
         // SAFETY: forwarded caller contract.
-        let ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
+        let mut ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
+        // Submissions return at once; the next frame checks the last one finished (the
+        // UI thread never waits on the GPU, as the legacy window does).
+        ui.set_deferred_completion(true)?;
         let mut paint = UiRenderer::default();
         paint
             .external_image(overlay::viewport_image())
@@ -72,7 +75,8 @@ impl Compositor {
     /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
     /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
     /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
-    /// to the renderer and `scene` redraws.
+    /// to the renderer and `scene` redraws. False skips the frame while the last one is
+    /// still on the GPU: call again on a later pass.
     /// # Safety
     /// `layer` is the live `CAMetalLayer` of the Scene view.
     #[allow(clippy::too_many_arguments)]
@@ -88,7 +92,13 @@ impl Compositor {
         layer: NonNull<c_void>,
         extent: [u32; 2],
         scale: f32,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        if !self
+            .ui
+            .wait_previous_for(std::time::Duration::from_millis(1))?
+        {
+            return Ok(false);
+        }
         if self.light != state.light {
             self.sheet = sheet(state.light)?;
             self.light = state.light;
@@ -164,7 +174,7 @@ impl Compositor {
         let (present, _) = self.present.insert((present, extent));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
         unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
-        Ok(())
+        Ok(true)
     }
 
     /// Releases the layer presentation; call before the window closes.
