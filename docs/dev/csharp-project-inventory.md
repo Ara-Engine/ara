@@ -62,6 +62,9 @@ Preparation requests reuse a hidden, parent-bound SDK process. Each request
 rescans the requested absolute root and rechecks compilation inputs; folder
 ownership and results are not cached by the host. SDK content changes replace
 the transport, and worker failures/timeouts dispose its exact owned process.
+Warm reload ownership scans use the same discovery rules without rereading every
+published schema and DLL. Public inventory and project compilation still validate
+and return intact publications, including excluded editor domains.
 Projects without source files or manifests return an empty inventory before
 initializing private compiler state, keeping read-only CLI fixtures clean.
 

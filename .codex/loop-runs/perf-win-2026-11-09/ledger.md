@@ -228,3 +228,27 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Ownership-only scan change source frozen by batch_queries; public/default/full
   publication hydration and excluded editor results preserved. Actual .NET build,
   dedicated test and runtime gates still pending; not part of measured SDK above.
+
+
+### Ownership discovery without publication hydration (verified)
+
+- ModuleInputs.Scan now explicitly skips derived publication reads, while the one
+  shared discovery implementation and public/default/full ProjectCompiler scans
+  preserve their behavior, including excluded editor publication schema/fingerprint.
+  No new cache or graph semantics. Actual publication/corruption/unknown-reference
+  test passes; full158 compiler tests and fresh0-warning/error solution build pass.
+  Seven actual host tests pass: first published leaf/root edits, mixed unwatched
+  images, module cascades and project lifecycle. Source review: the hydration flag
+  gates only the existing derived publication branch, not discovery/diagnostics.
+- Guarded actual16-module/1024-script publication scan comparison accepted. One warm
+  process,30samples per block, both orders; every normalized inventory equal.
+  Full->ownership p50 6.36585->3.94190ms, reversed 6.33315->3.95715ms; both p95 lower.
+  Median managed scan allocation2,918,936->1,140,152bytes. This is only scan cost,
+  never total startup/Play or a market comparison. All source/binary/power/CPU
+  guards pass. Public packet compiler_ownership_scan_mac_2026-11-09.json.
+- Target-only preparation helper initially used invalid reflected names containing
+  underscores (ARA0704); preserved errors/invalid source, corrected names and emitted
+  the actual fixture. No preparation timings accepted. No production naming relaxation.
+- Three-way DAG timing attempt stopped before its first process for an unrelated
+  active ara-editor compiler; zeroaccepted. Native quality and prior limited internal
+  gains remain retained, not promoted to a fresh Unity or combined-engine claim.
