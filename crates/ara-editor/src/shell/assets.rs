@@ -148,7 +148,7 @@ impl Browser {
         self.revision += 1;
         self.refresh();
     }
-    pub(super) fn remove_path(&mut self, path: &str) {
+    pub(crate) fn remove_path(&mut self, path: &str) {
         self.items.retain(|asset| asset.path != path);
         self.optimistic.insert(path.into(), None);
         self.revision += 1;

@@ -171,11 +171,8 @@ fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
 /// Writes the studio's chrome (the Scene hole left empty) in both themes, with each bottom
 /// panel, to `target/studio-captures/` for design review: `cargo test -p ara-editor --lib
 /// studio::tests::captures -- --ignored`.
-#[test]
-#[ignore = "writes review captures under target/"]
-fn captures() {
-    let mut rt = open();
-    // The Project view over a real scan.
+/// Gives the studio its Assets browser over a real scan of the test project.
+fn scan(rt: &mut Runtime<Studio>) {
     rt.update(|s| {
         let store = s.editor.host.store();
         s.assets = Some(crate::shell::assets::Browser::new(
@@ -194,6 +191,13 @@ fn captures() {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+#[ignore = "writes review captures under target/"]
+fn captures() {
+    let mut rt = open();
+    scan(&mut rt);
     rt.update(|s| {
         s.act(
             "editor.workspace",
@@ -668,6 +672,41 @@ fn the_animation_page_shows_states_added_to_its_controller() {
     rt.touch(|s| super::graph::sync(s, "animation"));
     let nodes = super::graph::node_ids(rt.state());
     assert_eq!(nodes.len(), 2, "{doc}: {nodes:?}");
+}
+
+#[test]
+fn right_clicking_an_asset_offers_its_actions_and_a_press_outside_closes_them() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    scan(&mut rt);
+    rt.update(|s| {
+        s.act(
+            "editor.workspace",
+            json!({"folder": ara_doc::AUTHORING_ROOT}),
+        )
+    });
+    settle(&mut rt);
+    let tile = rt
+        .find("asset/content/levels")
+        .expect("the levels folder shows");
+    rt.right_click(tile.center().x, tile.center().y);
+    settle(&mut rt);
+    for id in [
+        "assets.open",
+        "assets.reveal",
+        "assets.rename",
+        "assets.duplicate",
+        "assets.delete",
+    ] {
+        assert!(rt.find(&format!("cmd/{id}")).is_some(), "{id} is offered");
+    }
+    rt.pointer_down(5.0, 880.0);
+    rt.pointer_up(5.0, 880.0);
+    settle(&mut rt);
+    assert!(
+        rt.state().local.context.is_none(),
+        "a press outside closes the menu"
+    );
 }
 
 #[test]

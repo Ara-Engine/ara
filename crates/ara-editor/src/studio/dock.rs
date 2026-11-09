@@ -291,7 +291,11 @@ fn area_tools(s: &Studio, panel: &str) -> Vec<El<Studio>> {
                 .key("hierarchy/create")
                 .on_press(|s: &mut Studio| {
                     super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
-                }),
+                })
+                .overlay(super::create::overlay(
+                    s,
+                    super::create::Anchor::Key("hierarchy/create"),
+                )),
         ],
         _ => Vec::new(),
     }

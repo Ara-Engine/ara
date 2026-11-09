@@ -82,10 +82,20 @@ fn folder(s: &mut Studio) -> anyhow::Result<()> {
         "cmd.apply",
         json!({"doc": "ara.project.json", "commands": [{"cmd": "folder.create", "args": {"path": path}}], "why": "Create authored folder"}),
     )?;
-    if let Some(browser) = s.assets.as_mut() {
-        browser.refresh();
-    }
+    show(s, &path, "folder");
     Ok(())
+}
+
+/// Shows a just-created `path` (authored) in Assets at once, before the host's next scan.
+fn show(s: &mut Studio, path: &str, kind: &str) {
+    let workspace = s.editor.host.store().workspace();
+    let Some(browser) = s.assets.as_mut() else {
+        return;
+    };
+    if let Ok(storage) = crate::shell::ops::authored::storage(&browser.files, workspace, path) {
+        browser.insert_path(&storage, kind);
+    }
+    browser.refresh();
 }
 
 /// A new `domain` document, opened: a scene in the Scene view, a graph or controller in its
@@ -109,9 +119,7 @@ fn resource(s: &mut Studio, domain: &str, stem: &str, extension: &str) -> anyhow
             &crate::shell::commands::Target::None,
         );
     }
-    if let Some(browser) = s.assets.as_mut() {
-        browser.refresh();
-    }
+    show(s, &path, extension);
     Ok(())
 }
 

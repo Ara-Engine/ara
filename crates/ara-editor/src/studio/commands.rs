@@ -48,6 +48,7 @@ pub(super) fn shortcut(keys: &str) -> Option<String> {
 /// Whether the studio runs `id`.
 pub(super) fn ported(id: &str) -> bool {
     super::create::item(id).is_some()
+        || super::asset_ops::COMMANDS.contains(&id)
         || id.strip_prefix("assets.create.").is_some_and(|kind| {
             super::asset_create::KINDS
                 .iter()
@@ -112,6 +113,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             .any(|(k, _, _)| *k == kind)
     {
         super::asset_create::create(s, kind);
+        return;
+    }
+    if super::asset_ops::COMMANDS.contains(&id) {
+        super::asset_ops::run(s, id, target);
         return;
     }
     let e = &mut s.editor;
