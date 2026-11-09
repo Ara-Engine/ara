@@ -1,0 +1,404 @@
+{
+  "date": "2026-11-09",
+  "source_base_commit": "c9789fa06",
+  "scope": "Compiler scheduling/cancellation correctness and reversible Mac process-priority proof. No accepted latency, frame-time or Unity/Unreal performance comparison.",
+  "timings_accepted": false,
+  "changes": [
+    "Carry operation cancellation through all built-in tree/body/module analyzer requests; legacy providers retain each corresponding coverage override and check tokens at call boundaries.",
+    "Own each concurrent L3 analyzer request with a linked child token; cancel/drain/observe its Ara task on every emit exit while retaining primary errors and secondary faults.",
+    "Drain agent CancelAsync callbacks outside the scheduler lock before disposing the run CTS or marking idle; Watch/Recover follow human queue admission.",
+    "Only a requested matching operation cancellation yields/requeues; unrelated OCE is a terminal compiler error without worker death.",
+    "Tokenized prewarm restores the generator driver in finally. No unbounded Dispose join; existing host-process fallback remains.",
+    "Capture launch budget before ALL startup modes; Mac background policy uses documented reversible self-process Darwin state instead of irreversible BSD nice. Any active human retains the captured budget, including across worker threads.",
+    "Scheduling hints remain best effort with visible failures; worker-thread restoration is attempted separately. One-shot/editor/project modes retain background startup."
+  ],
+  "priority_evidence": {
+    "runtime": "10.0.14",
+    "self_only_unprivileged_children": true,
+    "legacy_control": {
+      "mode": "legacy",
+      "skipped": false,
+      "pid": 94973,
+      "uid": 501,
+      "runtime": "10.0.14",
+      "rows": [
+        {
+          "action": "initial",
+          "Nice": 0,
+          "Background": 0,
+          "failure": null
+        },
+        {
+          "action": "Normal",
+          "Nice": 0,
+          "Background": 0,
+          "failure": null
+        },
+        {
+          "action": "BelowNormal",
+          "Nice": 10,
+          "Background": 0,
+          "failure": null
+        },
+        {
+          "action": "Normal",
+          "Nice": 10,
+          "Background": 0,
+          "failure": "errno=13 Permission denied"
+        },
+        {
+          "action": "exit",
+          "Nice": 10,
+          "Background": 0,
+          "failure": null
+        }
+      ],
+      "complete": true,
+      "failure": null,
+      "throughput_or_latency_claim": false
+    },
+    "actual_product_class_cases": [
+      {
+        "mode": "candidate",
+        "skipped": false,
+        "pid": 2679,
+        "uid": 501,
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "action": "initial",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "idle",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "exit",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          }
+        ],
+        "complete": true,
+        "failure": null,
+        "throughput_or_latency_claim": false
+      },
+      {
+        "mode": "candidate",
+        "skipped": false,
+        "pid": 2700,
+        "uid": 501,
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "action": "initial",
+            "Nice": 10,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 10,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 10,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "idle",
+            "Nice": 10,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 10,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 10,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 10,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "exit",
+            "Nice": 10,
+            "Background": 0,
+            "failure": null
+          }
+        ],
+        "complete": true,
+        "failure": null,
+        "throughput_or_latency_claim": false
+      },
+      {
+        "mode": "inherited-background",
+        "skipped": false,
+        "pid": 2705,
+        "uid": 501,
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "action": "initial",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "idle",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "agent",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "human",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "exit",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          }
+        ],
+        "complete": true,
+        "failure": null,
+        "throughput_or_latency_claim": false
+      },
+      {
+        "mode": "overlap",
+        "skipped": false,
+        "pid": 2709,
+        "uid": 501,
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "action": "initial",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "human-with-agent",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          },
+          {
+            "action": "all-idle",
+            "Nice": 0,
+            "Background": 1,
+            "failure": null
+          },
+          {
+            "action": "exit",
+            "Nice": 0,
+            "Background": 0,
+            "failure": null
+          }
+        ],
+        "complete": true,
+        "failure": null,
+        "throughput_or_latency_claim": false
+      }
+    ],
+    "actual_product_class_source_identical": true,
+    "parents_unchanged": true,
+    "inherited_background_fixture": "The BG1 case establishes background state inside the disposable child before first manager capture, then restores its own original policy. It does not claim observed fork inheritance.",
+    "actual_entrypoint": "Actual Ara.CompileServer.dll --pipe test failed before startup fix (inherited nice0, childnice10), then passed after routing Program startup through the centralized manager. Drives initial human image, human L1, agent L1, another human L1 and shutdown; observes child raw BSD nice, not cached enum.",
+    "targeted_entry_test_budget": "One tiny filtered quality test deliberately launched without nice-n10 to exercise the observed normal inherited budget; no priority elevation or throughput workload. Full suite/ordinary builds retain nice-n10.",
+    "red_pe_limit": "Raw red log and original Program source at base commit retained by Git; red compiled PE was not separately archived."
+  },
+  "checks": {
+    "fresh_solution": "zero warnings/errors",
+    "focused_cancellation_cases": 11,
+    "focused_actual_entry_test": "passed after genuine Expected0Actual10 red",
+    "full_compiler_tests_passed": 213,
+    "real_clr_tests_passed": 14,
+    "real_clr_suites": [
+      "compile_lifecycle",
+      "levels",
+      "modules",
+      "nondisruption",
+      "prebuilt_watch",
+      "recovery",
+      "restart"
+    ],
+    "clippy": "ara-script all-targets -Dwarnings passed",
+    "formatting": "114packages passed",
+    "independent_review": "no remaining must-fix after closing startup downgrade"
+  },
+  "limits": [
+    "This is functional preemption and process-policy evidence, not a measured compile latency reduction. Recorded wall times are unaccepted.",
+    "PendingAnalysis drains Ara-owned tasks. Roslyn5.3 internal callback workers may outlive a canceled public request; source audit supports that caveat, no runtime escape was reproduced.",
+    "Legacy custom providers remain cooperative at call boundaries. Source inventory/IO and one-shot ProjectCompiler scheduling are outside this cancellation slice.",
+    "Darwin policy success/reversal is demonstrated on this Mac only. Other platforms retain best-effort .NET priority classes; Unix nice restoration elsewhere can remain permission-limited.",
+    "Normal numerical code, concurrency flags, EnC capabilities, source/ref diagnostics, ABI and publication guards are unchanged."
+  ],
+  "retained_attempts": [
+    "Initial entry test compile failed on Ara.Environment shadowing System.Environment.ProcessId; qualified names, no assertion change.",
+    "First entry fixture exceeded Unix socket path limit; shortened random pipe name, preserved log.",
+    "Next normal-budget actual entry test exposed the genuine startupnice0\u219210 defect. Fixed central startup call; matching fresh build/test passed."
+  ],
+  "checked_source_sha256": {
+    "dotnet/src/Ara.CompileServer/AnalyzerSet.cs": "7c8a6770ebdd89b40f095d53caaed4d45dea739e8eec44d7679d7ee87ade1b6d",
+    "dotnet/src/Ara.CompileServer/ModuleSession.cs": "7f5424403b49edd09724baa05ede456f041dc2150dd6b2cc8b4957112e08e3e9",
+    "dotnet/src/Ara.CompileServer/Coordinator.cs": "a89654a7adbc41294ce29e980fad234ec7e4354678e0393523628f7b06925868",
+    "dotnet/src/Ara.CompileServer/PendingAnalysis.cs": "652a888728f581577e5c90160f6a803681083569c29cbdd31ed9528aa1b42425",
+    "dotnet/src/Ara.CompileServer/CompilePriority.cs": "0354a4d5603b41f9d2d37d7f33eae385b85c89acbb93ad5d95a78e0380773597",
+    "dotnet/src/Ara.CompileServer/Program.cs": "5403d4609acc3c1c2083ddc5de9cd0bffa82d477dc4472f047475f387fa571dd",
+    "dotnet/tests/Ara.CompileServer.Tests/AnalysisCancellationTests.cs": "0af28dfa3410db81d382eacf3036c973c51c110f685178394c7d351684b1cee7",
+    "dotnet/tests/Ara.CompileServer.Tests/CancellationFixture.cs": "474e2bfda4201fd3a4af6db75306d9ac7c53347100664a74e30abaa2ff1cb2f3",
+    "dotnet/tests/Ara.CompileServer.Tests/CompilePriorityEntryTests.cs": "b847ad45c344b41f1d5c7705ea9a18ac54c1e20ea528f3127051701f5b1c782c"
+  },
+  "final_compiler_sha256": "a73fc0e1fcc01c82476179f5406c33793bad822cd6fec239f3a1fe0441f8a03b",
+  "raw_proof_sha256": {
+    "target/compiler-analysis-cancellation-20261109/correction-roslyn53/REVIEW.md": "5455acf34b6f3d3581d878c86f99bfc19cb2f9b9d5afeec78ed76538bbf044e8",
+    "target/compiler-analysis-cancellation-20261109/correction-roslyn53/provenance.json": "320088780679170b647497dab38a3014b7b4c8a7448a635d7a92c3bde3b66685",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/REPORT.json": "fe74ee5352c95bcd3dcc47b0bd1d45109c08552f789744ad0f5435d53daa741b",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/before-compiler-bin/Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/before-compiler-bin/Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/before-identities.json": "5ee01c94eb0448d5e12fb8c8f04ea953e2e14680ffe7853b7250fa11b2e41055",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/build.command.json": "a28edee87a46c0bbde498704a7c400f5bc2be837256a60655a1ee25abe30842f",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/build.log": "a5516050f479e1fe0b6c42e98272acab4f7dad027a7ffe395797d138416af881",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/build.result.json": "db6ee076214bb99c8abba298a3f5d0d09499cd63289210368a6b8dfccef80e42",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/built-identities.json": "7d2e8c45b33326c3a8d1c4081d7ce6a61cf3eed41267c71a5845eaced7e28617",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/environment.json": "4dd5340eeba109a0e1b0baae3d12ae3d828ba8e478495f88d6b9d4f6c4180966",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/focused.command.json": "8fef8b5fbac4bb75421f9310c5bacbe108be9cf37a454f21990a28b270f317aa",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/focused.environment.json": "9ea637468c40c9e54af456ca78ce0fde5e57341601035f534798b22845fcdfef",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/focused.host-trace.log": "e660abfdf3e369c0e3f2b06646b4ab1a3d12a4bcb32d194a1861e4894a0ad9f9",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/focused.log": "e85e6136707a94c19708ff3cb8de1023dc7634d1595fce316947b067ca999a86",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/focused.result.json": "fd82693948e5be8f4635a03eda9f81f4a1516f5f0320ba37a3cd2ef51fd45168",
+    "target/compiler-analysis-cancellation-20261109/implementation/quality-20261109T153321Z/results/focused.trx": "f07f8e03e173a4df42ac5e761716e8b646a5eccc5278906cf15e109de4821d86",
+    "target/compiler-analysis-cancellation-20261109/implementation/source-freeze.json": "be02cd14018f84e33f393e71e193f0c30ebace36e3bae71b1bfad01a115f0306",
+    "target/compiler-analysis-cancellation-20261109/priority-audit/REVIEW.md": "9d3cf46d8f81e3d6c8b2dd8c741a29873262cec65f4194bc5626070b2dd974c6",
+    "target/compiler-analysis-cancellation-20261109/priority-audit/provenance.json": "6d27ecba1fafedba693cc59940db5fe1e07d5039d9847ffcdbad1eac32936b72",
+    "target/compiler-priority-production-20261109/CompilePriority.cs": "0354a4d5603b41f9d2d37d7f33eae385b85c89acbb93ad5d95a78e0380773597",
+    "target/compiler-priority-production-20261109/Program.cs": "dde91454eb5e5958a12fd1afca1a12a95b7c79dc4242d3d735e2f2e462e57ba3",
+    "target/compiler-priority-production-20261109/Proof.csproj": "dab6559ad707cf2ea57d2beb229404477494d03398a74e35973492df1f16d02d",
+    "target/compiler-priority-production-20261109/build.log": "5b09b3b1dbb1b83d0b166b3d4ba84aadd11f5dd486889c1f9881bec594022b9f",
+    "target/compiler-priority-production-20261109/controller.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-production-20261109/execution-01/candidate-inherited-background.command.json": "daf14711879d39bfbf3d303dc7d700bf25eccac73e14a638edab80c6d9803261",
+    "target/compiler-priority-production-20261109/execution-01/candidate-inherited-background.json": "693b7114f75df0edd3dc4c9cc5a3618502558b22c86de65c50f4919f4221eacf",
+    "target/compiler-priority-production-20261109/execution-01/candidate-inherited-background.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-production-20261109/execution-01/candidate-nice.command.json": "89c165ed291affee580c07c253d0603cc2a8588495eab13ce317f2d7baa6c51f",
+    "target/compiler-priority-production-20261109/execution-01/candidate-nice.json": "e989df11ec7135430d6c8ea7e44ae80544652d901dc11b4ac6a1e2fbc23b8f39",
+    "target/compiler-priority-production-20261109/execution-01/candidate-nice.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-production-20261109/execution-01/candidate.command.json": "17da8dd46927e94e6af3d68168629aceee657d4a5209e2ea59a43ccc59582537",
+    "target/compiler-priority-production-20261109/execution-01/candidate.json": "63309218be169d6f167d6eaf75d4e5207bdaff6f8517cccee5933c30132c731e",
+    "target/compiler-priority-production-20261109/execution-01/candidate.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-production-20261109/execution-01/environment.json": "cee42854f8c2912f6d1254062d64194a41306b1a3d874f43aac7657aa821ba16",
+    "target/compiler-priority-production-20261109/execution-01/freeze.json": "68f2ccaf656bd201dfe1da063f7b785d8353bbce064f69c0cc07e2d5bc0885bb",
+    "target/compiler-priority-production-20261109/execution-01/overlapping-human-agent.command.json": "092054c5d85d063ca3ba3bd063b39a9d2d7e363014f702ce5d09680819d665a1",
+    "target/compiler-priority-production-20261109/execution-01/overlapping-human-agent.json": "a1e71969683a1d81f5aed966170eac7218f2af8082cedd9cb19dfbf8438ef622",
+    "target/compiler-priority-production-20261109/execution-01/overlapping-human-agent.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-production-20261109/execution-01/summary.json": "09a92f9cb330e680f1d603155833122178cb644d9c160a0c78559f721f7402bf",
+    "target/compiler-priority-production-20261109/run.py": "f09653f0ea3ee1dc01de98a678901d6b76b47db77e3ede03a957c0c877639ca4",
+    "target/compiler-priority-proof-20261109/Program.cs": "c0cb9b701a2f730c1a40e5f50aab605cf27427157d79c29d9ea1af4337acfc54",
+    "target/compiler-priority-proof-20261109/Proof.csproj": "dab6559ad707cf2ea57d2beb229404477494d03398a74e35973492df1f16d02d",
+    "target/compiler-priority-proof-20261109/build.log": "e696a3e71eef7b2394e91ac52ce401f772fb14a8ee86952a453f504a010c8caa",
+    "target/compiler-priority-proof-20261109/controller.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-inherited-background.command.json": "9f53fad27701f78a3d55947f7577aebfd68ba26dc64b818465d1df22dd92ff1a",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-inherited-background.json": "21d26e18efe7a5f4e9791c0e778b8577ec8c13a24c9d3c1485cdd2a52ff47dc8",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-inherited-background.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-nice.command.json": "f6611d10d7caf2c8ebdbf086220748c38219f987def4a519a980104d775cad9d",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-nice.json": "657199098a66bdccd3b9610dc6524a6ad8c8f81402defa714d55d1793811a693",
+    "target/compiler-priority-proof-20261109/execution-01/candidate-nice.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-proof-20261109/execution-01/candidate.command.json": "543bc1bde1606124e39ef70bbd80c4174fbb7aba81bcb648b8428df327bbad59",
+    "target/compiler-priority-proof-20261109/execution-01/candidate.json": "f8aafc21cb5a7fbedf83ad1f0c83b6bec7be9aed10faf9e9fdb6146d1b5841e8",
+    "target/compiler-priority-proof-20261109/execution-01/candidate.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-proof-20261109/execution-01/environment.json": "cee42854f8c2912f6d1254062d64194a41306b1a3d874f43aac7657aa821ba16",
+    "target/compiler-priority-proof-20261109/execution-01/freeze.json": "88748563608bf9a755c6713da305408aa0db35388908df82a39fd86dda7d09d0",
+    "target/compiler-priority-proof-20261109/execution-01/legacy.command.json": "586dcbe1415d6b340c4c258048b26546bc3464c3bc8168a2dd09002acc243366",
+    "target/compiler-priority-proof-20261109/execution-01/legacy.json": "b88df9e792dfdb6188bc1374312dda07709bb50de56a7415e66c2bba6cac6742",
+    "target/compiler-priority-proof-20261109/execution-01/legacy.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-priority-proof-20261109/execution-01/summary.json": "a673fcf86b14eea2d17e19cbb4f7b6952bec48fb29c33127b4ce43621a9dce98",
+    "target/compiler-priority-proof-20261109/run.py": "20c1240d6382a257f90fd88aa723c5d6fb1296fff718e14967fd28b0ac9d75eb",
+    "target/compiler-scheduling-production-20261109/build-startup-fixed.log": "068aafbcc2e2ddf9ffffbb2f37be49795779bc6920daa79c9e2ca18c844dff14",
+    "target/compiler-scheduling-production-20261109/build.log": "3a2d4d2eb44d3fe6048a4b98698673ae372db977b76bbe0c2cd7d170ad3c111e",
+    "target/compiler-scheduling-production-20261109/clippy.log": "c9ad0d7c775d77f832c0bcff2acfadfc48c37626685d89d95096864333ff375d",
+    "target/compiler-scheduling-production-20261109/entry-fixed.log": "93155ab9efd9e5400a6fc08c298c5b6ce0da6670a22b33f7718152a4a479a760",
+    "target/compiler-scheduling-production-20261109/entry-red-budget.log": "628b2ebbd9a4ecc0a33b41e9445844bbacd78935a2d82a781fe9477314a358fa",
+    "target/compiler-scheduling-production-20261109/entry-red.log": "bcbf959596ded7890e3a5db5a7cb461cdfb6d88060dcd1988bd16e67e59a4cc6",
+    "target/compiler-scheduling-production-20261109/entry-test-build-qualified.log": "0047eba23d81705717b25bed7bf4708e047e1d2d0d98e67023937b5a256ad11f",
+    "target/compiler-scheduling-production-20261109/entry-test-build-short-pipe.log": "5277591f20beb1b2f17664b186665bb536fd5a963c768493712e2885e0ceccff",
+    "target/compiler-scheduling-production-20261109/entry-test-build.log": "9d00de055b49fdaa07fe273a57ef9d0ac5585ea3d0b654321aa66947207f015e",
+    "target/compiler-scheduling-production-20261109/fmt.log": "cfde8123770695f785e38d39fab37df6bc5d657288947a15487ecf23cdd0c640",
+    "target/compiler-scheduling-production-20261109/full-tests.log": "d1fc616766ff7f42e8bf50e3f360c7a3985a26ab324aafbddfbe4ace1d51579f",
+    "target/compiler-scheduling-production-20261109/python-launcher-observation.json": "47c05ce769a3087952c653cfed1503240594908f42a2bfa16bf28345589ecea2",
+    "target/compiler-scheduling-production-20261109/runtime-tests.log": "867daa7b171eb776e23d890dcdd311a8a7eed3b8c4d06009a13e517a8bc5f771"
+  }
+}

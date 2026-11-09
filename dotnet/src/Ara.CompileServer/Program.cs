@@ -8,9 +8,9 @@ using Ara.Hosting;
 //
 // Started by the game or editor process (Ara.Host's CompileClient). Connects to its pipe and
 // exits with its parent. Idle and agent compiles run below normal priority; the human's run at
-// normal priority while the host raises its tick threads above normal (A13, D20).
-try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; }
-catch (Exception) { /* not allowed on this platform: compiles still run out of process */ }
+// their launch budget while the host raises its tick threads above normal (A13, D20).
+// Capture that budget before backgrounding every CLI/session mode, including startup.
+if (CompilePriority.Apply(null) is { } priorityFailure) Console.Error.WriteLine(priorityFailure);
 
 if (args.Contains("--inventory", StringComparer.Ordinal))
 {

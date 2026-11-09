@@ -23,24 +23,35 @@ internal sealed class AnalyzerSet : IAnalysis
     readonly ConcurrentDictionary<string, AnalyzerOptions> _options = new();
 
     /// <inheritdoc/>
-    public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile)
+    public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) =>
+        Analyze(compilation, trees, profile, CancellationToken.None);
+
+    /// <inheritdoc/>
+    public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var failures = new ConcurrentQueue<Diagnostic>();
         var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(Failure(diagnostic)));
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var tree in trees)
         {
-            all.AddRange(cwa.GetAnalyzerSyntaxDiagnosticsAsync(tree, CancellationToken.None).GetAwaiter().GetResult());
+            all.AddRange(cwa.GetAnalyzerSyntaxDiagnosticsAsync(tree, ct).GetAwaiter().GetResult());
             var model = compilation.GetSemanticModel(tree);
-            all.AddRange(cwa.GetAnalyzerSemanticDiagnosticsAsync(model, null, CancellationToken.None).GetAwaiter().GetResult());
+            all.AddRange(cwa.GetAnalyzerSemanticDiagnosticsAsync(model, null, ct).GetAwaiter().GetResult());
         }
         all.AddRange(failures);
+        ct.ThrowIfCancellationRequested();
         return all.ToImmutable();
     }
 
     /// <inheritdoc/>
-    public ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile)
+    public ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile) =>
+        AnalyzeBodies(compilation, methods, profile, CancellationToken.None);
+
+    /// <inheritdoc/>
+    public ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         // Tree/span requests omit Roslyn's nonlocal failure diagnostics. Capture
         // the callback too, so a failed analyzer cannot establish clean trust.
         var failures = new ConcurrentQueue<Diagnostic>();
@@ -48,17 +59,18 @@ internal sealed class AnalyzerSet : IAnalysis
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var group in methods.GroupBy(method => method.SyntaxTree))
         {
-            all.AddRange(cwa.GetAnalyzerSyntaxDiagnosticsAsync(group.Key, CancellationToken.None).GetAwaiter().GetResult());
+            all.AddRange(cwa.GetAnalyzerSyntaxDiagnosticsAsync(group.Key, ct).GetAwaiter().GetResult());
             var model = compilation.GetSemanticModel(group.Key);
             foreach (var method in group)
             {
-                var diagnostics = cwa.GetAnalyzerSemanticDiagnosticsAsync(model, method.Span, CancellationToken.None).GetAwaiter().GetResult();
+                var diagnostics = cwa.GetAnalyzerSemanticDiagnosticsAsync(model, method.Span, ct).GetAwaiter().GetResult();
                 // Successive Roslyn requests can include earlier cached diagnostics.
                 // Each disjoint ordinary method owns only its own source diagnostics.
                 all.AddRange(diagnostics.Where(diagnostic => Owns(method, diagnostic)));
             }
         }
         all.AddRange(failures);
+        ct.ThrowIfCancellationRequested();
         return all.ToImmutable();
     }
 
@@ -68,16 +80,23 @@ internal sealed class AnalyzerSet : IAnalysis
             && method.Span.Contains(diagnostic.Location.SourceSpan));
 
     /// <summary>Analyzes a full project in one Roslyn request, allowing work across files to run concurrently.</summary>
-    internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile)
+    internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var failures = new ConcurrentQueue<Diagnostic>();
         var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(Failure(diagnostic)));
-        return [.. cwa.GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult(), .. failures];
+        var diagnostics = cwa.GetAnalyzerDiagnosticsAsync(ct).GetAwaiter().GetResult();
+        ct.ThrowIfCancellationRequested();
+        return [.. diagnostics, .. failures];
     }
 
     /// <inheritdoc/>
     public ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) =>
         AnalyzeProject(compilation, profile);
+
+    /// <inheritdoc/>
+    public ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile, CancellationToken ct) =>
+        AnalyzeProject(compilation, profile, ct);
 
     // Roslyn reports analyzer exceptions as warnings. An unchecked candidate must
     // retain the running code; its external AD diagnostic maps to existing ARA0900.
