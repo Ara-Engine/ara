@@ -292,10 +292,14 @@ fn scrubbable(
                         // 8 logical px per schema step (I02).
                         *now = (*now + f64::from(e.delta.x) / 8.0 * step * k)
                             .clamp(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX));
+                        let now = *now;
+                        // The whole value previews in the Scene and the Inspector as it moves.
+                        s.local.draft = Some((path.clone(), whole(s, &path, axis, now)));
                     }
                 }
                 PointerPhase::Up | PointerPhase::Cancel => {
                     if let Some((path, axis, base, now)) = s.local.scrub.take() {
+                        s.local.draft = None;
                         let _ = s.editor.end_field_gestures();
                         if e.phase == PointerPhase::Up && (now - base).abs() > f64::EPSILON {
                             commit_number(s, &path, axis, now);
@@ -306,6 +310,111 @@ fn scrubbable(
             }
             true
         })
+}
+
+/// While a gizmo drags the first selected entity, its Transform field at `path` as the drag
+/// has it (position, rotation in degrees, scale), so the Inspector moves with the gizmo.
+fn dragged(s: &Studio, path: &str) -> Option<[f64; 3]> {
+    let gesture = s.editor.gesture.as_ref()?;
+    let matrix = gesture.current.get(s.editor.state.selection.first()?)?;
+    let (scale, rotation, position) = matrix.to_scale_rotation_translation();
+    let v = match path {
+        "Transform.position" => position,
+        "Transform.scale" => scale,
+        "Transform.rotation" => {
+            let (x, y, z) = rotation.to_euler(glam::EulerRot::XYZ);
+            glam::Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
+        }
+        _ => return None,
+    };
+    Some(v.to_array().map(f64::from))
+}
+
+/// The whole value of `path` with `value` set: the number itself, or the first selected
+/// entity's vector with channel `axis` replaced (every channel scaled, for a linked scale).
+fn whole(s: &Studio, path: &str, axis: Option<usize>, value: f64) -> Value {
+    let Some(a) = axis else {
+        return json!(round(value));
+    };
+    let scale = path.ends_with(".scale");
+    let current: Vec<f64> = s
+        .editor
+        .state
+        .selection
+        .first()
+        .and_then(|id| s.resolved.get(id))
+        .and_then(|e| {
+            let (component, field) = path.split_once('.')?;
+            e.record.get(component)?.get(field)?.as_array().cloned()
+        })
+        .map(|v| v.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect())
+        // An unauthored scale is its default, one on every axis.
+        .unwrap_or_else(|| vec![if scale { 1.0 } else { 0.0 }; 3]);
+    let base = current.get(a).copied().unwrap_or(0.0);
+    let linked = scale && s.local.scale_linked;
+    let out = current.iter().enumerate().map(|(i, v)| {
+        let v = match (i == a, linked) {
+            (true, _) => value,
+            (false, true) if base.abs() > 1e-9 => v * value / base,
+            (false, true) => value,
+            (false, false) => *v,
+        };
+        json!(round(v))
+    });
+    Value::Array(out.collect())
+}
+
+/// The Inspector's live preview for the Scene: the field being scrubbed, as its whole value
+/// on every selected entity (`SceneSync::preview` draws it until the commit lands).
+pub(super) struct Preview {
+    key: BTreeMap<String, String>,
+    draft: Option<(String, Value)>,
+    selection: Vec<String>,
+}
+
+impl Preview {
+    /// The preview of `s`'s current draft (empty when nothing is being scrubbed).
+    pub fn of(s: &Studio) -> Self {
+        let draft = s.local.draft.clone();
+        let key = draft
+            .iter()
+            .map(|(path, value)| (path.clone(), value.to_string()))
+            .collect();
+        Self {
+            key,
+            draft,
+            selection: s.editor.state.selection.clone(),
+        }
+    }
+}
+
+impl crate::app::scene_sync::Drafts for Preview {
+    fn drafts(&self) -> &BTreeMap<String, String> {
+        &self.key
+    }
+    fn draft_records(
+        &self,
+        _: &crate::editor::Editor,
+        view: &crate::world::DocumentView,
+    ) -> Option<BTreeMap<String, ara_doc::Record>> {
+        use crate::world::EditWorldView;
+        let (path, value) = self.draft.as_ref()?;
+        let (component, field) = path.split_once('.')?;
+        let records: BTreeMap<_, _> = self
+            .selection
+            .iter()
+            .filter_map(|id| {
+                let mut record = view.entities().get(id)?.record.clone();
+                record
+                    .entry(component.to_owned())
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()?
+                    .insert(field.to_owned(), value.clone());
+                Some((id.clone(), record))
+            })
+            .collect();
+        (!records.is_empty()).then_some(records)
+    }
 }
 
 /// Commits a number (one channel of a vector when `axis` is set) to every selected entity.
@@ -379,8 +488,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
     }
     match &f.widget {
         Widget::Number { .. } => {
-            let shown = match &s.local.scrub {
-                Some((p, None, _, now)) if *p == f.path => *now,
+            let shown = match &s.local.draft {
+                Some((p, v)) if *p == f.path => v.as_f64().unwrap_or(0.0),
                 _ => f.value.as_f64().unwrap_or(0.0),
             };
             number(
@@ -406,8 +515,11 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             ];
             let mut out = row().gap(4.0);
             for axis in 0..(*count).min(4) {
-                let value = match &s.local.scrub {
-                    Some((p, Some(a), _, now)) if *p == f.path && *a == axis => *now,
+                let value = match (&s.local.draft, dragged(s, &f.path)) {
+                    (_, Some(v)) => v[axis.min(2)],
+                    (Some((p, v)), _) if *p == f.path => {
+                        v.get(axis).and_then(Value::as_f64).unwrap_or(0.0)
+                    }
                     _ => f
                         .channels
                         .get(axis)
@@ -417,7 +529,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 };
                 let path = f.path.clone();
                 let tag = scrubbable(
-                    el().w(14.0)
+                    el().key(format!("field/{}/{axis}/scrub", f.path))
+                        .w(14.0)
                         .h(22.0)
                         .align(Align::Center)
                         .justify(Justify::Center)
@@ -481,40 +594,12 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             }
             out
         }
-        Widget::Vector { color: true, .. } => {
-            let rgb: Vec<f64> = (0..3)
-                .map(|i| {
-                    f.value
-                        .get(i)
-                        .or_else(|| f.value.get(["r", "g", "b"][i]))
-                        .and_then(Value::as_f64)
-                        .unwrap_or(0.0)
-                })
-                .collect();
-            let to8 = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            let swatch = stillkit::Rgba::rgb8([to8(rgb[0]), to8(rgb[1]), to8(rgb[2])], 1.0);
-            row()
-                .gap(6.0)
-                .align(Align::Center)
-                .child(
-                    el().w(36.0)
-                        .h(20.0)
-                        .radius(l.radius.xs)
-                        .fill(swatch)
-                        .border(1.0, c.separator_strong.0),
-                )
-                .child(
-                    text(format!(
-                        "#{:02X}{:02X}{:02X}",
-                        to8(rgb[0]),
-                        to8(rgb[1]),
-                        to8(rgb[2])
-                    ))
-                    .text_size(11.5)
-                    .family(mono())
-                    .color(c.foreground.0),
-                )
-        }
+        Widget::Vector {
+            color: true,
+            count,
+            hdr,
+            ..
+        } => color_field(s, f, *count, *hdr),
         Widget::Bool => {
             let on = f.value.as_bool().unwrap_or(false);
             let p = f.path.clone();
@@ -604,7 +689,154 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
     }
 }
 
-/// A number box: shows the value (with its unit), types a new one on Enter.
+/// A colour field: a swatch that opens the picker (live in the Scene while dragging, one
+/// undo step on release) and the hex value, typed on Enter. An HDR colour picks its base
+/// colour and keeps its intensity (its brightest channel above one).
+fn color_field(s: &Studio, f: &Field, count: usize, hdr: bool) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let value = match &s.local.draft {
+        Some((p, v)) if *p == f.path => v.clone(),
+        _ => f.value.clone(),
+    };
+    let channel = |i: usize| {
+        value
+            .get(i)
+            .or_else(|| value.get(["r", "g", "b", "a"][i]))
+            .and_then(Value::as_f64)
+            .unwrap_or(if i == 3 { 1.0 } else { 0.0 }) as f32
+    };
+    let rgba = stillkit::Rgba::new(channel(0), channel(1), channel(2), channel(3));
+    let intensity = if hdr {
+        rgba.r.max(rgba.g).max(rgba.b).max(1.0)
+    } else {
+        1.0
+    };
+    let base = stillkit::Rgba::new(
+        rgba.r / intensity,
+        rgba.g / intensity,
+        rgba.b / intensity,
+        rgba.a,
+    );
+    let to8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let hex = format!("#{:02X}{:02X}{:02X}", to8(base.r), to8(base.g), to8(base.b));
+    let key = format!("field/{}/swatch", f.path);
+    let open = s.local.picker.as_ref().is_some_and(|(p, _)| *p == f.path);
+    // The value in the field's own shape (an array or `r g b a` keys), at its intensity.
+    let shaped = {
+        let template = f.value.clone();
+        move |c: stillkit::Rgba| {
+            let channels = [c.r * intensity, c.g * intensity, c.b * intensity, c.a];
+            let n = count.clamp(3, 4);
+            match &template {
+                Value::Object(_) => Value::Object(
+                    ["r", "g", "b", "a"][..n]
+                        .iter()
+                        .zip(channels)
+                        .map(|(k, v)| ((*k).to_owned(), json!(round(f64::from(v)))))
+                        .collect(),
+                ),
+                _ => Value::Array(
+                    channels[..n]
+                        .iter()
+                        .map(|v| json!(round(f64::from(*v))))
+                        .collect(),
+                ),
+            }
+        }
+    };
+    let path = f.path.clone();
+    let mut swatch = row()
+        .key(key.clone())
+        .w(36.0)
+        .h(ROW - 2.0)
+        .radius(super::style::RADIUS)
+        .fill(base.with_alpha(1.0))
+        .label("Pick colour")
+        .tooltip("Pick colour")
+        .expanded(open)
+        .on_press(move |s: &mut Studio| {
+            s.local.picker = match &s.local.picker {
+                Some((p, _)) if *p == path => None,
+                _ => Some((path.clone(), stillkit_kit::Hsva::from_rgba(base))),
+            };
+        });
+    if open && let Some((_, hsva)) = &s.local.picker {
+        let (path, commit_path, shaped_commit) = (f.path.clone(), f.path.clone(), shaped.clone());
+        let picker = stillkit_kit::ColorPicker::new(*hsva)
+            .alpha(count >= 4)
+            .width(232.0)
+            .on_change(move |s: &mut Studio, picked, done| {
+                let value = shaped(picked.rgba());
+                s.local.picker = Some((path.clone(), picked));
+                if done {
+                    s.local.draft = None;
+                    commit(s, &path, value, "Pick colour");
+                } else {
+                    s.local.draft = Some((path.clone(), value));
+                }
+            })
+            .build();
+        let hex_field = field(
+            l,
+            Size::Sm,
+            format!("field/{}/hex", f.path),
+            Some(icons::HASH),
+            "",
+            hex.trim_start_matches('#'),
+            move |x| {
+                x.on_submit(move |s: &mut Studio, t| {
+                    if let Some(rgb) = parse_hex(t) {
+                        let picked = stillkit::Rgba::new(rgb[0], rgb[1], rgb[2], base.a);
+                        s.local.picker =
+                            Some((commit_path.clone(), stillkit_kit::Hsva::from_rgba(picked)));
+                        commit(s, &commit_path, shaped_commit(picked), "Set colour");
+                    }
+                })
+            },
+        );
+        let panel = super::style::float(l, col())
+            .pad(10.0)
+            .gap(10.0)
+            .radius(l.radius.md)
+            .child(picker)
+            .child(hex_field);
+        swatch = swatch.overlay(popover(panel).on_dismiss(|s: &mut Studio| {
+            s.local.picker = None;
+            s.local.draft = None;
+        }));
+    }
+    row()
+        .gap(8.0)
+        .align(Align::Center)
+        .child(swatch)
+        .child(
+            text(hex)
+                .text_size(11.5)
+                .family(mono())
+                .color(c.foreground.0),
+        )
+        .children(hdr.then(|| {
+            text(format!("× {intensity:.2}"))
+                .text_size(11.0)
+                .color(c.muted_foreground.0)
+        }))
+}
+
+/// `RRGGBB` or `RGB` (with or without `#`) as channels from 0 to 1.
+fn parse_hex(text: &str) -> Option<[f32; 3]> {
+    let t = text.trim().trim_start_matches('#');
+    let full: String = match t.len() {
+        3 => t.chars().flat_map(|c| [c, c]).collect(),
+        6 => t.to_owned(),
+        _ => return None,
+    };
+    let byte = |i: usize| u8::from_str_radix(full.get(i..i + 2)?, 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
+}
+
+/// A number box: the value to edit, its unit after it as a quiet label (not part of what
+/// you type, as in Unreal); a new value on Enter.
 fn number(
     l: &ara_kit::look::Look,
     key: &str,
@@ -613,11 +845,11 @@ fn number(
     read_only: bool,
     commit: impl Fn(&mut Studio, f64) + 'static,
 ) -> El<Studio> {
-    let shown = match unit {
-        Some(u) if !u.is_empty() => format!("{} {u}", show(value)),
-        _ => show(value),
-    };
-    let unit = unit.map(str::to_owned);
+    let shown = show(value);
+    let unit = unit.filter(|u| !u.is_empty()).map(str::to_owned);
+    let label = unit
+        .clone()
+        .map(|u| text(u).text_size(10.5).color(l.c.muted_foreground.0));
     let mut f = text_input(key.to_owned())
         .focus_ring(false)
         .grow(1.0)
@@ -650,6 +882,7 @@ fn number(
             move |e| e.border(1.0, ring)
         })
         .child(f)
+        .children(label)
 }
 
 /// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.

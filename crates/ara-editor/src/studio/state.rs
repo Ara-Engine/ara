@@ -221,6 +221,12 @@ pub struct Local {
     pub hierarchy_query: String,
     /// A number being scrubbed: field path, channel, value at the press, and its value now.
     pub scrub: Option<(String, Option<usize>, f64, f64)>,
+    /// The field being scrubbed as its whole value (`field path`, value): the Inspector
+    /// shows it and the Scene previews it until the commit lands.
+    pub draft: Option<(String, serde_json::Value)>,
+    /// The open colour picker: its field path and the colour it holds (kept as HSV, so a
+    /// grey keeps its hue while dragging).
+    pub picker: Option<(String, stillkit_kit::Hsva)>,
     /// The open dropdown, by key.
     pub select: Option<String>,
     /// The open context menu: its layout, what it acts on, and where (window design px).
