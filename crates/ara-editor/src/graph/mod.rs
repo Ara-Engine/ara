@@ -58,6 +58,22 @@ struct Pin {
     direction: Direction,
     ty: String,
     connected: bool,
+    /// The input's default value, drawn on the pin row (see [`Inline`]).
+    inline: Option<Inline>,
+}
+/// An input's default value shown inside its node, as Unreal shows pin defaults: the
+/// constant the material's `node.add` generated for the input (named `…Input<n>`, feeding
+/// only it) is not drawn as a node of its own.
+struct Inline {
+    /// The constant node holding the value; edits go to it.
+    node: String,
+    text: String,
+    swatch: Option<Color>,
+}
+/// Whether `name` is one a material node's generated input default gets (`value_3Input0`).
+fn default_name(name: &str) -> bool {
+    name.rsplit_once("Input")
+        .is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 struct NodeView {
     id: String,
@@ -166,6 +182,8 @@ pub struct Canvas {
     wires: Vec<Wire>,
     labels: Labels,
     errors: BTreeMap<String, String>,
+    /// Generated input defaults drawn inline on their consumer's pin, not as nodes.
+    defaults: BTreeSet<String>,
     drag: Option<interaction::Drag>,
     pointer: [f32; 2],
 }
@@ -187,6 +205,7 @@ impl Canvas {
             wires: Vec::new(),
             labels: Labels::default(),
             errors: BTreeMap::new(),
+            defaults: BTreeSet::new(),
             drag: None,
             pointer: [0.; 2],
         };
@@ -244,20 +263,65 @@ impl Canvas {
     }
     /// Semantic node/port geometry for agents, including culled nodes and annotations.
     pub fn report(&self, rect: Box2) -> serde_json::Value {
-        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"inline":pin.inline.as_ref().map(|i|serde_json::json!({"node":i.node,"value":i.text})),"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
     }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();
         self.index.clear();
         self.wires.clear();
+        let mut uses = BTreeMap::<&str, usize>::new();
+        for edge in self.graph.edges.values() {
+            *uses.entry(edge.from.node.as_str()).or_default() += 1;
+        }
+        self.defaults = self
+            .graph
+            .nodes
+            .iter()
+            .filter(|(id, node)| {
+                node.kind == "material.literal"
+                    && uses.get(id.as_str()).copied().unwrap_or(0) <= 1
+                    && node
+                        .payload
+                        .get("name")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(default_name)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut inline = BTreeMap::new();
+        for edge in self.graph.edges.values() {
+            let Some(node) = self
+                .graph
+                .nodes
+                .get(&edge.from.node)
+                .filter(|_| self.defaults.contains(&edge.from.node))
+            else {
+                continue;
+            };
+            let look = style::look(&self.graph, &edge.from.node, node);
+            let value = look.value.unwrap_or_default();
+            self.labels.prepare(&value, text);
+            inline.insert(
+                (edge.to.node.clone(), edge.to.port.clone()),
+                Inline {
+                    node: edge.from.node.clone(),
+                    text: value,
+                    swatch: look.swatch,
+                },
+            );
+        }
         let connected = self
             .graph
             .edges
             .values()
+            .filter(|edge| !self.defaults.contains(&edge.from.node))
             .flat_map(|edge| [&edge.from, &edge.to])
             .map(|endpoint| (endpoint.node.as_str(), endpoint.port.as_str()))
             .collect::<BTreeSet<_>>();
         for (id, node) in &self.graph.nodes {
+            if self.defaults.contains(id) {
+                continue;
+            }
             let look = style::look(&self.graph, id, node);
             // Unplaced nodes (text-authored) are laid out below, once heights are known.
             let position = self
@@ -276,6 +340,7 @@ impl Canvas {
                     direction: port.direction,
                     ty: port.ty.clone(),
                     connected: connected.contains(&(id.as_str(), name.as_str())),
+                    inline: inline.remove(&(id.clone(), name.clone())),
                 })
                 .collect::<Vec<_>>();
             let inputs = ports
@@ -318,6 +383,9 @@ impl Canvas {
         self.layout_unplaced();
         let transitions = self.graph.header.payload.get("transitions");
         for (id, edge) in &self.graph.edges {
+            if self.defaults.contains(&edge.from.node) {
+                continue;
+            }
             let label = transitions
                 .and_then(|t| t.get(id))
                 .and_then(serde_json::Value::as_str)
@@ -534,6 +602,63 @@ impl Canvas {
     /// Every node id, for Select All.
     pub fn node_ids(&self) -> Vec<String> {
         self.nodes.iter().map(|n| n.id.clone()).collect()
+    }
+    /// Whether `id` is a generated input default drawn on its consumer's pin.
+    pub fn is_default(&self, id: &str) -> bool {
+        self.defaults.contains(id)
+    }
+    /// The inline default on `node`'s input `port`: its constant node and its text.
+    pub fn inline(&self, node: &str, port: &str) -> Option<(&str, &str)> {
+        let view = self.nodes.get(*self.index.get(node)?)?;
+        let inline = view
+            .ports
+            .iter()
+            .find(|p| p.name == port)?
+            .inline
+            .as_ref()?;
+        Some((inline.node.as_str(), inline.text.as_str()))
+    }
+    /// The inline input value under a screen point: its constant node, its text and the
+    /// value box (to edit it in place).
+    pub fn inline_at(&self, p: [f32; 2], rect: Box2) -> Option<(&str, &str, Box2)> {
+        self.inline_boxes(rect)
+            .find(|(_, _, b)| b.contains(p[0], p[1]))
+    }
+    /// Every inline input value, topmost node first: its constant node, its text and its
+    /// value box on screen.
+    pub fn inline_boxes(&self, rect: Box2) -> impl Iterator<Item = (&str, &str, Box2)> {
+        self.nodes
+            .iter()
+            .rev()
+            .filter(|node| node.look.shape == Shape::Pins)
+            .flat_map(move |node| {
+                let r = self.node_rect(node, rect);
+                node.ports
+                    .iter()
+                    .filter(|pin| pin.direction == Direction::Input)
+                    .enumerate()
+                    .filter_map(move |(row, pin)| {
+                        let inline = pin.inline.as_ref()?;
+                        let y =
+                            r.y + (node.pins_top() + (row as f32 + 0.5) * ROW) * self.camera.zoom;
+                        let b = self.inline_box(pin, inline, r.x, y);
+                        Some((inline.node.as_str(), inline.text.as_str(), b))
+                    })
+            })
+    }
+    /// The value box of an input's inline default, right of its label, for the pin row
+    /// centred at `y` on a node whose left edge is `x` (screen).
+    fn inline_box(&self, pin: &Pin, inline: &Inline, x: f32, y: f32) -> Box2 {
+        let z = self.camera.zoom;
+        let small = z * paint::SMALL;
+        let left = x + 12. * z + self.labels.width(&pin.label) * small + 6. * z;
+        let chip = if inline.swatch.is_some() { 14. } else { 0. };
+        Box2 {
+            x: left,
+            y: y - 8. * z,
+            w: self.labels.width(&inline.text) * small + (12. + chip) * z,
+            h: 16. * z,
+        }
     }
     fn node_rect(&self, node: &NodeView, rect: Box2) -> Box2 {
         let position = if let Some(interaction::Drag::Nodes {

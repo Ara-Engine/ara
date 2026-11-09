@@ -43,6 +43,17 @@ pub struct Page {
     pub dirty: bool,
     /// The Add Node search, while it is open.
     pub adding: Option<Adding>,
+    /// An input's inline default being typed, while its field is open.
+    pub editing: Option<Editing>,
+}
+
+/// An inline input default edited in place: its constant node, the text it started from,
+/// and the value box's window rectangle (left, top, width).
+#[derive(Clone)]
+pub struct Editing {
+    node: String,
+    text: String,
+    at: (f32, f32, f32),
 }
 
 /// The Add Node search: what is typed, where the node goes (graph space; the view's centre
@@ -299,6 +310,31 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             }
         }
     }
+    // A clicked inline value opens its field over the box, from an element of no size.
+    let mut at_value = el().key("graph/value-anchor").absolute(0.0, 0.0).size(0.0);
+    if let Some(editing) = s.graph.editing.as_ref() {
+        let (doc, node) = (doc.clone(), editing.node.clone());
+        let input = field(
+            l,
+            Size::Sm,
+            "graph/value",
+            None,
+            "",
+            &editing.text,
+            move |x| {
+                x.select_all_on_focus().on_submit(move |s: &mut Studio, t| {
+                    s.graph.editing = None;
+                    set_value(s, &doc, &node, t);
+                })
+            },
+        )
+        .w(editing.at.2.max(96.0));
+        at_value = at_value.overlay(
+            stillkit::el::popover(input)
+                .at(editing.at.0 - 4.0, editing.at.1 - 6.0)
+                .on_dismiss(|s: &mut Studio| s.graph.editing = None),
+        );
+    }
     let toolbar = row()
         .h(super::style::TOOLBAR + 6.0)
         .pad_x(8.0)
@@ -388,10 +424,14 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             }
             _ => Handled::No,
         });
-    let body = row()
-        .grow(1.0)
-        .min_h(0.0)
-        .child(col().grow(1.0).min_w(0.0).child(canvas).child(at_point));
+    let body = row().grow(1.0).min_h(0.0).child(
+        col()
+            .grow(1.0)
+            .min_w(0.0)
+            .child(canvas)
+            .child(at_point)
+            .child(at_value),
+    );
     let body = if animation {
         body
     } else {
@@ -566,24 +606,24 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
                 .unwrap_or_else(|| value.to_string());
             let (doc, node_id) = (doc.to_owned(), id.clone());
             out = out.child(prop(
-                if op == "parameter" { "Default" } else { "Value" }.into(),
-                field(l, Size::Sm, format!("material/value/{id}"), None, "", &shown, move |x| {
-                    x.on_submit(move |s: &mut Studio, t| {
-                        // JSON, or lanes typed as `0.18, 0.42, 0.9`.
-                        let Ok(mut value) = serde_json::from_str::<Value>(t)
-                            .or_else(|_| serde_json::from_str(&format!("[{}]", t.trim())))
-                        else {
-                            return;
-                        };
-                        if value.is_number() {
-                            value = json!([value]);
-                        }
-                        let command = json!({"cmd": "editor.material.value.set", "args": {"node": node_id, "value": value}});
-                        if let Err(error) = s.editor.apply_to(&doc, vec![command], "Edit material node value") {
-                            s.editor.report_failure(&error);
-                        }
-                    })
-                }),
+                if op == "parameter" {
+                    "Default"
+                } else {
+                    "Value"
+                }
+                .into(),
+                field(
+                    l,
+                    Size::Sm,
+                    format!("material/value/{id}"),
+                    None,
+                    "",
+                    &shown,
+                    move |x| {
+                        x.select_all_on_focus()
+                            .on_submit(move |s: &mut Studio, t| set_value(s, &doc, &node_id, t))
+                    },
+                ),
             ));
         }
         let inputs: Vec<_> = node
@@ -595,6 +635,27 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
             out = out.child(band("Inputs".into(), String::new(), icons::ARROW_RIGHT));
         }
         for (port, socket) in inputs {
+            let pin = style::pin_label(node, port, socket.direction, &socket.ty);
+            // A default drawn on the pin is typed here too, as Unreal's Details do.
+            if let Some((default, value)) = shown.canvas.inline(id, port) {
+                let (doc, node_id) = (doc.to_owned(), default.to_owned());
+                out = out.child(prop(
+                    pin,
+                    field(
+                        l,
+                        Size::Sm,
+                        format!("material/input/{id}/{port}"),
+                        None,
+                        "",
+                        value,
+                        move |x| {
+                            x.select_all_on_focus()
+                                .on_submit(move |s: &mut Studio, t| set_value(s, &doc, &node_id, t))
+                        },
+                    ),
+                ));
+                continue;
+            }
             let source = graph
                 .edges
                 .values()
@@ -609,7 +670,6 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
                             style::op_title(from.kind.trim_start_matches("material."))
                         })
                 });
-            let pin = style::pin_label(node, port, socket.direction, &socket.ty);
             out = out.child(prop(
                 pin,
                 row()
@@ -730,6 +790,18 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
                 s.local.focus = Some("material/add/search");
                 s.graph.dirty = true;
                 return true;
+            }
+            let value = (still && !right)
+                .then(|| shown.canvas.inline_at(p, rect))
+                .flatten()
+                .map(|(node, text, b)| Editing {
+                    node: node.to_owned(),
+                    text: text.to_owned(),
+                    at: (e.at.x - p[0] + b.x, e.at.y - p[1] + b.y, b.w),
+                });
+            if value.is_some() {
+                s.graph.editing = value;
+                s.local.focus = Some("graph/value");
             }
             match shown.canvas.end(p, rect) {
                 Ok(edits) => {
@@ -968,17 +1040,45 @@ fn add_node(s: &mut Studio, doc: &str, kind: &str) {
     }
 }
 
-/// Removes the selected nodes (one undo step).
+/// Sets a constant or parameter's value from typed text: JSON, a number, or lanes typed as
+/// `0.18, 0.42, 0.9` (one undo step).
+fn set_value(s: &mut Studio, doc: &str, node: &str, typed: &str) {
+    let Ok(mut value) = serde_json::from_str::<Value>(typed)
+        .or_else(|_| serde_json::from_str(&format!("[{}]", typed.trim())))
+    else {
+        return;
+    };
+    if value.is_number() {
+        value = json!([value]);
+    }
+    let command =
+        json!({"cmd": "editor.material.value.set", "args": {"node": node, "value": value}});
+    if let Err(error) = s
+        .editor
+        .apply_to(doc, vec![command], "Edit material node value")
+    {
+        s.editor.report_failure(&error);
+    }
+}
+
+/// Removes the selected nodes and their inline defaults (one undo step).
 fn delete_selection(s: &mut Studio) {
     let Some(shown) = s.graph.shown.as_ref() else {
         return;
     };
     let doc = shown.doc.clone();
-    let commands: Vec<_> = shown
-        .canvas
-        .selection
+    let graph = shown.canvas.graph();
+    let selected = &shown.canvas.selection;
+    // A node's inline input defaults go with it.
+    let defaults = graph
+        .edges
+        .values()
+        .filter(|e| selected.contains(&e.to.node) && shown.canvas.is_default(&e.from.node))
+        .map(|e| &e.from.node);
+    let commands: Vec<_> = selected
         .iter()
-        .filter(|id| shown.canvas.graph().nodes.contains_key(*id))
+        .filter(|id| graph.nodes.contains_key(*id))
+        .chain(defaults)
         .map(|node| json!({"cmd": "graph.node.remove", "args": {"node": node}}))
         .collect();
     if commands.is_empty() {
@@ -992,6 +1092,19 @@ fn delete_selection(s: &mut Studio) {
         }
         Err(error) => s.editor.report_failure(&error),
     }
+}
+
+/// The open canvas's inline input values: constant node and box centre in the canvas
+/// (tests click them without a window).
+#[cfg(test)]
+pub(super) fn inline_values(s: &Studio) -> Vec<(String, (f32, f32))> {
+    let rect = view_rect(s);
+    s.graph.shown.as_ref().map_or_else(Vec::new, |g| {
+        g.canvas
+            .inline_boxes(rect)
+            .map(|(node, _, b)| (node.to_owned(), (b.x + b.w * 0.5, b.y + b.h * 0.5)))
+            .collect()
+    })
 }
 
 /// The nodes on the open canvas (tests read the page without a window).

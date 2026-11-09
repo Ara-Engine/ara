@@ -761,6 +761,165 @@ fn right_clicking_the_material_graph_adds_a_node_where_it_was_clicked() {
 }
 
 #[test]
+fn material_inputs_show_their_defaults_inline_and_edit_in_place() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/inline.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc.clone()}));
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "editor.material.node.add", "args": {"kind": "material.add", "position": [40, 40]}})],
+                "Add",
+            )
+            .unwrap();
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
+    });
+    rt.touch(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let values = super::graph::inline_values(rt.state());
+    assert_eq!(
+        values.len(),
+        2,
+        "Add's two inputs show their defaults: {values:?}"
+    );
+    let nodes = super::graph::node_ids(rt.state());
+    assert!(
+        values.iter().all(|(id, _)| !nodes.contains(id)),
+        "the defaults are not nodes of their own"
+    );
+    let canvas = rt.find("graph/view").expect("the canvas shows");
+    let (constant, (x, y)) = values[0].clone();
+    let (x, y) = (canvas.left + x, canvas.top + y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    assert!(
+        rt.state().graph.editing.is_some(),
+        "a click opens the value"
+    );
+    // The whole value is selected: typing replaces it.
+    rt.type_text("0.25");
+    rt.key(0x0D);
+    settle(&mut rt);
+    rt.touch(|s| super::graph::sync(s, "material"));
+    assert!(
+        rt.state().graph.editing.is_none(),
+        "Enter commits and closes"
+    );
+    let workspace = rt.state().editor.host.store().workspace();
+    let doc = workspace
+        .find("samples/inline.graph")
+        .expect("the material");
+    let graph =
+        ara_graph::Graph::from_document(workspace.doc(doc.as_str()).expect("doc")).expect("graph");
+    assert_eq!(graph.nodes[&constant].params["value"], json!([0.25]));
+}
+
+/// The open effect at `path`, compiled.
+fn effect_at(rt: &Runtime<Studio>, path: &str) -> ara_vfx::Effect {
+    let workspace = rt.state().editor.host.store().workspace();
+    let doc = workspace.find(path).expect("the effect");
+    let graph =
+        ara_graph::Graph::from_document(workspace.doc(doc.as_str()).expect("doc")).expect("graph");
+    ara_vfx::Effect::from_graph(&graph).expect("it compiles")
+}
+
+#[test]
+fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/fire.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::shell::commands::Target::None));
+    settle(&mut rt);
+    assert!(
+        rt.find("vfx/selection").is_some(),
+        "the Selection panel shows"
+    );
+    // The first module with a number to type.
+    let effect = effect_at(&rt, "samples/fire.graph");
+    let emitter = &effect.emitters[0];
+    let (stage, module, key) = [
+        ("spawn", &emitter.stacks.spawn),
+        ("initialize", &emitter.stacks.initialize),
+        ("update", &emitter.stacks.update),
+    ]
+    .into_iter()
+    .flat_map(|(stage, modules)| modules.iter().map(move |m| (stage, m)))
+    .find_map(|(stage, m)| {
+        let value = ara_json::to_value(&m.module).ok()?;
+        let key = value
+            .as_object()?
+            .iter()
+            .find(|(k, v)| *k != "op" && v.is_number())?
+            .0
+            .clone();
+        Some((stage, m.name.clone(), key))
+    })
+    .expect("a module with a number");
+    let item = format!("{}|{stage}|{module}", emitter.name);
+    let row = rt
+        .find(&format!("vfx/module/{item}"))
+        .expect("the module's row");
+    rt.pointer_move(row.center().x, row.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(row.center().x, row.center().y);
+    rt.pointer_up(row.center().x, row.center().y);
+    settle(&mut rt);
+    let field = rt
+        .find(&format!("vfx/set/{key}"))
+        .expect("the picked module's value shows in the Selection");
+    let selection = rt.find("vfx/selection").expect("selection");
+    assert!(field.left >= selection.left, "in the Selection panel");
+    rt.pointer_move(field.center().x, field.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(field.center().x, field.center().y);
+    rt.pointer_up(field.center().x, field.center().y);
+    rt.frame(FRAME);
+    rt.type_text("7");
+    rt.key(0x0D);
+    settle(&mut rt);
+    let effect = effect_at(&rt, "samples/fire.graph");
+    let edited = [
+        &effect.emitters[0].stacks.spawn,
+        &effect.emitters[0].stacks.initialize,
+        &effect.emitters[0].stacks.update,
+    ]
+    .into_iter()
+    .flatten()
+    .find(|m| m.name == module)
+    .expect("the module");
+    assert_eq!(
+        ara_json::to_value(&edited.module).unwrap()[&key],
+        json!(7.0)
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(

@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/Snowy7/stillkit?rev=a461220958893f7f447a3d6eb50f6b7c563fc74b#a461220958893f7f447a3d6eb50f6b7c563fc74b"
+source = "git+https://github.com/Snowy7/stillkit?rev=4d21b04c93a79fc87bdfb4cb012869de94bc40af#4d21b04c93a79fc87bdfb4cb012869de94bc40af"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_consumer 0.39.2",
@@ -12238,7 +12238,7 @@ checksum = "ae139f051204a4af015d4f0ed3a1f7a51020d03a44c7cf249168c543d88131e9"
 [[package]]
 name = "stillkit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=a461220958893f7f447a3d6eb50f6b7c563fc74b#a461220958893f7f447a3d6eb50f6b7c563fc74b"
+source = "git+https://github.com/Snowy7/stillkit?rev=4d21b04c93a79fc87bdfb4cb012869de94bc40af#4d21b04c93a79fc87bdfb4cb012869de94bc40af"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_macos 0.27.2",
@@ -12274,7 +12274,7 @@ dependencies = [
 [[package]]
 name = "stillkit-kit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=a461220958893f7f447a3d6eb50f6b7c563fc74b#a461220958893f7f447a3d6eb50f6b7c563fc74b"
+source = "git+https://github.com/Snowy7/stillkit?rev=4d21b04c93a79fc87bdfb4cb012869de94bc40af#4d21b04c93a79fc87bdfb4cb012869de94bc40af"
 dependencies = [
  "stillkit",
 ]

@@ -6,7 +6,7 @@ use super::*;
 use ara_ui::{paint::Draw, source::stable_id};
 
 /// Caption and pin text size relative to the shaping size.
-const SMALL: f32 = 11. / text::SIZE;
+pub(super) const SMALL: f32 = 11. / text::SIZE;
 /// Caption of an in-node preview tile whose render has not landed yet.
 pub(super) const RENDERING: &str = "Rendering…";
 
@@ -480,6 +480,31 @@ impl Canvas {
                     },
                     inner,
                     theme.card,
+                );
+            }
+            if let Some(inline) = pin.inline.as_ref().filter(|_| detailed && input) {
+                // Unreal's pin default: a sunken value box beside the label.
+                let b = self.inline_box(pin, inline, r.x, y);
+                fill(list, id, b, 3. * z, mix(theme.background, theme.card, 0.3));
+                border(list, id, b, 3. * z, 1., alpha(theme.separator, 160));
+                let mut tx = b.x + 6. * z;
+                if let Some(swatch) = inline.swatch {
+                    let chip = Box2 {
+                        x: tx,
+                        y: b.y + 3. * z,
+                        w: 10. * z,
+                        h: 10. * z,
+                    };
+                    fill(list, id, chip, 2. * z, swatch);
+                    tx += 14. * z;
+                }
+                self.labels.paint(
+                    list,
+                    id,
+                    &inline.text,
+                    [tx, y - 7. * z],
+                    small,
+                    theme.foreground,
                 );
             }
             if detailed {
