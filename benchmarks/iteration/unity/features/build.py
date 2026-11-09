@@ -35,7 +35,8 @@ def source_hashes(args=None):
 
 def snapshot(binary, args=None):
     record_path = project.rust_target(args) / "build-provenance.json"
-    record = json.loads(record_path.read_text())
+    provenance_raw = record_path.read_bytes()
+    record = json.loads(provenance_raw)
     if record["exit_code"] != 0 or record["source_sha256"] != source_hashes(args):
         raise ValueError("Rust fixture source differs from the successful build; rebuild in a CPU slot")
     binary = project.BASE.scratch_path(binary)
@@ -51,9 +52,15 @@ def snapshot(binary, args=None):
         archive.chmod(0o755)
     if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
         raise ValueError("immutable executable snapshot is corrupt")
+    provenance_digest = hashlib.sha256(provenance_raw).hexdigest()
+    provenance = archive.parent / (provenance_digest + ".build.json")
+    if not provenance.exists():
+        with provenance.open("xb") as output: output.write(provenance_raw)
+    if provenance.read_bytes() != provenance_raw:
+        raise ValueError("immutable build provenance snapshot is corrupt")
     return archive, {"executable_sha256": digest, "snapshot": str(archive),
-                     "build_provenance": str(record_path),
-                     "build_provenance_sha256": hashlib.sha256(record_path.read_bytes()).hexdigest()}
+                     "build_provenance": str(provenance), "original_build_provenance": str(record_path),
+                     "build_provenance_sha256": provenance_digest}
 
 
 def build(args):

@@ -205,6 +205,20 @@ impl BenchWorld {
         }
     }
 
+    /// Exact original identities/components for nonstructural kernels, outside timing.
+    pub fn check_static_ids(&self) {
+        for (slot, &entity) in self.entities.iter().enumerate() {
+            let id = self
+                .world
+                .get::<StableId>(entity)
+                .expect("original live identity");
+            assert_eq!(id.0 as usize, slot, "identity at slot {slot}");
+            assert!(self.world.get::<Position>(entity).is_some());
+            assert!(self.world.get::<Velocity>(entity).is_some());
+            assert!(self.world.get::<Rotation>(entity).is_some());
+        }
+    }
+
     /// Sort by logical slot, independent of ECS allocation/playback order.
     pub fn records(&mut self) -> Vec<[f32; 12]> {
         let n = self.entities.len();

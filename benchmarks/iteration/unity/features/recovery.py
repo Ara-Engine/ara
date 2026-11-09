@@ -18,8 +18,13 @@ REGISTRY = ROOT / "target/perf-scale/feature-preference-recovery/projects.json"
 def checked_project(project):
     project = Path(project).resolve()
     if not project.is_relative_to((ROOT / "target").resolve()): raise ValueError("preference project is outside owned target")
-    marker = json.loads((project / ".ara-query-feature.json").read_text())
-    if marker.get("repository_root") != str(ROOT) or marker.get("fixture") not in ("query_filter-v1", "extended-v1"):
+    markers = [(".ara-query-feature.json", ("query_filter-v1", "extended-v1")),
+               (".ara-s8-current.json", ("s8-current-v1",))]
+    present = [(path, families) for name, families in markers if (path := project / name).is_file()]
+    if len(present) != 1: raise ValueError("preference project needs exactly one owned fixture marker")
+    path, families = present[0]
+    marker = json.loads(path.read_text())
+    if marker.get("repository_root") != str(ROOT) or marker.get("fixture") not in families:
         raise ValueError("preference project marker ownership differs")
     return project
 

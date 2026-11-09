@@ -135,6 +135,10 @@ def config_path(args):
     return BASE.scratch_path(args.project) / "inputs" / args.run / (cases.name(args) + "_" + cases.variant(args) + ".json")
 
 
+def recovery_temp(args):
+    return ROOT / ("target/perf-scale/ufx-t" if cases.extended(args) else "target/perf-scale/uf-t")
+
+
 def build_command(args=None):
     return {"command": ["/usr/bin/nice", "-n", "10", "cargo", "build", "--locked", "--release", "--bin", binary_name(args), "--manifest-path", str(HERE / "rust/Cargo.toml")],
             "environment": {"CARGO_TARGET_DIR": str(rust_target(args)), "CARGO_BUILD_JOBS": "2",

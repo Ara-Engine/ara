@@ -14,6 +14,7 @@ import build
 import inputs
 import cases
 import recovery
+import monitor
 
 
 def run(args, engine):
@@ -46,7 +47,7 @@ def run(args, engine):
         with subprocess.Popen(argv, env=environment, cwd=project.ROOT, stdout=output, stderr=subprocess.STDOUT) as child:
             try:
                 try:
-                    status = child.wait(timeout=args.timeout)
+                    status, observed = monitor.wait(child, args.timeout, project.resources)
                 finally:
                     if child.poll() is None:
                         child.terminate()
@@ -71,11 +72,9 @@ def run(args, engine):
                 or metadata.get("burst_force_safety_checks") is not False or metadata.get("burst_debug") is not False):
             raise RuntimeError("controlled Burst flags or preference restoration not proven")
         checkpoint = recovery.successful(project.BASE.scratch_path(args.project), result, metadata)
-    after = project.resources(strict=timed)
+    after = project.resources(strict=False)
     if case_input and hashlib.sha256(Path(case_input["path"]).read_bytes()).hexdigest() != case_input["sha256"]:
         raise RuntimeError("case input changed during execution; retain raw output and rerun")
-    if timed and before["power"].splitlines()[0] != after["power"].splitlines()[0]:
-        raise RuntimeError("power source changed during the engine process; retain raw output and rerun")
     try:
         checked = project.prepared_manifest(args)
         if checked["marker_sha256"] != prepared["marker_sha256"]:
@@ -88,18 +87,25 @@ def run(args, engine):
             "error": str(error), "prepared_project": prepared, "observed_prepared_inputs": actual})
         reason = "Unity initialized first-import metadata/settings" if bootstrap else "prepared inputs/templates changed"
         raise RuntimeError(reason + "; measurements are unaccepted; run prepare and a fresh actual smoke") from error
+    quiet = not before.get("busy_tools") and not after.get("busy_tools") and monitor.quiet(observed)
+    power_matches = monitor.power_stable(before, observed, after)
+    accepted = timed and quiet and power_matches
     project.BASE.write_json(result.with_suffix(".launch.json"), {
         "command": argv, "nice": 10, "before": before, "wall_seconds": time.monotonic() - started,
-        "execution_lane": lane, "timings_accepted": timed, "strict_timing_guard_enforced": timed,
+        "execution_lane": lane, "timings_accepted": accepted, "strict_timing_guard_enforced": timed,
         "executable": executable,
         "case_input": case_input,
         "initial_preference_checkpoint": checkpoint if engine == "unity" else None,
         "prepared_project": prepared, "prepared_inputs_unchanged_after_run": True,
         "environment_sha256": (hashlib.sha256(Path(str(result) + ".environment.json").read_bytes()).hexdigest()
                                if engine == "unity" else None),
-        "after": after, "resource_guards_passed": not before.get("busy_tools") and not after.get("busy_tools"),
+        "after": after, "resource_observations_during_run": observed,
+        "resource_sample_interval_seconds": 2,
+        "resource_guards_passed": quiet, "power_source_unchanged": power_matches,
         "result_sha256": hashlib.sha256(result.read_bytes()).hexdigest()})
-    summary = {"result": str(result), "execution_lane": lane, "timings_accepted": timed,
+    if timed and not accepted:
+        raise RuntimeError("competing tools/power change observed; raw outputs retained, timings unaccepted")
+    summary = {"result": str(result), "execution_lane": lane, "timings_accepted": accepted,
                "state_audit_passed": True}
     if timed:
         summary.update(p50_ms=data["p50_ms"], p95_ms=data["p95_ms"])

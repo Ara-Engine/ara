@@ -37,9 +37,13 @@ namespace AraFeatureControl
         {
             if (!Application.isBatchMode) throw new InvalidOperationException("preference control requires batch mode");
             string project = Directory.GetParent(Application.dataPath).FullName;
-            var marker = JsonUtility.FromJson<Marker>(File.ReadAllText(Path.Combine(project, ".ara-query-feature.json")));
+            string featureMarker = Path.Combine(project, ".ara-query-feature.json");
+            string s8Marker = Path.Combine(project, ".ara-s8-current.json");
+            if (File.Exists(featureMarker) == File.Exists(s8Marker)) throw new InvalidOperationException("ambiguous or missing owned fixture marker");
+            bool s8 = File.Exists(s8Marker);
+            var marker = JsonUtility.FromJson<Marker>(File.ReadAllText(s8 ? s8Marker : featureMarker));
             if (marker == null || string.IsNullOrEmpty(marker.repository_root) ||
-                (marker.fixture != "query_filter-v1" && marker.fixture != "extended-v1") ||
+                (s8 ? marker.fixture != "s8-current-v1" : marker.fixture != "query_filter-v1" && marker.fixture != "extended-v1") ||
                 !project.StartsWith(Path.GetFullPath(Path.Combine(marker.repository_root, "target")) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                 throw new InvalidOperationException("unowned preference recovery project");
             return project;

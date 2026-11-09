@@ -113,6 +113,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 before.check_churn_ids(warmup);
                 after.check_churn_ids(warmup);
                 simd.check_churn_ids(warmup);
+            } else {
+                before.check_static_ids();
+                after.check_static_ids();
+                simd.check_static_ids();
             }
             if !a
                 .iter()
@@ -154,6 +158,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     if workload == "w4" {
         world.check_churn_ids(warmup + frames);
+    } else {
+        world.check_static_ids();
     }
     let mut hash = blake3::Hasher::new();
     for row in world.records() {
@@ -175,7 +181,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         p95_ms: sorted[(frames as usize * 95).div_ceil(100) - 1],
         ms,
         state_hash: hash.finalize().to_hex().to_string(),
-        stable_ids_asserted: workload == "w4",
+        stable_ids_asserted: true,
     };
     if args[8] != "-" {
         std::fs::write(
