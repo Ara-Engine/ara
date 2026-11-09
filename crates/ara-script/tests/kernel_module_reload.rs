@@ -1,4 +1,4 @@
-//! A hot query wrapper keeps real L1 edits while its borrowed-span kernel stays cold.
+//! Wrapper L1 keeps the kernel cold; editing the kernel heats it through an atomic L3 cascade.
 #[path = "../examples/ecs_kernel_bench/direct.rs"]
 #[allow(dead_code)] // The shared source selector also carries optional direct mode.
 mod direct;
@@ -12,7 +12,7 @@ mod support;
 #[path = "../examples/ecs_kernel_bench/topology.rs"]
 mod topology;
 
-use ara_script::abi::RELOAD_L1;
+use ara_script::abi::{ESC_COLD, ESC_RELINK, RELOAD_L1, RELOAD_L3};
 use bevy_ecs::entity::Entity;
 use serde_json::json;
 
@@ -26,7 +26,13 @@ fn vector(live: &support::Live, entity: Entity, name: &str) -> [f32; 4] {
     std::array::from_fn(|axis| values[axis].as_f64().expect("finite field") as f32)
 }
 
-fn assert_state(live: &support::Live, entities: &[Entity], workload: &str, edited_ticks: usize) {
+fn assert_state(
+    live: &support::Live,
+    entities: &[Entity],
+    workload: &str,
+    wrapper_edited_ticks: usize,
+    kernel_edited_ticks: usize,
+) {
     let component_ids = [
         "BenchStableId",
         "BenchPosition",
@@ -69,10 +75,12 @@ fn assert_state(live: &support::Live, entities: &[Entity], workload: &str, edite
             }
         }
         // Eleven contiguous rows exercise two SIMD groups and all three scalar tails.
-        // The wrapper edits p.w once per chunk; the frozen kernel preserves it (v.w=0).
+        // Both edits use exact binary fractions. The original kernel preserves p.w
+        // because v.w=0; row zero also proves the wrapper's L1 survives its relink.
         if id == 0 {
-            expected[0][3] += edited_ticks as f32 * 0.25;
+            expected[0][3] += wrapper_edited_ticks as f32 * 0.25;
         }
+        expected[0][3] += kernel_edited_ticks as f32 * 0.125;
         let actual = ["BenchPosition", "BenchVelocity", "BenchRotation"]
             .map(|name| vector(live, entity, name));
         for (field, (actual, expected)) in actual
@@ -91,7 +99,7 @@ fn assert_state(live: &support::Live, entities: &[Entity], workload: &str, edite
 }
 
 #[test]
-fn hot_wrapper_l1_keeps_cold_simd_kernel_generation_native_columns_and_three_tails() {
+fn hot_wrapper_l1_then_cold_kernel_l3_preserve_native_columns_and_three_tails() {
     let _clr = support::clr_lock();
     for workload in ["w1", "w3"] {
         let mut live = topology::start(workload, "simd", true, true).expect("two modules compile");
@@ -130,7 +138,7 @@ fn hot_wrapper_l1_keeps_cold_simd_kernel_generation_native_columns_and_three_tai
             .collect::<Vec<_>>();
         // Initial module-load reports are retained until the first boundary.
         live.tick();
-        assert_state(&live, &entities, workload, 0);
+        assert_state(&live, &entities, workload, 0, 0);
         let reports_before_edit = live.reports.len();
         live.edit(
             "Game",
@@ -149,10 +157,10 @@ fn hot_wrapper_l1_keeps_cold_simd_kernel_generation_native_columns_and_three_tai
             1,
             "only the wrapper applies one EnC delta after the edit"
         );
-        assert_state(&live, &entities, workload, 1);
+        assert_state(&live, &entities, workload, 1, 0);
         for edited_ticks in 2..=4 {
             live.run();
-            assert_state(&live, &entities, workload, edited_ticks);
+            assert_state(&live, &entities, workload, edited_ticks, 0);
         }
         let mut after = live.host.modules();
         after.sort_by(|left, right| left.name.cmp(&right.name));
@@ -177,6 +185,106 @@ fn hot_wrapper_l1_keeps_cold_simd_kernel_generation_native_columns_and_three_tai
                 .component_id(name)
                 .expect("native component retained")),
             ids
+        );
+
+        // Change the real cold arithmetic body without changing its public surface.
+        // R10 heats this module at L3; Game must relink with its existing L1 intact.
+        let entry = std::str::from_utf8(&kernel_source)
+            .expect("kernel source is UTF-8")
+            .lines()
+            .find(|line| line.contains("public static void Batch("))
+            .expect("the actual borrowed-span batch entry");
+        let before_body = format!("{entry}\n    {{");
+        let after_body = format!(
+            "{before_body}\n        for (var row = 0; row < positions.Length; row++) positions[row].Value.W += 0.125f;"
+        );
+        let frame_before_kernel_edit = live.frame;
+        let reports_before_kernel_edit = live.reports.len();
+        let game_source = std::fs::read(live.file("Game")).expect("edited Game source");
+        let mut expected_heated = modules.clone();
+        for module in &mut expected_heated {
+            module.hot = true;
+            module.generation += 1;
+        }
+        live.edit("Kernel", &before_body, &after_body);
+        live.until(
+            "the cold kernel's observable arithmetic body edit",
+            |live| {
+                let reports = &live.reports[reports_before_kernel_edit..];
+                assert!(
+                    reports.is_empty() || reports.len() == 2,
+                    "both cascade reports must arrive at the same boundary: {reports:?}"
+                );
+                let mut actual = live.host.modules();
+                actual.sort_by(|left, right| left.name.cmp(&right.name));
+                assert_eq!(
+                    actual.as_slice(),
+                    if reports.is_empty() {
+                        modules.as_slice()
+                    } else {
+                        expected_heated.as_slice()
+                    },
+                    "both module generations and heats transition at that boundary"
+                );
+                vector(live, entities[1], "BenchPosition")[3] != 1.0
+            },
+        );
+        let cascade = live.reports[reports_before_kernel_edit..]
+            .iter()
+            .map(|report| {
+                (
+                    report.module,
+                    report.kind,
+                    report.escalation,
+                    report.cascade,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            cascade,
+            [
+                (kernel.slot, RELOAD_L3, ESC_COLD, 2),
+                (game_slot, RELOAD_L3, ESC_RELINK, 2),
+            ],
+            "exactly the cold rebuild and dependent relink must apply together"
+        );
+        let mut heated = live.host.modules();
+        heated.sort_by(|left, right| left.name.cmp(&right.name));
+        eprintln!("kernel topology L3 workload={workload} after={heated:?} reports={cascade:?}");
+        assert_eq!(
+            heated, expected_heated,
+            "the edited kernel heats; both generations advance once"
+        );
+        for kernel_edited_ticks in 1..=4 {
+            if kernel_edited_ticks > 1 {
+                live.run();
+            }
+            let wrapper_edited_ticks = 4 + (live.frame - frame_before_kernel_edit) as usize;
+            assert_state(
+                &live,
+                &entities,
+                workload,
+                wrapper_edited_ticks,
+                kernel_edited_ticks,
+            );
+        }
+        assert_eq!(
+            std::fs::read(live.file("Game")).expect("relinked Game source"),
+            game_source
+        );
+        assert_eq!(
+            [
+                "BenchStableId",
+                "BenchPosition",
+                "BenchVelocity",
+                "BenchRotation"
+            ]
+            .map(|name| live
+                .host
+                .component_id(name)
+                .expect("native component retained after L3")),
+            ids,
+            "unchanged layouts retain native component IDs through the cascade"
         );
         assert!(
             live.diagnostics
