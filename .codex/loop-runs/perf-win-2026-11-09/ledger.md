@@ -145,3 +145,56 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Startup audit found prebuilt watched modules lack compiler dependency state on first
   edits. Prioritize actual Core->Game leaf/root edit repro and correctness fix before
   extending the new-main performance captures. Nothing is silently called complete.
+
+
+### Published watched graph regression (verified)
+
+- Actual old-SDK first-leaf repro fails ARA0904: Game references Core, which has
+  not built. First-root repro changes Core generation but Game keeps value11
+  instead of12; only Core Initial/cascade1 is reported. Raw before logs retained
+  under `target/perf-main-integration-20261109/prebuilt-*-before.log`.
+- Stronger Rust fixture now covers Core->Game plus an independent broken Unrelated
+  module, both edit directions and cold/hot modes, zero-compile published startup,
+  atomic L3/heat/generation/native identities, subsequent L1 and failure/recovery.
+  Its old-SDK leaf repro reproduces the same dependency failure.
+- batch_queries owns the bounded C# fix: explicit published-loaded PE/source snapshot
+  separate from compiled Roslyn ModuleState, exact loaded-image/source identity,
+  first-edit L3/new baseline and dependent inclusion. Do not fake a compilation or
+  invoke all-graph RecoverAll (unrelated saves and cold heating would be wrong).
+  Public Host ABI5 stays; the internal Host/compiler IPC can version its payload.
+  Root owns Rust fixture and all test/build grants. Source implementation in progress.
+- Frozen ABI5 throughput r02 has8accepted round0 cases/4pairs, then a clean STOP
+  before reversed round; all full48B states/source/resource guards pass. Evidence
+  remains partial; no fresh Unity/market claim. Compiler fix takes priority.
+
+### Further bounded experiments retained
+
+- `target/perf-feature-batching-candidate/`: source-only control plus fixed32768
+  query batching, safe contiguous DAG columns, and combined variant. Four real
+  schedule stages/dependencies stay; dirty Changed filters/selected epoch stamping
+  stay unchanged. ONE combined quality configuration granted, no timings/Unity yet.
+- Compile audit found repeated publication artifact reads/hashes in ownership scans
+  and reparsing unchanged consumer trees after dependency/configuration changes.
+  Address after published-state correctness. Preserve public inventory hydration,
+  fresh-build-equivalent bytes, dependency error/recovery and corrupted-cache rejection.
+  Project compilation already has two independent-module workers; no speculative
+  live-reload concurrency redesign is authorized by this finding.
+
+- Published-loaded implementation verified: exact PE/PDB/source/dependency snapshot,
+  no synthetic compilation or baseline, first edit L3/new baseline, atomic published
+  dependents, unchanged saves skip parsing. Explicit unwatched images remain exact
+  references when saved source is invalid; untrusted source bodies stay unknown.
+  Internal IPC v3; public Host ABI5 unchanged. Missing/corrupt source snapshot or
+  complete PDB-byte mismatch forces a real compile, without blessing modified caches.
+- Independent source review has no remaining must-fix. Fresh solution build has zero
+  warnings/errors; all156 CompileServer tests pass. Four actual published-runtime
+  families pass in cold/hot modes, plus13 reload/lifecycle/recovery/multi-world tests.
+  Native identities, first-edit generations/heats, atomic cascades and later L1 verified.
+  Errors from an unrelated module remain active during edits and repairs.
+- Initial new-fixture failures retained: diagnostic reports were incorrectly counted
+  as applied code, then queued historical error rows were treated as current failure.
+  Assertions now inspect actual reload reports and latest structured completion scopes.
+  Shutdown cancellation no longer escapes the compiler worker. All-target scripting
+  Clippy passes after one borrowed-slice fixture correction; formatter114 packages passes.
+  Raw logs: target/perf-main-integration-20261109/published-*.log and
+  prebuilt-watch-scope-recovery-fixed.log. No runtime throughput/Unity claim from this fix.

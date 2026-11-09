@@ -43,6 +43,21 @@ Source membership changes rebuild the owning module; changes to module/domain
 boundaries request an L4 Play restart from the current snapshot, which loads the
 new inventory. Editor code is never loaded into a player.
 
+`source.snapshot.json` binds the publication to its exact source texts, dependency
+identities and complete PE/PDB hashes. Watched Play startup loads a validated image
+without repeating Roslyn compilation. The compiler adopts those loaded facts separately
+from compiled state: the first edit emits L3 and creates its first real EnC baseline;
+later supported body edits use L1. Published dependents participate in the same atomic
+cascade. Missing or stale snapshot metadata triggers ordinary compilation. A PDB
+whose complete bytes differ from its trusted publication is rebuilt, even when its
+debug identifier still matches.
+
+An explicitly supplied unwatched assembly remains authoritative when its saved sources
+are broken or different. If committed source bodies cannot be validated, consumers may
+compile against that exact loaded image; rebuilding, changing heat or rebinding that
+read-only module requires republishing it. No saved source is presented as committed
+code, and unrelated saved errors do not join another module's edit or recovery.
+
 Preparation requests reuse a hidden, parent-bound SDK process. Each request
 rescans the requested absolute root and rechecks compilation inputs; folder
 ownership and results are not cached by the host. SDK content changes replace

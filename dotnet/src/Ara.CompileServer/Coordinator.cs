@@ -3,7 +3,9 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Collections.Immutable;
 using Ara.Hosting;
+using Microsoft.CodeAnalysis;
 
 namespace Ara.CompileServer;
 
@@ -32,7 +34,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal TimeSpan AgentQuiet = TimeSpan.FromMilliseconds(150);
     readonly Func<long> _clock;
 
-    enum WorkKind { Initial, Change, Heat, Rebuild, Recover }
+    enum WorkKind { Initial, Change, Heat, Rebuild, Recover, PublishedRebind }
 
     sealed class Work(WorkKind kind, uint slot, uint origin, long tEvent)
     {
@@ -96,11 +98,12 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     }
 
     /// <summary>
-    /// Adds a module (after the modules it references), builds its first image and watches its
-    /// folder. A reference to a module that is not watched yet is refused with a diagnostic.
+    /// Adds a module after its references, adopting captured publication facts or building the
+    /// first image, then watches its folder. Unknown module references are refused.
     /// </summary>
     internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyList<string> assemblies,
-        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0)
+        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0,
+        PublishedSnapshot? published = null)
     {
         lock (_lock)
         {
@@ -113,12 +116,17 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 return;
             }
             var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
+            if (published is not null && !m.ImportPublished(published, this)) initial = true;
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
-            if (watch) _watcher.Watch(slot, m.WatchDirectory);
+            if (watch && !m.ReadOnlyPublished) _watcher.Watch(slot, m.WatchDirectory);
             foreach (var a in assemblies) WatchReference(a);
             if (initial) _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
+            else if (m.PublishedReferencesDrift(this))
+                _human.AddLast(new Work(WorkKind.PublishedRebind, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
+            else if (m.PublishedSourcesDrift)
+                _human.AddLast(new Work(WorkKind.Change, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
         }
         _wake.Set();
     }
@@ -160,6 +168,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 
     internal void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
     {
+        lock (_lock) if (_bySlot.TryGetValue(slot, out var module) && module.ReadOnlyPublished) return;
         uint origin;
         var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
         var current = canonical.Where(path => ModuleWatcher.IsSourceInput(path) && !Directory.Exists(path))
@@ -280,6 +289,10 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             {
                 Run(w, ct);
             }
+            catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+            {
+                // Closing Play cancels outstanding human and agent work alike.
+            }
             catch (OperationCanceledException) when (agent && !_stop.IsCancellationRequested)
             {
                 CancelAttempts();
@@ -331,13 +344,13 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             return;
         }
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
-        if (w.Kind == WorkKind.Heat && m.State is { } current && current.Hot == (w.Hot && Enc)) return;
+        if (w.Kind == WorkKind.Heat && m.LoadedHot == (w.Hot && Enc)) return;
         Begin(m.Slot, m.Name, m.Profile);
         CompileState(true);
         switch (w.Kind)
         {
             case WorkKind.Initial:
-                var unbuilt = m.References.Where(r => _byName[r].State is null).ToList();
+                var unbuilt = m.References.Where(r => !_byName[r].Loaded).ToList();
                 if (unbuilt.Count > 0)
                 {
                     SendDiagnostics(m.Slot, m.Dir, [], [(AraCodes.DependencyFailed, "error",
@@ -351,11 +364,14 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 Handle(Evaluated(m.Compile(w.Paths, w.TEvent, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Heat:
-                if (m.State is { } s && s.Hot == (w.Hot && Enc)) return;
+                if (m.LoadedHot == (w.Hot && Enc)) return;
                 Handle(Evaluated(m.Full(Escalation.Requested, w.Hot, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Rebuild:
                 Handle(Evaluated(m.Full(w.Escalation, null, this, ct), ct), w.Origin, ct);
+                break;
+            case WorkKind.PublishedRebind:
+                Handle(Evaluated(m.Cascade(this, ct), ct), w.Origin, ct);
                 break;
         }
     }
@@ -453,7 +469,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         {
             if (m == root || !m.References.Any(names.Contains)) continue;
             names.Add(m.Name);
-            if (m.State is not null) list.Add(m);
+            if (m.Loaded) list.Add(m);
         }
         return list;
     }
@@ -509,7 +525,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     // its usual path and never inspects unrelated saved modules.
     bool TryEditWave(Outcome trigger, uint origin, CancellationToken cancellation)
     {
-        if (trigger.Intent != CompileIntent.CurrentSources || trigger.Module.State is null) return false;
+        if (trigger.Intent != CompileIntent.CurrentSources || !trigger.Module.Loaded) return false;
         var previousCascade = _cascade;
         var previousInventories = _waveInventories;
         _waveInventories = [];
@@ -531,7 +547,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 foreach (var module in _modules)
                 {
                     cancellation.ThrowIfCancellationRequested();
-                    if (module.State is null || affected.Contains(module)) continue;
+                    if (!module.Loaded || module.ReadOnlyPublished || affected.Contains(module)) continue;
                     var closure = Closure(module);
                     // Join through an affected dependent, never merely through
                     // a shared unchanged ancestor or an unrelated saved edit.
@@ -625,6 +641,28 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         if (!_byName.TryGetValue(name, out var m)) return null;
         return _cascade is not null && _cascade.TryGetValue(m, out var o) && o.Next is { } prepared ? prepared : m.State;
     }
+
+    /// <inheritdoc/>
+    public MetadataReference? Reference(string name) => Dependency(name)?.Reference
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedReference : null);
+
+    /// <inheritdoc/>
+    public string? Surface(string name) => Dependency(name)?.Surface;
+
+    /// <inheritdoc/>
+    public ImmutableDictionary<string, string>? CommittedTexts(string name) => Dependency(name)?.Texts
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedTexts : null);
+
+    /// <inheritdoc/>
+    public IEnumerable<string>? CommittedPaths(string name) => Dependency(name)?.Texts.Keys
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedPaths : null);
+
+    /// <inheritdoc/>
+    public bool HasOpaqueSourceOwnership => _modules.Any(module => module.ReadOnlyPublished && module.LoadedPaths is null);
+
+    /// <inheritdoc/>
+    public string? PublishedFingerprint(string name) => _cascade is not null && _byName.TryGetValue(name, out var candidate) && _cascade.ContainsKey(candidate)
+        ? null : _byName.TryGetValue(name, out var module) ? module.PublicationFingerprint : null;
 
     /// <inheritdoc/>
     public bool HasDependents(ModuleSession module) => _modules.Any(m => m.References.Contains(module.Name));

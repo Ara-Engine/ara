@@ -44,3 +44,8 @@ is set by the Rust host.
 - A swap the host refuses at registration rolls the module's staged view back; the server
   still thinks it applied, so its next delta fails the generation check and asks for L3.
 - Prebuilt modules (`assembly`, no watch) wait for the modules they reference to stage first.
+- Watched publications capture and verify one exact PE/PDB/source snapshot for staging
+  and compiler adoption. Dependency identities are checked while staging. Stale or
+  incomplete snapshots use ordinary initial compilation; no synthetic EnC baseline.
+- An explicitly supplied unwatched image stays authoritative when saved sources differ.
+  Without trusted committed bodies it is a read-only compiler reference until republished.

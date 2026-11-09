@@ -119,6 +119,8 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   - `reload`: v1 L1/L3 path. `levels`: L1/L2/L3 edits against a running game.
     `modules`: cascades, relink vs rebuild, breaking edits, cycles. `nondisruption`: the four
     D20 guarantees. `restart`: L4 (runs from a private copy of `Ara.Host`'s output).
+  - `prebuilt_watch`: zero-compile published startup, first leaf/root L3, atomic dependents,
+    later L1, failure/recovery and explicit unwatched images with broken saved sources.
   - `aot`: NativeAOT sample. `run_worker`: limits.
   - `kernel_module_reload`: Game L1 and an atomic cold Kernel L3/dependent relink;
     full native identities, fields, SIMD tails, heats and generation transitions.
