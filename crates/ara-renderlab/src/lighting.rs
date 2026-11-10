@@ -106,8 +106,11 @@ pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a>
 }
 
 /// Local lights. Ara's `lumens` is point-equivalent: 4 pi times the candela.
-pub(crate) fn lights(lights: &[LightView], gaps: &mut Gaps) -> Vec<Light> {
-    let mut out = Vec::with_capacity(lights.len());
+pub(crate) fn lights<'a>(
+    lights: impl IntoIterator<Item = &'a LightView>,
+    gaps: &mut Gaps,
+) -> Vec<Light> {
+    let mut out = Vec::new();
     for light in lights {
         let intensity = light.lumens.max(0.) / (4. * PI);
         let candela = light.color.map(|c| c.max(0.) * intensity);

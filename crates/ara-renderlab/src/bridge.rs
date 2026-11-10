@@ -5,6 +5,7 @@
 use crate::{
     ActivePath, Options, PathChoice,
     decals::Decals,
+    effects::Effects,
     environment,
     gaps::Gaps,
     lighting::{self, Metering, SkySource},
@@ -57,6 +58,7 @@ pub(crate) struct Bridge {
     scene: Scene,
     terrain: Terrain,
     decals: Decals,
+    effects: Effects,
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
@@ -150,6 +152,7 @@ impl Bridge {
             scene: Scene::default(),
             terrain: Terrain::default(),
             decals: Decals::default(),
+            effects: Effects::default(),
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
@@ -197,6 +200,7 @@ impl Bridge {
             &mut self.gaps,
         )?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
+        self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &self.metering);
         self.engine.set_settings(lighting::settings(
@@ -211,7 +215,10 @@ impl Bridge {
             self.engine.set_sun(sun)?;
             self.applied.sun = sun;
         }
-        let lights = lighting::lights(&frame.lights, &mut self.gaps);
+        let lights = lighting::lights(
+            frame.lights.iter().chain(self.effects.lights()),
+            &mut self.gaps,
+        );
         if self.applied.lights != lights {
             self.engine.set_lights(&lights)?;
             self.applied.lights = lights;
@@ -347,10 +354,6 @@ impl Bridge {
                 "terrain and foliage levels of detail and foliage wind",
                 "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
             );
-        }
-        if !frame.effects.is_empty() {
-            self.gaps
-                .unsupported("VFX graph effects", "particles are not drawn");
         }
         if !frame.look.volumes.is_empty() {
             self.gaps.unsupported(

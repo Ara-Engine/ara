@@ -18,6 +18,8 @@ mod batch;
 #[cfg(not(target_vendor = "apple"))]
 mod decals;
 #[cfg(not(target_vendor = "apple"))]
+mod effects;
+#[cfg(not(target_vendor = "apple"))]
 mod environment;
 #[cfg(not(target_vendor = "apple"))]
 mod gaps;
