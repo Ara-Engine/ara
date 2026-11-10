@@ -983,6 +983,112 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
 }
 
 #[test]
+fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
+    let mut rt = open();
+    let keys: Vec<String> = std::iter::once("scene/view".to_owned())
+        .chain(
+            super::scene_overlays::OVERLAYS
+                .iter()
+                .map(|d| format!("scene/overlay/{}", d.id)),
+        )
+        .collect();
+    // A few passes of the host's feedback: rects reported, lengths measured.
+    let report = |rt: &mut Runtime<Studio>| {
+        for _ in 0..4 {
+            settle(rt);
+            rt.touch(|s| s.local.rects.clear());
+            track(rt, &keys.iter().map(String::as_str).collect::<Vec<_>>());
+            rt.update(super::scene_overlays::measure);
+        }
+    };
+    // Top-edge overlays never overlap: their rects are disjoint along the edge.
+    let disjoint = |rt: &Runtime<Studio>| {
+        let mut top: Vec<_> = super::scene_overlays::OVERLAYS
+            .iter()
+            .filter(|d| d.id != "orientation")
+            .filter_map(|d| rt.find(&format!("scene/overlay/{}", d.id)))
+            .filter(|r| r.top < 140.0)
+            .collect();
+        top.sort_by(|a, b| a.left.total_cmp(&b.left));
+        top.windows(2).all(|w| w[0].right <= w[1].left + 0.5)
+    };
+    report(&mut rt);
+    assert!(disjoint(&rt), "wide: every toolbar fits");
+    let wide = rt.find("scene/overlay/camera").unwrap().width();
+    rt.resize((900, 900));
+    report(&mut rt);
+    assert!(
+        disjoint(&rt),
+        "narrow: toolbars squeeze rather than overlap"
+    );
+    let narrow: f32 = [
+        "tools",
+        "transform",
+        "snapping",
+        "view",
+        "visibility",
+        "camera",
+    ]
+    .iter()
+    .filter_map(|id| rt.find(&format!("scene/overlay/{id}")))
+    .map(|r| r.width())
+    .sum();
+    assert!(
+        narrow < 900.0 - 300.0,
+        "some collapsed to their icons: {narrow}"
+    );
+    rt.resize((1600, 900));
+    report(&mut rt);
+    let back = rt.find("scene/overlay/camera").unwrap().width();
+    assert!(
+        (back - wide).abs() < 1.0,
+        "wide again: it expands ({wide} → {back})"
+    );
+    // A preset saves the layout; loading it puts a moved overlay back.
+    use crate::catalog::Target;
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "view.overlays.preset.save",
+            &Target::Text("Clean".into()),
+        )
+    });
+    let before = rt
+        .state()
+        .editor
+        .state
+        .settings
+        .get("viewport.overlays")
+        .cloned();
+    rt.update(|s| super::scene_overlays::update(s, "camera", |d| d.hidden = true));
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "view.overlays.preset.load",
+            &Target::Text("Clean".into()),
+        )
+    });
+    assert_eq!(
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get("viewport.overlays")
+            .cloned(),
+        before
+    );
+    assert!(!super::scene_overlays::dock(rt.state(), "camera").hidden);
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "view.overlays.preset.delete",
+            &Target::Text("Clean".into()),
+        )
+    });
+    assert!(super::scene_overlays::presets(rt.state()).is_empty());
+}
+
+#[test]
 fn tabs_drag_into_another_area_or_split_one_off_its_edge() {
     let mut rt = open();
     settle(&mut rt);

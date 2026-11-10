@@ -2589,4 +2589,25 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "GPU, driver, features and limits.",
     },
+    Command {
+        id: "view.overlays.preset.save",
+        title: "Save Overlay Preset As…",
+        icon: "bookmark",
+        keys: "",
+        summary: "Save where each Scene toolbar is docked under a name, to bring the layout back later.",
+    },
+    Command {
+        id: "view.overlays.preset.load",
+        title: "Load Overlay Preset",
+        icon: "layout-grid",
+        keys: "",
+        summary: "Dock the Scene toolbars as a saved preset has them (target: its name).",
+    },
+    Command {
+        id: "view.overlays.preset.delete",
+        title: "Delete Overlay Preset",
+        icon: "trash",
+        keys: "",
+        summary: "Remove a saved Scene toolbar preset (target: its name).",
+    },
 ];

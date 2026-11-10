@@ -953,7 +953,10 @@ fn pump(
                 })
             })
             .collect();
-        rt.touch(|s| s.local.rects = rects);
+        rt.touch(|s| {
+            s.local.rects = rects;
+            scene_overlays::measure(s);
+        });
     }
     rt.sync_text_input(surface);
     surface.set_cursor(rt.cursor());

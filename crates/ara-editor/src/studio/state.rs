@@ -345,6 +345,9 @@ pub struct Local {
     pub(crate) about: Option<super::about::Page>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
+    /// Each Scene overlay's length along its edge when last shown expanded (design px), so
+    /// one squeezed to its icon knows when it fits again.
+    pub overlay_lengths: std::collections::BTreeMap<&'static str, f32>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
