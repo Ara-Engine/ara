@@ -6,7 +6,7 @@
 //! know which OS window hosts them.
 pub(crate) mod asset_import;
 pub(crate) mod asset_ops;
-pub(crate) mod assets;
+pub(crate) use crate::assets;
 mod assets_favourites;
 mod axis;
 pub(crate) use crate::build;
@@ -75,7 +75,7 @@ mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
-pub(crate) mod names;
+pub(crate) use crate::names;
 pub(crate) use names::is_texture;
 mod mesh_paint_panel;
 mod probes;
@@ -86,12 +86,12 @@ mod scene_toolbars;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
-pub mod overlay;
+pub use crate::overlay;
 mod palette;
 mod panel_boundary;
 mod pilot;
 pub(crate) use panel_boundary::ProbeFailure;
-mod panels;
+pub(crate) mod panels;
 pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
@@ -110,7 +110,8 @@ pub(crate) use dialog::Dialog;
 pub(crate) use game_panel::game_stats_text;
 pub use hierarchy::LARGE_GROUP;
 pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
-use panels::{button, escape};
+use panels::button;
+pub(crate) use panels::escape;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -523,18 +524,7 @@ pub(crate) enum Binding {
     /// A Connect an agent row's button.
     Agent(ara_agents::Client, agents_connect::AgentAction),
 }
-/// The editor's fonts: Inter (UI), JetBrains Mono (code, timings) and Noto Naskh
-/// Arabic (right-to-left text). The shell and the loading window share them.
-pub(crate) fn text_system() -> ara_ui::Result<TextSystem> {
-    TextSystem::new(
-        [
-            include_bytes!("../../assets/fonts/InterVariable.ttf").to_vec(),
-            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
-            include_bytes!("../../../ara-ui-text/fonts/NotoNaskhArabic.ttf").to_vec(),
-        ],
-        "'Inter Variable', 'Noto Naskh Arabic'",
-    )
-}
+pub(crate) use crate::text::text_system;
 impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
     pub fn new(editor: &mut Editor, size: [f32; 2]) -> ara_ui::Result<Self> {

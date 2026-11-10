@@ -1,4 +1,6 @@
-//! Typed player profiling port and its owned Play mailbox adapter.
+//! Profiling a running Play player: the typed port (`Backend`: its targets, Start, Stop,
+//! Snapshot and Freeze requests, and their status) and its adapter over the Play
+//! service's mailbox (`attach_play`), owned by the `Editor` (`Editor::play_profiling`).
 mod play;
 pub(crate) use play::attach as attach_play;
 
@@ -19,7 +21,8 @@ pub(crate) struct Scope {
     pub binding: u64,
 }
 impl Scope {
-    pub(super) fn label(&self) -> String {
+    /// The target in words: its world, player, source and binding.
+    pub(crate) fn label(&self) -> String {
         format!(
             "{} · player {} · source {} · binding {}",
             self.world, self.player, self.source, self.binding

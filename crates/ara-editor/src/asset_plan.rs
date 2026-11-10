@@ -1,5 +1,8 @@
-//! Pure projection of browser gestures to one atomic typed command batch.
-use super::*;
+//! Asset file gestures (move, rename, duplicate, delete) as one atomic batch of typed
+//! commands on the project marker: pure, so both windows and tests plan alike.
+use serde_json::{Value, json};
+
+use crate::assets;
 pub(crate) struct Plan {
     pub title: String,
     pub calls: Vec<Value>,

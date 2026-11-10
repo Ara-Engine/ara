@@ -10,7 +10,7 @@ use stillkit::el::{Align, Axis, El, Side, col, el, icon, image, menu, row, text}
 
 use super::Studio;
 use super::style::ROW;
-use crate::shell::import_batch::{self, Change};
+use crate::import_edit::{self, Change};
 
 /// The asset inspector for `path`.
 pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
@@ -122,7 +122,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
     }
     if let Some(asset) = asset
         && matches!(asset.kind.as_str(), "graph" | "animation")
-        && let Some(doc) = crate::shell::import_panel::namespace::document(workspace, asset)
+        && let Some(doc) = crate::asset_links::namespace::document(workspace, asset)
     {
         let id = doc.id.to_string();
         body = body.child(
@@ -162,7 +162,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
         );
     }
     if let Some(browser) = &s.assets {
-        let (uses, used_by) = crate::shell::import_panel::links(browser, workspace, path);
+        let (uses, used_by) = crate::asset_links::links(browser, workspace, path);
         for (title, links) in [("Uses", uses), ("Used by", used_by)] {
             body = body.child(band(l, &format!("{title} · {}", links.len())));
             if links.is_empty() {
@@ -245,7 +245,7 @@ fn settings_rows(
             "MeshSettings",
         ),
     };
-    let defaults = import_batch::inherited_defaults(&s.editor, &settings.importer, defaults)?;
+    let defaults = import_edit::inherited_defaults(&s.editor, &settings.importer, defaults)?;
     let db = s.editor.host.store().schema();
     let metadata = db.get(schema).and_then(|ty| match &ty.shape {
         ara_schema::Shape::Struct { fields, .. } => Some(fields),
@@ -268,7 +268,7 @@ fn settings_rows(
             "lodError" => "LOD error".to_owned(),
             "flipNormalY" => "Flip normal Y".to_owned(),
             "maxDimension" => "Max dimension".to_owned(),
-            _ => crate::shell::inspector_panel::sentence(key),
+            _ => crate::names::sentence(key),
         };
         let field_key = format!("asset/setting/{key}");
         let (doc_id, setting) = (doc.to_owned(), key.clone());
@@ -281,7 +281,7 @@ fn settings_rows(
             desc.map(|d| crate::inspector::widget(db, d))
         {
             let nullable = desc.is_some_and(|d| matches!(&d.ty, ara_schema::ValueType::Option(_)));
-            let choices = import_batch::enum_values(options, nullable);
+            let choices = import_edit::enum_values(options, nullable);
             let current = choices
                 .iter()
                 .find(|(v, _)| *v == value)
@@ -367,7 +367,7 @@ fn set(s: &mut Studio, doc: &str, field: &str, value: Value) {
         value,
     };
     if let Err(error) =
-        import_batch::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
+        import_edit::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
     {
         s.editor.report_failure(&*error);
     }

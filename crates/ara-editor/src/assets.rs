@@ -9,7 +9,7 @@ use std::{
     },
 };
 #[cfg(test)]
-pub(in crate::shell) mod scan_fixture;
+pub(crate) mod scan_fixture;
 #[cfg(test)]
 mod scan_tests;
 #[derive(Clone, PartialEq, Eq)]
@@ -299,18 +299,6 @@ fn cached_authored_folder<'a>(
         return Ok("");
     }
     Err("This folder is not in the current authored index".into())
-}
-impl super::Shell {
-    /// Retry the cached semantic projection without starting an authoring job.
-    pub(crate) fn refresh_asset_browser(&mut self) -> ara_ui::Result<()> {
-        self.browser.refresh();
-        self.asset_grid_dirty = true;
-        Ok(())
-    }
-    /// The last successful semantic index is immutable during a UI/drop dispatch.
-    pub(crate) fn asset_authored_files(&self) -> &[AuthoredFile] {
-        &self.browser.files
-    }
 }
 fn scan(
     root: &Path,

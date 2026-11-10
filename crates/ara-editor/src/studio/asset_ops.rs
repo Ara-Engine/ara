@@ -7,8 +7,8 @@
 use serde_json::json;
 
 use super::Studio;
+use crate::assets::Asset;
 use crate::catalog::Target;
-use crate::shell::assets::Asset;
 
 /// The `assets.*` commands the studio runs.
 pub(super) const COMMANDS: [&str; 9] = [
@@ -52,8 +52,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             open(s, &a);
             Ok(())
         }
-        ("assets.reveal", Some(a)) => crate::shell::ops::open_external(&reveal_target(s, &a))
-            .map_err(|e| anyhow::anyhow!("{e}")),
+        ("assets.reveal", Some(a)) => {
+            crate::system::open_external(&reveal_target(s, &a)).map_err(|e| anyhow::anyhow!("{e}"))
+        }
         ("assets.copy_reference", Some(a)) => {
             let workspace = s.editor.host.store().workspace();
             let text = a
@@ -136,9 +137,7 @@ pub(super) fn open(s: &mut Studio, a: &Asset) {
             super::commands::run(s, &format!("window.{page}"), &Target::None);
         }
         _ => {
-            if let Err(error) =
-                crate::shell::ops::open_external(&s.editor.host.root().join(&a.path))
-            {
+            if let Err(error) = crate::system::open_external(&s.editor.host.root().join(&a.path)) {
                 s.editor.report_failure(&*error);
             }
         }
@@ -222,8 +221,8 @@ fn duplicate(s: &mut Studio, a: Asset) -> anyhow::Result<()> {
         .as_ref()
         .map(|b| b.items.clone())
         .unwrap_or_default();
-    let plan = crate::shell::asset_ops::plan::duplicate(vec![a], &inventory)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let plan =
+        crate::asset_plan::duplicate(vec![a], &inventory).map_err(|e| anyhow::anyhow!("{e}"))?;
     transact(s, plan.calls, &plan.title)?;
     if let Some(b) = s.assets.as_ref() {
         b.refresh();
@@ -247,8 +246,7 @@ pub(super) fn rename(s: &mut Studio, path: &str, name: &str) {
         return;
     }
     let result = (|| -> anyhow::Result<()> {
-        let source =
-            crate::shell::asset_ops::plan::source(&a).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let source = crate::asset_plan::source(&a).map_err(|e| anyhow::anyhow!("{e}"))?;
         let destination = match source.rsplit_once('/') {
             Some((dir, _)) => format!("{dir}/{name}"),
             None => name.to_owned(),
@@ -291,7 +289,7 @@ pub(super) fn move_to(s: &mut Studio, path: &str, folder: &str) {
             .authored_folder_ref(folder)
             .map_err(|e| anyhow::anyhow!("{e}"))?
             .to_owned();
-        let plan = crate::shell::asset_ops::plan::move_to(vec![a.clone()], &destination)
+        let plan = crate::asset_plan::move_to(vec![a.clone()], &destination)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         transact(s, plan.calls, &plan.title)?;
         if let Some(b) = s.assets.as_mut() {
@@ -360,7 +358,7 @@ pub(super) fn delete(s: &mut Studio, path: &str) {
     let Some(a) = target(s, &Target::Asset(path.to_owned())) else {
         return;
     };
-    let result = crate::shell::asset_ops::plan::delete(vec![a.clone()])
+    let result = crate::asset_plan::delete(vec![a.clone()])
         .map_err(|e| anyhow::anyhow!("{e}"))
         .and_then(|plan| transact(s, plan.calls, &plan.title));
     match result {

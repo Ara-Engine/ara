@@ -527,7 +527,7 @@ fn stack(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> Vec<El<Studio>> {
                         .size(20.0)
                         .key(format!("vfx/add/{}/{stage_name}", emitter.name))
                         .on_press(move |s: &mut Studio| {
-                            let module = crate::shell::vfx_panel::default_module(stage, s.editor.host.store().revision());
+                            let module = crate::vfx_edit::default_module(stage, s.editor.host.store().revision());
                             let command = json!({"cmd":"vfx.stack.edit","args":{"emitter":emitter_name,"stage":stage_add,"name":module.name,"operation":"insert","index":index,"module":module}});
                             if let Err(error) = s.editor.apply_to(&doc_add, vec![command], "Add VFX module") {
                                 s.editor.report_failure(&error);
@@ -545,7 +545,7 @@ fn stack(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> Vec<El<Studio>> {
 /// A module's title: its name, or its kind in words when it is named after it.
 fn module_title(module: &ara_vfx::StackModule, kind: &str) -> String {
     if module.name == kind {
-        crate::shell::inspector_panel::sentence(kind)
+        crate::names::sentence(kind)
     } else {
         module.name.clone()
     }
@@ -683,8 +683,8 @@ fn selection(s: &Studio, doc: &str, effect: &ara_vfx::Effect) -> El<Studio> {
                         .child(
                             text(format!(
                                 "{} · {}",
-                                crate::shell::inspector_panel::sentence(&kind),
-                                crate::shell::inspector_panel::sentence(&stage)
+                                crate::names::sentence(&kind),
+                                crate::names::sentence(&stage)
                             ))
                             .text_size(11.0)
                             .color(c.muted_foreground.0),
@@ -724,7 +724,7 @@ fn settings(
         .flatten()
         .filter(|(k, _)| *k != "op")
     {
-        let name = crate::shell::inspector_panel::sentence(key);
+        let name = crate::names::sentence(key);
         let set = {
             let (doc, emitter, stage, module, value, key) = (
                 doc.to_owned(),
@@ -759,7 +759,7 @@ fn settings(
                     Value::String(t) => t.clone(),
                     Value::Array(items) => items
                         .iter()
-                        .map(crate::shell::vfx_panel::short)
+                        .map(crate::vfx_edit::short)
                         .collect::<Vec<_>>()
                         .join(", "),
                     other => other.to_string(),
@@ -790,7 +790,7 @@ fn settings(
                     },
                 )
             }
-            other => text(crate::shell::vfx_panel::short(other))
+            other => text(crate::vfx_edit::short(other))
                 .text_size(11.5)
                 .color(c.muted_foreground.0),
         };
@@ -816,7 +816,7 @@ fn settings(
 /// Runs module operation `op` (`toggle`, `up`, `down`, `duplicate`, `delete`) on `item`
 /// of effect `doc` (one undo step).
 pub(super) fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
-    if let Err(error) = crate::shell::vfx_panel::module_edit(&mut s.editor, doc, item, op) {
+    if let Err(error) = crate::vfx_edit::module_edit(&mut s.editor, doc, item, op) {
         s.editor.report_failure(&*error);
     }
 }

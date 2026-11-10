@@ -9,13 +9,14 @@ use stillkit::el::{Align, Axis, El, Justify, col, el, icon, row, text, virtual_l
 
 use super::Studio;
 use super::state::LogRow;
-use crate::shell::assets::Asset;
+use crate::assets::Asset;
 
 pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
     match panel {
         "assets" => assets(s),
         "console" => console(s),
         "problems" => problems(s),
+        "mesh-paint" => super::mesh_paint::view(s),
         "agents" => super::agents::agents(s),
         "history" => super::agents::history(s),
         "lighting" => super::lighting::view(s),
@@ -399,7 +400,10 @@ fn assets(s: &Studio) -> El<Studio> {
                 .rsplit('/')
                 .next()
                 .is_some_and(|n| n.starts_with('.'));
-            if hidden || (!s.local.assets_view.show_all && a.is_noise()) {
+            // Support files, and the project's own files at its root (ara.project.json,
+            // notes), show with Show All Files.
+            let root_file = a.kind != "folder" && !a.path.trim_end_matches('/').contains('/');
+            if hidden || (!s.local.assets_view.show_all && (a.is_noise() || root_file)) {
                 false
             } else if let Some(only) = s.local.assets_view.filter {
                 category(a) == Some(only)
@@ -638,7 +642,7 @@ fn view_menu(s: &Studio) -> El<Studio> {
 }
 
 /// Every folder Assets knows (listed, or holding a listed file), without a trailing `/`.
-fn folders(browser: &crate::shell::assets::Browser) -> std::collections::BTreeSet<String> {
+fn folders(browser: &crate::assets::Browser) -> std::collections::BTreeSet<String> {
     let mut out = std::collections::BTreeSet::new();
     for a in &browser.items {
         let path = a.path.trim_end_matches('/');
@@ -894,7 +898,7 @@ fn conflicts_dialog(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
 /// Move to Folder: the project's folders to pick from, searched as you type.
 fn move_dialog(
     s: &Studio,
-    browser: &crate::shell::assets::Browser,
+    browser: &crate::assets::Browser,
 ) -> Option<stillkit::el::Overlay<Studio>> {
     let l = &s.look;
     let c = &l.c;
@@ -986,7 +990,7 @@ fn move_dialog(
 }
 
 /// How many visible entries (files and subfolders) each folder holds directly.
-fn contents(browser: &crate::shell::assets::Browser) -> std::collections::HashMap<String, usize> {
+fn contents(browser: &crate::assets::Browser) -> std::collections::HashMap<String, usize> {
     let mut seen = std::collections::HashSet::new();
     let mut counts = std::collections::HashMap::new();
     for a in &browser.items {
@@ -1021,7 +1025,7 @@ fn folder_tint(l: &ara_kit::look::Look, empty: bool) -> stillkit::Rgba {
 
 /// Every folder in the project, as a tree: the open ones and the current one's ancestors
 /// show their children. A click opens the folder in the grid.
-fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
+fn folder_tree(s: &Studio, browser: &crate::assets::Browser, current: &str) -> El<Studio> {
     let l = &s.look;
     let counts = contents(browser);
     let mut dirs = std::collections::BTreeSet::new();
@@ -1452,9 +1456,20 @@ fn console(s: &Studio) -> El<Studio> {
                 .as_deref()
                 .is_some_and(|s| s.to_lowercase().contains(&query))
     };
+    // This computer's messages (its GPU loader, overlay layers) are not the project's:
+    // they fold into one group above the rest.
+    let machine_record = |r: &&LogRow| r.diagnostic.code == ara_diag::codes::GPU_ENVIRONMENT;
+    let machine: Vec<&LogRow> = s
+        .logs
+        .iter()
+        .filter(machine_record)
+        .filter(|r| s.local.console[level(r.severity)])
+        .filter(matches)
+        .collect();
     let filtered = s
         .logs
         .iter()
+        .filter(|r| !machine_record(r))
         .filter(|r| s.local.console[level(r.severity)])
         .filter(matches);
     // Collapse: one row per repeated record, its latest, counting them all (Unity).
@@ -1600,10 +1615,50 @@ fn console(s: &Studio) -> El<Studio> {
         .console_open
         .and_then(|seq| s.logs.iter().find(|r| r.seq == seq))
         .map(|r| log_detail(s, r));
+    let machine_group = (!machine.is_empty()).then(|| {
+        let c = &l.c;
+        let open = s.local.console_machine;
+        let hover = c.hover_surface.0;
+        let mut group = col().child(
+            row()
+                .key("console/machine")
+                .h(26.0)
+                .pad_x(10.0)
+                .gap(8.0)
+                .align(Align::Center)
+                .label("Driver and overlay messages")
+                .tooltip("Messages from this computer's graphics drivers and overlay layers, not the project")
+                .expanded(open)
+                .hovered(move |e| e.fill(hover))
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "console.machine", &crate::catalog::Target::None)
+                })
+                .child(
+                    icon(if open { icons::CHEVRON_DOWN } else { icons::CHEVRON_RIGHT })
+                        .size(11.0)
+                        .color(c.muted_foreground.0),
+                )
+                .child(icon(icons::MONITOR).size(13.0).color(c.muted_foreground.0))
+                .child(
+                    text("Driver and overlay messages")
+                        .text_size(12.0)
+                        .color(c.muted_foreground.0)
+                        .grow(1.0),
+                )
+                .child(count(l, machine.len(), false)),
+        );
+        if open {
+            for (i, r) in machine.iter().enumerate() {
+                group = group.child(log_row(l, r, i % 2 == 1, s.local.console_open == Some(r.seq)));
+            }
+        }
+        group
+    });
     col()
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
+        .children(machine_group)
         .child(body)
         .children(detail.map(|d| col().child(d)))
 }
@@ -1667,7 +1722,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     if file.ends_with(".cs") {
                         let at = line.map(|l| (l, column.unwrap_or(1)));
                         super::asset_ops::open_in_ide(s, &file, at);
-                    } else if let Err(error) = crate::shell::ops::open_external(&path) {
+                    } else if let Err(error) = crate::system::open_external(&path) {
                         s.editor.report_failure(&*anyhow::anyhow!("{error}"));
                     }
                 }),
@@ -1734,9 +1789,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     &fix.title,
                 )
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) =
-                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                    {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
                         s.editor
                             .report_failure(&std::io::Error::other(error.to_string()));
                     }
@@ -1982,9 +2035,7 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
                     &fix.title,
                 )
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) =
-                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                    {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
                         s.editor
                             .report_failure(&std::io::Error::other(error.to_string()));
                     }
@@ -2091,7 +2142,7 @@ fn place(s: &mut Studio, path: &str, at: (f32, f32)) {
         w: view.width(),
         h: view.height(),
     };
-    let ground = crate::shell::overlay::ground_point(
+    let ground = crate::overlay::ground_point(
         &s.editor.state.camera,
         rect,
         [at.0 - view.left, at.1 - view.top],

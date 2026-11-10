@@ -85,7 +85,7 @@ fn x_arrow(rt: &Runtime<Studio>) -> ([f32; 2], [f32; 2]) {
         w: view.width(),
         h: view.height(),
     };
-    let h = crate::shell::overlay::handles_in(&rt.state().resolved, &rt.state().editor.state, rect)
+    let h = crate::overlay::handles_in(&rt.state().resolved, &rt.state().editor.state, rect)
         .expect("the selection has a gizmo");
     let along = [h.ends[0][0] - h.origin[0], h.ends[0][1] - h.origin[1]];
     let len = (along[0] * along[0] + along[1] * along[1]).sqrt();
@@ -675,6 +675,51 @@ fn the_play_menu_sets_mode_clients_network_and_start_paused() {
 }
 
 #[test]
+fn the_computers_own_messages_fold_into_their_own_console_group() {
+    let mut rt = open();
+    let row = |seq: u64, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
+        seq,
+        severity: ara_diag::Severity::Warning,
+        code: "ARA".into(),
+        message: diagnostic.message.clone(),
+        origin: "engine".into(),
+        at: 0,
+        source: None,
+        count: 1,
+        diagnostic: std::sync::Arc::new(diagnostic),
+    };
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.logs = vec![
+            row(
+                1,
+                ara_diag::Diagnostic::warning(
+                    ara_diag::codes::GPU_ENVIRONMENT,
+                    "An overlay layer is old",
+                ),
+            ),
+            row(
+                2,
+                ara_diag::Diagnostic::warning(ara_diag::Code(1), "The project warns"),
+            ),
+        ];
+        s.local.log_seen = 2;
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("console/machine").is_some(),
+        "the computer's group shows"
+    );
+    assert!(rt.find("console/row/1").is_none(), "folded until opened");
+    assert!(
+        rt.find("console/row/2").is_some(),
+        "the project's own message shows"
+    );
+    press(&mut rt, "console/machine");
+    assert!(rt.find("console/row/1").is_some(), "opened");
+}
+
+#[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
     let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
@@ -860,18 +905,14 @@ fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
 fn scan(rt: &mut Runtime<Studio>) {
     rt.update(|s| {
         let store = s.editor.host.store();
-        s.assets = Some(crate::shell::assets::Browser::new(
+        s.assets = Some(crate::assets::Browser::new(
             s.editor.host.root(),
             store.schema(),
             store.workspace().reference_root(),
         ));
     });
     for _ in 0..200 {
-        if rt.touch(|s| {
-            s.assets
-                .as_mut()
-                .is_some_and(crate::shell::assets::Browser::poll)
-        }) {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::assets::Browser::poll)) {
             break;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -937,7 +978,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     });
     settle(&mut rt);
     press(&mut rt, &format!("assets/move/{art}"));
-    for _ in 0..400 {
+    for _ in 0..3000 {
         if rt.touch(|s| {
             s.editor.tick();
             super::asset_ops::poll_jobs(s);
@@ -955,7 +996,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     std::fs::write(outside.join("readme.txt"), "hello").unwrap();
     let import = |rt: &mut Runtime<Studio>| {
         rt.update(|s| super::asset_ops::import(s, vec![outside.join("readme.txt")], Some(&art)));
-        for _ in 0..400 {
+        for _ in 0..3000 {
             if rt.touch(|s| {
                 s.editor.tick();
                 s.importer.poll(&mut s.editor);
@@ -1089,6 +1130,74 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn the_profiler_picks_the_editor_or_a_player_and_records_it() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.profiler", &crate::catalog::Target::None));
+    settle(&mut rt);
+    press(&mut rt, "profiler/target");
+    assert!(
+        rt.find("profiler/target/editor").is_some(),
+        "the editor is a target"
+    );
+    rt.update(|s| s.local.select = None);
+    settle(&mut rt);
+    press(&mut rt, "profiler/record");
+    assert!(
+        rt.touch(|s| s.editor.host.profiler().is_recording()),
+        "the editor records"
+    );
+    rt.update(|s| s.local.profiling = true);
+    settle(&mut rt);
+    press(&mut rt, "profiler/stop");
+    assert!(!rt.touch(|s| s.editor.host.profiler().is_recording()));
+    rt.update(|s| assert!(!super::profiler::poll(s, true) || s.local.profiler_target.is_none()));
+    // A baseline freezes what shows, to compare later captures' scopes with it.
+    rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+    settle(&mut rt);
+    press(&mut rt, "profiler/baseline");
+    assert!(rt.state().editor.profile_baseline.is_some());
+    press(&mut rt, "profiler/baseline/clear");
+    assert!(rt.state().editor.profile_baseline.is_none());
+}
+
+#[test]
+fn mesh_paint_sets_its_brush_and_sends_scene_presses_to_the_host() {
+    use crate::catalog::Target;
+    use crate::paint::PaintTool;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "paint.mode", &Target::None));
+    settle(&mut rt);
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    assert!(rt.state().editor.state.paint.is_some(), "Mesh Paint is on");
+    assert!(rt.find("paint/mode").is_some(), "its panel shows");
+    press(&mut rt, "paint/tool/fill");
+    press(&mut rt, "paint/paint.channel.alpha");
+    press(&mut rt, "paint/paint.color.red");
+    press(&mut rt, "paint/swap");
+    let p = rt.state().editor.state.paint.unwrap();
+    assert_eq!(p.tool, PaintTool::Fill);
+    assert!(!p.channels[3], "alpha off");
+    assert_eq!(p.erase, [1.0, 0.0, 0.0, 1.0], "red swapped to erase");
+    rt.update(|s| super::commands::run(s, "paint.radius.up", &Target::None));
+    assert!(rt.state().editor.state.paint.unwrap().radius > p.radius);
+    // A press in the Scene goes to the host's painter, not to picking.
+    let view = rt.find("scene/view").unwrap();
+    rt.pointer_move(view.center().x, view.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(view.center().x, view.center().y);
+    rt.frame(FRAME);
+    assert!(matches!(
+        rt.state().local.paint_input.first(),
+        Some(super::state::PaintInput::Down(..))
+    ));
+    rt.pointer_up(view.center().x, view.center().y);
+    rt.update(|s| super::commands::run(s, "paint.mode", &Target::None));
+    assert!(rt.state().editor.state.paint.is_none(), "off again");
+}
+
+#[test]
 fn lighting_recaptures_probes_and_applies_look_presets() {
     use crate::catalog::Target;
     let mut rt = open();
@@ -1163,6 +1272,88 @@ fn history_searches_opens_changes_and_undoes_back_to_a_step() {
         position(&rt, "e_box"),
         json!([0, 0, 0]),
         "back before the first move"
+    );
+}
+
+#[test]
+fn play_clients_show_side_by_side_and_a_click_takes_control_of_one() {
+    // Three players tile two by two; each tile is the view's quarter, 4 px apart.
+    let tiles = super::game::tiles(3, [804.0, 604.0], 4.0);
+    assert_eq!(tiles.len(), 3);
+    assert_eq!(tiles[0], [0.0, 0.0, 400.0, 300.0]);
+    assert_eq!(tiles[1], [404.0, 0.0, 400.0, 300.0]);
+    assert_eq!(tiles[2], [0.0, 304.0, 400.0, 300.0]);
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "game"})));
+    rt.update(|s| {
+        s.editor.state.playing = Some(true);
+        s.local.game.live = true;
+        s.local.game.players = vec![(0, [0, 0, 300, 200], true), (1, [304, 0, 300, 200], true)];
+    });
+    settle(&mut rt);
+    assert!(rt.find("game/tile/0").is_some() && rt.find("game/tile/1").is_some());
+    press(&mut rt, "game/tile/1");
+    assert_eq!(
+        rt.state().play.client,
+        1,
+        "Client 1 takes the keyboard and mouse"
+    );
+    assert!(rt.state().local.game_captured);
+}
+
+#[test]
+fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let floating = |rt: &Runtime<Studio>| rt.state().editor.state.floating.clone();
+    let window = floating(&rt);
+    assert_eq!(window.len(), 1, "Console floats in a window");
+    let id = window[0].id.clone();
+    assert!(
+        rt.find("tab/console").is_some(),
+        "its tab shows in the window"
+    );
+    // Its title bar moves it.
+    let bar = rt.find(&format!("float/{id}/bar")).unwrap();
+    let (x, y) = (bar.left + 30.0, bar.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 60.0, y + 40.0);
+    rt.frame(FRAME);
+    rt.pointer_up(x + 60.0, y + 40.0);
+    settle(&mut rt);
+    let moved = floating(&rt)[0].rect;
+    assert_eq!(
+        [moved[0] - window[0].rect[0], moved[1] - window[0].rect[1]],
+        [60, 40],
+        "moved by the drag"
+    );
+    // Its tab drags back into the Scene's strip: the window goes.
+    let keys = super::dock::all_drag_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let scene = super::dock::area_holding(rt.state(), "scene").unwrap();
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    let tab = rt.find("tab/console").unwrap();
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(strip.right - 40.0, strip.top + 10.0);
+    rt.frame(FRAME);
+    rt.pointer_up(strip.right - 40.0, strip.top + 10.0);
+    settle(&mut rt);
+    assert!(floating(&rt).is_empty(), "the emptied window closes");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console"),
+        Some(scene)
     );
 }
 
@@ -1400,7 +1591,14 @@ fn captures() {
         }
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         for panel in [
-            "assets", "console", "problems", "agents", "history", "lighting", "profiler",
+            "assets",
+            "console",
+            "problems",
+            "agents",
+            "history",
+            "lighting",
+            "profiler",
+            "mesh-paint",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
@@ -1464,6 +1662,63 @@ fn captures() {
             .unwrap();
             rt.update(|s| s.local.tab_drag = None);
         }
+        // The Profiler comparing a capture with its baseline.
+        rt.update(|s| {
+            super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+            s.editor.profile_baseline = Some(std::sync::Arc::new(sample_profile()));
+            let mut now = sample_profile();
+            for frame in &mut now.frames {
+                for span in &mut frame.spans {
+                    span.self_ns = if span.label % 2 == 0 {
+                        span.self_ns * 3 / 2
+                    } else {
+                        span.self_ns / 2
+                    };
+                }
+            }
+            s.profile = std::sync::Arc::new(now);
+        });
+        for _ in 0..10 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-profiler-compare.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            s.editor.profile_baseline = None;
+            s.profile = std::sync::Arc::new(sample_profile());
+        });
+        // A panel floating in its own window.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "history"}));
+            super::commands::run(
+                s,
+                "window.float",
+                &crate::catalog::Target::Panel("history".into()),
+            )
+        });
+        for _ in 0..10 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            super::commands::run(
+                s,
+                "window.move.bottom",
+                &crate::catalog::Target::Panel("history".into()),
+            )
+        });
         rt.update(|s| {
             super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
         });
@@ -1870,7 +2125,7 @@ fn the_animation_page_shows_states_added_to_its_controller() {
         let doc = result["doc"].as_str().unwrap().to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
         for _ in 0..2 {
-            crate::shell::animation_panel::edit(&mut s.editor, &doc, "state").unwrap();
+            crate::animation_edit::edit(&mut s.editor, &doc, "state").unwrap();
         }
         doc
     });
@@ -1914,7 +2169,7 @@ fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
         for kind in ["state", "state", "transition"] {
-            crate::shell::animation_panel::edit(&mut s.editor, &doc, kind).unwrap();
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
         }
         doc
     });

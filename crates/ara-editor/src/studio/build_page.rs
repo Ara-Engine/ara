@@ -72,7 +72,7 @@ pub(super) fn open_folder(s: &mut Studio) {
         .unwrap_or_else(|| s.editor.host.root().join("builds"));
     attempt(s, |_| {
         std::fs::create_dir_all(&folder)?;
-        crate::shell::ops::open_external(&folder)
+        crate::system::open_external(&folder)
     });
 }
 

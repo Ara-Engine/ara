@@ -1,17 +1,14 @@
 //! Pure adapters between logical authoring paths and cached browser storage keys.
 use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
 
-pub(in crate::shell) fn existing_storage<'a>(
-    files: &'a [AuthoredFile],
-    logical: &str,
-) -> Option<&'a str> {
+pub(crate) fn existing_storage<'a>(files: &'a [AuthoredFile], logical: &str) -> Option<&'a str> {
     files
         .iter()
         .find(|file| matches!(&file.scope, AuthoredScope::Authored) && file.path == logical)
         .map(|file| file.storage_path.as_str())
 }
 /// Stable IDs repair stale reference paths before consulting the browser cache.
-pub(in crate::shell) fn reference_storage<'a>(
+pub(crate) fn reference_storage<'a>(
     files: &'a [AuthoredFile],
     index: &ara_doc::AssetIndex,
     reference: &str,

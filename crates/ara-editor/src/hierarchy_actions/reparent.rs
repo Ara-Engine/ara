@@ -1,5 +1,5 @@
 //! Validate hierarchy gestures and lower selection roots to one ordered command batch.
-use crate::shell::hierarchy_actions::{preserved_transform, selection_roots};
+use super::model::{preserved_transform, selection_roots};
 use ara_doc::prefab::Resolved;
 use ara_ui::drag_drop::Placement;
 use glam::Mat4;
@@ -17,7 +17,7 @@ fn siblings<'a>(resolved: &'a Resolved, parent: Option<&str>) -> Vec<&'a String>
 }
 
 /// Parent and sibling insertion slot before any source is removed from that sibling list.
-pub(super) fn destination(
+pub(crate) fn destination(
     resolved: &Resolved,
     target: Option<&str>,
     placement: Placement,

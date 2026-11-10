@@ -2,15 +2,15 @@
 //! height fog, post-process volumes with their live weight at the Scene camera, reflection
 //! probes), as Unreal's Lighting views gather them. A row selects its entity (the Inspector
 //! edits it); Add creates a volume, fog or probe at the camera's pivot; Presets append
-//! override groups to the selected volumes. The rows and commands are the legacy panel's
-//! (`shell::lighting::{model, authoring}`), so both windows read and write the same way.
+//! override groups to the selected volumes. The rows and commands are `crate::lighting`'s
+//! (`model`, `authoring`), shared with the legacy window until it goes.
 use ara_kit::icons;
 use ara_kit::ui::*;
 use stillkit::el::{Align, Axis, El, Justify, Side, col, el, icon, menu, row, text};
 use stillkit::icons::Icon;
 
 use super::Studio;
-use crate::shell::lighting::authoring::{self, Create, Preset};
+use crate::lighting::authoring::{self, Create, Preset};
 
 /// What Add offers, in order.
 const ADD: [(Create, &str, Icon); 6] = [
@@ -27,7 +27,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let query = s.local.lighting_query.to_lowercase();
-    let rows = crate::shell::lighting::model::rows(&s.resolved, &s.editor, query.trim());
+    let rows = crate::lighting::model::rows(&s.resolved, &s.editor, query.trim());
     let volumes = !s.editor.state.selection.is_empty()
         && s.editor.state.selection.iter().all(|id| {
             s.resolved

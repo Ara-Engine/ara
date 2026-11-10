@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Selected top-level roots in tree display order; descendants travel with their root.
-pub(in crate::shell) fn selection_roots<'a>(
+pub(crate) fn selection_roots<'a>(
     resolved: &Resolved,
     selected: &BTreeSet<&'a str>,
 ) -> Result<Vec<&'a str>, String> {
@@ -47,7 +47,7 @@ pub(in crate::shell) fn selection_roots<'a>(
 }
 
 /// Lower an exact world-to-parent pose, rejecting singular or sheared local transforms.
-pub(in crate::shell) fn preserved_transform(
+pub(crate) fn preserved_transform(
     resolved: &Resolved,
     source: &str,
     parent_world: Mat4,
@@ -103,7 +103,7 @@ fn ancestors<'a>(resolved: &'a Resolved, id: &'a str) -> Result<Vec<&'a str>, St
 
 /// Create an identity container at the nearest shared ancestor, at the first source's slot.
 /// Existing sibling locals remain exact; cross-parent roots use the drag pose adapter.
-pub(super) fn group_commands(
+pub(crate) fn group_commands(
     resolved: &Resolved,
     selection: &[String],
     locked: &BTreeSet<String>,
@@ -158,7 +158,7 @@ pub(super) fn group_commands(
 }
 
 /// Full, deduplicated target set. Presentation flags also support inner prefab entities.
-pub(super) fn view_targets(
+pub(crate) fn view_targets(
     resolved: &Resolved,
     selected: &[String],
     descendants: bool,
