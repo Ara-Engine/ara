@@ -263,8 +263,13 @@ fn radiance(source: &Source, face: u32) -> Result<Vec<CubeLevel>> {
 /// ignored) of `size` for `Engine::create_environment`.
 pub(crate) fn prepare(size: [u32; 2], pixels: &[[f32; 4]]) -> Result<PreparedEnvironment> {
     let source = Source::new(size, pixels)?;
-    // A cube face spans a quarter of the map's width: no finer than the source, capped.
-    let face = (size[0] / 4).max(16).next_power_of_two().min(MAX_FACE);
+    // A cube face spans a quarter of the map's width and half its height: as fine as
+    // the finer of the two (the gradient sky is 64 by 128), capped.
+    let face = (size[0] / 4)
+        .max(size[1] / 2)
+        .max(16)
+        .next_power_of_two()
+        .min(MAX_FACE);
     let mut generator_hash = [0; 32];
     for (chunk, salt) in generator_hash.as_chunks_mut::<8>().0.iter_mut().zip(0u64..) {
         chunk.copy_from_slice(&key(size, pixels).wrapping_add(salt).to_le_bytes());
