@@ -9,30 +9,27 @@ use stillkit::el::{Align, Axis, El, Justify, col, el, icon, row, text, virtual_l
 
 use super::Studio;
 use super::state::LogRow;
-use crate::shell::assets::Asset;
+use crate::assets::Asset;
 
 pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
     match panel {
         "assets" => assets(s),
         "console" => console(s),
         "problems" => problems(s),
+        "mesh-paint" => super::mesh_paint::view(s),
         "agents" => super::agents::agents(s),
         "history" => super::agents::history(s),
         "lighting" => super::lighting::view(s),
         "profiler" => super::profiler::view(s),
+        "build" => super::build_page::view(s),
         "material" => super::graph::view(s, "material"),
         "animation" => super::graph::view(s, "animation"),
         "vfx" => super::vfx::view(s),
         // Import settings live in the asset inspector; the Import tab shows the same.
         "import" => match s.editor.state.asset_path.as_deref() {
             Some(path) => super::asset_inspector::view(s, path),
-            None => empty(
-                &s.look,
-                icons::DOWNLOAD,
-                "Pick an asset",
-                "Its importer settings, actions and dependencies show here and in the Inspector.",
-                None,
-            ),
+            // No asset picked: the project's importer defaults.
+            None => super::asset_inspector::defaults_view(s),
         },
         "settings" => col().grow(1.0).justify(Justify::Center).child(empty(
             &s.look,
@@ -96,6 +93,12 @@ pub struct AssetsView {
     pub forward: Vec<String>,
     /// The Add menu is open.
     pub add: bool,
+    /// Project files that are not assets show too (notes, JSON, solution files).
+    pub show_all: bool,
+    /// The view menu (⋯) is open.
+    pub menu: bool,
+    /// Move to Folder: the asset moving and the folder search typed.
+    pub moving: Option<(String, String)>,
 }
 
 /// The type filters: id, label, icon.
@@ -234,7 +237,20 @@ fn assets(s: &Studio) -> El<Studio> {
         &query,
         None,
         |f| f.on_input(|s: &mut Studio, t| s.act("editor.workspace", json!({"assetQuery": t}))),
-        |s: &mut Studio| s.act("editor.workspace", json!({"assetQuery": ""})),
+        |s: &mut Studio| {
+            // Kept for Restore Removed Assets Search.
+            let query = s
+                .editor
+                .state
+                .searches
+                .get("assets")
+                .cloned()
+                .unwrap_or_default();
+            if !query.trim().is_empty() {
+                s.local.assets_cleared_query = Some(query);
+            }
+            s.act("editor.workspace", json!({"assetQuery": ""}))
+        },
     )
     .h(22.0)
     .w(200.0);
@@ -315,7 +331,22 @@ fn assets(s: &Studio) -> El<Studio> {
         .child(add)
         .child(crumbs.grow(1.0).pad_x(4.0))
         .child(search)
-        .child(sizes);
+        .children((!query.trim().is_empty()).then(|| {
+            icon_button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                icons::BOOKMARK,
+                "Save this search",
+            )
+            .size(22.0)
+            .key("assets/search/save")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "assets.search.save", &crate::catalog::Target::None)
+            })
+        }))
+        .child(sizes)
+        .child(view_menu(s));
     // Type filters (Unreal's filter bar): one type across the whole project.
     let mut chips = row()
         .h(24.0)
@@ -377,7 +408,10 @@ fn assets(s: &Studio) -> El<Studio> {
                 .rsplit('/')
                 .next()
                 .is_some_and(|n| n.starts_with('.'));
-            if hidden {
+            // Support files, and the project's own files at its root (ara.project.json,
+            // notes), show with Show All Files.
+            let root_file = a.kind != "folder" && !a.path.trim_end_matches('/').contains('/');
+            if hidden || (!s.local.assets_view.show_all && (a.is_noise() || root_file)) {
                 false
             } else if let Some(only) = s.local.assets_view.filter {
                 category(a) == Some(only)
@@ -434,7 +468,7 @@ fn assets(s: &Studio) -> El<Studio> {
                 l,
                 icons::FOLDER_OPEN,
                 "This folder is empty",
-                "Drop files onto the window to import them.",
+                "Drop files here from Finder or Explorer to import them, or use Import… in ⋯.",
                 None,
             )
         } else {
@@ -484,7 +518,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .scroll(Axis::Vertical)
             // Empty space: the folder's own menu (create, refresh, import), as in Unity.
             .on_context_menu(move |s: &mut Studio, x, y| {
-                use crate::shell::commands::{Target, menus::Context};
+                use crate::catalog::{Target, menus::Context};
                 s.local.context = Some((Context::Assets, Target::Folder(here.clone()), (x, y)));
             })
             .child(if size == TileSize::List {
@@ -494,12 +528,21 @@ fn assets(s: &Studio) -> El<Studio> {
             })
     };
     // Unity's Project window: the folder tree beside the folder's contents.
-    let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
+    let right = col()
+        .w(0.0)
+        .grow(1.0)
+        .min_h(0.0)
+        .child(toolbar)
+        .children(import_strip(s))
+        .child(body);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
         .child(folder_tree(s, browser, &folder))
         .child(right);
+    if let Some(dialog) = conflicts_dialog(s).or_else(|| move_dialog(s, browser)) {
+        root = root.overlay(dialog);
+    }
     if let Some(path) = s.local.asset_delete.clone() {
         let name = path
             .trim_end_matches('/')
@@ -534,8 +577,428 @@ fn assets(s: &Studio) -> El<Studio> {
     root
 }
 
+/// The Assets view menu (⋯): Import, what shows (every file, the folder only), thumbnails.
+fn view_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let open = s.local.assets_view.menu;
+    let mut b = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key("assets/menu")
+        .expanded(open)
+        .on_press(|s: &mut Studio| s.local.assets_view.menu = !s.local.assets_view.menu);
+    if !open {
+        return b;
+    }
+    let run = |id: &'static str| {
+        move |s: &mut Studio| {
+            s.local.assets_view.menu = false;
+            super::commands::run(s, id, &crate::catalog::Target::None);
+        }
+    };
+    let items = vec![
+        menu_item(
+            l,
+            "assets/menu/import",
+            Some(icons::DOWNLOAD),
+            "Import…",
+            None,
+            false,
+        )
+        .on_press(run("assets.import")),
+        menu_separator(l),
+        menu_check(
+            l,
+            "assets/menu/all",
+            "Show All Files",
+            s.local.assets_view.show_all,
+        )
+        .on_press(run("assets.show_all")),
+        menu_check(
+            l,
+            "assets/menu/scope",
+            "Search Within Current Folder",
+            s.editor.state.asset_search_folder_only,
+        )
+        .on_press(run("assets.search.scope")),
+        menu_separator(l),
+        menu_item(
+            l,
+            "assets/menu/thumbnails",
+            Some(icons::IMAGE),
+            "Rebuild Thumbnails",
+            None,
+            false,
+        )
+        .on_press(run("assets.rebuild_thumbnails")),
+        menu_item(
+            l,
+            "assets/menu/refresh",
+            Some(icons::REFRESH_CW),
+            "Refresh",
+            None,
+            false,
+        )
+        .on_press(run("assets.refresh")),
+    ];
+    b = b.overlay(
+        stillkit::el::menu(menu_panel(l, items))
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::End)
+            .on_dismiss(|s: &mut Studio| s.local.assets_view.menu = false),
+    );
+    b
+}
+
+/// Every folder Assets knows (listed, or holding a listed file), without a trailing `/`.
+fn folders(browser: &crate::assets::Browser) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for a in &browser.items {
+        let path = a.path.trim_end_matches('/');
+        let mut at = if a.kind == "folder" {
+            path
+        } else {
+            parent(path)
+        };
+        while !at.is_empty() && out.insert(at.to_owned()) {
+            at = parent(at);
+        }
+    }
+    out
+}
+
+/// The keys of every folder an asset can be dropped on (tree rows, folder tiles), for the
+/// host to report where they lie while an asset is dragged.
+pub(super) fn drop_keys(s: &Studio) -> Vec<String> {
+    let Some(browser) = s.assets.as_ref() else {
+        return Vec::new();
+    };
+    let mut keys = vec!["assets/tree/".to_owned()];
+    for folder in folders(browser) {
+        keys.push(format!("asset/{folder}"));
+        keys.push(format!("asset/{folder}/"));
+        keys.push(format!("assets/tree/{folder}"));
+    }
+    keys
+}
+
+/// The folder under window point `at` (a tree row or a folder tile), `""` for Project.
+fn folder_at(s: &Studio, at: (f32, f32)) -> Option<String> {
+    s.local.rects.iter().find_map(|(key, r)| {
+        let folder = key
+            .strip_prefix("assets/tree/")
+            .or_else(|| key.strip_prefix("asset/"))?;
+        (at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom)
+            .then(|| folder.trim_end_matches('/').to_owned())
+    })
+}
+
+/// Favourites and saved searches, above the folder tree (Unity's Favorites).
+fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let state = &s.editor.state;
+    let mut out = Vec::new();
+    let heading = |label: &str| {
+        row().h(22.0).pad_x(6.0).align(Align::Center).child(
+            text(label.to_owned())
+                .text_size(11.0)
+                .weight(600)
+                .color(c.muted_foreground.0),
+        )
+    };
+    let line = |key: String, glyph, name: String, on_press: Box<dyn Fn(&mut Studio)>| {
+        let hover = c.hover_surface.0;
+        row()
+            .key(key)
+            .h(super::style::ROW)
+            .pad_x(6.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(super::style::RADIUS)
+            .label(name.clone())
+            .hovered(move |e| e.fill(hover))
+            .on_press(move |s: &mut Studio| on_press(s))
+            .child(icon(glyph).size(12.0).color(c.warning.0))
+            .child(
+                text(name)
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(1)
+                    .w(0.0)
+                    .grow(1.0),
+            )
+    };
+    if !state.asset_favourites.is_empty() {
+        out.push(heading("Favourites"));
+        for path in state.asset_favourites.keys() {
+            let name = path
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or(path);
+            let target = crate::catalog::Target::Text(path.clone());
+            out.push(line(
+                format!("assets/favourite/{path}"),
+                icons::STAR,
+                if name.is_empty() { "Project" } else { name }.to_owned(),
+                Box::new(move |s| super::commands::run(s, "assets.favourite.open", &target)),
+            ));
+        }
+    }
+    if !state.asset_saved_searches.is_empty() {
+        out.push(heading("Searches"));
+        for name in state.asset_saved_searches.keys() {
+            let (open, remove) = (
+                crate::catalog::Target::Text(name.clone()),
+                crate::catalog::Target::Text(name.clone()),
+            );
+            out.push(
+                line(
+                    format!("assets/saved/{name}"),
+                    icons::SEARCH,
+                    name.clone(),
+                    Box::new(move |s| super::commands::run(s, "assets.search.apply", &open)),
+                )
+                .child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Remove this search")
+                        .size(18.0)
+                        .key(format!("assets/saved/{name}/remove"))
+                        .on_press(move |s: &mut Studio| {
+                            super::commands::run(s, "assets.search.remove", &remove)
+                        }),
+                ),
+            );
+        }
+    }
+    if !out.is_empty() {
+        out.push(el().h(6.0));
+    }
+    out
+}
+
+/// A running import (its message, progress and Cancel), or how the last one ended.
+fn import_strip(s: &Studio) -> Option<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let strip = || {
+        row()
+            .key("assets/import")
+            .h(26.0)
+            .pad_x(8.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .fill(super::style::tones(l).band)
+    };
+    if let Some((message, fraction)) = s.importer.progress() {
+        let mut out = strip()
+            .child(spinner(l, 12.0))
+            .child(
+                text(message.to_owned())
+                    .text_size(11.5)
+                    .color(c.foreground.0)
+                    .wrap(1),
+            )
+            .child(progress(l, fraction, Status::Info).w(120.0))
+            .child(el().grow(1.0));
+        if s.importer.can_cancel() {
+            out = out.child(
+                button(l, Tone::Ghost, Size::Sm, None, "Cancel")
+                    .key("assets/import/cancel")
+                    .on_press(|s: &mut Studio| {
+                        super::commands::run(
+                            s,
+                            "assets.import.cancel",
+                            &crate::catalog::Target::None,
+                        )
+                    }),
+            );
+        }
+        return Some(out);
+    }
+    let note = s.importer.note.clone()?;
+    Some(
+        strip()
+            .child(icon(icons::DOWNLOAD).size(12.0).color(c.muted_foreground.0))
+            .child(
+                text(note)
+                    .text_size(11.5)
+                    .color(c.muted_foreground.0)
+                    .wrap(1)
+                    .w(0.0)
+                    .grow(1.0),
+            )
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Dismiss")
+                    .size(18.0)
+                    .key("assets/import/dismiss")
+                    .on_press(|s: &mut Studio| s.importer.note = None),
+            ),
+    )
+}
+
+/// Files the import would overwrite: Rename keeps both, Replace updates the assets, Skip
+/// leaves them (Unity asks the same).
+fn conflicts_dialog(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let conflicts = s.importer.conflicts.as_ref()?;
+    let count = conflicts.labels.len();
+    let mut list = col().gap(2.0);
+    for label in conflicts.labels.iter().take(8) {
+        list = list.child(
+            text(label.clone())
+                .text_size(11.5)
+                .family(mono())
+                .color(c.foreground.0)
+                .wrap(1),
+        );
+    }
+    if count > 8 {
+        list = list.child(
+            text(format!("… and {} more", count - 8))
+                .text_size(11.5)
+                .color(c.muted_foreground.0),
+        );
+    }
+    let choose = |policy: Option<&'static str>| {
+        move |s: &mut Studio| {
+            if let Err(error) = s.importer.resolve(&mut s.editor, policy) {
+                s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+            }
+        }
+    };
+    let panel = dialog_panel(
+        l,
+        Some((Status::Warning, icons::TRIANGLE_ALERT)),
+        &match count {
+            1 => "1 file already exists".to_owned(),
+            n => format!("{n} files already exist"),
+        },
+        col()
+            .gap(8.0)
+            .child(
+                text("Rename keeps both copies. Replace updates the existing assets in place. Skip leaves them as they are.")
+                    .text_size(12.0)
+                    .wrap(3)
+                    .color(c.muted_foreground.0),
+            )
+            .child(list),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("assets/conflict/cancel")
+                .on_press(choose(None)),
+            button(l, Tone::Secondary, Size::Md, None, "Skip")
+                .key("assets/conflict/skip")
+                .on_press(choose(Some("skip"))),
+            button(l, Tone::Secondary, Size::Md, None, "Replace")
+                .key("assets/conflict/replace")
+                .on_press(choose(Some("replace"))),
+            button(l, Tone::Primary, Size::Md, None, "Rename")
+                .key("assets/conflict/rename")
+                .on_press(choose(Some("rename"))),
+        ],
+        choose(None),
+    )
+    .w(460.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(choose(None)))
+}
+
+/// Move to Folder: the project's folders to pick from, searched as you type.
+fn move_dialog(
+    s: &Studio,
+    browser: &crate::assets::Browser,
+) -> Option<stillkit::el::Overlay<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let (path, query) = s.local.assets_view.moving.as_ref()?;
+    let name = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(path);
+    let own = path.trim_end_matches('/');
+    let needle = query.trim().to_lowercase();
+    let mut list = col().gap(1.0).max_h(320.0).scroll(Axis::Vertical);
+    let choices = std::iter::once(String::new())
+        .chain(folders(browser))
+        // Not into itself or its own folder, nor anywhere inside itself.
+        .filter(|f| *f != own && *f != parent(own) && !f.starts_with(&format!("{own}/")))
+        .filter(|f| needle.is_empty() || f.to_lowercase().contains(&needle));
+    let hover = c.hover_surface.0;
+    for folder in choices.take(200) {
+        let (source, to) = (path.clone(), folder.clone());
+        list = list.child(
+            row()
+                .key(format!("assets/move/{folder}"))
+                .h(super::style::ROW)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .radius(super::style::RADIUS)
+                .label(if folder.is_empty() {
+                    "Project".to_owned()
+                } else {
+                    folder.clone()
+                })
+                .hovered(move |e| e.fill(hover))
+                .on_press(move |s: &mut Studio| super::asset_ops::move_to(s, &source, &to))
+                .child(icon(icons::FOLDER).size(13.0).color(folder_tint(l, false)))
+                .child(
+                    text(if folder.is_empty() {
+                        "Project".to_owned()
+                    } else {
+                        folder
+                    })
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(1),
+                ),
+        );
+    }
+    let panel = dialog_panel(
+        l,
+        Some((Status::Info, icons::FOLDER_OPEN)),
+        &format!("Move {name} to…"),
+        col()
+            .gap(8.0)
+            .child(search(
+                l,
+                "assets/move/search",
+                "Search folders",
+                query,
+                None,
+                |f| {
+                    f.on_input(|s: &mut Studio, t| {
+                        if let Some((_, q)) = s.local.assets_view.moving.as_mut() {
+                            *q = t.to_owned();
+                        }
+                    })
+                },
+                |s: &mut Studio| {
+                    if let Some((_, q)) = s.local.assets_view.moving.as_mut() {
+                        q.clear();
+                    }
+                },
+            ))
+            .child(list)
+            .child(
+                text("References to it update in the same step.")
+                    .text_size(11.5)
+                    .color(c.muted_foreground.0),
+            ),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("assets/move/cancel")
+                .on_press(|s: &mut Studio| s.local.assets_view.moving = None),
+        ],
+        |s: &mut Studio| s.local.assets_view.moving = None,
+    )
+    .w(420.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(|s: &mut Studio| s.local.assets_view.moving = None))
+}
+
 /// How many visible entries (files and subfolders) each folder holds directly.
-fn contents(browser: &crate::shell::assets::Browser) -> std::collections::HashMap<String, usize> {
+fn contents(browser: &crate::assets::Browser) -> std::collections::HashMap<String, usize> {
     let mut seen = std::collections::HashSet::new();
     let mut counts = std::collections::HashMap::new();
     for a in &browser.items {
@@ -570,7 +1033,7 @@ fn folder_tint(l: &ara_kit::look::Look, empty: bool) -> stillkit::Rgba {
 
 /// Every folder in the project, as a tree: the open ones and the current one's ancestors
 /// show their children. A click opens the folder in the grid.
-fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
+fn folder_tree(s: &Studio, browser: &crate::assets::Browser, current: &str) -> El<Studio> {
     let l = &s.look;
     let counts = contents(browser);
     let mut dirs = std::collections::BTreeSet::new();
@@ -599,7 +1062,7 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
         .pad(4.0)
         .gap(0.0)
         .scroll(Axis::Vertical);
-    tree = tree.child(folder_row(
+    tree = tree.children(bookmarks(s)).child(folder_row(
         l,
         "Project",
         String::new(),
@@ -826,7 +1289,7 @@ fn tile(
         .on_context_menu({
             let path = a.path.clone();
             move |s: &mut Studio, x, y| {
-                use crate::shell::commands::{Target, menus::Context};
+                use crate::catalog::{Target, menus::Context};
                 s.act("editor.workspace", json!({"asset": path}));
                 s.local.context = Some(if folder {
                     (Context::Folder, Target::Folder(path.clone()), (x, y))
@@ -854,15 +1317,22 @@ fn tile(
                         s.act("editor.workspace", json!({"asset": path}));
                         s.local.inspect_asset = !folder;
                     }
-                    // Models and prefabs drag into the Scene.
-                    PointerPhase::Move
-                        if placeable && e.travel().x.abs() + e.travel().y.abs() >= 4.0 =>
-                    {
+                    // Anything drags onto a folder (moving it there); models and prefabs
+                    // drag into the Scene too.
+                    PointerPhase::Move if e.travel().x.abs() + e.travel().y.abs() >= 4.0 => {
                         s.local.asset_drag = Some((path.clone(), name.clone(), (e.at.x, e.at.y)));
                     }
                     PointerPhase::Up => {
                         if let Some((path, _, at)) = s.local.asset_drag.take() {
-                            place(s, &path, at);
+                            let own = path.trim_end_matches('/');
+                            match folder_at(s, at) {
+                                Some(folder) if folder != parent(own) && folder != own => {
+                                    super::asset_ops::move_to(s, &path, &folder)
+                                }
+                                Some(_) => {}
+                                None if placeable => place(s, &path, at),
+                                None => {}
+                            }
                         }
                     }
                     PointerPhase::Cancel => s.local.asset_drag = None,
@@ -922,6 +1392,49 @@ fn tile(
         }))
 }
 
+/// A severity filter (Console, Problems): its icon in `tint` and its count, a soft fill
+/// while shown; the caller says what a press flips.
+fn level_toggle(
+    l: &ara_kit::look::Look,
+    key: String,
+    on: bool,
+    tint: stillkit::Rgba,
+    glyph: stillkit::icons::Icon,
+    label: &str,
+    count: usize,
+) -> El<Studio> {
+    let c = &l.c;
+    let hover = c.hover_surface.0;
+    row()
+        .key(key)
+        .h(24.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .radius(l.radius.sm)
+        .fill(if on {
+            c.raised.0
+        } else {
+            stillkit::Rgba::TRANSPARENT
+        })
+        .color(if on {
+            c.foreground.0
+        } else {
+            c.muted_foreground.0
+        })
+        .cascade_ink()
+        .label(format!("{label}: {count}"))
+        .tooltip(format!("{} {label}", if on { "Hide" } else { "Show" }))
+        .checked(on)
+        .hovered(move |e| e.fill(hover))
+        .child(
+            icon(glyph)
+                .size(13.0)
+                .color(if on { tint } else { tint.with_alpha(0.45) }),
+        )
+        .child(text(count.to_string()).text_size(12.0).weight(560))
+}
+
 fn severity_glyph(l: &ara_kit::look::Look, severity: ara_diag::Severity) -> El<Studio> {
     let c = &l.c;
     let (glyph, ink) = match severity {
@@ -941,46 +1454,71 @@ fn console(s: &Studio) -> El<Studio> {
         ara_diag::Severity::Info,
     ]
     .map(|sev| s.logs.iter().filter(|r| r.severity == sev).count());
-    let shown: Vec<&LogRow> = s
+    let query = s.local.console_search.trim().to_lowercase();
+    let matches = |r: &&LogRow| {
+        query.is_empty()
+            || r.message.to_lowercase().contains(&query)
+            || r.code.to_lowercase().contains(&query)
+            || r.origin.to_lowercase().contains(&query)
+            || r.source
+                .as_deref()
+                .is_some_and(|s| s.to_lowercase().contains(&query))
+    };
+    // This computer's messages (its GPU loader, overlay layers) are not the project's:
+    // they fold into one group above the rest.
+    let machine_record = |r: &&LogRow| r.diagnostic.code == ara_diag::codes::GPU_ENVIRONMENT;
+    let machine: Vec<&LogRow> = s
         .logs
         .iter()
+        .filter(machine_record)
         .filter(|r| s.local.console[level(r.severity)])
+        .filter(matches)
         .collect();
+    let filtered = s
+        .logs
+        .iter()
+        .filter(|r| !machine_record(r))
+        .filter(|r| s.local.console[level(r.severity)])
+        .filter(matches);
+    // Collapse: one row per repeated record, its latest, counting them all (Unity).
+    let shown: Vec<LogRow> = if s.local.console_collapse {
+        let mut merged: Vec<LogRow> = Vec::new();
+        let mut at: std::collections::HashMap<(String, String, Option<String>), usize> =
+            std::collections::HashMap::new();
+        for r in filtered {
+            let key = (r.code.clone(), r.message.clone(), r.source.clone());
+            match at.get(&key) {
+                Some(&i) => {
+                    let count = merged[i].count + r.count.max(1);
+                    merged[i] = LogRow { count, ..r.clone() };
+                }
+                None => {
+                    at.insert(key, merged.len());
+                    merged.push(LogRow {
+                        count: r.count.max(1),
+                        ..r.clone()
+                    });
+                }
+            }
+        }
+        merged
+    } else {
+        filtered.cloned().collect()
+    };
     // Severity filters: the icon in its colour and the count, a soft fill while shown.
     let c = &l.c;
     let toggle = |i: usize, glyph, label: &str| {
-        let on = s.local.console[i];
         let tint = [c.destructive.0, c.warning.0, c.info.0][i];
-        let hover = c.hover_surface.0;
-        row()
-            .key(format!("console/level/{i}"))
-            .h(24.0)
-            .pad_x(8.0)
-            .gap(6.0)
-            .align(Align::Center)
-            .radius(l.radius.sm)
-            .fill(if on {
-                c.raised.0
-            } else {
-                stillkit::Rgba::TRANSPARENT
-            })
-            .color(if on {
-                c.foreground.0
-            } else {
-                c.muted_foreground.0
-            })
-            .cascade_ink()
-            .label(format!("{label}: {}", counts[i]))
-            .tooltip(format!("{} {label}", if on { "Hide" } else { "Show" }))
-            .checked(on)
-            .hovered(move |e| e.fill(hover))
-            .on_press(move |s: &mut Studio| s.local.console[i] = !s.local.console[i])
-            .child(
-                icon(glyph)
-                    .size(13.0)
-                    .color(if on { tint } else { tint.with_alpha(0.45) }),
-            )
-            .child(text(counts[i].to_string()).text_size(12.0).weight(560))
+        level_toggle(
+            l,
+            format!("console/level/{i}"),
+            s.local.console[i],
+            tint,
+            glyph,
+            label,
+            counts[i],
+        )
+        .on_press(move |s: &mut Studio| s.local.console[i] = !s.local.console[i])
     };
     let toolbar = row()
         .h(super::style::TOOLBAR)
@@ -990,11 +1528,73 @@ fn console(s: &Studio) -> El<Studio> {
         .child(toggle(0, icons::CIRCLE_X, "Errors"))
         .child(toggle(1, icons::TRIANGLE_ALERT, "Warnings"))
         .child(toggle(2, icons::INFO, "Messages"))
+        .child(
+            row().w(220.0).child(
+                search(
+                    l,
+                    "console/search",
+                    "Search messages",
+                    &s.local.console_search,
+                    None,
+                    |f| f.on_input(|s: &mut Studio, t| s.local.console_search = t.to_owned()),
+                    |s: &mut Studio| s.local.console_search.clear(),
+                )
+                .grow(1.0),
+            ),
+        )
         .child(el().grow(1.0))
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::LAYERS,
+                "Collapse repeated messages",
+                s.local.console_collapse,
+            )
+            .key("console/collapse")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.collapse", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::ROTATE_CCW,
+                "Clear on Play",
+                s.editor
+                    .state
+                    .settings
+                    .get("console.clearOnPlay")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            )
+            .key("console/clear-on-play")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.clear_on_play", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::CIRCLE_PAUSE,
+                "Pause Play on an error",
+                s.editor
+                    .state
+                    .settings
+                    .get("console.errorPause")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            )
+            .key("console/error-pause")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.error_pause", &crate::catalog::Target::None)
+            }),
+        )
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::TRASH), "Clear")
                 .key("console/clear")
-                .on_press(|s: &mut Studio| s.logs.clear()),
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "console.clear", &crate::catalog::Target::None)
+                }),
         );
     let body = if shown.is_empty() {
         empty(
@@ -1005,8 +1605,7 @@ fn console(s: &Studio) -> El<Studio> {
             None,
         )
     } else {
-        let rows: std::sync::Arc<Vec<LogRow>> =
-            std::sync::Arc::new(shown.into_iter().cloned().collect());
+        let rows: std::sync::Arc<Vec<LogRow>> = std::sync::Arc::new(shown);
         let n = rows.len();
         let look = l.clone();
         let open = s.local.console_open;
@@ -1024,10 +1623,50 @@ fn console(s: &Studio) -> El<Studio> {
         .console_open
         .and_then(|seq| s.logs.iter().find(|r| r.seq == seq))
         .map(|r| log_detail(s, r));
+    let machine_group = (!machine.is_empty()).then(|| {
+        let c = &l.c;
+        let open = s.local.console_machine;
+        let hover = c.hover_surface.0;
+        let mut group = col().child(
+            row()
+                .key("console/machine")
+                .h(26.0)
+                .pad_x(10.0)
+                .gap(8.0)
+                .align(Align::Center)
+                .label("Driver and overlay messages")
+                .tooltip("Messages from this computer's graphics drivers and overlay layers, not the project")
+                .expanded(open)
+                .hovered(move |e| e.fill(hover))
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "console.machine", &crate::catalog::Target::None)
+                })
+                .child(
+                    icon(if open { icons::CHEVRON_DOWN } else { icons::CHEVRON_RIGHT })
+                        .size(11.0)
+                        .color(c.muted_foreground.0),
+                )
+                .child(icon(icons::MONITOR).size(13.0).color(c.muted_foreground.0))
+                .child(
+                    text("Driver and overlay messages")
+                        .text_size(12.0)
+                        .color(c.muted_foreground.0)
+                        .grow(1.0),
+                )
+                .child(count(l, machine.len(), false)),
+        );
+        if open {
+            for (i, r) in machine.iter().enumerate() {
+                group = group.child(log_row(l, r, i % 2 == 1, s.local.console_open == Some(r.seq)));
+            }
+        }
+        group
+    });
     col()
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
+        .children(machine_group)
         .child(body)
         .children(detail.map(|d| col().child(d)))
 }
@@ -1056,7 +1695,49 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                 .color(c.foreground.0),
         );
     }
+    let copy = format!(
+        "{} {}{}",
+        r.code,
+        r.message,
+        r.source
+            .as_deref()
+            .map(|s| format!(" ({s})"))
+            .unwrap_or_default()
+    );
     head = head.child(el().grow(1.0)).child(
+        icon_button(l, Tone::Ghost, Size::Sm, icons::COPY, "Copy message")
+            .key("console/detail/copy")
+            .on_press(move |s: &mut Studio| s.local.copy = Some(copy.clone())),
+    );
+    // Its source opens where the system opens it; a script in the IDE, at its line.
+    if let Some(source) = r.source.as_deref() {
+        let mut parts = source.split(':');
+        let file = parts.next().unwrap_or(source).to_owned();
+        let line = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
+        let column = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
+        let path = s.editor.host.root().join(&file);
+        if path.is_file() {
+            head = head.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::EXTERNAL_LINK,
+                    "Open source",
+                )
+                .key("console/detail/open")
+                .on_press(move |s: &mut Studio| {
+                    if file.ends_with(".cs") {
+                        let at = line.map(|l| (l, column.unwrap_or(1)));
+                        super::asset_ops::open_in_ide(s, &file, at);
+                    } else if let Err(error) = crate::system::open_external(&path) {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                }),
+            );
+        }
+    }
+    head = head.child(
         icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close details")
             .on_press(|s: &mut Studio| s.local.console_open = None),
     );
@@ -1116,9 +1797,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     &fix.title,
                 )
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) =
-                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                    {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
                         s.editor
                             .report_failure(&std::io::Error::other(error.to_string()));
                     }
@@ -1213,13 +1892,75 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Stu
 fn problems(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let mut groups: std::collections::BTreeMap<&str, Vec<&LogRow>> =
-        std::collections::BTreeMap::new();
-    for r in s
+    let all: Vec<&LogRow> = s
         .logs
         .iter()
         .filter(|r| r.severity != ara_diag::Severity::Info)
-    {
+        .collect();
+    let errors = all
+        .iter()
+        .filter(|r| r.severity == ara_diag::Severity::Error)
+        .count();
+    let toolbar = row()
+        .h(super::style::TOOLBAR)
+        .pad_x(8.0)
+        .gap(4.0)
+        .align(Align::Center)
+        .child(
+            level_toggle(
+                l,
+                "problems/level/0".into(),
+                s.local.problems[0],
+                c.destructive.0,
+                icons::CIRCLE_X,
+                "Errors",
+                errors,
+            )
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "problems.errors", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            level_toggle(
+                l,
+                "problems/level/1".into(),
+                s.local.problems[1],
+                c.warning.0,
+                icons::TRIANGLE_ALERT,
+                "Warnings",
+                all.len() - errors,
+            )
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "problems.warnings", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            row().w(240.0).child(
+                search(
+                    l,
+                    "problems/search",
+                    "Search problems",
+                    &s.local.problems_search,
+                    None,
+                    |f| f.on_input(|s: &mut Studio, t| s.local.problems_search = t.to_owned()),
+                    |s: &mut Studio| s.local.problems_search.clear(),
+                )
+                .grow(1.0),
+            ),
+        );
+    let query = s.local.problems_search.trim().to_lowercase();
+    let shown = |r: &&&LogRow| {
+        s.local.problems[usize::from(r.severity != ara_diag::Severity::Error)]
+            && (query.is_empty()
+                || r.message.to_lowercase().contains(&query)
+                || r.code.to_lowercase().contains(&query)
+                || r.source
+                    .as_deref()
+                    .is_some_and(|f| f.to_lowercase().contains(&query)))
+    };
+    let mut groups: std::collections::BTreeMap<&str, Vec<&LogRow>> =
+        std::collections::BTreeMap::new();
+    for r in all.iter().filter(shown) {
         groups
             .entry(
                 r.source
@@ -1229,89 +1970,157 @@ fn problems(s: &Studio) -> El<Studio> {
             .or_default()
             .push(r);
     }
-    if groups.is_empty() {
-        return empty(
+    let body = if all.is_empty() {
+        empty(
             l,
             icons::CIRCLE_CHECK,
             "No problems",
             "Errors and warnings in the project's files and scenes show here, grouped by file.",
             None,
-        );
-    }
-    let mut out = col().pad(8.0).gap(8.0);
-    for (file, rows) in groups {
-        let mut card = col()
-            .radius(super::style::RADIUS)
-            .fill(super::style::tones(l).band)
-            .child(
-                row()
-                    .h(30.0)
-                    .pad_x(10.0)
-                    .gap(8.0)
-                    .align(Align::Center)
-                    .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
-                    .child(
-                        text(file.to_owned())
-                            .text_size(12.0)
-                            .weight(600)
-                            .color(c.foreground.0)
-                            .grow(1.0),
-                    )
-                    .child(count(l, rows.len(), false)),
-            );
-        for r in rows {
-            // Its typed fixes, one click each (the same ones agents apply).
-            let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
-                text(r.message.clone())
-                    .text_size(12.0)
-                    .wrap(3)
-                    .color(c.foreground.0),
-            );
-            if !r.diagnostic.fixes.is_empty() {
-                let mut fixes = row().gap(4.0);
-                for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(2) {
-                    let diagnostic = r.diagnostic.clone();
-                    fixes = fixes.child(
-                        button(
-                            l,
-                            Tone::Secondary,
-                            Size::Sm,
-                            Some(icons::WRENCH),
-                            &fix.title,
+        )
+    } else if groups.is_empty() {
+        empty(
+            l,
+            icons::SEARCH,
+            "Nothing matches",
+            "Show errors and warnings again, or change the search.",
+            None,
+        )
+    } else {
+        let mut out = col().pad(8.0).gap(8.0);
+        for (file, rows) in groups {
+            let mut card = col()
+                .radius(super::style::RADIUS)
+                .fill(super::style::tones(l).band)
+                .child(
+                    row()
+                        .h(30.0)
+                        .pad_x(10.0)
+                        .gap(8.0)
+                        .align(Align::Center)
+                        .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
+                        .child(
+                            text(file.to_owned())
+                                .text_size(12.0)
+                                .weight(600)
+                                .color(c.foreground.0)
+                                .grow(1.0),
                         )
-                        .on_press(move |s: &mut Studio| {
-                            if let Err(error) =
-                                crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                            {
-                                s.editor
-                                    .report_failure(&std::io::Error::other(error.to_string()));
-                            }
-                            s.resolve();
-                        }),
-                    );
-                }
-                message = message.child(fixes);
+                        .child(count(l, rows.len(), false)),
+                );
+            for r in rows {
+                card = card.child(problem(s, r));
             }
-            card = card.child(
-                row()
-                    .min_h(32.0)
-                    .pad_x(10.0)
-                    .pad_y(6.0)
-                    .gap(10.0)
-                    .align(Align::Center)
-                    .child(severity_glyph(l, r.severity))
-                    .child(message)
-                    .child(
-                        text(r.code.clone())
-                            .text_size(10.5)
-                            .family(mono())
-                            .color(c.muted_foreground.0),
-                    ),
+            out = out.child(card);
+        }
+        col().grow(1.0).min_h(0.0).scroll(Axis::Vertical).child(out)
+    };
+    col().grow(1.0).min_h(0.0).child(toolbar).child(body)
+}
+
+/// One problem: its message and typed fixes (the same ones agents apply), Why? to read
+/// what its code means and usually causes, and Go to for the entity it names.
+fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let open = s.local.problems_open.contains(&r.seq);
+    let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
+        text(r.message.clone())
+            .text_size(12.0)
+            .wrap(3)
+            .color(c.foreground.0),
+    );
+    if !r.diagnostic.fixes.is_empty() {
+        let mut fixes = row().gap(4.0);
+        for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(2) {
+            let diagnostic = r.diagnostic.clone();
+            fixes = fixes.child(
+                button(
+                    l,
+                    Tone::Secondary,
+                    Size::Sm,
+                    Some(icons::WRENCH),
+                    &fix.title,
+                )
+                .on_press(move |s: &mut Studio| {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
+                        s.editor
+                            .report_failure(&std::io::Error::other(error.to_string()));
+                    }
+                    s.resolve();
+                }),
             );
         }
-        out = out.child(card);
+        message = message.child(fixes);
     }
-    col().grow(1.0).min_h(0.0).scroll(Axis::Vertical).child(out)
+    let doc = ara_diag::catalog::get(r.diagnostic.code);
+    if open && let Some(doc) = doc {
+        message = message
+            .child(
+                text(format!("{}: {}", doc.title, doc.summary()))
+                    .text_size(11.5)
+                    .wrap(4)
+                    .color(c.muted_foreground.0),
+            )
+            .children(doc.causes.first().map(|cause| {
+                text(format!("Usually: {cause}"))
+                    .text_size(11.5)
+                    .wrap(3)
+                    .color(c.muted_foreground.0)
+            }));
+    }
+    let seq = r.seq.to_string();
+    let why = super::scene_overlays::toggle(
+        l,
+        icons::LIGHTBULB,
+        "Why? What this means and usually causes",
+        open,
+    )
+    .key(format!("problems/{}/why", r.seq))
+    .on_press(move |s: &mut Studio| {
+        super::commands::run(
+            s,
+            "problems.explain",
+            &crate::catalog::Target::Text(seq.clone()),
+        )
+    });
+    let location = &r.diagnostic.location;
+    let go = location.record.clone().map(|record| {
+        let scene = location.doc.clone();
+        icon_button(
+            l,
+            Tone::Ghost,
+            Size::Sm,
+            icons::CROSSHAIR,
+            "Go to: select and frame it",
+        )
+        .key(format!("problems/{}/go", r.seq))
+        .on_press(move |s: &mut Studio| {
+            if let Some(scene) = scene.as_ref().filter(|d| **d != s.editor.state.doc) {
+                s.act("editor.scene.open", json!({"scene": scene}));
+                s.resolve();
+            }
+            let entity = crate::catalog::Target::Entity(record.clone());
+            super::commands::run(s, "edit.select_entity", &entity);
+        })
+    });
+    row()
+        .key(format!("problems/{}", r.seq))
+        .min_h(32.0)
+        .pad_x(10.0)
+        .pad_y(6.0)
+        .gap(10.0)
+        .align(Align::Center)
+        .child(severity_glyph(l, r.severity))
+        .child(message)
+        .child(
+            text(r.code.clone())
+                .text_size(10.5)
+                .family(mono())
+                .color(c.muted_foreground.0),
+        )
+        .children(doc.map(|_| why))
+        .children(go)
 }
 
 /// Places the model or prefab at storage `path` where the pointer let go: on the ground
@@ -1341,7 +2150,7 @@ fn place(s: &mut Studio, path: &str, at: (f32, f32)) {
         w: view.width(),
         h: view.height(),
     };
-    let ground = crate::shell::overlay::ground_point(
+    let ground = crate::overlay::ground_point(
         &s.editor.state.camera,
         rect,
         [at.0 - view.left, at.1 - view.top],

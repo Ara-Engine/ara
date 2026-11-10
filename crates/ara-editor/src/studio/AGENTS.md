@@ -20,9 +20,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `components.rs`: Add Component (Unity's picker): categories from each component's schema
   module, search across all, recent first, arrows/Enter/Left, the description below.
 - `asset_inspector.rs`: an asset in the Inspector (Unity) and the Import tab: preview,
-  importer settings (`shell::import_batch`, one `import.configure` step each), Reimport,
-  Open, Uses / Used by (`shell::import_panel::links`).
-- `lighting.rs`: everything that lights the scene (`shell::lighting::{model, authoring}`).
+  importer settings (`crate::import_edit`, one `import.configure` step each), Reimport,
+  Open, Uses / Used by (`crate::asset_links::links`).
+- `lighting.rs`: everything that lights the scene (`crate::lighting::{model, authoring}`).
 - `profiler.rs`: Record/Stop (`profile.start`), a frame strip against the budget, the
   frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
   while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
@@ -32,28 +32,28 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `graph.rs`: the Material and Animation pages: the shared node canvas
   (`crate::graph::Canvas`) in `graph::PAGES`' layers; gestures become document commands
   (`material.connect`, `graph.node.move`; controllers through
-  `shell::animation_panel::{connect, edit}`). Unreal's habits: generated input defaults
+  `crate::animation_edit::{connect, edit}`). Unreal's habits: generated input defaults
   draw inline on their pins (`graph::is_default`; click to type), the node search opens
   at a right-click or dropped wire and lists only what fits it, C makes a comment box,
   ⌘D duplicates (`editor.material.node.duplicate`), Delete removes; Details on the right.
 - `vfx.rs`: the VFX page, laid out as Niagara's: preview and timeline (left), System
   Overview cards per emitter with coloured stages (middle), the picked module's Selection
-  (right); `shell::vfx_panel::module_edit`, preview from `asset_tools::vfx_stream`.
+  (right); `crate::vfx_edit::module_edit`, preview from `asset_tools::vfx_stream`.
 - `asset_create.rs`: Add / `assets.create.*`: folder, scene, material, effect, controller,
   script, at the open folder's authored path (never its storage path), opened where edited.
 - Assets (`panels.rs`): back/forward, Add, type filters across the project (Unreal's
   filter bar), list or three tile sizes, a type strip under tiles.
-- `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
+- `compositor.rs`: the renderer's image plus `crate::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
-- `chrome.rs`: root view, title bar (menus from `shell::commands::menus`, Play,
+- `chrome.rs`: root view, title bar (menus from `crate::catalog::menus`, Play,
   scene crumb, ⌘K launcher), status bar, palette, context menus.
 - `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters.
 - `scene.rs`: the Scene element and toolbar. RMB look + WASD fly (key-ups from the host),
   MMB pan, Alt+LMB orbit, wheel dolly, click to pick, right-click menu, Shift+A at pointer.
 - `gizmo.rs`: handle hover/drag mapped to an editor gesture; release commits one step.
 - `hierarchy.rs`: scene root row, virtual tree, rename, visibility/lock, WAI tree keyboard,
-  drag to reparent (quarters: before / inside / after) through `shell::drag::content::hierarchy`.
+  drag to reparent (quarters: before / inside / after) through `crate::hierarchy_actions::reparent`.
 - `inspector.rs`: fields from `crate::inspector::fields`; label scrubs (8 px a step,
   Shift ×0.1, Alt ×10), typed units, vectors, enums, colours; field menu (Reset, Copy
   Value, Copy Path); component ⋯ (Fold Others, Remove); Add Component.
@@ -64,7 +64,7 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   when the schema has its components). Recent, search, Enter, Shift+A placement.
 - `panels.rs`: Assets (folder tree + grid, thumbnails from `asset_tools::thumbnails` via
   `state::Previews`, models/prefabs drag into the Scene), Console, Problems (one-click
-  typed fixes via `shell::input::apply_fix`); other panels say they are coming.
+  typed fixes via `fixes::apply_fix`); other panels say they are coming.
 - `preferences.rs`: Preferences / Project Settings generated from `crate::settings::DEFS`.
 - `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
 - `commands.rs`: which registry commands the studio runs (`ported`), `run`, keymap,

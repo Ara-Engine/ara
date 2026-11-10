@@ -15,7 +15,7 @@ use stillkit::el::{Align, Axis, El, Handled, Justify, Overlay, col, el, icon, po
 use stillkit::icons::Icon;
 
 use super::Studio;
-use crate::shell::commands::Target;
+use crate::catalog::Target;
 
 /// A browser category.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +229,42 @@ pub const CATALOG: &[Item] = &[
         "Light in every direction from a point: lamps, fires.",
         "omni bulb lamp",
         r#"{"Light":{"kind":"point"}}"#,
+    ),
+    entity(
+        "create.light.rect",
+        "Rect Light",
+        Category::Lights,
+        icons::SQUARE,
+        "A one-sided rectangular area light facing down: windows, panels, soft boxes.",
+        "area rectangle panel window softbox",
+        r#"{"Light":{"kind":"rect"},"Transform":{"rotation":[-90,0,0]}}"#,
+    ),
+    entity(
+        "create.light.disc",
+        "Disc Light",
+        Category::Lights,
+        icons::CIRCLE,
+        "A one-sided round area light facing down: ceiling lamps, spots.",
+        "area round disc ceiling lamp",
+        r#"{"Light":{"kind":"disc","sourceRadius":0.25},"Transform":{"rotation":[-90,0,0]}}"#,
+    ),
+    entity(
+        "create.fog_volume",
+        "Fog Volume",
+        Category::Lights,
+        icons::CLOUD,
+        "Local fog in a box: mist in a valley, smoke in a room.",
+        "fog mist haze volume local",
+        r#"{"LocalFogVolume":{}}"#,
+    ),
+    entity(
+        "create.decal",
+        "Decal",
+        Category::Effects,
+        icons::PAINTBRUSH,
+        "Projects a decal material onto the surfaces in its box: dirt, signs, cracks.",
+        "decal projector sticker dirt sign",
+        r#"{"Decal":{},"Transform":{"rotation":[-90,0,0]}}"#,
     ),
     entity(
         "create.light.spot",

@@ -294,10 +294,10 @@ fn selected_prefab_child_travels_with_its_selected_instance_without_flattening()
     assert!(before.contains_key(inner));
     let selected = BTreeSet::from(["e_instance1", inner]);
     assert_eq!(
-        selection_roots(&before, &selected).unwrap(),
+        model::selection_roots(&before, &selected).unwrap(),
         ["e_instance1"]
     );
-    assert!(selection_roots(&before, &BTreeSet::from([inner])).is_err());
+    assert!(model::selection_roots(&before, &BTreeSet::from([inner])).is_err());
     let id = group(&mut editor, &before, &[inner.into(), "e_instance1".into()]).unwrap();
     let after = resolved(&editor);
     assert_eq!(children(&after, Some(&id)), ["e_instance1"]);

@@ -1,16 +1,16 @@
 //! Schema-backed lighting inventory; current-selection editing uses the shared Inspector.
 use super::*;
-use ara_components::post::{PostProcessVolume, PostVolume, VolumeShape};
+pub(crate) use crate::lighting::{authoring, bounds, model};
+#[cfg(test)]
+use ara_components::post::{PostProcessVolume, VolumeShape};
 use commands::Target;
+#[cfg(test)]
 use glam::Vec3;
-pub(crate) mod authoring;
-pub(in crate::shell) mod bounds;
-pub(crate) mod model;
 #[cfg(test)]
 mod tests;
 mod view;
 
-pub(crate) use authoring::{Create, Preset};
+pub(crate) use authoring::{Create, Preset, create_commands, preset_commands};
 pub(super) const CSS: &str = super::live_styles::embedded::LIGHTING;
 const PAGE: usize = 64;
 
@@ -148,5 +148,34 @@ impl Shell {
         }
         out.push_str("</panel></scroll>");
         Ok(())
+    }
+}
+
+impl Shell {
+    /// One undoable creation, then explicit human selection; local volumes start with no overrides.
+    pub(crate) fn create_lighting(
+        &mut self,
+        editor: &mut Editor,
+        kind: Create,
+    ) -> ara_ui::Result<()> {
+        let (name, commands) = create_commands(kind, editor.state.camera.target);
+        let result = editor.apply(commands, &format!("Create {name}"), None)?;
+        if let Some(entity) = result["outputs"][0]["id"].as_str() {
+            editor.action("editor.select", json!({"entities":[entity]}))?;
+            self.reveal_lighting(editor, entity)?;
+        }
+        self.open_lighting(editor)
+    }
+
+    /// Append instead of replacing a captured array: agent-authored groups and other values survive.
+    pub(crate) fn lighting_preset(
+        &mut self,
+        editor: &mut Editor,
+        preset: Preset,
+    ) -> ara_ui::Result<()> {
+        let resolved = self.resolved(editor)?;
+        let (calls, why) = preset_commands(editor, &resolved, preset)?;
+        editor.apply(calls, why, None)?;
+        self.rebuild(editor)
     }
 }

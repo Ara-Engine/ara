@@ -248,8 +248,19 @@ impl State {
     pub fn final_matched(&self) -> bool {
         match (&self.latest, &self.final_catalog) {
             (Some(loaded), Some(authority)) => {
-                loaded.generation == authority.generation
-                    && loaded.registrations.keys().eq(authority.ids.iter())
+                // The authority publishes the studio's catalogue as its native commands;
+                // the C# registrations and their generation are what must agree.
+                let loaded_csharp = loaded
+                    .registrations
+                    .values()
+                    .filter(|r| !r.builtin)
+                    .map(|r| r.id.as_str());
+                let published_csharp = authority
+                    .ids
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|id| crate::catalog::get(id).is_none());
+                loaded.generation == authority.generation && loaded_csharp.eq(published_csharp)
             }
             _ => false,
         }
@@ -292,6 +303,8 @@ impl State {
                 catalog
                     .ids
                     .iter()
+                    // Native ids are the studio's catalogue; only C# ids can be unloaded.
+                    .filter(|id| crate::catalog::get(id).is_none())
                     .filter(|id| {
                         self.latest
                             .as_ref()
