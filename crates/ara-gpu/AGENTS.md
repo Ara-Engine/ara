@@ -83,13 +83,13 @@ Insertions allocate fresh slots. Resource retirement invalidates its CPU handle
 immediately; allocation and descriptor reuse wait for both queue timelines.
 Retention is conservative across published resources in v0. A live TLAS prevents
 its BLAS from retiring. Default static acceleration structures build once; options enable repeated builds/refits. Pipelines also retire through queue completion.
-Completed images/pipelines release identities on the owner; their destruction and
-uncached buffer-memory frees run on one worker (one active/one queued batch).
-Backpressure retains completed objects locally; device teardown drains and joins.
-Retired buffers destroy their VkBuffer but may retain up to 64 MiB/256 idle memory
-blocks. Reuse requires exact size, memory type and device-address allocation flags;
-required dedicated allocations are excluded. Fresh buffers keep queue ownership
-and handle generations independent; images and shared surfaces do not use this pool.
+Private resources suballocate: Metal automatic heaps (including AS storage), Vulkan
+aligned blocks segregated by memory type, address flags and buffer/image class.
+Host buffers, required-dedicated and transient/external allocations stay separate.
+Retirement gates reuse on both timelines. Vulkan image ranges return from disposal
+only after native destruction; generation IDs reject late worker replies. Preparation
+jobs transfer blocks/heaps on adoption. Metal views need explicit residency too.
+Vulkan caches at most 64 MiB of empty blocks, plus the bounded host-buffer cache.
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.

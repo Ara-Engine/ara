@@ -126,6 +126,14 @@ impl Device for VulkanDevice {
         if let Some(worker) = &mut self.pipeline_preparation {
             worker.drain(self.disposal.as_mut().expect("disposal worker alive"))?;
         }
+        for slice in self
+            .disposal
+            .as_ref()
+            .expect("disposal worker alive")
+            .released()
+        {
+            self.context.memory_blocks.release(slice);
+        }
         let done = self.completed()?;
         let mut index = 0;
         while index < self.retired.len() {
@@ -163,6 +171,12 @@ impl Device for VulkanDevice {
             } else {
                 index += 1;
             }
+        }
+        for memory in self.context.memory_blocks.trim() {
+            self.disposal
+                .as_mut()
+                .expect("disposal worker alive")
+                .push(disposal::Object::Memory(memory));
         }
         self.disposal
             .as_mut()

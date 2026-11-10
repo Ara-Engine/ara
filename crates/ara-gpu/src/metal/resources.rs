@@ -11,6 +11,7 @@ use objc2_metal::*;
 /// An owned Metal buffer and its declared uses.
 pub(super) struct NativeBuffer {
     pub buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    pub heap: Option<super::memory::Heap>,
     pub size: u64,
     pub usage: vk::BufferUsageFlags,
     pub host: bool,
@@ -19,6 +20,7 @@ pub(super) struct NativeBuffer {
 /// An owned Metal texture and its declared uses.
 pub(super) struct NativeImage {
     pub texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    pub heap: Option<super::memory::Heap>,
     pub info: FormatInfo,
     pub size: [u32; 2],
     pub levels: u32,
@@ -36,11 +38,21 @@ impl NativeImage {
     }
 }
 
+#[cfg(test)]
 pub(super) fn buffer(
     device: &ProtocolObject<dyn MTLDevice>,
     size: u64,
     usage: vk::BufferUsageFlags,
     host: bool,
+) -> Result<NativeBuffer> {
+    buffer_pooled(device, size, usage, host, None)
+}
+pub(super) fn buffer_pooled(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: u64,
+    usage: vk::BufferUsageFlags,
+    host: bool,
+    pool: Option<&mut super::memory::Pool>,
 ) -> Result<NativeBuffer> {
     if size == 0 || usage.is_empty() {
         return Err(GpuError::Contract("Empty buffer".into()));
@@ -59,17 +71,27 @@ pub(super) fn buffer(
     } else {
         MTLResourceOptions::StorageModePrivate
     };
-    let buffer = device
-        .newBufferWithLength_options(length, storage)
-        .ok_or_else(|| nil("buffer"))?;
+    let (buffer, heap) = if let Some(pool) = pool.filter(|_| !host) {
+        let (b, h) = pool.buffer(device, length)?;
+        (b, Some(h))
+    } else {
+        (
+            device
+                .newBufferWithLength_options(length, storage)
+                .ok_or_else(|| nil("buffer"))?,
+            None,
+        )
+    };
     Ok(NativeBuffer {
         buffer,
+        heap,
         size,
         usage,
         host,
     })
 }
 
+#[cfg(test)]
 pub(super) fn image(
     device: &ProtocolObject<dyn MTLDevice>,
     size: [u32; 2],
@@ -89,6 +111,7 @@ pub(super) fn image(
     )
 }
 
+#[cfg(test)]
 pub(super) fn image_shaped(
     device: &ProtocolObject<dyn MTLDevice>,
     size: [u32; 2],
@@ -96,8 +119,26 @@ pub(super) fn image_shaped(
     usage: vk::ImageUsageFlags,
     shape: crate::texture::ImageShape,
 ) -> Result<NativeImage> {
+    image_pooled(device, size, format_id, usage, shape, None)
+}
+pub(super) fn image_pooled(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: [u32; 2],
+    format_id: vk::Format,
+    usage: vk::ImageUsageFlags,
+    shape: crate::texture::ImageShape,
+    pool: Option<&mut super::memory::Pool>,
+) -> Result<NativeImage> {
     use crate::texture::{SampleCount, TextureDimension};
     shape.validate(size)?;
+    if shape.layers > 2048
+        || (shape.dimension == TextureDimension::D3 && size[0].max(size[1]).max(shape.depth) > 2048)
+        || (usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) && shape.mip_levels != 1)
+    {
+        return Err(GpuError::Contract(
+            "Texture shape exceeds Metal dimensions or transient mip limits".into(),
+        ));
+    }
     let levels = shape.mip_levels;
     let info = format(format_id)?;
     let [width, height] = size;
@@ -168,11 +209,22 @@ pub(super) fn image_shaped(
             MTLStorageMode::Private
         },
     );
-    let texture = device
-        .newTextureWithDescriptor(&descriptor)
-        .ok_or_else(|| nil("texture"))?;
+    let (texture, heap) = if let Some(pool) =
+        pool.filter(|_| !usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT))
+    {
+        let (texture, heap) = pool.image(device, &descriptor)?;
+        (texture, Some(heap))
+    } else {
+        (
+            device
+                .newTextureWithDescriptor(&descriptor)
+                .ok_or_else(|| nil("texture"))?,
+            None,
+        )
+    };
     Ok(NativeImage {
         texture,
+        heap,
         info,
         size,
         levels,

@@ -5,6 +5,7 @@ mod descriptors;
 #[cfg(test)]
 mod diagnostics_tests;
 mod environment;
+pub(crate) mod memory_blocks;
 mod presentation;
 mod priority;
 mod queues;
@@ -247,6 +248,7 @@ pub struct Gpu {
     pub compute_pool: vk::CommandPool,
     buffers: Vec<BufferAllocation>,
     buffer_memory: buffer_memory::BufferMemory,
+    pub(crate) memory_blocks: memory_blocks::MemoryBlocks,
     images: Vec<ImageAllocation>,
     structures: Vec<vk::AccelerationStructureKHR>,
 }
@@ -400,11 +402,18 @@ impl Drop for Gpu {
                     self.device.destroy_image_view(storage, None);
                 }
                 self.device.destroy_image(image.handle, None);
-                self.device.free_memory(image.memory, None);
+                if image.suballocation.is_none() {
+                    self.device.free_memory(image.memory, None);
+                }
             }
             for buffer in &self.buffers {
                 self.device.destroy_buffer(buffer.handle, None);
-                self.device.free_memory(buffer.memory, None);
+                if buffer.suballocation.is_none() {
+                    self.device.free_memory(buffer.memory, None);
+                }
+            }
+            for memory in self.memory_blocks.drain() {
+                self.shared.device.free_memory(memory, None);
             }
             for memory in self.buffer_memory.drain() {
                 self.shared.device.free_memory(memory, None);

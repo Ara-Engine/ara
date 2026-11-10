@@ -366,8 +366,7 @@ impl VulkanDevice {
         );
         native.shape = desc.shape;
         self.context.validate_image(&native)?;
-        let raw = self.context.allocator().image(native)?;
-        self.context.track_image(raw);
+        let raw = self.context.image_shaped(native)?;
         self.images.insert(Owned {
             raw,
             last: [0; 2],

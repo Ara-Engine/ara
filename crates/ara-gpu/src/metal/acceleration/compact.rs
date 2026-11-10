@@ -58,17 +58,13 @@ impl MetalDevice {
             if size == 0 || size > original.size() {
                 return Err(GpuError::Contract("Invalid compacted BLAS size".into()));
             }
-            let structure = self
-                .device
-                .newAccelerationStructureWithSize(size)
-                .ok_or_else(|| nil("compacted acceleration structure"))?;
-            self.residency
-                .addAllocation(ProtocolObject::from_ref(&*structure));
-            self.residency_dirty = true;
+            let (structure, heap) = self.memory.acceleration(&self.device, size)?;
+            self.resident_heap(&heap);
             let scratch =
                 self.create_buffer(scratch_size, vk::BufferUsageFlags::STORAGE_BUFFER, false)?;
             let destination = self.accelerations.insert(Owned::new(NativeAcceleration {
                 structure,
+                heap: Some(heap),
                 geometry: Geometry::Triangles(range),
                 scratch,
                 dependencies: Vec::new(),

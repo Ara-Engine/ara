@@ -485,6 +485,7 @@ impl Gpu {
                 compute_pool,
                 buffers: vec![],
                 buffer_memory: Default::default(),
+                memory_blocks: Default::default(),
                 images: vec![],
                 structures: vec![],
             })

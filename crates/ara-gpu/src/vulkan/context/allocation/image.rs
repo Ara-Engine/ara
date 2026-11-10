@@ -2,11 +2,13 @@ use super::super::resources::range;
 use super::*;
 use ash::vk::TaggedStructure;
 
-pub(crate) fn image(
+pub(crate) fn pooled_image(
     device: &ash::Device,
     memory_properties: &vk::PhysicalDeviceMemoryProperties,
     desc: ImageDesc,
+    mut blocks: Option<&mut super::super::memory_blocks::MemoryBlocks>,
 ) -> Result<ImageAllocation> {
+    let mut suballocation = None;
     let ImageDesc {
         size: [width, height],
         format,
@@ -52,7 +54,13 @@ pub(crate) fn image(
         let mut view = vk::ImageView::null();
         let mut storage_view = None;
         let result = (|| -> Result<_> {
-            let req = device.get_image_memory_requirements(handle);
+            let mut dedicated = vk::MemoryDedicatedRequirements::default();
+            let mut req2 = vk::MemoryRequirements2::default().push(&mut dedicated);
+            device.get_image_memory_requirements2(
+                &vk::ImageMemoryRequirementsInfo2::default().image(handle),
+                &mut req2,
+            );
+            let req = req2.memory_requirements;
             let device_local = || {
                 memory_type(
                     memory_properties,
@@ -73,13 +81,32 @@ pub(crate) fn image(
             } else {
                 device_local()?
             };
-            memory = device.allocate_memory(
-                &vk::MemoryAllocateInfo::default()
+            if dedicated.requires_dedicated_allocation == vk::FALSE
+                && !usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
+                && let Some(blocks) = blocks.as_deref_mut()
+            {
+                let slice = blocks.allocate(
+                    device,
+                    super::super::memory_blocks::Key {
+                        memory_type: index,
+                        address: false,
+                        class: super::super::memory_blocks::Class::Image,
+                    },
+                    req,
+                )?;
+                memory = slice.memory;
+                suballocation = Some(slice);
+            } else {
+                let mut own = vk::MemoryDedicatedAllocateInfo::default().image(handle);
+                let mut info = vk::MemoryAllocateInfo::default()
                     .allocation_size(req.size)
-                    .memory_type_index(index),
-                None,
-            )?;
-            device.bind_image_memory(handle, memory, 0)?;
+                    .memory_type_index(index);
+                if dedicated.requires_dedicated_allocation != vk::FALSE {
+                    info = info.push(&mut own);
+                }
+                memory = device.allocate_memory(&info, None)?;
+            }
+            device.bind_image_memory(handle, memory, suballocation.map_or(0, |s| s.offset))?;
             // The image's own format cannot be stored to: its view leaves storage out.
             let mut own = vk::ImageViewUsageCreateInfo::default()
                 .usage(usage & !vk::ImageUsageFlags::STORAGE);
@@ -102,7 +129,7 @@ pub(crate) fn image(
                 view_info = view_info.push(&mut own);
             }
             view = device.create_image_view(&view_info, None)?;
-            if let Some(alias) = alias {
+            if usage.contains(vk::ImageUsageFlags::STORAGE) {
                 let mut storage =
                     vk::ImageViewUsageCreateInfo::default().usage(vk::ImageUsageFlags::STORAGE);
                 storage_view = Some(
@@ -116,11 +143,9 @@ pub(crate) fn image(
                             } else {
                                 vk::ImageViewType::TYPE_2D
                             })
-                            .format(alias)
+                            .format(alias.unwrap_or(format))
                             .subresource_range(
-                                range(aspect)
-                                    .level_count(mip_levels)
-                                    .layer_count(shape.layers),
+                                range(aspect).level_count(1).layer_count(shape.layers),
                             )
                             .push(&mut storage),
                         None,
@@ -130,6 +155,7 @@ pub(crate) fn image(
             Ok(ImageAllocation {
                 handle,
                 memory,
+                suballocation,
                 view,
                 storage_view,
                 width,
@@ -151,7 +177,9 @@ pub(crate) fn image(
                     device.destroy_image_view(storage, None);
                 }
                 device.destroy_image(handle, None);
-                if memory != vk::DeviceMemory::null() {
+                if let Some(slice) = suballocation {
+                    blocks.expect("pooled image has an owner").release(slice);
+                } else if memory != vk::DeviceMemory::null() {
                     device.free_memory(memory, None);
                 }
                 return Err(error);

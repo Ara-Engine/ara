@@ -267,3 +267,86 @@ fn barrier_recording_timing() {
         );
     }
 }
+
+#[test]
+fn comparison_samplers_read_the_bindless_depth_view() {
+    use crate::sampler::{CompareOp, Filter, SamplerDesc};
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    let depth = gpu
+        .create_image(
+            1,
+            1,
+            vk::Format::D32_SFLOAT,
+            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+        )
+        .unwrap();
+    let image = gpu.sampled_image(depth, true).unwrap();
+    let input = gpu
+        .create_buffer(4, vk::BufferUsageFlags::TRANSFER_SRC, true)
+        .unwrap();
+    gpu.upload(input, bytemuck::cast_slice(&[0.25f32])).unwrap();
+    let output = gpu
+        .create_buffer(20, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+        .unwrap();
+    let out = gpu.storage_buffer(output).unwrap();
+    let shader = r#"
+struct DepthEntry {ulong unused; depth2d<float> image; ulong metadata;};
+kernel void compareDepth(constant TopLevel& t [[buffer(2)]]){
+    device DepthEntry* images=(device DepthEntry*)t.textures;
+    float value=images[t.root[0]].image.sample_compare(t.samplers[t.root[1]].state,float2(0.5),0.5);
+    t.buffers[t.root[2]].data[t.root[3]]=as_type<uint>(value);
+}
+"#;
+    let p = gpu.msl_pipeline_from(
+        shader,
+        &[(cooked::Stage::Compute, "compareDepth")],
+        &cooked::RenderState::default(),
+        Some([1, 1, 1]),
+    );
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::UploadImage {
+        source: input,
+        destination: depth,
+    });
+    rec.barriers([Barrier {
+        resource: Resource::Image(depth),
+        before: Access::CopyDestination,
+        after: Access::ShaderRead,
+        handoff: None,
+    }]);
+    rec.push(Command::Pipeline(p));
+    for (i, compare) in [
+        CompareOp::Less,
+        CompareOp::LessEqual,
+        CompareOp::Greater,
+        CompareOp::GreaterEqual,
+        CompareOp::Always,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let sampler = gpu
+            .sampler(&SamplerDesc {
+                compare: Some(compare),
+                min: Filter::Nearest,
+                mag: Filter::Nearest,
+                ..Default::default()
+            })
+            .unwrap();
+        rec.push(Command::Constants(RootConstants {
+            words: [image.index, sampler.index, out.index, i as u32, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+    }
+    let point = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(point).unwrap();
+    let result: Vec<_> = gpu
+        .read(output)
+        .unwrap()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
+        .collect();
+    assert_eq!(result, [0., 0., 1., 1., 1.]);
+}

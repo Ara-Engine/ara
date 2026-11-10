@@ -71,6 +71,9 @@ impl MetalDevice {
             } else {
                 self.tables.textures.insert(entry)?
             };
+            self.residency
+                .addAllocation(ProtocolObject::from_ref(&*texture));
+            self.residency_dirty = true;
             self.views.push(View {
                 parent,
                 desc,
@@ -89,6 +92,9 @@ impl MetalDevice {
                 continue;
             }
             let view = self.views.swap_remove(i);
+            self.residency
+                .removeAllocation(ProtocolObject::from_ref(&*view._texture));
+            self.residency_dirty = true;
             if view.storage {
                 self.tables.storage_images.release(view.slot);
             } else {

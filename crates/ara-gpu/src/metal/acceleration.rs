@@ -31,6 +31,7 @@ pub(super) enum Geometry {
 /// One structure and the storage its build and shader binding own.
 pub(super) struct NativeAcceleration {
     pub structure: Retained<ProtocolObject<dyn MTLAccelerationStructure>>,
+    pub heap: Option<super::memory::Heap>,
     geometry: Geometry,
     scratch: Buffer,
     /// BLASes a TLAS references; they cannot retire while it lives.
@@ -140,15 +141,13 @@ impl MetalDevice {
             false,
         )?;
         auxiliary.push(scratch);
-        let structure = self
-            .device
-            .newAccelerationStructureWithSize(sizes.accelerationStructureSize)
-            .ok_or_else(|| nil("acceleration structure"))?;
-        self.residency
-            .addAllocation(ProtocolObject::from_ref(&*structure));
-        self.residency_dirty = true;
+        let (structure, heap) = self
+            .memory
+            .acceleration(&self.device, sizes.accelerationStructureSize)?;
+        self.resident_heap(&heap);
         self.accelerations.insert(Owned::new(NativeAcceleration {
             structure,
+            heap: Some(heap),
             geometry,
             scratch,
             dependencies,
