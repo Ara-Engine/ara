@@ -229,7 +229,7 @@ impl Editor {
         host.register(Box::new(probes))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(
-            crate::shell::reachability::ValidationService::default(),
+            crate::validation_service::ValidationService::default(),
         ))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let session = host
