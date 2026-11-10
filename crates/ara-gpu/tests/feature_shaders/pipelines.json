@@ -1,0 +1,154 @@
+{
+  "color": {
+    "entries": {
+      "colorOnly": "fragment",
+      "fullscreenVertex": "vertex"
+    },
+    "source": "dual.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "depth": {
+    "entries": {
+      "depthOnly": "fragment",
+      "fullscreenVertex": "vertex"
+    },
+    "source": "dual.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "dual": {
+    "entries": {
+      "dualColor": "fragment",
+      "fullscreenVertex": "vertex"
+    },
+    "source": "dual.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37,
+        37
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "hit": {
+    "entries": {
+      "hitMain": "compute"
+    },
+    "source": "hit.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "samplers": {
+    "entries": {
+      "samplerMain": "compute"
+    },
+    "source": "samplers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "views": {
+    "entries": {
+      "viewsMain": "compute"
+    },
+    "source": "views.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  }
+}

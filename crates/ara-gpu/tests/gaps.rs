@@ -22,6 +22,23 @@ fn barrier(resource: Resource, before: Access, after: Access) -> Barrier {
         handoff: None,
     }
 }
+fn assert_unorm_resolve_clear(pixels: &[u8]) {
+    assert_eq!(pixels.len(), 256);
+    let first = &pixels[..4];
+    assert!(
+        pixels.as_chunks::<4>().0.iter().all(|p| p == first),
+        "nonuniform resolve"
+    );
+    // Vulkan permits either adjacent integer for nonintegral UNORM conversion:
+    // https://docs.vulkan.org/spec/latest/chapters/fundamentals.html#fundamentals-fp-conversion
+    for (&actual, clear) in first.iter().zip([0.25f32, 0.5, 0.75, 1.0]) {
+        let scaled = clear * 255.0;
+        assert!(
+            (scaled.floor()..=scaled.ceil()).contains(&f32::from(actual)),
+            "resolved pixel: {first:?}"
+        );
+    }
+}
 #[test]
 fn large_updates_keep_both_in_flight_payloads_and_fill_patterns() -> Result<()> {
     let mut gpu = device("uploads")?;
@@ -244,13 +261,9 @@ fn multisample_clear_resolves_to_single_sample_pixels() -> Result<()> {
     )]);
     let p = gpu.submit(rec.finish(), &[])?;
     gpu.wait(p)?;
-    assert!(
-        gpu.read(output)?
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|p| *p == [64, 128, 191, 255])
-    );
+    gpu.assert_clean()?;
+    let pixels = gpu.read(output)?;
+    assert_unorm_resolve_clear(&pixels);
     gpu.assert_clean()?;
     Ok(())
 }
@@ -452,13 +465,9 @@ fn transient_msaa_resolves_inside_the_pass_into_mip_zero() -> Result<()> {
     )]);
     let p = gpu.submit(rec.finish(), &[])?;
     gpu.wait(p)?;
-    assert!(
-        gpu.read(output)?
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|p| *p == [64, 128, 191, 255])
-    );
+    gpu.assert_clean()?;
+    let pixels = gpu.read(output)?;
+    assert_unorm_resolve_clear(&pixels);
     gpu.assert_clean()?;
     Ok(())
 }
@@ -466,7 +475,18 @@ fn transient_msaa_resolves_inside_the_pass_into_mip_zero() -> Result<()> {
 #[test]
 fn odd_sized_half_float_and_depth_mips_use_their_required_alignment() -> Result<()> {
     let mut gpu = device("odd-mips")?;
-    for (format, bytes) in [(Format::R16Float, 20), (Format::Depth16Unorm, 22)] {
+    for (format, bytes) in [
+        (Format::R16Float, 20),
+        (Format::Depth16Unorm, 22),
+        (Format::R32Float, 40),
+        (Format::R32Uint, 40),
+        (Format::Rg16Float, 40),
+        (Format::Rg32Uint, 80),
+        (Format::Rgba32Uint, 160),
+        (Format::Rgba32Float, 160),
+        (Format::Rgba16Float, 80),
+        (Format::Depth32Float, 40),
+    ] {
         let desc = TextureDesc {
             image: ImageDesc {
                 size: [3, 3],
@@ -527,6 +547,179 @@ fn odd_sized_half_float_and_depth_mips_use_their_required_alignment() -> Result<
         gpu.wait(p)?;
         assert_eq!(gpu.read(output)?, expected);
     }
+    gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn volume_mips_roundtrip_all_depth_slices() -> Result<()> {
+    let mut gpu = device("volume-mips")?;
+    let (format, bytes) = (Format::R32Uint, 292);
+    let desc = TextureDesc {
+        image: ImageDesc {
+            size: [4, 4],
+            format,
+            sampled: true,
+            storage: false,
+            attachment: false,
+            copy_source: true,
+            copy_destination: true,
+        },
+        shape: ImageShape {
+            dimension: ara_gpu::texture::TextureDimension::D3,
+            depth: 4,
+            mip_levels: 3,
+            ..Default::default()
+        },
+    };
+    assert_eq!(desc.copy_byte_len()?, bytes);
+    let image = gpu.create_texture(&desc)?;
+    let input = gpu.create_buffer(bytes, ara_gpu::vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+    let output = gpu.create_readback_buffer(bytes)?;
+    let expected: Vec<_> = (0..bytes).map(|i| (i % 251) as u8).collect();
+    gpu.upload(input, &expected)?;
+    gpu.upload(output, &vec![0; bytes as usize])?;
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([
+        barrier(
+            Resource::Buffer(input),
+            Access::HostWrite,
+            Access::CopySource,
+        ),
+        barrier(
+            Resource::Image(image),
+            Access::Undefined,
+            Access::CopyDestination,
+        ),
+    ]);
+    rec.push(Command::UploadImage {
+        source: input,
+        destination: image,
+    });
+    rec.barriers([barrier(
+        Resource::Image(image),
+        Access::CopyDestination,
+        Access::CopySource,
+    )]);
+    rec.push(Command::ReadImage {
+        source: image,
+        destination: output,
+    });
+    rec.barriers([barrier(
+        Resource::Buffer(output),
+        Access::CopyDestination,
+        Access::HostRead,
+    )]);
+    let p = gpu.submit(rec.finish(), &[])?;
+    gpu.wait(p)?;
+    assert_eq!(gpu.read(output)?, expected);
+    gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn volume_regions_roundtrip_interior_depth_slices() -> Result<()> {
+    let mut gpu = device("volume-regions")?;
+    let desc = || TextureDesc {
+        image: ImageDesc {
+            size: [8, 8],
+            format: Format::Rgba32Uint,
+            sampled: true,
+            storage: true,
+            attachment: false,
+            copy_source: true,
+            copy_destination: true,
+        },
+        shape: ImageShape {
+            dimension: ara_gpu::texture::TextureDimension::D3,
+            depth: 8,
+            mip_levels: 4,
+            ..Default::default()
+        },
+    };
+    let a = gpu.create_texture(&desc())?;
+    let b = gpu.create_texture(&desc())?;
+    let input = gpu.create_buffer(160, ara_gpu::vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+    let output = gpu.create_readback_buffer(160)?;
+    gpu.upload(input, &[0x37; 160])?;
+    let region = ImageRegion {
+        mip: 1,
+        origin: [1, 1, 1],
+        extent: [2, 2, 2],
+        base_layer: 0,
+        layer_count: 1,
+    };
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([
+        barrier(
+            Resource::Buffer(input),
+            Access::HostWrite,
+            Access::CopySource,
+        ),
+        barrier(
+            Resource::Image(a),
+            Access::Undefined,
+            Access::CopyDestination,
+        ),
+        barrier(
+            Resource::Image(b),
+            Access::Undefined,
+            Access::CopyDestination,
+        ),
+    ]);
+    rec.push(Command::FillBuffer {
+        destination: output,
+        offset: 0,
+        size: 160,
+        value: 0,
+    });
+    // RGBA32 texels require a 16-byte-aligned offset.
+    rec.push(Command::UploadImageRegion {
+        source: input,
+        destination: a,
+        buffer_offset: 16,
+        region,
+    });
+    rec.barriers([barrier(
+        Resource::Image(a),
+        Access::CopyDestination,
+        Access::CopySource,
+    )]);
+    rec.push(Command::CopyImageRegion {
+        source: a,
+        destination: b,
+        from: region,
+        to: region,
+    });
+    rec.barriers([
+        barrier(
+            Resource::Image(b),
+            Access::CopyDestination,
+            Access::CopySource,
+        ),
+        barrier(
+            Resource::Buffer(output),
+            Access::CopyDestination,
+            Access::CopyDestination,
+        ),
+    ]);
+    rec.push(Command::ReadImageRegion {
+        source: b,
+        destination: output,
+        buffer_offset: 16,
+        region,
+    });
+    rec.barriers([barrier(
+        Resource::Buffer(output),
+        Access::CopyDestination,
+        Access::HostRead,
+    )]);
+    let p = gpu.submit(rec.finish(), &[])?;
+    gpu.wait(p)?;
+    let bytes = gpu.read(output)?;
+    assert_eq!(&bytes[..16], &[0; 16]);
+    assert_eq!(&bytes[16..144], &[0x37; 128]);
+    assert_eq!(&bytes[144..], &[0; 16]);
     gpu.assert_clean()?;
     Ok(())
 }

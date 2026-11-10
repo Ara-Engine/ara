@@ -76,7 +76,9 @@ impl VulkanDevice {
     /// Within a deferred frame this records a logical point; end the scope before
     /// host waits. Consecutive same-queue lists share a native submission.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
-        self.validate_commands(&list)?;
+        if self.validate_commands(&list)? {
+            self.prepare_render_views(&list)?;
+        }
         let point = TimelinePoint {
             queue: list.queue,
             value: self.submitted[list.queue.index()] + 1,

@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 pub fn spirv(pass: Pass) -> Result<Vec<SpirvStage>> {
     let source = adapt(pass);
     let module = parse(&source)?;
-    let info = validate(&module)?;
     let entries: Vec<_> = if matches!(pass, Pass::Tone) {
         vec![
             (naga::ShaderStage::Vertex, "vs"),
@@ -21,8 +20,18 @@ pub fn spirv(pass: Pass) -> Result<Vec<SpirvStage>> {
     entries
         .into_iter()
         .map(|(stage, entry)| {
+            // Ara's cooked Vulkan ABI uses one `main` entry per module. Rename
+            // the selected IR entry without editing the pinned WGSL shader body.
+            let mut selected = module.clone();
+            selected
+                .entry_points
+                .iter_mut()
+                .find(|e| e.stage == stage && e.name == entry)
+                .context("replay entry missing")?
+                .name = "main".into();
+            let info = validate(&selected)?;
             let mut words = naga::back::spv::write_vec(
-                &module,
+                &selected,
                 &info,
                 &naga::back::spv::Options {
                     lang_version: (1, 5),
@@ -30,7 +39,7 @@ pub fn spirv(pass: Pass) -> Result<Vec<SpirvStage>> {
                 },
                 Some(&naga::back::spv::PipelineOptions {
                     shader_stage: stage,
-                    entry_point: entry.into(),
+                    entry_point: "main".into(),
                 }),
             )?;
             // Naga 30 emits OpTypeRuntimeArray for descriptor binding arrays but does
@@ -67,7 +76,7 @@ pub fn spirv(pass: Pass) -> Result<Vec<SpirvStage>> {
             repair_image_arguments(&mut words)?;
             Ok(SpirvStage {
                 stage,
-                entry: entry.into(),
+                entry: "main".into(),
                 words,
             })
         })

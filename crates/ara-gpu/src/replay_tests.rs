@@ -309,7 +309,7 @@ fn emit(pass: Pass, path: &std::path::Path) -> Result<CookedPipeline> {
     std::fs::create_dir_all(path)?;
     let mut stages = Vec::new();
     for stage in ara_gpu_replay::spirv(pass)? {
-        let name = format!("{pass:?}-{}.spv", stage.entry);
+        let name = format!("{pass:?}-{:?}-{}.spv", stage.stage, stage.entry);
         let bytes: Vec<u8> = stage.words.iter().flat_map(|w| w.to_le_bytes()).collect();
         std::fs::write(path.join(&name), &bytes)?;
         stages.push(CookedStage {

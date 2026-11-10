@@ -27,6 +27,7 @@ mod queries;
 mod query_tests;
 mod recording;
 mod reload;
+mod render_targets;
 pub use reload::ShaderStatus;
 mod queue_gate;
 pub use queue_gate::QueueGate;
@@ -478,7 +479,10 @@ impl VulkanDevice {
         let mut last = [0u64; 2];
         for retired in &self.retired {
             if let Retired::Image(image) = retired
-                && self.heap.has_storage(image.raw.view)
+                && (self
+                    .heap
+                    .has_storage(image.raw.storage_view.unwrap_or(image.raw.view))
+                    || self.has_storage_views(image.raw.handle))
             {
                 for (q, value) in retired.last().into_iter().enumerate() {
                     last[q] = last[q].max(value.min(self.flushed[q]));

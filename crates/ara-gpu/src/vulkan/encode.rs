@@ -57,10 +57,16 @@ impl VulkanDevice {
                         *offset,
                     );
                 }
-                Command::BeginRenderingSubresources { .. } => {
-                    return Err(GpuError::Contract(
-                        "Raster subresource recording awaits Vulkan implementation".into(),
-                    ));
+                Command::BeginRenderingSubresources {
+                    colors,
+                    depth,
+                    resolves,
+                    size,
+                } => {
+                    let ops = scopes
+                        .next()
+                        .expect("attachment analysis lists every rendering scope");
+                    self.encode_render_targets(cmd, colors, *depth, resolves, *size, &ops)?;
                 }
                 Command::BeginRendering {
                     colors,
@@ -534,7 +540,12 @@ impl VulkanDevice {
         Ok(())
     }
 }
-unsafe fn viewport(device: &ash::Device, cmd: vk::CommandBuffer, origin: [u32; 2], size: [u32; 2]) {
+pub(super) unsafe fn viewport(
+    device: &ash::Device,
+    cmd: vk::CommandBuffer,
+    origin: [u32; 2],
+    size: [u32; 2],
+) {
     // SAFETY: Called only within a graphics command buffer, with positive attachment extent.
     unsafe {
         device.cmd_set_viewport(

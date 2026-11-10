@@ -20,8 +20,9 @@ impl VulkanDevice {
         }
         Ok(())
     }
-    pub(super) fn validate_commands(&self, list: &CommandList) -> Result<()> {
+    pub(super) fn validate_commands(&self, list: &CommandList) -> Result<bool> {
         crate::cpu_scope!("GPU.validate_commands");
+        let mut requires_views = false;
         let mut rendering = false;
         let mut pass = false;
         let mut pipeline = None;
@@ -63,10 +64,20 @@ impl VulkanDevice {
                         ));
                     }
                 }
-                Command::BeginRenderingSubresources { .. } => {
-                    return Err(GpuError::Contract(
-                        "Raster subresource recording awaits Vulkan implementation".into(),
-                    ));
+                Command::BeginRenderingSubresources {
+                    colors,
+                    depth,
+                    resolves,
+                    size,
+                } => {
+                    if rendering || list.queue != Queue::Graphics || size.contains(&0) {
+                        return Err(GpuError::Contract("Invalid rendering scope".into()));
+                    }
+                    (color_formats, depth_format, samples) =
+                        self.validate_render_targets(colors, *depth, resolves, *size)?;
+                    extent = *size;
+                    rendering = true;
+                    requires_views = true;
                 }
                 Command::BeginRendering {
                     colors,
@@ -597,6 +608,6 @@ impl VulkanDevice {
         if pass || rendering {
             return Err(GpuError::Contract("Unclosed command scope".into()));
         }
-        Ok(())
+        Ok(requires_views)
     }
 }
