@@ -732,6 +732,33 @@ fn brush_sliders_set_by_press_and_drag() {
 }
 
 #[test]
+fn an_assets_details_say_what_it_is_and_holds() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| {
+        let path = s
+            .assets
+            .as_ref()
+            .and_then(|b| b.items.iter().find(|a| a.path.ends_with("main.scene")))
+            .map(|a| a.path.clone())
+            .unwrap();
+        s.act("editor.workspace", json!({"asset": path}));
+        s.local.inspect_asset = true;
+    });
+    settle(&mut rt);
+    let labels: Vec<String> = rt
+        .tree()
+        .iter()
+        .filter_map(|shown| shown.label.as_deref().map(str::to_owned))
+        .collect();
+    let has = |want: &str| labels.iter().any(|l| l.starts_with(want));
+    assert!(has("Kind: Scene"), "{labels:?}");
+    assert!(has("Size: ") && has("Modified: "));
+    assert!(has("Entities: 4"));
+    assert!(has("Components: Transform 4"), "most common first");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
