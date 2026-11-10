@@ -148,9 +148,10 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .zip(&keys)
         .map(|((_, _, title, _), key)| (key.as_str(), None, *title))
         .collect();
+    // The chosen tool shows whether or not painting is on: it is what the next stroke uses.
     let chosen = TOOLS
         .iter()
-        .position(|(t, ..)| on && *t == p.tool)
+        .position(|(t, ..)| *t == p.tool)
         .unwrap_or(usize::MAX);
     let tools = segmented(l, &options, chosen, |i| {
         let id = TOOLS[i].1;
