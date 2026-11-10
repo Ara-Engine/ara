@@ -29,9 +29,11 @@ use std::collections::{HashMap, HashSet};
 
 /// Foliage part draws kept at most: each is one Renderlab object.
 const MAX_FOLIAGE_DRAWS: usize = 60_000;
+/// Foliage triangles the non-RT path draws at most (`Terrain::sync`).
+const NONRT_FOLIAGE_TRIANGLES: usize = 2_000_000;
 
 /// Triangles a draw's mesh holds (shapes: a few hundred at most).
-fn triangles(draw: &Draw) -> usize {
+fn triangles_of(draw: &Draw) -> usize {
     match &draw.geometry {
         ara_runtime::extract::Geometry::Model { model, primitive } => model
             .primitives
@@ -181,8 +183,8 @@ impl Terrain {
             wanted
                 .iter()
                 .map(|(_, mesh, _)| mesh.source.indices.len() / 3)
-                .chain(view.frame.draws.iter().map(triangles))
-                .chain(view.foliage_parts.values().flatten().map(triangles))
+                .chain(view.frame.draws.iter().map(triangles_of))
+                .chain(view.foliage_parts.values().flatten().map(triangles_of))
                 .fold(uploaded, usize::max)
         });
         let cap = if packed_ids.is_some() {
@@ -192,13 +194,22 @@ impl Terrain {
         } else {
             MAX_FOLIAGE_DRAWS
         };
-        key = fnv(key, &cap.to_le_bytes());
+        // Renderlab's non-RT shadows slow sharply with caster triangles (Outpost's ten
+        // million foliage triangles outlive a GPU's hang timer): foliage stays within a
+        // triangle budget there.
+        let triangles = packed_ids.map(|_| NONRT_FOLIAGE_TRIANGLES);
+        key = fnv(
+            fnv(key, &cap.to_le_bytes()),
+            &view.foliage_percent.to_le_bytes(),
+        );
+        key = fnv(key, &triangles.unwrap_or(0).to_le_bytes());
         if key != self.foliage_key {
             self.foliage_key = key;
             self.rebuild_foliage(
                 view,
                 &coords.iter().map(|c| (c.x, c.z)).collect(),
                 cap,
+                triangles,
                 gaps,
             );
         }
@@ -226,6 +237,7 @@ impl Terrain {
         view: &ExternalView<'_>,
         resident: &HashSet<(i32, i32)>,
         cap: usize,
+        budget: Option<usize>,
         gaps: &mut Gaps,
     ) {
         self.foliage.clear();
@@ -235,7 +247,13 @@ impl Terrain {
         let data = &terrain.data;
         let (origin, width) = (data.header.origin, data.header.tile_width());
         let (mut unresolved, mut over) = (0usize, 0usize);
+        let mut used = 0usize;
         for instance in &data.foliage {
+            // The user's foliage density, selected as Ara's renderer selects it.
+            let identity = u64::from(instance.identity[0]) | u64::from(instance.identity[1]) << 32;
+            if identity % 100 >= u64::from(view.foliage_percent.min(100)) {
+                continue;
+            }
             let [x, y, z, scale] = instance.position_scale;
             let coord = (
                 ((x - origin[0]) / width).floor() as i32,
@@ -259,7 +277,8 @@ impl Terrain {
                 AraVec3::new(x, y, z),
             );
             for (index, part) in parts.iter().enumerate() {
-                if self.foliage.len() == cap {
+                let cost = triangles_of(part);
+                if self.foliage.len() == cap || budget.is_some_and(|b| used + cost > b) {
                     over += 1;
                     continue;
                 }
@@ -269,6 +288,7 @@ impl Terrain {
                     fnv(entity, &rule.to_le_bytes()),
                     &(index as u32).to_le_bytes(),
                 );
+                used += cost;
                 self.foliage.push(Draw {
                     entity: FOLIAGE_ENTITY | (entity & 0x0000_ffff_ffff_ffff),
                     world: placed * part.world,
@@ -286,7 +306,8 @@ impl Terrain {
             gaps.limit(
                 "foliage draws the bridge keeps",
                 &format!(
-                    "{over} foliage parts beyond {cap} are not drawn ({MAX_FOLIAGE_DRAWS} at most; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits)"
+                    "{over} foliage parts are not drawn: at most {cap} parts ({MAX_FOLIAGE_DRAWS} on the RT path; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits){}",
+                    budget.map_or(String::new(), |b| format!(" and {b} triangles on the non-RT path, whose shadows slow sharply with caster triangles"))
                 ),
             );
         }
