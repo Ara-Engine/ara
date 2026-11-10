@@ -201,3 +201,72 @@ fn imports_are_refused_for_another_device_identity() -> Result<()> {
     assert_eq!(diagnostic.code, ara_gpu::GPU_EXTERNAL);
     Ok(())
 }
+
+/// An owner that keeps its own copy: `copy_out` takes a published slot into an
+/// owner image and hands the slot back at once, so the producer can write every
+/// slot again without a release round trip through the owner.
+#[test]
+fn a_published_slot_is_copied_out_and_handed_straight_back() -> Result<()> {
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/test-gpu");
+    let mut producer = VulkanDevice::new(&[], &cache)?;
+    let mut owner = VulkanDevice::new(&[], &cache)?;
+    if !ara_gpu::vulkan::external::supported(producer.context()) {
+        eprintln!("skipped: no VK_KHR_external_memory_win32");
+        return Ok(());
+    }
+    let size = [64, 32];
+    let image = source(&mut producer, size)?;
+    let kept = source(&mut owner, size)?;
+    // The owner's image rests in TRANSFER_SRC, as an engine image in `CopySource`.
+    fill(owner.context(), kept, [0.0; 4], true)?;
+    // SAFETY: Both devices outlive the rings and imports; this thread owns the queues.
+    let mut ring = unsafe { ExportRing::new(producer.context(), size)? };
+    let shared = SharedSurface::duplicate_local(&ring.desc())?;
+    // SAFETY: As above.
+    let mut imported = unsafe { ImportedSurface::new(owner.context(), &shared)? };
+    // The owner's copy is read through a ring of its own, imported on the producer.
+    // SAFETY: As above.
+    let mut back = unsafe { ExportRing::new(owner.context(), size)? };
+    let back_shared = SharedSurface::duplicate_local(&back.desc())?;
+    // SAFETY: As above.
+    let mut reader = unsafe { ImportedSurface::new(producer.context(), &back_shared)? };
+    let mut shown: Option<ara_gpu::shared::Frame> = None;
+    for round in 0..(SLOTS * 2) as u32 {
+        let value = (round * 30 + 20) as u8;
+        fill(
+            producer.context(),
+            image,
+            [f32::from(value) / 255.0, 0.5, 0.0, 1.0],
+            round == 0,
+        )?;
+        // SAFETY: The completed source is 64x32 in TRANSFER_SRC on this device.
+        let frame = unsafe { ring.publish(image, u64::from(round))? }.expect("a free slot");
+        // SAFETY: The producer published the slot; `kept` is idle in TRANSFER_SRC.
+        unsafe { imported.copy_out(frame.slot, kept)? };
+        assert!(!imported.owns(frame.slot), "the slot went straight back");
+        assert!(ring.release(frame));
+        assert_eq!(ring.free(), SLOTS, "every slot is the producer's again");
+
+        // SAFETY: `kept` completed its copy and rests in TRANSFER_SRC.
+        let copy = unsafe { back.publish(kept, u64::from(round))? }.expect("a free slot");
+        // SAFETY: The previous read completed (every run waits).
+        unsafe { reader.exchange(Some(copy.slot), shown.map(|f| f.slot))? };
+        if let Some(previous) = shown.replace(copy) {
+            assert!(back.release(previous));
+        }
+        // SAFETY: The slot is acquired by the reading device.
+        let pixels = unsafe { reader.read(copy.slot)? };
+        for pixel in pixels.as_chunks::<4>().0 {
+            for (got, want) in pixel.iter().zip([value, 128, 0, 255]) {
+                assert!(got.abs_diff(want) <= 1, "round {round}: {pixel:?}");
+            }
+        }
+    }
+    drop(reader);
+    drop(imported);
+    drop(back);
+    drop(ring);
+    producer.assert_clean()?;
+    owner.assert_clean()?;
+    Ok(())
+}

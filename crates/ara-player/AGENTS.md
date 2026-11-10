@@ -9,7 +9,7 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
   See [graphics settings](../../docs/dev/graphics-settings.md) and `tests/graphics.rs`.
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
-[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
+[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]] [--renderer ara|renderlab|renderlab-rt|renderlab-nonrt]` (`renderer.rs`; `ARA_RENDERER`; D35).
 Without `--owner`, loads `ara-launch.json` in the sibling `data/` (legacy flat and
 macOS `Contents/Resources` roots remain readable; `--root DIR` accepts either),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
