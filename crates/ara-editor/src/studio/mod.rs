@@ -33,6 +33,7 @@ mod preferences;
 mod profiler;
 mod references;
 mod scene;
+mod scene_overlays;
 pub mod state;
 mod style;
 #[cfg(test)]
@@ -886,6 +887,11 @@ fn pump(
         keys.push("graph/view".into());
         keys.push("vfx/preview".into());
         keys.push("vfx/stacks".into());
+        keys.extend(
+            scene_overlays::OVERLAYS
+                .iter()
+                .map(|d| format!("scene/overlay/{}", d.id)),
+        );
         let s = rt.scale();
         let rects = keys
             .into_iter()

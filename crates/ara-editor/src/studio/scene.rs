@@ -10,7 +10,6 @@ use stillkit::{Button, Cursor, Rgba};
 
 use super::{SCENE_LAYER, Studio, commands, gizmo};
 use crate::shell::commands::Target;
-use crate::state::Tool;
 
 /// A pick the host resolves against the renderer after the frame: where (0..1 across the
 /// view), and whether it adds to the selection.
@@ -81,6 +80,11 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 super::create::toggle(s, anchor, place);
                 return Handled::Yes;
             }
+            // ` opens the Overlays menu (Unity).
+            if key.0 == 0xC0 && !tx.modifiers().ctrl && !tx.modifiers().meta {
+                s.local.overlays_menu = !s.local.overlays_menu;
+                return Handled::Yes;
+            }
             // While flying, the fly keys steer instead of switching tools.
             if s.local.flying && super::FLY_KEYS.contains(&key.0) {
                 return Handled::Yes;
@@ -97,8 +101,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 None => Handled::No,
             }
         })
-        .child(toolbar(s))
-        .child(orientation(s));
+        .children(super::scene_overlays::layer(s));
     // Flying: the speed, which the wheel changes.
     if s.local.flying {
         let speed = s
@@ -234,97 +237,12 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
     true
 }
 
-/// The floating toolbar: transform tools, space and pivot, snapping, then view controls.
-fn toolbar(s: &Studio) -> El<Studio> {
-    let l = &s.look;
-    let st = &s.editor.state;
-    let tool = |id: &'static str, glyph, label: &str, on: bool| {
-        glass_toggle(l, glyph, label, on)
-            .key(format!("scene/{id}"))
-            .on_press(move |s: &mut Studio| commands::run(s, id, &Target::None))
-    };
-    let tools = glass_group(l)
-        .child(tool(
-            "view.tool.move",
-            icons::MOVE_3D,
-            "Move (W)",
-            st.tool == Tool::Translate,
-        ))
-        .child(tool(
-            "view.tool.rotate",
-            icons::ROTATE_3D,
-            "Rotate (E)",
-            st.tool == Tool::Rotate,
-        ))
-        .child(tool(
-            "view.tool.scale",
-            icons::SCALE_3D,
-            "Scale (R)",
-            st.tool == Tool::Scale,
-        ))
-        .child(tool(
-            "view.tool.universal",
-            icons::MOVE,
-            "Universal (T)",
-            st.tool == Tool::Universal,
-        ));
-    let space = glass_group(l)
-        .child(
-            glass_label(
-                l,
-                if st.local { icons::BOX } else { icons::GLOBE },
-                if st.local { "Local" } else { "World" },
-            )
-            .key("scene/space")
-            .on_press(|s: &mut Studio| commands::run(s, "view.space", &Target::None)),
-        )
-        .child(
-            glass_label(
-                l,
-                icons::CROSSHAIR,
-                if st.centre { "Centre" } else { "Pivot" },
-            )
-            .key("scene/pivot")
-            .on_press(|s: &mut Studio| commands::run(s, "view.pivot", &Target::None)),
-        )
-        .child(
-            glass_toggle(l, icons::MAGNET, "Snapping", st.snapping)
-                .key("scene/snap")
-                .on_press(|s: &mut Studio| commands::run(s, "snap.toggle", &Target::None)),
-        );
-    let projection = if st.camera.projection == crate::state::CameraProjection::Perspective {
-        "Perspective"
-    } else {
-        "Orthographic"
-    };
-    let views = glass_group(l)
-        .child(
-            glass_label(l, icons::VIDEO, projection)
-                .key("scene/projection")
-                .on_press(|s: &mut Studio| {
-                    commands::run(s, "view.camera.perspective", &Target::None)
-                }),
-        )
-        .child(
-            glass_label(l, icons::FOCUS, "Frame")
-                .key("scene/frame")
-                .on_press(|s: &mut Studio| commands::run(s, "view.frame", &Target::None)),
-        );
-    row()
-        .absolute(8.0, 8.0)
-        .gap(8.0)
-        .child(tools)
-        .child(space)
-        .child(el().w(8.0))
-        .child(views)
-}
-
-/// The top-right corner: the orientation gizmo, and the frame rate under it while frames run.
-fn orientation(s: &Studio) -> El<Studio> {
+/// The Orientation overlay: the axis gizmo, and the frame rate under it while frames run.
+pub(super) fn orientation_widget(s: &Studio) -> El<Studio> {
     let mut corner = col().gap(6.0).align(Align::End).child(axes(s));
     if let Some((fps, ms)) = s.local.scene.fps.filter(|_| s.local.scene.ready) {
         corner = corner.child(
-            glass_group(&s.look).h(22.0).pad_x(8.0).child(
+            row().h(18.0).pad_x(6.0).child(
                 text(format!("{fps:.0} fps  {ms:.1} ms"))
                     .text_size(10.5)
                     .family(mono())
@@ -332,12 +250,7 @@ fn orientation(s: &Studio) -> El<Studio> {
             ),
         );
     }
-    row()
-        .absolute(0.0, 8.0)
-        .w_full()
-        .justify(Justify::End)
-        .child(corner)
-        .child(el().w(8.0))
+    corner
 }
 
 /// The axis gizmo's size and its arms' length, design px.
@@ -491,45 +404,4 @@ fn glass_group(l: &ara_kit::look::Look) -> El<Studio> {
         .align(Align::Center)
         .radius(super::style::RADIUS + 1.0)
         .fill(super::style::tones(l).strip.with_alpha(0.94))
-}
-
-/// An icon toggle in a Scene group: the chosen tone while on, like a selected row.
-fn glass_toggle(
-    l: &ara_kit::look::Look,
-    glyph: stillkit::icons::Icon,
-    label: &str,
-    on: bool,
-) -> El<Studio> {
-    let c = &l.c;
-    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
-    super::style::chosen(l, row(), on)
-        .size(22.0)
-        .align(Align::Center)
-        .justify(Justify::Center)
-        .radius(super::style::RADIUS)
-        .color(if on { ink } else { c.muted_foreground.0 })
-        .cascade_ink()
-        .label(label)
-        .tooltip(label)
-        .checked(on)
-        .hovered(move |e| if on { e } else { e.fill(hover).color(ink) })
-        .child(icon(glyph).size(14.0))
-}
-
-/// An icon and label button in a Scene group.
-fn glass_label(l: &ara_kit::look::Look, glyph: stillkit::icons::Icon, label: &str) -> El<Studio> {
-    let c = &l.c;
-    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
-    row()
-        .h(22.0)
-        .pad_x(7.0)
-        .gap(5.0)
-        .align(Align::Center)
-        .radius(super::style::RADIUS)
-        .color(c.muted_foreground.0)
-        .cascade_ink()
-        .label(label)
-        .hovered(move |e| e.fill(hover).color(ink))
-        .child(icon(glyph).size(13.0))
-        .child(text(label).text_size(super::style::TEXT))
 }
