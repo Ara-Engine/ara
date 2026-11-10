@@ -70,6 +70,13 @@ impl Presenter {
     /// `present`; this never waits and does not treat moving actors as pending.
     pub fn readiness(&self) -> PresentationReadiness {
         let mut status = match (&self.raster, &self.renderer) {
+            // An external renderer loads its content inside its own blocking frames.
+            _ if self.external.is_some() => PresentationReadiness {
+                raster: true,
+                content_prepared: true,
+                textures_pending: Some(0),
+                ..Default::default()
+            },
             (Some(raster), Some(renderer)) => raster.readiness(renderer),
             _ => PresentationReadiness::default(),
         };

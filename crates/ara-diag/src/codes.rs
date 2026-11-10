@@ -321,6 +321,18 @@ codes! {
     /// A debug view mode is unsupported or not ready on this renderer
     /// (`ARA_VIEW_MODE_UNAVAILABLE`).
     VIEW_MODE_UNAVAILABLE = 6109,
+    /// The Renderlab renderer was selected but could not start; Ara's renderer draws
+    /// instead (`ARA_RENDERLAB_UNAVAILABLE`).
+    RENDERLAB_UNAVAILABLE = 6120,
+    /// A frame uses a feature the Renderlab renderer path does not map yet; reported
+    /// once per feature (`ARA_RENDERLAB_UNSUPPORTED`).
+    RENDERLAB_UNSUPPORTED = 6121,
+    /// A frame exceeds a Renderlab limit and part of it is left out
+    /// (`ARA_RENDERLAB_LIMIT`).
+    RENDERLAB_LIMIT = 6122,
+    /// Renderlab's non-RT path started: its sun-shadow method awaits a patent review
+    /// (`ARA_RENDERLAB_NONRT_PATENT`).
+    RENDERLAB_NONRT_PATENT = 6123,
 }
 
 #[cfg(test)]

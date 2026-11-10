@@ -254,7 +254,7 @@ impl Presenter {
             .map_or(self.size, |image| image.size)
     }
 
-    fn ensure_device(&mut self) -> Result<()> {
+    pub(crate) fn ensure_device(&mut self) -> Result<()> {
         if self.renderer.is_some() {
             return Ok(());
         }
@@ -316,6 +316,10 @@ impl Presenter {
     ) -> Result<()> {
         let started = Instant::now();
         self.ensure_device()?;
+        // An external renderer draws the content; Ara's keeps its bootstrap scene.
+        if self.external.is_some() {
+            return Ok(());
+        }
         let renderer = self
             .renderer
             .as_mut()
@@ -689,6 +693,11 @@ impl Presenter {
         let result = (|| {
             self.stats.skipped = false;
             self.stats.in_flight_wait = Duration::ZERO;
+            if self.external.is_some() {
+                // Synchronous: frames Ara's renderer left in flight complete first.
+                self.drain()?;
+                return self.present_external(frame, resolve);
+            }
             // Never block the event pump: with a frame in flight that has not
             // completed within STALL_WAIT, submit nothing this time.
             if self.frames_in_flight {
@@ -799,6 +808,9 @@ impl Drop for Presenter {
     fn drop(&mut self) {
         let _ = self.drain();
         if let Some(renderer) = &mut self.renderer {
+            if let Some(mut external) = self.external.take() {
+                let _ = external.release(renderer.gpu_mut());
+            }
             if let Some(live) = self.live.take() {
                 let _ = live.destroy(renderer.gpu_mut());
             }
