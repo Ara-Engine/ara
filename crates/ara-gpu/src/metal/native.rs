@@ -52,6 +52,10 @@ const FORMATS: &[(vk::Format, MTLPixelFormat, u32, u32, bool)] = {
         (vk::Format::R16G16_UNORM, P::RG16Unorm, 1, 4, false),
         (vk::Format::R16G16B16A16_SFLOAT, P::RGBA16Float, 1, 8, false),
         (vk::Format::R32_SFLOAT, P::R32Float, 1, 4, false),
+        (vk::Format::R32_UINT, P::R32Uint, 1, 4, false),
+        (vk::Format::R32G32_UINT, P::RG32Uint, 1, 8, false),
+        (vk::Format::R32G32B32A32_UINT, P::RGBA32Uint, 1, 16, false),
+        (vk::Format::D16_UNORM, P::Depth16Unorm, 1, 2, true),
         (vk::Format::R32G32_SFLOAT, P::RG32Float, 1, 8, false),
         (
             vk::Format::R32G32B32A32_SFLOAT,

@@ -1,7 +1,7 @@
 //! Native-backend-independent allocation and queue descriptors.
 
 /// Baseline image formats; backends explicitly map their native equivalents.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     /// Linear RGBA8.
     Rgba8,
@@ -15,6 +15,18 @@ pub enum Format {
     Rgb10A2,
     /// Single floating channel (IDs and diagnostics).
     R32Float,
+    /// Four unsigned integer channels.
+    Rgba32Uint,
+    /// One unsigned integer channel.
+    R32Uint,
+    /// One half precision float channel.
+    R16Float,
+    /// Two unsigned integer channels.
+    Rg32Uint,
+    /// Two half precision float channels.
+    Rg16Float,
+    /// Normalized 16-bit depth.
+    Depth16Unorm,
     /// Reversed-Z floating depth.
     Depth32Float,
 }
@@ -85,6 +97,12 @@ impl Format {
             Self::Rgb10A2 => F::A2B10G10R10_UNORM_PACK32,
             Self::R32Float => F::R32_SFLOAT,
             Self::Depth32Float => F::D32_SFLOAT,
+            Self::Rgba32Uint => F::R32G32B32A32_UINT,
+            Self::R32Uint => F::R32_UINT,
+            Self::R16Float => F::R16_SFLOAT,
+            Self::Rg32Uint => F::R32G32_UINT,
+            Self::Rg16Float => F::R16G16_SFLOAT,
+            Self::Depth16Unorm => F::D16_UNORM,
         }
     }
 }
@@ -125,7 +143,7 @@ impl ImageDesc {
         .filter(|(enabled, _)| *enabled)
         .fold(U::empty(), |usage, (_, flag)| usage | flag);
         if self.attachment {
-            usage |= if matches!(self.format, Format::Depth32Float) {
+            usage |= if matches!(self.format, Format::Depth32Float | Format::Depth16Unorm) {
                 U::DEPTH_STENCIL_ATTACHMENT
             } else {
                 U::COLOR_ATTACHMENT

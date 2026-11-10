@@ -41,6 +41,8 @@ pub mod external;
 mod external_tests;
 #[cfg(test)]
 mod gaps_tests;
+#[cfg(test)]
+mod format_tests;
 mod info;
 mod native;
 mod native_access;

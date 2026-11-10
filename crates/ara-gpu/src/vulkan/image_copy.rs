@@ -8,15 +8,16 @@ fn block(format: vk::Format) -> Result<(u32, u64)> {
         | vk::Format::BC5_UNORM_BLOCK
         | vk::Format::BC6H_UFLOAT_BLOCK => (4, 16),
         vk::Format::BC4_UNORM_BLOCK => (4, 8),
-        vk::Format::R32G32B32A32_SFLOAT => (1, 16),
-        vk::Format::R16G16B16A16_SFLOAT => (1, 8),
+        vk::Format::R32G32B32A32_SFLOAT | vk::Format::R32G32B32A32_UINT => (1, 16),
+        vk::Format::R16G16B16A16_SFLOAT | vk::Format::R32G32_UINT => (1, 8),
         vk::Format::A2B10G10R10_UNORM_PACK32
         | vk::Format::R16G16_SFLOAT
         | vk::Format::R8G8B8A8_UNORM
         | vk::Format::R8G8B8A8_SRGB
         | vk::Format::D32_SFLOAT
-        | vk::Format::R32_SFLOAT => (1, 4),
-        vk::Format::R16_SFLOAT => (1, 2),
+        | vk::Format::R32_SFLOAT
+        | vk::Format::R32_UINT => (1, 4),
+        vk::Format::R16_SFLOAT | vk::Format::D16_UNORM => (1, 2),
         _ => return Err(GpuError::Contract("Unsupported image copy format".into())),
     })
 }
