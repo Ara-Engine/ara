@@ -1648,6 +1648,20 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 None => Err(format!("{id}: unknown command").into()),
             }
         }
+        "profiler.record" => {
+            super::profiler::toggle_record(s);
+            Ok(())
+        }
+        "profiler.refresh" => match s.editor.play_profiling.as_mut() {
+            Some(backend) => backend.refresh_targets().map_err(|d| {
+                d.first()
+                    .map_or("The players could not be listed".to_owned(), |d| {
+                        d.message.clone()
+                    })
+                    .into()
+            }),
+            None => Err("Player profiling is not available in this editor".into()),
+        },
         "tools.cs.reload" => super::scripts::reload(s),
         "tools.cs.solution" => super::scripts::solution(s),
         "component.new_script" => {

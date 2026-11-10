@@ -2834,4 +2834,18 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Narrow the brush's fading edge by 0.1.",
     },
+    Command {
+        id: "profiler.record",
+        title: "Record",
+        icon: "circle-dot",
+        keys: "",
+        summary: "Start or stop recording the selected Profiler target.",
+    },
+    Command {
+        id: "profiler.refresh",
+        title: "Refresh Profiler Targets",
+        icon: "refresh-cw",
+        keys: "",
+        summary: "Refresh live player targets without changing the selected scope.",
+    },
 ];

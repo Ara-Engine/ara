@@ -1,6 +1,6 @@
 //! Target identity and immutable player captures over a small private asynchronous port.
 use super::*;
-pub(crate) mod backend;
+pub(crate) use crate::play_profiling as backend;
 mod controls;
 #[cfg(test)]
 mod tests;
