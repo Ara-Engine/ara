@@ -207,6 +207,8 @@ impl std::fmt::Debug for Previews {
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
+    /// The keyboard bindings in force (`commands::refresh_keys`).
+    pub(crate) bindings: super::commands::Bindings,
     /// The open title-bar menu, by its name.
     pub menu: Option<&'static str>,
     /// The command palette: open, query, highlighted result.
@@ -538,6 +540,7 @@ impl Studio {
             painter: Default::default(),
         };
         studio.resolve();
+        super::commands::refresh_keys(&mut studio);
         studio
     }
 

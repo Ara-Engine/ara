@@ -243,6 +243,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
         // pass boundary through the same handlers as the menus.
+        // A preset or rebind changed in Settings: menus and the palette show it.
+        if rt.touch(commands::refresh_keys) {
+            rt.update(|_| {});
+        }
         let queued = rt.touch(|s| std::mem::take(&mut s.editor.queued_commands));
         if !queued.is_empty() {
             rt.update(|s| {

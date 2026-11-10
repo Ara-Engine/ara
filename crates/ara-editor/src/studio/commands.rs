@@ -171,6 +171,12 @@ pub(super) fn ported(id: &str) -> bool {
 
 /// Runs registry command `id` on `target`; failures are reported like any editor failure.
 pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
+    // Not built yet: say why where the person is looking, without a failure.
+    if let Some(reason) = crate::catalog::later(id) {
+        let title = spec(id).map_or(id, |c| c.title);
+        s.local.note = Some((format!("{title}: {reason}"), std::time::Instant::now()));
+        return;
+    }
     // Assets' Create menu, wherever it is asked for (context menus, the palette, agents).
     if let Some(kind) = id.strip_prefix("assets.create.")
         && super::asset_create::KINDS
@@ -1985,63 +1991,66 @@ pub(super) fn spec(id: &str) -> Option<&'static crate::catalog::Command> {
     crate::catalog::get(id)
 }
 
-/// The studio's keyboard map: the registry's default chords for the commands it runs.
-pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'static str> {
-    let c = mods.ctrl;
-    let sh = mods.shift;
-    if mods.alt {
-        return (key == 0x74).then_some("play.simulate");
+/// The bindings in force (`catalog::keymap`) and the settings they were built from: the
+/// keymap preset, the user's rebinds and the C# catalogue generation.
+#[derive(Debug, Default)]
+pub(crate) struct Bindings {
+    source: Option<(Value, Value, Option<String>)>,
+    /// Chords to commands and back.
+    pub map: crate::keys::Keymap,
+}
+
+/// Builds the bindings again when the preset, a rebind or the C# commands changed;
+/// whether they did. Cheap when nothing changed, so the host runs it every pass.
+pub(super) fn refresh_keys(s: &mut Studio) -> bool {
+    let settings = &s.editor.state.settings;
+    let source = (
+        settings.get("input.keymap").cloned().unwrap_or_default(),
+        settings.get("input.shortcuts").cloned().unwrap_or_default(),
+        s.editor.extensions.generation.clone(),
+    );
+    if s.local.bindings.source.as_ref() == Some(&source) {
+        return false;
     }
-    Some(match (c, sh, key) {
-        (true, false, 0x5A) => "edit.undo",
-        (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
-        (true, false, 0x53) => "file.save",
-        (true, false, 0x43) => "edit.copy",
-        (true, false, 0x58) => "edit.cut",
-        (true, false, 0x56) => "edit.paste",
-        (true, false, 0x46) => "edit.find_scene",
-        (true, true, 0x46) => "edit.find_project",
-        (true, true, 0x42) => "build.current",
-        (true, false, 0x4E) => "file.new_scene",
-        (true, false, 0x4F) => "file.open",
-        (true, false, 0x57) => "file.close_document",
-        (true, false, 0x42) => "assets.show",
-        (true, false, 0x44) => "edit.duplicate",
-        (true, false, 0x41) => "edit.select_all",
-        (true, true, 0x41) => "edit.deselect",
-        (true, false, 0x4B) | (true, true, 0x50) => "edit.palette",
-        (true, false, 0x52) => "tools.cs.reload",
-        (true, true, 0x4E) => "create.empty",
-        (false, true, 0x41) => "create.at_cursor",
-        (true, false, 0xBC) => "edit.preferences",
-        (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
-        (false, false, 0x48) => "edit.hide",
-        (false, true, 0x48) => "view.isolate",
-        (false, true, 0x47) => "view.hide_overlays",
-        (true, true, 0x47) => "view.gizmos.toggle",
-        (false, false, 0x61) => "view.camera.front",
-        (true, false, 0x61) => "view.camera.back",
-        (false, false, 0x63) => "view.camera.right",
-        (true, false, 0x63) => "view.camera.left",
-        (false, false, 0x67) => "view.camera.top",
-        (true, false, 0x67) => "view.camera.bottom",
-        (false, true, 0x20) => "window.maximize",
-        (false, false, 0x46) => "view.frame",
-        (false, false, 0x24) => "view.frame_all",
-        (false, false, 0x57) => "view.tool.move",
-        (false, false, 0x45) => "view.tool.rotate",
-        (false, false, 0x52) => "view.tool.scale",
-        (false, false, 0x54) => "view.tool.universal",
-        (false, false, 0x51) => "view.tool.select",
-        (false, false, 0x70) => "help.search",
-        (true, false, 0x09) => "window.next_document",
-        (false, false, 0x74) => "play.start",
-        (false, false, 0x75) => "play.pause",
-        (false, false, 0x76) => "play.step",
-        (false, true, 0x74) => "play.stop",
-        (false, false, 0x77) => "play.eject",
-        _ => return None,
-    })
+    s.local.bindings.map = crate::catalog::keymap(&s.editor.state, &s.editor.extensions);
+    s.local.bindings.source = Some(source);
+    true
+}
+
+/// The command a key runs, through the bindings in force (presets and rebinds, as
+/// Settings › Keyboard sets them). When two commands share a chord the catalogue's
+/// first wins; Settings notes the conflict.
+pub(super) fn for_key(s: &mut Studio, key: u16, mods: stillkit::el::Modifiers) -> Option<String> {
+    refresh_keys(s);
+    let chord = crate::keys::Chord::from_key(key, mods.ctrl, mods.shift, mods.alt)?;
+    let in_panel = |id: &str| {
+        PANEL_KEYS
+            .iter()
+            .any(|p| id == *p || (p.ends_with('.') && id.starts_with(p)))
+    };
+    s.local
+        .bindings
+        .map
+        .commands(chord)
+        .iter()
+        .find(|id| !in_panel(id))
+        .cloned()
+}
+
+/// Commands whose keys only their own panel takes (the graph canvas's Space, Assets'
+/// Enter, a captured Game view's Esc); a trailing `.` names a family.
+const PANEL_KEYS: &[&str] = &[
+    "assets.open",
+    "assets.rename",
+    "game.release",
+    "graph.",
+    "vfx.module.",
+];
+
+/// `id`'s bindings in force as this platform writes the first one (`⇧⌘Z` on macOS).
+pub(super) fn keys_of(s: &Studio, id: &str) -> Option<String> {
+    let first = s.local.bindings.map.chords(id).first()?;
+    shortcut(&first.text())
 }
 
 /// Whether `panel` is a tab somewhere in `node`.

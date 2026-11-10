@@ -132,9 +132,9 @@ fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
 /// Window-wide shortcuts: the registry's chords for the commands the studio runs. Keys a
 /// focused field takes (typing, its own Enter) never reach here.
 fn keys(s: &mut Studio, key: KeyCode, tx: &mut stillkit::el::Tx) -> Handled {
-    match commands::for_key(key.0, tx.modifiers()) {
+    match commands::for_key(s, key.0, tx.modifiers()) {
         Some(id) => {
-            commands::run(s, id, &Target::None);
+            commands::run(s, &id, &Target::None);
             if id == "edit.palette" {
                 tx.focus("palette/query");
             }
@@ -498,12 +498,24 @@ fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Stud
     let l = &s.look;
     let spec = commands::spec(id)?;
     let glyph = icons::named(spec.icon);
-    let keys = commands::shortcut(spec.keys);
+    let keys = commands::keys_of(s, id);
     // The OS file manager by its own name.
     let title = match id {
         "assets.reveal" if cfg!(target_os = "macos") => "Show in Finder",
         _ => spec.title,
     };
+    // Not built yet: dimmed, its reason on hover, and a press says it in the status bar.
+    if let Some(reason) = crate::catalog::later(id) {
+        let item = menu_item(l, &format!("cmd/{id}"), glyph, title, None, false)
+            .color(l.c.muted_foreground.0)
+            .tooltip(reason)
+            .on_press(move |s: &mut Studio| {
+                s.local.menu = None;
+                s.local.context = None;
+                commands::run(s, id, &Target::None);
+            });
+        return Some(item.description(reason));
+    }
     let item = menu_item(
         l,
         &format!("cmd/{id}"),
@@ -902,7 +914,8 @@ struct Entry {
     icon: Option<stillkit::icons::Icon>,
     title: String,
     detail: String,
-    keys: &'static str,
+    /// The binding in force, as this platform writes it.
+    keys: Option<String>,
     run: Run,
 }
 
@@ -934,13 +947,13 @@ pub(super) fn score(query: &str, title: &str) -> Option<i32> {
 fn results(s: &Studio, query: &str) -> Vec<Entry> {
     let entry = |group: &'static str, id: &'static str| {
         commands::spec(id)
-            .filter(|_| commands::ported(id))
+            .filter(|_| commands::ported(id) && crate::catalog::later(id).is_none())
             .map(|spec| Entry {
                 group,
                 icon: icons::named(spec.icon),
                 title: spec.title.to_owned(),
                 detail: spec.summary.to_owned(),
-                keys: spec.keys,
+                keys: commands::keys_of(s, spec.id),
                 run: Run::Command(spec.id),
             })
     };
@@ -976,6 +989,9 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
     }
     let mut all: Vec<(i32, Entry)> = Vec::new();
     for spec in crate::catalog::all() {
+        if crate::catalog::later(spec.id).is_some() {
+            continue;
+        }
         if let Some(sc) = score(query, spec.title) {
             // Recency only breaks ties between similar matches.
             let recent = if s.local.recent_commands.contains(&spec.id) {
@@ -990,7 +1006,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
                     icon: icons::named(spec.icon),
                     title: spec.title.to_owned(),
                     detail: spec.summary.to_owned(),
-                    keys: spec.keys,
+                    keys: commands::keys_of(s, spec.id),
                     run: Run::Command(spec.id),
                 },
             ));
@@ -1020,7 +1036,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
                     icon: Some(icons::CLAPPERBOARD),
                     title: name.to_owned(),
                     detail: path.to_owned(),
-                    keys: "",
+                    keys: None,
                     run: Run::Scene(doc.to_string()),
                 },
             ));
@@ -1044,7 +1060,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
                     icon: Some(icons::BOX),
                     title: name.to_owned(),
                     detail: id.clone(),
-                    keys: "",
+                    keys: None,
                     run: Run::Select(id.clone()),
                 },
             ));
@@ -1178,8 +1194,8 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
                     })
                     .grow(1.0),
             );
-        if let Some(k) = commands::shortcut(e.keys) {
-            item = item.child(kbd(l, &k));
+        if let Some(k) = &e.keys {
+            item = item.child(kbd(l, k));
         }
         list = list.child(item);
     }

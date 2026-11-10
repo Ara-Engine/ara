@@ -75,7 +75,7 @@ pub struct Editor {
     pub(crate) review_revision: u64,
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
-    pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    pub(crate) queued_commands: Vec<(String, crate::catalog::Target)>,
     pub(crate) extensions: crate::extensions::Catalog,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,

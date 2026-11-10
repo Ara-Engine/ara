@@ -92,9 +92,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 gizmo::end(s, true);
                 return Handled::Yes;
             }
-            match commands::for_key(key.0, tx.modifiers()) {
+            match commands::for_key(s, key.0, tx.modifiers()) {
                 Some(id) => {
-                    commands::run(s, id, &Target::None);
+                    commands::run(s, &id, &Target::None);
                     Handled::Yes
                 }
                 None => Handled::No,

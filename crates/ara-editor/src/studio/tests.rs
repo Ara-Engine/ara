@@ -420,6 +420,48 @@ fn the_inspector_locks_searches_and_copies_component_values() {
         top(&rt, "Transform") < top(&rt, "MeshRenderer"),
         "and back down"
     );
+    rt.update(|s| {
+        s.act(
+            "editor.settings.set",
+            json!({"key": "inspector.componentOrder", "reset": true}),
+        )
+    });
+}
+
+#[test]
+fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
+    use stillkit::el::{KeyCode, Modifiers};
+    let mut rt = open();
+    settle(&mut rt);
+    let all = rt.state().resolved.len();
+    let selected = |rt: &Runtime<Studio>| rt.state().editor.state.selection.len();
+    // Set in memory, as a settings edit leaves them, so the test profile stays default.
+    let set = |rt: &mut Runtime<Studio>, key: &str, value: Value| {
+        rt.update(|s| {
+            s.editor.state.settings.insert(key.into(), value);
+            s.editor.state.selection.clear();
+        });
+    };
+    rt.key_with(KeyCode::of('A').0, Modifiers::CTRL);
+    assert_eq!(selected(&rt), all, "Ara: Ctrl+A selects all");
+    // Blender's preset: A selects all, Ctrl+A does not.
+    set(&mut rt, "input.keymap", json!("blender"));
+    rt.key_with(KeyCode::of('A').0, Modifiers::CTRL);
+    assert_eq!(selected(&rt), 0);
+    rt.key(KeyCode::of('A').0);
+    assert_eq!(selected(&rt), all, "Blender: A selects all");
+    // The person's own binding wins over the preset, and the menus say so.
+    set(
+        &mut rt,
+        "input.shortcuts",
+        json!({"edit.select_all": "Ctrl+Shift+L"}),
+    );
+    rt.key_with(KeyCode::of('L').0, Modifiers::CTRL | Modifiers::SHIFT);
+    assert_eq!(selected(&rt), all, "rebound");
+    assert_eq!(
+        super::commands::keys_of(rt.state(), "edit.select_all"),
+        super::commands::shortcut("Ctrl+Shift+L")
+    );
 }
 
 #[test]
