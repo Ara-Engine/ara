@@ -14,7 +14,13 @@
 #![warn(missing_docs)]
 
 #[cfg(not(target_vendor = "apple"))]
+mod atmosphere;
+#[cfg(not(target_vendor = "apple"))]
+mod batch;
+#[cfg(not(target_vendor = "apple"))]
 mod decals;
+#[cfg(not(target_vendor = "apple"))]
+mod effects;
 #[cfg(not(target_vendor = "apple"))]
 mod environment;
 #[cfg(not(target_vendor = "apple"))]
@@ -23,11 +29,15 @@ mod gaps;
 #[cfg(not(target_vendor = "apple"))]
 mod bridge;
 #[cfg(not(target_vendor = "apple"))]
+mod grade;
+#[cfg(not(target_vendor = "apple"))]
 mod lighting;
 #[cfg(not(target_vendor = "apple"))]
 mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
+#[cfg(not(target_vendor = "apple"))]
+mod splat;
 #[cfg(not(target_vendor = "apple"))]
 mod terrain;
 #[cfg(not(target_vendor = "apple"))]
