@@ -1,0 +1,5221 @@
+{
+  "passed": true,
+  "timings_accepted": false,
+  "scope": "Actual ProjectSourceCapture.Read, synchronous per-thread allocation counters. Reflection setup, fixture writes and validation excluded; pools/JIT warmed. Cold means no prior text, not a cold process.",
+  "sdk_and_helper_sha256": {
+    "baseline": {
+      "Ara.Analyzers.CodeFixes.dll": "90957849ae2b1ef91bff92831272f276bfc4530da9a1921e968d3064d5a52666",
+      "Ara.Analyzers.CodeFixes.pdb": "755db95865299e28edf9a8305b509e0ba7070a31cf42bd3b4b66d5b419bbd688",
+      "Ara.Analyzers.dll": "0f6232c27628b708edda24bb252325ca4f648f0346e9d10327b53fa370b9b7dd",
+      "Ara.Analyzers.pdb": "b9ae7a9c4beb5e5c5ca87fa4acdf3586a9a30bd43a03024c4a5794d8acd418ec",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.CompileServer.dll": "ab90e9981c6d818d7a762c0c7084045c4e1a5635a01e191737ad4f74e51c1dcf",
+      "Ara.CompileServer.pdb": "32e4328995fd91446ee89c43e95a2a981ffd3f9a3e5cbfa058f79ffa42762d00",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.CompileServer.xml": "bc92946fe3a2165018362b68681cfd30ff4f3bd587e3dcb3976056435c5d7069",
+      "Ara.Editor.dll": "f4f76afdaaf21d9c6d2199141320dc09ddf4ae1a8f2d20337efb7850fefe6c5c",
+      "Ara.Editor.pdb": "6b560643389488dafb5d1d25abe6acb351bcc27a7d7db5e6e8f8b0086c0af437",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Generators.dll": "4489d88498ef9a3da7203a56ab8e75811340207d7822e97bba2924013885ff7c",
+      "Ara.Generators.pdb": "e5aaf44394cc45e4c1162d978f03a29696fdae3c5d0042f6d3bdae23a3a7c859",
+      "Ara.Runtime.dll": "8341df9f82ba49475fae6474d1e4e83819222a3488c551d721e44f72a02ccc84",
+      "Ara.Runtime.pdb": "ed4562eabbf9cecf018e08877737db977936e4d2cf7ec1510a08d7a315d1292d",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "candidate": {
+      "Ara.Analyzers.CodeFixes.dll": "90957849ae2b1ef91bff92831272f276bfc4530da9a1921e968d3064d5a52666",
+      "Ara.Analyzers.CodeFixes.pdb": "755db95865299e28edf9a8305b509e0ba7070a31cf42bd3b4b66d5b419bbd688",
+      "Ara.Analyzers.dll": "0f6232c27628b708edda24bb252325ca4f648f0346e9d10327b53fa370b9b7dd",
+      "Ara.Analyzers.pdb": "b9ae7a9c4beb5e5c5ca87fa4acdf3586a9a30bd43a03024c4a5794d8acd418ec",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.CompileServer.dll": "71cd71c5d339f107d2910a1934c3eaecc73e1fb68f5bb78e32b83a3e3af02416",
+      "Ara.CompileServer.pdb": "60888a08957cf3fbd574098ec5c101a7bc39b24ed0d8d2ffbf7881c59ddaf064",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.CompileServer.xml": "cd83313fb6b94563b4b58beb999a7fcb846dc200a5dea2809ab313567173b2d7",
+      "Ara.Editor.dll": "f4f76afdaaf21d9c6d2199141320dc09ddf4ae1a8f2d20337efb7850fefe6c5c",
+      "Ara.Editor.pdb": "6b560643389488dafb5d1d25abe6acb351bcc27a7d7db5e6e8f8b0086c0af437",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Generators.dll": "4489d88498ef9a3da7203a56ab8e75811340207d7822e97bba2924013885ff7c",
+      "Ara.Generators.pdb": "e5aaf44394cc45e4c1162d978f03a29696fdae3c5d0042f6d3bdae23a3a7c859",
+      "Ara.Runtime.dll": "8341df9f82ba49475fae6474d1e4e83819222a3488c551d721e44f72a02ccc84",
+      "Ara.Runtime.pdb": "ed4562eabbf9cecf018e08877737db977936e4d2cf7ec1510a08d7a315d1292d",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "helper": {
+      "SourceHash": "95f354963b049b170c6741f8548c3d29a58ab533053623f7e8c197d20e12e71c",
+      "SourceHash.deps.json": "422dbb61a2941f5a78bb7052a7022459f0d25d6fdcc71b7359a49e137b9dc3e5",
+      "SourceHash.dll": "e760fc18a1984078d162a3b4ede33c9e30fecb20e509ba0a0e946860c7b366b4",
+      "SourceHash.pdb": "79465a4f29fc381d7f8bead984c1d00bea52afe31919aa960e7c0b3d5952d274",
+      "SourceHash.runtimeconfig.json": "73dea1f77a0ad6dbaa6cc5923bd2dac899e0a94eaf9ae810a188092260c57fa8"
+    }
+  },
+  "host": "/usr/local/share/dotnet/dotnet",
+  "host_sha256": "36948d8aef33e97653d75217b1b83338666993ba66261aa05e210dc86d0890f7",
+  "runtime_sha256": {
+    "10.0.7/.version": "d0426cfb4c66217ba5e123c959db8f667dd6371e5f28434f74f8c5a1c0575c04",
+    "10.0.7/Microsoft.CSharp.dll": "470dad15d5fde150a71e3d06b60f39f50165858d3e5e36b29cdb2c93eb4f59ee",
+    "10.0.7/Microsoft.NETCore.App.deps.json": "86488cae4c8033c7ea18ee397739c3ddc5f8e09c46791a40878327a77d627ed6",
+    "10.0.7/Microsoft.NETCore.App.runtimeconfig.json": "b0389faed3531f74a620de69039790f308c6e08affe1ebd21bc51c3b80cde8b5",
+    "10.0.7/Microsoft.VisualBasic.Core.dll": "6fc0bb1ca2d2c58eecde829162a81d9c3edd794717dce4fc03dc962a696440b5",
+    "10.0.7/Microsoft.VisualBasic.dll": "8737161e0a871d4e7e778b188cff24d96a54e25aeed47396adcfc4b316c8ac75",
+    "10.0.7/Microsoft.Win32.Primitives.dll": "b38ae4433125d5067ec5522911f84f0ea47b6dbbb2ce07d047e501a3648c5897",
+    "10.0.7/Microsoft.Win32.Registry.dll": "f445b71c1a4bd875a0b84df67059ee929557baa7bfb565b10f34a4c224cae907",
+    "10.0.7/System.AppContext.dll": "70c854e6de704a30fd4b1daf8b00854d690ca4ccfc378d69c6c580a32cb340be",
+    "10.0.7/System.Buffers.dll": "4a5d0d340e891d67ff4afeac0e9680cf6d464bf10f68e177e188ed44bfecb495",
+    "10.0.7/System.Collections.Concurrent.dll": "c9d4a13cb6151848ea8d4860bafa89d18e57e9fe430fe268c0dedc4bb0a3be66",
+    "10.0.7/System.Collections.Immutable.dll": "1290a8ee15b7a988f890bd3360a367cb87008901a0987d80aa630e5acf8cf71b",
+    "10.0.7/System.Collections.NonGeneric.dll": "7ca7f0818d4e664fd13bb9a189f120137129f4e41a28fde55287bc3d9a371117",
+    "10.0.7/System.Collections.Specialized.dll": "f6218673ef2b144e27d1d820e959e78f6cb0fac7ae8f07b7e2b728f48c7987a4",
+    "10.0.7/System.Collections.dll": "19437f4c338044108b25c90d2c5913932d47e578fa5522a1bebda6d4bffc5817",
+    "10.0.7/System.ComponentModel.Annotations.dll": "2e6a8bbe12f0a9131450b507ec9742a0e3b5b9066c96d4a4bd1219f420ce897c",
+    "10.0.7/System.ComponentModel.DataAnnotations.dll": "8975cdc8a87ec169afdf23828a14bffb69abe2dbc29e292eaaaa5dff2ecacfca",
+    "10.0.7/System.ComponentModel.EventBasedAsync.dll": "64f525b13d1b3364b7207ae843a54e9e9674f5e0a78fc2a9c87708538a32da31",
+    "10.0.7/System.ComponentModel.Primitives.dll": "904cf011805af93a2bbb336f8ab57bbd8ee8b40adb7da1462c44cf095ca50a31",
+    "10.0.7/System.ComponentModel.TypeConverter.dll": "2c85b0f2468b92f9a6235a920af5753ed806e1a43ae38a11e886b1c90f27c5de",
+    "10.0.7/System.ComponentModel.dll": "1c6ab4a47c2688be6705db318352c1adf0fc5123ed725eebede2501dde17f27a",
+    "10.0.7/System.Configuration.dll": "80c8d134190ee202b1b857db41809dea545d35e3010f3a39e35cf2dd80b6ec62",
+    "10.0.7/System.Console.dll": "765fe7d82736ce8e83d2ab7cf4f72941e693486a1d7ba9f80fc9c93998b3b86b",
+    "10.0.7/System.Core.dll": "21b1eb08dc75eba846228d4b2705408f6318fb81c7c0b853ee5a8f509229d855",
+    "10.0.7/System.Data.Common.dll": "b4073e376d6ff63d47713397b339942160e3047c2c5bdf85337a68b05c3cdd43",
+    "10.0.7/System.Data.DataSetExtensions.dll": "8ced55171605ad0929ba200d00b86c2b75a5136c5810482b60f7f60fad54e9c7",
+    "10.0.7/System.Data.dll": "49f388921e9b4ae9f6833f9fccfadba9d857b462849830cc0090813cb46aaed7",
+    "10.0.7/System.Diagnostics.Contracts.dll": "a037f4dcf7dacb56e0a5095324acdc56d0370b9a6152e7b3dd66722501fce9b4",
+    "10.0.7/System.Diagnostics.Debug.dll": "9bb40bde2e4560c593f10ae3bf833b7dc6681d43e405921523db9a824cb40c2b",
+    "10.0.7/System.Diagnostics.DiagnosticSource.dll": "35d74cbcb0a207d2176ee70ab63e32f0eae2f5b11836b19e2c4eae238f101bfe",
+    "10.0.7/System.Diagnostics.FileVersionInfo.dll": "4ec464c518cba4ff5ef00c38ac2ad5e42e73b57226759455f7e1839f1d1406e4",
+    "10.0.7/System.Diagnostics.Process.dll": "f89ea1b11a511aced470143d083ae4e61ccce57291621d962bb6d868632ab6de",
+    "10.0.7/System.Diagnostics.StackTrace.dll": "e8e533a34eae92dbb8e5bdc98a1220426836e1bde7546491370c737e91ca2061",
+    "10.0.7/System.Diagnostics.TextWriterTraceListener.dll": "7511ffbb7d5f18f1fbfb5df03627c74237168581425199d98b9c550a6b7fbb3e",
+    "10.0.7/System.Diagnostics.Tools.dll": "fedfec7186d5a95112543be69287d4de6dd3a20f16d0435738173ae4cb8438e3",
+    "10.0.7/System.Diagnostics.TraceSource.dll": "b5d4cac249bbadfbb80397437ca345a510a16e147e6ff6fbea3d58e9d396b322",
+    "10.0.7/System.Diagnostics.Tracing.dll": "188b4acc3fc57d7f3af7b0930855b3e291c41d13600d623642e241e27dadd1a0",
+    "10.0.7/System.Drawing.Primitives.dll": "89e2749825c1e8704925d9ca90df2c1ce929fb5622a15f296c54220578268023",
+    "10.0.7/System.Drawing.dll": "0dcd004348592ee066c84358346483d88e11865d4cf3b927de620e9351484f6f",
+    "10.0.7/System.Dynamic.Runtime.dll": "5801acd3d1ceb54e26da9766f7f880341acb9147b1bf4b8a538a876f550e03f5",
+    "10.0.7/System.Formats.Asn1.dll": "ed5da327484a26dfae5a1f7519aaddc8a5549e8e8c6d72bddcf27fc2ee7a81d1",
+    "10.0.7/System.Formats.Tar.dll": "5ea80ebe731c0b64554991623118b51b25471c999161ab8f84b795f5bb90269f",
+    "10.0.7/System.Globalization.Calendars.dll": "a59593fa2bb47fd81029f78e202273f619073d79a9a8c1b5c8d3c0fd144600ee",
+    "10.0.7/System.Globalization.Extensions.dll": "94606cb827a3fd802c140329cbcead74a1899b342870c92645ca1b96cd66e577",
+    "10.0.7/System.Globalization.dll": "706c704e148575dc9533b9204d3443fad10a626e761bdb1c5cb328fba43df033",
+    "10.0.7/System.IO.Compression.Brotli.dll": "65f684b52f122333e0114601325298250a34c9b1c7e4eb5a6ab68cb701a73563",
+    "10.0.7/System.IO.Compression.FileSystem.dll": "41b540c044129f259eb5edc903947259a8c6fa62eb3ab7cdacef13f7ce566dbf",
+    "10.0.7/System.IO.Compression.ZipFile.dll": "f5e23224fecd9ccf1e5ccd4b37d44a39baec4756d98fb5d71374b70fb0468ec3",
+    "10.0.7/System.IO.Compression.dll": "b6543f66a54fb326c8aca27b40056ac4cc02e610852fa5131a082191612366fa",
+    "10.0.7/System.IO.FileSystem.AccessControl.dll": "0202a6a03a86be22e14164a5c1a40a38a958fe70cecdc567962558156f3d50ba",
+    "10.0.7/System.IO.FileSystem.DriveInfo.dll": "0be783cef138c442743f6c1ecd2a2a40293494378e9b3628dacd4c11c7d2a62d",
+    "10.0.7/System.IO.FileSystem.Primitives.dll": "8409130e8fb4ae732f08df53c7612fa551db28f173d6712d87c1eb4e125117eb",
+    "10.0.7/System.IO.FileSystem.Watcher.dll": "68492c5aa3e7e9917ae0dcddd456babc8560513a3309e7e9ad2e244456917221",
+    "10.0.7/System.IO.FileSystem.dll": "3fcedb2b58b1dc814784348f013e01b830686b9b9df09e6d46b2065245fc6808",
+    "10.0.7/System.IO.IsolatedStorage.dll": "a6b759286fe640dffe89fcd9453e766f5cb9a6aebaf696bbcd668356330e848a",
+    "10.0.7/System.IO.MemoryMappedFiles.dll": "3cf86f33085bb1d741db770aeab477e6311eeb3df424a6ba775bbcd65dacbc8b",
+    "10.0.7/System.IO.Pipelines.dll": "5d5e400369c41ad32ee6d41987154d7be8db0fe9262a1bf0fe118ebeae8044da",
+    "10.0.7/System.IO.Pipes.AccessControl.dll": "76bcfcd1f5690052c84fe91d38bd11f1a2e56c5a1365818c659be45e2f2f81da",
+    "10.0.7/System.IO.Pipes.dll": "a9e9c8ca046df1b3ab2c2ec14fee7bdb0e8861a6355f5b46b9f048a4e4d989fd",
+    "10.0.7/System.IO.UnmanagedMemoryStream.dll": "169ed30226d9d85fb42f23ed78e22173ae9a7d052823d663dd7f99a236133c14",
+    "10.0.7/System.IO.dll": "dec5627845af9d1e80824c77b7dea04828deb15971249a3845a1cec1c5130924",
+    "10.0.7/System.Linq.AsyncEnumerable.dll": "820b96289dc9188ed8a3177f490df21b3c71f922c41ef7dc9ae0432439cf985a",
+    "10.0.7/System.Linq.Expressions.dll": "f2980c1306fc68ba09c13af119c550eea912436442132bb4eed0a2e619b8f980",
+    "10.0.7/System.Linq.Parallel.dll": "9a4124e95ff0b99f83cccf8f1a75f8d9cd251e2e16eaf194a645b7c162d41915",
+    "10.0.7/System.Linq.Queryable.dll": "a14167fd87dfd0c2321c5638530d8efe3cd359120899276aad273d6d8572f8f3",
+    "10.0.7/System.Linq.dll": "a6ff91191fbd9cfcb53e386a782b7e574b6dbc0182ff43a0c99dcd6f2b79e367",
+    "10.0.7/System.Memory.dll": "26b95db0737fb0ff3a4b4cb6cbf439b57c7bf5b9e3737178113cf94fc5c78a8f",
+    "10.0.7/System.Net.Http.Json.dll": "a3698e79e709c77162200704d685e91986016baecb609f227f87cacbeb4fc707",
+    "10.0.7/System.Net.Http.dll": "102a625fc17ccc64c4ae8778357e3de2df12b0b90a66a4ebeee8833705223fac",
+    "10.0.7/System.Net.HttpListener.dll": "a49902f0aeee323dca2f0047c154c64f72c3b2cc13ce17a1a281639b4e40f543",
+    "10.0.7/System.Net.Mail.dll": "77c104b7649616f0176800cf0a06355464eafa2145535060d9c077feb15e3153",
+    "10.0.7/System.Net.NameResolution.dll": "e3393f368e9ce03a64f2d4048b10546c3eccc6c6dcda888c6bdb251877e986bb",
+    "10.0.7/System.Net.NetworkInformation.dll": "46a6773dd41e59b52b870c5f93193d50cb971660b5f53ce264641984f62500c6",
+    "10.0.7/System.Net.Ping.dll": "256cfac12ca45dfc55b258214edf3ffee5796d401c2341633ca2043fd99d4fe2",
+    "10.0.7/System.Net.Primitives.dll": "89269383989be9b6cf166c069ee35b18d77d5b5683806e0f6be63a8d4a740c01",
+    "10.0.7/System.Net.Quic.dll": "97a5a39191df6450b7125fc7a4c95522428f0cccfbd42badab67d2a4e433cf74",
+    "10.0.7/System.Net.Requests.dll": "050a078d4983ca57632f06697de937957bd858b8a8cd30c870f72d217d32714f",
+    "10.0.7/System.Net.Security.dll": "0002184f5ec37f65cf49d16791aea7de30a645814e116be81bde06ee5309f7c9",
+    "10.0.7/System.Net.ServerSentEvents.dll": "48be0ed0d9c4b1b3d3609f858b6e443325fe23f7e4ef4393e0805a6ffefd152c",
+    "10.0.7/System.Net.ServicePoint.dll": "f6bdf0a0f4dbe780ebced0f670a2433d376e9536ce1c86ca5625c3f9b32692cb",
+    "10.0.7/System.Net.Sockets.dll": "44c34a2dee97863977268ed9cea1dd70b14eac16628e04e56cf0973cbd269151",
+    "10.0.7/System.Net.WebClient.dll": "1ee92f8a73a95c65d918a2fc885023ab909a185d935b139439917f83e8262838",
+    "10.0.7/System.Net.WebHeaderCollection.dll": "7b37663096f137349f92e69945cff693cbd39d4b97e7d363486890339ed33f31",
+    "10.0.7/System.Net.WebProxy.dll": "fbcfd31db4bb6a4a5c27179441b5a59b17d7499bbe945baf1d534f51aa6612ee",
+    "10.0.7/System.Net.WebSockets.Client.dll": "dcb09d84944756867ecf0d27798c1adfa66d453c4997c64bfac72c78235b7b13",
+    "10.0.7/System.Net.WebSockets.dll": "3cad487484937beaa35b224c9a61bb37f27b0f23f20a51e235abb3367c3f3936",
+    "10.0.7/System.Net.dll": "7e703d33c4e47a92c2ecbb9e6ee35dee1c5367eb2aba81c429d093c2c888199a",
+    "10.0.7/System.Numerics.Vectors.dll": "7f03ef34d6e7adebe10b3bb29fdc0464acf50846047c2c6cad087aa1d49209b8",
+    "10.0.7/System.Numerics.dll": "98d389eb594cb0c90bc07284189199dee8bbc13aa431c475764d827a338c7bcd",
+    "10.0.7/System.ObjectModel.dll": "5564082fd95f5b9b4a986b83d3c3fc5b327baa46b5feac930c9083197597e838",
+    "10.0.7/System.Private.CoreLib.dll": "e74abaf103a4537fb970d298c6071b4eb0a316528fb4a691a37e23c1523107fc",
+    "10.0.7/System.Private.DataContractSerialization.dll": "35c766390770eb0bab1324f0e0cd370688cd0b3f695f2b0ee396df3a850fce2f",
+    "10.0.7/System.Private.Uri.dll": "72f14c19c059e438024dce0745883363e1023db0ea8e5e4f5ca2ee3854ffd118",
+    "10.0.7/System.Private.Xml.Linq.dll": "df8231f0bd1ff3e952579b71e111a0fb8bfea71c111067669800e13e76198b05",
+    "10.0.7/System.Private.Xml.dll": "9e7f70ad64f17668f460a0fc6ae14f77e2b2d3ee07080663e710e23c55010ccd",
+    "10.0.7/System.Reflection.DispatchProxy.dll": "dae9c81a6f0b0a29c63ba4627102175d792197699844a37eb12c905c6e287496",
+    "10.0.7/System.Reflection.Emit.ILGeneration.dll": "719ef87e6358d42b0d6ebe853c1487cfda8bac8a85f0e615a9ebb60c70db90aa",
+    "10.0.7/System.Reflection.Emit.Lightweight.dll": "d4f41ef9cf4b31f822cd9017b09237e77e8130b33659374b33b9f645493ec0b9",
+    "10.0.7/System.Reflection.Emit.dll": "3365b2f33ab2cf6c131652d2bbc5e7e2f164125e35e616e653e184505f3a6b17",
+    "10.0.7/System.Reflection.Extensions.dll": "e9d95f042550a0dc7cef3d8efcef76136741429c56f6f028c0ad1f480c173a52",
+    "10.0.7/System.Reflection.Metadata.dll": "c729e89917d47a185a13ce6092230a6f3ea383abb61f88b1ec3700c31ac4c7c0",
+    "10.0.7/System.Reflection.Primitives.dll": "f63b4244e74ffa86555fcd0a88f4376e4c9db62682647d8c1e53ecd54a546230",
+    "10.0.7/System.Reflection.TypeExtensions.dll": "9214da4b176239659519570e390878c0c98c7ea6c1dd80a3739667894a5679af",
+    "10.0.7/System.Reflection.dll": "6042d6f8e7a6756f803cc10ee465f49d8e97962164a4885bf10b4bc2a65ad3a7",
+    "10.0.7/System.Resources.Reader.dll": "1fa72002d9322cd8e7c617cdf519d725e1807f0bc379ac8e66828ffae481d812",
+    "10.0.7/System.Resources.ResourceManager.dll": "983b190b66bdc022490e9bd9b70b0ee7a81201aa0ab1ac4ca45c4ac7b4267fa6",
+    "10.0.7/System.Resources.Writer.dll": "ddbb25505ee26801f483969a843b46567f45c0a6cedca69c518284d259a67f47",
+    "10.0.7/System.Runtime.CompilerServices.Unsafe.dll": "fd18ce7a6bdfc277d044821e0e5095038151658116859669e71ea216cfb524ae",
+    "10.0.7/System.Runtime.CompilerServices.VisualC.dll": "fc5d2860c9d0c65ec7c224f90eb039744c44b91c3151c2b8f718115357727888",
+    "10.0.7/System.Runtime.Extensions.dll": "c227ac3de10d7c9e1ce649549c236fadd358c0e54090f2a53882378c5e1b3f2f",
+    "10.0.7/System.Runtime.Handles.dll": "747e046e7bdd976558274315246afd2b2acf7a869fb13028942cf2a32dc51d5f",
+    "10.0.7/System.Runtime.InteropServices.JavaScript.dll": "2482be50d2288d68aef2d7c43e310bc4b706692987de8e85db8b43451ada02f4",
+    "10.0.7/System.Runtime.InteropServices.RuntimeInformation.dll": "85be8873475ddb15bea2cd6527bf13f775160636e6ae82f804a765104aa120da",
+    "10.0.7/System.Runtime.InteropServices.dll": "232b0909eb9c9a30ff3e9b978a8b0429b26aa6b6000bf2911b96b0ec0d5157f8",
+    "10.0.7/System.Runtime.Intrinsics.dll": "eecf2135ada6f4d9cb8e80e8bcc0abdf5b6c16ffeb3ed5b1e52c96adea2cbf93",
+    "10.0.7/System.Runtime.Loader.dll": "ccbdd7ac247d3b67ed5288e440f2b0c66ab899f7650d58fd35274752f0567b03",
+    "10.0.7/System.Runtime.Numerics.dll": "ce3ab852339b64446ad20fa5c64c46ec3293f711d6ee72c38835aa7e3d9b3354",
+    "10.0.7/System.Runtime.Serialization.Formatters.dll": "d1c8b4ce5ed35472e13a4f3fd7f1dd8a7c550c637d22aaff642c99019995662e",
+    "10.0.7/System.Runtime.Serialization.Json.dll": "982ea2ea78ab385c3139e43ff0aa2955e5efd53765c1cecc51be17cbb7320521",
+    "10.0.7/System.Runtime.Serialization.Primitives.dll": "ada07920d0c00f2d9212e09a5df5b64cfb215ac18c47c93dd2bb91a60691eea3",
+    "10.0.7/System.Runtime.Serialization.Xml.dll": "ef20180fdc77d1b51433cafe7f17076182e02ebb0fdb9aeb78e60646090ee8ae",
+    "10.0.7/System.Runtime.Serialization.dll": "a5bb0b82927195706ef99ca94f50f0daf66222e0f06d33a82813ae548cab4e81",
+    "10.0.7/System.Runtime.dll": "3b4f74341c3022c2659950cee30f1693d13a3c3349c1015c304778370a29c5e7",
+    "10.0.7/System.Security.AccessControl.dll": "0ff4fdb9449a906dbe268e7036a8518194867536314b14f08eab2989b4493656",
+    "10.0.7/System.Security.Claims.dll": "ce825d96a65449614d423c7bb074a9641b1223a1e1f6cfa572529e2752ebbd06",
+    "10.0.7/System.Security.Cryptography.Algorithms.dll": "cb6fb5434171255914d2202fd51769a85f3c5180c5e6356051182f32a4a22f04",
+    "10.0.7/System.Security.Cryptography.Cng.dll": "77f4eafce0786b2c8633b35aab7f1aa809b37f3a2d6e18b7d9fd6ca9072f9e27",
+    "10.0.7/System.Security.Cryptography.Csp.dll": "6e0351d7a52ec8fb54fd3f5be5721bcc07d3ad3e0de46cd69ae8bd97688ee8d3",
+    "10.0.7/System.Security.Cryptography.Encoding.dll": "90c4187debfded4cc054af63150930f9e23cd029c48d7d88f598524d48779f1f",
+    "10.0.7/System.Security.Cryptography.OpenSsl.dll": "b56a1648feda5822949b0b000ffe127e190dc9dcce0e6b5c83a85ee0a2a9d43a",
+    "10.0.7/System.Security.Cryptography.Primitives.dll": "15a54cf9a5255e09f61790f7287d8e3df13dde09a90524b55e18ce968f50c502",
+    "10.0.7/System.Security.Cryptography.X509Certificates.dll": "5bb00604e94e0a340b5ee8134faf92e912fb9b518babd912cd2fae52cfb19b80",
+    "10.0.7/System.Security.Cryptography.dll": "eecca2e1dde060e0fedc2b29ad31c668282e275ae0aef9c756370588bc858327",
+    "10.0.7/System.Security.Principal.Windows.dll": "5c3f76c5e6ac71554345a86cfaeb465cfc43053421ae7431b075f4fe1a9b782e",
+    "10.0.7/System.Security.Principal.dll": "781e3318c0223fc641c797bd8fbecd40d9ed0e10f72c0aefdd971f5b22203a5f",
+    "10.0.7/System.Security.SecureString.dll": "8dec58a9f18e671755e489f5a5d6489afc073197019e79ad00fa447f8c1c581b",
+    "10.0.7/System.Security.dll": "1d39982d48d7c7840bf4a0dfe12a72621845ff3db5f49f50b8e870668ff9c1e0",
+    "10.0.7/System.ServiceModel.Web.dll": "12e44e43602c9071f88230da2c5f7a94acd69acb32a014e13c50847f192e4f57",
+    "10.0.7/System.ServiceProcess.dll": "ace0419e0ba62ae24f82e13ebf4b676ee983ab2e5b345ada3b09b6cfb3d9d724",
+    "10.0.7/System.Text.Encoding.CodePages.dll": "d61865a781c252330c4ccae288657f0ddb7d5af3466b54f933d3a22aa161f0f7",
+    "10.0.7/System.Text.Encoding.Extensions.dll": "39560bcb0f62e1fe97e0546d3f015a4d0692a703684af9ddb63f1dfeeeea38e3",
+    "10.0.7/System.Text.Encoding.dll": "72fe823bf1e9d1d79f8264e7e2338ea980d2c8e054da3537454e1dbe07e7d90c",
+    "10.0.7/System.Text.Encodings.Web.dll": "2f865abef076ba17c51d1fedcb8be18d5dadb712fe4fed19a326c7283b41f1dd",
+    "10.0.7/System.Text.Json.dll": "2505996b1800e2f17d3892b0b78c142d3a24c0730d2f90a183ee62d2c362ff05",
+    "10.0.7/System.Text.RegularExpressions.dll": "6172212850365013c47dca0cd6268c08396d20aec1fdcf22315b59dacb120346",
+    "10.0.7/System.Threading.AccessControl.dll": "7563f2b84abba10c3d88152d6773b1524bf5df603f04b6e4a2a3d289df924903",
+    "10.0.7/System.Threading.Channels.dll": "df5ca308d7e5e64431a47b046eb3ee7fe25ad3a62960708e6ba7aec87c8646e9",
+    "10.0.7/System.Threading.Overlapped.dll": "ed22c2b52a8c2c92c91f1a190fded2da511f6578bba4b5e031f99a5f49abe50e",
+    "10.0.7/System.Threading.Tasks.Dataflow.dll": "343197464eb57cda529d57a52cd6aa6286573470c640d3a286927bbcdbf9bfaf",
+    "10.0.7/System.Threading.Tasks.Extensions.dll": "dc80c5804bb06d1a3363d6b67ad688fa3b2ce689dad3249641a350b18dc0d5dd",
+    "10.0.7/System.Threading.Tasks.Parallel.dll": "ceef8d9e06045237246168c32c3dc3a914bcad300f4d675bbe39069c0ea48c52",
+    "10.0.7/System.Threading.Tasks.dll": "ce69ecfdc1f8d17a13c726e921ec315728a859d8e20c9c8bc7d03da8622f9aec",
+    "10.0.7/System.Threading.Thread.dll": "b888f33bd7605f9c68d0409f21939e3265fd8e047875726eeda1911e579d5e5d",
+    "10.0.7/System.Threading.ThreadPool.dll": "8a8ec6f7391b94da10ad240dd372906e1ea75fccf899760bbbc57661dc7cc22a",
+    "10.0.7/System.Threading.Timer.dll": "8d736e19640a7ccc088f6d17a35d4554cbe89b9ac92ba6a462708c1d8422ae7e",
+    "10.0.7/System.Threading.dll": "549e2ca31ba94da649a3a9c2d561981b167e52bb8da40047b12eb1b3109a2652",
+    "10.0.7/System.Transactions.Local.dll": "1891ebab6481234a63fa9806991cbd1fde9c3dfdc3b61e87e5e294a972d07c22",
+    "10.0.7/System.Transactions.dll": "4be6711adf0e9588de8f2748d6cf4c5d75a0777e719c1ef14561a27c4943dcb9",
+    "10.0.7/System.ValueTuple.dll": "5a1daf9b557c72fcc4e9e2c39725210179462fae5989b458928c7ec803543335",
+    "10.0.7/System.Web.HttpUtility.dll": "b6a07060978f33b02ed13fa7ab90a172efbd29dfa6514dddbe2bd1f3e0111b94",
+    "10.0.7/System.Web.dll": "06c5516b4773969b5196958a07ff9d39d63b67011956b9c10d86211c78049a87",
+    "10.0.7/System.Windows.dll": "04d3d177cf5a78aedd37333bc3682105f113ce66bb527b1855bfeb43d2147cee",
+    "10.0.7/System.Xml.Linq.dll": "673deea3272d14d82ab4f011ad260b9afbe24e2ce4e74c5733de15c7cd22ca95",
+    "10.0.7/System.Xml.ReaderWriter.dll": "da2311c78eff036b107e7663f6df6ffca3214db8ea7d14e6ae791faee0df867d",
+    "10.0.7/System.Xml.Serialization.dll": "34e2fe0eccfb807a79165057794ca12c1fed50a7062a1845d7d61a6903fe4c60",
+    "10.0.7/System.Xml.XDocument.dll": "a876aeeae306d9dda27a84ee46fe19a7326484bf64fe1daed554e8352452922d",
+    "10.0.7/System.Xml.XPath.XDocument.dll": "9298dcefa9a58d8a7a6ebe3334c1b992f16bb2c6c51983604ed478aa77612ea5",
+    "10.0.7/System.Xml.XPath.dll": "4844b18744ab4ad702d8ea161729a2dc2359a7238ea21d4f18a2b1db2b9cc06c",
+    "10.0.7/System.Xml.XmlDocument.dll": "bec308290e4e8fb7a5fad263961e28069647f58ac14d349e00e2ae83b5938382",
+    "10.0.7/System.Xml.XmlSerializer.dll": "2497053afb073849bd8b7fe5c1b984e3464379762cd6cda865fe1d9c5abd056c",
+    "10.0.7/System.Xml.dll": "646a67eea93275e5cf6115b47311dbcc6588c866a237c6baddc96c76d6343bc2",
+    "10.0.7/System.dll": "87ac7b0029c0df9eb6bd19dfabe3a8da5c47204642262b78ef4ee9399458b38b",
+    "10.0.7/WindowsBase.dll": "0317c337c6fb7177d0fe8ee793959f9bfcacb36ef6a52fec41b54fba08584d38",
+    "10.0.7/createdump": "11fc47ec5053bb300ee1c9c6071a17cc98a6415356930a147e540b1fe332813f",
+    "10.0.7/libSystem.Globalization.Native.dylib": "8e4abad3b515f9fedd385b3e61cd29a5463493f749c65a61ad7d6b13125428f2",
+    "10.0.7/libSystem.IO.Compression.Native.dylib": "343a62ddabe1a23277f4577194b94d5db7cf2e36b8d8cc3e24109a42975411dd",
+    "10.0.7/libSystem.Native.dylib": "26c927b6b7abea0af1de24b90c894faa47ecac4ea2a377266701a683edffeb06",
+    "10.0.7/libSystem.Net.Security.Native.dylib": "9237a6dab53f1d5ddc20f3f1110d793e352ac4fa1b6d01336832bcc7b8ef2de2",
+    "10.0.7/libSystem.Security.Cryptography.Native.Apple.dylib": "e9fe1237f7b78cbbf1da4599dab5492635c055a276d4f907f8053eb65e4c6a48",
+    "10.0.7/libclrgc.dylib": "8dced3f6bd3ee985bdb88a60e62ba6c7dc4631639283267da8d26f8a84df3a4f",
+    "10.0.7/libclrgcexp.dylib": "c1b559c76db75ab2b043c223cccb9219e76239b89f34781dd20dad63f1df14c7",
+    "10.0.7/libclrjit.dylib": "f3acc69d6afc76332935e0d810f7b25b0a144c71231a1349e97b78cc03fecedc",
+    "10.0.7/libcoreclr.dylib": "585412659e53186086fd73d7be67bd9156da488cb95b54d8c733f1b4d816d4a0",
+    "10.0.7/libhostpolicy.dylib": "aba5e979e27043b206aa381d4a92b4ec6519c7eaff6d63445c1276ddfb920875",
+    "10.0.7/libmscordaccore.dylib": "03a46437c2ff02a16e2f48af183d7199e103ad8320be291aa6e3ba7843d26350",
+    "10.0.7/libmscordbi.dylib": "a2139119a93e6d071062f2b04c157a27a4c308a71747eeab4c00cc235aa50fee",
+    "10.0.7/mscorlib.dll": "2157926b38d7abe8eb7abaf86cc8f016c329c11251f98281212f8a47514b7167",
+    "10.0.7/netstandard.dll": "5e412d337a80d5c579276cb97c2e4cb8766ff1daa989c4d30648901812ded8c3"
+  },
+  "source_sha256": {
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/benchmarks/iteration/source_capture_pairs.py": "078abf2763250bce8fa3f05d4a770e9fcc04bbd61ac19a2b08c90a0efac7b361",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/benchmarks/iteration/source_hash/Program.cs": "344059822b98588e3a32c2e99cd9ca9a9670aaa9edaadcb1579594123829930e",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/benchmarks/iteration/source_hash/SourceCaptureProbe.cs": "db097eed54e5ee94bc127cb102f5a3fb2c5c24151815bb24441b84af2c79b915"
+  },
+  "processes": [
+    {
+      "arm": "baseline",
+      "slot": 0,
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/baseline-sdk/Ara.CompileServer.dll",
+        "--project-sources",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/capture-final-abba/FILES"
+      ],
+      "stdout_sha256": "4d2edb9dabb16c440e277768373d1e602b4b9eaa7f6026df6236421a20099476",
+      "runtime": "10.0.7",
+      "reusable": false,
+      "rows": [
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461640,
+            8461192,
+            8453264,
+            8453264,
+            8453040,
+            8453488,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8461416
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8453264,
+            8461416,
+            8453488,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461640,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8453488,
+            8453040,
+            8453264,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453488,
+            8461192,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461640,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8453264,
+            8453040,
+            8453488,
+            8461416,
+            8461640,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8453264,
+            8461416,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461416
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453040,
+            8453488,
+            8453040,
+            8461640,
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8469568,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416
+          ]
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "slot": 1,
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/candidate-final-sdk/Ara.CompileServer.dll",
+        "--project-sources",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/capture-final-abba/FILES"
+      ],
+      "stdout_sha256": "daa87de322da38c92b2d61e79e9ae38ba51c29e242157462d2790f0190a2bdaa",
+      "runtime": "10.0.7",
+      "reusable": true,
+      "rows": [
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314552,
+            314328
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2715864
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            211696,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482392,
+            2482616,
+            2482392
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            195640,
+            195864,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2230456,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230456,
+            2230232
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211696,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461648,
+            8461200,
+            8453272,
+            8453048,
+            8453272,
+            8453496,
+            8461424,
+            8453272,
+            8453272,
+            8453272,
+            8453048,
+            8453272,
+            8453272,
+            8461648,
+            8453048,
+            8453272,
+            8453272,
+            8461424,
+            8453272,
+            8453272
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126472,
+            2126248,
+            2126248,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2126248
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455896,
+            8455672,
+            8456120,
+            8464048,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455896,
+            8464048
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2127968,
+            2127968,
+            2127968,
+            2128192,
+            2127968,
+            2127968,
+            2128192,
+            2127968,
+            2136104,
+            2127968,
+            2127968,
+            2127968,
+            2127968,
+            2127968,
+            2127968,
+            2127968,
+            2136344,
+            2127968,
+            2136296,
+            2127968
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8462776,
+            8462552,
+            8462552,
+            8462776,
+            8462552,
+            8462552,
+            8462552,
+            8462776,
+            8471152,
+            8462552,
+            8462552,
+            8462776,
+            8470928,
+            8470464,
+            8462776,
+            8462776,
+            8470704,
+            8462776,
+            8470640,
+            8471152
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2113688,
+            2113688,
+            2113688,
+            2122064,
+            2113688,
+            2113688,
+            2113688,
+            2116544,
+            2113688,
+            2113688,
+            2113688,
+            2122064,
+            2113688,
+            2113688,
+            2113688,
+            2114080,
+            2113688,
+            2113688,
+            2113688,
+            2122064
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8411120,
+            8405432,
+            8405656,
+            8405656,
+            8405432,
+            8405432,
+            8405432,
+            8405432,
+            8405432,
+            8406232,
+            8405432,
+            8405432,
+            8405432,
+            8405432,
+            8405432,
+            8405656,
+            8405664,
+            8405432,
+            8405656,
+            8405688
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2134624,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2126248,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2134624
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8455896,
+            8455896,
+            8464048,
+            8455896,
+            8463824,
+            8456120,
+            8455672,
+            8455896,
+            8455672,
+            8456120,
+            8455672,
+            8464272,
+            8463824,
+            8456120,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896
+          ]
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "slot": 2,
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/candidate-final-sdk/Ara.CompileServer.dll",
+        "--project-sources",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/capture-final-abba/FILES"
+      ],
+      "stdout_sha256": "92fcf8edff7b1c556858a03fcd3a4880667645ddfc1c2d687f4930c07f1fcab4",
+      "runtime": "10.0.7",
+      "reusable": true,
+      "rows": [
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314328,
+            314552,
+            314328
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704,
+            127704
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129560,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336,
+            129336
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928,
+            179928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2716088,
+            2715864,
+            2715864,
+            2715864
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008,
+            130008
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            211696,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520,
+            203520
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482616,
+            2482392,
+            2482392,
+            2482392,
+            2482616,
+            2482392
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            195640,
+            195864,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640,
+            195640
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2230456,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230232,
+            2230456,
+            2230232,
+            2230232,
+            2230456,
+            2230232
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211696,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472,
+            211472
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856,
+            2737080,
+            2736856,
+            2736856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461648,
+            8461200,
+            8453272,
+            8453048,
+            8453272,
+            8453496,
+            8461424,
+            8453272,
+            8453272,
+            8453272,
+            8453048,
+            8453272,
+            8453272,
+            8461648,
+            8453048,
+            8453272,
+            8453272,
+            8461424,
+            8453272,
+            8453272
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440,
+            16440
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2134624
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8456120,
+            8464048,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455896,
+            8464272,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2127968,
+            2127968,
+            2136344,
+            2128192,
+            2127968,
+            2127968,
+            2127968,
+            2136344,
+            2127968,
+            2127968,
+            2136104,
+            2127968,
+            2127968,
+            2127968,
+            2136344,
+            2127968,
+            2127968,
+            2127968,
+            2128192,
+            2136344
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8462552,
+            8462552,
+            8479080,
+            8463000,
+            8462552,
+            8462552,
+            8462552,
+            8462776,
+            8462552,
+            8462552,
+            8470704,
+            8471152,
+            8462552,
+            8462552,
+            8462552,
+            8471152,
+            8470704,
+            8462776,
+            8462552,
+            8470928
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2113688,
+            2113688,
+            2122064,
+            2113688,
+            2113688,
+            2113688,
+            2113912,
+            2113688,
+            2113688,
+            2113688,
+            2118888,
+            2113688,
+            2113688,
+            2113688,
+            2113912,
+            2113688,
+            2113688,
+            2113688,
+            2122064,
+            2113688
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8405656,
+            8405432,
+            8405656,
+            8405656,
+            8405432,
+            8405656,
+            8405656,
+            8405656,
+            8405432,
+            8405656,
+            8412480,
+            8405432,
+            8405656,
+            8412480,
+            8405656,
+            8405432,
+            8405656,
+            8406696,
+            8405432,
+            8405656
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126248,
+            2126472,
+            2126248,
+            2126248,
+            2126248,
+            2134624,
+            2126248,
+            2126248,
+            2126248,
+            2134624
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8455896,
+            8464048,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8456120,
+            8464048,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896,
+            8455672,
+            8455896
+          ]
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "slot": 3,
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/baseline-sdk/Ara.CompileServer.dll",
+        "--project-sources",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/capture-final-abba/FILES"
+      ],
+      "stdout_sha256": "44cc14e01186749f4a73d70880d45ac68daae42003c9cc8b2568bddf7ef5546c",
+      "runtime": "10.0.7",
+      "reusable": false,
+      "rows": [
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 384,
+          "utf8BytesPerFile": 916,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            314320,
+            314320,
+            314544,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320,
+            314320
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 16384,
+          "utf8BytesPerFile": 39316,
+          "files": 32,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080,
+            2715856,
+            2715856,
+            2716080
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "cold",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461640,
+            8461192,
+            8453264,
+            8453264,
+            8453040,
+            8453488,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "unchanged",
+          "edit": "none",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8461416,
+            8453264,
+            8453264,
+            8453264,
+            8461416
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8453264,
+            8461416,
+            8453488,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461640,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8453488,
+            8453040,
+            8453264,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "early",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453488,
+            8461192,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461640,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264,
+            8461416,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "middle",
+          "allocatedBytesPerSet": [
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8461640,
+            8453040,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8453264,
+            8461192,
+            8453488,
+            8461416,
+            8461640,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040,
+            8461640,
+            8453040
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "late",
+          "allocatedBytesPerSet": [
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453264,
+            8453264,
+            8461416,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8461416
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "one_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8461416,
+            8453264,
+            8453040,
+            8453488,
+            8453040,
+            8461640,
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8469568,
+            8453264,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264
+          ]
+        },
+        {
+          "utf16UnitsPerFile": 524288,
+          "utf8BytesPerFile": 1258287,
+          "files": 4,
+          "scenario": "all_changed",
+          "edit": "replacement",
+          "allocatedBytesPerSet": [
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8461416,
+            8461416,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8453264,
+            8453040,
+            8460840,
+            8461416
+          ]
+        }
+      ]
+    }
+  ],
+  "frozen_unchanged": true,
+  "production_base": "5a3fa475ac2f61837d9b02ac536c0c61cbaeb5ee",
+  "production_source_sha256": {
+    "dotnet/src/Ara.CompileServer/ProjectCompiler.cs": "3180284319278b479434a25b28d49b9593153b6cc81a6134ce0a989be6bb7f51",
+    "dotnet/src/Ara.CompileServer/ProjectCompilations.cs": "1d647d4735cd2c71202cc1454fe25a03e436bb5116ce17e1adabd997cf19549d",
+    "dotnet/src/Ara.CompileServer/ProjectSourceCapture.cs": "80d049d853f5e0fcb90a82d9bbfdc9a7f618c9555bb914baec8958a44842c2a2",
+    "dotnet/src/Ara.CompileServer/ModuleSource.cs": "50d78d3e9e419d27b8de663b1daa03d1cbe910cfdd6c624bcd1140d777e19658"
+  },
+  "summary": [
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "cold",
+      "edit": "none",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 314328.0,
+      "change_percent": 0.0025451768898010485
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "unchanged",
+      "edit": "none",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 127704.0,
+      "change_percent": -59.37134130822093
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 129336.0,
+      "change_percent": -58.85212522270298
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 179928.0,
+      "change_percent": -42.756426571646735
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 129336.0,
+      "change_percent": -58.85212522270298
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 179928.0,
+      "change_percent": -42.756426571646735
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 129336.0,
+      "change_percent": -58.85212522270298
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 179928.0,
+      "change_percent": -42.756426571646735
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 129336.0,
+      "change_percent": -58.85212522270298
+    },
+    {
+      "utf16_units": 384,
+      "utf8_bytes": 916,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 314320.0,
+      "candidate_bytes_per_set": 179928.0,
+      "change_percent": -42.756426571646735
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "cold",
+      "edit": "none",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 2715864.0,
+      "change_percent": 0.00029456642767211605
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "unchanged",
+      "edit": "none",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 130008.0,
+      "change_percent": -95.21300098385187
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 211472.0,
+      "change_percent": -92.21343105083626
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 2736856.0,
+      "change_percent": 0.7732368726471428
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 203520.0,
+      "change_percent": -92.50623007994533
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 2482392.0,
+      "change_percent": -8.596332058842593
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 195640.0,
+      "change_percent": -92.7963780112053
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 2230232.0,
+      "change_percent": -17.881065859161904
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "one_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 211472.0,
+      "change_percent": -92.21343105083626
+    },
+    {
+      "utf16_units": 16384,
+      "utf8_bytes": 39316,
+      "files": 32,
+      "scenario": "all_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 2715856.0,
+      "candidate_bytes_per_set": 2736856.0,
+      "change_percent": 0.7732368726471428
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "cold",
+      "edit": "none",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 8453272.0,
+      "change_percent": 9.463800019204882e-05
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "unchanged",
+      "edit": "none",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 16440.0,
+      "change_percent": -99.80551890961881
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "one_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 2126248.0,
+      "change_percent": -74.84701767270016
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "all_changed",
+      "edit": "early",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 8455896.0,
+      "change_percent": 0.03113590206103023
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "one_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 2127968.0,
+      "change_percent": -74.82667050266028
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "all_changed",
+      "edit": "middle",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 8462776.0,
+      "change_percent": 0.11252458222055228
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "one_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 2113688.0,
+      "change_percent": -74.99559933299138
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "all_changed",
+      "edit": "late",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 8405656.0,
+      "change_percent": -0.5631907391038582
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "one_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 2126248.0,
+      "change_percent": -74.84701767270016
+    },
+    {
+      "utf16_units": 524288,
+      "utf8_bytes": 1258287,
+      "files": 4,
+      "scenario": "all_changed",
+      "edit": "replacement",
+      "baseline_bytes_per_set": 8453264.0,
+      "candidate_bytes_per_set": 8455896.0,
+      "change_percent": 0.03113590206103023
+    }
+  ],
+  "quality": {
+    "response_count": 18,
+    "module_pairs": 81,
+    "new_image_pairs": 71,
+    "scalar_witnesses": 32256,
+    "runtime": {
+      "version": "10.0.7",
+      "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+      "error": null,
+      "image_sha256": "585412659e53186086fd73d7be67bd9156da488cb95b54d8c733f1b4d816d4a0"
+    },
+    "raw_result_sha256": "24b743ac808bbcac086c4a22414abe5159849beb81bd1026cee0a47b0858fbd0",
+    "cases": [
+      {
+        "case": "initial",
+        "passed": true,
+        "source_manifest_sha256": "d11102e9c8ed9999b78c0a239d85f540a448d520ca5bf8ba82737ccc6ed1940b",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "756df8b580ddb774c764ca884f7cf28513bc94737f528c59161c3cd8826c26a1",
+              ".pdb": "23d83e5010851809ed11dfa8909935450f100e3b4f532f610eb635585dcfebb7"
+            },
+            "module0": {
+              ".dll": "3cc2ca0396e63c637dee07257c7219eac8ad8a9d0f60fd83a2d769c44e7489b9",
+              ".pdb": "df7a47388daf9b6157afe31278432cc8147a0cf097b32244e1efa6db99da12a1"
+            },
+            "module1": {
+              ".dll": "c13b82acafaf6ed3a2e82d91e58214812066aeae943b05ea472a88998ea56199",
+              ".pdb": "caf3519e74cb2e92a1af9e17b7458e3e856777ed515c8e1f13f2fba13d852234"
+            },
+            "module2": {
+              ".dll": "20355505ee9ad70217e552a634d3a8d92927a0ad504b37806e6e4bea14e3ee5b",
+              ".pdb": "8c55349c0f5860950e4894c8fae5bbc247fe8a5246ee8ad53078be61a11b16d1"
+            },
+            "module3": {
+              ".dll": "25b50902de0dba845a4c3558221633cf96054ec79343ead39b547e2e7c7e69db",
+              ".pdb": "50c5cb54403d824c9d41687a977afea1ef234df67cceb46012c5b9833dc004bb"
+            },
+            "module4": {
+              ".dll": "e092800064e7fb79707f6e60958b60cab2e30d818b71e7531712f53f06886012",
+              ".pdb": "fa830deeedc7dce86da59906b7c2d860003d85bbe060540003d2923022524836"
+            },
+            "module5": {
+              ".dll": "5b0ecde8cdfac11062a78d3b4d253efd06d5e118835409f6061145cdf2dd15cc",
+              ".pdb": "c9c5636e4d356e66e50436e2bd5895af726b72feaf26f90d67bfe6259f6eb2ff"
+            },
+            "module6": {
+              ".dll": "b3b927310ba84b4651c7c388f84f193ba23b84594a5d34cd404653b88261fb22",
+              ".pdb": "154ccbdff125ada4539e9850d216a769f9775050dde1f09f3918731e0b367410"
+            },
+            "module7": {
+              ".dll": "482a22b754df71d7407afe9d74d70f3f4eddb8069f30e8c805cd96900ac696e0",
+              ".pdb": "3a07a8f8e25a5472ba65a36c4d00910ab3594bd590f7ce42f56a5e05ea91f8c8"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1065353216
+          },
+          "response_sha256": "2909b94021852d8115e52fdac9667312f548aba37db0796b73d587a8d5bc2abb",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "756df8b580ddb774c764ca884f7cf28513bc94737f528c59161c3cd8826c26a1",
+              ".pdb": "23d83e5010851809ed11dfa8909935450f100e3b4f532f610eb635585dcfebb7"
+            },
+            "module0": {
+              ".dll": "3cc2ca0396e63c637dee07257c7219eac8ad8a9d0f60fd83a2d769c44e7489b9",
+              ".pdb": "df7a47388daf9b6157afe31278432cc8147a0cf097b32244e1efa6db99da12a1"
+            },
+            "module1": {
+              ".dll": "c13b82acafaf6ed3a2e82d91e58214812066aeae943b05ea472a88998ea56199",
+              ".pdb": "caf3519e74cb2e92a1af9e17b7458e3e856777ed515c8e1f13f2fba13d852234"
+            },
+            "module2": {
+              ".dll": "20355505ee9ad70217e552a634d3a8d92927a0ad504b37806e6e4bea14e3ee5b",
+              ".pdb": "8c55349c0f5860950e4894c8fae5bbc247fe8a5246ee8ad53078be61a11b16d1"
+            },
+            "module3": {
+              ".dll": "25b50902de0dba845a4c3558221633cf96054ec79343ead39b547e2e7c7e69db",
+              ".pdb": "50c5cb54403d824c9d41687a977afea1ef234df67cceb46012c5b9833dc004bb"
+            },
+            "module4": {
+              ".dll": "e092800064e7fb79707f6e60958b60cab2e30d818b71e7531712f53f06886012",
+              ".pdb": "fa830deeedc7dce86da59906b7c2d860003d85bbe060540003d2923022524836"
+            },
+            "module5": {
+              ".dll": "5b0ecde8cdfac11062a78d3b4d253efd06d5e118835409f6061145cdf2dd15cc",
+              ".pdb": "c9c5636e4d356e66e50436e2bd5895af726b72feaf26f90d67bfe6259f6eb2ff"
+            },
+            "module6": {
+              ".dll": "b3b927310ba84b4651c7c388f84f193ba23b84594a5d34cd404653b88261fb22",
+              ".pdb": "154ccbdff125ada4539e9850d216a769f9775050dde1f09f3918731e0b367410"
+            },
+            "module7": {
+              ".dll": "482a22b754df71d7407afe9d74d70f3f4eddb8069f30e8c805cd96900ac696e0",
+              ".pdb": "3a07a8f8e25a5472ba65a36c4d00910ab3594bd590f7ce42f56a5e05ea91f8c8"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1065353216
+          },
+          "response_sha256": "2909b94021852d8115e52fdac9667312f548aba37db0796b73d587a8d5bc2abb",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        }
+      },
+      {
+        "case": "dependency",
+        "passed": true,
+        "source_manifest_sha256": "269d0504b122c71340208d0fa2232293f2a391fa0b068d77b9f412903f0449b1",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "d033d6f54caaf854009fe58a3946de067bc1d0e76a81b89e7c4185c87044cba0",
+              ".pdb": "df7a47388daf9b6157afe31278432cc8147a0cf097b32244e1efa6db99da12a1"
+            },
+            "module1": {
+              ".dll": "7f86f1814b192f11e0c44512aa53d7835ab6d0c456bc050ad8444d2d9d032df7",
+              ".pdb": "caf3519e74cb2e92a1af9e17b7458e3e856777ed515c8e1f13f2fba13d852234"
+            },
+            "module2": {
+              ".dll": "c01e177989e89a141d94320ad20d4ca305b9bb47db5ca3126af12cd010f73aa5",
+              ".pdb": "8c55349c0f5860950e4894c8fae5bbc247fe8a5246ee8ad53078be61a11b16d1"
+            },
+            "module3": {
+              ".dll": "614b809f7f3ba746af60ab86b05ac6370c6f8d125c12eab32197ba78dd3d0195",
+              ".pdb": "50c5cb54403d824c9d41687a977afea1ef234df67cceb46012c5b9833dc004bb"
+            },
+            "module4": {
+              ".dll": "cf9ea464bac83ecfac60d32c62678d4cc2ea8684759e5cfd73008203c51a8861",
+              ".pdb": "fa830deeedc7dce86da59906b7c2d860003d85bbe060540003d2923022524836"
+            },
+            "module5": {
+              ".dll": "6b8d2b0454f679e828226a3fa0ddeb71e308d9d15cfdd049c9a33695510ee40e",
+              ".pdb": "c9c5636e4d356e66e50436e2bd5895af726b72feaf26f90d67bfe6259f6eb2ff"
+            },
+            "module6": {
+              ".dll": "69844e13db10512985202c11c9fe1035c895c44633fb1b763ee4fcdc2b287ab0",
+              ".pdb": "154ccbdff125ada4539e9850d216a769f9775050dde1f09f3918731e0b367410"
+            },
+            "module7": {
+              ".dll": "a817fb5d825f4b1d09c2d77664e710534b57fe2743cbef1bb0ee1733a02698c7",
+              ".pdb": "3a07a8f8e25a5472ba65a36c4d00910ab3594bd590f7ce42f56a5e05ea91f8c8"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1073741824
+          },
+          "response_sha256": "298ec3bbaf455844118c88f6af22bf9c09a2323e523fd38a0b2785a55a05b39a",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "d033d6f54caaf854009fe58a3946de067bc1d0e76a81b89e7c4185c87044cba0",
+              ".pdb": "df7a47388daf9b6157afe31278432cc8147a0cf097b32244e1efa6db99da12a1"
+            },
+            "module1": {
+              ".dll": "7f86f1814b192f11e0c44512aa53d7835ab6d0c456bc050ad8444d2d9d032df7",
+              ".pdb": "caf3519e74cb2e92a1af9e17b7458e3e856777ed515c8e1f13f2fba13d852234"
+            },
+            "module2": {
+              ".dll": "c01e177989e89a141d94320ad20d4ca305b9bb47db5ca3126af12cd010f73aa5",
+              ".pdb": "8c55349c0f5860950e4894c8fae5bbc247fe8a5246ee8ad53078be61a11b16d1"
+            },
+            "module3": {
+              ".dll": "614b809f7f3ba746af60ab86b05ac6370c6f8d125c12eab32197ba78dd3d0195",
+              ".pdb": "50c5cb54403d824c9d41687a977afea1ef234df67cceb46012c5b9833dc004bb"
+            },
+            "module4": {
+              ".dll": "cf9ea464bac83ecfac60d32c62678d4cc2ea8684759e5cfd73008203c51a8861",
+              ".pdb": "fa830deeedc7dce86da59906b7c2d860003d85bbe060540003d2923022524836"
+            },
+            "module5": {
+              ".dll": "6b8d2b0454f679e828226a3fa0ddeb71e308d9d15cfdd049c9a33695510ee40e",
+              ".pdb": "c9c5636e4d356e66e50436e2bd5895af726b72feaf26f90d67bfe6259f6eb2ff"
+            },
+            "module6": {
+              ".dll": "69844e13db10512985202c11c9fe1035c895c44633fb1b763ee4fcdc2b287ab0",
+              ".pdb": "154ccbdff125ada4539e9850d216a769f9775050dde1f09f3918731e0b367410"
+            },
+            "module7": {
+              ".dll": "a817fb5d825f4b1d09c2d77664e710534b57fe2743cbef1bb0ee1733a02698c7",
+              ".pdb": "3a07a8f8e25a5472ba65a36c4d00910ab3594bd590f7ce42f56a5e05ea91f8c8"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1073741824
+          },
+          "response_sha256": "298ec3bbaf455844118c88f6af22bf9c09a2323e523fd38a0b2785a55a05b39a",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        }
+      },
+      {
+        "case": "bulk",
+        "passed": true,
+        "source_manifest_sha256": "174b50a043c1dd53398888f55d30437389032a2c27abb902f0898a8e5dcdd37c",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "ab2c01848de65112ae4c8e0a1c05ce9f8359413c76a6f07f42af5706c4776c02",
+              ".pdb": "e51b33bf96bd4519b596554a608f4efd40389f7a867ecb218b8192e9d59d282b"
+            },
+            "module1": {
+              ".dll": "70c6d552a0a1f5ebe2bd64e86a1a3ef5a300599351b370dabd56d7c4c404f452",
+              ".pdb": "21803259bc50ee05f35060d1469cbe97620e1db7aac8d9ed5785e606ac6c84c1"
+            },
+            "module2": {
+              ".dll": "a1471630fe4ca314416cc791695aeb8ff2fd1a51c996afaf52f4437d5e6a3b1a",
+              ".pdb": "5d2dcf92f7eb3d04df0e265a6627c6086cd72efc536361dad3b05170258cf9c6"
+            },
+            "module3": {
+              ".dll": "54587645ccb84028fccbebf5da3f07d54cb8c61cd6769b77457932ee0d4748e3",
+              ".pdb": "54713391bd4a58ff5c59e5eedc621d5cb915b49b7cb39fd8dbfc28c66c251b4f"
+            },
+            "module4": {
+              ".dll": "2572b6e68356059a937073003206e8cf53f145b612a53b3619164ff15e5fd515",
+              ".pdb": "cea548d823d9b42542e56c8f8a5f864dfad411a3194308fcd73469725f87e85b"
+            },
+            "module5": {
+              ".dll": "cb2da9232a3cf172b3c65f277dc7f79dc67736a681ba45060199e4138c245efb",
+              ".pdb": "fe14af4475f514c36348612bebf74fbd6d81c0aa99e9f07bad205225ab712b55"
+            },
+            "module6": {
+              ".dll": "44617353dd889b099cb37144fa05442de58f857a52f0f164854d550a3be2f7fd",
+              ".pdb": "7e2acb6e03cbc3dc737ff5ae3c5de7a38e381a3944c5e258576459dbcf42a247"
+            },
+            "module7": {
+              ".dll": "138165785d79377bac89084b0c8968a772d78b468de6a18848bee987edc27d05",
+              ".pdb": "077e79ebd458f2a53190bc84749f8bad151f5b302dd98d7c047159fd3b6465c6"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "a7b4d0703eff8770c1df7dbaa17a495fe30082293bfaa7aed4e20f996562914b",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "ab2c01848de65112ae4c8e0a1c05ce9f8359413c76a6f07f42af5706c4776c02",
+              ".pdb": "e51b33bf96bd4519b596554a608f4efd40389f7a867ecb218b8192e9d59d282b"
+            },
+            "module1": {
+              ".dll": "70c6d552a0a1f5ebe2bd64e86a1a3ef5a300599351b370dabd56d7c4c404f452",
+              ".pdb": "21803259bc50ee05f35060d1469cbe97620e1db7aac8d9ed5785e606ac6c84c1"
+            },
+            "module2": {
+              ".dll": "a1471630fe4ca314416cc791695aeb8ff2fd1a51c996afaf52f4437d5e6a3b1a",
+              ".pdb": "5d2dcf92f7eb3d04df0e265a6627c6086cd72efc536361dad3b05170258cf9c6"
+            },
+            "module3": {
+              ".dll": "54587645ccb84028fccbebf5da3f07d54cb8c61cd6769b77457932ee0d4748e3",
+              ".pdb": "54713391bd4a58ff5c59e5eedc621d5cb915b49b7cb39fd8dbfc28c66c251b4f"
+            },
+            "module4": {
+              ".dll": "2572b6e68356059a937073003206e8cf53f145b612a53b3619164ff15e5fd515",
+              ".pdb": "cea548d823d9b42542e56c8f8a5f864dfad411a3194308fcd73469725f87e85b"
+            },
+            "module5": {
+              ".dll": "cb2da9232a3cf172b3c65f277dc7f79dc67736a681ba45060199e4138c245efb",
+              ".pdb": "fe14af4475f514c36348612bebf74fbd6d81c0aa99e9f07bad205225ab712b55"
+            },
+            "module6": {
+              ".dll": "44617353dd889b099cb37144fa05442de58f857a52f0f164854d550a3be2f7fd",
+              ".pdb": "7e2acb6e03cbc3dc737ff5ae3c5de7a38e381a3944c5e258576459dbcf42a247"
+            },
+            "module7": {
+              ".dll": "138165785d79377bac89084b0c8968a772d78b468de6a18848bee987edc27d05",
+              ".pdb": "077e79ebd458f2a53190bc84749f8bad151f5b302dd98d7c047159fd3b6465c6"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "a7b4d0703eff8770c1df7dbaa17a495fe30082293bfaa7aed4e20f996562914b",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "module1": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "module2": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "module3": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "module4": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "module5": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "module6": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "module7": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba"
+          }
+        }
+      },
+      {
+        "case": "membership",
+        "passed": true,
+        "source_manifest_sha256": "8d0d3d0ecf476fd37cc7738e36679a0d3c983135ba57130d438c37025bcd397e",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "10d441396240c6dda69b71063053c6cb7d8e46c87fa210eb83773fb760f88067",
+              ".pdb": "aa007653067b5493e4a1374a78e33252da79e3b95ab5a31700a68b8236cbe54a"
+            },
+            "module1": {
+              ".dll": "e4cab50bfd41a568b524876b559cfe9f9b53b2af725b893e4096d75ad69cd898",
+              ".pdb": "bdcd4ef3dcbb12db9648e2fbd1f4d95554c7279675d8abd29c0ca54452d52351"
+            },
+            "module2": {
+              ".dll": "dc834792683ba6045fbd5690346d92e61b16a8a39b8c7faa06c9dd5dd4707a4a",
+              ".pdb": "6c44825554f87321942669a90ad2dd2817ba234e52c89f0e67ab6768a710d2ea"
+            },
+            "module3": {
+              ".dll": "9e25b68f3938966b44f8027961599544a287f553f2b463415a1428466b2cdad2",
+              ".pdb": "fa540f36d2a28886695f7377fa2814d2a228b195d67c77d279a694d5690e2224"
+            },
+            "module4": {
+              ".dll": "1c289560490f26ceda3e70e585b946a02e4502672dc20665560ddf2870981acd",
+              ".pdb": "2373993329dbffb21b7fa022af583881b54ee5d3bbd44068fb6c86bea5aed6a3"
+            },
+            "module5": {
+              ".dll": "3b4f4f77a4842888b36df8d3828188c9c550dfd91a7b371e7fd44aa7fb512122",
+              ".pdb": "5ab42128d875d68db870da1a4d1a2fcce1cb8f8eccd798afa72ff604d68adf41"
+            },
+            "module6": {
+              ".dll": "ef5fa9075a8bb7e10c5e9eca2888be73267b17c197b58356c65fd3136cd8cc77",
+              ".pdb": "bb14426ea6a7ab40cd11ec353501a70243ba9247737c4d2e3d8b8f14a78eaa11"
+            },
+            "module7": {
+              ".dll": "1ea9e80f982555a8c1f8439e4ef720aa759ca53a1a78189213ad0a842f7f3f2a",
+              ".pdb": "75622c6eb4d32f359f9f13d50226ae398a7ec9a8f4c3bb1a8ecb01ba6d8191d4"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "2e1f8dbb46ba1a662f125b0b2c81b6a045ce693e672bce5715a41b22d1171fbc",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "10d441396240c6dda69b71063053c6cb7d8e46c87fa210eb83773fb760f88067",
+              ".pdb": "aa007653067b5493e4a1374a78e33252da79e3b95ab5a31700a68b8236cbe54a"
+            },
+            "module1": {
+              ".dll": "e4cab50bfd41a568b524876b559cfe9f9b53b2af725b893e4096d75ad69cd898",
+              ".pdb": "bdcd4ef3dcbb12db9648e2fbd1f4d95554c7279675d8abd29c0ca54452d52351"
+            },
+            "module2": {
+              ".dll": "dc834792683ba6045fbd5690346d92e61b16a8a39b8c7faa06c9dd5dd4707a4a",
+              ".pdb": "6c44825554f87321942669a90ad2dd2817ba234e52c89f0e67ab6768a710d2ea"
+            },
+            "module3": {
+              ".dll": "9e25b68f3938966b44f8027961599544a287f553f2b463415a1428466b2cdad2",
+              ".pdb": "fa540f36d2a28886695f7377fa2814d2a228b195d67c77d279a694d5690e2224"
+            },
+            "module4": {
+              ".dll": "1c289560490f26ceda3e70e585b946a02e4502672dc20665560ddf2870981acd",
+              ".pdb": "2373993329dbffb21b7fa022af583881b54ee5d3bbd44068fb6c86bea5aed6a3"
+            },
+            "module5": {
+              ".dll": "3b4f4f77a4842888b36df8d3828188c9c550dfd91a7b371e7fd44aa7fb512122",
+              ".pdb": "5ab42128d875d68db870da1a4d1a2fcce1cb8f8eccd798afa72ff604d68adf41"
+            },
+            "module6": {
+              ".dll": "ef5fa9075a8bb7e10c5e9eca2888be73267b17c197b58356c65fd3136cd8cc77",
+              ".pdb": "bb14426ea6a7ab40cd11ec353501a70243ba9247737c4d2e3d8b8f14a78eaa11"
+            },
+            "module7": {
+              ".dll": "1ea9e80f982555a8c1f8439e4ef720aa759ca53a1a78189213ad0a842f7f3f2a",
+              ".pdb": "75622c6eb4d32f359f9f13d50226ae398a7ec9a8f4c3bb1a8ecb01ba6d8191d4"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "2e1f8dbb46ba1a662f125b0b2c81b6a045ce693e672bce5715a41b22d1171fbc",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        }
+      },
+      {
+        "case": "hot",
+        "passed": true,
+        "source_manifest_sha256": "bcacd7c07627a3f9bfcfe9ce1fa274b7ad8881ea3bf71af46292434826ff49cc",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "14f91491f6b65166ec50cae54b518cceca6b97ac72c828d6ab88b871b8fb1259",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "2e8b846474ee4a258c083d880eaf6141243b2654ccb59e33e3ea040193fcf235",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "9b28dd15a732ff72714b1a97a47a64f18abeee8d355571b2ba4f96d1098950eb",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "e6dca88ef300b02920765ee3508c24c045da662156e4d6439c96224c3614a7f4",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "bf4ddcd8a71965eb5d4ce98832cca74c5a88f822907511f53a6ccdb3ff0618cc",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0c04439426acdef051856a7baa79ea13aee58b650d0c23da4a20c815063e2ded",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "aa9687230652255f9d1187482f9b8548f2d2b40cd65e128d15d8754df324afd5",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "18e95bcc60a581732c01461218c5dd340a7b7d930cca6adfe4f0a56cffc1ed3d",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "9a541676ae1e8ad8ec6ac69fd6b7582d4d7b3b34a6637159b0fae9529e57deaf",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "14f91491f6b65166ec50cae54b518cceca6b97ac72c828d6ab88b871b8fb1259",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "2e8b846474ee4a258c083d880eaf6141243b2654ccb59e33e3ea040193fcf235",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "9b28dd15a732ff72714b1a97a47a64f18abeee8d355571b2ba4f96d1098950eb",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "e6dca88ef300b02920765ee3508c24c045da662156e4d6439c96224c3614a7f4",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "bf4ddcd8a71965eb5d4ce98832cca74c5a88f822907511f53a6ccdb3ff0618cc",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0c04439426acdef051856a7baa79ea13aee58b650d0c23da4a20c815063e2ded",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "aa9687230652255f9d1187482f9b8548f2d2b40cd65e128d15d8754df324afd5",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "18e95bcc60a581732c01461218c5dd340a7b7d930cca6adfe4f0a56cffc1ed3d",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "9a541676ae1e8ad8ec6ac69fd6b7582d4d7b3b34a6637159b0fae9529e57deaf",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        }
+      },
+      {
+        "case": "compiler-error",
+        "passed": true,
+        "source_manifest_sha256": "d8df441b016def8162c59af63a249a247ec2ee818899eab1416ff456f9f102f5",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "14f91491f6b65166ec50cae54b518cceca6b97ac72c828d6ab88b871b8fb1259",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "2e8b846474ee4a258c083d880eaf6141243b2654ccb59e33e3ea040193fcf235",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "9b28dd15a732ff72714b1a97a47a64f18abeee8d355571b2ba4f96d1098950eb",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "e6dca88ef300b02920765ee3508c24c045da662156e4d6439c96224c3614a7f4",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "bf4ddcd8a71965eb5d4ce98832cca74c5a88f822907511f53a6ccdb3ff0618cc",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0c04439426acdef051856a7baa79ea13aee58b650d0c23da4a20c815063e2ded",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "aa9687230652255f9d1187482f9b8548f2d2b40cd65e128d15d8754df324afd5",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "18e95bcc60a581732c01461218c5dd340a7b7d930cca6adfe4f0a56cffc1ed3d",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 0,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "909f4360677c5f68b1dfd97a1dfe256f4c5cb12a63002aa3c641af1a1ffcd9a8",
+          "schemas": {
+            "core": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module0": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module1": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module2": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module3": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module4": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module5": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module6": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module7": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "43a042d913f256888941d866227580dd2a998c430350a38e2183d5a21ebd1a5e",
+              ".pdb": "0ba22deb7d7825de6fc409d74d38e551d4fdd89a2b44bf12dc0cc2de3090f38f"
+            },
+            "module0": {
+              ".dll": "14f91491f6b65166ec50cae54b518cceca6b97ac72c828d6ab88b871b8fb1259",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "2e8b846474ee4a258c083d880eaf6141243b2654ccb59e33e3ea040193fcf235",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "9b28dd15a732ff72714b1a97a47a64f18abeee8d355571b2ba4f96d1098950eb",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "e6dca88ef300b02920765ee3508c24c045da662156e4d6439c96224c3614a7f4",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "bf4ddcd8a71965eb5d4ce98832cca74c5a88f822907511f53a6ccdb3ff0618cc",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0c04439426acdef051856a7baa79ea13aee58b650d0c23da4a20c815063e2ded",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "aa9687230652255f9d1187482f9b8548f2d2b40cd65e128d15d8754df324afd5",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "18e95bcc60a581732c01461218c5dd340a7b7d930cca6adfe4f0a56cffc1ed3d",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 0,
+            "rateBits": 1074790400
+          },
+          "response_sha256": "909f4360677c5f68b1dfd97a1dfe256f4c5cb12a63002aa3c641af1a1ffcd9a8",
+          "schemas": {
+            "core": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module0": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module1": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module2": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module3": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module4": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module5": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module6": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module7": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+          }
+        }
+      },
+      {
+        "case": "compiler-repair",
+        "passed": true,
+        "source_manifest_sha256": "087d71c1dd27e1025455271c90d8f844120a735ea6503649c521798bc3b0a35f",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "2417f895c340919ff85f09e92c7cdcb17acf288733c4cc6ad8af01abf6fc75f2",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "2417f895c340919ff85f09e92c7cdcb17acf288733c4cc6ad8af01abf6fc75f2",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        }
+      },
+      {
+        "case": "policy-error",
+        "passed": true,
+        "source_manifest_sha256": "3b807cb3d7ee7c23148af10e0ce64495a2db2863f7df056490eeb7ba4db4b4a1",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 1792,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "0cc735d18e87ad91421d66757d759eca1e342c77d3d48253b952bf8856bb4ac9",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 1792,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "0cc735d18e87ad91421d66757d759eca1e342c77d3d48253b952bf8856bb4ac9",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        }
+      },
+      {
+        "case": "policy-repair",
+        "passed": true,
+        "source_manifest_sha256": "087d71c1dd27e1025455271c90d8f844120a735ea6503649c521798bc3b0a35f",
+        "warm": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "d18ccae8688e26f1d2042d4a8c0a674a5e84882ce8bcf8946307f50a08b93d97",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        },
+        "fresh": {
+          "images": {
+            "core": {
+              ".dll": "06673efba5157cfbc666336b658cade9cc49b3a7c913fb0be4dcae24c409c8d3",
+              ".pdb": "21b8438c0b717215b0353cef0e26a107b338e2c21e7044d306ad682f02e25e5d"
+            },
+            "module0": {
+              ".dll": "453d784ee5f26835497ec0418f0955d8579ef21d83c3787207424846bd728905",
+              ".pdb": "5bf53af6cd82aafb62af9019e853c438894b7bc73dcd09aae2fe1e2156421f87"
+            },
+            "module1": {
+              ".dll": "55e321d2b46addce1156244bb263dc0090141ed3b119d5c54fa387aab614180c",
+              ".pdb": "73a79041c82758073aaa7a4d27e46556223f43fe2ce18b9d47d3e59bebcf07b9"
+            },
+            "module2": {
+              ".dll": "5dd3de1a0dc9ed116e8d5c24587689b7b45b707f6984e135fd8de3619dbf1fbd",
+              ".pdb": "e4eba51628344e01c0e75e22a0a9e5a122817d8e187bae3b005693679d721699"
+            },
+            "module3": {
+              ".dll": "cbbac3c40971e826ac64de9fe6409be6544614e21f560a33159dc57d8bfd737b",
+              ".pdb": "d7d44d38f8c5dd1bac0f0c8ad5f9fe3378e1844c1bf1ddd17a8ceb9b64900a4f"
+            },
+            "module4": {
+              ".dll": "3b4df41ab099005f38874e82004a4adcf0212eb510911fb920bcba44f1fbc915",
+              ".pdb": "ba6132a2ee03d4d919df27d71598211952e1e5ec5dda9a533ab23b2276ab2d39"
+            },
+            "module5": {
+              ".dll": "0289a2ea8bf3202638de9758a4af9caa5188b49610026a71ea17727114c02e1a",
+              ".pdb": "7675d9b344c089b0d38ff23ab51ecd707012d6493f31ccea444ab90904fead02"
+            },
+            "module6": {
+              ".dll": "46507b008e17c5409d84602cf2e6a6b2acc840029b707e8e99f1be3491a898c9",
+              ".pdb": "b9238ad771b4753d9bc8744b7bfdc84c296afb2d9ffdc71fae6c2777fe3498a1"
+            },
+            "module7": {
+              ".dll": "029df74d0c4fa1a2d268dcfdc647ab8366037ca3e28b856930c0f3a30b860278",
+              ".pdb": "940003ace1adcacd6ccbdf2615b557d02e35381c64db324eb63379822dc33154"
+            }
+          },
+          "witness": {
+            "witnesses": 2048,
+            "rateBits": 1088946176
+          },
+          "response_sha256": "d18ccae8688e26f1d2042d4a8c0a674a5e84882ce8bcf8946307f50a08b93d97",
+          "schemas": {
+            "core": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "module0": "7a7f8fc1042f112e7a4e359bb4bb0ef14eba242f3293eb8e267f19ab3a8ad586",
+            "module1": "dae27011c28def46e6a0626eb60fa925643378ada5d505c43b5f0277d50afbf8",
+            "module2": "f9c4da79c0e95a5c6909f08455ab95297535d91dbb740a17beb0b27f68e981bb",
+            "module3": "2ebfdddfb4ca116daab13182f8a70c651d706e81413d46851ae76b1057406c6e",
+            "module4": "f8b36ffc0eabbac837a737833f123a134a1c27e843720388147ec7d1ed3df1e8",
+            "module5": "5002791157648e12db21249d69a380f470858072891ff973736191727b06bde6",
+            "module6": "5fb65859b912e228d25ff09112d564ae702e5bbcdd2894187f1314664f6b712c",
+            "module7": "f6a4f30c39e0f949e25e053c2b3abf375a75e2b27fff0dd942a14f887089658c"
+          }
+        }
+      }
+    ]
+  },
+  "cross_version_quality": {
+    "pe_pdb_schema_pairs": 27,
+    "passed": true,
+    "raw_campaign_sha256": "fe1db95f5652f4756b7f042f08bf2a06e330992d03ee952fb52b54ceb516e18c"
+  },
+  "validation": {
+    "dotnet_tests": 328,
+    "compiler_tests": 232,
+    "native_tests": 8,
+    "logs_sha256": {
+      "candidate-build.log": "474f0beabc2bc3cd784cde1723f1cd969672c74a1d3b3a8e1783a18fa5d89648",
+      "candidate-final-all-tests.log": "851c89bc94a27c8398c6c38efd3758e8083e9106607925ff4872cafff738f3d0",
+      "native-script-gates.log": "bba53ce5f0288029433240eb4b0bd5e3ec69ec0b0786e0ba891eba4771fed1d5",
+      "capture-final-tests.log": "8980e0f777d544073c949d2da126c12c395410451d60b2eb2889bd6042c7fac2"
+    }
+  },
+  "limitations": [
+    "Allocation counters only; no latency or p95 admission.",
+    "Set allocation divided by file count is an average, not individual-file tail data.",
+    "Eight warmups per case/process; JIT and pools are warm. Cold means no prior source string.",
+    "Unicode synthetic text exercises actual read/hash code, not Roslyn compilation in this direct-call probe.",
+    "Some early/full replacements allocate slightly more. All thirty cases are retained.",
+    "Only existing active module strings are offered for reuse. A helper serving only publication-cache hits may have no parsed source strings to reuse.",
+    "No extra source-text cache is added. Existing ArrayPool instances can retain pooled buffers."
+  ],
+  "raw_evidence_root": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110"
+}
