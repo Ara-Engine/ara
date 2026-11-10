@@ -1,5 +1,4 @@
 //! A read-only command adapter; source/destination planning stays in the authority.
-use super::super::Request;
 use crate::Editor;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -32,7 +31,7 @@ impl Conflict {
 }
 /// Read-only conflict inventory; planned entries remain authority-owned data.
 #[derive(Debug, Deserialize, Serialize)]
-pub(in crate::shell::asset_import) struct Plan {
+pub(crate) struct Plan {
     /// Existing destinations, in authoritative planner order.
     conflicts: Vec<Conflict>,
     /// Planned entries are preserved for evidence without duplicating their schema.
@@ -76,21 +75,23 @@ impl Plan {
     }
 }
 /// A preflight can reply immediately or prepare its inventory on a host job.
-pub(in crate::shell::asset_import) enum Preflight {
+pub(crate) enum Preflight {
     Ready(Plan),
     Pending(String),
 }
 
-pub(in crate::shell::asset_import) fn preflight(
+/// Asks the authority where `sources` would land in authored folder `destination` and
+/// which already exist, without importing; a large batch answers on a job.
+pub(crate) fn preflight(
     editor: &mut Editor,
-    request: &Request,
+    sources: &[std::path::PathBuf],
+    destination: &str,
 ) -> ara_ui::Result<Preflight> {
-    let response = editor.action("cmd.apply", request_params(request)?)?;
+    let response = editor.action("cmd.apply", request_params(sources, destination)?)?;
     read_response(&response)
 }
-fn request_params(request: &Request) -> ara_ui::Result<Value> {
-    let sources = request
-        .sources
+fn request_params(sources: &[std::path::PathBuf], destination: &str) -> ara_ui::Result<Value> {
+    let sources = sources
         .iter()
         .map(|path| {
             path.to_str()
@@ -99,7 +100,7 @@ fn request_params(request: &Request) -> ara_ui::Result<Value> {
         .collect::<Result<Vec<_>, _>>()?;
     Ok(json!({"doc":"ara.project.json",
     "why":"Check imported file destinations","commands":[{"cmd":"asset.import","args":{
-        "sources":sources,"destination":request.destination,"conflict":"rename","dryRun":true
+        "sources":sources,"destination":destination,"conflict":"rename","dryRun":true
     }}]}))
 }
 fn read_response(response: &Value) -> ara_ui::Result<Preflight> {
@@ -126,12 +127,7 @@ mod tests {
     #[test]
     fn preflight_uses_the_authority_read_only_job_instead_of_rolling_back_a_started_job() {
         let source = std::env::temp_dir().join("outside.wav");
-        let request = Request {
-            sources: vec![source.clone()],
-            destination: "Custom Content/Audio".into(),
-            conflicts: Vec::new(),
-        };
-        let params = request_params(&request).unwrap();
+        let params = request_params(std::slice::from_ref(&source), "Custom Content/Audio").unwrap();
         assert_eq!(params["doc"], "ara.project.json");
         assert!(params.get("dryRun").is_none());
         assert_eq!(params["commands"][0]["cmd"], "asset.import");

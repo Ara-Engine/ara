@@ -160,7 +160,7 @@ impl Shell {
         if !searching {
             let mut subfolders = std::collections::BTreeSet::new();
             for asset in &self.browser.items {
-                if !self.assets_show_all && is_noise(asset) {
+                if !self.assets_show_all && asset.is_noise() {
                     continue;
                 }
                 let parent = if asset.kind == "folder" {
@@ -198,7 +198,7 @@ impl Shell {
                 .iter()
                 .filter(|a| {
                     a.kind != "folder"
-                        && (self.assets_show_all || !is_noise(a))
+                        && (self.assets_show_all || !a.is_noise())
                         && matches_query(a, query)
                         && assets_favourites::in_scope(
                             &a.path,
@@ -503,29 +503,6 @@ pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
         "wav" | "ogg" | "mp3" | "flac" => "volume-2",
         _ => "file",
     }
-}
-/// Authored support files hide by default. Semantic documents and project-setting
-/// entries remain reachable regardless of their storage extension.
-pub(super) fn is_noise(asset: &assets::Asset) -> bool {
-    if asset.document_kind.is_some() || asset.authored_path.is_none() {
-        return false;
-    }
-    matches!(
-        asset.kind.as_str(),
-        "bin"
-            | "md"
-            | "toml"
-            | "json"
-            | "csproj"
-            | "sln"
-            | "slnx"
-            | "lock"
-            | "txt"
-            | "log"
-            | "tmp"
-            | "gitignore"
-            | "gitattributes"
-    )
 }
 /// Grid tile size: a 64 px thumbnail and two caption lines; and the short-drawer tile
 /// (48 px thumbnail, the name beside it). Tiles are `GAP` apart.
