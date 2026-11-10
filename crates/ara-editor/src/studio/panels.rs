@@ -1809,7 +1809,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
     }
     if let Some(doc) = doc {
         out = out.child(
-            super::style::prose(&doc.summary())
+            super::style::prose(doc.summary())
                 .text_size(11.5)
                 .wrap(3)
                 .color(c.muted_foreground.0),
