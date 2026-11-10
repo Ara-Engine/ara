@@ -329,10 +329,12 @@ The compile-server connection failed, the process exited, or a requested module 
 Causes:
 - The compile server crashed, could not start, or lost its pipe connection.
 - No initial module image arrived within the loader's three-minute timeout.
+- SDK tools could not be located, including a custom build layout without its artifact override.
 
 Fixes:
 - Correct the reported process or connection failure, then restart the script host and its compile server.
 - Verify the configured compile-server executable or DLL exists and uses the expected .NET installation; inspect server output for a stalled compilation.
+- Build `dotnet/Ara.slnx -c Release`. For custom C# output locations, set `ARA_DOTNET_ARTIFACTS` to the `artifacts/bin` directory containing `Ara.Host/release/Ara.Host.dll` and `Ara.CompileServer/release/Ara.CompileServer.dll`.
 
 ## ARA0905 script::DELTA_REJECTED: Runtime rejected reload delta
 owner: ara-script, Ara.Runtime
