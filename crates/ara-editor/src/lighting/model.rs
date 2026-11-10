@@ -153,14 +153,16 @@ pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
                 "sun",
             )
         } else if let Some(light) = row.record.get("Light") {
+            // Its kind, and a local light's reach; the row's mixer shows its intensity.
+            let kind = light.get("kind").and_then(Value::as_str).unwrap_or("point");
+            let range = light
+                .get("range")
+                .and_then(Value::as_f64)
+                .filter(|_| kind != "directional")
+                .map(|r| format!(" · range {r} m"))
+                .unwrap_or_default();
             (
-                format!(
-                    "{} light · intensity {}",
-                    light.get("kind").and_then(Value::as_str).unwrap_or("point"),
-                    light
-                        .get("intensity")
-                        .map_or("schema default".into(), crate::shell::panels::display)
-                ),
+                format!("{} light{range}", crate::names::sentence(kind)),
                 None,
                 "lightbulb",
             )
