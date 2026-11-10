@@ -709,11 +709,14 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
         .or(tabs.first())
         .cloned()
         .unwrap_or_default();
+    // One Tab stop per strip, on its open tab; Left and Right move along it.
     let strip = row()
         .h(style::STRIP)
         .pad_x(2.0)
         .gap(1.0)
         .align(Align::End)
+        .role(stillkit::Role::TabList)
+        .focus_group(stillkit::el::Orientation::Horizontal)
         .children(tabs.iter().enumerate().map(|(i, tab)| {
             let on = i == active;
             let (title, glyph) = panel_title(tab);

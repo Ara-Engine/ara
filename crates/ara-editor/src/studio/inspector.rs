@@ -647,7 +647,9 @@ fn scrubbable(
     max: Option<f64>,
 ) -> El<Studio> {
     let step = if step > 0.0 { step } else { 0.01 };
+    // A drag handle: the field beside it is the keyboard's stop, as in Unity.
     label
+        .skip_tab()
         .cursor(Cursor::ResizeHorizontal)
         .on_pointer(move |s: &mut Studio, e, _| {
             match e.phase {
@@ -870,6 +872,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             number(
                 l,
                 &format!("field/{}", f.path),
+                &sentence(&f.label),
                 shown,
                 f.unit.as_deref(),
                 f.read_only,
@@ -936,6 +939,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                             number(
                                 l,
                                 &format!("field/{}/{axis}", f.path),
+                                // Announced by its field and axis ("Position X").
+                                &format!("{} {}", sentence(&f.label), axes[axis]),
                                 value,
                                 None,
                                 f.read_only,
@@ -1213,11 +1218,12 @@ fn parse_hex(text: &str) -> Option<[f32; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
 }
 
-/// A number box: the value to edit, its unit after it as a quiet label (not part of what
-/// you type, as in Unreal); a new value on Enter.
+/// A number box announced as `name`: the value to edit, its unit after it as a quiet label
+/// (not part of what you type, as in Unreal); a new value on Enter.
 fn number(
     l: &ara_kit::look::Look,
     key: &str,
+    name: &str,
     value: f64,
     unit: Option<&str>,
     read_only: bool,
@@ -1229,6 +1235,7 @@ fn number(
         .clone()
         .map(|u| text(u).text_size(10.5).color(l.c.muted_foreground.0));
     let mut f = text_input(key.to_owned())
+        .label(name.to_owned())
         .focus_ring(false)
         .grow(1.0)
         .value(shown.clone())

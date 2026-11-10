@@ -187,14 +187,20 @@ fn title_bar(s: &Studio) -> El<Studio> {
         Some(mark) => stillkit::el::image(mark).size(20.0),
         None => el().size(20.0),
     };
-    let mut lead = vec![mark.label("Ara")];
-    lead.extend(MENUS.iter().map(|m| {
-        if m.title == "Create" {
-            create_button(s)
-        } else {
-            menu_button(s, m.title, m.items)
-        }
-    }));
+    // The menu bar is one Tab stop; Left and Right move between its menus.
+    let menus = row()
+        .gap(4.0)
+        .align(Align::Center)
+        .role(stillkit::Role::MenuBar)
+        .focus_group(stillkit::el::Orientation::Horizontal)
+        .children(MENUS.iter().map(|m| {
+            if m.title == "Create" {
+                create_button(s)
+            } else {
+                menu_button(s, m.title, m.items)
+            }
+        }));
+    let lead = vec![mark.label("Ara"), menus];
     let play = play_controls(s);
     let workspace = s.editor.host.store().workspace();
     let scene = workspace

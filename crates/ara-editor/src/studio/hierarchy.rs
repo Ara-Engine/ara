@@ -211,6 +211,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .grow(1.0)
         .pad_x(4.0)
+        // One Tab stop for the whole tree, on its selected row: the rows' own arrows move
+        // through it (the WAI tree pattern), as Unity's and VS Code's trees do.
+        .focus_group(stillkit::el::Orientation::Vertical)
         // Empty space: create at the root (rows have their own menu).
         .on_context_menu(|s: &mut Studio, x, y| {
             s.local.context = Some((
@@ -507,6 +510,11 @@ fn row_el(
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
+        // Unset off the hovered row it isn't shown: a plain spacer, not a Tab stop on
+        // every row of the tree.
+        if !on && !hovered {
+            return el().size(18.0);
+        }
         el().key(key)
             .size(18.0)
             .align(Align::Center)
