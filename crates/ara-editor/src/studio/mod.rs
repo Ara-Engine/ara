@@ -21,6 +21,7 @@ mod components;
 mod compositor;
 mod compound;
 mod create;
+mod curve;
 mod dock;
 mod game;
 mod gizmo;
