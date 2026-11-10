@@ -1456,9 +1456,20 @@ fn console(s: &Studio) -> El<Studio> {
                 .as_deref()
                 .is_some_and(|s| s.to_lowercase().contains(&query))
     };
+    // This computer's messages (its GPU loader, overlay layers) are not the project's:
+    // they fold into one group above the rest.
+    let machine_record = |r: &&LogRow| r.diagnostic.code == ara_diag::codes::GPU_ENVIRONMENT;
+    let machine: Vec<&LogRow> = s
+        .logs
+        .iter()
+        .filter(machine_record)
+        .filter(|r| s.local.console[level(r.severity)])
+        .filter(matches)
+        .collect();
     let filtered = s
         .logs
         .iter()
+        .filter(|r| !machine_record(r))
         .filter(|r| s.local.console[level(r.severity)])
         .filter(matches);
     // Collapse: one row per repeated record, its latest, counting them all (Unity).
@@ -1604,10 +1615,50 @@ fn console(s: &Studio) -> El<Studio> {
         .console_open
         .and_then(|seq| s.logs.iter().find(|r| r.seq == seq))
         .map(|r| log_detail(s, r));
+    let machine_group = (!machine.is_empty()).then(|| {
+        let c = &l.c;
+        let open = s.local.console_machine;
+        let hover = c.hover_surface.0;
+        let mut group = col().child(
+            row()
+                .key("console/machine")
+                .h(26.0)
+                .pad_x(10.0)
+                .gap(8.0)
+                .align(Align::Center)
+                .label("Driver and overlay messages")
+                .tooltip("Messages from this computer's graphics drivers and overlay layers, not the project")
+                .expanded(open)
+                .hovered(move |e| e.fill(hover))
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "console.machine", &crate::catalog::Target::None)
+                })
+                .child(
+                    icon(if open { icons::CHEVRON_DOWN } else { icons::CHEVRON_RIGHT })
+                        .size(11.0)
+                        .color(c.muted_foreground.0),
+                )
+                .child(icon(icons::MONITOR).size(13.0).color(c.muted_foreground.0))
+                .child(
+                    text("Driver and overlay messages")
+                        .text_size(12.0)
+                        .color(c.muted_foreground.0)
+                        .grow(1.0),
+                )
+                .child(count(l, machine.len(), false)),
+        );
+        if open {
+            for (i, r) in machine.iter().enumerate() {
+                group = group.child(log_row(l, r, i % 2 == 1, s.local.console_open == Some(r.seq)));
+            }
+        }
+        group
+    });
     col()
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
+        .children(machine_group)
         .child(body)
         .children(detail.map(|d| col().child(d)))
 }

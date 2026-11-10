@@ -2862,4 +2862,11 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Move every floating window onto the main window's monitor.",
     },
+    Command {
+        id: "console.machine",
+        title: "Show This Computer's Messages",
+        icon: "monitor",
+        keys: "",
+        summary: "Show or hide messages from this computer's graphics drivers and overlay layers.",
+    },
 ];
