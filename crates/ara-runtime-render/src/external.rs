@@ -14,7 +14,8 @@ use anyhow::{Context, Result};
 use ara_gpu::{GpuDevice, Image, commands::PassTiming};
 use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use ara_render_fidelity::environment::FrameEnvironment;
-use std::time::Instant;
+use ara_runtime::{extract::Draw, material::MaterialAsset};
+use std::{collections::BTreeMap, sync::Arc, time::Instant};
 
 /// One frame for an external renderer.
 pub struct ExternalView<'a> {
@@ -27,6 +28,13 @@ pub struct ExternalView<'a> {
     pub look: &'a FrameEnvironment,
     /// The content's authored environment map (an HDRI sky), when it has one.
     pub environment: Option<&'a EnvironmentMap>,
+    /// The parts of each foliage rule's model or prefab, keyed by the rule's asset
+    /// reference (`Content::foliage_parts`): what `frame.terrain`'s foliage instances
+    /// draw. Each part's `world` is its transform inside one instance.
+    pub foliage_parts: &'a BTreeMap<String, Vec<Draw>>,
+    /// The terrain's splat-layer materials, keyed by the references in its header
+    /// (`Content::terrain_materials`); a terrain without them has Ara's default surface.
+    pub terrain_materials: &'a BTreeMap<String, Arc<MaterialAsset>>,
     /// The host turned rendering effects off or asked for a diagnostic view
     /// (`Presenter::set_debug`); an external renderer that cannot honour that says so.
     pub debug_switches: bool,
@@ -90,7 +98,8 @@ impl Presenter {
     }
 
     /// Renders `frame` with the external renderer and publishes its image.
-    /// `resolve` runs only when the draw count changes, for the environment map.
+    /// `resolve` runs only when the draw count changes, for the environment map, the
+    /// foliage parts and the terrain layer materials.
     pub(crate) fn present_external(
         &mut self,
         frame: &RenderFrame,
@@ -102,7 +111,10 @@ impl Presenter {
         // The draw count stands in for a structural change: ordinary motion never
         // resolves content.
         if self.external_draws != Some(frame.draws.len()) {
-            self.environment = resolve()?.environment;
+            let content = resolve()?;
+            self.environment = content.environment;
+            self.external_foliage = content.foliage_parts;
+            self.external_terrain_materials = content.terrain_materials;
             self.external_draws = Some(frame.draws.len());
         }
         let look = self.frame_look(frame);
@@ -126,6 +138,8 @@ impl Presenter {
                 size,
                 look: &look,
                 environment: self.environment.as_ref(),
+                foliage_parts: &self.external_foliage,
+                terrain_materials: &self.external_terrain_materials,
                 debug_switches,
             },
         )?;
