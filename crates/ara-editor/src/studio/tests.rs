@@ -436,6 +436,37 @@ fn isolate_hides_the_rest_and_runs_again_to_show_it() {
 }
 
 #[test]
+fn file_play_and_assets_commands_run_in_the_studio() {
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str| {
+        rt.update(|s| super::commands::run(s, id, &crate::catalog::Target::None));
+        settle(rt);
+    };
+    // Open Scene lists the project's scenes in the palette.
+    run(&mut rt, "file.open");
+    assert_eq!(
+        rt.state().local.palette.as_ref().map(|p| p.0.as_str()),
+        Some("#")
+    );
+    rt.update(|s| s.local.palette = None);
+    // Play options are settings.
+    run(&mut rt, "play.mode.host");
+    run(&mut rt, "play.clients.more");
+    let settings = &rt.state().editor.state.settings;
+    assert_eq!(settings["play.mode"], json!("host"));
+    assert_eq!(settings["play.clients"], json!(2.0));
+    // Favourite the open folder, then scope searches to it.
+    run(&mut rt, "assets.favourite.toggle");
+    assert!(!rt.state().editor.state.asset_favourites.is_empty());
+    run(&mut rt, "assets.search.scope");
+    assert!(rt.state().editor.state.asset_search_folder_only);
+    // Exit asks the host to close.
+    run(&mut rt, "file.exit");
+    assert!(rt.state().local.quit);
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

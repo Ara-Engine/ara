@@ -761,6 +761,10 @@ fn pump(
     started: Instant,
     mut game: Option<&mut game::Game>,
 ) -> anyhow::Result<bool> {
+    // File › Exit closes as the window's close button does.
+    if rt.state().local.quit {
+        return Ok(true);
+    }
     while let Some((id, event)) = next_event() {
         if id != surface.id() {
             continue;

@@ -15,6 +15,7 @@ mod editor;
 mod extensions;
 mod fixes;
 pub mod graph;
+pub(crate) mod hub_launch;
 mod interaction;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;

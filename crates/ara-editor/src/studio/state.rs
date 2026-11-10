@@ -249,6 +249,8 @@ pub struct Local {
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
     pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// File › Exit asked to close the editor (documents are saved as it closes).
+    pub quit: bool,
     /// What Isolate Selection hid, to show again when it is run a second time.
     pub isolated: Option<Vec<String>>,
     /// The Scene tab's Overlays menu, open.

@@ -463,6 +463,8 @@ struct Entry {
 enum Run {
     Command(&'static str),
     Select(String),
+    /// Open this scene document.
+    Scene(String),
 }
 
 /// A fuzzy match of `query` in `title`: letters in order, rewarding runs and word starts.
@@ -548,6 +550,40 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
             ));
         }
     }
+    // Scenes in the project; `#` lists only them (File › Open Scene).
+    let (scene_query, scenes_only) = match query.strip_prefix('#') {
+        Some(rest) => (rest.trim(), true),
+        None => (query, false),
+    };
+    let workspace = s.editor.host.store().workspace();
+    for (doc, document) in workspace.docs() {
+        if document.kind != "scene" {
+            continue;
+        }
+        let path = workspace.path_of(doc).unwrap_or_default();
+        let name = path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".scene");
+        if let Some(sc) = score(scene_query, name) {
+            all.push((
+                sc + if scenes_only { 20 } else { 1 },
+                Entry {
+                    group: "Scenes",
+                    icon: Some(icons::CLAPPERBOARD),
+                    title: name.to_owned(),
+                    detail: path.to_owned(),
+                    keys: "",
+                    run: Run::Scene(doc.to_string()),
+                },
+            ));
+        }
+    }
+    if scenes_only {
+        all.sort_by_key(|e| std::cmp::Reverse(e.0));
+        return all.into_iter().take(14).map(|(_, e)| e).collect();
+    }
     for (id, entity) in s.resolved.iter() {
         let name = entity
             .record
@@ -590,6 +626,11 @@ fn run(s: &mut Studio) {
             Run::Select(id) => {
                 s.select(vec![id], false);
                 s.act("editor.frame", serde_json::json!({}));
+            }
+            Run::Scene(doc) => {
+                s.act("editor.scene.open", serde_json::json!({"scene": doc}));
+                s.resolve();
+                s.act("editor.focus", serde_json::json!({"panel": "scene"}));
             }
         }
     }

@@ -326,7 +326,7 @@ pub struct Shell {
     compile_problems: log_panels::CompilationView,
     lighting: lighting::View,
     probe_ui: probes::State,
-    project_request: Option<project_actions::LaunchRequest>,
+    project_request: Option<crate::hub_launch::LaunchRequest>,
     profiler_targets: profiler_targets::State,
     pilot: pilot::Pilot,
     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
