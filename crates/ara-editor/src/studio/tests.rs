@@ -963,6 +963,30 @@ fn a_new_material_opens_docked_beside_the_scene() {
 }
 
 #[test]
+fn the_status_bar_shows_the_newest_problem_and_opens_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.local.console_open = None;
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("status/log").is_some(),
+        "the newest warning or error shows"
+    );
+    press(&mut rt, "status/log");
+    assert_eq!(
+        rt.state().local.console_open,
+        Some(5),
+        "the error, in the Console"
+    );
+    assert!(crate::state::panel_visible(
+        &rt.state().editor.state,
+        "console"
+    ));
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
