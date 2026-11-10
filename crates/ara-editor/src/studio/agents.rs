@@ -15,7 +15,7 @@ use stillkit::el::{Align, Axis, El, col, el, icon, row, text};
 
 use super::Studio;
 use crate::activity::short_author;
-use crate::shell::agents_panel::{ago, file_change, turns};
+use crate::turns::{ago, file_change, turns};
 
 /// The Agents panel.
 pub(super) fn agents(s: &Studio) -> El<Studio> {
@@ -24,9 +24,10 @@ pub(super) fn agents(s: &Studio) -> El<Studio> {
     let mut page = col().gap(6.0).pad(8.0);
     // Who is connected, and what they see.
     let presence = &s.editor.state.presence;
-    if presence.is_empty() {
+    if presence.is_empty() || s.local.agents_connect {
         page = page.child(connect_card(s));
-    } else {
+    }
+    if !presence.is_empty() {
         for (id, p) in presence {
             page = page.child(presence_row(s, id, p));
         }
@@ -82,17 +83,256 @@ pub(super) fn agents(s: &Studio) -> El<Studio> {
         .child(page)
 }
 
-/// How to connect an agent, with the command to run.
+/// Looks for every agent client again, and draws their marks once.
+pub(super) fn probe_clients(s: &mut Studio) {
+    s.local.agent_setups.probe();
+    draw_logos(s);
+}
+
+/// Each agent client's mark in both schemes, drawn once.
+pub(super) fn draw_logos(s: &mut Studio) {
+    if !s.local.agent_logos.is_empty() {
+        return;
+    }
+    for light in [false, true] {
+        let ink = ara_kit::look::Look::new(!light).c.foreground.0;
+        let hex = format!(
+            "#{:02x}{:02x}{:02x}",
+            (ink.r * 255.0) as u8,
+            (ink.g * 255.0) as u8,
+            (ink.b * 255.0) as u8
+        );
+        for client in ara_agents::Client::ALL {
+            // Claude keeps its brand colour; the others paint `currentColor`.
+            let svg = client.logo().replace("currentColor", &hex);
+            if let Some(image) = ara_kit::art::svg(&svg, 40, 40) {
+                s.local
+                    .agent_logos
+                    .insert((client, light), std::sync::Arc::new(image));
+            }
+        }
+    }
+}
+
+/// How to connect an agent, as the Hub has it: each client with what was found, Connect
+/// in one click (or Retry), and manual steps with Copy where the editor cannot connect it;
+/// then the command any other MCP client runs.
 fn connect_card(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let command = format!("ara mcp --root \"{}\"", s.editor.host.root().display());
-    col().radius(super::style::RADIUS).fill(super::style::tones(l).band)
+    let mut card = col()
+        .key("agents/connect")
+        .radius(super::style::RADIUS)
+        .fill(super::style::tones(l).band)
         .pad(10.0)
         .gap(6.0)
-        .child(row().gap(8.0).align(Align::Center).child(icon(icons::BOT).size(15.0).color(c.primary.0)).child(text("No agent connected").text_size(12.5).weight(600).color(c.foreground.0)))
-        .child(text("Claude Code, Codex and other MCP clients use the same commands as this editor. Run this in the project, or add it to the client's MCP config:").text_size(11.5).wrap(3).color(c.muted_foreground.0))
-        .child(row().pad_x(8.0).pad_y(6.0).radius(l.radius.sm).fill(c.code_background.0).child(text(command).text_size(11.0).family(mono()).color(c.code_foreground.0)))
+        .child(
+            row()
+                .gap(8.0)
+                .align(Align::Center)
+                .child(icon(icons::BOT).size(15.0).color(c.primary.0))
+                .child(text("Connect an agent").text_size(12.5).weight(600).color(c.foreground.0)),
+        )
+        .child(
+            text("Agents open this project and edit it with the same commands you use; each change is undoable.")
+                .text_size(11.5)
+                .wrap(3)
+                .color(c.muted_foreground.0),
+        );
+    for client in ara_agents::Client::ALL {
+        card = card.child(client_row(s, client));
+    }
+    let note = match &s.local.agent_setups.ara {
+        None if s.local.agent_setups.probed => Some(
+            "Ara's command-line tool isn't beside this editor, so agents are set up by hand; the steps assume ara is on your PATH.",
+        ),
+        _ if s
+            .local
+            .agent_setups
+            .setup
+            .values()
+            .any(|v| *v == ara_agents::Setup::Connected) =>
+        {
+            Some("Restart a newly connected agent, then ask it to list your projects.")
+        }
+        _ => None,
+    };
+    if let Some(note) = note {
+        card = card.child(
+            text(note)
+                .text_size(11.0)
+                .wrap(2)
+                .color(c.muted_foreground.0),
+        );
+    }
+    let copy = command.clone();
+    card.child(
+        text("Any other MCP client runs:")
+            .text_size(11.0)
+            .color(c.muted_foreground.0),
+    )
+    .child(
+        row()
+            .gap(6.0)
+            .align(Align::Center)
+            .child(
+                row()
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .pad_x(8.0)
+                    .pad_y(6.0)
+                    .radius(l.radius.sm)
+                    .fill(c.code_background.0)
+                    .child(
+                        text(command)
+                            .text_size(11.0)
+                            .family(mono())
+                            .color(c.code_foreground.0),
+                    ),
+            )
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::COPY, "Copy the command")
+                    .key("agents/connect/copy")
+                    .on_press(move |s: &mut Studio| {
+                        s.local.copy = Some(copy.clone());
+                        super::note(s, "Copied the MCP command");
+                    }),
+            ),
+    )
+}
+
+/// One agent client: its mark, what was found, and the action that fits; its manual
+/// steps below when opened.
+fn client_row(s: &Studio, client: ara_agents::Client) -> El<Studio> {
+    use ara_agents::Setup;
+    let l = &s.look;
+    let c = &l.c;
+    let setups = &s.local.agent_setups;
+    let id = client.id();
+    let state = setups.setup.get(&client);
+    let status = match state {
+        None if setups.probed => "Looking for it…",
+        None => "",
+        Some(Setup::Missing) => "Not found on this computer",
+        Some(Setup::Available) => "Installed · not connected yet",
+        Some(Setup::Working) => "Connecting…",
+        Some(Setup::Connected) => "Ara is connected",
+        Some(Setup::Failed(_)) => "Couldn't connect",
+    };
+    let mark = match s.local.agent_logos.get(&(client, s.editor.state.light)) {
+        Some(logo) => stillkit::el::image(logo.clone()).size(20.0),
+        None => el().size(20.0),
+    };
+    let can_connect = setups.ara.is_some();
+    let action: Option<El<Studio>> = match state {
+        Some(Setup::Available) if can_connect => Some(
+            button(l, Tone::Primary, Size::Sm, None, "Connect")
+                .key(format!("agents/{id}/connect"))
+                .on_press(move |s: &mut Studio| s.local.agent_setups.connect(client)),
+        ),
+        Some(Setup::Failed(_)) if can_connect => Some(
+            button(l, Tone::Secondary, Size::Sm, None, "Retry")
+                .key(format!("agents/{id}/retry"))
+                .on_press(move |s: &mut Studio| s.local.agent_setups.connect(client)),
+        ),
+        Some(Setup::Connected) => Some(chip(l, Status::Success, "Connected", true)),
+        _ => None,
+    };
+    let manual = setups.manual == Some(client);
+    let mut head = row()
+        .key(format!("agents/{id}"))
+        .h(34.0)
+        .gap(8.0)
+        .align(Align::Center)
+        .child(mark)
+        .child(
+            col()
+                .grow(1.0)
+                .min_w(0.0)
+                .child(
+                    text(client.name())
+                        .text_size(12.0)
+                        .weight(560)
+                        .color(c.foreground.0),
+                )
+                .child(text(status).text_size(11.0).color(c.muted_foreground.0)),
+        )
+        .children(action);
+    if setups.offers_manual(client) {
+        head = head.child(
+            button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                None,
+                if manual {
+                    "Hide steps"
+                } else {
+                    "Set up manually"
+                },
+            )
+            .key(format!("agents/{id}/manual"))
+            .on_press(move |s: &mut Studio| s.local.agent_setups.toggle_manual(client)),
+        );
+    }
+    let mut out = col().gap(4.0).child(head);
+    if let Some(Setup::Failed(error)) = state {
+        out = out.child(
+            text(error.clone())
+                .text_size(11.0)
+                .wrap(3)
+                .color(c.destructive_foreground.0),
+        );
+    }
+    if manual {
+        let steps = setups.manual_text(client);
+        let copy = steps.clone();
+        out = out.child(
+            col()
+                .gap(4.0)
+                .pad_x(28.0)
+                .child(
+                    row()
+                        .gap(6.0)
+                        .align(Align::Center)
+                        .child(
+                            text(client.manual_hint())
+                                .text_size(11.0)
+                                .grow(1.0)
+                                .color(c.muted_foreground.0),
+                        )
+                        .child(
+                            button(l, Tone::Ghost, Size::Sm, Some(icons::COPY), "Copy")
+                                .key(format!("agents/{id}/copy"))
+                                .on_press(move |s: &mut Studio| {
+                                    s.local.copy = Some(copy.clone());
+                                    super::note(s, format!("Copied the {} setup", client.name()));
+                                }),
+                        ),
+                )
+                .child(
+                    row()
+                        .pad_x(8.0)
+                        .pad_y(6.0)
+                        .radius(l.radius.sm)
+                        .fill(c.code_background.0)
+                        .child(
+                            text(steps.trim_end().to_owned())
+                                .text_size(11.0)
+                                .family(mono())
+                                .wrap(8)
+                                .color(c.code_foreground.0),
+                        ),
+                )
+                .child(
+                    text("Then restart the agent and ask it to list your projects.")
+                        .text_size(11.0)
+                        .color(c.muted_foreground.0),
+                ),
+        );
+    }
+    out
 }
 
 /// A connected agent: a pulse, its name, what it works on, View and Follow.
@@ -156,7 +396,7 @@ fn presence_row(s: &Studio, id: &str, p: &crate::state::AgentPresence) -> El<Stu
 }
 
 /// One agent turn: why, who, when, what it did; Undo Turn; its ops when open.
-fn turn_card(s: &Studio, turn: &crate::shell::agents_panel::Turn, now: Instant) -> El<Studio> {
+fn turn_card(s: &Studio, turn: &crate::turns::Turn, now: Instant) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let store = s.editor.host.store();
@@ -333,7 +573,21 @@ fn op_line(s: &Studio, op: &ara_doc::Op) -> (Rgba, String) {
     }
 }
 
-/// The History panel: every transaction, newest first, with Undo and Redo.
+/// The History panel (Unreal's Transaction History, Unity's Undo History): every
+/// transaction newest first, searched by what or who; a click opens what it changed, a
+/// right-click its menu; your own steps undo back to any one of them.
+/// How many changes one History page lists.
+pub(super) const HISTORY_PAGE: usize = 300;
+
+/// A History list end's way to the next page of changes.
+fn page_button(s: &Studio, key: &str, label: &str, command: &'static str) -> El<Studio> {
+    button(&s.look, Tone::Ghost, Size::Sm, None, label)
+        .key(key)
+        .on_press(move |s: &mut Studio| {
+            super::commands::run(s, command, &crate::catalog::Target::None)
+        })
+}
+
 pub(super) fn history(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
@@ -346,15 +600,37 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::UNDO_2), "Undo").on_press(
                 |s: &mut Studio| {
-                    super::commands::run(s, "edit.undo", &crate::shell::commands::Target::None)
+                    super::commands::run(s, "edit.undo", &crate::catalog::Target::None)
                 },
             ),
         )
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::REDO_2), "Redo").on_press(
                 |s: &mut Studio| {
-                    super::commands::run(s, "edit.redo", &crate::shell::commands::Target::None)
+                    super::commands::run(s, "edit.redo", &crate::catalog::Target::None)
                 },
+            ),
+        )
+        .child(
+            row().w(220.0).child(
+                search(
+                    l,
+                    "history/search",
+                    "Search changes",
+                    &s.local.history_search,
+                    None,
+                    |f| {
+                        f.on_input(|s: &mut Studio, t| {
+                            s.local.history_search = t.to_owned();
+                            s.local.history_page = 0;
+                        })
+                    },
+                    |s: &mut Studio| {
+                        s.local.history_search.clear();
+                        s.local.history_page = 0;
+                    },
+                )
+                .grow(1.0),
             ),
         )
         .child(el().grow(1.0))
@@ -377,10 +653,23 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         ));
     }
     let now = Instant::now();
+    let query = s.local.history_search.trim().to_lowercase();
     let mut list = col().pad(4.0).gap(1.0);
-    for txn in history.iter().rev().take(300) {
+    let mut shown = 0;
+    let skip = s.local.history_page * HISTORY_PAGE;
+    let mut more = false;
+    if s.local.history_page > 0 {
+        list = list.child(page_button(
+            s,
+            "history/newer",
+            "Newer changes",
+            "history.newer",
+        ));
+    }
+    for txn in history.iter().rev() {
         let undone = store.reverted_by(&txn.id).is_some();
         let revert = txn.reverts.is_some();
+        let human = matches!(txn.author, ara_ops::Author::Human);
         let who = match &txn.author {
             ara_ops::Author::Human => "You".to_owned(),
             other => short_author(&other.to_string()),
@@ -390,6 +679,20 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             .clone()
             .or_else(|| txn.label.clone())
             .unwrap_or_else(|| "Edit".into());
+        if !query.is_empty()
+            && !what.to_lowercase().contains(&query)
+            && !who.to_lowercase().contains(&query)
+        {
+            continue;
+        }
+        shown += 1;
+        if shown <= skip {
+            continue;
+        }
+        if shown > skip + HISTORY_PAGE {
+            more = true;
+            break;
+        }
         let when = s
             .editor
             .activity
@@ -398,7 +701,7 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             .unwrap_or_else(|| "earlier".into());
         let glyph = if revert {
             icons::UNDO_2
-        } else if matches!(txn.author, ara_ops::Author::Human) {
+        } else if human {
             icons::USER
         } else {
             icons::BOT
@@ -408,36 +711,127 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         } else {
             c.foreground.0
         };
-        list = list.child(
-            row()
-                .h(28.0)
-                .pad_x(8.0)
-                .gap(8.0)
-                .align(Align::Center)
-                .radius(4.0)
-                .child(icon(glyph).size(13.0).color(c.muted_foreground.0))
-                .child(
-                    text(if revert {
-                        format!("Undo: {what}")
-                    } else {
-                        what
-                    })
-                    .text_size(12.0)
-                    .color(ink)
-                    .grow(1.0),
+        let id = txn.id.0.clone();
+        let open = s.local.history_open.as_deref() == Some(id.as_str());
+        let hover = c.hover_surface.0;
+        let (toggle, menu) = (id.clone(), id.clone());
+        let mut line = super::style::chosen(l, row(), open)
+            .key(format!("history/{id}"))
+            .h(28.0)
+            .pad_x(8.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .radius(4.0)
+            .label(what.clone())
+            .expanded(open)
+            .hovered(move |e| if open { e } else { e.fill(hover) })
+            .on_press(move |s: &mut Studio| {
+                s.local.history_open = (s.local.history_open.as_deref() != Some(toggle.as_str()))
+                    .then(|| toggle.clone())
+            })
+            .on_context_menu(move |s: &mut Studio, x, y| {
+                use crate::catalog::{Target, menus::Context};
+                s.local.context = Some((Context::History, Target::Text(menu.clone()), (x, y)));
+            })
+            .child(icon(glyph).size(13.0).color(c.muted_foreground.0))
+            .child(
+                text(if revert {
+                    format!("Undo: {what}")
+                } else {
+                    what
+                })
+                .text_size(12.0)
+                .color(ink)
+                .wrap(1)
+                .w(0.0)
+                .grow(1.0),
+            );
+        // Your own steps undo back to here (later ones first), as Unity's list jumps.
+        if human && !undone && !revert && history.last().is_some_and(|last| last.id != txn.id) {
+            let to = crate::catalog::Target::Text(id.clone());
+            line = line.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::ROTATE_CCW,
+                    "Undo back to here",
                 )
-                .child(
-                    text(if undone { "undone".to_owned() } else { who })
+                .size(20.0)
+                .key(format!("history/{id}/undo-to"))
+                .on_press(move |s: &mut Studio| super::commands::run(s, "history.undo_to", &to)),
+            );
+        }
+        line = line
+            .child(
+                text(if undone { "undone".to_owned() } else { who })
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0),
+            )
+            .child(
+                text(when)
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0.with_alpha(0.7))
+                    .w(70.0)
+                    .text_align(stillkit::el::TextAlign::End),
+            );
+        list = list.child(line);
+        if open {
+            let mut diff = col().pad_x(30.0).pad_y(4.0).gap(2.0);
+            for op in txn.ops.iter().take(60) {
+                let (tone, line) = op_line(s, op);
+                diff = diff.child(
+                    row()
+                        .gap(6.0)
+                        .align(Align::Center)
+                        .child(el().w(3.0).h(14.0).radius(1.5).fill(tone))
+                        .child(
+                            text(line)
+                                .text_size(11.5)
+                                .family(mono())
+                                .color(c.foreground.0)
+                                .wrap(1),
+                        ),
+                );
+            }
+            if txn.ops.len() > 60 {
+                diff = diff.child(
+                    text(format!("and {} more", txn.ops.len() - 60))
                         .text_size(11.0)
                         .color(c.muted_foreground.0),
-                )
-                .child(
-                    text(when)
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0.with_alpha(0.7))
-                        .w(70.0)
-                        .text_align(stillkit::el::TextAlign::End),
+                );
+            }
+            let copy = crate::catalog::Target::Text(id.clone());
+            diff = diff.child(
+                row().pad_y(2.0).child(
+                    button(
+                        l,
+                        Tone::Ghost,
+                        Size::Sm,
+                        Some(icons::COPY),
+                        "Copy transaction",
+                    )
+                    .key(format!("history/{id}/copy"))
+                    .on_press(move |s: &mut Studio| super::commands::run(s, "history.copy", &copy)),
                 ),
+            );
+            list = list.child(diff);
+        }
+    }
+    if more {
+        list = list.child(page_button(
+            s,
+            "history/older",
+            "Older changes",
+            "history.older",
+        ));
+    }
+    if shown == 0 {
+        list = list.child(
+            text("No changes match the search.")
+                .text_size(12.0)
+                .color(c.muted_foreground.0)
+                .pad(10.0),
         );
     }
     col()

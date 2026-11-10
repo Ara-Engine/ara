@@ -21,7 +21,7 @@ impl Shell {
         request: Request,
     ) -> ara_ui::Result<()> {
         let selection = Selection::read(self, editor);
-        match backend::preflight(editor, &request)? {
+        match backend::preflight(editor, &request.sources, &request.destination)? {
             backend::Preflight::Ready(plan) => self
                 .asset_import
                 .ready

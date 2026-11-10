@@ -16,10 +16,11 @@ fn extension(ids: &[&str], generation: &str) -> Catalog {
         ..Default::default()
     }
 }
+/// `editor.commands` as the authority answers it: the catalogue, then the C# commands.
 fn response(catalog: &Catalog) -> Value {
-    json!({"commands":commands::entries(catalog).map(|c| json!({"id":c.id})).collect::<Vec<_>>(),
-        "generation":catalog.generation})
+    json!({"commands":crate::catalog::export(&Default::default(), catalog), "generation":catalog.generation})
 }
+
 fn offer_pending(state: &mut State) -> Vec<String> {
     let mut offered = Vec::new();
     while let Some(Action::Command { id, target }) = state.next() {

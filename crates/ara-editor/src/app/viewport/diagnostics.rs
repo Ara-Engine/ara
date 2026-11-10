@@ -1,6 +1,6 @@
 //! Borrow retained native geometry with its current authoring and pose provenance.
 use super::*;
-use crate::shell::overlay::diagnostics::{Source, SourceKey};
+use crate::overlay::diagnostics::{Source, SourceKey};
 
 impl SceneView {
     /// Never substitutes a pending extraction or reads GPU data for diagnostic bounds.
