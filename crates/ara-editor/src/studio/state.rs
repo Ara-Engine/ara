@@ -414,6 +414,8 @@ pub struct Local {
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.
     pub flying: bool,
+    /// The command Settings › Keyboard shortcuts is recording a chord for.
+    pub recording_shortcut: Option<&'static str>,
     /// A middle-button pan or an Alt+left orbit is under way.
     pub navigating: bool,
     /// Pilot Selected Camera: the Camera the Scene view moves, and its committed steps.

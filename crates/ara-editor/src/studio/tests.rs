@@ -33,7 +33,9 @@ fn open() -> Runtime<Studio> {
         ),
     )
     .unwrap();
-    let mut editor = Editor::open(&root).unwrap();
+    // Each studio test keeps its own user settings, so rebinding or reordering in one
+    // never reaches another.
+    let mut editor = Editor::open_with(&root, Some(root.join(".ara/test-user.json"))).unwrap();
     editor
         .apply(
             vec![
@@ -612,6 +614,54 @@ fn a_piloted_camera_follows_the_view_and_commits_each_finished_move() {
     assert_ne!(position(&rt), before, "the Camera moved with the view");
     rt.update(|s| super::commands::run(s, "view.camera.pilot", &Target::None));
     assert!(!rt.state().local.pilot.active(), "stopped");
+}
+
+#[test]
+fn keyboard_shortcuts_record_clear_and_reset_a_binding() {
+    use stillkit::el::{KeyCode, Modifiers};
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "edit.shortcuts", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert!(
+        rt.find("shortcuts/edit.duplicate").is_some(),
+        "every command is listed"
+    );
+    let own = |rt: &Runtime<Studio>| {
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get("input.shortcuts")
+            .cloned()
+    };
+    let keys = |rt: &Runtime<Studio>| super::commands::keys_of(rt.state(), "edit.duplicate");
+    // Record: the next chord is the person's binding, in force at once.
+    rt.update(|s| {
+        if let Some(v) = s.local.settings.as_mut() {
+            v.query = "duplicate".into();
+        }
+    });
+    settle(&mut rt);
+    press(&mut rt, "shortcuts/edit.duplicate/record");
+    assert_eq!(rt.state().local.recording_shortcut, Some("edit.duplicate"));
+    rt.key_with(KeyCode::of('J').0, Modifiers::CTRL);
+    settle(&mut rt);
+    assert_eq!(own(&rt), Some(json!({"edit.duplicate": "Ctrl+J"})));
+    assert_eq!(keys(&rt), super::commands::shortcut("Ctrl+J"));
+    assert!(rt.state().local.recording_shortcut.is_none());
+    // Clear unbinds it; Reset gives it back to the preset.
+    // Away first: Record's tooltip, just shown, would take the press beside it.
+    rt.pointer_move(5.0, 5.0);
+    settle(&mut rt);
+    press(&mut rt, "shortcuts/edit.duplicate/clear");
+    assert_eq!(keys(&rt), None);
+    press(&mut rt, "shortcuts/edit.duplicate/reset");
+    assert_eq!(
+        own(&rt).and_then(|o| o.get("edit.duplicate").cloned()),
+        None
+    );
+    assert_eq!(keys(&rt), super::commands::shortcut("Ctrl+D"));
 }
 
 #[test]
