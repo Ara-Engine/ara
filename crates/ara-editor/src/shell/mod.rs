@@ -524,18 +524,7 @@ pub(crate) enum Binding {
     /// A Connect an agent row's button.
     Agent(ara_agents::Client, agents_connect::AgentAction),
 }
-/// The editor's fonts: Inter (UI), JetBrains Mono (code, timings) and Noto Naskh
-/// Arabic (right-to-left text). The shell and the loading window share them.
-pub(crate) fn text_system() -> ara_ui::Result<TextSystem> {
-    TextSystem::new(
-        [
-            include_bytes!("../../assets/fonts/InterVariable.ttf").to_vec(),
-            include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
-            include_bytes!("../../../ara-ui-text/fonts/NotoNaskhArabic.ttf").to_vec(),
-        ],
-        "'Inter Variable', 'Noto Naskh Arabic'",
-    )
-}
+pub(crate) use crate::text::text_system;
 impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
     pub fn new(editor: &mut Editor, size: [f32; 2]) -> ara_ui::Result<Self> {

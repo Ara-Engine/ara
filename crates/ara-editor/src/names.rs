@@ -19,6 +19,24 @@ pub(crate) fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
+/// `innerAngle` → `Inner angle`; `_` becomes a space.
+pub(crate) fn sentence(label: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in label.chars().enumerate() {
+        if i == 0 {
+            out.extend(c.to_uppercase());
+        } else if c.is_uppercase() {
+            out.push(' ');
+            out.extend(c.to_lowercase());
+        } else if c == '_' {
+            out.push(' ');
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Image files the texture importer reads (lowercase extensions), plus cooked KTX2.
 pub(crate) fn is_texture(extension: &str) -> bool {
     matches!(
@@ -212,7 +230,7 @@ mod tests {
 
     #[test]
     fn long_names_break_at_separators_and_end_in_an_ellipsis() {
-        let mut text = crate::shell::text_system().expect("fonts");
+        let mut text = crate::text::text_system().expect("fonts");
         let width = |text: &mut TextSystem, s: &str| {
             let mut t = Text::new(s.to_owned());
             text.measure(&mut t, None, 11.).width

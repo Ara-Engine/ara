@@ -4,6 +4,7 @@
 pub(crate) mod about;
 mod actions;
 pub mod activity;
+pub(crate) mod animation_edit;
 pub(crate) mod app;
 pub(crate) mod asset_import;
 pub(crate) mod asset_plan;
@@ -45,9 +46,11 @@ pub mod shell;
 pub mod state;
 pub mod studio;
 pub(crate) mod system;
+pub(crate) mod text;
 mod transaction_label;
 mod transport;
 mod view_camera;
+pub(crate) mod vfx_edit;
 pub mod world;
 
 pub use app::{LAUNCHED, Options, Settle, before_open_project, run};
