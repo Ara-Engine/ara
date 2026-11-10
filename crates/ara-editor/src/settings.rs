@@ -45,6 +45,9 @@ pub enum Kind {
     Text,
     /// A string map edited on its own page (keyboard shortcuts).
     Map,
+    /// Names in order, kept by another window (the Inspector's Move Up and Move Down);
+    /// Settings shows them and resets them.
+    List,
     /// Up to `max` linear RGBA colours (`[[r, g, b, a], ...]`), edited from the colour
     /// picker; Settings shows them and resets them.
     Colors {
@@ -136,9 +139,9 @@ pub const DEFS: &[Def] = &[
         User,
         "Inspector",
         "Component order",
-        "The Inspector's component sections in this order (names, comma-separated), set by Move Up and Move Down; the rest follow, Transform first. Data order is unchanged.",
-        Kind::Text,
-        Lit::S(""),
+        "The Inspector's component sections in this order, set by Move Up and Move Down on a component; the rest follow, Transform first. The scene's data is unchanged.",
+        Kind::List,
+        Lit::None,
     ),
     def(
         "scripts.ide",
@@ -919,6 +922,13 @@ pub fn valid(d: &Def, value: &Value) -> Result<(), String> {
             _ => Err(format!("{} must be a number from {min} to {max}", d.label)),
         },
         Kind::Text if value.is_string() => Ok(()),
+        Kind::List
+            if value
+                .as_array()
+                .is_some_and(|l| l.iter().all(Value::is_string)) =>
+        {
+            Ok(())
+        }
         Kind::Map
             if value
                 .as_object()

@@ -411,8 +411,8 @@ fn the_inspector_locks_searches_and_copies_component_values() {
     assert!(
         saved
             .as_ref()
-            .and_then(Value::as_str)
-            .is_some_and(|o| o.starts_with("MeshRenderer,Transform")),
+            .and_then(Value::as_array)
+            .is_some_and(|o| o.starts_with(&[json!("MeshRenderer"), json!("Transform")])),
         "{saved:?}"
     );
     press(&mut rt, "component/MeshRenderer/more");
@@ -1934,6 +1934,7 @@ fn captures() {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
             });
+            host_feedback(&mut rt);
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
@@ -2466,6 +2467,24 @@ fn the_animation_page_shows_states_added_to_its_controller() {
 }
 
 /// Records where `keys` are laid out, as the host does after each frame.
+/// The host's layout feedback for a few passes: the Scene view's and overlays' rects
+/// reported, overlay lengths measured (so overflow folds overlays as the app does).
+fn host_feedback(rt: &mut Runtime<Studio>) {
+    let keys: Vec<String> = std::iter::once("scene/view".to_owned())
+        .chain(
+            super::scene_overlays::OVERLAYS
+                .iter()
+                .map(|d| format!("scene/overlay/{}", d.id)),
+        )
+        .collect();
+    for _ in 0..4 {
+        settle(rt);
+        rt.touch(|s| s.local.rects.clear());
+        track(rt, &keys.iter().map(String::as_str).collect::<Vec<_>>());
+        rt.update(super::scene_overlays::measure);
+    }
+}
+
 fn track(rt: &mut Runtime<Studio>, keys: &[&str]) {
     let rects: Vec<_> = keys
         .iter()

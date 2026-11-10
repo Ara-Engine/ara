@@ -1293,11 +1293,10 @@ pub(super) fn sort_components(s: &Studio, components: &mut [String]) {
         .state
         .settings
         .get("inspector.componentOrder")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .split(',')
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
         .collect();
     components.sort_by_key(|name| {
         saved
@@ -1342,7 +1341,7 @@ pub(super) fn move_component(s: &mut Studio, component: &str, down: bool) -> boo
     shown.swap(at, to);
     s.act(
         "editor.settings.set",
-        json!({"key": "inspector.componentOrder", "value": shown.join(",")}),
+        json!({"key": "inspector.componentOrder", "value": shown}),
     );
     true
 }
