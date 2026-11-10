@@ -273,6 +273,16 @@ validation. Account for upload, graph compilation, encoding, waits, driver pipel
 compile/reload and actual GPU pass times separately. Porting the layer does not by
 itself establish faster GPU algorithms or cure the driver compilation stall.
 
+## Executed first-step proof
+
+The [WGSL replay](../dev/renderlab-wgsl-replay.md) now executes the first three
+post families on Metal through naga-generated MSL and Ara's existing heap, with
+independent CPU references. All four generated SPIR-V stages validate; their Vulkan
+runtime test is ready for the PC. This demonstrates that these authored WGSL
+algorithms do not require a Slang rewrite or MSC. The report records the required
+heap adapters and two naga SPIR-V repairs. Production packaging and the harder
+shader families still need proof before changing the renderer-wide language choice.
+
 ## Source references
 
 [at-encode]: https://github.com/Ara-Engine/renderlab/blob/71ea35542346c70a2eea0b48d8ef05a931876979/src/atmosphere_gpu.rs#L1020-L1095

@@ -148,3 +148,9 @@ instance 1 with padding, nonzero offsets, reordered indices and a mirrored/scale
 transform, then checks all nine original object-space coordinates exactly. Instance
 and primitive overflow return invalid. The helper also compiles to SPIR-V locally;
 DXIL/cooked-helper and Vulkan runtime execution remain for the PC.
+
+The [naga post replay](renderlab-wgsl-replay.md) now proves bloom downsample,
+upsample and post tone on Metal from the exact WGSL shader bodies, with CPU
+references and no Slang/MSC. Generated bindless SPIR-V validates; native Vulkan
+execution is pending. `ara-gpu-replay` is a test-only dependency, not a change to
+the production shader loader.

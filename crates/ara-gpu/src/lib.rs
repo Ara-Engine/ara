@@ -320,3 +320,6 @@ pub trait BindlessHeap {
     /// Insert a writable image in the storage-image table.
     fn insert_storage_image(&mut self, image: Image) -> Result<HeapIndex>;
 }
+
+#[cfg(test)]
+mod replay_tests;

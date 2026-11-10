@@ -1119,3 +1119,6 @@ mod attachment_tests;
 
 #[cfg(test)]
 mod hit_geometry_tests;
+
+#[cfg(test)]
+mod naga_replay_tests;
