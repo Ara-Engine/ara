@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-curve = { path = "../ara-curve" }
 ara-cmd = { path = "../ara-cmd" }
 ara-diag = { path = "../ara-diag" }
 ara-doc = { path = "../ara-doc" }

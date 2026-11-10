@@ -116,7 +116,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                     .color(c.muted_foreground.0),
             ).child(
                 row().child(
-                    button(l, Tone::Primary, Size::Sm, Some(icons::FILE_PLUS), "Create build profile")
+                    button(l, Tone::Secondary, Size::Sm, Some(icons::FILE_PLUS), "Create build profile")
                         .key("build/create")
                         .on_press(create_profile),
                 ),
