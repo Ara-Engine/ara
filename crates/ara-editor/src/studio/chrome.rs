@@ -23,6 +23,7 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
+        .children(dock::floating(s))
         .children(drag_chip(s))
         .children(dock::drag_preview(s))
         // Menus at a point hang from an element of no size: an overlay never closes on a

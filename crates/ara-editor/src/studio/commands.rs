@@ -852,6 +852,47 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             };
             view(e, json!({"maximized": next}))
         }
+        // Move to New Window: the panel floats over the main window, near its middle.
+        "window.float" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            let (w, h) = s.size;
+            let rect = [
+                w * 0.25,
+                h * 0.2,
+                (w * 0.4).max(320.0),
+                (h * 0.5).max(240.0),
+            ];
+            act(
+                &mut s.editor,
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "float", "rect": rect}),
+            )
+            .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
+        }
+        // Gather: every floating window back inside the main window.
+        "window.gather" => {
+            let size = s.size;
+            let windows: Vec<(String, [i32; 4])> = e
+                .state
+                .floating
+                .iter()
+                .map(|f| (f.id.clone(), f.rect))
+                .collect();
+            for (id, r) in windows {
+                let [x, y, w, h] = r.map(|v| v as f32);
+                let fitted = [
+                    x.clamp(0.0, (size.0 - w).max(0.0)),
+                    y.clamp(0.0, (size.1 - h).max(0.0)),
+                    w,
+                    h,
+                ];
+                super::dock::place_window(s, &id, fitted);
+            }
+            Ok(())
+        }
         // Add Tab: `panel@beside` opens `panel` as a tab in the area holding `beside`.
         "window.add_tab" => match target {
             Target::Text(text) => match text
@@ -1834,11 +1875,12 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         // Window › a panel (last, so the window.* commands above take theirs first).
         id if id.starts_with("window.") => {
             let panel = id.trim_start_matches("window.");
-            // Tool pages open floating in the legacy window; the studio draws no floating
-            // windows yet, so they dock in the centre beside the Scene.
+            // Tool pages open floating by default (the legacy window's habit); here a page
+            // that was not open docks beside the Scene. One already floating stays so.
+            let open = crate::state::panel_visible(&e.state, panel);
             act(e, "editor.layout.show", json!({"panel": panel}))
                 .and_then(|_| {
-                    if e.state.floating.iter().any(|f| holds(&f.root, panel)) {
+                    if !open && e.state.floating.iter().any(|f| holds(&f.root, panel)) {
                         act(
                             e,
                             "editor.layout.move",

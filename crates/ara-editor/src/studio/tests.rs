@@ -1224,6 +1224,62 @@ fn history_searches_opens_changes_and_undoes_back_to_a_step() {
 }
 
 #[test]
+fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let floating = |rt: &Runtime<Studio>| rt.state().editor.state.floating.clone();
+    let window = floating(&rt);
+    assert_eq!(window.len(), 1, "Console floats in a window");
+    let id = window[0].id.clone();
+    assert!(
+        rt.find("tab/console").is_some(),
+        "its tab shows in the window"
+    );
+    // Its title bar moves it.
+    let bar = rt.find(&format!("float/{id}/bar")).unwrap();
+    let (x, y) = (bar.left + 30.0, bar.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 60.0, y + 40.0);
+    rt.frame(FRAME);
+    rt.pointer_up(x + 60.0, y + 40.0);
+    settle(&mut rt);
+    let moved = floating(&rt)[0].rect;
+    assert_eq!(
+        [moved[0] - window[0].rect[0], moved[1] - window[0].rect[1]],
+        [60, 40],
+        "moved by the drag"
+    );
+    // Its tab drags back into the Scene's strip: the window goes.
+    let keys = super::dock::all_drag_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let scene = super::dock::area_holding(rt.state(), "scene").unwrap();
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    let tab = rt.find("tab/console").unwrap();
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(strip.right - 40.0, strip.top + 10.0);
+    rt.frame(FRAME);
+    rt.pointer_up(strip.right - 40.0, strip.top + 10.0);
+    settle(&mut rt);
+    assert!(floating(&rt).is_empty(), "the emptied window closes");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console"),
+        Some(scene)
+    );
+}
+
+#[test]
 fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
@@ -1528,6 +1584,31 @@ fn captures() {
             .unwrap();
             rt.update(|s| s.local.tab_drag = None);
         }
+        // A panel floating in its own window.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "history"}));
+            super::commands::run(
+                s,
+                "window.float",
+                &crate::catalog::Target::Panel("history".into()),
+            )
+        });
+        for _ in 0..10 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            super::commands::run(
+                s,
+                "window.move.bottom",
+                &crate::catalog::Target::Panel("history".into()),
+            )
+        });
         rt.update(|s| {
             super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
         });

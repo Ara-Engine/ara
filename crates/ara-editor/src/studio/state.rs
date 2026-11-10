@@ -369,6 +369,8 @@ pub struct Local {
     pub history_open: Option<String>,
     /// The History search: transactions whose description or author match.
     pub history_search: String,
+    /// A floating window being moved or resized.
+    pub float_drag: Option<FloatDrag>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
     /// Each Scene overlay's length along its edge when last shown expanded (design px), so
@@ -403,6 +405,31 @@ pub struct Local {
     pub problems_search: String,
     /// Problems rows opened to their explanation (Why?), by bus sequence number.
     pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A floating window being moved (its title bar) or resized (its corner).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FloatDrag {
+    /// The window's id.
+    pub id: String,
+    /// Resized, else moved.
+    pub resize: bool,
+    /// Its rect when the gesture began (design px).
+    pub start: [f32; 4],
+    /// The pointer's travel since (design px).
+    pub travel: (f32, f32),
+}
+
+impl FloatDrag {
+    /// The rect the gesture gives now.
+    pub fn rect(&self) -> [f32; 4] {
+        let [x, y, w, h] = self.start;
+        let (dx, dy) = self.travel;
+        match self.resize {
+            true => [x, y, w + dx, h + dy],
+            false => [x + dx, y + dy, w, h],
+        }
+    }
 }
 
 /// A Mesh Paint pointer event from the Scene view, at a place across it (0..1).
