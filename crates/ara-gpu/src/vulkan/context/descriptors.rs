@@ -15,7 +15,7 @@ pub(super) fn select(
     // images, three samplers and the optional AS binding before growing buffers.
     let reserved = 128 + 128 + 128 + crate::sampler::SAMPLER_CAPACITY + if rt { 16 } else { 0 };
     let storage_buffers = [
-        128,
+        4096,
         limits.max_per_stage_descriptor_update_after_bind_storage_buffers,
         limits.max_descriptor_set_update_after_bind_storage_buffers,
         limits
@@ -76,7 +76,7 @@ mod tests {
             .max_per_stage_update_after_bind_resources(100_000)
             .max_update_after_bind_descriptors_in_all_pools(100_000);
         let full = select(&limits, true)?;
-        assert_eq!((full.storage_buffers, full.sampled_images), (128, 65_536));
+        assert_eq!((full.storage_buffers, full.sampled_images), (1024, 65_536));
         limits.max_per_stage_update_after_bind_resources = 525;
         let tight = select(&limits, false)?;
         assert_eq!((tight.storage_buffers, tight.sampled_images), (77, 128));
