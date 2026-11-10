@@ -705,13 +705,10 @@ impl MetalDevice {
             None => self.flush(),
         }
         for command in &list.commands {
-            if let commands::Command::Barrier(Barrier {
-                resource: Resource::Buffer(buffer),
-                handoff,
-                ..
-            }) = command
-            {
-                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            for dependency in command.barriers() {
+                if let Resource::Buffer(buffer) = dependency.barrier.resource {
+                    self.buffers.get_mut(buffer)?.owner = dependency.barrier.handoff.map_or(queue, |h| h.to);
+                }
             }
         }
         Ok(point)

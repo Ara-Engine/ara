@@ -254,3 +254,126 @@ fn multisample_clear_resolves_to_single_sample_pixels() -> Result<()> {
     gpu.assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn batched_subresource_ranges_touch_one_array_mip_and_reject_overflow() -> Result<()> {
+    use ara_gpu::sync::{BarrierRange, ResourceBarrier};
+    let mut gpu = device("barrier-ranges")?;
+    let image = gpu.create_texture(&TextureDesc {
+        image: ImageDesc {
+            size: [4, 4],
+            format: Format::R32Uint,
+            sampled: false,
+            storage: false,
+            attachment: false,
+            copy_source: true,
+            copy_destination: true,
+        },
+        shape: ImageShape {
+            mip_levels: 3,
+            layers: 2,
+            ..Default::default()
+        },
+    })?;
+    let input = gpu.create_buffer(16, ara_gpu::vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+    gpu.upload(input, &[37; 16])?;
+    let output = gpu.create_readback_buffer(16)?;
+    let range = BarrierRange::Image {
+        base_mip: 1,
+        mip_count: 1,
+        base_layer: 1,
+        layer_count: 1,
+    };
+    let region = ImageRegion {
+        mip: 1,
+        origin: [0; 3],
+        extent: [2, 2, 1],
+        base_layer: 1,
+        layer_count: 1,
+    };
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barrier_ranges([
+        ResourceBarrier {
+            barrier: barrier(
+                Resource::Image(image),
+                Access::Undefined,
+                Access::CopyDestination,
+            ),
+            range,
+        },
+        ResourceBarrier {
+            barrier: barrier(
+                Resource::Buffer(input),
+                Access::HostWrite,
+                Access::CopySource,
+            ),
+            range: BarrierRange::Buffer {
+                offset: 0,
+                size: 16,
+            },
+        },
+    ]);
+    rec.push(Command::UploadImageRegion {
+        source: input,
+        destination: image,
+        buffer_offset: 0,
+        region,
+    });
+    rec.barrier_ranges([ResourceBarrier {
+        barrier: barrier(
+            Resource::Image(image),
+            Access::CopyDestination,
+            Access::CopySource,
+        ),
+        range,
+    }]);
+    rec.push(Command::ReadImageRegion {
+        source: image,
+        destination: output,
+        buffer_offset: 0,
+        region,
+    });
+    rec.barriers([barrier(
+        Resource::Buffer(output),
+        Access::CopyDestination,
+        Access::HostRead,
+    )]);
+    let point = gpu.submit(rec.finish(), &[])?;
+    gpu.wait(point)?;
+    assert_eq!(gpu.read(output)?, [37; 16]);
+    for invalid in [
+        BarrierRange::Buffer {
+            offset: u64::MAX,
+            size: 8,
+        },
+        BarrierRange::Buffer { offset: 0, size: 0 },
+    ] {
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.barrier_ranges([ResourceBarrier {
+            barrier: barrier(
+                Resource::Buffer(output),
+                Access::HostRead,
+                Access::CopyDestination,
+            ),
+            range: invalid,
+        }]);
+        assert!(gpu.submit(rec.finish(), &[]).is_err());
+    }
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barrier_ranges([ResourceBarrier {
+        barrier: barrier(
+            Resource::Image(image),
+            Access::CopySource,
+            Access::CopyDestination,
+        ),
+        range: BarrierRange::Image {
+            base_mip: 2,
+            mip_count: 2,
+            base_layer: 0,
+            layer_count: 1,
+        },
+    }]);
+    assert!(gpu.submit(rec.finish(), &[]).is_err());
+    gpu.assert_clean()?;
+    Ok(())
+}

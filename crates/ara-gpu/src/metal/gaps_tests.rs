@@ -218,3 +218,52 @@ fn runtime_buffer_heap_addresses_slots_beyond_128_without_an_abi_change() {
     gpu.wait(point).unwrap();
     assert_eq!(gpu.read(buffer).unwrap(), 0x12345678u32.to_le_bytes());
 }
+
+#[test]
+#[ignore = "CPU timing; run through ara-dev gpu"]
+fn barrier_recording_timing() {
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    gpu.set_pass_timing(false);
+    let b = gpu
+        .create_buffer(4096, vk::BufferUsageFlags::TRANSFER_DST, false)
+        .unwrap();
+    for batched in [false, true] {
+        let mut samples = Vec::new();
+        for iteration in 0..120 {
+            let mut rec = gpu.begin(Queue::Graphics);
+            rec.push(Command::FillBuffer {
+                destination: b,
+                offset: 0,
+                size: 4096,
+                value: 0,
+            });
+            let barriers = (0..256).map(|_| Barrier {
+                resource: Resource::Buffer(b),
+                before: Access::CopyDestination,
+                after: Access::CopyDestination,
+                handoff: None,
+            });
+            if batched {
+                rec.barriers(barriers);
+            } else {
+                for barrier in barriers {
+                    rec.push(Command::Barrier(barrier));
+                }
+            }
+            let list = rec.finish();
+            let start = std::time::Instant::now();
+            let p = gpu.submit(list, &[]).unwrap();
+            let elapsed = start.elapsed().as_secs_f64() * 1e6;
+            gpu.wait(p).unwrap();
+            if iteration >= 20 {
+                samples.push(elapsed);
+            }
+        }
+        samples.sort_by(f64::total_cmp);
+        eprintln!(
+            "barriers256 mode={} median_cpu_us={:.3}",
+            if batched { "recorder" } else { "individual" },
+            samples[samples.len() / 2]
+        );
+    }
+}

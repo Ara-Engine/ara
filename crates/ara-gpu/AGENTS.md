@@ -1,6 +1,5 @@
 # ara-gpu
 
-Owns the native GPU boundary.
 ## Public API
 
 - `new_raster` omits RT features/descriptors; `new` enables optional RT.
@@ -33,11 +32,11 @@ Owns the native GPU boundary.
 - `Handle<T>`: arena/device identity plus a 64-bit generation. Shader `HeapIndex`
   identities are separate. An expired CPU handle never aliases a replacement.
 - `Recorder` / `CommandList`: owned portable commands; no borrowed ECS state.
-- `DeviceInfo::{mesh_shading,buffer_int64_atomics}`: queried optional tiers.
-  `Stage::{Mesh,Task}` and `DrawMeshTasksIndirect` require the mesh tier; the
-  existing vertex/indirect path remains available. Mesh reads use ALL_GRAPHICS
-  barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
-- `Barrier`, `Access`, `Handoff`, `TimelinePoint`: graph synchronization; `after: Undefined` discards, so `attachments::ops` skips the scope's store and colour load.
+- Mesh/task/indirect mesh dispatch requires `DeviceInfo::mesh_shading`; ordinary
+  vertex/indirect draws remain available. Mesh reads use ALL_GRAPHICS barriers.
+- `Recorder::barriers` / `barrier_ranges` record simultaneous batches; byte and mip/layer
+  ranges are checked. Vulkan emits one dependency call; Metal orders whole stages.
+  `after: Undefined` discards; only whole-image discards suppress attachment stores.
   `TRANSIENT_ATTACHMENT` images are attachment-only: Metal memoryless, Vulkan lazily allocated.
 - `RenderState::raster` adds depth compare/bias, cull/winding, per-target blend,
   sample count and explicit vertex layouts. `DrawVertexBuffers` binds up to eight
@@ -67,7 +66,8 @@ Owns the native GPU boundary.
 ## Contracts
 
 The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled images and 4,096 storage buffers, clamped jointly to set/stage/pool limits (minimum 128 images/64 buffers; capacity changes preserve the runtime-array ABI), plus 64 storage images and optional 16 acceleration structures.
-A full storage heap waits (bounded) for retired storage images' last use, then collects (`reclaim_storage`); Vulkan sRGB images created with STORAGE are MUTABLE_FORMAT|EXTENDED_USAGE with a UNORM `storage_view` (`storage_alias`) that `storage_image` publishes (shaders encode sRGB; Metal still needs the equivalent pixel-format view); window devices enable swapchain_maintenance1 present scaling.
+A full storage heap waits for completed retirement (`reclaim_storage`). Vulkan sRGB
+storage uses a mutable UNORM alias (shaders encode sRGB); window devices enable present scaling.
 `DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
 material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 reserves three default samplers: material repeat (up to 16x anisotropic where the

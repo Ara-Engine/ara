@@ -27,6 +27,8 @@ pub struct Draw {
 pub enum Command {
     /// Explicit graph dependency.
     Barrier(Barrier),
+    /// A simultaneous batch of resource dependencies, lowered in one native call.
+    Barriers(Vec<crate::sync::ResourceBarrier>),
     /// Bind cooked pipeline and the global descriptor heap.
     Pipeline(Pipeline),
     /// Update eight root words.
@@ -264,8 +266,17 @@ impl Recorder {
     }
     /// Record explicit graph barriers.
     pub fn barriers(&mut self, barriers: impl IntoIterator<Item = Barrier>) {
-        self.commands
-            .extend(barriers.into_iter().map(Command::Barrier));
+        self.barrier_ranges(barriers.into_iter().map(Into::into));
+    }
+    /// Record one simultaneous batch with explicit byte or mip/layer ranges.
+    pub fn barrier_ranges(
+        &mut self,
+        barriers: impl IntoIterator<Item = crate::sync::ResourceBarrier>,
+    ) {
+        let batch: Vec<_> = barriers.into_iter().collect();
+        if !batch.is_empty() {
+            self.commands.push(Command::Barriers(batch));
+        }
     }
     /// Finish recording; resources are validated before native submission.
     pub fn finish(self) -> CommandList {
@@ -303,5 +314,22 @@ impl TimestampSpan {
     /// Elapsed device time; overlapping passes are counted only once.
     pub fn milliseconds(self) -> f64 {
         self.end_ms - self.start_ms
+    }
+}
+
+impl Command {
+    pub(crate) fn barriers(&self) -> impl Iterator<Item = crate::sync::ResourceBarrier> + '_ {
+        let single = match self {
+            Self::Barrier(b) => Some((*b).into()),
+            _ => None,
+        };
+        let batch = match self {
+            Self::Barriers(b) => b.as_slice(),
+            _ => &[],
+        };
+        single.into_iter().chain(batch.iter().copied())
+    }
+    pub(crate) fn is_barrier(&self) -> bool {
+        matches!(self, Self::Barrier(_) | Self::Barriers(_))
     }
 }

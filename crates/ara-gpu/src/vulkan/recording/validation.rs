@@ -32,22 +32,16 @@ impl VulkanDevice {
         let mut extent = [0u32; 2];
         for c in &list.commands {
             match c {
-                Command::Barrier(_) if rendering => {
-                    return Err(GpuError::Contract(
-                        "Barriers must be outside rendering scopes".into(),
-                    ));
+                Command::Barrier(_) | Command::Barriers(_) => {
+                    if rendering {
+                        return Err(GpuError::Contract(
+                            "Barriers must be outside rendering scopes".into(),
+                        ));
+                    }
+                    for barrier in c.barriers() {
+                        self.validate_barrier(barrier)?;
+                    }
                 }
-                Command::Barrier(b) => match b.resource {
-                    Resource::Buffer(h) => {
-                        self.buffers.get(h)?;
-                    }
-                    Resource::AccelerationStructure(h) => {
-                        self.accelerations.get(h)?;
-                    }
-                    Resource::Image(h) => {
-                        self.images.get(h)?;
-                    }
-                },
                 Command::RefitAccelerationStructure(h) => {
                     if rendering {
                         return Err(GpuError::Contract("AS refit inside rendering".into()));

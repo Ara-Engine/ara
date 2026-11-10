@@ -1,5 +1,4 @@
 use super::image_copy::copy_regions;
-use super::recording::access;
 use super::*;
 use crate::attachments::{Load, Ops};
 use crate::commands::*;
@@ -19,87 +18,8 @@ impl VulkanDevice {
         // SAFETY: All handles were validated, scopes checked, and command buffer is recording.
         unsafe {
             match command {
-                // A discard orders nothing; `attachments::ops` already consumed it, and
-                // Vulkan has no transition to UNDEFINED.
-                Command::Barrier(b) if b.after == Access::Undefined => {}
-                Command::Barrier(b) => {
-                    let source_queue = b.handoff.map(|h| h.from).unwrap_or(queue);
-                    let dest_queue = b.handoff.map(|h| h.to).unwrap_or(queue);
-                    let (mut src_stage, mut src_access, old) = access(b.before, source_queue);
-                    let (mut dst_stage, mut dst_access, new) = access(b.after, dest_queue);
-                    let (from, to) = if let Some(h) = b.handoff {
-                        if h.release {
-                            dst_stage = vk::PipelineStageFlags2::NONE;
-                            dst_access = vk::AccessFlags2::NONE;
-                        } else {
-                            src_stage = vk::PipelineStageFlags2::NONE;
-                            src_access = vk::AccessFlags2::NONE;
-                        }
-                        if self.family(h.from) == self.family(h.to) {
-                            (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED)
-                        } else {
-                            (self.family(h.from), self.family(h.to))
-                        }
-                    } else {
-                        (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED)
-                    };
-                    match b.resource {
-                        Resource::AccelerationStructure(h) => {
-                            let structure = self.accelerations.get(h)?;
-                            let barrier = vk::BufferMemoryBarrier2::default()
-                                .buffer(structure.raw.backing.handle)
-                                .size(structure.raw.backing.size)
-                                .src_stage_mask(src_stage)
-                                .src_access_mask(src_access)
-                                .dst_stage_mask(dst_stage)
-                                .dst_access_mask(dst_access)
-                                .src_queue_family_index(from)
-                                .dst_queue_family_index(to);
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier]),
-                            );
-                        }
-                        Resource::Image(h) => {
-                            let i = self.images.get(h)?;
-                            let barrier = image_barrier(
-                                i.raw.handle,
-                                i.raw.aspect,
-                                old,
-                                new,
-                                (src_stage, src_access),
-                                (dst_stage, dst_access),
-                            )
-                            .src_queue_family_index(from)
-                            .dst_queue_family_index(to)
-                            .subresource_range(
-                                vk::ImageSubresourceRange::default()
-                                    .aspect_mask(i.raw.aspect)
-                                    .level_count(i.raw.mip_levels)
-                                    .layer_count(i.raw.shape.layers),
-                            );
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
-                            );
-                        }
-                        Resource::Buffer(h) => {
-                            let b = self.buffers.get(h)?;
-                            let barrier = vk::BufferMemoryBarrier2::default()
-                                .buffer(b.raw.handle)
-                                .size(b.raw.size)
-                                .src_stage_mask(src_stage)
-                                .src_access_mask(src_access)
-                                .dst_stage_mask(dst_stage)
-                                .dst_access_mask(dst_access)
-                                .src_queue_family_index(from)
-                                .dst_queue_family_index(to);
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier]),
-                            );
-                        }
-                    }
+                Command::Barrier(_) | Command::Barriers(_) => {
+                    self.encode_barriers(cmd, queue, command.barriers())?
                 }
                 Command::Pipeline(h) => {
                     let p = self.pipelines.get(*h)?;

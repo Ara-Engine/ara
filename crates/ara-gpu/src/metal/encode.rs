@@ -10,6 +10,7 @@
 //! wait on all earlier queue work, which keeps Vulkan's cross-submission barrier
 //! semantics conservative. Each draw and dispatch binds a fresh top-level argument
 //! buffer (root constants plus table addresses) through the argument table.
+mod barriers;
 mod transfers;
 
 use super::MetalDevice;
@@ -197,28 +198,8 @@ impl MetalDevice {
 
     fn encode_one(&mut self, rec: &mut Recording, queue: Queue, command: &Command) -> Result<()> {
         match command {
-            Command::Barrier(barrier) => {
-                if matches!(rec.active, Active::Render(_)) {
-                    return Err(GpuError::Contract(
-                        "Barriers must be outside rendering scopes".into(),
-                    ));
-                }
-                // A discard orders nothing; `attachments::ops` already consumed it.
-                if barrier.after == Access::Undefined {
-                    return Ok(());
-                }
-                // Order later work in this encoder, and in any encoder opened next.
-                if let Active::Compute(encoder) = &rec.active {
-                    encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
-                        COMPUTE_STAGES,
-                        COMPUTE_STAGES,
-                        MTL4VisibilityOptions::Device,
-                    );
-                }
-                let (after, before) = (stages(barrier.before), stages(barrier.after));
-                if !after.is_empty() && !before.is_empty() {
-                    rec.wait = (rec.wait.0 | after, rec.wait.1 | before);
-                }
+            Command::Barrier(_) | Command::Barriers(_) => {
+                self.encode_barriers(rec, command.barriers())?
             }
             Command::Pipeline(pipeline) => {
                 self.pipelines.get(*pipeline)?;

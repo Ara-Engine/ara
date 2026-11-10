@@ -13,6 +13,7 @@ pub mod metal;
 pub mod raster;
 pub mod sampler;
 pub mod shared;
+pub mod sync;
 pub mod texture;
 mod transfers;
 #[cfg(feature = "fidelity-lab")]

@@ -38,44 +38,43 @@ pub(crate) fn ops(commands: &[Command], transient: impl Fn(Image) -> bool) -> Ve
     let mut undefined = Vec::<Image>::new();
     let mut scopes = Vec::new();
     for (index, command) in commands.iter().enumerate() {
-        match command {
-            Command::Barrier(Barrier {
-                resource: Resource::Image(image),
-                before,
-                after,
-                ..
-            }) => {
-                undefined.retain(|i| i != image);
-                if *before == Access::Undefined || *after == Access::Undefined {
-                    undefined.push(*image);
+        for dependency in command.barriers() {
+            if !matches!(dependency.range, crate::sync::BarrierRange::Whole) {
+                continue;
+            }
+            if let Resource::Image(image) = dependency.barrier.resource {
+                undefined.retain(|i| *i != image);
+                if dependency.barrier.before == Access::Undefined
+                    || dependency.barrier.after == Access::Undefined
+                {
+                    undefined.push(image);
                 }
             }
-            Command::BeginRendering { colors, depth, .. } => {
-                let discarded = discarded_after(&commands[index + 1..]);
-                let attachments = colors
-                    .iter()
-                    .map(|a| (a, false))
-                    .chain(depth.iter().map(|a| (a, true)));
-                let op = |(a, depth): (&Attachment, bool)| {
-                    let transient = transient(a.image);
-                    let dead_after = transient || discarded.contains(&a.image);
-                    // Depth contents decide which fragments write the other attachments.
-                    let dead_before =
-                        transient || undefined.contains(&a.image) || (dead_after && !depth);
-                    Ops {
-                        load: match (a.clear, dead_before) {
-                            (Some(_), _) => Load::Clear,
-                            (None, true) => Load::DontCare,
-                            (None, false) => Load::Keep,
-                        },
-                        store: !dead_after,
-                    }
-                };
-                scopes.push(attachments.map(op).collect());
-                // The scope writes its attachments: their contents are defined now.
-                undefined.retain(|i| !colors.iter().chain(depth).any(|a| a.image == *i));
-            }
-            _ => {}
+        }
+        if let Command::BeginRendering { colors, depth, .. } = command {
+            let discarded = discarded_after(&commands[index + 1..]);
+            let attachments = colors
+                .iter()
+                .map(|a| (a, false))
+                .chain(depth.iter().map(|a| (a, true)));
+            let op = |(a, depth): (&Attachment, bool)| {
+                let transient = transient(a.image);
+                let dead_after = transient || discarded.contains(&a.image);
+                // Depth contents decide which fragments write the other attachments.
+                let dead_before =
+                    transient || undefined.contains(&a.image) || (dead_after && !depth);
+                Ops {
+                    load: match (a.clear, dead_before) {
+                        (Some(_), _) => Load::Clear,
+                        (None, true) => Load::DontCare,
+                        (None, false) => Load::Keep,
+                    },
+                    store: !dead_after,
+                }
+            };
+            scopes.push(attachments.map(op).collect());
+            // The scope writes its attachments: their contents are defined now.
+            undefined.retain(|i| !colors.iter().chain(depth).any(|a| a.image == *i));
         }
     }
     scopes
@@ -87,18 +86,18 @@ fn discarded_after(rest: &[Command]) -> Vec<Image> {
     rest.iter()
         .skip_while(|c| !matches!(c, Command::EndRendering))
         .skip(1)
-        .take_while(|c| {
-            matches!(
-                c,
-                Command::Barrier(_) | Command::BeginPass(_) | Command::EndPass
-            )
-        })
-        .filter_map(|c| match c {
-            Command::Barrier(Barrier {
-                resource: Resource::Image(image),
-                after: Access::Undefined,
-                ..
-            }) => Some(*image),
+        .take_while(|c| c.is_barrier() || matches!(c, Command::BeginPass(_) | Command::EndPass))
+        .flat_map(|c| c.barriers())
+        .filter_map(|b| match b {
+            crate::sync::ResourceBarrier {
+                barrier:
+                    Barrier {
+                        resource: Resource::Image(image),
+                        after: Access::Undefined,
+                        ..
+                    },
+                range: crate::sync::BarrierRange::Whole,
+            } => Some(image),
             _ => None,
         })
         .collect()
