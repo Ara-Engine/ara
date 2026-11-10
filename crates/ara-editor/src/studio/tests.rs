@@ -2601,7 +2601,7 @@ fn captures() {
         )
         .unwrap();
         // The menu bar's menus.
-        for menu in ["File", "Edit", "Window", "Help"] {
+        for menu in ["File", "Edit", "View", "Window", "Help"] {
             rt.update(|s| s.local.menu = Some(menu));
             for _ in 0..30 {
                 rt.frame(FRAME);

@@ -47,8 +47,12 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
 - `chrome.rs`: root view, title bar (menus from `crate::catalog::menus`, Play,
-  scene crumb, ⌘K launcher), status bar, palette, context menus.
-- `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters.
+  scene crumb, ⌘K launcher), status bar (newest warning/error), palette (commands,
+  settings, scenes, entities), context menus. `cascade` lays a menu and its open
+  submenu side by side in one menu overlay; the menu never moves under the pointer.
+- `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters. Every
+  layout change goes through the authority (`editor.layout`, `editor.window`), whose
+  commit writes `.ara/editor-layout.json`; never edit the window copy and leave it.
 - `scene.rs`: the Scene element and toolbar. RMB look + WASD fly (key-ups from the host),
   MMB pan, Alt+LMB orbit, wheel dolly, click to pick, right-click menu, Shift+A at pointer.
 - `gizmo.rs`: handle hover/drag mapped to an editor gesture; release commits one step.
@@ -67,8 +71,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   typed fixes via `fixes::apply_fix`); other panels say they are coming.
 - `preferences.rs`: Preferences / Project Settings generated from `crate::settings::DEFS`.
 - `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
-- `commands.rs`: which registry commands the studio runs (`ported`), `run`, keymap,
-  macOS shortcut glyphs. Menus hide (context) or disable (title) unported commands.
+- `commands.rs`: which registry commands the studio runs, `run`, `applies` (context
+  menus), the keymap in force (`Bindings`, from `catalog::keymap`), macOS glyphs.
+  `catalog::later` commands show dimmed with their reason. `shortcuts.rs` rebinds them.
 
 ## Rules
 
@@ -77,7 +82,8 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Copies set `local.copy`; the host writes it to the system clipboard.
 - Window-only state lives in `Local`; anything agents should see goes to `EditorState`.
 - Visual review: `cargo test -p ara-editor --lib studio::tests::captures -- --ignored`
-  writes both themes (panels, context menu, Create) to `target/studio-captures/`.
+  writes both themes (every panel and tool page, menus, the palette, Settings) to
+  `target/studio-captures/`, with the host's layout feedback applied.
 - Spacing: 3 px gutters, 26 px tab strips, 20 px tree and field rows, 24 px dense
   controls. Fields set `focus_ring(false)` where their well shows focus.
 - One flat look (D34): no lines and no elevation. `style::chosen` marks the chosen row,
@@ -94,5 +100,6 @@ re-running the view; use `rt.update` (or settle) before finding what it should s
 
 ## Gaps
 
-The Scene layer presents on macOS only (Windows needs the Vulkan HWND path). The material
-preview sphere needs slangc (the Vulkan SDK). Tool pages dock; no floating windows yet.
+The Windows Scene layer is PR #10. The material preview sphere needs slangc (the Vulkan
+SDK). Floating windows live inside the main window (OS windows need stillkit's
+multi-window runtime); Full Screen needs a stillkit window call.
