@@ -56,7 +56,7 @@ impl Default for Page {
 
 /// The effect document the page edits: the selected resource when it is one, else the
 /// project's first effect.
-fn document(s: &Studio) -> Option<String> {
+pub(super) fn document(s: &Studio) -> Option<String> {
     let workspace = s.editor.host.store().workspace();
     let matches = |doc: &ara_doc::Document| {
         doc.kind == "graph"
@@ -779,7 +779,9 @@ fn settings(
     out
 }
 
-fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
+/// Runs module operation `op` (`toggle`, `up`, `down`, `duplicate`, `delete`) on `item`
+/// of effect `doc` (one undo step).
+pub(super) fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
     if let Err(error) = crate::shell::vfx_panel::module_edit(&mut s.editor, doc, item, op) {
         s.editor.report_failure(&*error);
     }

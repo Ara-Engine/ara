@@ -1114,7 +1114,7 @@ fn submit_animation(s: &mut Studio, doc: &str, edits: Vec<Edit>) {
 }
 
 /// Fits the whole graph in view.
-fn frame(s: &mut Studio) {
+pub(super) fn frame(s: &mut Studio) {
     let rect = view_rect(s);
     if let Some(shown) = s.graph.shown.as_mut() {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
@@ -1389,7 +1389,7 @@ fn command(tx: &stillkit::el::Tx) -> bool {
 }
 
 /// Duplicates the selected nodes (one undo step) and picks the copies.
-fn duplicate_selection(s: &mut Studio) {
+pub(super) fn duplicate_selection(s: &mut Studio) {
     let Some(shown) = s.graph.shown.as_ref() else {
         return;
     };
@@ -1427,7 +1427,7 @@ fn duplicate_selection(s: &mut Studio) {
 }
 
 /// Wraps the selected nodes in a comment box and picks it, its title ready to type.
-fn comment_selection(s: &mut Studio) {
+pub(super) fn comment_selection(s: &mut Studio) {
     let Some(shown) = s.graph.shown.as_ref() else {
         return;
     };
@@ -1468,7 +1468,7 @@ fn comment_selection(s: &mut Studio) {
 
 /// Removes the selected nodes and their inline defaults (one undo step); with a comment box
 /// picked, only the box.
-fn delete_selection(s: &mut Studio) {
+pub(super) fn delete_selection(s: &mut Studio) {
     let Some(shown) = s.graph.shown.as_ref() else {
         return;
     };
@@ -1529,6 +1529,20 @@ pub(super) fn inline_values(s: &Studio) -> Vec<(String, (f32, f32))> {
             .map(|(node, _, b)| (node.to_owned(), (b.x + b.w * 0.5, b.y + b.h * 0.5)))
             .collect()
     })
+}
+
+/// Picks every node on the open canvas (Select All).
+pub(super) fn select_all(s: &mut Studio) {
+    if let Some(shown) = s.graph.shown.as_mut() {
+        shown.canvas.selection = shown.canvas.node_ids().into_iter().collect();
+        s.graph.dirty = true;
+    }
+}
+
+/// Opens the node search under Add Node (Space).
+pub(super) fn add(s: &mut Studio) {
+    s.graph.adding = Some(Adding::default());
+    s.local.focus = Some("material/add/search");
 }
 
 /// Picks `ids` on the open canvas (tests select without a window).
