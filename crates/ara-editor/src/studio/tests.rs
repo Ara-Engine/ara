@@ -983,6 +983,77 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
 }
 
 #[test]
+fn menus_list_scenes_and_layouts_and_filters_and_layouts_save_by_name() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    // Save Layout As asks for a name, then the Window menu lists it.
+    rt.update(|s| super::commands::run(s, "layout.save", &Target::None));
+    settle(&mut rt);
+    rt.update(|s| {
+        if let Some(p) = s.local.prompt.as_mut() {
+            p.text = "Wide".into();
+        }
+    });
+    settle(&mut rt);
+    press(&mut rt, "prompt/ok");
+    assert!(rt.state().local.prompt.is_none());
+    assert!(
+        crate::state::saved_layouts(rt.state().editor.host.root()).contains(&"Wide".to_owned())
+    );
+    press(&mut rt, "menu/Window");
+    assert!(
+        rt.find("cmd/layout.load/Wide").is_some(),
+        "Window lists saved layouts"
+    );
+    press(&mut rt, "menu/Window");
+    // Open Recent lists the project's scenes.
+    press(&mut rt, "menu/File");
+    assert!(
+        rt.find("cmd/file.open_scene/levels/main.scene").is_some(),
+        "File › Open Recent lists scenes"
+    );
+    rt.key(stillkit::el::KeyCode::ESCAPE.0);
+    settle(&mut rt);
+    // A Hierarchy filter saves, applies and goes.
+    rt.update(|s| s.local.hierarchy_query = "t:light".into());
+    settle(&mut rt);
+    press(&mut rt, "hierarchy/filters");
+    press(&mut rt, "hierarchy/filters/save");
+    rt.update(|s| s.local.hierarchy_query.clear());
+    settle(&mut rt);
+    rt.update(|s| {
+        super::commands::run(s, "hierarchy.filter.apply", &Target::Text("t:light".into()))
+    });
+    assert_eq!(rt.state().local.hierarchy_query, "t:light");
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "hierarchy.filter.remove",
+            &Target::Text("t:light".into()),
+        )
+    });
+    assert!(super::hierarchy::saved_filters(rt.state()).is_empty());
+    // Why This Value? says where a value comes from.
+    rt.update(|s| {
+        super::commands::run(s, "field.why", &Target::Field("Transform.position".into()))
+    });
+    let note = rt
+        .state()
+        .local
+        .note
+        .clone()
+        .map(|(n, _)| n)
+        .unwrap_or_default();
+    assert!(note.contains("Set on this entity"), "{note}");
+    // About opens and closes.
+    rt.update(|s| super::commands::run(s, "help.about", &Target::None));
+    settle(&mut rt);
+    press(&mut rt, "about/close");
+    assert!(rt.state().local.about.is_none());
+}
+
+#[test]
 fn new_script_is_named_in_place_then_compiles_and_attaches() {
     let mut rt = open();
     scan(&mut rt);

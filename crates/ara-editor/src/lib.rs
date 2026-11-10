@@ -1,6 +1,7 @@
 //! Ara's native editor: one authority, typed actions and a shared GPU UI/scene device.
 #![warn(missing_docs)]
 
+pub(crate) mod about;
 mod actions;
 pub mod activity;
 pub(crate) mod app;

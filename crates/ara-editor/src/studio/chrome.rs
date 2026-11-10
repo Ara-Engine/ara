@@ -36,8 +36,62 @@ pub fn view(s: &Studio) -> El<Studio> {
                     super::create::Anchor::Point(0.0, 0.0),
                 )),
         )
-        .overlay(super::preferences::overlay(s));
+        .overlay(super::preferences::overlay(s))
+        .overlay(prompt(s))
+        .overlay(super::about::overlay(s));
     palette(s, root)
+}
+
+/// The open one-field question (Save Layout As): Enter runs its command with the text.
+fn prompt(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let p = s.local.prompt.as_ref()?;
+    let l = &s.look;
+    let then = p.then;
+    let submit = move |s: &mut Studio, text: &str| {
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            return;
+        }
+        s.local.prompt = None;
+        commands::run(s, then, &Target::Text(text));
+    };
+    let close = |s: &mut Studio| s.local.prompt = None;
+    let typed = p.text.clone();
+    let panel = dialog_panel(
+        l,
+        None,
+        p.title,
+        field(
+            l,
+            Size::Md,
+            "prompt/field",
+            None,
+            "Name",
+            &p.text,
+            move |f| {
+                f.on_input(|s: &mut Studio, t| {
+                    if let Some(p) = s.local.prompt.as_mut() {
+                        p.text = t.to_owned();
+                    }
+                })
+                .on_submit(submit)
+            },
+        ),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("prompt/cancel")
+                .on_press(close),
+            enabled(
+                button(l, Tone::Primary, Size::Md, None, "Save")
+                    .key("prompt/ok")
+                    .on_press(move |s: &mut Studio| submit(s, &typed)),
+                !p.text.trim().is_empty(),
+            ),
+        ],
+        close,
+    )
+    .w(380.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(close))
 }
 
 /// What an asset drag carries, beside the pointer.
@@ -243,16 +297,19 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
 }
 
 /// One line of a flattened menu.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Line {
     Separator,
     Heading(&'static str),
     Command(&'static str),
+    /// A generated entry (a scene, a layout, a profile): its title, the command it runs
+    /// with its target, and whether it is the current one.
+    Entry(String, &'static str, Target, Option<bool>),
 }
 
-/// Flattens registry items: a submenu becomes a separator and a heading over its entries.
-/// `hide` drops commands the studio doesn't run yet (context menus stay short).
-fn lines(items: &'static [Item], depth: usize, out: &mut Vec<Line>) {
+/// Flattens registry items: a submenu becomes a separator and a heading over its entries;
+/// dynamic items become an entry each (`target` is what the menu acts on).
+fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out: &mut Vec<Line>) {
     for item in items {
         match item {
             Item::Separator => out.push(Line::Separator),
@@ -261,10 +318,111 @@ fn lines(items: &'static [Item], depth: usize, out: &mut Vec<Line>) {
             Item::Sub(title, sub) if depth < 2 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));
-                lines(sub, depth + 1, out);
+                lines(s, sub, depth + 1, target, out);
             }
-            Item::Command(_) | Item::Sub(..) | Item::Dynamic(_) => {}
+            Item::Dynamic(kind) => out.extend(dynamic(s, *kind, target)),
+            Item::Command(_) | Item::Sub(..) => {}
         }
+    }
+}
+
+/// The entries a dynamic item stands for, now.
+fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) -> Vec<Line> {
+    use crate::catalog::menus::Dynamic;
+    let e = &s.editor;
+    let command = kind.command();
+    let entry = |title: String, target: Target, checked: Option<bool>| {
+        Line::Entry(title, command, target, checked)
+    };
+    match kind {
+        Dynamic::RecentScenes => {
+            let workspace = e.host.store().workspace();
+            let mut scenes: Vec<String> = workspace
+                .docs()
+                .filter(|(_, d)| d.kind == "scene")
+                .map(|(_, d)| d.id.to_string())
+                .collect();
+            // Recently opened first, then the rest by path.
+            scenes.sort_by_key(|id| {
+                (
+                    e.state
+                        .recent_scenes
+                        .iter()
+                        .position(|r| r == id)
+                        .unwrap_or(usize::MAX),
+                    workspace.path_of(id).unwrap_or("").to_owned(),
+                )
+            });
+            scenes
+                .into_iter()
+                .take(12)
+                .map(|id| {
+                    let path = workspace.path_of(&id).unwrap_or(&id);
+                    let path = workspace.reference_path(path).to_owned();
+                    let open = id == e.state.doc;
+                    entry(path, Target::Doc(id), Some(open))
+                })
+                .collect()
+        }
+        Dynamic::SavedLayouts => crate::state::saved_layouts(e.host.root())
+            .into_iter()
+            .map(|name| entry(name.clone(), Target::Text(name), None))
+            .collect(),
+        Dynamic::BuildProfiles => {
+            let names = s
+                .assets
+                .as_ref()
+                .map(|b| crate::build::profiles(&b.files))
+                .unwrap_or_default();
+            let setting = e
+                .state
+                .settings
+                .get(crate::build::PROFILE_SETTING)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            let chosen = crate::build::selected_profile(&names, setting)
+                .ok()
+                .map(str::to_owned);
+            names
+                .into_iter()
+                .map(|name| {
+                    let on = chosen.as_deref() == Some(name.as_str());
+                    entry(name.clone(), Target::Text(name), Some(on))
+                })
+                .collect()
+        }
+        Dynamic::PrefabSources => {
+            let Some(entity) = target.entity(&e.state) else {
+                return Vec::new();
+            };
+            let path = match target {
+                Target::Field(path) => Some(path.as_str()),
+                _ => None,
+            };
+            crate::prefab::source_choices(e.host.store(), &e.state.doc, entity)
+                .into_iter()
+                .map(|source| {
+                    let logical = e.host.store().workspace().reference_path(&source.path).to_owned();
+                    let choice = serde_json::json!({"entity": entity, "path": path, "destination": format!("@{logical}#{}", source.doc)});
+                    entry(logical, Target::Text(choice.to_string()), None)
+                })
+                .collect()
+        }
+        Dynamic::GizmoTypes => {
+            let settings = crate::shell::overlay::gizmos::Settings::read(&e.state);
+            crate::shell::overlay::gizmos::TYPES
+                .iter()
+                .map(|g| {
+                    entry(
+                        g.label.to_owned(),
+                        Target::Component(g.key.to_owned()),
+                        Some(settings.shows(g.key)),
+                    )
+                })
+                .collect()
+        }
+        // The studio has no floating windows yet.
+        Dynamic::Windows => Vec::new(),
     }
 }
 
@@ -273,13 +431,14 @@ fn lines(items: &'static [Item], depth: usize, out: &mut Vec<Line>) {
 fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio>> {
     let l = &s.look;
     let mut all = Vec::new();
-    lines(items, 0, &mut all);
+    lines(s, items, 0, target, &mut all);
+    let entry = |line: Option<&Line>| matches!(line, Some(Line::Command(_) | Line::Entry(..)));
     let mut clean: Vec<Line> = Vec::new();
     for (i, line) in all.iter().enumerate() {
         match line {
-            Line::Heading(_) if !matches!(all.get(i + 1), Some(Line::Command(_))) => {}
-            Line::Separator if !matches!(clean.last(), Some(Line::Command(_))) => {}
-            _ => clean.push(*line),
+            Line::Heading(_) if !entry(all.get(i + 1)) => {}
+            Line::Separator if !entry(clean.last()) => {}
+            _ => clean.push(line.clone()),
         }
     }
     while matches!(clean.last(), Some(Line::Separator | Line::Heading(_))) {
@@ -291,6 +450,18 @@ fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio
             Line::Separator => Some(menu_separator(l)),
             Line::Heading(title) => Some(menu_heading(l, title)),
             Line::Command(id) => command_item(s, id, target),
+            Line::Entry(title, id, target, checked) => {
+                let key = format!("cmd/{id}/{title}");
+                let item = match checked {
+                    Some(on) => menu_check(l, &key, &title, on),
+                    None => menu_item(l, &key, None, &title, None, false),
+                };
+                Some(item.on_press(move |s: &mut Studio| {
+                    s.local.menu = None;
+                    s.local.context = None;
+                    commands::run(s, id, &target);
+                }))
+            }
         })
         .collect()
 }

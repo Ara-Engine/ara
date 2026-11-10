@@ -49,6 +49,15 @@ pub(super) fn build(s: &mut Studio) {
     });
 }
 
+/// Builds the chosen profile into `folder` (Build to Folder…), a fresh one the person
+/// picked.
+pub(super) fn build_into(s: &mut Studio, folder: std::path::PathBuf) -> ara_ui::Result<()> {
+    let names = names(s);
+    let profile = chosen(s, &names).ok_or("Create a build profile first")?;
+    s.builder
+        .build_profile(&mut s.editor, &profile, Some(folder))
+}
+
 /// Launches the last build.
 pub(super) fn run(s: &mut Studio) {
     attempt(s, |s| s.builder.run_build(&mut s.editor, false));
@@ -179,6 +188,21 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                         .tooltip("Launch the last build, outside the editor")
                         .on_press(run),
                     !busy && s.builder.last_build.is_some(),
+                ))
+                .child(enabled(
+                    button(
+                        l,
+                        Tone::Ghost,
+                        Size::Md,
+                        Some(icons::FOLDER),
+                        "Build to folder…",
+                    )
+                    .key("build/destination")
+                    .tooltip("Build the chosen profile into a folder you pick")
+                    .on_press(|s: &mut Studio| {
+                        super::commands::run(s, "build.destination", &crate::catalog::Target::None)
+                    }),
+                    !busy && selected.is_some(),
                 ))
                 .child(
                     button(

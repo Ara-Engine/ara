@@ -526,7 +526,7 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
             s.local.field_menu = Some((path.clone(), value.clone(), (x, y)))
         });
     if let Some((_, value, (x, y))) = s.local.field_menu.as_ref().filter(|(p, ..)| *p == f.path) {
-        out = out.overlay(field_menu(s, &f.path, value, f.provenance).at(*x, *y));
+        out = out.overlay(field_menu(s, f, value).at(*x, *y));
     }
     out.child(label)
         .child(editor(s, f).w(0.0).grow(1.0 - LABEL).min_w(0.0))
@@ -1161,15 +1161,63 @@ fn number(
 }
 
 /// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.
-fn field_menu(
-    s: &Studio,
-    path: &str,
-    value: &str,
-    provenance: Provenance,
-) -> stillkit::el::Overlay<Studio> {
+/// The inspected entities' field `path`, as the Inspector shows it.
+pub(super) fn field_of(s: &Studio, path: &str) -> Option<Field> {
+    let doc = s.editor.host.store().workspace().doc(&s.editor.state.doc)?;
+    let changes = s.editor.agent_fields();
+    crate::inspector::fields(
+        s.editor.host.store().schema(),
+        doc,
+        &s.resolved,
+        s.inspected(),
+        &changes,
+    )
+    .into_iter()
+    .find(|f| f.path == path)
+}
+
+/// Why field `f` has its value: authored here, the schema's default, its prefab's, an
+/// override of it, or an agent's change (and what it was before).
+pub(super) fn why(s: &Studio, f: &Field) -> String {
+    let prefab = || {
+        s.inspected()
+            .first()
+            .and_then(|e| crate::prefab::instance(s.editor.host.store(), &s.editor.state.doc, e))
+            .map(|i| i.prefab_path)
+            .unwrap_or_else(|| "its prefab".into())
+    };
+    let mut why = match f.provenance {
+        Provenance::Default => "Not set: the schema's default applies.".to_owned(),
+        Provenance::Prefab => format!("From {}.", prefab()),
+        Provenance::Override => format!("Overridden here; {} has another value.", prefab()),
+        Provenance::Authored => "Set on this entity in the scene.".to_owned(),
+        Provenance::AgentChanged => "Changed by an agent; review it in Agents.".to_owned(),
+    };
+    if let Some(was) = &f.was {
+        why.push_str(&format!(" It was {was} before."));
+    }
+    why
+}
+
+fn field_menu(s: &Studio, f: &Field, value: &str) -> stillkit::el::Overlay<Studio> {
     let l = &s.look;
+    let (path, provenance) = (f.path.as_str(), f.provenance);
     let (reset, copy_value, copy_path) = (path.to_owned(), value.to_owned(), path.to_owned());
-    let mut items = Vec::new();
+    // Why it has this value leads the menu (Unreal's property source).
+    let mut items = vec![
+        row()
+            .key(format!("field/{path}/why"))
+            .max_w(280.0)
+            .pad_x(8.0)
+            .pad_y(6.0)
+            .child(
+                text(why(s, f))
+                    .text_size(11.5)
+                    .wrap(3)
+                    .color(l.c.muted_foreground.0),
+            ),
+        menu_separator(l),
+    ];
     if provenance != Provenance::Default {
         items.push(menu_item(l, &format!("field/{path}/reset"), Some(icons::UNDO_2), "Reset to Default", None, false).on_press(move |s: &mut Studio| {
             s.local.field_menu = None;

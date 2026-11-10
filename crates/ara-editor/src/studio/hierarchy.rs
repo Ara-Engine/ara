@@ -242,9 +242,119 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         .pad_y(4.0)
         .gap(3.0)
-        .child(row().pad_x(4.0).child(search.h(22.0).grow(1.0)))
+        .child(
+            row()
+                .pad_x(4.0)
+                .gap(2.0)
+                .child(search.h(22.0).grow(1.0))
+                .child(filter_menu(s)),
+        )
         .child(row().pad_x(4.0).child(root))
         .child(body)
+}
+
+/// The saved Hierarchy filters (`hierarchy.filters`: name to query), by name.
+pub(super) fn saved_filters(s: &Studio) -> Vec<(String, String)> {
+    s.editor
+        .state
+        .settings
+        .get("hierarchy.filters")
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, query)| Some((name.clone(), query.as_str()?.to_owned())))
+        .collect()
+}
+
+/// The Hierarchy's filter menu (Unity's search filters): the type filters, the saved
+/// ones, and Save This Filter for what is typed.
+fn filter_menu(s: &Studio) -> El<Studio> {
+    use crate::catalog::Target;
+    let l = &s.look;
+    const KEY: &str = "hierarchy/filters";
+    let open = s.local.select.as_deref() == Some(KEY);
+    let query = s.local.hierarchy_query.trim().to_owned();
+    let mut b = super::scene_overlays::toggle(l, icons::FUNNEL, "Filters", !query.is_empty())
+        .key(KEY)
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if !open {
+        return b;
+    }
+    let run = |id: &'static str, target: Target| {
+        move |s: &mut Studio| {
+            s.local.select = None;
+            super::commands::run(s, id, &target);
+        }
+    };
+    let mut items = vec![menu_heading(l, "Show")];
+    for (id, title, filter) in [
+        ("hierarchy.filter.lights", "Lights", "t:light"),
+        ("hierarchy.filter.cameras", "Cameras", "t:camera"),
+        ("hierarchy.filter.meshes", "Meshes", "t:meshrenderer"),
+        ("hierarchy.filter.audio", "Audio", "t:audio"),
+        ("hierarchy.filter.effects", "Effects", "t:vfx"),
+        ("hierarchy.filter.prefabs", "Prefab instances", "is:prefab"),
+    ] {
+        items.push(
+            menu_check(l, &format!("{KEY}/{id}"), title, query == filter)
+                .on_press(run(id, Target::None)),
+        );
+    }
+    let saved = saved_filters(s);
+    if !saved.is_empty() {
+        items.push(menu_separator(l));
+        items.push(menu_heading(l, "Saved"));
+    }
+    for (name, filter) in saved {
+        items.push(
+            menu_check(l, &format!("{KEY}/saved/{name}"), &name, query == filter)
+                .on_press(run("hierarchy.filter.apply", Target::Text(name.clone())))
+                .child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Remove this filter")
+                        .size(18.0)
+                        .key(format!("{KEY}/saved/{name}/remove"))
+                        .on_press(run("hierarchy.filter.remove", Target::Text(name))),
+                ),
+        );
+    }
+    items.push(menu_separator(l));
+    items.push(enabled(
+        menu_item(
+            l,
+            &format!("{KEY}/save"),
+            Some(icons::BOOKMARK),
+            "Save This Filter",
+            None,
+            false,
+        )
+        .on_press(run("hierarchy.filter.save", Target::None)),
+        !query.is_empty(),
+    ));
+    items.push(enabled(
+        menu_item(
+            l,
+            &format!("{KEY}/clear"),
+            Some(icons::X),
+            "Clear Filter",
+            None,
+            false,
+        )
+        .on_press(run("hierarchy.filter.all", Target::None)),
+        !query.is_empty(),
+    ));
+    b = b.overlay(
+        stillkit::el::menu(menu_panel(l, items).min_w(220.0))
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::End)
+            .on_dismiss(|s: &mut Studio| s.local.select = None),
+    );
+    b
 }
 
 fn row_el(

@@ -337,6 +337,12 @@ pub struct Local {
     pub script_attach: Vec<String>,
     /// What the last request did, shown in the status bar for a few seconds.
     pub note: Option<(String, std::time::Instant)>,
+    /// A one-field question open (Save Layout As): what it asks, and the text typed.
+    pub prompt: Option<Prompt>,
+    /// The renderer's device report (`DeviceInfo` as JSON), once it runs.
+    pub device: String,
+    /// About Ara or System Info, open.
+    pub(crate) about: Option<super::about::Page>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
@@ -366,6 +372,17 @@ pub struct Local {
     pub problems_search: String,
     /// Problems rows opened to their explanation (Why?), by bus sequence number.
     pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A one-field question: its title, the text typed, and what Enter does with it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Prompt {
+    /// What it asks.
+    pub title: &'static str,
+    /// The text typed so far.
+    pub text: String,
+    /// The command Enter runs, with the text as its target.
+    pub then: &'static str,
 }
 
 /// A change to the OS window (Window › Minimize, Maximize or Restore).
