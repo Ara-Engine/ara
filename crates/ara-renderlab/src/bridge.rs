@@ -440,7 +440,11 @@ impl Bridge {
         }
         // Renderlab keeps the selected map alive until the sky changes: old ones go
         // only after the new sky is set.
-        for map in replaced.flatten().into_iter().chain(self.stale_maps.drain(..)) {
+        for map in replaced
+            .flatten()
+            .into_iter()
+            .chain(self.stale_maps.drain(..))
+        {
             self.engine.remove_environment(map)?;
         }
         Ok(())
