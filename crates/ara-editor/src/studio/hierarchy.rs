@@ -180,6 +180,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         let rename = s.local.rename.clone();
         let drop = s.local.row_drag.as_ref().and_then(|d| d.target.clone());
         let hovered = s.local.hierarchy_hover.clone();
+        // The search's first name word (filters such as `t:light` are not names), to mark
+        // in each row's name as Unity does.
+        let needle = s
+            .local
+            .hierarchy_query
+            .split_whitespace()
+            .find(|t| !t.contains(':'))
+            .unwrap_or("")
+            .to_lowercase();
         virtual_list("hierarchy/rows", rows.len(), ROW, move |range| {
             range
                 .map(|i| {
@@ -192,7 +201,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                         ),
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
-                        rename.as_ref(),
+                        (rename.as_ref(), &needle),
                         drop.as_ref()
                             .filter(|(t, _)| *t == built[i].id)
                             .map(|(_, p)| *p),
@@ -382,7 +391,7 @@ fn row_el(
     (selected, hovered): (bool, bool),
     hidden: bool,
     locked: bool,
-    rename: Option<&(String, String)>,
+    (rename, needle): (Option<&(String, String)>, &str),
     drop: Option<ara_ui::drag_drop::Placement>,
 ) -> El<Studio> {
     let r = &rows[at];
@@ -460,17 +469,41 @@ fn row_el(
                     }
                 })
         }
-        None => text(r.name.clone())
-            .text_size(12.0)
-            .grow(1.0)
-            .color(if hidden {
+        None => {
+            let tint = if hidden {
                 muted
             } else if r.prefab {
                 // Prefab instances read in the prefab colour, as Unity's do.
                 c.info_foreground.0
             } else {
                 ink
-            }),
+            };
+            // The search's match marked in the name (lowercase byte offsets match the
+            // name's only when lowering keeps lengths; otherwise it stays plain).
+            let at = (!needle.is_empty())
+                .then(|| r.name.to_lowercase())
+                .filter(|lower| lower.len() == r.name.len())
+                .and_then(|lower| lower.find(needle));
+            match at {
+                Some(at) => {
+                    // Three pieces side by side, each with its own ink (a row's ink
+                    // cascades over rich runs).
+                    let end = at + needle.len();
+                    let piece = |s: &str| text(s.to_owned()).text_size(12.0);
+                    row()
+                        .grow(1.0)
+                        .min_w(0.0)
+                        .child(piece(&r.name[..at]).color(tint))
+                        .child(
+                            piece(&r.name[at..end])
+                                .weight(700)
+                                .color(c.warning_foreground.0),
+                        )
+                        .child(piece(&r.name[end..]).color(tint))
+                }
+                None => text(r.name.clone()).text_size(12.0).grow(1.0).color(tint),
+            }
+        }
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
