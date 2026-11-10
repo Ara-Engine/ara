@@ -2069,6 +2069,58 @@ fn material_inputs_show_their_defaults_inline_and_edit_in_place() {
 }
 
 #[test]
+fn the_material_source_view_edits_the_graph_as_text_and_wires_reroute() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/text.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc.clone()}));
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    rt.touch(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    press(&mut rt, "material/view/source");
+    assert!(rt.find("material/source").is_some(), "the text shows");
+    assert!(
+        !rt.state()
+            .graph
+            .source
+            .clone()
+            .unwrap_or_default()
+            .is_empty()
+    );
+    // Typed text applies to the document; the graph follows.
+    let showcase = crate::asset_tools::node_preview::SHOWCASE.to_owned();
+    rt.update(|s| s.graph.source = Some(showcase.clone()));
+    settle(&mut rt);
+    press(&mut rt, "material/source/apply");
+    let graph = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        ara_graph::Graph::from_document(workspace.doc(&doc).unwrap()).unwrap()
+    };
+    assert!(
+        graph(&rt).edges.len() > 1,
+        "the text's wires are in the graph"
+    );
+    // Back to the graph: a picked wire gets a reroute point.
+    press(&mut rt, "material/view/graph");
+    rt.touch(|s| super::graph::sync(s, "material"));
+    let wire = graph(&rt).edges.keys().next().unwrap().clone();
+    rt.update(|s| s.graph.pick(wire.clone()));
+    rt.update(|s| super::commands::run(s, "graph.reroute", &crate::catalog::Target::None));
+    assert_eq!(graph(&rt).editor.reroutes.get(&wire).map(Vec::len), Some(1));
+}
+
+#[test]
 fn c_wraps_the_selection_in_a_comment_that_is_titled_and_removed_alone() {
     let mut rt = open();
     rt.touch(|s| {

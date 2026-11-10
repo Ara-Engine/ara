@@ -2631,4 +2631,11 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Undo your steps after this one, and this one (target: the transaction).",
     },
+    Command {
+        id: "graph.reroute",
+        title: "Add Reroute",
+        icon: "git-compare",
+        keys: "",
+        summary: "Add a reroute point to a wire.",
+    },
 ];

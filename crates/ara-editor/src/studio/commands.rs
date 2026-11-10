@@ -1164,6 +1164,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             super::graph::comment_selection(s);
             Ok(())
         }
+        "graph.reroute" => match super::graph::reroute_selection(s) {
+            true => Ok(()),
+            false => Err("Select a wire, or a node with an input wire, first".into()),
+        },
         "graph.select_all" => {
             super::graph::select_all(s);
             Ok(())

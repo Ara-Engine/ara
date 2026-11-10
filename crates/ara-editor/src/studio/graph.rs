@@ -46,6 +46,9 @@ pub struct Page {
     pub adding: Option<Adding>,
     /// An input's inline default being typed, while its field is open.
     pub editing: Option<Editing>,
+    /// The Material page shows its source (the material as DSL text) instead of the graph:
+    /// the text being edited, unapplied.
+    pub source: Option<String>,
 }
 
 impl Page {
@@ -381,7 +384,26 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 .color(c.foreground.0),
         )
         .child(el().grow(1.0))
-        .children((!animation).then_some(add))
+        .children((!animation).then(|| {
+            // Graph or Source: the same document, as nodes or as text.
+            let on = usize::from(s.graph.source.is_some());
+            let doc = doc.clone();
+            segmented(
+                l,
+                &[
+                    ("material/view/graph", Some(icons::WORKFLOW), "Graph"),
+                    ("material/view/source", Some(icons::FILE_CODE), "Source"),
+                ],
+                on,
+                move |i| {
+                    let doc = doc.clone();
+                    move |s: &mut Studio| {
+                        s.graph.source = (i == 1).then(|| source_text(s, &doc).unwrap_or_default());
+                    }
+                },
+            )
+        }))
+        .children((!animation && s.graph.source.is_none()).then_some(add))
         .children(animation.then(|| {
             let edit = |kind: &'static str, label: &str, glyph| {
                 let doc = doc.clone();
@@ -460,6 +482,12 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             }
             _ => Handled::No,
         });
+    if let (false, Some(text)) = (animation, s.graph.source.as_ref()) {
+        return col()
+            .grow(1.0)
+            .child(toolbar)
+            .child(source_view(s, &doc, text));
+    }
     let body = row().grow(1.0).min_h(0.0).child(
         col()
             .grow(1.0)
@@ -483,6 +511,84 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
         body.child(details(s, &doc))
     };
     col().grow(1.0).child(toolbar).child(body)
+}
+
+/// Material `doc` as DSL text (what the Source view edits), if it reads as a material.
+fn source_text(s: &Studio, doc: &str) -> Option<String> {
+    let graph =
+        ara_graph::Graph::from_document(s.editor.host.store().workspace().doc(doc)?).ok()?;
+    let material = ara_material::Material::from_graph(&graph).ok()?;
+    ara_material::dsl::print(&material).ok()
+}
+
+/// The Source view: the material as text, edited in place; Apply (⌘/Ctrl+Enter) writes it
+/// back as one undo step (the graph follows), Revert takes the document's text again.
+fn source_view(s: &Studio, doc: &str, draft: &str) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let changed = source_text(s, doc).as_deref() != Some(draft);
+    let apply = {
+        let doc = doc.to_owned();
+        move |s: &mut Studio, text: &str| {
+            let command = json!({"cmd": "material.text.apply", "args": {"text": text}});
+            match s
+                .editor
+                .apply_to(&doc, vec![command], "Edit material source")
+            {
+                Ok(_) => super::note(s, "Material source applied"),
+                Err(error) => s.editor.report_failure(&error),
+            }
+        }
+    };
+    let (typed, revert_doc) = (draft.to_owned(), doc.to_owned());
+    let on_apply = apply.clone();
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .pad(8.0)
+        .gap(6.0)
+        .child(
+            stillkit::el::text_area("material/source")
+                .value(draft.to_owned())
+                .family(mono())
+                .text_size(12.5)
+                .grow(1.0)
+                .w_full()
+                .pad(10.0)
+                .radius(super::style::RADIUS)
+                .fill(super::style::tones(l).well)
+                .on_input(|s: &mut Studio, t| s.graph.source = Some(t.to_owned()))
+                .on_submit(move |s: &mut Studio, t| apply(s, t)),
+        )
+        .child(
+            row()
+                .gap(6.0)
+                .align(Align::Center)
+                .child(
+                    text(if changed {
+                        "Edited: Apply writes it back (⌘/Ctrl+Enter)"
+                    } else {
+                        "The material as text: the same document as the graph"
+                    })
+                    .text_size(11.5)
+                    .color(c.muted_foreground.0)
+                    .grow(1.0),
+                )
+                .child(enabled(
+                    button(l, Tone::Ghost, Size::Sm, None, "Revert")
+                        .key("material/source/revert")
+                        .on_press(move |s: &mut Studio| {
+                            s.graph.source = Some(source_text(s, &revert_doc).unwrap_or_default())
+                        }),
+                    changed,
+                ))
+                .child(enabled(
+                    button(l, Tone::Primary, Size::Sm, Some(icons::CHECK), "Apply")
+                        .key("material/source/apply")
+                        .on_press(move |s: &mut Studio| on_apply(s, &typed)),
+                    changed,
+                )),
+        )
 }
 
 /// The parameter types the Parameters band's + offers (Shader Graph's Blackboard), as
@@ -976,6 +1082,22 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         return false;
     };
     match e.phase {
+        // A double-click on a wire adds a reroute point there (Unreal's), one undo step.
+        PointerPhase::Down
+            if e.clicks == 2
+                && e.button == stillkit::Button::Left
+                && shown.canvas.node_at(p, rect).is_none() =>
+        {
+            let Some((wire, segment)) = shown.canvas.wire_at(p, rect) else {
+                return false;
+            };
+            let (doc, at) = (shown.doc.clone(), shown.canvas.world(p, rect));
+            edit_layout(s, &doc, |layout| {
+                let points = layout.reroutes.entry(wire).or_default();
+                points.insert(segment.min(points.len()), at);
+            });
+            return true;
+        }
         PointerPhase::Down => {
             let button = match e.button {
                 stillkit::Button::Left => 1,
@@ -1361,6 +1483,44 @@ fn set_value(s: &mut Studio, doc: &str, node: &str, typed: &str) {
     {
         s.editor.report_failure(&error);
     }
+}
+
+/// Adds a reroute point midway along the selected wire (or the first wire into a selected
+/// node), as one undo step; whether there was one.
+pub(super) fn reroute_selection(s: &mut Studio) -> bool {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return false;
+    };
+    let graph = shown.canvas.graph();
+    let wire = graph
+        .edges
+        .iter()
+        .find(|(id, _)| shown.canvas.selection.contains(*id))
+        .or_else(|| {
+            graph
+                .edges
+                .iter()
+                .find(|(_, e)| shown.canvas.selection.contains(&e.to.node))
+        });
+    let Some((id, edge)) = wire else {
+        return false;
+    };
+    let at = |node: &str| {
+        graph
+            .editor
+            .positions
+            .get(node)
+            .copied()
+            .unwrap_or([0.0, 0.0])
+    };
+    let (a, b) = (at(&edge.from.node), at(&edge.to.node));
+    // From the source node's right side (a node is about 216 wide) to the target's left.
+    let mid = [(a[0] + 216.0 + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+    let (doc, id) = (shown.doc.clone(), id.clone());
+    edit_layout(s, &doc, |layout| {
+        layout.reroutes.entry(id).or_default().push(mid)
+    });
+    true
 }
 
 /// Changes the graph's layout (comments, groups, reroutes) as one undo step.
