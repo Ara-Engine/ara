@@ -344,6 +344,8 @@ pub struct Local {
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
     pub lighting_menu: Option<&'static str>,
+    /// The light whose colour-temperature menu is open in the Lighting list.
+    pub lighting_color: Option<String>,
     /// The Play options menu (mode, clients, network, Simulate, Eject, Keep), open.
     pub play_menu: bool,
     /// File operations still running on host jobs: each job and what it does.
@@ -355,10 +357,17 @@ pub struct Local {
     pub note: Option<(String, std::time::Instant)>,
     /// A one-field question open (Save Layout As): what it asks, and the text typed.
     pub prompt: Option<Prompt>,
+    /// Drop to Surface asked for: the host drops the selection at its next pass.
+    pub drop_to_surface: bool,
     /// The diagnostic service's last answer (Tools › Why?): the question and its lines.
     pub why: Option<(String, Vec<String>)>,
     /// The Agents panel shows how to connect one even while agents are connected.
     pub agents_connect: bool,
+    /// Each agent client's detection and setup (the Agents panel's Connect rows).
+    pub(crate) agent_setups: crate::agent_setup::AgentSetups,
+    /// Each agent client's mark, by client and whether for the light scheme.
+    pub(crate) agent_logos:
+        std::collections::BTreeMap<(ara_agents::Client, bool), std::sync::Arc<stillkit::Image>>,
     /// The Profiler hides the baseline comparison (Profiler › Compare off).
     pub profiler_hide_compare: bool,
     /// Opened in the background (`--background`): fields are not given keyboard focus (on
@@ -382,6 +391,12 @@ pub struct Local {
     pub history_open: Option<String>,
     /// The History search: transactions whose description or author match.
     pub history_search: String,
+    /// Which page of the History list shows, newest first (History › Older and Newer).
+    pub history_page: usize,
+    /// The last Assets search cleared this session (Restore Removed Assets Search).
+    pub assets_cleared_query: Option<String>,
+    /// The renderer's latest reflection probe report (Lighting › Refresh Probe Status).
+    pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
@@ -406,6 +421,12 @@ pub struct Local {
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.
     pub flying: bool,
+    /// The command Settings › Keyboard shortcuts is recording a chord for.
+    pub recording_shortcut: Option<&'static str>,
+    /// A middle-button pan or an Alt+left orbit is under way.
+    pub navigating: bool,
+    /// Pilot Selected Camera: the Camera the Scene view moves, and its committed steps.
+    pub(crate) pilot: crate::pilot::Pilot,
     /// Fly keys held down (W A S D Q E, as virtual keys).
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.

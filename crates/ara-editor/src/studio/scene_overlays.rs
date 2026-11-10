@@ -364,6 +364,8 @@ pub(super) fn measure(s: &mut Studio) {
 
 /// Overlays that do not fit along their edge, shown collapsed to their icons until the
 /// view has room again (Unity's overflow): the ones farthest from their corners go first.
+/// An edge holds two stacks, one from each corner, each laid out as `stack` lays it out
+/// (an overlay's offset is its gap from the corner), so both must fit side by side.
 fn squeezed(s: &Studio) -> std::collections::BTreeSet<&'static str> {
     let mut out = std::collections::BTreeSet::new();
     let Some(view) = s.local.rects.get("scene/view") else {
@@ -374,8 +376,8 @@ fn squeezed(s: &Studio) -> std::collections::BTreeSet<&'static str> {
             Edge::Top | Edge::Bottom => view.width(),
             Edge::Left | Edge::Right => view.height(),
         } - 2.0 * INSET;
-        // This edge's shown overlays, nearest their corner first, each with its length.
-        let mut items: Vec<(f32, &'static str, f32)> = OVERLAYS
+        // This edge's shown overlays: which corner, offset from it, id, natural length.
+        let mut items: Vec<(bool, f32, &'static str, f32)> = OVERLAYS
             .iter()
             .filter_map(|d| {
                 let at = dock(s, d.id);
@@ -389,20 +391,44 @@ fn squeezed(s: &Studio) -> std::collections::BTreeSet<&'static str> {
                             .copied()
                             .unwrap_or(COLLAPSED),
                     };
-                    (at.offset, d.id, length)
+                    (at.end, at.offset, d.id, length)
                 })
             })
             .collect();
-        items.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let mut total: f32 = items.iter().map(|(_, _, l)| l + 6.0).sum();
-        for (_, id, length) in items {
-            if total <= room {
+        items.sort_by(|a, b| a.1.total_cmp(&b.1));
+        // How far both stacks reach along the edge with `out` collapsed.
+        let reach = |out: &std::collections::BTreeSet<&'static str>| -> f32 {
+            let side = |end: bool| {
+                let mut at = 0.0_f32;
+                let mut first = true;
+                for (_, offset, id, length) in items.iter().filter(|i| i.0 == end) {
+                    let gap = (offset - at).max(if first { 0.0 } else { 6.0 });
+                    at += gap + if out.contains(id) { COLLAPSED } else { *length };
+                    first = false;
+                }
+                at
+            };
+            let (start, end) = (side(false), side(true));
+            start + end + if start > 0.0 && end > 0.0 { 6.0 } else { 0.0 }
+        };
+        // Farthest from its corner first: where each starts along its stack, as laid out.
+        let mut order: Vec<(f32, &'static str)> = Vec::new();
+        for end in [false, true] {
+            let mut at = 0.0_f32;
+            for (i, (_, offset, id, length)) in items.iter().filter(|i| i.0 == end).enumerate() {
+                at += (offset - at).max(if i == 0 { 0.0 } else { 6.0 });
+                if *length > COLLAPSED {
+                    order.push((at, id));
+                }
+                at += length;
+            }
+        }
+        order.sort_by(|a, b| b.0.total_cmp(&a.0));
+        for (_, id) in order {
+            if reach(&out) <= room {
                 break;
             }
-            if length > COLLAPSED {
-                total -= length - COLLAPSED;
-                out.insert(id);
-            }
+            out.insert(id);
         }
     }
     out

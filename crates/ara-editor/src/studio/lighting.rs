@@ -148,7 +148,20 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(search)
         .child(add)
         .child(presets)
-        .child(capture);
+        .child(capture)
+        .child(
+            icon_button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                icons::ACTIVITY,
+                "Refresh probe status",
+            )
+            .key("lighting/probe/refresh")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "lighting.probe.refresh", &crate::catalog::Target::None)
+            }),
+        );
     let body = if rows.is_empty() {
         col().grow(1.0).justify(Justify::Center).child(empty(
             l,
@@ -205,6 +218,13 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                                     .wrap(1),
                             ),
                     )
+                    .children(mixer(s, &r.id))
+                    .children(probe_state(s, &r.id).map(|state| {
+                        text(state)
+                            .text_size(11.0)
+                            .color(c.muted_foreground.0)
+                            .tooltip("The renderer's capture of this probe")
+                    }))
                     .children(r.priority.map(|p| {
                         text(format!("{p:.0}"))
                             .text_size(11.0)
@@ -221,6 +241,175 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(toolbar)
         .child(body)
         .child(el().h(4.0))
+}
+
+/// Colour temperatures a light can take from the Lighting list, warmest first.
+const TEMPERATURES: &[(&str, f32)] = &[
+    ("Candle", 1900.0),
+    ("Tungsten", 2700.0),
+    ("Halogen", 3200.0),
+    ("Fluorescent", 4100.0),
+    ("Daylight", 5600.0),
+    ("Overcast", 6500.0),
+    ("Clear sky", 10000.0),
+];
+
+/// A black body's colour at `kelvin` as linear RGB, brightest channel 1 (Tanner
+/// Helland's fit of the Planckian locus, then the sRGB transfer undone).
+pub(super) fn kelvin(kelvin: f32) -> [f32; 3] {
+    let t = (kelvin / 100.0).clamp(10.0, 400.0);
+    let red = match t <= 66.0 {
+        true => 255.0,
+        false => 329.698_73 * (t - 60.0).powf(-0.133_204_76),
+    };
+    let green = match t <= 66.0 {
+        true => 99.470_8 * t.ln() - 161.119_57,
+        false => 288.122_16 * (t - 60.0).powf(-0.075_514_85),
+    };
+    let blue = match t {
+        t if t >= 66.0 => 255.0,
+        t if t <= 19.0 => 0.0,
+        t => 138.517_73 * (t - 10.0).ln() - 305.044_8,
+    };
+    let linear = [red, green, blue].map(|c| {
+        let c = (c / 255.0).clamp(0.0, 1.0);
+        match c <= 0.04045 {
+            true => c / 12.92,
+            false => ((c + 0.055) / 1.055).powf(2.4),
+        }
+    });
+    let top = linear.iter().copied().fold(f32::MIN, f32::max).max(1e-6);
+    linear.map(|c| c / top)
+}
+
+/// A light's row in the Lighting list as Unreal's Light Mixer has it: shown in the Scene
+/// (the viewport's eye), its intensity in its units (typed, Enter applies), and its
+/// colour, with colour temperatures to pick. Other rows have none.
+fn mixer(s: &Studio, id: &str) -> Option<El<Studio>> {
+    use ara_runtime::components::{Light, LightKind, LightUnits};
+    let record = s.resolved.get(id)?.record.get("Light")?;
+    let light: Light = serde_json::from_value(record.clone()).unwrap_or_default();
+    let l = &s.look;
+    let c = &l.c;
+    let hidden = s.editor.state.hidden.contains(id);
+    let units = match (light.kind, light.units) {
+        (LightKind::Directional, _) => "lux",
+        (_, LightUnits::Lumens) => "lm",
+        (_, LightUnits::Candela) => "cd",
+        (_, LightUnits::Nits) => "nits",
+    };
+    let eye = {
+        let id = id.to_owned();
+        icon_button(
+            l,
+            Tone::Ghost,
+            Size::Sm,
+            if hidden { icons::EYE_OFF } else { icons::EYE },
+            if hidden {
+                "Show in the Scene"
+            } else {
+                "Hide in the Scene"
+            },
+        )
+        .key(format!("lighting/{id}/eye"))
+        .on_press(move |s: &mut Studio| {
+            s.act(
+                "editor.visibility",
+                serde_json::json!({"entity": id, "enabled": !hidden}),
+            )
+        })
+    };
+    let intensity = {
+        let id = id.to_owned();
+        field(
+            l,
+            Size::Sm,
+            format!("lighting/{id}/intensity"),
+            None,
+            "",
+            &format!("{}", (light.intensity * 100.0).round() / 100.0),
+            move |f| {
+                f.on_submit(move |s: &mut Studio, t| match t.trim().parse::<f32>() {
+                    Ok(v) if v.is_finite() && v >= 0.0 => s.apply(
+                        vec![serde_json::json!({"cmd": "property.set", "args": {"entity": id, "path": "Light.intensity", "value": v}})],
+                        "Set light intensity",
+                    ),
+                    _ => super::note(s, "Intensity is a number, zero or more"),
+                })
+            },
+        )
+        .w(64.0)
+        .tooltip("Intensity")
+    };
+    let [r, g, b, _] = light.color.0;
+    let swatch = {
+        let id = id.to_owned();
+        let open = s.local.lighting_color.as_deref() == Some(id.as_str());
+        let mut swatch = el()
+            .key(format!("lighting/{id}/color"))
+            .size(18.0)
+            .radius(4.0)
+            .fill(stillkit::Rgba::new(r, g, b, 1.0))
+            .border(1.0, c.border.0)
+            .label("Colour temperature")
+            .tooltip("Colour temperature")
+            .on_press({
+                let id = id.clone();
+                move |s: &mut Studio| {
+                    s.local.lighting_color =
+                        match s.local.lighting_color.as_deref() == Some(id.as_str()) {
+                            true => None,
+                            false => Some(id.clone()),
+                        };
+                }
+            });
+        if open {
+            let items = TEMPERATURES
+                .iter()
+                .map(|(name, k)| {
+                    let (id, k) = (id.to_owned(), *k);
+                    let [r, g, b] = kelvin(k);
+                    menu_item(
+                        l,
+                        &format!("lighting/{id}/kelvin/{k}"),
+                        None,
+                        &format!("{name} · {k:.0} K"),
+                        None,
+                        false,
+                    )
+                    .child(el().size(12.0).radius(3.0).fill(stillkit::Rgba::new(r, g, b, 1.0)))
+                    .on_press(move |s: &mut Studio| {
+                        s.local.lighting_color = None;
+                        s.apply(
+                            vec![serde_json::json!({"cmd": "property.set", "args": {"entity": id, "path": "Light.color", "value": [r, g, b, 1.0]}})],
+                            "Set light colour temperature",
+                        );
+                    })
+                })
+                .collect();
+            swatch = swatch.overlay(
+                menu(menu_panel(l, items))
+                    .side(Side::Bottom)
+                    .align(Align::End)
+                    .on_dismiss(|s: &mut Studio| s.local.lighting_color = None),
+            );
+        }
+        swatch
+    };
+    Some(
+        row()
+            .gap(6.0)
+            .align(Align::Center)
+            .child(eye)
+            .child(intensity)
+            .child(
+                text(units)
+                    .text_size(11.0)
+                    .w(28.0)
+                    .color(c.muted_foreground.0),
+            )
+            .child(swatch),
+    )
 }
 
 /// The legacy rows' icon names as icons.
@@ -315,6 +504,74 @@ pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<
             n => format!("Recapturing {n} reflection probes"),
         },
     );
+    Ok(())
+}
+
+/// Asks the renderer where each of the scene's reflection probes stands (captured, stale,
+/// capturing, failed) for the Lighting list.
+pub(super) fn refresh_probes(s: &mut Studio) -> ara_ui::Result<()> {
+    let doc = s.editor.state.doc.clone();
+    let answer = s.editor.action(
+        "render.probes.query",
+        serde_json::json!({"doc": doc, "since": null}),
+    )?;
+    let snapshot: ara_runtime_render::probes::ProbeSnapshot = serde_json::from_value(answer)
+        .map_err(|e| format!("The renderer's probe report could not be read: {e}"))?;
+    if snapshot.probes.iter().any(|row| row.doc != doc) {
+        return Err("The probe report was for another scene".into());
+    }
+    s.local.probe_status = Some(snapshot);
+    Ok(())
+}
+
+/// What the renderer last said of `entity`'s probe capture, in a few words.
+fn probe_state(s: &Studio, entity: &str) -> Option<String> {
+    use ara_runtime_render::probes::ProbeState;
+    let row = s
+        .local
+        .probe_status
+        .as_ref()?
+        .probes
+        .iter()
+        .find(|r| r.entity == entity)?;
+    let state = match row.state {
+        ProbeState::Idle if row.generation == 0 => "Not captured".to_owned(),
+        ProbeState::Idle | ProbeState::Done => "Captured".to_owned(),
+        ProbeState::Queued => "Queued".to_owned(),
+        ProbeState::Capturing | ProbeState::Progress => match row.progress {
+            Some(p) => format!("Capturing {:.0}%", p * 100.0),
+            None => "Capturing".to_owned(),
+        },
+        ProbeState::Cancelled => "Cancelled".to_owned(),
+        ProbeState::Failed => "Failed".to_owned(),
+    };
+    Some(if row.stale {
+        format!("{state} · stale")
+    } else {
+        state
+    })
+}
+
+/// The renderer's report on one probe as JSON, for the clipboard (bug reports, agents).
+pub(super) fn copy_probe(s: &mut Studio, entity: &str) -> ara_ui::Result<()> {
+    let snapshot = s
+        .local
+        .probe_status
+        .as_ref()
+        .ok_or("Refresh the probe status first")?;
+    let row = snapshot
+        .probes
+        .iter()
+        .find(|r| r.entity == entity)
+        .ok_or("The renderer has not reported that reflection probe yet")?;
+    let report = serde_json::json!({
+        "doc": s.editor.state.doc,
+        "entity": entity,
+        "version": snapshot.version,
+        "capabilities": snapshot.capabilities,
+        "probe": row,
+    });
+    s.local.copy = Some(ara_json::to_canonical_string(&report));
     Ok(())
 }
 

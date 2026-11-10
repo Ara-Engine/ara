@@ -1,0 +1,3194 @@
+{
+  "date": "2026-11-10",
+  "scope": "Direct production PublishedSnapshot.TextHash allocation probe, four fresh processes ABBA; captured-text fingerprint only, not whole compiler or Play latency.",
+  "timings_accepted": false,
+  "allocation_scope": "GC.GetAllocatedBytesForCurrentThread deltas around repeated warmed synchronous hash calls; result strings are included; runtime is CoreCLR 10.0.14.",
+  "source_files_sha256": {
+    "target/script-preparation-tail-20261110/hash-probe/bin/Release/net10.0/Probe.dll": "188b081b2b58e3f2d08509881441b818f7a3fb7925a869ffda69e21d6e87926f",
+    "target/script-preparation-tail-20261110/hash-probe/Program.cs": "6efe11ebefe81f5aae485f1f90511d39fbb12300cf7a2229ec59b727e9873aab",
+    "dotnet/src/Ara.CompileServer/PublishedSnapshot.cs": "8272b4d4b8bcf322ca9749e67d10fed1a19c3af27e822b535ff18d317de9c1fb"
+  },
+  "baseline_manifest": {
+    "source_commit": "7ede3d64194c9d37ff657c9b60b6e5ca69b1071e",
+    "files": {
+      "Ara.Analyzers.pdb": "4aa69612190120e34fc153c6039aa0b02b75d557fe88ffe900454872440c64e0",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "Ara.Runtime.pdb": "ad9580ee8275974358ff7285e74eb403cd5437bd59f9e67ede5a17c8acf0cdc9",
+      "Ara.CompileServer.xml": "b2ba4951ba2566a5c1eaccd5e0b013c4b6927659f02f8b85912962be7deaef39",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Ara.Analyzers.dll": "a14bd058732ed71047a66fb68b8a2ce109e7e1d3f16280b5c86c713b24192aa6",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Runtime.dll": "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "Ara.Editor.dll": "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Ara.CompileServer.pdb": "e740b86731a312858cf08dae2c6c64cc5232df8c54b55bf108b5242a68e7ad42",
+      "Ara.Analyzers.CodeFixes.pdb": "6b02196279341b41299cb6890ea1ea7004ff91c51fe95864b67b8e8cb6492cfd",
+      "Ara.Generators.pdb": "b6ae6237f59f522dc10a2f1bb795324e8e98f90274e17a943f71520e90ecb772",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.Editor.pdb": "0b66bb4984d7a92703cc1a04dde4ec066b7d2c6530385deef976c1ca0df3d35f",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.Analyzers.CodeFixes.dll": "c844113ecc9f7d11cae719677d4c04f0d5803fd36e126c3b9a299036e20e5b83",
+      "Ara.CompileServer.dll": "484abbb0dabbdb65a3512121624df319b7fc278a6f5cb997aabe2cffa88804b1",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.Generators.dll": "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360"
+    },
+    "PublishedSnapshot.cs": "ed9b72d90b23859ddf9827eac76f78f65747ebede58eba562d3393ab6e33ccb4"
+  },
+  "candidate_manifest": {
+    "base_source_commit": "7ede3d64194c9d37ff657c9b60b6e5ca69b1071e",
+    "patch": "PublishedSnapshot.TextHash only, stack/pooled UTF8 bytes and stack digest",
+    "files": {
+      "Ara.Analyzers.pdb": "4aa69612190120e34fc153c6039aa0b02b75d557fe88ffe900454872440c64e0",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "Ara.Runtime.pdb": "ad9580ee8275974358ff7285e74eb403cd5437bd59f9e67ede5a17c8acf0cdc9",
+      "Ara.CompileServer.xml": "4b4650c6296d3a63130e46eecaf499c680e691f6d615decd6e970db7b16c8333",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Ara.Analyzers.dll": "a14bd058732ed71047a66fb68b8a2ce109e7e1d3f16280b5c86c713b24192aa6",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Runtime.dll": "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "Ara.Editor.dll": "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Ara.CompileServer.pdb": "b63bf347fcee9f0e708762ca2fa9ff67f3f9fda716332f0224dcb7b4493c33f4",
+      "Ara.Analyzers.CodeFixes.pdb": "6b02196279341b41299cb6890ea1ea7004ff91c51fe95864b67b8e8cb6492cfd",
+      "Ara.Generators.pdb": "b6ae6237f59f522dc10a2f1bb795324e8e98f90274e17a943f71520e90ecb772",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.Editor.pdb": "0b66bb4984d7a92703cc1a04dde4ec066b7d2c6530385deef976c1ca0df3d35f",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.Analyzers.CodeFixes.dll": "c844113ecc9f7d11cae719677d4c04f0d5803fd36e126c3b9a299036e20e5b83",
+      "Ara.CompileServer.dll": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.Generators.dll": "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360"
+    },
+    "PublishedSnapshot.cs": "8272b4d4b8bcf322ca9749e67d10fed1a19c3af27e822b535ff18d317de9c1fb"
+  },
+  "processes": [
+    {
+      "arm": "baseline",
+      "index": 0,
+      "result": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-baseline-sdk/Ara.CompileServer.dll",
+        "serverHash": "484abbb0dabbdb65a3512121624df319b7fc278a6f5cb997aabe2cffa88804b1",
+        "rows": [
+          {
+            "name": "small_ascii",
+            "utf8Bytes": 384,
+            "hash": "a94f3676696d2ad7d4991b34a479c606d0cf14a4f67ec8e15ea36244c9ab27c8",
+            "samples": [
+              {
+                "count": 10922,
+                "milliseconds": 3.8555,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 6.2577,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 4.7612,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6757,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.8064,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4957,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6181,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5544,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6172,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7291,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7482,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.9055,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.8194,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.796,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7156,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5966,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.561,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5958,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5567,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.531,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              }
+            ]
+          },
+          {
+            "name": "small_unicode",
+            "utf8Bytes": 768,
+            "hash": "1afa2d8e30c0e5ccc99ec01d087af7d8eb3ee2a9e25791b1a2189085c6b016ea",
+            "samples": [
+              {
+                "count": 5461,
+                "milliseconds": 5.075,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.116,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1229,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.092,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1909,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1496,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.061,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1348,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0382,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.147,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.4941,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0272,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.2527,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1135,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0332,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1696,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0972,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.3346,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1783,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1776,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              }
+            ]
+          },
+          {
+            "name": "boundary_1024",
+            "utf8Bytes": 1024,
+            "hash": "2edc986847e209b4016e141a6dc8716d3207350f416969382d431539bf292e4a",
+            "samples": [
+              {
+                "count": 4096,
+                "milliseconds": 2.2766,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 3.4751,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 3.0809,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2494,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3677,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2457,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3051,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3763,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.379,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3539,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2463,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3132,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2992,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2961,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3225,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3011,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2484,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2988,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2474,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2943,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              }
+            ]
+          },
+          {
+            "name": "boundary_1025",
+            "utf8Bytes": 1025,
+            "hash": "4a82297889eb505cf6b5cbdf69977afab4632d6557539782f657bd7dc78091a5",
+            "samples": [
+              {
+                "count": 4092,
+                "milliseconds": 2.3542,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3149,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3721,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2568,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3461,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3115,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2576,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3856,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.5709,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2453,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.4103,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2395,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2989,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2703,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2015,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2788,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.211,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2663,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2574,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2114,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              }
+            ]
+          },
+          {
+            "name": "medium_16KiB",
+            "utf8Bytes": 16384,
+            "hash": "f3336bea752b5a28743033dd2c844a4a63fba08871aaee2586a2bf2d69be83a2",
+            "samples": [
+              {
+                "count": 256,
+                "milliseconds": 1.593,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5298,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6233,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5447,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6214,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5373,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5983,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5415,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6613,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.67,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.8321,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.8527,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.7347,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.7861,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.693,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.7773,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.8276,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.756,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5734,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6299,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              }
+            ]
+          },
+          {
+            "name": "large_512KiB",
+            "utf8Bytes": 524288,
+            "hash": "85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba",
+            "samples": [
+              {
+                "count": 20,
+                "milliseconds": 4.063,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.6642,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.976,
+                "allocationBytes": 10498616,
+                "bytesPerCall": 524930.8
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1038,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.2369,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1512,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.2801,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.2008,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0852,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0579,
+                "allocationBytes": 10506688,
+                "bytesPerCall": 525334.4
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.4496,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.302,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0489,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 5.2011,
+                "allocationBytes": 10514680,
+                "bytesPerCall": 525734
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.3097,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0234,
+                "allocationBytes": 10506688,
+                "bytesPerCall": 525334.4
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.166,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0072,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.9972,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1684,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "index": 1,
+      "result": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "rows": [
+          {
+            "name": "small_ascii",
+            "utf8Bytes": 384,
+            "hash": "a94f3676696d2ad7d4991b34a479c606d0cf14a4f67ec8e15ea36244c9ab27c8",
+            "samples": [
+              {
+                "count": 10922,
+                "milliseconds": 3.6819,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5967,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5455,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6052,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7455,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4722,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.573,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4876,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5202,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.616,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5488,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5242,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4896,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.486,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5518,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4999,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.483,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5146,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4696,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5695,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "small_unicode",
+            "utf8Bytes": 768,
+            "hash": "1afa2d8e30c0e5ccc99ec01d087af7d8eb3ee2a9e25791b1a2189085c6b016ea",
+            "samples": [
+              {
+                "count": 5461,
+                "milliseconds": 5.0932,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.135,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.7481,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.7388,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8737,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0894,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.031,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0285,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9078,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.7977,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8577,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8993,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9116,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.922,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0078,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.7572,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.7277,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8652,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8722,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.923,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "boundary_1024",
+            "utf8Bytes": 1024,
+            "hash": "2edc986847e209b4016e141a6dc8716d3207350f416969382d431539bf292e4a",
+            "samples": [
+              {
+                "count": 4096,
+                "milliseconds": 2.3172,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2321,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2135,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.189,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.223,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1946,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1909,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1928,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1962,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2123,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.188,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1822,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1878,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3161,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1741,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1775,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.214,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1862,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1901,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2022,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "boundary_1025",
+            "utf8Bytes": 1025,
+            "hash": "4a82297889eb505cf6b5cbdf69977afab4632d6557539782f657bd7dc78091a5",
+            "samples": [
+              {
+                "count": 4092,
+                "milliseconds": 2.2395,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2187,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2347,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2408,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2082,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2287,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1989,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3148,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2027,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1965,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1965,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2113,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2047,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.241,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2054,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1953,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2021,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2009,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1954,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "medium_16KiB",
+            "utf8Bytes": 16384,
+            "hash": "f3336bea752b5a28743033dd2c844a4a63fba08871aaee2586a2bf2d69be83a2",
+            "samples": [
+              {
+                "count": 256,
+                "milliseconds": 1.4975,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4802,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.481,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4752,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4742,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4742,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4801,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4751,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5945,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4787,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4765,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4762,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4737,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4934,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4902,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5034,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4812,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4753,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4773,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4768,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "large_512KiB",
+            "utf8Bytes": 524288,
+            "hash": "85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba",
+            "samples": [
+              {
+                "count": 20,
+                "milliseconds": 3.6198,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.625,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6637,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6719,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.652,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6488,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.659,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6348,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6672,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6299,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6819,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6165,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.614,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6185,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6144,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6246,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6113,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.8131,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.7632,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.7574,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "index": 2,
+      "result": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "rows": [
+          {
+            "name": "small_ascii",
+            "utf8Bytes": 384,
+            "hash": "a94f3676696d2ad7d4991b34a479c606d0cf14a4f67ec8e15ea36244c9ab27c8",
+            "samples": [
+              {
+                "count": 10922,
+                "milliseconds": 3.5664,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5526,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7241,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5686,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7334,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4354,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.432,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5219,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4203,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5255,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4891,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.46,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4926,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4709,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6001,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6543,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6782,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6354,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.8755,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4827,
+                "allocationBytes": 1660144,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "small_unicode",
+            "utf8Bytes": 768,
+            "hash": "1afa2d8e30c0e5ccc99ec01d087af7d8eb3ee2a9e25791b1a2189085c6b016ea",
+            "samples": [
+              {
+                "count": 5461,
+                "milliseconds": 5.0447,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0519,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0874,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9247,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8612,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8563,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.886,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0082,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0566,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0643,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9717,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.91,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9213,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8656,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9018,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8686,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8585,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8701,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8526,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8512,
+                "allocationBytes": 830072,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "boundary_1024",
+            "utf8Bytes": 1024,
+            "hash": "2edc986847e209b4016e141a6dc8716d3207350f416969382d431539bf292e4a",
+            "samples": [
+              {
+                "count": 4096,
+                "milliseconds": 2.3036,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1875,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1847,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2104,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1912,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1912,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1988,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.1919,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2119,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2186,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.211,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2115,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2021,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3902,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2819,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3065,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2327,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2415,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2407,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2358,
+                "allocationBytes": 622592,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "boundary_1025",
+            "utf8Bytes": 1025,
+            "hash": "4a82297889eb505cf6b5cbdf69977afab4632d6557539782f657bd7dc78091a5",
+            "samples": [
+              {
+                "count": 4092,
+                "milliseconds": 2.2677,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2542,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2675,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.254,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.1998,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2131,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.199,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.4001,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2231,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2125,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2149,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2886,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2086,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2033,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.4284,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2095,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.211,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2037,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2212,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2522,
+                "allocationBytes": 621984,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "medium_16KiB",
+            "utf8Bytes": 16384,
+            "hash": "f3336bea752b5a28743033dd2c844a4a63fba08871aaee2586a2bf2d69be83a2",
+            "samples": [
+              {
+                "count": 256,
+                "milliseconds": 1.4803,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4752,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4765,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4773,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4754,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4964,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4813,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4775,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5967,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4795,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4772,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.481,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4861,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.476,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4822,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4745,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4752,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4793,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4907,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.4748,
+                "allocationBytes": 38912,
+                "bytesPerCall": 152
+              }
+            ]
+          },
+          {
+            "name": "large_512KiB",
+            "utf8Bytes": 524288,
+            "hash": "85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba",
+            "samples": [
+              {
+                "count": 20,
+                "milliseconds": 3.6393,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6367,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6311,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6394,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6417,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6302,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.656,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6256,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.778,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6166,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6122,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6208,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6277,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6187,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6247,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6234,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6316,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6221,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6118,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.6145,
+                "allocationBytes": 3040,
+                "bytesPerCall": 152
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "baseline",
+      "index": 3,
+      "result": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-baseline-sdk/Ara.CompileServer.dll",
+        "serverHash": "484abbb0dabbdb65a3512121624df319b7fc278a6f5cb997aabe2cffa88804b1",
+        "rows": [
+          {
+            "name": "small_ascii",
+            "utf8Bytes": 384,
+            "hash": "a94f3676696d2ad7d4991b34a479c606d0cf14a4f67ec8e15ea36244c9ab27c8",
+            "samples": [
+              {
+                "count": 10922,
+                "milliseconds": 3.8908,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.702,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5351,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4856,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.518,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4302,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4856,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5025,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4773,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.4781,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5141,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7015,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6605,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6659,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7452,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5557,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.9112,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.6235,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.7403,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              },
+              {
+                "count": 10922,
+                "milliseconds": 3.5817,
+                "allocationBytes": 6727952,
+                "bytesPerCall": 616
+              }
+            ]
+          },
+          {
+            "name": "small_unicode",
+            "utf8Bytes": 768,
+            "hash": "1afa2d8e30c0e5ccc99ec01d087af7d8eb3ee2a9e25791b1a2189085c6b016ea",
+            "samples": [
+              {
+                "count": 5461,
+                "milliseconds": 5.3289,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1377,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.038,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9605,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0497,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1438,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0572,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1751,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0805,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9388,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9303,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.899,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1186,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1195,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8895,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9432,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.9259,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 4.8955,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.0232,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              },
+              {
+                "count": 5461,
+                "milliseconds": 5.1917,
+                "allocationBytes": 5461000,
+                "bytesPerCall": 1000
+              }
+            ]
+          },
+          {
+            "name": "boundary_1024",
+            "utf8Bytes": 1024,
+            "hash": "2edc986847e209b4016e141a6dc8716d3207350f416969382d431539bf292e4a",
+            "samples": [
+              {
+                "count": 4096,
+                "milliseconds": 2.2261,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.8242,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2674,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2107,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3039,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.253,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3245,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2859,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2248,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3287,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2317,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2856,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2765,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2352,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3005,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.3432,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2374,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.308,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.2278,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              },
+              {
+                "count": 4096,
+                "milliseconds": 2.308,
+                "allocationBytes": 5144576,
+                "bytesPerCall": 1256
+              }
+            ]
+          },
+          {
+            "name": "boundary_1025",
+            "utf8Bytes": 1025,
+            "hash": "4a82297889eb505cf6b5cbdf69977afab4632d6557539782f657bd7dc78091a5",
+            "samples": [
+              {
+                "count": 4092,
+                "milliseconds": 2.3328,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.238,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2938,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2345,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.5129,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3295,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2484,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3147,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3686,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2254,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3479,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2281,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2755,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2662,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2346,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.3858,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2525,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.287,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2819,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              },
+              {
+                "count": 4092,
+                "milliseconds": 2.2506,
+                "allocationBytes": 5172288,
+                "bytesPerCall": 1264
+              }
+            ]
+          },
+          {
+            "name": "medium_16KiB",
+            "utf8Bytes": 16384,
+            "hash": "f3336bea752b5a28743033dd2c844a4a63fba08871aaee2586a2bf2d69be83a2",
+            "samples": [
+              {
+                "count": 256,
+                "milliseconds": 1.6067,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5439,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6034,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5304,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5842,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5348,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5968,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5304,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5924,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5277,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5973,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.635,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5385,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5799,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5514,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6017,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5468,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.6568,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.5511,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              },
+              {
+                "count": 256,
+                "milliseconds": 1.595,
+                "allocationBytes": 4253696,
+                "bytesPerCall": 16616
+              }
+            ]
+          },
+          {
+            "name": "large_512KiB",
+            "utf8Bytes": 524288,
+            "hash": "85a84a75886e8a526dbec4e16e3375faa307b4aead79c9ed3264c0477a6f6eba",
+            "samples": [
+              {
+                "count": 20,
+                "milliseconds": 4.1761,
+                "allocationBytes": 10506688,
+                "bytesPerCall": 525334.4
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.4557,
+                "allocationBytes": 10498600,
+                "bytesPerCall": 524930
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.519,
+                "allocationBytes": 10498632,
+                "bytesPerCall": 524931.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.3005,
+                "allocationBytes": 10507800,
+                "bytesPerCall": 525390
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.155,
+                "allocationBytes": 10514832,
+                "bytesPerCall": 525741.6
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1291,
+                "allocationBytes": 10498608,
+                "bytesPerCall": 524930.4
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0612,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1099,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.9835,
+                "allocationBytes": 10506688,
+                "bytesPerCall": 525334.4
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.2036,
+                "allocationBytes": 10501096,
+                "bytesPerCall": 525054.8
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1178,
+                "allocationBytes": 10511936,
+                "bytesPerCall": 525596.8
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1595,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.0781,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.074,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.121,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 3.9582,
+                "allocationBytes": 10498576,
+                "bytesPerCall": 524928.8
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.161,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1093,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.1165,
+                "allocationBytes": 10506720,
+                "bytesPerCall": 525336
+              },
+              {
+                "count": 20,
+                "milliseconds": 4.2062,
+                "allocationBytes": 10506968,
+                "bytesPerCall": 525348.4
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "No independent CPU/thermal timing admission; raw durations must not be presented as latency wins.",
+    "ArrayPool is warmed by 32 calls per input; first-rent/cold costs are not represented.",
+    "This isolates source hashing allocations; retained-state p95 remains unresolved."
+  ],
+  "quality": {
+    "dotnet_tests_passed": 316,
+    "compiler_tests_passed": 220,
+    "native_tests_passed": 7,
+    "native_suites": [
+      "levels",
+      "project",
+      "project_lifecycle"
+    ],
+    "workspace_format_packages": 116,
+    "project_fixture_scripts": 1024,
+    "exact_pe_pdb_schema_module_pairs": 96,
+    "project_quality_receipt_sha256": "f22eb4991e5f6f37eec1f0f8dcd439f3f22f2fb8207e8e12187770f346949f34",
+    "helper_program_sha256": "6efe11ebefe81f5aae485f1f90511d39fbb12300cf7a2229ec59b727e9873aab"
+  }
+}

@@ -197,7 +197,7 @@ impl Shell {
                 );
                 out.push_str(&format!("<text id='set-{id}-count' class='caption' text='{count} saved' /><button id='set-{id}' text='Manage saved filters…' label='Apply a saved hierarchy filter' description='Choose a named query; save and delete filters from the Hierarchy filter menu' action='Dispatch' />"));
             }
-            Kind::Text | Kind::Map => {
+            Kind::Text | Kind::Map | Kind::List => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("set-{id}")),
                     Binding::Setting(key.into()),
