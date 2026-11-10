@@ -1,0 +1,1 @@
+<Project><PropertyGroup><ArtifactsPath>$(MSBuildThisFileDirectory)../../../target/iteration-perf/project-quality</ArtifactsPath></PropertyGroup></Project>

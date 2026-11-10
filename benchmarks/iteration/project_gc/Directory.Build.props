@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)../../../target/iteration-perf/project-gc-hook</ArtifactsPath>
+  </PropertyGroup>
+</Project>

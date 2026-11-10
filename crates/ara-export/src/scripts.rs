@@ -140,7 +140,11 @@ pub fn prepare(
     std::fs::create_dir_all(&generated)?;
     // Do not inherit project/worktree build props: this job owns every output path.
     std::fs::write(generated.join("Directory.Build.props"), "<Project />\n")?;
-    std::fs::write(generated.join("Directory.Build.targets"), "<Project />\n")?;
+    // Share the engine-owned security policy without inheriting worktree output settings.
+    std::fs::write(
+        generated.join("Directory.Build.targets"),
+        include_str!("../../../dotnet/Ara.NativeAot.targets"),
+    )?;
     let runtime = bin.join("Ara.Runtime/release/Ara.Runtime.dll");
     let generator = bin.join("Ara.Generators/release/Ara.Generators.dll");
     let analyzer = bin.join("Ara.Analyzers/release/Ara.Analyzers.dll");

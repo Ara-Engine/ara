@@ -35,7 +35,7 @@ fn srgb_to_linear(value: u8) -> f32 {
     }
 }
 
-fn linear_to_srgb(value: f32) -> u8 {
+pub(crate) fn linear_to_srgb(value: f32) -> u8 {
     let v = if value <= 0.003_130_8 {
         value * 12.92
     } else {
