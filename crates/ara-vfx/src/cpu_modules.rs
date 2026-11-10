@@ -117,13 +117,7 @@ pub(crate) fn update(
                 p.color = p.color.lerp(Vec4::from(pair[1].value), f);
             }
         }
-        Module::SizeOverLife { keys } => {
-            p.size = keys[0].value;
-            for pair in keys.windows(2) {
-                let f = ((t - pair[0].t) / (pair[1].t - pair[0].t)).clamp(0., 1.);
-                p.size += (pair[1].value - p.size) * f;
-            }
-        }
+        Module::SizeOverLife { curve } => p.size = curve.evaluate(t),
         Module::PlaneCollision {
             normal,
             offset,

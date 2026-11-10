@@ -27,6 +27,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
   while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
   Tool pages (Profiler, Material, VFX, Animation) dock in the centre.
+- `curve.rs`: the inline curve editor (`ara_curve::Curve`): plot, keys, the picked key's
+  handles, double-click to add; modes, time/value and shapes below. Drags edit
+  `Local::curve_drag` and commit once. Used by VFX Size over Life and Animator blends.
 - `portals.rs`: floating windows as native windows. One runtime; each floating window lays
   out in a band far right of the main window (`dock::region`) and its OS window presents
   that region (`Runtime::present_region`), its input shifted by the region's origin. During
