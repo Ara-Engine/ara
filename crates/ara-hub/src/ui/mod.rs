@@ -8,6 +8,7 @@ mod dialogs;
 pub mod images;
 mod installs;
 mod learn;
+mod markdown;
 mod palette;
 mod projects;
 mod settings;
