@@ -30,6 +30,8 @@
 //! Not yet available: mesh/task stages and HDR output.
 mod abi;
 mod acceleration;
+#[cfg(test)]
+mod barrier_tests;
 mod cache;
 #[cfg(test)]
 mod cache_tests;
@@ -39,7 +41,14 @@ mod encode;
 pub mod external;
 #[cfg(test)]
 mod external_tests;
+#[cfg(test)]
+mod format_tests;
+#[cfg(test)]
+mod gaps_tests;
 mod info;
+mod memory;
+#[cfg(test)]
+mod memory_tests;
 mod native;
 mod native_access;
 #[cfg(test)]
@@ -47,6 +56,8 @@ mod parity_tests;
 mod pipeline;
 mod prepare;
 pub mod present;
+#[cfg(test)]
+mod raster_tests;
 mod reload;
 mod resources;
 #[cfg(test)]
@@ -56,8 +67,11 @@ mod serialized;
 mod tables;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod texture_tests;
 mod timestamps;
 mod transfer;
+mod views;
 mod worker;
 
 pub use completion::Completion;
@@ -147,6 +161,7 @@ pub struct MetalDevice {
     table: Retained<ProtocolObject<dyn MTL4ArgumentTable>>,
     tables: tables::Tables,
     scratch: scratch::Pool,
+    memory: memory::Pool,
     allocators: Vec<Retained<ProtocolObject<dyn MTL4CommandAllocator>>>,
     buffers: Arena<BufferKind, Owned<NativeBuffer>>,
     images: Arena<ImageKind, Owned<NativeImage>>,
@@ -162,6 +177,7 @@ pub struct MetalDevice {
     /// (`wait_for`), one entry per event.
     device_waits: [Vec<EventWait>; 2],
     retired: Vec<Retired>,
+    views: Vec<views::View>,
     pending: Vec<Pending>,
     info: vulkan::DeviceInfo,
     /// Distinguishes this device's completions from another device's.
@@ -275,6 +291,7 @@ impl MetalDevice {
             table,
             tables,
             scratch: scratch::Pool::default(),
+            memory: memory::Pool::default(),
             allocators: Vec::new(),
             buffers: Arena::default(),
             images: Arena::default(),
@@ -285,6 +302,7 @@ impl MetalDevice {
             batch: Vec::new(),
             device_waits: Default::default(),
             retired: Vec::new(),
+            views: Vec::new(),
             pending: Vec::new(),
             info,
             identity: {
@@ -367,13 +385,19 @@ impl MetalDevice {
         usage: vk::BufferUsageFlags,
         host: bool,
     ) -> Result<Buffer> {
-        let raw = native::pool(|| resources::buffer(&self.device, size, usage, host))?;
+        let raw = native::pool(|| {
+            resources::buffer_pooled(&self.device, size, usage, host, Some(&mut self.memory))
+        })?;
         self.adopt_buffer(raw)
     }
     /// Make a created buffer resident and give it an arena identity.
     fn adopt_buffer(&mut self, raw: NativeBuffer) -> Result<Buffer> {
-        self.residency
-            .addAllocation(ProtocolObject::from_ref(&*raw.buffer));
+        if let Some(heap) = &raw.heap {
+            self.resident_heap(heap);
+        } else {
+            self.residency
+                .addAllocation(ProtocolObject::from_ref(&*raw.buffer));
+        }
         self.residency_dirty = true;
         self.buffers.insert(Owned::new(raw))
     }
@@ -399,13 +423,41 @@ impl MetalDevice {
         mip_levels: u32,
         usage: vk::ImageUsageFlags,
     ) -> Result<Image> {
-        let raw = native::pool(|| resources::image(&self.device, size, format, mip_levels, usage))?;
+        let raw = native::pool(|| {
+            resources::image_pooled(
+                &self.device,
+                size,
+                format,
+                usage,
+                crate::texture::ImageShape {
+                    mip_levels,
+                    ..Default::default()
+                },
+                Some(&mut self.memory),
+            )
+        })?;
+        self.adopt_image(raw)
+    }
+    /// Allocate a volume, array, mip chain or multisampled texture.
+    pub fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        let raw = native::pool(|| {
+            resources::image_pooled(
+                &self.device,
+                desc.image.size,
+                desc.image.format.vk(),
+                desc.vk_usage(),
+                desc.shape,
+                Some(&mut self.memory),
+            )
+        })?;
         self.adopt_image(raw)
     }
     /// Make a created texture resident and give it an arena identity.
     fn adopt_image(&mut self, raw: NativeImage) -> Result<Image> {
         // Memoryless (transient) textures have no allocation; residency sets reject them.
-        if !raw.memoryless() {
+        if let Some(heap) = &raw.heap {
+            self.resident_heap(heap);
+        } else if !raw.memoryless() {
             self.residency
                 .addAllocation(ProtocolObject::from_ref(&*raw.texture));
             self.residency_dirty = true;
@@ -446,6 +498,10 @@ impl MetalDevice {
             return Err(GpuError::Contract("Readback still in flight".into()));
         }
         resources::read(&b.raw)
+    }
+    /// Publish or reuse an immutable sampler. Slots are stable for this device's lifetime.
+    pub fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        native::pool(|| self.tables.sampler(&self.device, desc))
     }
     /// Publish a sampled image into a fresh immutable texture-table slot.
     pub fn sampled_image(&mut self, image: Image, _depth: bool) -> Result<HeapIndex> {
@@ -665,7 +721,7 @@ impl MetalDevice {
         for value in self.accelerations.values_mut() {
             value.last[queue.index()] = point.value;
         }
-        self.mark_built(&list.commands)?;
+        self.mark_built(&list.commands, queue)?;
         self.pending.push(Pending {
             point,
             allocator,
@@ -677,13 +733,11 @@ impl MetalDevice {
             None => self.flush(),
         }
         for command in &list.commands {
-            if let commands::Command::Barrier(Barrier {
-                resource: Resource::Buffer(buffer),
-                handoff,
-                ..
-            }) = command
-            {
-                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            for dependency in command.barriers() {
+                if let Resource::Buffer(buffer) = dependency.barrier.resource {
+                    self.buffers.get_mut(buffer)?.owner =
+                        dependency.barrier.handoff.map_or(queue, |h| h.to);
+                }
             }
         }
         Ok(point)
@@ -851,6 +905,14 @@ impl MetalDevice {
 }
 
 impl Device for MetalDevice {
+    fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        MetalDevice::create_texture(self, desc)
+    }
+
+    fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        MetalDevice::sampler(self, desc)
+    }
+
     fn queues(&self) -> [descriptors::QueueInfo; 2] {
         [Queue::Graphics, Queue::Compute].map(|id| descriptors::QueueInfo {
             id,
@@ -979,18 +1041,21 @@ impl MetalDevice {
                     if let Some(slot) = b.heap {
                         self.tables.buffers.release(slot);
                     }
-                    self.residency
-                        .removeAllocation(ProtocolObject::from_ref(&*b.raw.buffer));
+                    if b.raw.heap.is_none() {
+                        self.residency
+                            .removeAllocation(ProtocolObject::from_ref(&*b.raw.buffer));
+                    }
                     self.residency_dirty = true;
                 }
                 Retired::Image(i) => {
+                    self.retire_views(i.raw.texture.gpuResourceID().to_raw());
                     if let Some(slot) = i.heap {
                         self.tables.textures.release(slot);
                     }
                     if let Some(slot) = i.raw.storage {
                         self.tables.storage_images.release(slot);
                     }
-                    if !i.raw.memoryless() {
+                    if i.raw.heap.is_none() && !i.raw.memoryless() {
                         self.residency
                             .removeAllocation(ProtocolObject::from_ref(&*i.raw.texture));
                         self.residency_dirty = true;
@@ -1000,13 +1065,16 @@ impl MetalDevice {
                     if let Some(slot) = a.heap {
                         self.tables.accelerations.release(slot);
                     }
-                    self.residency
-                        .removeAllocation(ProtocolObject::from_ref(&*a.raw.structure));
+                    if a.raw.heap.is_none() {
+                        self.residency
+                            .removeAllocation(ProtocolObject::from_ref(&*a.raw.structure));
+                    }
                     self.residency_dirty = true;
                 }
                 Retired::Pipeline { .. } => {}
             }
         }
+        self.residency_dirty |= self.memory.trim(&self.residency);
         Ok(())
     }
 }
@@ -1047,3 +1115,12 @@ impl Drop for MetalDevice {
         });
     }
 }
+
+#[cfg(test)]
+mod attachment_tests;
+
+#[cfg(test)]
+mod hit_geometry_tests;
+
+#[cfg(test)]
+mod naga_replay_tests;

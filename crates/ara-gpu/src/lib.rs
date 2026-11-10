@@ -8,9 +8,16 @@ pub mod commands;
 pub mod cooked;
 mod cpu;
 pub mod descriptors;
+pub mod hit_geometry;
 #[cfg(target_os = "macos")]
 pub mod metal;
+pub mod raster;
+pub mod rendering;
+pub mod sampler;
 pub mod shared;
+pub mod sync;
+pub mod texture;
+mod transfers;
 #[cfg(feature = "fidelity-lab")]
 pub mod tunables;
 pub mod vulkan;
@@ -67,7 +74,7 @@ pub use vulkan::external;
 pub enum Queue {
     /// Raster, transfer and presentation work.
     Graphics,
-    /// Dedicated compute family, independent of graphics.
+    /// Compute work; may share a native family or queue with graphics.
     Compute,
 }
 impl Queue {
@@ -230,7 +237,9 @@ impl Access {
     }
 }
 
-/// Explicit queue ownership edge. Release/acquire carry identical ranges/layouts.
+/// Explicit logical queue edge. Release/acquire carry identical accesses/ranges;
+/// backends omit ownership transfers and eliminate duplicate layout transitions
+/// when both queues share a family.
 #[derive(Debug, Clone, Copy)]
 pub struct Handoff {
     /// Previous owner.
@@ -255,12 +264,14 @@ pub struct Barrier {
 
 /// Backend-neutral resource, recording and lifetime surface, shared with Metal.
 pub trait Device {
-    /// Queue capabilities for graphics and dedicated compute.
+    /// Queue capabilities for graphics and logical compute.
     fn queues(&self) -> [descriptors::QueueInfo; 2];
     /// Allocate a typed buffer.
     fn create_buffer(&mut self, desc: &descriptors::BufferDesc) -> Result<Buffer>;
     /// Allocate a typed image.
     fn create_image(&mut self, desc: &descriptors::ImageDesc) -> Result<Image>;
+    /// Allocate a texture with explicit depth, layers, mip and sample counts.
+    fn create_texture(&mut self, desc: &texture::TextureDesc) -> Result<Image>;
     /// Allocate static triangle/instance acceleration storage.
     fn create_acceleration_structure(
         &mut self,
@@ -276,6 +287,8 @@ pub trait Device {
     fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()>;
     /// Publish immutable resource indices in the global heap.
     fn heap(&mut self) -> &mut impl BindlessHeap;
+    /// Publish or reuse an immutable sampler in the global sampler table.
+    fn sampler(&mut self, desc: &sampler::SamplerDesc) -> Result<HeapIndex>;
     /// Start owned recording with no long-lived device or ECS borrow.
     fn begin(&self, queue: Queue) -> commands::Recorder;
     /// Submit work and signal the next timeline value on its queue.
@@ -309,3 +322,6 @@ pub trait BindlessHeap {
     /// Insert a writable image in the storage-image table.
     fn insert_storage_image(&mut self, image: Image) -> Result<HeapIndex>;
 }
+
+#[cfg(test)]
+mod replay_tests;

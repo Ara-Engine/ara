@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
+  "key": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e",
   "stages": [
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryFragment.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryFragment.dxil",
       "dxil_hash": "f001d08c962e44ee5d367a6dd1d788ac4fca6583d0f19440f7bbdeca8e337590",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryFragment.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryFragment.metallib",
         "metallib_hash": "938d6d26dfa67d0c4c70d743cb730c44398e8c289d12bf3d7575fae9dcd1ac1d",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "geometryFragment",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryFragment.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "6e41770cdd778495a0c607ca319c31d73f50a14f2688ef6f538416e87c0f7353",
       "stage": "fragment"
     },
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryVertex.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryVertex.dxil",
       "dxil_hash": "7fd65695b8a61660e687f234337743b8cf9244693765856309160489aa85e7a9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryVertex.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryVertex.metallib",
         "metallib_hash": "e09c5ec37ed8a43f0eb93c9d730fec77f0671b11c304f5987f75712d1d0a6ad4",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "geometryVertex",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/gbuffer/geometryVertex.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/gbuffer/geometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "e7666723011000bd5db1d0c533f657ff10a8c636caf0510b757bd3bd2ff88143",
       "stage": "vertex"
@@ -48,6 +48,16 @@
     "depth_format": 126,
     "depth_test": true,
     "depth_write": true,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 48
   },
   "version": 1

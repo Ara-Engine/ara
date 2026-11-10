@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "91efa10d0f98a22198823b739930fae57a8f63a83b1f47d05e4ec17aac586b78",
+  "key": "df48b303544dc79301710e4219e78cf354aec742238e245d85bd6efde4f46d6f",
   "stages": [
     {
-      "dxil": "91efa10d0f98a22198823b739930fae57a8f63a83b1f47d05e4ec17aac586b78/sortPrepareMain/sortPrepareMain.dxil",
+      "dxil": "df48b303544dc79301710e4219e78cf354aec742238e245d85bd6efde4f46d6f/sortPrepareMain/sortPrepareMain.dxil",
       "dxil_hash": "51782c0a0f33e6387407388bdbbc7ff740c6c2ac5767c964af9d25d7b97e6732",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "91efa10d0f98a22198823b739930fae57a8f63a83b1f47d05e4ec17aac586b78/sortPrepareMain/sortPrepareMain.metallib",
+        "metallib": "df48b303544dc79301710e4219e78cf354aec742238e245d85bd6efde4f46d6f/sortPrepareMain/sortPrepareMain.metallib",
         "metallib_hash": "0818e0ec282354c46a6c4f2efdf487b63d7092ac954f8aba10217acbf228da6b",
-        "reflection": "91efa10d0f98a22198823b739930fae57a8f63a83b1f47d05e4ec17aac586b78/sortPrepareMain/sortPrepareMain.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "df48b303544dc79301710e4219e78cf354aec742238e245d85bd6efde4f46d6f/sortPrepareMain/sortPrepareMain.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "sortPrepareMain",
-      "spirv": "91efa10d0f98a22198823b739930fae57a8f63a83b1f47d05e4ec17aac586b78/sortPrepareMain/sortPrepareMain.spv",
+      "spirv": "df48b303544dc79301710e4219e78cf354aec742238e245d85bd6efde4f46d6f/sortPrepareMain/sortPrepareMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "329ef63ad6f4d8d78b07142b88e0373ba70fa4155d8b2c464e338a3ff0b5b7fa",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

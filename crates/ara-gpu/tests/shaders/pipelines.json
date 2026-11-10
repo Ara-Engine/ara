@@ -1,4 +1,55 @@
 {
+  "comparison": {
+    "entries": {
+      "comparisonMain": "compute"
+    },
+    "source": "comparison.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "fullscreen": {
+    "entries": {
+      "color": "fragment",
+      "fullscreen": "vertex"
+    },
+    "source": "raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
   "sampled_heap": {
     "entries": {
       "sampleMain": "compute"
@@ -10,6 +61,43 @@
       "depth_format": null,
       "depth_test": false,
       "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  },
+  "streams": {
+    "entries": {
+      "color": "fragment",
+      "streams": "vertex"
+    },
+    "source": "raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
       "vertex_stride": 0
     }
   },
@@ -24,6 +112,16 @@
       "depth_format": null,
       "depth_test": false,
       "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
       "vertex_stride": 0
     }
   }

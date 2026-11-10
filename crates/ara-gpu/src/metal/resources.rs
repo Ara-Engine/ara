@@ -11,6 +11,7 @@ use objc2_metal::*;
 /// An owned Metal buffer and its declared uses.
 pub(super) struct NativeBuffer {
     pub buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    pub heap: Option<super::memory::Heap>,
     pub size: u64,
     pub usage: vk::BufferUsageFlags,
     pub host: bool,
@@ -19,9 +20,11 @@ pub(super) struct NativeBuffer {
 /// An owned Metal texture and its declared uses.
 pub(super) struct NativeImage {
     pub texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    pub heap: Option<super::memory::Heap>,
     pub info: FormatInfo,
     pub size: [u32; 2],
     pub levels: u32,
+    pub shape: crate::texture::ImageShape,
     pub usage: vk::ImageUsageFlags,
     /// Storage-image table slot; sampled slots live on the owning record.
     pub storage: Option<crate::HeapIndex>,
@@ -35,15 +38,30 @@ impl NativeImage {
     }
 }
 
+#[cfg(test)]
 pub(super) fn buffer(
     device: &ProtocolObject<dyn MTLDevice>,
     size: u64,
     usage: vk::BufferUsageFlags,
     host: bool,
 ) -> Result<NativeBuffer> {
+    buffer_pooled(device, size, usage, host, None)
+}
+pub(super) fn buffer_pooled(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: u64,
+    usage: vk::BufferUsageFlags,
+    host: bool,
+    pool: Option<&mut super::memory::Pool>,
+) -> Result<NativeBuffer> {
     if size == 0 || usage.is_empty() {
         return Err(GpuError::Contract("Empty buffer".into()));
     }
+    let usage = if host {
+        usage | vk::BufferUsageFlags::TRANSFER_DST
+    } else {
+        usage
+    };
     let length = usize::try_from(size)
         .ok()
         .filter(|&length| length as u64 <= device.maxBufferLength() as u64)
@@ -53,17 +71,27 @@ pub(super) fn buffer(
     } else {
         MTLResourceOptions::StorageModePrivate
     };
-    let buffer = device
-        .newBufferWithLength_options(length, storage)
-        .ok_or_else(|| nil("buffer"))?;
+    let (buffer, heap) = if let Some(pool) = pool.filter(|_| !host) {
+        let (b, h) = pool.buffer(device, length)?;
+        (b, Some(h))
+    } else {
+        (
+            device
+                .newBufferWithLength_options(length, storage)
+                .ok_or_else(|| nil("buffer"))?,
+            None,
+        )
+    };
     Ok(NativeBuffer {
         buffer,
+        heap,
         size,
         usage,
         host,
     })
 }
 
+#[cfg(test)]
 pub(super) fn image(
     device: &ProtocolObject<dyn MTLDevice>,
     size: [u32; 2],
@@ -71,9 +99,59 @@ pub(super) fn image(
     levels: u32,
     usage: vk::ImageUsageFlags,
 ) -> Result<NativeImage> {
+    image_shaped(
+        device,
+        size,
+        format_id,
+        usage,
+        crate::texture::ImageShape {
+            mip_levels: levels,
+            ..Default::default()
+        },
+    )
+}
+
+#[cfg(test)]
+pub(super) fn image_shaped(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: [u32; 2],
+    format_id: vk::Format,
+    usage: vk::ImageUsageFlags,
+    shape: crate::texture::ImageShape,
+) -> Result<NativeImage> {
+    image_pooled(device, size, format_id, usage, shape, None)
+}
+pub(super) fn image_pooled(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: [u32; 2],
+    format_id: vk::Format,
+    usage: vk::ImageUsageFlags,
+    shape: crate::texture::ImageShape,
+    pool: Option<&mut super::memory::Pool>,
+) -> Result<NativeImage> {
+    use crate::texture::{SampleCount, TextureDimension};
+    shape.validate(size)?;
+    if shape.dimension == TextureDimension::D3
+        && usage.intersects(
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    {
+        return Err(GpuError::Contract(
+            "3D textures expose sampled/storage views, not raster attachments".into(),
+        ));
+    }
+    if shape.layers > 2048
+        || (shape.dimension == TextureDimension::D3 && size[0].max(size[1]).max(shape.depth) > 2048)
+        || (usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) && shape.mip_levels != 1)
+    {
+        return Err(GpuError::Contract(
+            "Texture shape exceeds Metal dimensions or transient mip limits".into(),
+        ));
+    }
+    let levels = shape.mip_levels;
     let info = format(format_id)?;
     let [width, height] = size;
-    let full = 32 - width.max(height).max(1).leading_zeros();
+    let full = 32 - width.max(height).max(shape.depth).max(1).leading_zeros();
     // Like Vulkan, an extent past the reported `max_image_dimension` is an error here
     // rather than whatever the driver does with it.
     let largest = super::info::MAX_IMAGE_DIMENSION;
@@ -111,6 +189,25 @@ pub(super) fn image(
     };
     // SAFETY: `levels` was checked against the full mip chain of this extent.
     unsafe { descriptor.setMipmapLevelCount(levels as usize) };
+    let kind = match (shape.dimension, shape.samples, shape.layers > 1) {
+        (TextureDimension::D3, _, _) => MTLTextureType::Type3D,
+        (_, SampleCount::Four, false) => MTLTextureType::Type2DMultisample,
+        (_, SampleCount::Four, true) => MTLTextureType::Type2DMultisampleArray,
+        (_, _, true) => MTLTextureType::Type2DArray,
+        _ => MTLTextureType::Type2D,
+    };
+    if !device.supportsTextureSampleCount(shape.samples.count() as usize) {
+        return Err(GpuError::Contract(
+            "Unsupported texture sample count".into(),
+        ));
+    }
+    // SAFETY: the validated shape has positive depth/layers and compatible mip/sample counts.
+    unsafe {
+        descriptor.setTextureType(kind);
+        descriptor.setDepth(shape.depth as usize);
+        descriptor.setArrayLength(shape.layers as usize);
+        descriptor.setSampleCount(shape.samples.count() as usize);
+    }
     descriptor.setUsage(texture_usage(usage));
     crate::attachments::validate_usage(usage)?;
     // Transient attachments live in tile memory only, with no backing allocation.
@@ -121,14 +218,26 @@ pub(super) fn image(
             MTLStorageMode::Private
         },
     );
-    let texture = device
-        .newTextureWithDescriptor(&descriptor)
-        .ok_or_else(|| nil("texture"))?;
+    let (texture, heap) = if let Some(pool) =
+        pool.filter(|_| !usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT))
+    {
+        let (texture, heap) = pool.image(device, &descriptor)?;
+        (texture, Some(heap))
+    } else {
+        (
+            device
+                .newTextureWithDescriptor(&descriptor)
+                .ok_or_else(|| nil("texture"))?,
+            None,
+        )
+    };
     Ok(NativeImage {
         texture,
+        heap,
         info,
         size,
         levels,
+        shape,
         usage,
         storage: None,
     })
