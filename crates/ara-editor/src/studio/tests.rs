@@ -549,6 +549,72 @@ fn history_pages_assets_search_restores_and_render_debug_opens() {
 }
 
 #[test]
+fn drop_to_surface_asks_the_host_and_waits_for_presented_geometry() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| s.select(Vec::new(), false));
+    rt.update(|s| super::commands::run(s, "edit.transform.drop", &Target::None));
+    assert!(!rt.state().local.drop_to_surface, "nothing selected");
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    rt.update(|s| super::commands::run(s, "edit.transform.drop", &Target::None));
+    assert!(
+        rt.state().local.drop_to_surface,
+        "the host drops it next pass"
+    );
+    // Before the Scene has presented this scene, the planner refuses rather than guess.
+    let scene = crate::app::viewport::SceneView::default();
+    let planned = crate::surface_drop::plan(&rt.state().editor, &scene, |_| None);
+    assert!(planned.is_err_and(|e| e.to_string().contains("waiting")));
+}
+
+#[test]
+fn a_piloted_camera_follows_the_view_and_commits_each_finished_move() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| {
+        s.apply(vec![json!({"cmd":"entity.create","args":{"id":"e_cam","name":"Shot","components":{"Transform":{"position":[0,2,6]},"Camera":{"fov":55.0}}}})], "Camera");
+        s.select(vec!["e_cam".into()], false);
+        s.act("editor.camera", json!({"projection": "perspective"}));
+    });
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "view.camera.pilot", &Target::None));
+    assert!(
+        rt.state().local.pilot.active(),
+        "piloting the selected Camera"
+    );
+    let position =
+        |rt: &Runtime<Studio>| rt.state().resolved["e_cam"].record["Transform"]["position"].clone();
+    let before = position(&rt);
+    let revision = rt.state().editor.host.store().revision();
+    // A move under way stays transient; when it ends it lands as one edit.
+    rt.update(|s| {
+        s.local.navigating = true;
+        s.editor.state.camera.pan([40.0, 0.0]);
+        super::scene::poll_pilot(s, true);
+    });
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        revision,
+        "still moving"
+    );
+    rt.update(|s| {
+        s.local.navigating = false;
+        super::scene::poll_pilot(s, false);
+        s.resolve();
+    });
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        revision + 1,
+        "one undoable edit"
+    );
+    assert_ne!(position(&rt), before, "the Camera moved with the view");
+    rt.update(|s| super::commands::run(s, "view.camera.pilot", &Target::None));
+    assert!(!rt.state().local.pilot.active(), "stopped");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();

@@ -5,7 +5,7 @@ use glam::Vec2;
 
 /// An actual mesh vertex and its transformed authored normal.
 #[derive(Clone, Copy, Debug)]
-pub(in crate::app) struct VertexHit {
+pub(crate) struct VertexHit {
     /// The presented source instance, suitable for channel/authoring validation.
     pub entity: u64,
     /// World-space vertex position.
@@ -16,7 +16,7 @@ pub(in crate::app) struct VertexHit {
 
 impl SceneView {
     /// Capture referenced vertices once at gesture start, including selected descendants.
-    pub(in crate::app) fn snap_vertices(&self, accept: impl Fn(u64) -> bool) -> Vec<VertexHit> {
+    pub(crate) fn snap_vertices(&self, accept: impl Fn(u64) -> bool) -> Vec<VertexHit> {
         self.presented_scene()
             .map(|scene| vertices(scene, accept))
             .unwrap_or_default()

@@ -1867,6 +1867,18 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Ok(())
             }
         },
+        "view.camera.pilot" => {
+            let entity = target.entity(&s.editor.state).map(str::to_owned);
+            super::scene::toggle_pilot(s, entity.as_deref())
+        }
+        "edit.transform.drop" => match (e.state.selection.is_empty(), e.gesture.is_some()) {
+            (true, _) => Err("Select geometry before dropping it to a surface".into()),
+            (_, true) => Err("Finish the transform under way first".into()),
+            _ => {
+                s.local.drop_to_surface = true;
+                Ok(())
+            }
+        },
         // A floating window comes to the front (Window › Floating).
         "window.focus_window" => match target {
             Target::Window(id) => {

@@ -3244,8 +3244,4 @@ pub(crate) const UNBUILT: &[&str] = &[
 
 /// Commands the legacy editor runs that the studio does not yet; each leaves this list
 /// as the studio runs it.
-pub(crate) const UNPORTED: &[&str] = &[
-    "edit.transform.drop",
-    "view.camera.pilot",
-    "view.fullscreen",
-];
+pub(crate) const UNPORTED: &[&str] = &["view.fullscreen"];
