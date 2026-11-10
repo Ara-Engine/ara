@@ -1,17 +1,3 @@
 <Project>
-  <PropertyGroup>
-    <!-- CVE-2026-111497: older .NET 10 SDKs select a vulnerable NativeAOT pack. -->
-    <_AraNativeAotSecurityVersion>10.0.14</_AraNativeAotSecurityVersion>
-  </PropertyGroup>
-  <!-- Run after package imports, which can restore an older SDK pack version. -->
-  <Target Name="AraNativeAotSecurityFloor" BeforeTargets="ProcessFrameworkReferences">
-    <ItemGroup>
-      <KnownILCompilerPack Update="Microsoft.DotNet.ILCompiler">
-        <ILCompilerPackVersion Condition="'%(TargetFramework)' == 'net10.0' and $([MSBuild]::VersionLessThan('%(ILCompilerPackVersion)', '$(_AraNativeAotSecurityVersion)'))">$(_AraNativeAotSecurityVersion)</ILCompilerPackVersion>
-      </KnownILCompilerPack>
-      <KnownRuntimePack Update="Microsoft.NETCore.App">
-        <LatestRuntimeFrameworkVersion Condition="'%(TargetFramework)' == 'net10.0' and '%(RuntimePackLabels)' == 'NativeAOT' and $([MSBuild]::VersionLessThan('%(LatestRuntimeFrameworkVersion)', '$(_AraNativeAotSecurityVersion)'))">$(_AraNativeAotSecurityVersion)</LatestRuntimeFrameworkVersion>
-      </KnownRuntimePack>
-    </ItemGroup>
-  </Target>
+  <Import Project="$(MSBuildThisFileDirectory)Ara.NativeAot.targets" />
 </Project>
