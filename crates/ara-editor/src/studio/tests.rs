@@ -33,7 +33,9 @@ fn open() -> Runtime<Studio> {
         ),
     )
     .unwrap();
-    let mut editor = Editor::open(&root).unwrap();
+    // Each studio test keeps its own user settings, so rebinding or reordering in one
+    // never reaches another.
+    let mut editor = Editor::open_with(&root, Some(root.join(".ara/test-user.json"))).unwrap();
     editor
         .apply(
             vec![
@@ -409,8 +411,8 @@ fn the_inspector_locks_searches_and_copies_component_values() {
     assert!(
         saved
             .as_ref()
-            .and_then(Value::as_str)
-            .is_some_and(|o| o.starts_with("MeshRenderer,Transform")),
+            .and_then(Value::as_array)
+            .is_some_and(|o| o.starts_with(&[json!("MeshRenderer"), json!("Transform")])),
         "{saved:?}"
     );
     press(&mut rt, "component/MeshRenderer/more");
@@ -497,6 +499,388 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
             .as_ref()
             .is_some_and(|(n, _)| n.starts_with("Save As"))
     );
+}
+
+#[test]
+fn history_pages_assets_search_restores_and_render_debug_opens() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str| {
+        rt.update(|s| super::commands::run(s, id, &Target::None));
+        settle(rt);
+    };
+    // More changes than one page: Older shows the rest, Newer comes back.
+    rt.update(|s| {
+        for i in 0..super::agents::HISTORY_PAGE {
+            let x = i as f64;
+            s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_lamp","path":"Transform.position","value":[x,0,0]}})], "Nudge");
+        }
+        s.act("editor.layout.show", json!({"panel": "history"}));
+    });
+    settle(&mut rt);
+    assert!(rt.find("history/older").is_some() && rt.find("history/newer").is_none());
+    // (The button sits below the page's rows, out of view; the command is the same.)
+    run(&mut rt, "history.older");
+    assert_eq!(rt.state().local.history_page, 1);
+    assert!(rt.find("history/newer").is_some() && rt.find("history/older").is_none());
+    press(&mut rt, "history/newer");
+    assert_eq!(rt.state().local.history_page, 0);
+    // A cleared Assets search comes back.
+    rt.update(|s| {
+        s.act("editor.workspace", json!({"assetQuery": "crate"}));
+        s.local.assets_cleared_query = Some("crate".into());
+        s.act("editor.workspace", json!({"assetQuery": ""}));
+    });
+    run(&mut rt, "assets.search.restore");
+    assert_eq!(
+        rt.state()
+            .editor
+            .state
+            .searches
+            .get("assets")
+            .map(String::as_str),
+        Some("crate")
+    );
+    // Rendering Debug opens the Scene's draw-mode menu.
+    run(&mut rt, "window.render_debug");
+    assert_eq!(rt.state().local.overlay_settings, Some("draw"));
+    // Copy Probe State needs the renderer's report first, and says so.
+    run(&mut rt, "lighting.probe.copy");
+    assert!(rt.state().local.copy.is_none());
+}
+
+#[test]
+fn drop_to_surface_asks_the_host_and_waits_for_presented_geometry() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| s.select(Vec::new(), false));
+    rt.update(|s| super::commands::run(s, "edit.transform.drop", &Target::None));
+    assert!(!rt.state().local.drop_to_surface, "nothing selected");
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    rt.update(|s| super::commands::run(s, "edit.transform.drop", &Target::None));
+    assert!(
+        rt.state().local.drop_to_surface,
+        "the host drops it next pass"
+    );
+    // Before the Scene has presented this scene, the planner refuses rather than guess.
+    let scene = crate::app::viewport::SceneView::default();
+    let planned = crate::surface_drop::plan(&rt.state().editor, &scene, |_| None);
+    assert!(planned.is_err_and(|e| e.to_string().contains("waiting")));
+}
+
+#[test]
+fn a_piloted_camera_follows_the_view_and_commits_each_finished_move() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| {
+        s.apply(vec![json!({"cmd":"entity.create","args":{"id":"e_cam","name":"Shot","components":{"Transform":{"position":[0,2,6]},"Camera":{"fov":55.0}}}})], "Camera");
+        s.select(vec!["e_cam".into()], false);
+        s.act("editor.camera", json!({"projection": "perspective"}));
+    });
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "view.camera.pilot", &Target::None));
+    assert!(
+        rt.state().local.pilot.active(),
+        "piloting the selected Camera"
+    );
+    let position =
+        |rt: &Runtime<Studio>| rt.state().resolved["e_cam"].record["Transform"]["position"].clone();
+    let before = position(&rt);
+    let revision = rt.state().editor.host.store().revision();
+    // A move under way stays transient; when it ends it lands as one edit.
+    rt.update(|s| {
+        s.local.navigating = true;
+        s.editor.state.camera.pan([40.0, 0.0]);
+        super::scene::poll_pilot(s, true);
+    });
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        revision,
+        "still moving"
+    );
+    rt.update(|s| {
+        s.local.navigating = false;
+        super::scene::poll_pilot(s, false);
+        s.resolve();
+    });
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        revision + 1,
+        "one undoable edit"
+    );
+    assert_ne!(position(&rt), before, "the Camera moved with the view");
+    rt.update(|s| super::commands::run(s, "view.camera.pilot", &Target::None));
+    assert!(!rt.state().local.pilot.active(), "stopped");
+}
+
+#[test]
+fn keyboard_shortcuts_record_clear_and_reset_a_binding() {
+    use stillkit::el::{KeyCode, Modifiers};
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "edit.shortcuts", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert!(
+        rt.find("shortcuts/edit.duplicate").is_some(),
+        "every command is listed"
+    );
+    let own = |rt: &Runtime<Studio>| {
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get("input.shortcuts")
+            .cloned()
+    };
+    let keys = |rt: &Runtime<Studio>| super::commands::keys_of(rt.state(), "edit.duplicate");
+    // Record: the next chord is the person's binding, in force at once.
+    rt.update(|s| {
+        if let Some(v) = s.local.settings.as_mut() {
+            v.query = "duplicate".into();
+        }
+    });
+    settle(&mut rt);
+    press(&mut rt, "shortcuts/edit.duplicate/record");
+    assert_eq!(rt.state().local.recording_shortcut, Some("edit.duplicate"));
+    rt.key_with(KeyCode::of('J').0, Modifiers::CTRL);
+    settle(&mut rt);
+    assert_eq!(own(&rt), Some(json!({"edit.duplicate": "Ctrl+J"})));
+    assert_eq!(keys(&rt), super::commands::shortcut("Ctrl+J"));
+    assert!(rt.state().local.recording_shortcut.is_none());
+    // Clear unbinds it; Reset gives it back to the preset.
+    // Away first: Record's tooltip, just shown, would take the press beside it.
+    rt.pointer_move(5.0, 5.0);
+    settle(&mut rt);
+    press(&mut rt, "shortcuts/edit.duplicate/clear");
+    assert_eq!(keys(&rt), None);
+    press(&mut rt, "shortcuts/edit.duplicate/reset");
+    assert_eq!(
+        own(&rt).and_then(|o| o.get("edit.duplicate").cloned()),
+        None
+    );
+    assert_eq!(keys(&rt), super::commands::shortcut("Ctrl+D"));
+}
+
+#[test]
+fn the_lighting_list_mixes_lights_in_place() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.lighting", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let light = |rt: &Runtime<Studio>| rt.state().resolved["e_sun"].record["Light"].clone();
+    // Intensity: typed in the row, Enter applies.
+    press(&mut rt, "lighting/e_sun/intensity");
+    rt.key_with(
+        stillkit::el::KeyCode::of('A').0,
+        stillkit::el::Modifiers::CTRL,
+    );
+    rt.type_text("12000");
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    settle(&mut rt);
+    assert_eq!(light(&rt)["intensity"], json!(12000.0));
+    // A colour temperature from the swatch's menu.
+    press(&mut rt, "lighting/e_sun/color");
+    press(&mut rt, "lighting/e_sun/kelvin/1900");
+    let color = light(&rt)["color"].clone();
+    assert!(
+        color[0].as_f64().unwrap() > color[2].as_f64().unwrap(),
+        "candlelight is warm: {color}"
+    );
+    // The eye hides it in the Scene only.
+    press(&mut rt, "lighting/e_sun/eye");
+    assert!(rt.state().editor.state.hidden.contains("e_sun"));
+    // Rows that are not lights have no mixer.
+    assert!(rt.find("lighting/e_post/intensity").is_none());
+    // The curve runs warm to cool, its brightest channel 1.
+    let [warm, cool] = [
+        super::lighting::kelvin(1900.0),
+        super::lighting::kelvin(10000.0),
+    ];
+    assert!(
+        warm[0] == 1.0 && warm[2] < 0.2 && cool[2] == 1.0 && cool[0] < 1.0,
+        "{warm:?} {cool:?}"
+    );
+}
+
+#[test]
+fn brush_sliders_set_by_press_and_drag() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.mesh-paint", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let press_at = |rt: &mut Runtime<Studio>, key: &str, along: f32| {
+        let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+        let (x, y) = (r.left + r.width() * along, r.center().y);
+        rt.pointer_move(x, y);
+        rt.frame(FRAME);
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        settle(rt);
+    };
+    let paint = |rt: &Runtime<Studio>| rt.state().editor.state.paint.unwrap_or_default();
+    press_at(&mut rt, "paint/strength/track", 0.75);
+    assert!(
+        (paint(&rt).strength - 0.75).abs() < 0.05,
+        "{}",
+        paint(&rt).strength
+    );
+    // Radius runs by magnitude: halfway is the range's geometric middle, not 50 m.
+    press_at(&mut rt, "paint/radius/track", 0.5);
+    let radius = paint(&rt).radius;
+    assert!(radius > 0.3 && radius < 1.5, "{radius}");
+}
+
+#[test]
+fn an_assets_details_say_what_it_is_and_holds() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| {
+        let path = s
+            .assets
+            .as_ref()
+            .and_then(|b| b.items.iter().find(|a| a.path.ends_with("main.scene")))
+            .map(|a| a.path.clone())
+            .unwrap();
+        s.act("editor.workspace", json!({"asset": path}));
+        s.local.inspect_asset = true;
+    });
+    settle(&mut rt);
+    let labels: Vec<String> = rt
+        .tree()
+        .iter()
+        .filter_map(|shown| shown.label.as_deref().map(str::to_owned))
+        .collect();
+    let has = |want: &str| labels.iter().any(|l| l.starts_with(want));
+    assert!(has("Kind: Scene"), "{labels:?}");
+    assert!(has("Size: ") && has("Modified: "));
+    assert!(has("Entities: 4"));
+    assert!(has("Components: Transform 4"), "most common first");
+}
+
+/// A few messages as a session might have them, for the Console and Problems captures.
+fn sample_logs(s: &mut Studio) {
+    use ara_diag::Severity;
+    let row = |seq: u64,
+               severity: Severity,
+               code: &str,
+               message: &str,
+               origin: &str,
+               source: Option<&str>,
+               count: u64| {
+        let diagnostic = match severity {
+            Severity::Error => ara_diag::Diagnostic::error(ara_diag::Code(seq as u16), message),
+            Severity::Warning => ara_diag::Diagnostic::warning(ara_diag::Code(seq as u16), message),
+            _ => ara_diag::Diagnostic::info(ara_diag::Code(seq as u16), message),
+        };
+        super::state::LogRow {
+            seq,
+            severity,
+            code: code.into(),
+            message: message.into(),
+            origin: origin.into(),
+            at: seq * 1_000,
+            source: source.map(str::to_owned),
+            count,
+            diagnostic: std::sync::Arc::new(diagnostic),
+        }
+    };
+    s.logs = vec![
+        row(
+            1,
+            Severity::Info,
+            "ARA0001",
+            "Project opened: 4 entities in levels/main.scene",
+            "engine",
+            None,
+            1,
+        ),
+        row(
+            2,
+            Severity::Info,
+            "ARA0911",
+            "C# modules compiled in 1.8 s",
+            "scripts",
+            None,
+            1,
+        ),
+        row(
+            3,
+            Severity::Warning,
+            "ARA2104",
+            "Texture rocks_albedo.png is 4096×4096 without mipmaps; it streams slowly",
+            "import",
+            Some("content/art/rocks_albedo.png"),
+            1,
+        ),
+        row(
+            4,
+            Severity::Warning,
+            "ARA3302",
+            "Light Sun casts shadows past its cascade range",
+            "render",
+            None,
+            12,
+        ),
+        row(
+            5,
+            Severity::Error,
+            "ARA0912",
+            "PlayerControl.Update threw NullReferenceException at PlayerControl.cs:42",
+            "scripts",
+            Some("content/scripts/PlayerControl.cs"),
+            1,
+        ),
+    ];
+    s.local.log_seen = 5;
+    // The error open in the details pane, as after a click.
+    s.local.console_open = Some(5);
+}
+
+/// Agent clients as a probe might find them (no client's CLI runs in tests).
+fn found_clients(s: &mut Studio) {
+    use ara_agents::{Client, Setup};
+    let setups = &mut s.local.agent_setups;
+    setups.probed = true;
+    setups.ara = Some(PathBuf::from("/opt/ara/ara"));
+    setups.setup.insert(Client::Claude, Setup::Connected);
+    setups.setup.insert(Client::Codex, Setup::Available);
+    setups.setup.insert(Client::Cursor, Setup::Missing);
+    setups.setup.insert(
+        Client::OpenCode,
+        Setup::Failed("opencode.json is not JSON".into()),
+    );
+    super::agents::draw_logos(s);
+}
+
+#[test]
+fn agent_clients_connect_or_show_their_manual_steps() {
+    let mut rt = open();
+    rt.update(|s| {
+        found_clients(s);
+        s.act("editor.layout.show", json!({"panel": "agents"}));
+    });
+    settle(&mut rt);
+    // Each client offers the one action that fits what was found.
+    assert!(
+        rt.find("agents/codex/connect").is_some(),
+        "installed: Connect"
+    );
+    assert!(rt.find("agents/opencode/retry").is_some(), "failed: Retry");
+    assert!(
+        rt.find("agents/claude/connect").is_none(),
+        "already connected"
+    );
+    // Where the editor cannot connect it: manual steps, copied as a whole.
+    press(&mut rt, "agents/cursor/manual");
+    press(&mut rt, "agents/cursor/copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(
+        copied.contains("/opt/ara/ara") && copied.contains("mcp"),
+        "{copied}"
+    );
+    // Any other client: the raw command, with its own Copy (below the fold here).
+    assert!(rt.find("agents/connect/copy").is_some());
 }
 
 #[test]
@@ -1756,6 +2140,8 @@ fn captures() {
             rt.set_background(Some(background));
         }
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+        rt.update(found_clients);
+        rt.update(sample_logs);
         for panel in [
             "assets",
             "console",
@@ -1765,10 +2151,13 @@ fn captures() {
             "lighting",
             "profiler",
             "mesh-paint",
+            "game",
+            "build",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
             });
+            host_feedback(&mut rt);
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
@@ -1924,6 +2313,8 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.palette = None);
+        // The Inspector in front of Mesh Paint, as a person picking a component has it.
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "inspector"})));
         rt.update(|s| s.local.add_component = Some(Default::default()));
         settle(&mut rt);
         for _ in 0..30 {
@@ -2301,6 +2692,24 @@ fn the_animation_page_shows_states_added_to_its_controller() {
 }
 
 /// Records where `keys` are laid out, as the host does after each frame.
+/// The host's layout feedback for a few passes: the Scene view's and overlays' rects
+/// reported, overlay lengths measured (so overflow folds overlays as the app does).
+fn host_feedback(rt: &mut Runtime<Studio>) {
+    let keys: Vec<String> = std::iter::once("scene/view".to_owned())
+        .chain(
+            super::scene_overlays::OVERLAYS
+                .iter()
+                .map(|d| format!("scene/overlay/{}", d.id)),
+        )
+        .collect();
+    for _ in 0..4 {
+        settle(rt);
+        rt.touch(|s| s.local.rects.clear());
+        track(rt, &keys.iter().map(String::as_str).collect::<Vec<_>>());
+        rt.update(super::scene_overlays::measure);
+    }
+}
+
 fn track(rt: &mut Runtime<Studio>, keys: &[&str]) {
     let rects: Vec<_> = keys
         .iter()

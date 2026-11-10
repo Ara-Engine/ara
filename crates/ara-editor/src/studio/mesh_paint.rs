@@ -50,6 +50,8 @@ fn number(
     set: fn(&mut PaintSettings, f32),
 ) -> El<Studio> {
     let l = &s.look;
+    // A radius spans millimetres to metres: its track runs by magnitude.
+    let log = range.1 / range.0.max(f32::EPSILON) > 100.0;
     row()
         .h(super::style::ROW)
         .gap(8.0)
@@ -59,6 +61,20 @@ fn number(
                 .text_size(12.0)
                 .color(l.c.muted_foreground.0)
                 .w(90.0),
+        )
+        .child(
+            super::style::slider(
+                l,
+                format!("{key}/track"),
+                value,
+                range,
+                log,
+                move |s: &mut Studio, v| {
+                    edit(s, |p| set(p, v));
+                },
+            )
+            .w(0.0)
+            .grow(1.0),
         )
         .child(
             field(
@@ -76,8 +92,7 @@ fn number(
                     })
                 },
             )
-            .w(0.0)
-            .grow(1.0),
+            .w(64.0),
         )
 }
 

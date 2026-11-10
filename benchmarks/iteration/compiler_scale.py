@@ -6,12 +6,14 @@ import math
 import os
 from pathlib import Path
 import platform
+import queue
 import re
 import shutil
 import statistics
 import subprocess
 import sys
 import time
+import threading
 
 
 def source(module, file, revision, rate=None):
@@ -77,9 +79,11 @@ def finish_server(process):
         time.sleep(0.01)
 
 
-def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edit_all, dependency_fanout=False):
+def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edit_all, dependency_fanout=False, *, warmups=3, project_root=None, request_timeout=120):
     server_hash = hashlib.sha256(server.read_bytes()).hexdigest()
-    project = repo / "target/iteration-perf" / f"compiler-scale-{os.getpid()}-{label}"
+    project = project_root or repo / "target/iteration-perf" / f"compiler-scale-{os.getpid()}-{label}"
+    if project.exists():
+        raise FileExistsError(f"fixture must be fresh: {project}")
     for module in range(modules):
         directory = project / "content" / f"module{module}"
         directory.mkdir(parents=True, exist_ok=True)
@@ -97,8 +101,29 @@ def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edi
     samples = []
     with subprocess.Popen([dotnet_host, str(server), "--project-session", "--parent", str(os.getpid())],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+        responses = queue.Queue()
+        stderr = []
+        stderr_bytes = 0
+
+        def read_stdout():
+            try:
+                for line in process.stdout:
+                    responses.put(line)
+            finally:
+                responses.put(None)
+
+        def read_stderr():
+            nonlocal stderr_bytes
+            for line in process.stderr:
+                stderr_bytes += len(line.encode("utf-8"))
+                if stderr_bytes <= 4 * 1024 * 1024:
+                    stderr.append(line)
+
+        readers = [threading.Thread(target=read_stdout, daemon=True), threading.Thread(target=read_stderr, daemon=True)]
+        for reader in readers:
+            reader.start()
         try:
-            for revision in range(sample_count + 3):
+            for revision in range(sample_count + warmups):
                 if dependency_fanout:
                     (project / "content/core/Rule.cs").write_text(
                         f"namespace Shared; public static class Rule {{ public const float Rate = {revision + 1}.0f; }}", encoding="utf-8")
@@ -109,12 +134,26 @@ def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edi
                 start = time.perf_counter()
                 process.stdin.write(json.dumps(dict(project=str(project), authoringRoot="content", domain="gameplay", operation="--compile-project")) + "\n")
                 process.stdin.flush()
-                response = process.stdout.readline()
+                try:
+                    response = responses.get(timeout=request_timeout)
+                except queue.Empty as error:
+                    raise TimeoutError(f"compiler request {revision} exceeded {request_timeout}s") from error
                 if not response:
-                    raise RuntimeError(process.stderr.read())
+                    raise RuntimeError("compiler exited before response: " + "".join(stderr))
+                if stderr_bytes > 4 * 1024 * 1024:
+                    raise RuntimeError("compiler stderr exceeded 4 MiB")
                 result = json.loads(response)
                 elapsed = (time.perf_counter() - start) * 1000
                 errors = [d for d in result["diagnostics"] if d.get("severity") == "error"]
+                expected = {f"module{i}" for i in range(modules)} | ({"core"} if dependency_fanout else set())
+                actual = [m["name"] for m in result["modules"]]
+                if len(actual) != len(expected) or set(actual) != expected:
+                    raise RuntimeError(f"incorrect module inventory: {actual}")
+                for module in result["modules"]:
+                    expected_types = 0 if module["name"] == "core" else files
+                    schema = module.get("schema") or {}
+                    if schema.get("$schema") != "ara://schema/types/1" or len(schema.get("types", {})) != expected_types:
+                        raise RuntimeError(f"incorrect reflected schema: {module['name']}")
                 if errors or any(m["result"] != "compiled" for m in result["modules"]):
                     raise RuntimeError(errors or "expected a full compile of every module")
                 samples.append(elapsed)
@@ -124,16 +163,29 @@ def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edi
                     pdb=hashlib.sha256((project / m["assemblyPath"]).with_suffix(".pdb").read_bytes()).hexdigest())
                     for m in result["modules"]})
             runtime = loaded_runtime(process.pid)
+        except BaseException:
+            process.kill()
+            raise
         finally:
             process.stdin.close()
             peak_rss = finish_server(process)
-        if process.returncode:
-            raise RuntimeError(process.stderr.read())
-    warm = samples[3:]
+            for reader in readers:
+                reader.join(timeout=2)
+            if any(reader.is_alive() for reader in readers):
+                raise RuntimeError("compiler output did not close after exit")
+        if process.returncode or stderr_bytes > 4 * 1024 * 1024:
+            raise RuntimeError("compiler exit/output failure: " + "".join(stderr))
+        trailing = []
+        while not responses.empty():
+            if (line := responses.get_nowait()) is not None:
+                trailing.append(line)
+        if trailing:
+            raise RuntimeError("unexpected trailing compiler output")
+    warm = samples[warmups:]
     report = dict(modules=modules + int(dependency_fanout), files_per_module=files, generated_components=modules * files,
                   edited_sources_per_request=1 if dependency_fanout else modules * (files if edit_all else 1),
                   dependency_fanout=dependency_fanout, artifact_sha256_per_request=artifacts,
-                  first_ms=samples[0], warm_ms=warm, p50_ms=statistics.median(warm),
+                  first_ms=samples[0], all_ms=samples, warmup_count=warmups, warm_ms=warm, p50_ms=statistics.median(warm),
                   p95_ms=sorted(warm)[math.ceil(0.95 * len(warm)) - 1],
                   server=str(server), server_sha256=server_hash, runtime=runtime,
                   dotnet_host=str(Path(dotnet_host).resolve()), platform=platform.platform(),
@@ -153,11 +205,19 @@ def main():
     parser.add_argument("--modules", type=int, default=12)
     parser.add_argument("--files", type=int, default=12)
     parser.add_argument("--samples", type=int, default=8)
+    parser.add_argument("--warmups", type=int, default=3)
+    parser.add_argument("--project-root", type=Path, help="fresh absolute fixture path; use the same path between sequential processes")
+    parser.add_argument("--request-timeout", type=float, default=120)
+    parser.add_argument("--dotnet-host", type=Path, help="pin the dotnet executable instead of PATH")
     parser.add_argument("--edit-all", action="store_true", help="change every source before each request instead of one per module")
     parser.add_argument("--dependency-fanout", action="store_true", help="edit one shared constant; rebuild all unchanged consumers against its new image")
     args = parser.parse_args()
     if min(args.modules, args.files, args.samples) < 1:
         parser.error("modules, files and samples must be positive")
+    if args.warmups < 1 or args.request_timeout <= 0:
+        parser.error("warmups and request timeout must be positive")
+    if args.project_root is not None and (not args.project_root.is_absolute() or args.reference_server is not None):
+        parser.error("project-root must be absolute and used with one server per invocation")
     if args.reverse and args.reference_server is None:
         parser.error("--reverse requires --reference-server")
     if args.edit_all and args.dependency_fanout:
@@ -169,10 +229,11 @@ def main():
         cases.reverse()
     if any(not path.is_file() for _, path in cases):
         parser.error("compile server missing; build/test the compiler project first")
-    dotnet_host = shutil.which("dotnet")
+    dotnet_host = str(args.dotnet_host.resolve()) if args.dotnet_host else shutil.which("dotnet")
     if dotnet_host is None:
         parser.error("dotnet host is not on PATH")
-    results = {label: run_case(repo, path, args.modules, args.files, args.samples, dotnet_host, label, args.edit_all, args.dependency_fanout)
+    results = {label: run_case(repo, path, args.modules, args.files, args.samples, dotnet_host, label, args.edit_all, args.dependency_fanout,
+                                     warmups=args.warmups, project_root=args.project_root, request_timeout=args.request_timeout)
                for label, path in cases}
     report = results["optimized"] if args.reference_server is None else dict(run_order=[label for label, _ in cases], **results)
     args.output.parent.mkdir(parents=True, exist_ok=True)

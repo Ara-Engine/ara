@@ -49,6 +49,22 @@ impl Compositor {
         })
     }
 
+    /// The map from presented renderer entities to scene addresses, brought up to date
+    /// (Drop to Surface reads what the rays hit through it).
+    pub fn channels(
+        &mut self,
+        renderer: &ara_render::Renderer,
+        view: &DocumentView,
+        revision: u64,
+    ) -> &crate::world::channels::Channels {
+        self.outlines.channels.update(
+            crate::world::EditWorldView::entities(view),
+            revision,
+            renderer.entities(),
+        );
+        &self.outlines.channels
+    }
+
     /// The renderer entity the click at physical pixel `at` lands on, through the
     /// channel map (a model's parts and a terrain's tiles pick their entity).
     pub fn pick(

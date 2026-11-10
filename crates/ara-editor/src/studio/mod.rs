@@ -40,6 +40,7 @@ mod running;
 mod scene;
 mod scene_overlays;
 mod scripts;
+mod shortcuts;
 pub mod state;
 mod style;
 #[cfg(test)]
@@ -223,9 +224,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         let mut pass = trace::Pass::begin();
         pass.phase("studio.events");
+        let before_events = rt.state().editor.state.camera;
         if pump(&mut rt, &mut surface, started, Some(&mut game))? {
             break;
         }
+        // Whether the person's own input moved the view this pass (Pilot Camera).
+        let mut steered = rt.state().editor.state.camera != before_events;
         pass.mark("events+ui");
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
@@ -342,7 +346,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // A hidden (minimized) window shows no frames: render none. A covered one skips
         // presents on its own (the 1 ms present wait).
         #[cfg(any(windows, target_os = "macos"))]
-        let shown = surface.is_visible();
+        let shown = visible(&surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let shown = true;
         if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
@@ -488,6 +492,25 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
+        // Drop to Surface (End): the presented geometry answers its rays.
+        if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
+            let channels = compositor.channels(&renderer, &view, revision);
+            rt.update(|s| {
+                let planned =
+                    crate::surface_drop::plan(&s.editor, &scene_view, |id| channels.target_of(id));
+                let result = planned.and_then(|plan| match plan {
+                    Some((commands, base)) => s
+                        .editor
+                        .apply(commands, "Drop selection to surface", Some(base))
+                        .map(drop)
+                        .map_err(Into::into),
+                    None => Ok(()),
+                });
+                if let Err(error) = result {
+                    s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                }
+            });
+        }
         // Mesh Paint: the Scene view's presses and drags as world rays on the selection's
         // meshes; a press on none of them selects as a click would.
         let input = rt.touch(|s| std::mem::take(&mut s.local.paint_input));
@@ -566,7 +589,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .map(|(_, r)| r);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
         #[cfg(any(windows, target_os = "macos"))]
-        let visible = surface.is_visible();
+        let visible = visible(&surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
@@ -679,6 +702,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 }
             });
         }
+        // Agents: the clients are looked for once the Connect rows show; answers redraw.
+        if rt.find("agents/connect").is_some() && !rt.state().local.agent_setups.probed {
+            rt.update(agents::probe_clients);
+        }
+        if rt.touch(|s| s.local.agent_setups.poll()) {
+            rt.update(|_| {});
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});
@@ -691,9 +721,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if flying {
             let dt = last_fly.elapsed().as_secs_f32().min(0.1);
             let shift = modifiers().shift;
+            let before_fly = rt.state().editor.state.camera;
             rt.touch(|s| fly(s, dt, shift));
+            steered |= rt.state().editor.state.camera != before_fly;
         }
         last_fly = Instant::now();
+        // A piloted Camera follows the view; a finished move commits.
+        if rt.state().local.pilot.active() {
+            rt.update(|s| {
+                scene::poll_pilot(s, steered);
+            });
+        }
         pass.end();
         if profiling {
             rt.touch(|s| {
@@ -834,12 +872,36 @@ pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
 
+/// Whether the window shows on screen. Linux's stillkit surface does not report it
+/// yet, so there the window counts as shown.
+fn visible(surface: &Surface) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = surface;
+        true
+    }
+    #[cfg(not(target_os = "linux"))]
+    surface.is_visible()
+}
+
+/// Whether the window is maximized (the drawn Restore button). Linux's stillkit surface
+/// does not report it yet, so there it reads as not maximized.
+fn maximized(surface: &Surface) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = surface;
+        false
+    }
+    #[cfg(not(target_os = "linux"))]
+    surface.is_maximized()
+}
+
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface) -> state::Frame {
     let s = surface.scale();
     state::Frame {
         inset: surface.system_controls().map_or(0.0, |r| r.right / s),
-        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
+        controls: (!cfg!(target_os = "macos")).then(|| maximized(surface)),
     }
 }
 
@@ -959,7 +1021,7 @@ fn pump(
             }
             Event::SettingChanged => rt.set_reduced_motion(reduced_motion()),
             #[cfg(any(windows, target_os = "macos"))]
-            Event::VisibilityChanged => rt.set_visible(surface.is_visible()),
+            Event::VisibilityChanged => rt.set_visible(visible(surface)),
             Event::Invoke(hit) => match surface.take_accessibility_action(hit) {
                 Some(action) => {
                     rt.accessibility_action(hit, &action);

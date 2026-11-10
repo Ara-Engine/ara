@@ -51,7 +51,7 @@ fn benchmark_idle_pilot_polling() {
     after.sort_by(f64::total_cmp);
     let mut source = blake3::Hasher::new();
     source.update(include_bytes!("../../pilot.rs"));
-    source.update(include_bytes!("../model.rs"));
+    source.update(include_bytes!("../../../pilot/model.rs"));
     source.update(include_bytes!("../../../app/controller.rs"));
     let result = json!({"schema":1,"kind":"cpu-opt-in","measurement":"disabled versus active unchanged Pilot::poll; not a pre-feature source comparison","samplesPerRound":count,"interleavedRounds":5,"warmupPerArm":1000,"disabledMedianNsPerCall":before[2],"activeMedianNsPerCall":after[2],"disabledRoundsNs":before,"activeRoundsNs":after,"sceneLookups":0,"sourceBlake3":source.finalize().to_hex().to_string(),"nativeOrGpuEvidence":false});
     let output = crate::test_target().join("pilot-benchmarks");

@@ -396,7 +396,7 @@ impl FileThread {
             stamp,
         }
     }
-    /// Ask for a full check now; `Done` follows its findings.
+    /// Verify watched contents and rescan; `Done` follows even for reused stamps.
     pub(crate) fn sync(&self) {
         self.send(Request::Sync);
     }
@@ -494,7 +494,7 @@ impl Worker {
             if let (Some((check_every, scan_every)), Some((check, scan))) = (cadence, &mut next) {
                 let now = Instant::now();
                 if now >= *check {
-                    self.check_watched();
+                    self.check_watched(false);
                     *check = now + check_every;
                 }
                 if now >= *scan {
@@ -633,7 +633,7 @@ impl Worker {
                 });
             }
             Request::Sync => {
-                self.check_watched();
+                self.check_watched(true);
                 self.scan();
                 self.reply(Reply::Done);
             }
@@ -647,7 +647,7 @@ impl Worker {
             }
             // A dropped or overflowing notification stream: look at everything.
             Request::Notified(_) => {
-                self.check_watched();
+                self.check_watched(true);
                 self.scan();
             }
         }
@@ -661,7 +661,7 @@ impl Worker {
         };
         let key = slash(rel);
         if self.watched.contains_key(&key) {
-            self.check(&key);
+            self.check(&key, true);
         } else if crate::project::is_document(rel, &self.extensions)
             && crate::project::walked(&self.root, rel)
         {
@@ -705,21 +705,23 @@ impl Worker {
         Ok(text)
     }
 
-    fn check_watched(&mut self) {
+    fn check_watched(&mut self, verify_contents: bool) {
         let paths: Vec<String> = self.watched.keys().cloned().collect();
         for path in paths {
-            self.check(&path);
+            self.check(&path, verify_contents);
         }
         self.check_types();
     }
 
     /// Report a watched file that changed or disappeared since it was last seen.
-    fn check(&mut self, path: &str) {
+    fn check(&mut self, path: &str, verify_contents: bool) {
         let Some(known) = self.watched.get(path) else {
             return;
         };
         let now = stamp(&self.root.join(path));
-        if now == known.stamp {
+        // Explicit scans and notifications can describe a same-size rewrite in
+        // one timestamp quantum. Only periodic metadata polling may trust the stamp.
+        if now == known.stamp && (!verify_contents || now.is_none()) {
             return;
         }
         match now {
@@ -828,6 +830,74 @@ fn slash(rel: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_scan_reads_same_stamp_rewrite() {
+        same_stamp_rewrite(false);
+    }
+
+    #[test]
+    fn notification_reads_same_stamp_rewrite() {
+        same_stamp_rewrite(true);
+    }
+
+    /// Model a coarse timestamp without depending on the machine's clock resolution.
+    fn same_stamp_rewrite(notified: bool) {
+        let dir = std::env::temp_dir().join(format!(
+            "ara-host-same-stamp-{}-{notified}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("scratch");
+        let path = "watched.txt";
+        let absolute = dir.join(path);
+        fs::write(&absolute, "first").expect("original bytes");
+        let before = fs::metadata(&absolute).expect("original metadata");
+        let original = stamp(&absolute);
+        let (journal, _, _) = Journal::open(&dir.join(".ara")).expect("journal");
+        let mut io = FileThread::start(
+            dir.clone(),
+            SchemaDb::new(),
+            Vec::new(),
+            journal,
+            Duration::ZERO,
+            Duration::ZERO,
+        )
+        .expect("worker");
+        io.track(path.into(), original.clone());
+        fs::write(&absolute, "later").expect("external rewrite");
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&absolute)
+            .expect("edited file")
+            .set_times(fs::FileTimes::new().set_modified(before.modified().expect("original time")))
+            .expect("preserve timestamp");
+        assert_eq!(
+            stamp(&absolute),
+            original,
+            "metadata cannot identify this edit"
+        );
+        if notified {
+            io.send(Request::Notified(Ok(notify::Event::new(
+                notify::EventKind::Any,
+            )
+            .add_path(absolute))));
+        } else {
+            io.sync();
+        }
+        io.settle();
+        let mut changed = Vec::new();
+        while let Some(reply) = io.reply() {
+            match reply {
+                Reply::Changed { path, text } => changed.push((path, text)),
+                Reply::Settled => break,
+                Reply::Done => {}
+                other => panic!("unexpected file reply: {other:?}"),
+            }
+        }
+        assert_eq!(changed, vec![(path.into(), "later".into())]);
+        drop(io);
+        fs::remove_dir_all(dir).expect("remove scratch");
+    }
 
     #[test]
     fn owned_file_delete_recreate_refreshes_watch_baseline_but_external_delete_is_reported() {
