@@ -738,6 +738,15 @@ impl EditorService {
                     let text = std::fs::read_to_string(&path)
                         .map_err(|_| vec![crate::invalid(format!("no layout `{}`", p.name))])?;
                     let (dock, migrated) = crate::state::restore_layout(&text).map_err(ui_error)?;
+                    // Its Scene overlays, when it was saved with them.
+                    let overlays = ara_json::parse(&text).ok().and_then(|v: Value| {
+                        v.get("sceneOverlays").filter(|o| o.is_object()).cloned()
+                    });
+                    if let Some(overlays) = overlays {
+                        self.settings
+                            .set_with_host(cx, "viewport.overlays", Some(overlays))?;
+                        sync_settings(&mut state, &self.settings);
+                    }
                     if migrated {
                         state.set_dock(&dock);
                         crate::state::write_layout(&path, &state)
@@ -758,7 +767,7 @@ impl EditorService {
                     .root()
                     .join(".ara/layouts")
                     .join(format!("{}.json", safe_name(&p.name)?));
-                crate::state::write_layout(&path, &state)
+                crate::state::write_named_layout(&path, &state)
                     .map_err(|e| vec![crate::invalid(e.to_string())])?;
                 return Ok(json!({"saved": path}));
             }
@@ -1090,8 +1099,14 @@ impl EditorService {
             }
             "editor.layout" => {
                 let p: EditorLayout = parse(params)?;
-                if p.window.is_some() && p.ratio.is_none() {
-                    return Err(vec![crate::invalid("window requires a splitter ratio")]);
+                let front = p.front.unwrap_or(false);
+                if p.window.is_some() && p.ratio.is_none() && !front {
+                    return Err(vec![crate::invalid(
+                        "window requires a splitter ratio or front",
+                    )]);
+                }
+                if p.window.is_none() && front {
+                    return Err(vec![crate::invalid("front needs a floating window")]);
                 }
                 let mut dock = state.dock().map_err(ui_error)?;
                 if let Some(ratio) = p.ratio {
@@ -1128,6 +1143,16 @@ impl EditorService {
                     dock.expand_panel(&panel);
                 }
                 state.set_dock(&dock);
+                // In front: last in the floating list draws on top.
+                if front && let Some(window) = p.window.as_deref() {
+                    let at = state
+                        .floating
+                        .iter()
+                        .position(|f| f.id == window)
+                        .ok_or_else(|| vec![crate::invalid("no floating window with that id")])?;
+                    let raised = state.floating.remove(at);
+                    state.floating.push(raised);
+                }
             }
             "editor.paint" => {
                 let p: EditorPaint = parse(params)?;

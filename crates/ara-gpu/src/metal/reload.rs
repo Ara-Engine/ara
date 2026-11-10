@@ -17,7 +17,7 @@ struct Entry {
     active: CookedPipeline,
 }
 enum Request {
-    Track(Entry),
+    Track(Box<Entry>),
     Forget(Pipeline),
     Reload,
     Stop,
@@ -66,7 +66,10 @@ struct ManifestIndex {
 
 fn compatible(old: &CookedPipeline, new: &CookedPipeline) -> Result<()> {
     ensure!(
-        old.version == new.version && old.binding_layout_hash == new.binding_layout_hash,
+        old.version == new.version
+            && (old.binding_layout_hash == new.binding_layout_hash
+                || (crate::cooked::binding_layout_compatible(&old.binding_layout_hash)
+                    && crate::cooked::binding_layout_compatible(&new.binding_layout_hash))),
         "shader schema/layout changed; a Rust rebuild is required"
     );
     ensure!(
@@ -184,7 +187,7 @@ impl Worker {
                                         .unwrap_or_default()
                                 });
                             }
-                            entries.push(entry);
+                            entries.push(*entry);
                         }
                         Ok(Request::Forget(handle)) => {
                             let directory = entries
@@ -318,11 +321,11 @@ impl Worker {
                 .cohorts
                 .entry(directory.to_owned())
                 .or_insert_with(|| cooked.key.clone());
-            self.sender.send(Request::Track(Entry {
+            self.sender.send(Request::Track(Box::new(Entry {
                 handle,
                 manifest: path.clone(),
                 active: cooked.clone(),
-            }))?;
+            })))?;
         }
         Ok(())
     }

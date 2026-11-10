@@ -295,7 +295,10 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     // List, then three tile sizes (Unity's slider, as steps).
-    let mut sizes = row().gap(1.0);
+    // One Tab stop for the view sizes (on the current one), arrows between them.
+    let mut sizes = row()
+        .gap(1.0)
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (size, glyph, label) in [
         (TileSize::List, icons::LIST, "List"),
         (TileSize::Small, icons::GRID_3X3, "Small tiles"),
@@ -347,14 +350,16 @@ fn assets(s: &Studio) -> El<Studio> {
         }))
         .child(sizes)
         .child(view_menu(s));
-    // Type filters (Unreal's filter bar): one type across the whole project.
+    // Type filters (Unreal's filter bar): one type across the whole project. A narrow
+    // panel wraps them onto another line rather than hiding the last ones past its edge.
     let mut chips = row()
-        .h(24.0)
         .min_w(0.0)
         .pad_x(6.0)
+        .pad_y(2.0)
         .gap(3.0)
         .align(Align::Center)
-        .scroll(Axis::Horizontal);
+        .flow_wrap()
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (id, label, glyph) in FILTERS {
         let on = view.filter == Some(id);
         let tint = category_tint(l, id);
@@ -454,6 +459,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .cmp(&(a.kind == "folder"))
             .then_with(|| a.path.to_lowercase().cmp(&b.path.to_lowercase()))
     });
+    let footer = assets_footer(s, &folder, items.len());
     let body = if let Some(error) = &browser.error {
         empty(
             l,
@@ -534,7 +540,8 @@ fn assets(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         .child(toolbar)
         .children(import_strip(s))
-        .child(body);
+        .child(body)
+        .child(footer);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
@@ -575,6 +582,42 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     root
+}
+
+/// Under the contents, as Unity's Project window: the selected asset's path, or what the
+/// folder shows (`shown` items) and where it is.
+fn assets_footer(s: &Studio, folder: &str, shown: usize) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let (glyph, line) = match s.editor.state.asset_path.as_deref() {
+        Some(path) if !path.is_empty() => (icons::FILE, path.to_owned()),
+        _ => {
+            let place = if folder.is_empty() { "Project" } else { folder };
+            let items = match shown {
+                1 => "1 item".to_owned(),
+                n => format!("{n} items"),
+            };
+            (icons::FOLDER, format!("{place} · {items}"))
+        }
+    };
+    row()
+        .key("assets/footer")
+        .h(22.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .fill(super::style::tones(l).band)
+        .label(line.clone())
+        .child(icon(glyph).size(12.0).color(c.muted_foreground.0))
+        .child(
+            text(line)
+                .text_size(11.0)
+                .family(mono())
+                .wrap(1)
+                .color(c.muted_foreground.0)
+                .grow(1.0)
+                .min_w(0.0),
+        )
 }
 
 /// The Assets view menu (⋯): Import, what shows (every file, the folder only), thumbnails.
@@ -1770,14 +1813,14 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
     }
     if let Some(doc) = doc {
         out = out.child(
-            text(doc.summary())
+            super::style::prose(doc.summary())
                 .text_size(11.5)
                 .wrap(3)
                 .color(c.muted_foreground.0),
         );
         if let Some(cause) = doc.causes.first() {
             out = out.child(
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(2)
                     .color(c.muted_foreground.0),
@@ -1860,6 +1903,18 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Stu
                 None
             } else {
                 Some(seq)
+            }
+        })
+        // Its menu (Copy, Collapse, Clear…), the message open in the details.
+        .on_context_menu({
+            let line = format!("{}: {}", r.code, r.message);
+            move |s: &mut Studio, x, y| {
+                s.local.console_open = Some(seq);
+                s.local.context = Some((
+                    crate::catalog::menus::Context::Console,
+                    crate::catalog::Target::Text(line.clone()),
+                    (x, y),
+                ));
             }
         })
         .child(severity_glyph(l, r.severity))
@@ -1988,6 +2043,19 @@ fn problems(s: &Studio) -> El<Studio> {
         )
     } else {
         let mut out = col().pad(8.0).gap(8.0);
+        // Files with errors first, then the most problems, then by name.
+        let mut groups: Vec<_> = groups.into_iter().collect();
+        groups.sort_by_key(|(file, rows)| {
+            let errors = rows
+                .iter()
+                .filter(|r| r.severity == ara_diag::Severity::Error)
+                .count();
+            (
+                std::cmp::Reverse(errors),
+                std::cmp::Reverse(rows.len()),
+                *file,
+            )
+        });
         for (file, rows) in groups {
             let mut card = col()
                 .radius(super::style::RADIUS)
@@ -2057,13 +2125,13 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
     if open && let Some(doc) = doc {
         message = message
             .child(
-                text(format!("{}: {}", doc.title, doc.summary()))
+                super::style::prose(&format!("{}: {}", doc.title, doc.summary()))
                     .text_size(11.5)
                     .wrap(4)
                     .color(c.muted_foreground.0),
             )
             .children(doc.causes.first().map(|cause| {
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(3)
                     .color(c.muted_foreground.0)

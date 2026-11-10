@@ -290,11 +290,11 @@ impl MetalDevice {
             .collect();
         let mut commands = self.begin(queue);
         commands.push(Command::BeginPass("Frame.UploadConstants".into()));
-        for (i, chunk) in bytes.chunks(65536).enumerate() {
+        if !bytes.is_empty() {
             commands.push(Command::UpdateBuffer {
                 destination: buffer,
-                offset: offset + (i * 65536) as u64,
-                bytes: chunk.to_vec(),
+                offset,
+                bytes: bytes.to_vec(),
             });
         }
         commands.push(Command::EndPass);

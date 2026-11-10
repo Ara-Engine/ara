@@ -149,11 +149,15 @@ mod override_tests {
 
 /// Runtime sampled-image and storage-buffer arrays. The fingerprint rejects
 /// fixed-size engine shaders whose declared buffer range cannot reach new slots.
-pub const BINDING_LAYOUT: &str =
-    "ara.v3:root32:texture-runtime@5:legacy-texture128@0:buffer-runtime@1:sampler3:storage128:as16";
+pub const BINDING_LAYOUT: &str = "ara.v4:root32:texture-runtime@5:legacy-texture128@0:buffer-runtime@1:sampler-runtime@2:comparison-runtime@6:storage128:as16";
 /// Hash of the exact global binding ABI.
 pub fn binding_layout_hash() -> String {
     format!("{:x}", Sha256::digest(BINDING_LAYOUT.as_bytes()))
+}
+
+/// This runtime accepts the v3 prefix; older runtimes reject new v4 artifacts.
+pub(crate) fn binding_layout_compatible(hash: &str) -> bool {
+    hash==binding_layout_hash() || hash==format!("{:x}",Sha256::digest(b"ara.v3:root32:texture-runtime@5:legacy-texture128@0:buffer-runtime@1:sampler3:storage128:as16"))
 }
 
 /// Only cached editor material previews retain this binding subset. Engine
@@ -242,6 +246,24 @@ pub struct RenderState {
     pub depth_write: bool,
     /// Premultiplied alpha blending.
     pub blend: bool,
+    /// Explicit native raster and vertex-input state; absent preserves old cooked files.
+    #[serde(default)]
+    pub raster: crate::raster::RasterState,
+}
+impl RenderState {
+    pub(crate) fn validate(&self) -> crate::Result<()> {
+        self.raster.validate()?;
+        if self.color_formats.len() > 8
+            || (!self.raster.blends.is_empty()
+                && self.raster.blends.len() != self.color_formats.len())
+            || (!self.raster.vertex_layouts.is_empty() && self.vertex_stride != 0)
+        {
+            return Err(crate::GpuError::Contract(
+                "Invalid attachment count, blend count or ambiguous vertex layout".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 /// Runtime pipeline manifest, content-addressed by the cook.
 #[derive(Debug, Clone, Serialize, Deserialize)]

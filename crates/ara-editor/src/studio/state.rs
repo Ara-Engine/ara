@@ -204,11 +204,30 @@ impl std::fmt::Debug for Previews {
     }
 }
 
+/// Floating windows as native ones: whether they are, and what the host measured of them.
+/// Their layout rects are then desktop design px (window frames), not main-window ones.
+#[derive(Debug, Default)]
+pub struct Desktop {
+    /// Set by the host; off (headless tests), floating windows sit inside the main one.
+    pub on: bool,
+    /// The main window's client top-left on the desktop (design px).
+    pub origin: (f32, f32),
+    /// Each floating window's client size (design px), as its native window has it.
+    pub sizes: std::collections::BTreeMap<String, (f32, f32)>,
+    /// How far in from a floating window's left its title bar starts: the system's window
+    /// controls (macOS's traffic lights) sit there.
+    pub inset: f32,
+    /// The pointer on the desktop (design px) while a tab is dragged: where it tears out to.
+    pub pointer: Option<(f32, f32)>,
+}
+
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
     /// The keyboard bindings in force (`commands::refresh_keys`).
     pub(crate) bindings: super::commands::Bindings,
+    /// The submenu open beside the open menu, by its title (Unity's cascading menus).
+    pub submenu: Option<&'static str>,
     /// The open title-bar menu, by its name.
     pub menu: Option<&'static str>,
     /// The command palette: open, query, highlighted result.
@@ -257,6 +276,8 @@ pub struct Local {
     /// The Inspector locked on these entities (Unity's padlock): selecting others leaves
     /// it showing them.
     pub inspector_lock: Option<Vec<String>>,
+    /// The Inspector shows the entity's record as stored (Unity's Debug mode).
+    pub inspector_raw: bool,
     /// Properties the Inspector shows: those whose name or component matches.
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
@@ -368,6 +389,10 @@ pub struct Local {
     /// Each agent client's mark, by client and whether for the light scheme.
     pub(crate) agent_logos:
         std::collections::BTreeMap<(ara_agents::Client, bool), std::sync::Arc<stillkit::Image>>,
+    /// The Profiler's scopes as a call tree (Unity's Hierarchy view) rather than a flat list.
+    pub profiler_tree: bool,
+    /// Call-tree rows open in the Profiler, by their path of scope names (`a/b/c`).
+    pub profiler_open: std::collections::BTreeSet<String>,
     /// The Profiler hides the baseline comparison (Profiler › Compare off).
     pub profiler_hide_compare: bool,
     /// Opened in the background (`--background`): fields are not given keyboard focus (on
@@ -399,8 +424,14 @@ pub struct Local {
     pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
+    /// A curve key or tangent handle being dragged (`studio::curve`).
+    pub curve_drag: Option<super::curve::CurveDrag>,
+    /// The picked key of a curve editor: its key (`curve/{field}`) and the key's index.
+    pub curve_pick: Option<(String, usize)>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
+    /// Floating windows as native windows of their own (`studio::portals`).
+    pub desktop: Desktop,
     /// Each Scene overlay's length along its edge when last shown expanded (design px), so
     /// one squeezed to its icon knows when it fits again.
     pub overlay_lengths: std::collections::BTreeMap<&'static str, f32>,
@@ -506,6 +537,8 @@ pub enum WindowRequest {
     Minimize,
     /// Maximize it, or restore it when it is.
     Maximize,
+    /// Full screen, or back to a window when it is (View › Full Screen, F11).
+    Fullscreen,
 }
 
 /// The studio's runtime state.

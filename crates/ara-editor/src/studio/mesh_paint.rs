@@ -37,7 +37,7 @@ fn swatch(l: &ara_kit::look::Look, color: [f32; 4], size: f32) -> El<Studio> {
     el().size(size)
         .radius(4.0)
         .fill(stillkit::Rgba::new(color[0], color[1], color[2], 1.0))
-        .border(1.0, l.c.border.0)
+        .border(1.0, l.c.foreground.0.with_alpha(0.2))
 }
 
 /// A labelled number the brush has, typed into (Enter sets it, within `range`).
@@ -148,9 +148,10 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .zip(&keys)
         .map(|((_, _, title, _), key)| (key.as_str(), None, *title))
         .collect();
+    // The chosen tool shows whether or not painting is on: it is what the next stroke uses.
     let chosen = TOOLS
         .iter()
-        .position(|(t, ..)| on && *t == p.tool)
+        .position(|(t, ..)| *t == p.tool)
         .unwrap_or(usize::MAX);
     let tools = segmented(l, &options, chosen, |i| {
         let id = TOOLS[i].1;

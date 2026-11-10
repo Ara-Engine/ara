@@ -284,6 +284,88 @@ fn scene_overlays_move_to_another_edge_collapse_and_hide() {
 }
 
 #[test]
+fn a_scene_overlay_floats_as_a_panel_switches_layout_and_docks_back() {
+    use super::scene_overlays::{Edge, Layout};
+    let mut rt = open();
+    settle(&mut rt);
+    let dock = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    let drag_grip = |rt: &mut Runtime<Studio>, to: (f32, f32)| {
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        let grip = rt.find("scene/overlay/tools/grip").expect("its grip");
+        rt.pointer_move(grip.center().x, grip.center().y);
+        rt.frame(FRAME);
+        rt.pointer_down(grip.center().x, grip.center().y);
+        for step in 1..=8 {
+            let t = step as f32 / 8.0;
+            rt.pointer_move(
+                grip.center().x + (to.0 - grip.center().x) * t,
+                grip.center().y + (to.1 - grip.center().y) * t,
+            );
+            rt.frame(FRAME);
+        }
+        rt.pointer_up(to.0, to.1);
+        settle(rt);
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        settle(rt);
+    };
+    let view = rt.find("scene/view").expect("the Scene view");
+    // Let go in the middle of the view: it floats there, as a titled panel.
+    drag_grip(&mut rt, (view.center().x, view.center().y));
+    let f = dock(&rt).float.expect("floating");
+    assert_eq!(f.layout, Layout::Panel);
+    let shown = rt.find("scene/overlay/tools").expect("shown");
+    assert!(
+        shown.left > view.left + 40.0 && shown.top > view.top + 40.0,
+        "where it was let go: {shown:?} in {view:?}"
+    );
+    // Its menu lays it out vertically, in place.
+    rt.update(|s| s.local.overlay_menu = Some(("tools", (shown.left + 4.0, shown.top + 4.0))));
+    settle(&mut rt);
+    press(&mut rt, "scene/overlay/tools/vertical");
+    let g = dock(&rt).float.expect("still floating");
+    assert_eq!((g.layout, g.at), (Layout::Vertical, f.at));
+    let tall = rt.find("scene/overlay/tools").expect("shown");
+    assert!(tall.height() > tall.width(), "a column: {tall:?}");
+    // The saved form reads back the same.
+    let text = dock(&rt).text();
+    assert_eq!(
+        super::scene_overlays::Dock::parse(&text),
+        Some(dock(&rt)),
+        "{text}"
+    );
+    // Dragged to the right edge, it docks there again.
+    drag_grip(&mut rt, (view.right - 14.0, view.center().y));
+    let d = dock(&rt);
+    assert_eq!((d.float, d.edge), (None, Edge::Right), "{d:?}");
+}
+
+#[test]
+fn a_saved_layout_brings_its_scene_overlays_back() {
+    let mut rt = open();
+    settle(&mut rt);
+    let tools = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    rt.update(|s| {
+        super::scene_overlays::update(s, "tools", |d| {
+            d.float = Some(super::scene_overlays::Float {
+                at: (160.0, 120.0),
+                layout: super::scene_overlays::Layout::Panel,
+            })
+        });
+        s.act("editor.layout.save", json!({"name": "Overlays"}));
+        super::scene_overlays::reset(s);
+    });
+    settle(&mut rt);
+    assert!(tools(&rt).float.is_none(), "reset docks it");
+    rt.update(|s| s.act("editor.layout.apply", json!({"name": "Overlays"})));
+    settle(&mut rt);
+    assert_eq!(
+        tools(&rt).float.map(|f| f.at),
+        Some((160.0, 120.0)),
+        "as saved with the layout"
+    );
+}
+
+#[test]
 fn the_draw_mode_menu_switches_view_modes_and_effects() {
     let mut rt = open();
     settle(&mut rt);
@@ -464,32 +546,29 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
     assert!(rt.state().local.profiler_hide_compare);
     // Two floating windows: focusing the first brings it to the front.
     rt.update(|s| {
-        for (id, panel) in [("float-a", "console"), ("float-b", "problems")] {
-            s.editor.state.floating.push(ara_ui::docking::Floating {
-                id: id.into(),
-                rect: [40, 40, 400, 300],
-                root: ara_ui::docking::DockNode::Area {
-                    id: format!("{id}-area"),
-                    tabs: vec![panel.into()],
-                    active: 0,
-                },
-            });
+        for panel in ["console", "problems"] {
+            s.act(
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "float", "rect": [40.0, 40.0, 400.0, 300.0]}),
+            );
         }
     });
+    let order = |rt: &Runtime<Studio>| -> Vec<String> {
+        rt.state()
+            .editor
+            .state
+            .floating
+            .iter()
+            .map(|f| f.id.clone())
+            .collect()
+    };
+    let first = order(&rt).first().cloned().expect("two floating windows");
     run(
         &mut rt,
         "window.focus_window",
-        Target::Window("float-a".into()),
+        Target::Window(first.clone()),
     );
-    let order: Vec<_> = rt
-        .state()
-        .editor
-        .state
-        .floating
-        .iter()
-        .map(|f| f.id.clone())
-        .collect();
-    assert_eq!(order, ["float-b", "float-a"]);
+    assert_eq!(order(&rt).last(), Some(&first), "in front");
     // Commands not built yet say why instead of failing.
     run(&mut rt, "file.save_as", Target::None);
     assert!(
@@ -768,10 +847,11 @@ fn sample_logs(s: &mut Studio) {
                origin: &str,
                source: Option<&str>,
                count: u64| {
+        let number = ara_diag::Code::parse(code).expect("sample diagnostic code is valid");
         let diagnostic = match severity {
-            Severity::Error => ara_diag::Diagnostic::error(ara_diag::Code(seq as u16), message),
-            Severity::Warning => ara_diag::Diagnostic::warning(ara_diag::Code(seq as u16), message),
-            _ => ara_diag::Diagnostic::info(ara_diag::Code(seq as u16), message),
+            Severity::Error => ara_diag::Diagnostic::error(number, message),
+            Severity::Warning => ara_diag::Diagnostic::warning(number, message),
+            _ => ara_diag::Diagnostic::info(number, message),
         };
         super::state::LogRow {
             seq,
@@ -789,7 +869,7 @@ fn sample_logs(s: &mut Studio) {
         row(
             1,
             Severity::Info,
-            "ARA0001",
+            "ARA4508",
             "Project opened: 4 entities in levels/main.scene",
             "engine",
             None,
@@ -1023,6 +1103,280 @@ fn a_settings_slider_previews_while_dragged_and_commits_once() {
 }
 
 #[test]
+fn the_scene_header_has_the_scenes_own_menu() {
+    let mut rt = open();
+    settle(&mut rt);
+    let header = rt.find("hierarchy/scene").unwrap();
+    rt.right_click(header.center().x, header.center().y);
+    settle(&mut rt);
+    let context = rt.state().local.context.clone();
+    assert!(
+        matches!(&context, Some((crate::catalog::menus::Context::Scene, crate::catalog::Target::Asset(p), _)) if p.ends_with("main.scene")),
+        "{context:?}"
+    );
+    for id in [
+        "file.save",
+        "assets.set_main",
+        "assets.show",
+        "create.empty",
+    ] {
+        assert!(rt.find(&format!("cmd/{id}")).is_some(), "{id} is offered");
+    }
+    // Create Empty from the scene's menu goes at the root, not under the selection.
+    let before = rt.state().resolved.len();
+    press(&mut rt, "cmd/create.empty");
+    let made: Vec<_> = rt.state().editor.state.selection.clone();
+    assert_eq!(rt.state().resolved.len(), before + 1);
+    assert!(
+        rt.state().resolved[&made[0]].parent.is_none(),
+        "a root entity"
+    );
+}
+
+#[test]
+fn the_assets_footer_names_the_selection_or_the_folder() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "assets"}));
+        s.act(
+            "editor.workspace",
+            json!({"folder": ara_doc::AUTHORING_ROOT, "asset": ""}),
+        );
+    });
+    settle(&mut rt);
+    let footer = |rt: &Runtime<Studio>| {
+        rt.tree()
+            .into_iter()
+            .find(|shown| shown.key.as_deref() == Some("assets/footer"))
+            .and_then(|shown| shown.label.as_deref().map(str::to_owned))
+    };
+    let folder = footer(&rt).unwrap_or_default();
+    assert!(
+        folder.contains(" items") || folder.contains(" item"),
+        "{folder}"
+    );
+    let path = rt
+        .state()
+        .assets
+        .as_ref()
+        .and_then(|b| b.items.iter().find(|a| a.path.ends_with("main.scene")))
+        .map(|a| a.path.clone())
+        .unwrap();
+    rt.update(|s| s.act("editor.workspace", json!({"asset": path.clone()})));
+    settle(&mut rt);
+    assert_eq!(footer(&rt), Some(path), "the selected asset's path");
+}
+
+#[test]
+fn the_inspectors_debug_mode_shows_the_record() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "inspector/raw");
+    assert!(rt.find("inspector/record").is_some(), "the record shows");
+    assert!(
+        rt.find("component/Transform").is_none(),
+        "instead of the fields"
+    );
+    press(&mut rt, "inspector/record/copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(
+        copied.contains("MeshRenderer") && copied.contains("Transform"),
+        "{copied}"
+    );
+    press(&mut rt, "inspector/raw");
+    assert!(
+        rt.find("component/Transform").is_some(),
+        "back to the fields"
+    );
+}
+
+#[test]
+fn the_profiler_shows_scopes_under_their_callers() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    press(&mut rt, "profiler/tree");
+    let parent = "profiler/call/studio.scene";
+    let child = "profiler/call/studio.scene/scene.render";
+    assert!(rt.find(parent).is_some(), "a root scope");
+    assert!(rt.find(child).is_none(), "its callee waits until it opens");
+    press(&mut rt, parent);
+    assert!(rt.find(child).is_some(), "opened: what it called");
+    press(&mut rt, "profiler/flat");
+    assert!(rt.find(parent).is_none(), "the flat list again");
+}
+
+#[test]
+fn problems_list_files_with_errors_first() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.act("editor.layout.show", json!({"panel": "problems"}));
+    });
+    settle(&mut rt);
+    let top = |rt: &Runtime<Studio>, seq: u64| rt.find(&format!("problems/{seq}")).map(|r| r.top);
+    // The error (5) above both warnings (3 and 4), though its file sorts last by name.
+    let (error, warning) = (top(&rt, 5).unwrap(), top(&rt, 4).unwrap());
+    assert!(error < warning, "{error} < {warning}");
+}
+
+#[test]
+fn a_console_rows_menu_copies_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.local.console_open = None;
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    let row = rt.find("console/row/4").unwrap();
+    rt.right_click(row.center().x, row.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.console_open, Some(4), "its details open");
+    press(&mut rt, "cmd/console.copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(copied.starts_with("ARA3302: Light Sun"), "{copied}");
+}
+
+#[test]
+fn empty_hierarchy_space_the_profiler_and_the_status_bar_have_menus() {
+    use crate::catalog::menus::Context;
+    let mut rt = open();
+    settle(&mut rt);
+    let kind = |rt: &Runtime<Studio>| rt.state().local.context.as_ref().map(|c| c.0);
+    let right_click = |rt: &mut Runtime<Studio>, x: f32, y: f32| {
+        rt.update(|s| s.local.context = None);
+        settle(rt);
+        rt.right_click(x, y);
+        settle(rt);
+    };
+    // Below the last row: the Hierarchy's own menu; on a row, the entity's.
+    let post = rt.find("row/e_post").unwrap();
+    right_click(&mut rt, post.center().x, post.bottom + 60.0);
+    assert_eq!(kind(&rt), Some(Context::Hierarchy));
+    right_click(&mut rt, post.center().x, post.center().y);
+    assert_eq!(kind(&rt), Some(Context::Entity));
+    let status = rt.find("status").unwrap();
+    right_click(&mut rt, status.left + 300.0, status.center().y);
+    assert_eq!(kind(&rt), Some(Context::Status));
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    let strip = rt
+        .find("profiler/track")
+        .or_else(|| rt.find("profiler/calls"))
+        .unwrap();
+    right_click(&mut rt, strip.center().x, strip.center().y);
+    assert_eq!(kind(&rt), Some(Context::Profiler));
+}
+
+#[test]
+fn the_palette_finds_settings() {
+    let mut rt = open();
+    rt.update(|s| s.local.palette = Some(("camera speed".into(), 0)));
+    settle(&mut rt);
+    press(&mut rt, "palette/0");
+    let view = rt.state().local.settings.clone();
+    assert!(
+        view.as_ref()
+            .is_some_and(|v| v.query == "Camera speed" && v.scope == crate::settings::Scope::User),
+        "{view:?}"
+    );
+}
+
+#[test]
+fn a_splitter_drag_is_kept_in_the_layout_without_a_failure() {
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    let ratio = |rt: &Runtime<Studio>| match &rt.state().editor.state.layout {
+        ara_ui::docking::DockNode::Split { ratio, .. } => *ratio,
+        _ => panic!("the default layout splits at its root"),
+    };
+    let before = ratio(&rt);
+    // The host reports the splits' rects; the drag reads them.
+    let keys = super::dock::rect_keys(&rt.state().editor.state.layout);
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let hit = rt.find("splitter/split/").expect("the root splitter");
+    let (x, y) = (hit.center().x, hit.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 60.0, y + 60.0);
+    rt.frame(FRAME);
+    rt.pointer_up(x + 60.0, y + 60.0);
+    settle(&mut rt);
+    // The authority keeps the new ratio (a later sync leaves it), and writes the file.
+    let after = ratio(&rt);
+    assert!((after - before).abs() > 0.01, "{before} -> {after}");
+    rt.update(|s| {
+        s.act("editor.focus", json!({"panel": "hierarchy"}));
+    });
+    assert!(
+        (ratio(&rt) - after).abs() < 1e-4,
+        "kept across the next action"
+    );
+    let file = root.join(".ara/editor-layout.json");
+    let written = (0..200).any(|_| {
+        std::thread::sleep(Duration::from_millis(10));
+        std::fs::read_to_string(&file).is_ok_and(|text| {
+            text.contains(&format!("{after}")) || text.contains(&format!("{:.3}", after))
+        })
+    });
+    assert!(written, "{} holds the new ratio {after}", file.display());
+    // Nothing failed on the way: no error reached the status bar or the Console.
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    settle(&mut rt);
+    let errors: Vec<_> = rt
+        .state()
+        .logs
+        .iter()
+        .filter(|r| r.severity == ara_diag::Severity::Error)
+        .map(|r| r.message.clone())
+        .collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rt.find("status/log").is_none());
+}
+
+#[test]
+fn menus_cascade_their_submenus() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "menu/File");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "folded under Build & Export"
+    );
+    let hover = |rt: &mut Runtime<Studio>, key: &str| {
+        let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+        rt.pointer_move(r.center().x, r.center().y);
+        settle(rt);
+    };
+    hover(&mut rt, "sub/Build & Export");
+    assert!(
+        rt.find("cmd/build.current").is_some(),
+        "beside it, on hover"
+    );
+    hover(&mut rt, "cmd/file.save");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "another row closes it"
+    );
+    assert_eq!(rt.state().local.menu, Some("File"), "the menu stays");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -1238,13 +1592,16 @@ fn the_console_searches_collapses_and_clear_stays_clear() {
     let row = |seq: u64, message: &str| super::state::LogRow {
         seq,
         severity: ara_diag::Severity::Warning,
-        code: "ARA0001".into(),
+        code: crate::codes::DIAGNOSTIC_SAMPLE.to_string(),
         message: message.into(),
         origin: "engine".into(),
         at: 0,
         source: None,
         count: 1,
-        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(ara_diag::Code(1), message)),
+        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(
+            crate::codes::DIAGNOSTIC_SAMPLE,
+            message,
+        )),
     };
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "console"}));
@@ -1389,7 +1746,7 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
             ),
             row(
                 2,
-                ara_diag::Diagnostic::warning(ara_diag::Code(1), "The project warns"),
+                ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "The project warns"),
             ),
         ];
         s.local.log_seen = 2;
@@ -1411,12 +1768,13 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
 #[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
-    let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
+    let mut diagnostic =
+        ara_diag::Diagnostic::error(crate::codes::DIAGNOSTIC_SAMPLE, "Lamp is broken");
     diagnostic.location.record = Some("e_lamp".into());
     let row = |seq: u64, severity, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
         seq,
         severity,
-        code: "ARA0001".into(),
+        code: diagnostic.code.to_string(),
         message: diagnostic.message.clone(),
         origin: "engine".into(),
         at: 0,
@@ -1424,7 +1782,7 @@ fn problems_filter_explain_and_go_to_what_they_name() {
         count: 1,
         diagnostic: std::sync::Arc::new(diagnostic),
     };
-    let warning = ara_diag::Diagnostic::warning(ara_diag::Code(1), "Box is odd");
+    let warning = ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "Box is odd");
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "problems"}));
         s.logs = vec![
@@ -1512,6 +1870,12 @@ fn named_targets_run_as_agents_and_the_palette_send_them() {
     assert_eq!(
         rt.state().local.window,
         Some(super::state::WindowRequest::Minimize)
+    );
+    // View › Full Screen (F11) asks the window for full screen.
+    run(&mut rt, "view.fullscreen", Target::None);
+    assert_eq!(
+        rt.state().local.window,
+        Some(super::state::WindowRequest::Fullscreen)
     );
     assert_eq!(failures(&mut rt), before, "nothing failed");
 }
@@ -2047,6 +2411,110 @@ fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
 }
 
 #[test]
+fn a_native_floating_window_shows_its_region_and_its_tab_docks_back_or_tears_out() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    // The host's native windows: the main window at (200, 100) on the desktop.
+    rt.update(|s| {
+        s.local.desktop.on = true;
+        s.local.desktop.origin = (200.0, 100.0);
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let floating = |rt: &Runtime<Studio>| rt.state().editor.state.floating.clone();
+    let window = floating(&rt);
+    assert_eq!(window.len(), 1, "Console floats");
+    let id = window[0].id.clone();
+    assert!(
+        window[0].rect[0] >= 200 && window[0].rect[1] >= 100,
+        "opened on the desktop over the main window: {:?}",
+        window[0].rect
+    );
+    // It lays out in its region, beyond the main window, and shows there alone.
+    let region = super::dock::region(rt.state(), 0, &id, window[0].rect);
+    rt.set_portals(&[region]);
+    settle(&mut rt);
+    let bar = rt.find(&format!("float/{id}/bar")).expect("its title bar");
+    let (w, _) = rt.state().size;
+    assert!(
+        bar.left >= w && bar.left >= region.left,
+        "{bar:?} in {region:?}"
+    );
+    let image = rt.snap_region(region).unwrap();
+    assert_eq!(
+        (image.width, image.height),
+        (region.width() as u32, region.height() as u32)
+    );
+    // Its tab drags back into the Scene's strip: the host sends the pointer to the main
+    // window once the desktop point is over it, and the native window goes.
+    let keys = super::dock::all_drag_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let scene = super::dock::area_holding(rt.state(), "scene").unwrap();
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    let tab = rt.find("tab/console").unwrap();
+    assert!(tab.left >= region.left, "the tab is in the region");
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(strip.right - 40.0, strip.top + 10.0);
+    rt.frame(FRAME);
+    rt.pointer_up(strip.right - 40.0, strip.top + 10.0);
+    settle(&mut rt);
+    assert!(floating(&rt).is_empty(), "the emptied window closes");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console"),
+        Some(scene.clone())
+    );
+    // Dragged out past the main window's edge, the tab tears out where the pointer is on
+    // the desktop (a second monitor's, say).
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    let tab = rt.find("tab/console").unwrap();
+    let (w, h) = rt.state().size;
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(w + 300.0, h / 2.0);
+    rt.touch(|s| s.local.desktop.pointer = Some((2400.0, 500.0)));
+    rt.frame(FRAME);
+    rt.pointer_up(w + 300.0, h / 2.0);
+    settle(&mut rt);
+    let torn = floating(&rt);
+    assert_eq!(torn.len(), 1, "a window of its own");
+    assert_eq!(super::dock::tabs_of(&torn[0].root), ["console"]);
+    let [x, y, ..] = torn[0].rect;
+    assert!(
+        (x - 2400).abs() < 100 && (y - 500).abs() < 40,
+        "under the pointer: {:?}",
+        torn[0].rect
+    );
+}
+
+#[test]
+fn a_desktop_point_maps_into_the_topmost_window_under_it() {
+    use super::portals::{Placement, locate};
+    let main = Placement {
+        client: [0.0, 0.0, 1000.0, 800.0],
+        origin: (0.0, 0.0),
+    };
+    let float = Placement {
+        client: [900.0, 100.0, 400.0, 300.0],
+        origin: (100_000.0, 0.0),
+    };
+    let windows = [float, main];
+    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_050.0, 50.0)));
+    assert_eq!(locate(&windows, (500.0, 500.0)), Some((500.0, 500.0)));
+    assert_eq!(locate(&windows, (2000.0, 500.0)), None);
+}
+
+#[test]
 fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
@@ -2058,6 +2526,7 @@ fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
         rt.find("cmd/window.maximize").is_some(),
         "the tab's menu opens"
     );
+    press(&mut rt, "sub/Add Tab");
     press(&mut rt, "cmd/window.add_tab/Import");
     settle(&mut rt);
     let area = |rt: &Runtime<Studio>, panel: &str| super::dock::area_holding(rt.state(), panel);
@@ -2152,13 +2621,15 @@ fn menus_list_scenes_and_layouts_and_filters_and_layouts_save_by_name() {
         crate::state::saved_layouts(rt.state().editor.host.root()).contains(&"Wide".to_owned())
     );
     press(&mut rt, "menu/Window");
+    press(&mut rt, "sub/Layouts");
     assert!(
         rt.find("cmd/layout.load/Wide").is_some(),
-        "Window lists saved layouts"
+        "Window › Layouts lists saved layouts"
     );
     press(&mut rt, "menu/Window");
     // Open Recent lists the project's scenes.
     press(&mut rt, "menu/File");
+    press(&mut rt, "sub/Open Recent");
     assert!(
         rt.find("cmd/file.open_scene/levels/main.scene").is_some(),
         "File › Open Recent lists scenes"
@@ -2270,7 +2741,16 @@ fn captures() {
     });
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
-    for light in [false, true] {
+    // Every shot in both themes, at 1x and at 2x (`@2x` in the name).
+    let design = rt.state().size;
+    for (light, scale) in [(false, 1.0), (true, 1.0), (false, 2.0), (true, 2.0)] {
+        rt.set_scale(scale);
+        rt.resize(((design.0 * scale) as u32, (design.1 * scale) as u32));
+        let theme = format!(
+            "{}{}",
+            if light { "light" } else { "dark" },
+            if scale > 1.0 { "@2x" } else { "" }
+        );
         rt.update(|s| s.editor.state.light = light);
         if rt.touch(Studio::sync_look) {
             let theme = rt.state().look.theme.clone();
@@ -2304,34 +2784,190 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-{panel}.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-{panel}.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
             )
             .unwrap();
         }
+        // The Size over Life curve in the VFX Selection, a key picked (its handles shown).
+        if !light && scale == 1.0 {
+            rt.touch(|s| {
+                let doc = s
+                    .editor
+                    .action(
+                        "editor.resource.create",
+                        json!({"path": "samples/capture.graph", "domain": "vfx"}),
+                    )
+                    .unwrap()["doc"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                s.act("editor.workspace", json!({"resource": doc}));
+            });
+        }
+        rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+        let effect = effect_at(&rt, "samples/capture.graph");
+        if let Some((emitter, module, curve)) = effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        }) {
+            let mut shaped = curve;
+            shaped.keys[0].interpolation = ara_curve::Interpolation::Cubic;
+            rt.update(|s| {
+                s.editor.state.resource_item = Some(format!("{emitter}|update|{module}"));
+                s.local.curve_pick = Some((format!("curve/vfx/{emitter}/update/{module}"), 1));
+                s.local.curve_drag = Some(super::curve::CurveDrag {
+                    field: format!("curve/vfx/{emitter}/update/{module}"),
+                    frame: super::curve::Frame::of(&shaped, Some((0.0, 1.0))),
+                    curve: shaped,
+                    grab: super::curve::Grab::Key(1),
+                });
+            });
+            host_feedback(&mut rt);
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{theme}-vfx-curve.png");
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+            rt.update(|s| s.local.curve_drag = None);
+        }
+        // Scene overlays floating: Tools as a titled panel, Snapping as a column.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "scene"}));
+            s.act(
+                "editor.settings.set",
+                json!({"key": "viewport.overlays", "value": {
+                    "tools": "float:120:140:panel",
+                    "snapping": "float:420:120:vertical",
+                }}),
+            );
+        });
+        host_feedback(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-overlays-float.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(super::scene_overlays::reset);
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-hover.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-hover.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The menu bar's menus.
+        for menu in ["File", "Edit", "View", "Window", "Help"] {
+            rt.update(|s| s.local.menu = Some(menu));
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{theme}-menu-{}.png", menu.to_lowercase());
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+        }
+        // A submenu open beside its menu.
+        rt.update(|s| {
+            s.local.menu = Some("File");
+            s.local.submenu = Some("Build & Export");
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-menu-cascade.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            s.local.menu = None;
+            s.local.submenu = None;
+        });
+        // A Hierarchy search, its match marked in each name.
+        rt.update(|s| s.local.hierarchy_query = "o".into());
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-hierarchy-search.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.hierarchy_query.clear());
+        // The Profiler's call tree, one scope open.
+        rt.update(|s| {
+            super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+            s.local.profiler_tree = true;
+            s.local.profiler_open.insert("studio.scene".into());
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-profiler-tree.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.profiler_tree = false);
+        // The Inspector's Debug mode: the record itself.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "inspector"}));
+            s.local.inspector_raw = true;
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-inspector-debug.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.inspector_raw = false);
+        // The scene header's own menu.
+        let header = rt.find("hierarchy/scene").unwrap();
+        rt.right_click(header.center().x, header.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-scene-menu.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.context = None);
+        settle(&mut rt);
         let row = rt.find("row/e_box").unwrap();
         rt.right_click(row.center().x, row.center().y);
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-context.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-context.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2348,7 +2984,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-play.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-play.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2367,7 +3003,7 @@ fn captures() {
             for _ in 0..10 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-tabdrag.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-tabdrag.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2394,10 +3030,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-profiler-compare.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-profiler-compare.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2419,7 +3052,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-floating.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2440,7 +3073,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-create.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-create.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2452,7 +3085,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-settings.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-settings.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2464,7 +3097,18 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-palette.png");
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        // A search reaches settings too.
+        rt.update(|s| s.local.palette = Some(("camera".into(), 0)));
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{theme}-palette-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2478,7 +3122,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-add-component.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-add-component.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2501,10 +3145,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-asset-inspector.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-asset-inspector.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3420,6 +4061,228 @@ fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
     assert_eq!(
         ara_json::to_value(&edited.module).unwrap()[&key],
         json!(7.0)
+    );
+}
+
+#[test]
+fn the_size_over_life_curve_takes_a_key_and_a_dragged_one_in_one_step() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/fire.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let size_curve = |rt: &Runtime<Studio>| {
+        let effect = effect_at(rt, "samples/fire.graph");
+        effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        })
+    };
+    let (emitter, module, curve) = size_curve(&rt).expect("a Size over Life module");
+    press(&mut rt, &format!("vfx/module/{emitter}|update|{module}"));
+    let plot = rt
+        .find(&format!("curve/vfx/{emitter}/update/{module}"))
+        .expect("the curve shows in the Selection");
+    let (w, h) = (plot.width(), plot.height());
+    let frame = super::curve::Frame::of(&curve, Some((0.0, 1.0)));
+    let at = |(x, y): (f32, f32)| (plot.left + x, plot.top + y);
+    // A double-click on the plot adds a key there.
+    let (x, y) = at(frame.place((0.5, curve.evaluate(0.5) * 0.5), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    let pointer = stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.handle(&stillkit::Event::DoubleClick(
+        pointer,
+        stillkit::Button::Left,
+    ));
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    let (_, _, added) = size_curve(&rt).expect("still there");
+    assert_eq!(added.keys.len(), curve.keys.len() + 1, "a key added");
+    let undo_depth = rt.state().editor.host.store().history().len();
+    // The first key dragged up: higher, saved once on release.
+    let first = added.keys[0];
+    let frame = super::curve::Frame::of(&added, Some((0.0, 1.0)));
+    let (x, y) = at(frame.place((first.time, first.value), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x, y - 6.0 * step as f32);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth,
+        "nothing saved mid-drag"
+    );
+    rt.pointer_up(x, y - 24.0);
+    settle(&mut rt);
+    let (_, _, dragged) = size_curve(&rt).expect("still there");
+    assert!(
+        dragged.keys[0].value > first.value,
+        "{} > {}",
+        dragged.keys[0].value,
+        first.value
+    );
+    assert_eq!(dragged.keys[0].time, 0.0, "kept at the start of life");
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth + 1,
+        "one undo step"
+    );
+}
+
+#[test]
+fn a_transition_s_blend_curve_shapes_it_and_straightens_back() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/run.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let blend = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .blend
+            .clone()
+    };
+    let transition = {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .id
+            .clone()
+    };
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition))
+    });
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "straight to start");
+    let plot = rt
+        .find(&format!("curve/animation/{transition}"))
+        .expect("the blend curve shows with the transition");
+    let (w, h) = (plot.width(), plot.height());
+    let straight = ara_curve::Preset::Linear.curve();
+    let frame = super::curve::Frame::of(&straight, Some((0.0, 1.0)));
+    let (kx, ky) = frame.place((0.0, 0.0), (w, h));
+    let (x, y) = (plot.left + kx, plot.top + ky);
+    // Pick the first key, then pull its leaving handle flat: the fade eases in.
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "picking a key changes nothing");
+    // The handle lies along the straight line, 36 px out.
+    let (ex, ey) = frame.place((1.0, 1.0), (w, h));
+    let len = ((ex - kx).powi(2) + (ey - ky).powi(2)).sqrt();
+    let handle = (x + (ex - kx) / len * 36.0, y + (ey - ky) / len * 36.0);
+    rt.pointer_move(handle.0, handle.1);
+    rt.frame(FRAME);
+    rt.pointer_down(handle.0, handle.1);
+    rt.pointer_move(handle.0 + 10.0, y);
+    rt.frame(FRAME);
+    rt.pointer_up(handle.0 + 10.0, y);
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let shaped = blend(&rt).expect("shaped");
+    assert!(
+        shaped.evaluate(0.25) < 0.2,
+        "eases in: {}",
+        shaped.evaluate(0.25)
+    );
+    press(&mut rt, "animation/transition/blend/reset");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    assert_eq!(blend(&rt), None, "straight again");
+}
+
+#[test]
+fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspector() {
+    let mut rt = open();
+    settle(&mut rt);
+    let mut stops: Vec<(String, String)> = Vec::new();
+    for _ in 0..60 {
+        rt.key(0x09);
+        rt.frame(FRAME);
+        if let Some(n) = rt.tree().into_iter().find(|n| n.focused) {
+            let key = n.key.map(|k| k.to_string()).unwrap_or_default();
+            stops.push((key, n.label.map(|l| l.to_string()).unwrap_or_default()));
+        }
+    }
+    // Within one pass round the window (60 Tabs cover more than one here).
+    let pass = stops
+        .iter()
+        .skip(1)
+        .position(|s| *s == stops[0])
+        .map_or(stops.len(), |at| at + 1);
+    let stops = &stops[..pass];
+    let count = |prefix: &str| stops.iter().filter(|(k, _)| k.starts_with(prefix)).count();
+    assert_eq!(count("menu/"), 1, "the menu bar is one stop: {stops:?}");
+    assert_eq!(
+        count("row/"),
+        1,
+        "the Hierarchy is one stop, on its selected row"
+    );
+    assert_eq!(
+        count("scene/view.tool."),
+        1,
+        "the Tools overlay is one stop"
+    );
+    assert!(
+        !stops.iter().any(|(k, _)| k.ends_with("/scrub")),
+        "scrub labels are drag handles, not stops"
+    );
+    let position: Vec<&str> = stops
+        .iter()
+        .filter(|(k, _)| k.starts_with("field/Transform.position/"))
+        .map(|(_, l)| l.as_str())
+        .collect();
+    assert_eq!(
+        position,
+        ["Position X", "Position Y", "Position Z"],
+        "field to field, named"
     );
 }
 

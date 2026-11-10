@@ -48,6 +48,8 @@ impl Converter {
                 .or_else(|| {
                     [
                         "/opt/metal-shaderconverter/bin",
+                        // The macOS pkg's own install location.
+                        "/usr/local/bin",
                         r"C:\Program Files\Metal Shader Converter\bin",
                     ]
                     .into_iter()
@@ -158,9 +160,17 @@ mod tests {
     fn root_signature_mirrors_the_vulkan_set_zero_layout() {
         let json: serde_json::Value = serde_json::from_str(super::ROOT_SIGNATURE).unwrap();
         let signature = &json["RootSignature"];
-        assert_eq!(signature["Parameters"].as_array().unwrap().len(), 5);
-        assert_eq!(signature["StaticSamplers"].as_array().unwrap().len(), 3);
+        assert_eq!(signature["Parameters"].as_array().unwrap().len(), 7);
+        assert_eq!(signature["StaticSamplers"].as_array().unwrap().len(), 0);
         assert_eq!(signature["Parameters"][0]["Constants"]["Num32BitValues"], 8);
+        assert_eq!(
+            signature["Parameters"][5]["DescriptorTable"]["DescriptorRanges"][0]["NumDescriptors"],
+            u32::MAX
+        );
+        assert_eq!(
+            signature["Parameters"][6]["DescriptorTable"]["DescriptorRanges"][0]["RegisterSpace"],
+            5
+        );
         assert_eq!(super::root_signature_hash().len(), 64);
     }
 }

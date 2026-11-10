@@ -52,7 +52,8 @@ fn measure_completed_image_collection() -> anyhow::Result<()> {
                     let super::super::Retired::Image(image) = retired else {
                         anyhow::bail!("benchmark retires images only")
                     };
-                    gpu.heap.retire_image(image.raw.view, image.heap);
+                    gpu.heap
+                        .retire_image(image.raw.storage_view.unwrap_or(image.raw.view), image.heap);
                     gpu.context.detach_image(image.raw);
                     Object::Image(image.raw).destroy(&gpu.context.device);
                 }

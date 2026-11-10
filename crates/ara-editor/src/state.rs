@@ -1080,6 +1080,22 @@ fn layout_text(state: &EditorState) -> anyhow::Result<String> {
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
     Ok(crate::persist::write_text(path, &layout_text(state)?)?)
 }
+/// Save a named layout with the Scene view's overlay arrangement (`sceneOverlays`, the
+/// `viewport.overlays` setting), so applying it puts them back as Unity's layouts do.
+pub(crate) fn write_named_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
+    let mut saved: serde_json::Value = ara_json::parse(&layout_text(state)?)?;
+    if let Some(overlays) = state
+        .settings
+        .get("viewport.overlays")
+        .filter(|v| v.as_object().is_some_and(|m| !m.is_empty()))
+    {
+        saved["sceneOverlays"] = overlays.clone();
+    }
+    Ok(crate::persist::write_text(
+        path,
+        &ara_json::to_canonical_string(&saved),
+    )?)
+}
 /// Project-local saved layouts, by file stem.
 pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {
     let mut names: Vec<_> = std::fs::read_dir(root.join(".ara/layouts"))

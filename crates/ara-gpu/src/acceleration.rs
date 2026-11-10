@@ -1,4 +1,4 @@
-//! Static acceleration structure descriptions, owned through generational handles.
+//! Acceleration structure descriptions, owned through generational handles.
 use crate::{AccelerationStructure, Buffer};
 
 /// Triangle or instance input for a one-time acceleration structure build.
@@ -85,4 +85,16 @@ pub struct AccelerationInstance {
     pub custom_index: u32,
     /// Visibility mask.
     pub mask: u8,
+}
+
+/// Build-time acceleration capabilities. Static structures pay no update overhead.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AccelerationOptions {
+    /// Permit repeated builds and in-place refits with unchanged topology.
+    pub allow_update: bool,
+    /// Permit size queries and compact copies.
+    pub allow_compaction: bool,
+    /// TLAS instance capacity; zero uses the initial instance count. New counts may
+    /// grow up to this capacity on a rebuild; refits keep the preceding build count.
+    pub instance_capacity: u32,
 }

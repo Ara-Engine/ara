@@ -52,6 +52,10 @@ const FORMATS: &[(vk::Format, MTLPixelFormat, u32, u32, bool)] = {
         (vk::Format::R16G16_UNORM, P::RG16Unorm, 1, 4, false),
         (vk::Format::R16G16B16A16_SFLOAT, P::RGBA16Float, 1, 8, false),
         (vk::Format::R32_SFLOAT, P::R32Float, 1, 4, false),
+        (vk::Format::R32_UINT, P::R32Uint, 1, 4, false),
+        (vk::Format::R32G32_UINT, P::RG32Uint, 1, 8, false),
+        (vk::Format::R32G32B32A32_UINT, P::RGBA32Uint, 1, 16, false),
+        (vk::Format::D16_UNORM, P::Depth16Unorm, 1, 2, true),
         (vk::Format::R32G32_SFLOAT, P::RG32Float, 1, 8, false),
         (
             vk::Format::R32G32B32A32_SFLOAT,
@@ -152,10 +156,18 @@ pub(super) fn texture_usage(usage: vk::ImageUsageFlags) -> MTLTextureUsage {
     metal
 }
 
-/// Bytes of one tightly packed mip level.
-pub(super) fn level_bytes(info: &FormatInfo, size: [u32; 2], level: u32) -> (u64, u64) {
-    let width = (size[0] >> level).max(1);
-    let height = (size[1] >> level).max(1);
-    let row = u64::from(width.div_ceil(info.block)) * u64::from(info.block_bytes);
-    (row, row * u64::from(height.div_ceil(info.block)))
+/// Metal comparison shared by raster and samplers.
+pub(super) fn compare(op: crate::sampler::CompareOp) -> objc2_metal::MTLCompareFunction {
+    use crate::sampler::CompareOp as C;
+    use objc2_metal::MTLCompareFunction as M;
+    match op {
+        C::Never => M::Never,
+        C::Less => M::Less,
+        C::Equal => M::Equal,
+        C::LessEqual => M::LessEqual,
+        C::Greater => M::Greater,
+        C::NotEqual => M::NotEqual,
+        C::GreaterEqual => M::GreaterEqual,
+        C::Always => M::Always,
+    }
 }
