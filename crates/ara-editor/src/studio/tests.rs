@@ -4303,6 +4303,47 @@ fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspec
 }
 
 #[test]
+fn the_material_page_shows_each_operation_s_value_in_its_node() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/paint.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                "Showcase",
+            )
+            .unwrap();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    settle(&mut rt);
+    // The previews render on their own worker on this GPU: wait for them to land.
+    let started = std::time::Instant::now();
+    while rt.state().graph.previewed() < 3
+        && started.elapsed() < std::time::Duration::from_secs(120)
+    {
+        rt.touch(|s| super::graph::sync(s, "material"));
+        rt.touch(super::graph::previews);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        rt.state().graph.previewed() >= 3,
+        "operation nodes show their values ({} rendered)",
+        rt.state().graph.previewed()
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
