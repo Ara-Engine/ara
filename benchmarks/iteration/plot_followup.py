@@ -84,3 +84,21 @@ fig.text(.08, .045, "Mac · CoreCLR 10.0.14 · 12 fresh processes, ABBA per set,
 fig.subplots_adjust(left=.16, right=.98, bottom=.23, top=.81)
 fig.savefig(args.output / "sdk-hash-allocations.png", dpi=200)
 plt.close(fig)
+
+packet = json.loads((root / "compiler_retained_gc_mac_2026-11-10.json").read_text())
+fig, axes = plt.subplots(1, 2, figsize=(11, 5.9))
+for ax, field, title in [(axes[0], "allocation_bytes_median", "Allocation per request"), (axes[1], "final_live_heap_bytes_median", "Live heap after final full GC")]:
+    values = [packet["summary"][arm][field] / (1024 * 1024) for arm in ["baseline", "candidate"]]
+    ax.bar([0, 1], values, color=[colors["baseline"], colors["candidate"]], width=.6, zorder=3)
+    for i, value in enumerate(values):
+        ax.text(i, value + max(values) * .025, f"{value:.1f} MiB", ha="center", fontsize=11)
+    ax.set_xticks([0, 1], ["8-entry cache", "All 32 active modules"])
+    ax.set_ylim(0, max(values) * 1.23)
+    ax.set_title(title, loc="left", fontsize=12)
+    ax.set_ylabel("MiB")
+    ax.grid(axis="y", alpha=.17, zorder=0)
+fig.suptitle("Retained compiler state: allocation and live heap", x=.08, ha="left", fontsize=17, weight="bold")
+fig.text(.08, .045, "Mac · CoreCLR 10.0.7 · actual archived CLI + diagnostic hook · ABBA, 5 warmups + 10 requests/process\n1,024 scripts; final live heap follows collect/finalize/collect with compiler state and last reply rooted.\nNot peak RSS or uninstrumented steady state. No clocks admitted; retained-state p95 remains unresolved.", fontsize=9, color="#53667a")
+fig.subplots_adjust(left=.08, right=.98, wspace=.28, bottom=.24, top=.80)
+fig.savefig(args.output / "retained-cache-gc.png", dpi=200)
+plt.close(fig)

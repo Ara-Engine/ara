@@ -67,3 +67,26 @@ These medians count reads, hash work, result arrays and strings on the current t
 Audited Release build, all 318 .NET tests (222 compiler), and six native publication/lifecycle tests pass. SDK hashing tests cover empty/small/page-boundary/large files, Unicode paths, exclusive sharing errors, missing/directory errors, immediate handle release, and actual installed SDK images.
 
 [Rejected campaign ledger](compiler_followup_rejections_mac_2026-11-10.json) preserves each failed admission, its first observer error, raw unaccepted request durations and report hashes. The original 2026-11-09 one-way dependency pair remains historical evidence; no rejected follow-up fills in its missing reverse arm.
+
+## Retained-state GC diagnosis
+
+A diagnostic startup hook recorded real archived CLI reply boundaries for four fresh processes ABBA, 32 modules × 32 scripts, five warmups plus ten measured requests/process. Original compiler DLL hashes match the historical 8-entry/all-active-state comparison. Both arms use fixed baseline common dependencies. Every emitted PE/PDB/schema matches the corresponding revision in the other processes (1,440 module-pair comparisons). The hook preserves the original CLI scheduling policy and JSON replies.
+
+| Counter | Eight-entry cache | All 32 active modules |
+| --- | ---: | ---: |
+| Median allocation/request | 814,471,476 B | 759,204,400 B |
+| Final live managed heap (median of two processes) | 73,812,280 B | 166,058,396 B |
+| Gen2 collections across 20 measured requests | 206 | 84 |
+
+Keeping active state retains about 92.2 MB more managed heap while reducing allocation about 6.8%. This identifies a real memory/collection tradeoff; it **does not establish a p95 cause or fix**. GC pause durations and all other clocks are unaccepted because no independent host admission was applied. The logger can shift GC phase. A final collect/finalize/collect deliberately invalidates the last request's timing; its live-heap result includes active state and the final reply, and is not peak RSS or ordinary steady state. CoreCLR here is 10.0.7, separate from the 10.0.14 live-edit/source-hash campaigns.
+
+[All counters, raw unaccepted durations, immutable SDK/hook hashes and exact output hashes](compiler_retained_gc_mac_2026-11-10.json) are retained. The next timing-dependent step stays open until a quiet Mac window: determine whether the historical six-sample p95 increase repeats. Allocation work can proceed separately; these source-hash/SDK-stream savings are small parts of total compilation allocation and do not prove a whole-compiler speedup.
+
+Reproduce the diagnostic independently of timing campaigns:
+
+```sh
+dotnet build benchmarks/iteration/project_gc/Hook.csproj -c Release --disable-build-servers
+python3 benchmarks/iteration/retained_gc.py --baseline /absolute/baseline/Ara.CompileServer.dll --candidate /absolute/candidate/Ara.CompileServer.dll --hook "$PWD/target/iteration-perf/project-gc-hook/bin/Hook/release/Hook.dll" --dotnet-host /absolute/dotnet --output /absolute/fresh-diagnostic
+```
+
+The checked-in portable controller and hook also passed a fresh four-process tiny quality run; every response had exactly one counter row and exact PE/PDB/schema parity. This is a diagnostic instrument, not part of the engine or a gameplay state store.
