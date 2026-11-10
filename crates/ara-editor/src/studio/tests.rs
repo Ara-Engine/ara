@@ -948,6 +948,21 @@ fn component_headers_say_what_the_component_is() {
 }
 
 #[test]
+fn a_new_material_opens_docked_beside_the_scene() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| super::asset_create::create(s, "material"));
+    settle(&mut rt);
+    let state = &rt.state().editor.state;
+    let floating = state
+        .floating
+        .iter()
+        .any(|f| super::dock::window_title(&f.root).contains("Material"));
+    assert!(!floating, "a new material's page docks, not floats");
+    assert!(crate::state::panel_visible(state, "material"));
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2206,6 +2221,7 @@ fn captures() {
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         rt.update(found_clients);
         rt.update(sample_logs);
+
         for panel in [
             "assets",
             "console",
@@ -2217,6 +2233,9 @@ fn captures() {
             "mesh-paint",
             "game",
             "build",
+            "material",
+            "vfx",
+            "animation",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)

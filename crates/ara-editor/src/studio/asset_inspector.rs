@@ -135,7 +135,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
                     "Open editor",
                 )
                 .key("asset/open")
-                .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"resource": id}))),
+                .on_press(move |s: &mut Studio| super::commands::open_resource(s, &id, "")),
             ),
         );
     }

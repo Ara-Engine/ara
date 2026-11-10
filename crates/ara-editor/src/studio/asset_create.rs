@@ -112,12 +112,9 @@ fn resource(s: &mut Studio, domain: &str, stem: &str, extension: &str) -> anyhow
         s.resolve();
         s.act("editor.focus", json!({"panel": "scene"}));
     } else {
-        s.act("editor.workspace", json!({"resource": doc, "asset": ""}));
-        super::commands::run(
-            s,
-            &format!("window.{domain}"),
-            &crate::catalog::Target::None,
-        );
+        if let Some(doc) = doc.as_str() {
+            super::commands::open_resource(s, doc, "");
+        }
     }
     show(s, &path, extension);
     Ok(())
