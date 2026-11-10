@@ -1,0 +1,90 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_effects",
+  "records": {
+    "e_camera": {
+      "name": "Camera",
+      "order": "a3",
+      "Camera": {
+        "fov": 50
+      },
+      "Transform": {
+        "position": [0, 1.8, 6.2],
+        "rotation": [-6.441599, 0, 0]
+      }
+    },
+    "e_env": {
+      "name": "Dusk",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.05, 0.07, 0.12, 1],
+        "horizon": [0.12, 0.1, 0.1, 1],
+        "ground": [0.03, 0.03, 0.03, 1],
+        "intensity": 5,
+        "exposure": 0.02
+      }
+    },
+    "e_fire": {
+      "name": "Campfire",
+      "order": "a4",
+      "Transform": {
+        "position": [-3.3, 0, 0]
+      },
+      "VisualEffect": {}
+    },
+    "e_floor": {
+      "name": "Floor",
+      "order": "a2",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [24, 1, 24],
+        "color": [0.35, 0.35, 0.35, 1],
+        "roughness": 0.8
+      },
+      "Transform": {}
+    },
+    "e_smoke": {
+      "name": "Smoke",
+      "order": "a5",
+      "Transform": {
+        "position": [-1.1, 0, 0]
+      },
+      "VisualEffect": {
+        "effect": "smoke"
+      }
+    },
+    "e_sparks": {
+      "name": "Sparks",
+      "order": "a6",
+      "Transform": {
+        "position": [1.1, 0.4, 0]
+      },
+      "VisualEffect": {
+        "effect": "sparks"
+      }
+    },
+    "e_sun": {
+      "name": "Moonlight",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [0.8, 0.85, 1, 1],
+        "intensity": 4
+      },
+      "Transform": {
+        "position": [0, 10, 0],
+        "rotation": [-56.30994, -26.529753, -33.821842]
+      }
+    },
+    "e_swirl": {
+      "name": "Swirl",
+      "order": "a7",
+      "Transform": {
+        "position": [3.3, 0.8, 0]
+      },
+      "VisualEffect": {
+        "effect": "magic_swirl"
+      }
+    }
+  }
+}
