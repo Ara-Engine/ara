@@ -346,7 +346,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // A hidden (minimized) window shows no frames: render none. A covered one skips
         // presents on its own (the 1 ms present wait).
         #[cfg(any(windows, target_os = "macos"))]
-        let shown = visible(surface);
+        let shown = visible(&surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let shown = true;
         if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
@@ -589,7 +589,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .map(|(_, r)| r);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
         #[cfg(any(windows, target_os = "macos"))]
-        let visible = visible(surface);
+        let visible = visible(&surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
