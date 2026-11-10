@@ -69,7 +69,7 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 | 2D | Unchanged: `Presenter2d` keeps Ara's 2D renderer | Nothing for 3D work | No |
 
 Reflection probes are not a gap: Renderlab traces reflections on both paths. Its
-glossy band can leave bright speckles on glossy surfaces at v0.1.1 (a renderer
+glossy band can leave bright speckles on glossy surfaces at v0.1.2 (a renderer
 defect); `Options::max_reflection_roughness` (`ARA_RENDERLAB_REFLECTION_ROUGHNESS`
 in the player) limits tracing, 0.05 keeping mirrors only.
 

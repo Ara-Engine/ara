@@ -63,7 +63,7 @@ pub struct Options {
     pub pipeline_cache: Option<PathBuf>,
     /// Roughness at which Renderlab stops tracing reflections; `None` keeps its own
     /// default (0.5). Its glossy band (above 0.05) can leave bright speckles on glossy
-    /// surfaces at v0.1.1; 0.05 traces mirrors only.
+    /// surfaces at v0.1.2; 0.05 traces mirrors only.
     pub max_reflection_roughness: Option<f32>,
     /// Hand frames to the presenter by CPU copy even where the two devices could
     /// share images (A/B measurements; the automatic fallback needs no flag).
