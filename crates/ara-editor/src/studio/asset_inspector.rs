@@ -268,7 +268,7 @@ fn settings_rows(
             "lodError" => "LOD error".to_owned(),
             "flipNormalY" => "Flip normal Y".to_owned(),
             "maxDimension" => "Max dimension".to_owned(),
-            _ => crate::shell::inspector_panel::sentence(key),
+            _ => crate::names::sentence(key),
         };
         let field_key = format!("asset/setting/{key}");
         let (doc_id, setting) = (doc.to_owned(), key.clone());
