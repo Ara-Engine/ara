@@ -348,6 +348,9 @@ pub struct Local {
     pub note: Option<(String, std::time::Instant)>,
     /// A one-field question open (Save Layout As): what it asks, and the text typed.
     pub prompt: Option<Prompt>,
+    /// Opened in the background (`--background`): fields are not given keyboard focus (on
+    /// Windows that would bring the window forward) until a person activates the window.
+    pub background: bool,
     /// The renderer's device report (`DeviceInfo` as JSON), once it runs.
     pub device: String,
     /// About Ara or System Info, open.
