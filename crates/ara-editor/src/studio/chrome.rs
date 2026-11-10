@@ -1453,15 +1453,11 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
             .role(Role::ListBoxOption)
             .selected(on)
             .fill(if on {
-                c.selection_surface.0
+                super::style::active_fill(l)
             } else {
                 stillkit::Rgba::TRANSPARENT
             })
-            .color(if on {
-                c.selection_foreground.0
-            } else {
-                c.foreground.0
-            })
+            .color(c.foreground.0)
             .cascade_ink()
             .on_press(move |s: &mut Studio| {
                 if let Some((query, _)) = s.local.palette.clone() {
@@ -1474,11 +1470,7 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
             .child(
                 text(e.detail.clone())
                     .text_size(11.5)
-                    .color(if on {
-                        c.selection_muted_foreground.0
-                    } else {
-                        c.muted_foreground.0
-                    })
+                    .color(c.muted_foreground.0)
                     .grow(1.0),
             );
         if let Some(k) = &e.keys {

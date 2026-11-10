@@ -353,7 +353,7 @@ fn row_el(
 ) -> El<Studio> {
     let c = &l.c;
     let hover = c.hover_surface.0;
-    let base = super::style::chosen(l, row(), active)
+    let base = super::style::active(l, row(), active)
         .h(26.0)
         .pad_x(8.0)
         .gap(9.0)
