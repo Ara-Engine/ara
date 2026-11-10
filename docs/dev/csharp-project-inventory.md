@@ -68,6 +68,13 @@ and return intact publications, including excluded editor domains.
 Projects without source files or manifests return an empty inventory before
 initializing private compiler state, keeping read-only CLI fixtures clean.
 
+Source builds also locate the checkout's `dotnet/artifacts/bin` when Cargo outputs
+and the game project are both outside the checkout. Installed engines never use
+this build-checkout fallback. A custom .NET `ArtifactsPath` still requires
+`ARA_DOTNET_ARTIFACTS` pointing to its `bin` directory, with both the `Ara.Host`
+and `Ara.CompileServer` Release outputs. Missing tools report ARA0904 with that
+layout and recovery instruction.
+
 The Play integration fixtures stage legacy Outpost sources under `AUTHORING_ROOT`
 with a JSON manifest preserving its name/hot setting. Generated schemas come from
 `.ara/scripts/`, and the first-start regression places a C# component directly in
