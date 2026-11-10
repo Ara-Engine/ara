@@ -983,6 +983,62 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
 }
 
 #[test]
+fn tabs_drag_into_another_area_or_split_one_off_its_edge() {
+    let mut rt = open();
+    settle(&mut rt);
+    let area_of = |rt: &Runtime<Studio>, panel: &str| {
+        fn find(n: &ara_ui::docking::DockNode, panel: &str) -> Option<String> {
+            match n {
+                ara_ui::docking::DockNode::Area { id, tabs, .. } => {
+                    tabs.iter().any(|t| t == panel).then(|| id.clone())
+                }
+                ara_ui::docking::DockNode::Split { first, second, .. } => {
+                    find(first, panel).or_else(|| find(second, panel))
+                }
+            }
+        }
+        find(&rt.state().editor.state.layout, panel)
+    };
+    // Drags tab `panel` to window point `to`, the host reporting where areas lie.
+    let drag = |rt: &mut Runtime<Studio>, panel: &str, to: (f32, f32)| {
+        let keys = super::dock::drag_keys(&rt.state().editor.state.layout);
+        track(rt, &keys.iter().map(String::as_str).collect::<Vec<_>>());
+        let tab = rt.find(&format!("tab/{panel}")).unwrap();
+        rt.pointer_move(tab.center().x, tab.center().y);
+        rt.frame(FRAME);
+        rt.pointer_down(tab.center().x, tab.center().y);
+        rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+        rt.pointer_move(to.0, to.1);
+        rt.frame(FRAME);
+        assert!(
+            rt.find("dock/drop").is_some(),
+            "the landing shows while dragging"
+        );
+        rt.pointer_up(to.0, to.1);
+        settle(rt);
+    };
+    let scene = area_of(&rt, "scene").unwrap();
+    let view = rt.find(&format!("area/{scene}")).unwrap();
+    // Console onto the Scene's left edge: a new area left of the Scene.
+    drag(&mut rt, "console", (view.left + 10.0, view.center().y));
+    let console = area_of(&rt, "console").unwrap();
+    assert_ne!(console, scene);
+    let (c, v) = (
+        rt.find(&format!("area/{console}")).unwrap(),
+        rt.find(&format!("area/{scene}")).unwrap(),
+    );
+    assert!(
+        c.right <= v.left + 1.0,
+        "split off to the left: {c:?} {v:?}"
+    );
+    // Hierarchy into the Scene's tab strip: a tab beside the Scene.
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    drag(&mut rt, "hierarchy", (strip.right - 40.0, strip.top + 10.0));
+    assert_eq!(area_of(&rt, "hierarchy").as_deref(), Some(scene.as_str()));
+    assert!(rt.state().local.tab_drag.is_none());
+}
+
+#[test]
 fn menus_list_scenes_and_layouts_and_filters_and_layouts_save_by_name() {
     use crate::catalog::Target;
     let mut rt = open();
@@ -1174,6 +1230,26 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.play_menu = false);
+        // A tab mid-drag onto the Scene's right edge.
+        let keys = super::dock::drag_keys(&rt.state().editor.state.layout);
+        track(
+            &mut rt,
+            &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
+        if let Some(view) = rt.find("area/view") {
+            let at = (view.right - 30.0, view.center().y);
+            rt.update(|s| s.local.tab_drag = Some(("console".into(), at)));
+            for _ in 0..10 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{}-tabdrag.png", if light { "light" } else { "dark" });
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+            rt.update(|s| s.local.tab_drag = None);
+        }
         rt.update(|s| {
             super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
         });
