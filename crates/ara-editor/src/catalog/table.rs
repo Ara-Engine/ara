@@ -2848,4 +2848,18 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Refresh live player targets without changing the selected scope.",
     },
+    Command {
+        id: "window.float",
+        title: "Move Panel to New Window",
+        icon: "external-link",
+        keys: "",
+        summary: "Tear the panel off into its own OS window.",
+    },
+    Command {
+        id: "window.gather",
+        title: "Gather Floating Windows",
+        icon: "minimize",
+        keys: "",
+        summary: "Move every floating window onto the main window's monitor.",
+    },
 ];

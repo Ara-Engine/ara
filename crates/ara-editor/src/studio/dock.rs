@@ -39,6 +39,151 @@ fn split_key(path: &[u8]) -> String {
     )
 }
 
+/// The windows floating over the main one (in-window, as Unreal's can): each a title bar
+/// that moves it, its panels' dock tree, and a corner that resizes it; tabs drag in and out
+/// as between any areas. Their rects are window design px, kept inside the window.
+pub(super) fn floating(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let (sw, sh) = s.size;
+    s.editor
+        .state
+        .floating
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let id = f.id.clone();
+            let mut r = f.rect.map(|v| v as f32);
+            if let Some(drag) = s.local.float_drag.as_ref().filter(|d| d.id == id) {
+                r = drag.rect();
+            }
+            let [x, y, w, h] = fit([r[0], r[1], r[2], r[3]], (sw, sh));
+            let gesture = |resize: bool| {
+                let id = id.clone();
+                move |s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el::Tx| {
+                    match e.phase {
+                        PointerPhase::Down => {
+                            s.local.float_drag = Some(super::state::FloatDrag {
+                                id: id.clone(),
+                                resize,
+                                start: [x, y, w, h],
+                                travel: (0.0, 0.0),
+                            })
+                        }
+                        PointerPhase::Move => {
+                            if let Some(drag) = s.local.float_drag.as_mut() {
+                                drag.travel = (e.travel().x, e.travel().y);
+                            }
+                        }
+                        PointerPhase::Up => {
+                            if let Some(drag) = s.local.float_drag.take() {
+                                place_window(s, &drag.id, fit(drag.rect(), s.size));
+                            }
+                        }
+                        PointerPhase::Cancel => s.local.float_drag = None,
+                        PointerPhase::Hover => return false,
+                    }
+                    true
+                }
+            };
+            let panels: Vec<String> = tabs_of(&f.root);
+            let close = panels.clone();
+            let title = panels
+                .first()
+                .map_or("Window", |p| panel_title(p).0)
+                .to_owned();
+            let bar = row()
+                .key(format!("float/{id}/bar"))
+                .h(22.0)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .cursor(Cursor::Move)
+                .label(format!("{title} window: drag to move"))
+                .on_pointer(gesture(false))
+                .child(
+                    icon(icons::GRIP_HORIZONTAL)
+                        .size(12.0)
+                        .color(c.muted_foreground.0),
+                )
+                .child(
+                    text(title)
+                        .text_size(11.5)
+                        .color(c.muted_foreground.0)
+                        .grow(1.0),
+                )
+                .child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close window")
+                        .size(18.0)
+                        .key(format!("float/{id}/close"))
+                        .on_press(move |s: &mut Studio| {
+                            for panel in &close {
+                                s.act("editor.layout.close", json!({"panel": panel}));
+                            }
+                        }),
+                );
+            let grip = el()
+                .key(format!("float/{id}/resize"))
+                .absolute(w - 14.0, h - 14.0)
+                .size(14.0)
+                .cursor(Cursor::Resize)
+                .label("Resize")
+                .on_pointer(gesture(true));
+            style::float(l, col())
+                .key(format!("float/{id}"))
+                .absolute(x, y)
+                .w(w)
+                .h(h)
+                .radius(style::RADIUS + 2.0)
+                .child(bar)
+                .child(
+                    node(s, &f.root, &mut vec![2 + i as u8])
+                        .grow(1.0)
+                        .min_h(0.0)
+                        .pad(3.0),
+                )
+                .child(grip)
+        })
+        .collect()
+}
+
+/// A floating window's rect kept usable inside the main window: at least 240 × 160, its
+/// title bar always reachable.
+fn fit([x, y, w, h]: [f32; 4], (sw, sh): (f32, f32)) -> [f32; 4] {
+    let (w, h) = (w.clamp(240.0, sw.max(240.0)), h.clamp(160.0, sh.max(160.0)));
+    [
+        x.clamp(0.0, (sw - 80.0).max(0.0)),
+        y.clamp(0.0, (sh - 40.0).max(0.0)),
+        w,
+        h,
+    ]
+}
+
+/// Moves or resizes floating window `id` to `rect` (design px), saved with the layout.
+pub(super) fn place_window(s: &mut Studio, id: &str, rect: [f32; 4]) {
+    let result = s.editor.state.dock().and_then(|mut dock| {
+        dock.set_rect(id, rect.map(|v| v.round() as i32))?;
+        s.editor.state.set_dock(&dock);
+        Ok(())
+    });
+    match result {
+        Ok(()) => s.act("editor.layout.save", json!({})),
+        Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
+    }
+}
+
+/// Every panel in `node`, in order.
+fn tabs_of(node: &DockNode) -> Vec<String> {
+    match node {
+        DockNode::Area { tabs, .. } => tabs.clone(),
+        DockNode::Split { first, second, .. } => {
+            let mut out = tabs_of(first);
+            out.extend(tabs_of(second));
+            out
+        }
+    }
+}
+
 /// Keys of every area and tab, for the host to report while a tab is dragged.
 pub(super) fn drag_keys(root: &DockNode) -> Vec<String> {
     fn walk(node: &DockNode, out: &mut Vec<String>) {
@@ -56,6 +201,15 @@ pub(super) fn drag_keys(root: &DockNode) -> Vec<String> {
     let mut out = Vec::new();
     walk(root, &mut out);
     out
+}
+
+/// [`drag_keys`] of the main tree and every floating window's.
+pub(super) fn all_drag_keys(s: &Studio) -> Vec<String> {
+    let mut keys = drag_keys(&s.editor.state.layout);
+    for f in &s.editor.state.floating {
+        keys.extend(drag_keys(&f.root));
+    }
+    keys
 }
 
 /// Where a dragged tab lands: among an area's tabs (`index`), or beside it in a new area
@@ -86,7 +240,11 @@ pub(super) fn drop_at(s: &Studio, panel: &str, at: (f32, f32)) -> Option<(Drop, 
             }
         }
     }
+    // Floating windows lie over the main one: they take the pointer first.
     let mut all = Vec::new();
+    for f in &s.editor.state.floating {
+        areas(&f.root, &mut all);
+    }
     areas(&s.editor.state.layout, &mut all);
     let inside =
         |r: &stillkit::Rect| at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom;
@@ -166,7 +324,7 @@ fn place(s: &mut Studio, panel: &str, drop: Drop) {
             before,
         } => {
             // A fresh area id: the panel's name, numbered past any area already called so.
-            let taken = drag_keys(&s.editor.state.layout);
+            let taken = all_drag_keys(s);
             let new_area = (1..)
                 .map(|n| format!("{panel}-{n}"))
                 .find(|id| !taken.contains(&format!("area/{id}")))
@@ -307,6 +465,11 @@ fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
         .label("Resize")
         .child(hair.fill(line).hovered(move |e| e.fill(hot)))
         .on_pointer(move |s: &mut Studio, e, _| {
+            // A floating window's splits (their paths start at 2) are fixed for now: the
+            // drag below resizes the main window's tree.
+            if path.first().is_some_and(|p| *p >= 2) {
+                return false;
+            }
             match e.phase {
                 PointerPhase::Down => {
                     s.local.drag = Some(SplitDrag {
@@ -380,9 +543,15 @@ pub(super) const PANELS: [&str; 18] = [
     "mesh-paint",
 ];
 
-/// The id of the area whose tabs hold `panel`, in the main window's layout.
+/// The id of the area whose tabs hold `panel`, in the main window or a floating one.
 pub(super) fn area_holding(s: &Studio, panel: &str) -> Option<String> {
-    area_of(&s.editor.state.layout, panel)
+    area_of(&s.editor.state.layout, panel).or_else(|| {
+        s.editor
+            .state
+            .floating
+            .iter()
+            .find_map(|f| area_of(&f.root, panel))
+    })
 }
 
 /// A panel's title and icon.

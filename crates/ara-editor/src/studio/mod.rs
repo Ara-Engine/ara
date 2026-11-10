@@ -1019,7 +1019,7 @@ fn pump(
         );
         // While a tab is dragged: every area and tab, to drop it among.
         if rt.state().local.tab_drag.is_some() {
-            keys.extend(dock::drag_keys(&rt.state().editor.state.layout));
+            keys.extend(dock::all_drag_keys(rt.state()));
         }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {
