@@ -92,7 +92,7 @@ fn show(s: &mut Studio, path: &str, kind: &str) {
     let Some(browser) = s.assets.as_mut() else {
         return;
     };
-    if let Ok(storage) = crate::shell::ops::authored::storage(&browser.files, workspace, path) {
+    if let Ok(storage) = crate::authored::storage(&browser.files, workspace, path) {
         browser.insert_path(&storage, kind);
     }
     browser.refresh();
@@ -154,12 +154,8 @@ fn script(s: &mut Studio, kind: &str) -> anyhow::Result<()> {
         format!("{folder}/{name}")
     };
     let storage = match &s.assets {
-        Some(b) => crate::shell::ops::authored::storage(
-            &b.files,
-            s.editor.host.store().workspace(),
-            &logical,
-        )
-        .map_err(|e| anyhow::anyhow!("{e}"))?,
+        Some(b) => crate::authored::storage(&b.files, s.editor.host.store().workspace(), &logical)
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
         None => logical,
     };
     let created = s.editor.action(

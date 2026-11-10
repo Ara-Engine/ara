@@ -4,7 +4,7 @@
 use super::commands::{Target, menus::Context};
 use super::*;
 use ara_ui::docking::{Axis, DockNode};
-pub(super) fn escape(s: &str) -> String {
+pub(crate) fn escape(s: &str) -> String {
     ara_ui::source::escape(s, b'\'')
 }
 /// A text button; ids with a known icon render icon-only or icon + label.

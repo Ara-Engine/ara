@@ -209,7 +209,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     }
     rt.update(|s| {
         let store = s.editor.host.store();
-        s.assets = Some(crate::shell::assets::Browser::new(
+        s.assets = Some(crate::assets::Browser::new(
             s.editor.host.root(),
             store.schema(),
             store.workspace().reference_root(),
@@ -254,11 +254,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.mark("authority");
         pass.phase("studio.assets");
         // Assets and the diagnostics bus.
-        if rt.touch(|s| {
-            s.assets
-                .as_mut()
-                .is_some_and(crate::shell::assets::Browser::poll)
-        }) {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::assets::Browser::poll)) {
             rt.update(|_| {});
         }
         // Tile pictures for the open folder, rendered off-thread.
@@ -794,13 +790,13 @@ fn fly(s: &mut Studio, dt: f32, fast: bool) {
 }
 
 /// The gizmo handles to light: the one under the pointer and the one dragged.
-fn gizmo_state(s: &Studio) -> crate::shell::overlay::GizmoState {
+fn gizmo_state(s: &Studio) -> crate::overlay::GizmoState {
     // While dragging, the gizmo draws at the previewed pose, not the committed one.
     let offset = match (&s.local.gizmo, &s.editor.gesture) {
         (Some(_), Some(g)) => g.world_delta(s.editor.state.selection.first().map(String::as_str)),
         _ => glam::Mat4::IDENTITY,
     };
-    crate::shell::overlay::GizmoState {
+    crate::overlay::GizmoState {
         hover: s.local.gizmo_hover,
         active: s.local.gizmo.as_ref().map(|d| d.handle),
         offset,

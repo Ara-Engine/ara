@@ -271,7 +271,7 @@ fn agent_batches_apply_immediately_with_attribution_and_undo() {
 
 #[test]
 fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
-    use ara_editor::{shell::overlay, state::Tool, world::gesture::Gesture};
+    use ara_editor::{overlay, state::Tool, world::gesture::Gesture};
     let project = Project::new();
     let mut editor = project.open();
     editor.apply(vec![json!({"cmd":"transform.set","args":{"entities":["e_crate001"],"rotation":[0,0,90]}})],"Rotate fixture",None).unwrap();
@@ -323,7 +323,7 @@ fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
 
 #[test]
 fn every_gizmo_handle_is_grabbable_where_it_is_drawn() {
-    use ara_editor::{shell::overlay, state::Tool};
+    use ara_editor::{overlay, state::Tool};
     use glam::Vec2;
     let project = Project::new();
     let mut editor = project.open();
@@ -380,7 +380,7 @@ fn every_gizmo_handle_is_grabbable_where_it_is_drawn() {
 #[test]
 fn universal_handles_pick_the_operation_and_keep_transform_commands_typed() {
     use ara_editor::{
-        shell::overlay::{self, Handle},
+        overlay::{self, Handle},
         state::Tool,
         world::gesture::Gesture,
     };

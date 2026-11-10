@@ -13,7 +13,7 @@ use crate::{
 };
 use ara_ui::{paint::Box2, style::Sheet};
 use glam::Vec3;
-pub(in crate::shell::overlay) use projection::clip;
+pub(in crate::overlay) use projection::clip;
 use serde_json::{Value, json};
 pub(crate) use stats::StatsSample;
 use std::time::Duration;

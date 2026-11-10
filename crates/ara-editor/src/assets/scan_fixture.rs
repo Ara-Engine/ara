@@ -1,13 +1,13 @@
 //! Controlled worker publications exercise the real Browser inbox without timing or sleeps.
 use super::*;
 
-pub(in crate::shell) struct Driver {
+pub(crate) struct Driver {
     sender: mpsc::SyncSender<(u64, Result<Snapshot, ara_diag::Diagnostic>)>,
     started: Arc<AtomicU64>,
     wake: Receiver<()>,
     generation: u64,
 }
-pub(in crate::shell) fn controlled(reference_root: &str) -> (Browser, Driver) {
+pub(crate) fn controlled(reference_root: &str) -> (Browser, Driver) {
     let (sender, pending) = mpsc::sync_channel(1);
     let (refresh, wake) = mpsc::sync_channel(1);
     let started = Arc::new(AtomicU64::new(0));
@@ -34,19 +34,15 @@ pub(in crate::shell) fn controlled(reference_root: &str) -> (Browser, Driver) {
     )
 }
 impl Driver {
-    pub(in crate::shell) fn start(&mut self) -> u64 {
+    pub(crate) fn start(&mut self) -> u64 {
         self.generation += 1;
         self.started.store(self.generation, Ordering::Release);
         self.generation
     }
-    pub(in crate::shell) fn requested(&self) -> bool {
+    pub(crate) fn requested(&self) -> bool {
         self.wake.try_recv().is_ok()
     }
-    pub(in crate::shell) fn publish(
-        &self,
-        generation: u64,
-        items: Vec<Asset>,
-    ) -> ara_ui::Result<()> {
+    pub(crate) fn publish(&self, generation: u64, items: Vec<Asset>) -> ara_ui::Result<()> {
         let files = items
             .iter()
             .map(|asset| AuthoredFile {
@@ -70,7 +66,7 @@ impl Driver {
             .send((generation, Ok(Snapshot { files, items })))
             .map_err(|_| "Controlled browser receiver disconnected".into())
     }
-    pub(in crate::shell) fn fail(&self, generation: u64) -> ara_ui::Result<()> {
+    pub(crate) fn fail(&self, generation: u64) -> ara_ui::Result<()> {
         self.sender
             .send((
                 generation,

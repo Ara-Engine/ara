@@ -43,7 +43,7 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   script, at the open folder's authored path (never its storage path), opened where edited.
 - Assets (`panels.rs`): back/forward, Add, type filters across the project (Unreal's
   filter bar), list or three tile sizes, a type strip under tiles.
-- `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
+- `compositor.rs`: the renderer's image plus `crate::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
 - `chrome.rs`: root view, title bar (menus from `shell::commands::menus`, Play,

@@ -545,3 +545,16 @@ impl Shell {
         }
     }
 }
+
+impl Shell {
+    /// Retry the cached semantic projection without starting an authoring job.
+    pub(crate) fn refresh_asset_browser(&mut self) -> ara_ui::Result<()> {
+        self.browser.refresh();
+        self.asset_grid_dirty = true;
+        Ok(())
+    }
+    /// The last successful semantic index is immutable during a UI/drop dispatch.
+    pub(crate) fn asset_authored_files(&self) -> &[ara_host::project::AuthoredFile] {
+        &self.browser.files
+    }
+}

@@ -6,7 +6,7 @@
 //! know which OS window hosts them.
 pub(crate) mod asset_import;
 pub(crate) mod asset_ops;
-pub(crate) mod assets;
+pub(crate) use crate::assets;
 mod assets_favourites;
 mod axis;
 pub(crate) use crate::build;
@@ -86,7 +86,7 @@ mod scene_toolbars;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
-pub mod overlay;
+pub use crate::overlay;
 mod palette;
 mod panel_boundary;
 mod pilot;
@@ -110,7 +110,8 @@ pub(crate) use dialog::Dialog;
 pub(crate) use game_panel::game_stats_text;
 pub use hierarchy::LARGE_GROUP;
 pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
-use panels::{button, escape};
+use panels::button;
+pub(crate) use panels::escape;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 

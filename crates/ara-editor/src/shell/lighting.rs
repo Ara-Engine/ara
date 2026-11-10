@@ -4,7 +4,7 @@ use ara_components::post::{PostProcessVolume, PostVolume, VolumeShape};
 use commands::Target;
 use glam::Vec3;
 pub(crate) mod authoring;
-pub(in crate::shell) mod bounds;
+pub(crate) mod bounds;
 pub(crate) mod model;
 #[cfg(test)]
 mod tests;

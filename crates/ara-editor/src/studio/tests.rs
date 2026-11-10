@@ -85,7 +85,7 @@ fn x_arrow(rt: &Runtime<Studio>) -> ([f32; 2], [f32; 2]) {
         w: view.width(),
         h: view.height(),
     };
-    let h = crate::shell::overlay::handles_in(&rt.state().resolved, &rt.state().editor.state, rect)
+    let h = crate::overlay::handles_in(&rt.state().resolved, &rt.state().editor.state, rect)
         .expect("the selection has a gizmo");
     let along = [h.ends[0][0] - h.origin[0], h.ends[0][1] - h.origin[1]];
     let len = (along[0] * along[0] + along[1] * along[1]).sqrt();
@@ -860,18 +860,14 @@ fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
 fn scan(rt: &mut Runtime<Studio>) {
     rt.update(|s| {
         let store = s.editor.host.store();
-        s.assets = Some(crate::shell::assets::Browser::new(
+        s.assets = Some(crate::assets::Browser::new(
             s.editor.host.root(),
             store.schema(),
             store.workspace().reference_root(),
         ));
     });
     for _ in 0..200 {
-        if rt.touch(|s| {
-            s.assets
-                .as_mut()
-                .is_some_and(crate::shell::assets::Browser::poll)
-        }) {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::assets::Browser::poll)) {
             break;
         }
         std::thread::sleep(Duration::from_millis(10));

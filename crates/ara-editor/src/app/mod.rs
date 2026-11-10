@@ -1329,7 +1329,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 .viewport_diagnostics
                 .observe_stats(frame_interval, || {
                     let source = scene_view.diagnostic_source(&editor);
-                    let mut sample = crate::shell::overlay::diagnostics::StatsSample::read(
+                    let mut sample = crate::overlay::diagnostics::StatsSample::read(
                         &renderer,
                         previous_cpu_loop_ms,
                         source.scene.map(|scene| scene.instances.len()),
