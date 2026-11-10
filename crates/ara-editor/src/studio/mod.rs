@@ -584,6 +584,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
         {
             let scale = rt.scale();
+            // Input goes to the client Play's controls act on.
+            game.client = rt.state().play.client;
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
