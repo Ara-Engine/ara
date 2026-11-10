@@ -39,6 +39,178 @@ fn split_key(path: &[u8]) -> String {
     )
 }
 
+/// Keys of every area and tab, for the host to report while a tab is dragged.
+pub(super) fn drag_keys(root: &DockNode) -> Vec<String> {
+    fn walk(node: &DockNode, out: &mut Vec<String>) {
+        match node {
+            DockNode::Area { id, tabs, .. } => {
+                out.push(format!("area/{id}"));
+                out.extend(tabs.iter().map(|t| format!("tab/{t}")));
+            }
+            DockNode::Split { first, second, .. } => {
+                walk(first, out);
+                walk(second, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out);
+    out
+}
+
+/// Where a dragged tab lands: among an area's tabs (`index`), or beside it in a new area
+/// split off one edge (Unity's and Unreal's dock targets).
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Drop {
+    /// Into `area`'s tabs at `index`.
+    Tab { area: String, index: usize },
+    /// A new area beside `area`: above or below it (`vertical`), else left or right;
+    /// `before` is above or left.
+    Split {
+        area: String,
+        vertical: bool,
+        before: bool,
+    },
+}
+
+/// The drop under window point `at` for `panel`, and the rect it would fill: over a tab
+/// strip, among its tabs; over an area's outer quarter, a split on that edge; elsewhere
+/// in an area, its tabs' end.
+pub(super) fn drop_at(s: &Studio, panel: &str, at: (f32, f32)) -> Option<(Drop, stillkit::Rect)> {
+    fn areas(node: &DockNode, out: &mut Vec<(String, Vec<String>)>) {
+        match node {
+            DockNode::Area { id, tabs, .. } => out.push((id.clone(), tabs.clone())),
+            DockNode::Split { first, second, .. } => {
+                areas(first, out);
+                areas(second, out);
+            }
+        }
+    }
+    let mut all = Vec::new();
+    areas(&s.editor.state.layout, &mut all);
+    let inside =
+        |r: &stillkit::Rect| at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom;
+    let (id, tabs, r) = all.into_iter().find_map(|(id, tabs)| {
+        let r = *s.local.rects.get(&format!("area/{id}"))?;
+        inside(&r).then_some((id, tabs, r))
+    })?;
+    let rect = |l: f32, t: f32, w: f32, h: f32| stillkit::Rect::new(l, t, w, h);
+    // The tab strip: before the first tab whose middle is right of the pointer.
+    if at.1 <= r.top + style::STRIP {
+        let index = tabs
+            .iter()
+            .filter(|t| t.as_str() != panel)
+            .position(|t| {
+                s.local
+                    .rects
+                    .get(&format!("tab/{t}"))
+                    .is_some_and(|tr| at.0 < tr.left + tr.width() / 2.0)
+            })
+            .unwrap_or(tabs.len());
+        return Some((
+            Drop::Tab { area: id, index },
+            rect(r.left, r.top, r.width(), r.height()),
+        ));
+    }
+    let (fx, fy) = (
+        (at.0 - r.left) / r.width().max(1.0),
+        (at.1 - r.top) / r.height().max(1.0),
+    );
+    // The nearest edge within the outer quarter splits; a tab alone in its own area has
+    // nothing to split off from.
+    let alone = tabs.len() == 1 && tabs[0] == panel;
+    let edge = [
+        (fx, false, true),
+        (1.0 - fx, false, false),
+        (fy, true, true),
+        (1.0 - fy, true, false),
+    ]
+    .into_iter()
+    .filter(|(d, ..)| *d < 0.25)
+    .min_by(|a, b| a.0.total_cmp(&b.0));
+    match edge {
+        Some((_, vertical, before)) if !alone => {
+            let (w, h) = (r.width(), r.height());
+            let target = match (vertical, before) {
+                (false, true) => rect(r.left, r.top, w / 2.0, h),
+                (false, false) => rect(r.left + w / 2.0, r.top, w / 2.0, h),
+                (true, true) => rect(r.left, r.top, w, h / 2.0),
+                (true, false) => rect(r.left, r.top + h / 2.0, w, h / 2.0),
+            };
+            Some((
+                Drop::Split {
+                    area: id,
+                    vertical,
+                    before,
+                },
+                target,
+            ))
+        }
+        _ => Some((
+            Drop::Tab {
+                area: id,
+                index: tabs.len(),
+            },
+            rect(r.left, r.top, r.width(), r.height()),
+        )),
+    }
+}
+
+/// Moves `panel` to `drop` (one layout change, saved like any other).
+fn place(s: &mut Studio, panel: &str, drop: Drop) {
+    let params = match drop {
+        Drop::Tab { area, index } => json!({"panel": panel, "area": area, "index": index}),
+        Drop::Split {
+            area,
+            vertical,
+            before,
+        } => {
+            // A fresh area id: the panel's name, numbered past any area already called so.
+            let taken = drag_keys(&s.editor.state.layout);
+            let new_area = (1..)
+                .map(|n| format!("{panel}-{n}"))
+                .find(|id| !taken.contains(&format!("area/{id}")))
+                .unwrap_or_else(|| panel.to_owned());
+            json!({"panel": panel, "area": area, "newArea": new_area, "vertical": vertical, "before": before})
+        }
+    };
+    s.act("editor.layout", params);
+    s.act("editor.layout.save", json!({}));
+}
+
+/// While a tab is dragged: where it would land, shaded, and its name at the pointer.
+pub(super) fn drag_preview(s: &Studio) -> Vec<El<Studio>> {
+    let Some((panel, at)) = &s.local.tab_drag else {
+        return Vec::new();
+    };
+    let l = &s.look;
+    let c = &l.c;
+    let mut out = Vec::new();
+    if let Some((_, r)) = drop_at(s, panel, *at) {
+        out.push(
+            el().key("dock/drop")
+                .absolute(r.left, r.top)
+                .w(r.width())
+                .h(r.height())
+                .radius(style::RADIUS)
+                .fill(c.primary.0.with_alpha(0.18)),
+        );
+    }
+    let (title, glyph) = panel_title(panel);
+    out.push(
+        style::float(l, row())
+            .absolute(at.0 + 12.0, at.1 + 10.0)
+            .h(26.0)
+            .pad_x(10.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(l.radius.sm)
+            .child(icon(glyph).size(12.0).color(c.primary.0))
+            .child(text(title).text_size(12.0).color(c.foreground.0)),
+    );
+    out
+}
+
 pub(super) fn view(s: &Studio) -> El<Studio> {
     // A maximized panel (Window › Maximize, Game's Maximize on Play) fills the dock alone,
     // in its own area, until it is restored.
@@ -252,8 +424,32 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                     c.muted_foreground.0
                 })
                 .cascade_ink()
-                .on_press(move |s: &mut Studio| {
-                    s.act("editor.layout.show", json!({"panel": panel}))
+                // A press shows it; a drag carries it to another area or an area's edge.
+                .on_pointer(move |s: &mut Studio, e, _| {
+                    if e.button != stillkit::Button::Left {
+                        return false;
+                    }
+                    match e.phase {
+                        PointerPhase::Down => {
+                            s.act("editor.layout.show", json!({"panel": panel}));
+                        }
+                        PointerPhase::Move
+                            if s.local.tab_drag.is_some()
+                                || e.travel().x.abs() + e.travel().y.abs() >= 6.0 =>
+                        {
+                            s.local.tab_drag = Some((panel.clone(), (e.at.x, e.at.y)));
+                        }
+                        PointerPhase::Up => {
+                            if let Some((panel, at)) = s.local.tab_drag.take()
+                                && let Some((drop, _)) = drop_at(s, &panel, at)
+                            {
+                                place(s, &panel, drop);
+                            }
+                        }
+                        PointerPhase::Cancel => s.local.tab_drag = None,
+                        _ => return false,
+                    }
+                    true
                 })
                 .child(icon(glyph).size(12.0))
                 .child(

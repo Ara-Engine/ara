@@ -933,6 +933,10 @@ fn pump(
                 .iter()
                 .map(|d| format!("scene/overlay/{}", d.id)),
         );
+        // While a tab is dragged: every area and tab, to drop it among.
+        if rt.state().local.tab_drag.is_some() {
+            keys.extend(dock::drag_keys(&rt.state().editor.state.layout));
+        }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {
             keys.extend(panels::drop_keys(rt.state()));
