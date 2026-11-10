@@ -832,11 +832,20 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "Ctrl+W",
         summary: "Close the active tool document tab.",
     },
+    // Each platform's own words and key: Quit ⌘Q on macOS, Exit Alt+F4 elsewhere.
     Command {
         id: "file.exit",
-        title: "Exit",
+        title: if cfg!(target_os = "macos") {
+            "Quit"
+        } else {
+            "Exit"
+        },
         icon: "x",
-        keys: "Alt+F4",
+        keys: if cfg!(target_os = "macos") {
+            "Ctrl+Q"
+        } else {
+            "Alt+F4"
+        },
         summary: "Close the editor; documents are saved first.",
     },
     Command {
