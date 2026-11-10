@@ -131,8 +131,47 @@ mod tests {
         );
         // Cover the scene/compute native alias and separate graphics/compute
         // native queues in the same family when the device offers two queues.
-        super::image_handoff::run(&mut gpu, true).unwrap();
-        super::image_handoff::run(&mut gpu, false).unwrap();
+        super::image_handoff::run(&mut gpu, true, Queue::Compute).unwrap();
+        super::image_handoff::run(&mut gpu, false, Queue::Compute).unwrap();
+        gpu.assert_clean().unwrap();
+    }
+    /// The only test that moves an image between two different queue families: the
+    /// release and acquire barriers carry real family indices here, where the forced
+    /// shared-family test above omits them. Needs a compute-only family (NVIDIA, RADV);
+    /// a device without one reports that and passes without running, unless
+    /// `ARA_REQUIRE_DISTINCT_FAMILIES` is set, which a gate known to have two families
+    /// uses so that a selection regression fails instead of skipping. Run it in a debug
+    /// build: synchronization validation is what detects a missing transfer, and the
+    /// read-back alone cannot, since both families share memory.
+    #[test]
+    #[cfg_attr(target_os = "macos", ignore = "Vulkan hardware probe")]
+    fn distinct_families_hand_a_storage_image_between_queues_on_hardware() {
+        use crate::{Queue, vulkan::VulkanDevice};
+        let mut gpu =
+            VulkanDevice::new_raster(&[], std::env::temp_dir().join("ara-distinct-family"))
+                .unwrap();
+        let info = &gpu.context().info;
+        if info.graphics_family == info.compute_family {
+            assert!(
+                std::env::var_os("ARA_REQUIRE_DISTINCT_FAMILIES").is_none(),
+                "ARA_REQUIRE_DISTINCT_FAMILIES is set, but graphics and compute share queue family {}",
+                info.graphics_family
+            );
+            eprintln!(
+                "skipped: graphics and compute share queue family {}; no cross-family handoff exists on this device",
+                info.graphics_family
+            );
+            return;
+        }
+        eprintln!(
+            "cross-family image handoff: graphics family {}, compute family {}",
+            info.graphics_family, info.compute_family
+        );
+        for from in [Queue::Compute, Queue::Graphics] {
+            for deferred in [false, true] {
+                super::image_handoff::run(&mut gpu, deferred, from).unwrap();
+            }
+        }
         gpu.assert_clean().unwrap();
     }
     #[test]
