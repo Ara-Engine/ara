@@ -970,6 +970,41 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose a message".into()),
         },
+        // The Material graph page (its canvas keys run these too).
+        "graph.add" => {
+            super::graph::add(s);
+            Ok(())
+        }
+        "graph.frame" => {
+            super::graph::frame(s);
+            Ok(())
+        }
+        "graph.delete" => {
+            super::graph::delete_selection(s);
+            Ok(())
+        }
+        "graph.comment" | "graph.group" => {
+            super::graph::comment_selection(s);
+            Ok(())
+        }
+        "graph.select_all" => {
+            super::graph::select_all(s);
+            Ok(())
+        }
+        // The VFX page's picked module.
+        id if id.starts_with("vfx.module.") => {
+            let op = id.trim_start_matches("vfx.module.");
+            match (
+                super::vfx::document(s),
+                s.editor.state.resource_item.clone(),
+            ) {
+                (Some(doc), Some(item)) => {
+                    super::vfx::edit(s, &doc, &item, op);
+                    Ok(())
+                }
+                _ => Err("Pick a module in the VFX page first".into()),
+            }
+        }
         "build.current" => {
             super::build_page::build(s);
             Ok(())
