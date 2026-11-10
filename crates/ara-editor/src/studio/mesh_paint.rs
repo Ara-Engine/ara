@@ -37,7 +37,7 @@ fn swatch(l: &ara_kit::look::Look, color: [f32; 4], size: f32) -> El<Studio> {
     el().size(size)
         .radius(4.0)
         .fill(stillkit::Rgba::new(color[0], color[1], color[2], 1.0))
-        .border(1.0, l.c.border.0)
+        .border(1.0, l.c.foreground.0.with_alpha(0.2))
 }
 
 /// A labelled number the brush has, typed into (Enter sets it, within `range`).
