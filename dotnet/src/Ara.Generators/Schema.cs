@@ -137,6 +137,14 @@ public static class Schema
         s.GetMembers().OfType<IFieldSymbol>().Where(f => !f.IsStatic && !f.IsConst)
             .Select(f => new Member(f.Name, f.Type, Docs.Summary(f), f.GetAttributes(), f)).ToList();
 
+    /// <summary>Tag detection needs field presence, without materializing members or reading their docs.</summary>
+    internal static bool HasFields(INamedTypeSymbol type)
+    {
+        foreach (var member in type.GetMembers())
+            if (member is IFieldSymbol { IsStatic: false, IsConst: false }) return true;
+        return false;
+    }
+
     /// <summary>A doc comment, or an <c>ARA0703</c> diagnostic.</summary>
     public static string RequireDoc(ISymbol s, List<DiagInfo> diags, string? doc = null)
     {
