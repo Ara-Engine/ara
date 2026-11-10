@@ -79,14 +79,12 @@ pub(crate) fn get(id: &str) -> Option<&'static Command> {
 }
 
 /// Why `id` cannot run yet, when it cannot: its feature is not built (the summary says
-/// what is missing), or only the legacy editor runs it so far.
+/// what is missing).
 pub(crate) fn later(id: &str) -> Option<&'static str> {
-    if table::UNBUILT.contains(&id) {
-        return get(id).map(|c| c.summary);
-    }
-    table::UNPORTED
+    table::UNBUILT
         .contains(&id)
-        .then_some("Not in the studio yet; the legacy editor (--legacy-ui) runs it")
+        .then(|| get(id).map(|c| c.summary))
+        .flatten()
 }
 
 /// The bindings in force: the catalogue's chords, under the `input.keymap` preset and
@@ -190,15 +188,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn later_commands_are_in_the_catalogue_once() {
-        for id in table::UNBUILT.iter().chain(table::UNPORTED) {
+    fn later_commands_are_in_the_catalogue() {
+        for id in table::UNBUILT {
             assert!(get(id).is_some(), "{id} has no entry");
         }
-        let both: Vec<_> = table::UNBUILT
-            .iter()
-            .filter(|id| table::UNPORTED.contains(id))
-            .collect();
-        assert!(both.is_empty(), "{both:?}");
     }
 
     #[test]
