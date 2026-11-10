@@ -897,7 +897,6 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 "editor.layout.move",
                 json!({"panel": panel, "slot": "float", "rect": rect}),
             )
-            .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
         }
         // Gather: every floating window back inside the main window.
         "window.gather" => {
@@ -928,15 +927,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             {
                 // Shown first (a closed panel is in no area), then moved beside.
                 Some((panel, area)) => {
-                    act(&mut s.editor, "editor.layout.show", json!({"panel": panel}))
-                        .and_then(|()| {
+                    act(&mut s.editor, "editor.layout.show", json!({"panel": panel})).and_then(
+                        |()| {
                             act(
                                 &mut s.editor,
                                 "editor.layout",
                                 json!({"panel": panel, "area": area, "index": u32::MAX}),
                             )
-                        })
-                        .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
+                        },
+                    )
                 }
                 None => Err("Choose a panel to add beside an open tab".into()),
             },
@@ -1921,17 +1920,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         },
         // A floating window comes to the front (Window › Floating).
         "window.focus_window" => match target {
-            Target::Window(id) => {
-                let floating = &mut s.editor.state.floating;
-                match floating.iter().position(|f| &f.id == id) {
-                    Some(at) => {
-                        let window = floating.remove(at);
-                        floating.push(window);
-                        act(&mut s.editor, "editor.layout.save", json!({}))
-                    }
-                    None => Err("That window has closed".into()),
-                }
-            }
+            Target::Window(id) => match s.editor.state.floating.iter().any(|f| &f.id == id) {
+                true => act(
+                    &mut s.editor,
+                    "editor.layout",
+                    json!({"window": id, "front": true}),
+                ),
+                false => Err("That window has closed".into()),
+            },
             _ => Err("Choose a window".into()),
         },
         "agents.stop_following" => act(e, "editor.follow", json!({})),

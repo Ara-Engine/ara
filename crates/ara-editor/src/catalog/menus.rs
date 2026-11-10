@@ -204,17 +204,8 @@ pub(crate) const MENUS: &[Menu] = &[
         items: &[
             C("edit.undo"),
             C("edit.redo"),
+            // A transaction's own commands (inspect, copy, page) are on its row in History.
             C("edit.history"),
-            Sub(
-                "History",
-                &[
-                    C("history.inspect"),
-                    C("history.copy"),
-                    S,
-                    C("history.older"),
-                    C("history.newer"),
-                ],
-            ),
             S,
             C("edit.cut"),
             C("edit.copy"),
@@ -607,6 +598,8 @@ pub(crate) enum Context {
     Profiler,
     /// A status bar chip.
     Status,
+    /// The Hierarchy's scene header row (the scene asset as its target).
+    Scene,
     /// The Play cluster's mode button.
     Play,
     /// A VFX module row.
@@ -861,6 +854,17 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("window.console"),
             C("window.agents"),
             C("window.profiler"),
+        ],
+        // Unity's scene header menu: the scene as a document and as an asset.
+        Context::Scene => &[
+            C("file.save"),
+            C("assets.set_main"),
+            S,
+            C("assets.show"),
+            C("assets.reveal"),
+            C("assets.copy_reference"),
+            S,
+            C("create.empty"),
         ],
         Context::Module => &[
             C("vfx.module.up"),

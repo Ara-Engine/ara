@@ -157,11 +157,8 @@ fn drag_chip(s: &Studio) -> Option<El<Studio>> {
 fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
     let (kind, target, (x, y)) = s.local.context.clone()?;
     let items = crate::catalog::menus::context(kind);
-    let panel = menu_panel(&s.look, entries(s, items, &target))
-        .max_h(560.0)
-        .scroll(Axis::Vertical);
     Some(
-        menu(panel)
+        menu(cascade(s, items, &target, y))
             .at(x, y)
             .on_dismiss(|s: &mut Studio| s.local.context = None),
     )
@@ -320,6 +317,7 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
         .key(format!("menu/{title}"))
         .expanded(open)
         .on_press(move |s: &mut Studio| {
+            s.local.submenu = None;
             s.local.menu = if s.local.menu == Some(title) {
                 None
             } else {
@@ -328,9 +326,8 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
         });
     if open {
         b = b.fill(l.c.raised.0).color(l.c.foreground.0);
-        let panel = menu_panel(l, entries(s, items, &Target::None))
-            .max_h(560.0)
-            .scroll(Axis::Vertical);
+        // Title-bar menus hang under the 40 px title bar.
+        let panel = cascade(s, items, &Target::None, 40.0);
         b = b.overlay(menu(panel).on_dismiss(|s: &mut Studio| s.local.menu = None));
     }
     b
@@ -342,13 +339,16 @@ enum Line {
     Separator,
     Heading(&'static str),
     Command(&'static str),
+    /// A submenu that opens beside its row: its title and items.
+    Sub(&'static str, &'static [Item]),
     /// A generated entry (a scene, a layout, a profile): its title, the command it runs
     /// with its target, and whether it is the current one.
     Entry(String, &'static str, Target, Option<bool>),
 }
 
-/// Flattens registry items: a submenu becomes a separator and a heading over its entries;
-/// dynamic items become an entry each (`target` is what the menu acts on).
+/// Flattens registry items: a menu's own submenus cascade beside it (`Line::Sub`); one
+/// level further in they become a separator and a heading over their entries; dynamic
+/// items become an entry each (`target` is what the menu acts on).
 fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out: &mut Vec<Line>) {
     for item in items {
         match item {
@@ -361,7 +361,18 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
             {
                 out.push(Line::Command(id))
             }
-            Item::Sub(title, sub) if depth < 2 => {
+            // A cascading submenu, when it has something to show for this target.
+            Item::Sub(title, sub) if depth == 0 => {
+                let mut inner = Vec::new();
+                lines(s, sub, 1, target, &mut inner);
+                if inner
+                    .iter()
+                    .any(|l| matches!(l, Line::Command(_) | Line::Entry(..)))
+                {
+                    out.push(Line::Sub(title, sub));
+                }
+            }
+            Item::Sub(title, sub) if depth < 3 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));
                 lines(s, sub, depth + 1, target, out);
@@ -506,11 +517,17 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
 
 /// Menu entries for registry items, with no empty headings and no leading, trailing or
 /// doubled separators; commands act on `target`.
-fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio>> {
-    let l = &s.look;
+/// A menu's rows from `items` at submenu `depth` (0: the menu itself), its empty
+/// headings and doubled separators dropped.
+fn clean_lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target) -> Vec<Line> {
     let mut all = Vec::new();
-    lines(s, items, 0, target, &mut all);
-    let entry = |line: Option<&Line>| matches!(line, Some(Line::Command(_) | Line::Entry(..)));
+    lines(s, items, depth, target, &mut all);
+    let entry = |line: Option<&Line>| {
+        matches!(
+            line,
+            Some(Line::Command(_) | Line::Entry(..) | Line::Sub(..))
+        )
+    };
     let mut clean: Vec<Line> = Vec::new();
     for (i, line) in all.iter().enumerate() {
         match line {
@@ -523,25 +540,134 @@ fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio
         clean.pop();
     }
     clean
+}
+
+/// A menu and, beside it at its row, the submenu open from it: both in one menu overlay,
+/// so the pointer moves between them, and hovering another row of the menu closes it.
+/// `from` is where the menu's top sits in the window: a submenu that would run off the
+/// window's bottom rises instead, so the menu never moves under the pointer.
+fn cascade(s: &Studio, items: &'static [Item], target: &Target, from: f32) -> El<Studio> {
+    let l = &s.look;
+    let lines = clean_lines(s, items, 0, target);
+    // Where the open submenu's row sits: menu rows are 26 px, separators 7, headings 24,
+    // a 1 px gap between, inside the panel's 4 px padding.
+    let mut top: f32 = 0.0;
+    let mut open = None;
+    for line in &lines {
+        if let Line::Sub(title, sub) = line
+            && s.local.submenu == Some(*title)
+        {
+            open = Some(*sub);
+            break;
+        }
+        top += 1.0
+            + match line {
+                Line::Separator => 7.0,
+                Line::Heading(_) => 24.0,
+                _ => 26.0,
+            };
+    }
+    let height = |lines: &[Line]| {
+        8.0 + lines
+            .iter()
+            .map(|line| match line {
+                Line::Separator => 8.0,
+                Line::Heading(_) => 25.0,
+                _ => 27.0,
+            })
+            .sum::<f32>()
+    };
+    let menu_height = height(&lines).min(560.0);
+    let menu = menu_panel(l, render(s, lines, 0, target))
+        .max_h(560.0)
+        .scroll(Axis::Vertical);
+    let sub = open.map(|sub| {
+        let sub_lines = clean_lines(s, sub, 1, target);
+        // Room under the menu's top, within the window: the submenu fits in it (scrolling
+        // past it), beside its row where it can, risen where it would run off.
+        // (stillkit flips a menu that would come within a few px of the bottom.)
+        let room = (s.size.1 - from - 24.0)
+            .clamp(120.0, 560.0)
+            .max(menu_height);
+        let sub_height = height(&sub_lines).min(room);
+        let top = top.min(room - sub_height).max(0.0);
+        col().child(el().h(top)).child(
+            menu_panel(l, render(s, sub_lines, 1, target))
+                .max_h(room)
+                .scroll(Axis::Vertical),
+        )
+    });
+    row().gap(2.0).align(Align::Start).child(menu).children(sub)
+}
+
+/// The rows of a menu's `lines` at submenu `depth`.
+fn render(s: &Studio, clean: Vec<Line>, depth: usize, target: &Target) -> Vec<El<Studio>> {
+    let l = &s.look;
+    // In a menu's own rows, hovering an entry closes a submenu open beside it, so its
+    // press runs it rather than only closing the submenu.
+    let leave = |item: El<Studio>| match depth {
+        0 => item.on_pointer(|s: &mut Studio, e, _| {
+            let closes = e.phase == stillkit::el::PointerPhase::Hover && s.local.submenu.is_some();
+            if closes {
+                s.local.submenu = None;
+            }
+            closes
+        }),
+        _ => item,
+    };
+    clean
         .into_iter()
         .filter_map(|line| match line {
             Line::Separator => Some(menu_separator(l)),
             Line::Heading(title) => Some(menu_heading(l, title)),
-            Line::Command(id) => command_item(s, id, target),
+            Line::Command(id) => command_item(s, id, target).map(leave),
+            Line::Sub(title, _) => Some(sub_item(s, title)),
             Line::Entry(title, id, target, checked) => {
                 let key = format!("cmd/{id}/{title}");
                 let item = match checked {
                     Some(on) => menu_check(l, &key, &title, on),
                     None => menu_item(l, &key, None, &title, None, false),
                 };
-                Some(item.on_press(move |s: &mut Studio| {
+                Some(leave(item.on_press(move |s: &mut Studio| {
                     s.local.menu = None;
                     s.local.context = None;
                     commands::run(s, id, &target);
-                }))
+                })))
             }
         })
         .collect()
+}
+
+/// A submenu's row: its title and a chevron; hovering or pressing it opens its entries
+/// beside it (a press never closes it: the pointer that pressed has already opened it),
+/// as Unity's and Unreal's menus cascade.
+fn sub_item(s: &Studio, title: &'static str) -> El<Studio> {
+    let l = &s.look;
+    let open = s.local.submenu == Some(title);
+    let lit = super::style::tones(l).hover;
+    menu_item(l, &format!("sub/{title}"), None, title, None, false)
+        .expanded(open)
+        // Lit while its submenu shows.
+        .fill(if open {
+            lit
+        } else {
+            stillkit::Rgba::TRANSPARENT
+        })
+        // A handled hover redraws the menu (an unhandled one leaves the view as it was).
+        .on_pointer(move |s: &mut Studio, e, _| {
+            let opens =
+                e.phase == stillkit::el::PointerPhase::Hover && s.local.submenu != Some(title);
+            if opens {
+                s.local.submenu = Some(title);
+            }
+            opens
+        })
+        .on_press(move |s: &mut Studio| s.local.submenu = Some(title))
+        .child(
+            icon(icons::CHEVRON_RIGHT)
+                .size(12.0)
+                .color(l.c.muted_foreground.0),
+        )
 }
 
 /// One command as a menu item: its icon, title, shortcut and summary.
@@ -989,6 +1115,14 @@ fn status_bar(s: &Studio) -> El<Studio> {
     };
     let bar = row()
         .key("status")
+        // Its menu: the windows the status bar reports on.
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Status,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
         .h(22.0)
         .pad_x(10.0)
         .gap(14.0)
@@ -1033,6 +1167,8 @@ enum Run {
     Select(String),
     /// Open this scene document.
     Scene(String),
+    /// Open Settings at this setting (its scope, searched by its label).
+    Setting(&'static crate::settings::Def),
 }
 
 /// A fuzzy match of `query` in `title`: letters in order, rewarding runs and word starts.
@@ -1155,6 +1291,22 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         all.sort_by_key(|e| std::cmp::Reverse(e.0));
         return all.into_iter().take(14).map(|(_, e)| e).collect();
     }
+    // Settings, by label (VS Code's and Unity's search reach them too).
+    for def in crate::settings::DEFS {
+        if let Some(sc) = score(query, def.label) {
+            all.push((
+                sc,
+                Entry {
+                    group: "Settings",
+                    icon: Some(icons::SETTINGS_2),
+                    title: def.label.to_owned(),
+                    detail: format!("{} · {}", def.category, def.description),
+                    keys: None,
+                    run: Run::Setting(def),
+                },
+            ));
+        }
+    }
     for (id, entity) in s.resolved.iter() {
         let name = entity
             .record
@@ -1176,7 +1328,27 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         }
     }
     all.sort_by_key(|e| std::cmp::Reverse(e.0));
-    all.into_iter().take(14).map(|(_, e)| e).collect()
+    // Best first, at most 8 of a kind (so settings and entities still show beside many
+    // commands), each group together where its best result ranks.
+    let mut taken: std::collections::BTreeMap<&'static str, usize> = Default::default();
+    let mut best: Vec<Entry> = all
+        .into_iter()
+        .map(|(_, e)| e)
+        .filter(|e| {
+            let n = taken.entry(e.group).or_default();
+            *n += 1;
+            *n <= 8
+        })
+        .take(14)
+        .collect();
+    let mut order: Vec<&'static str> = Vec::new();
+    for entry in &best {
+        if !order.contains(&entry.group) {
+            order.push(entry.group);
+        }
+    }
+    best.sort_by_key(|e| order.iter().position(|g| *g == e.group));
+    best
 }
 
 fn run(s: &mut Studio) {
@@ -1202,6 +1374,12 @@ fn run(s: &mut Studio) {
                 s.act("editor.scene.open", serde_json::json!({"scene": doc}));
                 s.resolve();
                 s.act("editor.focus", serde_json::json!({"panel": "scene"}));
+            }
+            Run::Setting(def) => {
+                super::preferences::open(s, def.scope);
+                if let Some(view) = s.local.settings.as_mut() {
+                    view.query = def.label.to_owned();
+                }
             }
         }
     }

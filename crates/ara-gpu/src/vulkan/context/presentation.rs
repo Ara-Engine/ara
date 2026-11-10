@@ -38,6 +38,7 @@ impl Gpu {
             compute_pool,
             buffers: Vec::new(),
             buffer_memory: Default::default(),
+            memory_blocks: Default::default(),
             images: Vec::new(),
             structures: Vec::new(),
         };

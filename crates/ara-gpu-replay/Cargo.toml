@@ -1,0 +1,15 @@
+[package]
+name = "ara-gpu-replay"
+description = "Test-only WGSL frontend and CPU reference for Renderlab post replay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+naga = { version = "30.0.1", features = ["wgsl-in", "msl-out", "spv-out"] }
+half = "2.7"
+
+[lints]
+workspace = true

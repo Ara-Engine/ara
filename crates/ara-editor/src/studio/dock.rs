@@ -156,17 +156,12 @@ fn fit([x, y, w, h]: [f32; 4], (sw, sh): (f32, f32)) -> [f32; 4] {
     ]
 }
 
-/// Moves or resizes floating window `id` to `rect` (design px), saved with the layout.
+/// Moves or resizes floating window `id` to `rect` (design px), kept with the layout.
 pub(super) fn place_window(s: &mut Studio, id: &str, rect: [f32; 4]) {
-    let result = s.editor.state.dock().and_then(|mut dock| {
-        dock.set_rect(id, rect.map(|v| v.round() as i32))?;
-        s.editor.state.set_dock(&dock);
-        Ok(())
-    });
-    match result {
-        Ok(()) => s.act("editor.layout.save", json!({})),
-        Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
-    }
+    s.act(
+        "editor.window",
+        json!({"id": id, "rect": rect.map(f32::round)}),
+    );
 }
 
 /// A floating window's name: its panels' titles, as its tabs read.
@@ -336,7 +331,6 @@ fn place(s: &mut Studio, panel: &str, drop: Drop) {
         }
     };
     s.act("editor.layout", params);
-    s.act("editor.layout.save", json!({}));
 }
 
 /// While a tab is dragged: where it would land, shaded, and its name at the pointer.
@@ -501,7 +495,15 @@ fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
                 }
                 PointerPhase::Up | PointerPhase::Cancel => {
                     s.local.drag = None;
-                    s.act("editor.layout.save", json!({}));
+                    // The ratio the drag left, kept by the authority (and the layout file).
+                    let ratio = match split_at(&mut s.editor.state.layout, &path) {
+                        Some(DockNode::Split { ratio, .. }) => Some(*ratio),
+                        _ => None,
+                    };
+                    if let Some(ratio) = ratio {
+                        let path: Vec<bool> = path.iter().map(|p| *p == 1).collect();
+                        s.act("editor.layout", json!({"path": path, "ratio": ratio}));
+                    }
                 }
                 PointerPhase::Hover => return false,
             }
