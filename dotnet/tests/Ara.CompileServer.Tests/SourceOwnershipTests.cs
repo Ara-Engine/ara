@@ -1,8 +1,67 @@
+using Ara.Hosting;
+
 namespace Ara.CompileServer.Tests;
 
 /// <summary>Folder nesting never changes which module owns a C# file.</summary>
 public sealed class SourceOwnershipTests
 {
+    [Fact]
+    public void A_later_editor_source_addition_is_observed_before_it_moves_into_gameplay()
+    {
+        var root = InstalledTools.Scratch("observed-editor-membership");
+        var authored = Path.Combine(root, "content");
+        var state = Path.Combine(root, ".ara", "scripts", "game");
+        Directory.CreateDirectory(Path.Combine(authored, "editor"));
+        Directory.CreateDirectory(state);
+        File.WriteAllText(Path.Combine(authored, "Main.cs"), "public class Main { }");
+        File.WriteAllText(Path.Combine(authored, "editor", "Tool.cs"), "public class Tool { }");
+        File.WriteAllText(Path.Combine(state, "module.inputs.json"), System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "content", name = "game" }));
+        var capture = new Capture();
+        using var coordinator = new Coordinator(capture, new AnalyzerSet());
+        coordinator.Hello(false, "");
+        coordinator.Watch(0, "game", state, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", watch: false);
+        capture.Next().Reload();
+        var editorSource = Path.Combine(authored, "editor", "Helper.cs");
+        File.WriteAllText(editorSource, "public class Helper { }");
+        coordinator.Change(0, [editorSource], AbiConst.OriginHuman, System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.True(coordinator.WaitIdle(TimeSpan.FromSeconds(60)));
+        Assert.True(capture.Empty, "an editor-only addition keeps the gameplay module unchanged");
+        var gameplaySource = Path.Combine(authored, "Helper.cs");
+        File.Move(editorSource, gameplaySource);
+        coordinator.Change(0, [editorSource, gameplaySource], AbiConst.OriginHuman, System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.Equal(MessageKind.Restart, capture.Next().Kind);
+        Assert.True(coordinator.WaitIdle(TimeSpan.FromSeconds(60)));
+    }
+
+    [Theory]
+    [InlineData("editor/Helper.cs")]
+    [InlineData("tools/Helper.cs")]
+    public void Moving_into_an_existing_domain_keeps_the_restart_contract(string destinationPath)
+    {
+        var root = InstalledTools.Scratch("existing-source-domain");
+        var authored = Path.Combine(root, "content");
+        var state = Path.Combine(root, ".ara", "scripts", "game");
+        Directory.CreateDirectory(Path.Combine(authored, "editor"));
+        Directory.CreateDirectory(Path.Combine(authored, "tools"));
+        Directory.CreateDirectory(state);
+        File.WriteAllText(Path.Combine(authored, "editor", "Tool.cs"), "public class Tool { }");
+        File.WriteAllText(Path.Combine(authored, "tools", "tools.module.json"), "{\"name\":\"tools\"}");
+        File.WriteAllText(Path.Combine(authored, "tools", "Existing.cs"), "public class Existing { }");
+        var source = Path.Combine(authored, "Helper.cs");
+        File.WriteAllText(source, "public class Helper { }");
+        File.WriteAllText(Path.Combine(state, "module.inputs.json"), System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "content", name = "game" }));
+        var capture = new Capture();
+        using var coordinator = new Coordinator(capture, new AnalyzerSet());
+        coordinator.Hello(false, "");
+        coordinator.Watch(0, "game", state, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", watch: false);
+        capture.Next().Reload();
+        var destination = Path.Combine(authored, destinationPath);
+        File.Move(source, destination);
+        coordinator.Change(0, [source, destination], AbiConst.OriginHuman, System.Diagnostics.Stopwatch.GetTimestamp());
+        Assert.Equal(MessageKind.Restart, capture.Next().Kind);
+        Assert.True(coordinator.WaitIdle(TimeSpan.FromSeconds(60)));
+    }
+
     [Fact]
     public void Compile_session_uses_project_inventory_and_requests_restart_when_a_file_crosses_editor_boundary()
     {

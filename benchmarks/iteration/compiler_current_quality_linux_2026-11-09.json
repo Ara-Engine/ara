@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-09",
+  "scope": "Latest compiler-only correctness comparison against baseline using identical immutable Runtime/generator/analyzer/editor/Roslyn dependency DLLs. No accepted timing.",
+  "baseline_source_commit": "1e04fe5dd9d04ede28592597dace9c0c06a15f9a",
+  "current_source_commit": "24b78830c4dd50369b0ec083ba88fbb538a0e8fc",
+  "current_includes": [
+    "request-local source hash reuse",
+    "reuse source strings with unchanged syntax trees"
+  ],
+  "common_dependencies": 15,
+  "current_build": {
+    "warnings": 0,
+    "errors": 0,
+    "invocations": 1
+  },
+  "external_quality": {
+    "responses": 20,
+    "complete_response_parity_pairs": 10,
+    "exact_PE_PDB_schema_pairs": 134,
+    "typed_IL_checks_passed": 268,
+    "typed_verified_methods_both_arms": 32776,
+    "all_IL_methods_both_arms": 82708,
+    "retained_artifact_files": 950,
+    "artifact_hash_mismatches": 0,
+    "rejection_and_repair_cases_passed": true,
+    "identity_normalization": false
+  },
+  "unit_quality": {
+    "current_discovered": 216,
+    "current_executed": 216,
+    "current_passed": 216,
+    "failures": 0,
+    "skips": 0,
+    "invocations": 1,
+    "warnings": 0,
+    "errors": 0,
+    "baseline_76": "Historical successful test run reused only after proving exact same complete binary closure; not rerun or relabeled.",
+    "packages_checked": 13,
+    "installed_layout_restored": "ABSENT",
+    "staged_archive_matching_files": 20
+  },
+  "preservation": {
+    "source_and_runtime_before_after_unchanged": true,
+    "copied_baseline_closure_unchanged": true,
+    "prior_experiment_files_unchanged": 18993
+  },
+  "compiler_sha256": {
+    "baseline": "a6573b82ff002560f30914aa35da1d8c903d67b0244710c944a669c3762bac0f",
+    "current": "0a6806866044f3977a34ff9a0fc169d5daa1d325d983a9816723d6c961ba0dee"
+  },
+  "proof_root": "/home/islam/projects/ara-csharp-perf-20261109/target/compiler-current-commondeps-20261109",
+  "proof_sha256": {
+    "execution-build-quality-01/summary.json": "51106362737ba5fe0e58a2fd1dbce2011cfc4dcff755cd3c00df59349927fee4",
+    "execution-unit216-01/summary.json": "2f64e89a1d7f8da804ab1e2fe6f8f4a13ff9232c2295733afa23c84db6d3c656"
+  },
+  "timings_accepted": false,
+  "limitations": [
+    "Controlled compiler-source comparison uses fixed dependencies, rather than each historical complete SDK.",
+    "Current Linux source remains24b; experimental SDK stream hashing is not included or promoted.",
+    "No Unity/Unreal/ECS, frame-rate, L1 hot-reload or time-to-play comparison.",
+    "Quality-only observation noise did not pass timing admission. The separately prepared finite timing campaign has no accepted result yet.",
+    "New harness tool repairs do not relabel earlier failed source/verification attempts."
+  ]
+}

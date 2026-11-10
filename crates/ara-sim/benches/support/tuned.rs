@@ -9,8 +9,8 @@ impl BenchWorld {
     pub fn profile_boids(&mut self, parallel: bool, batch: usize) -> [f64; 3] {
         let start = std::time::Instant::now();
         for (ids, p, v) in self
-            .world
-            .query::<(&StableId, &Position, &Velocity)>()
+            .queries
+            .snapshot
             .contiguous_iter(&self.world)
             .expect("table-only query")
         {
@@ -22,9 +22,7 @@ impl BenchWorld {
         let snapshot_done = std::time::Instant::now();
         self.sorted.build(&self.p, &self.v);
         let grid_done = std::time::Instant::now();
-        let mut query = self
-            .world
-            .query::<(&StableId, &mut Position, &mut Velocity)>();
+        let query = &mut self.queries.boids;
         let update = |(ids, p, v): (
             &[StableId],
             ContiguousMut<Position>,
@@ -78,9 +76,7 @@ impl BenchWorld {
     ) {
         match workload {
             "w1" => {
-                let mut query = self
-                    .world
-                    .query::<(&mut Position, &Velocity, &mut Rotation)>();
+                let query = &mut self.queries.transforms;
                 let update = |(p, v, q): (
                     ContiguousMut<Position>,
                     &[Velocity],
@@ -118,8 +114,8 @@ impl BenchWorld {
             }
             "w2" => {
                 for (ids, p, v) in self
-                    .world
-                    .query::<(&StableId, &Position, &Velocity)>()
+                    .queries
+                    .snapshot
                     .contiguous_iter(&self.world)
                     .expect("table-only query")
                 {
@@ -129,9 +125,7 @@ impl BenchWorld {
                     }
                 }
                 self.sorted.build(&self.p, &self.v);
-                let mut query = self
-                    .world
-                    .query::<(&StableId, &mut Position, &mut Velocity)>();
+                let query = &mut self.queries.boids;
                 let update = |(ids, p, v): (
                     &[StableId],
                     ContiguousMut<Position>,
@@ -159,7 +153,7 @@ impl BenchWorld {
                 }
             }
             "w3" => {
-                let mut query = self.world.query::<(&mut Position, &mut Velocity)>();
+                let query = &mut self.queries.particles;
                 let update = |(p, v): (ContiguousMut<Position>, ContiguousMut<Velocity>)| {
                     if simd {
                         super::kernels::particles(

@@ -31,6 +31,7 @@ internal static class EditorRunner
         EditorRegistry? _registry;
         string? _project;
         string? _generation;
+        readonly ProjectCompilations _compilations = new();
 
         public EditorResult Run(EditorRequest request)
         {
@@ -42,7 +43,7 @@ internal static class EditorRunner
                 _project = root;
                 if (_registry is null || request.Operation == "catalog")
                 {
-                    inventory = ProjectCompiler.Compile(new(root, request.AuthoringRoot, "editor", request.DiagnosticContext));
+                    inventory = ProjectCompiler.Compile(new(root, request.AuthoringRoot, "editor", request.DiagnosticContext), compilations: _compilations);
                     if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error")) return Result(inventory.Diagnostics, inventory: inventory);
                     var generation = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
                         string.Join('\n', inventory.Modules.Select(m => m.Name + ":" + m.Fingerprint)))));

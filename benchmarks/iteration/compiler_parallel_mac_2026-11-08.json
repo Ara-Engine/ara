@@ -1,0 +1,194 @@
+{
+  "date": "2026-11-08",
+  "scope": "Full project compilation: 32 independent modules with 32 generated component/query scripts each; one edited source per module per request; three warmups and six samples; fresh processes in each run order. Both sides use CoreCLR 10.0.7. Excludes live delta/reload/Play timing and cross-engine comparison.",
+  "baseline": "631ee46a1 retained project cache, sequential modules",
+  "candidate": "Two bounded independent module workers; dependency frontiers and inventory diagnostic ordering.",
+  "summary": {
+    "reference": {
+      "median_process_p50_ms": 1336.7091872499998,
+      "median_process_p95_ms": 1356.7415835000006,
+      "peak_rss_bytes": [
+        327204864,
+        326811648
+      ]
+    },
+    "optimized": {
+      "median_process_p50_ms": 1169.740624999999,
+      "median_process_p95_ms": 1202.2937494999992,
+      "peak_rss_bytes": [
+        362987520,
+        384385024
+      ]
+    }
+  },
+  "rounds": [
+    {
+      "run_order": [
+        "reference",
+        "optimized"
+      ],
+      "reference": {
+        "modules": 32,
+        "files_per_module": 32,
+        "generated_components": 1024,
+        "first_ms": 2840.2729170000002,
+        "warm_ms": [
+          1313.7855409999997,
+          1337.5132500000007,
+          1332.1648750000002,
+          1336.7751660000006,
+          1329.9658329999993,
+          1352.426833000001
+        ],
+        "p50_ms": 1334.4700205000004,
+        "p95_ms": 1352.426833000001,
+        "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/iteration-perf/compiler-sequential-631ee46a1/Ara.CompileServer.dll",
+        "server_sha256": "677f64dca31f282345332c1e55f649024f963a3f6ee9ed2c773205230cf4d240",
+        "runtime": {
+          "version": "10.0.7",
+          "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+          "error": null
+        },
+        "dotnet_host": "/usr/local/share/dotnet/dotnet",
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "architecture": "arm64",
+        "peak_rss_bytes": 327204864
+      },
+      "optimized": {
+        "modules": 32,
+        "files_per_module": 32,
+        "generated_components": 1024,
+        "first_ms": 2581.450457999999,
+        "warm_ms": [
+          1190.2275829999987,
+          1158.6699579999972,
+          1167.657499999997,
+          1112.5238750000008,
+          1180.657499999999,
+          1187.6816249999997
+        ],
+        "p50_ms": 1174.157499999998,
+        "p95_ms": 1190.2275829999987,
+        "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+        "server_sha256": "764014d08da65e2134453ab8044c14bbb14d998921be937fa02579a5e417966d",
+        "runtime": {
+          "version": "10.0.7",
+          "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+          "error": null
+        },
+        "dotnet_host": "/usr/local/share/dotnet/dotnet",
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "architecture": "arm64",
+        "peak_rss_bytes": 362987520
+      }
+    },
+    {
+      "run_order": [
+        "optimized",
+        "reference"
+      ],
+      "optimized": {
+        "modules": 32,
+        "files_per_module": 32,
+        "generated_components": 1024,
+        "first_ms": 2568.9604999999997,
+        "warm_ms": [
+          1142.3207500000005,
+          1177.4525420000002,
+          1214.3599159999994,
+          1149.1196249999991,
+          1199.5259999999987,
+          1153.1949580000003
+        ],
+        "p50_ms": 1165.3237500000002,
+        "p95_ms": 1214.3599159999994,
+        "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+        "server_sha256": "764014d08da65e2134453ab8044c14bbb14d998921be937fa02579a5e417966d",
+        "runtime": {
+          "version": "10.0.7",
+          "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+          "error": null
+        },
+        "dotnet_host": "/usr/local/share/dotnet/dotnet",
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "architecture": "arm64",
+        "peak_rss_bytes": 384385024
+      },
+      "reference": {
+        "modules": 32,
+        "files_per_module": 32,
+        "generated_components": 1024,
+        "first_ms": 2785.2621249999993,
+        "warm_ms": [
+          1351.5776669999973,
+          1308.894875,
+          1331.9450410000009,
+          1345.9516669999978,
+          1361.0563340000006,
+          1328.9188329999995
+        ],
+        "p50_ms": 1338.9483539999992,
+        "p95_ms": 1361.0563340000006,
+        "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/iteration-perf/compiler-sequential-631ee46a1/Ara.CompileServer.dll",
+        "server_sha256": "677f64dca31f282345332c1e55f649024f963a3f6ee9ed2c773205230cf4d240",
+        "runtime": {
+          "version": "10.0.7",
+          "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+          "error": null
+        },
+        "dotnet_host": "/usr/local/share/dotnet/dotnet",
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "architecture": "arm64",
+        "peak_rss_bytes": 326811648
+      }
+    }
+  ],
+  "same_binary_worker_probe": {
+    "runtime": "10.0.7",
+    "modules": 32,
+    "files_per_module": 32,
+    "cases": [
+      {
+        "workers": 1,
+        "p50_ms": 1360.6457500000001,
+        "p95_ms": 1372.1584,
+        "samples_ms": [
+          1356.9322,
+          1372.1584,
+          1328.0351,
+          1343.1685,
+          1364.3593,
+          1364.8021
+        ]
+      },
+      {
+        "workers": 2,
+        "p50_ms": 1150.42555,
+        "p95_ms": 1167.3604,
+        "samples_ms": [
+          1167.3604,
+          1139.5665,
+          1163.9841,
+          1159.9287,
+          1140.9224,
+          1140.73
+        ]
+      },
+      {
+        "workers": 4,
+        "p50_ms": 1110.21585,
+        "p95_ms": 1129.3664,
+        "samples_ms": [
+          1102.7008,
+          1082.6185,
+          1074.5088,
+          1120.1857,
+          1117.7309,
+          1129.3664
+        ]
+      }
+    ]
+  },
+  "same_binary_probe_runtime_mode": "CoreCLR 10.0.7, DOTNET_TieredCompilation=0; 32 modules x32 scripts; 1/2/4 workers measured in that order in one process. Paired CLI evidence above supports the default of two.",
+  "project_compiler_source_sha256": "fa2526bd6b6013797069a8de321915eac272524a5a5b29d15ed710a2dcffb782"
+}

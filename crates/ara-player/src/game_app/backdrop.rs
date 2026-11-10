@@ -32,7 +32,7 @@ impl Backdrop {
         content.scene.scene = menu.id.clone();
         content.scene.scripts = None;
         content.scene.ui = None;
-        let (mut world, _) = World::prepare_game(&content.scene, None, content.source)?;
+        let (mut world, _) = World::prepare_game(content.scene, None, content.source)?;
         world.runtime.resume()?;
         let point = |identity: &str| {
             world

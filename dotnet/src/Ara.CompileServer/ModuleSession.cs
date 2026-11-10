@@ -20,6 +20,35 @@ internal interface IAnalysis
 {
     /// <summary>Analyzer diagnostics for <paramref name="trees"/> of <paramref name="compilation"/> under an API profile.</summary>
     ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile);
+    /// <summary>Checks cancellation around legacy providers; token-aware providers may stop during analysis.</summary>
+    ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var result = Analyze(compilation, trees, profile);
+        ct.ThrowIfCancellationRequested();
+        return result;
+    }
+    /// <summary>Validates eligible ordinary methods; custom providers retain their full-tree behavior.</summary>
+    ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile) =>
+        Analyze(compilation, methods.Select(method => method.SyntaxTree).Distinct().ToArray(), profile);
+    /// <summary>Preserves a legacy body's specialized coverage while checking cancellation at its boundaries.</summary>
+    ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var result = AnalyzeBodies(compilation, methods, profile);
+        ct.ThrowIfCancellationRequested();
+        return result;
+    }
+    /// <summary>Validates declarations and cross-file effects; custom providers retain their full-tree fallback.</summary>
+    ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) => Analyze(compilation, trees, profile);
+    /// <summary>Preserves a legacy module override; cancellation does not interrupt an uncooperative legacy call.</summary>
+    ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var result = AnalyzeModule(compilation, trees, profile);
+        ct.ThrowIfCancellationRequested();
+        return result;
+    }
 }
 
 /// <summary>What a compile needs from outside its module.</summary>
@@ -31,8 +60,22 @@ internal interface ICompileContext
     EncCapabilities Caps { get; }
     /// <summary>The state a referenced module is compiled against: prepared in the current cascade, or committed.</summary>
     ModuleState? Dependency(string name);
+    /// <summary>A compiled or published dependency's exact committed metadata reference.</summary>
+    MetadataReference? Reference(string name) => Dependency(name)?.Reference;
+    /// <summary>A known compiled public surface; published surfaces may be unknown.</summary>
+    string? Surface(string name) => Dependency(name)?.Surface;
+    /// <summary>Committed source ownership, including loaded publications without compilations.</summary>
+    ImmutableDictionary<string, string>? CommittedTexts(string name) => Dependency(name)?.Texts;
+    /// <summary>Known committed ownership without inventing source bodies for read-only images.</summary>
+    IEnumerable<string>? CommittedPaths(string name) => CommittedTexts(name)?.Keys;
+    /// <summary>An opaque loaded image has no provable prior source ownership.</summary>
+    bool HasOpaqueSourceOwnership => false;
+    /// <summary>The identity of a still-published loaded image; freshly compiled states have none.</summary>
+    string? PublishedFingerprint(string name) => null;
     /// <summary>True if another module references <paramref name="module"/> (its surface hash is needed).</summary>
     bool HasDependents(ModuleSession module);
+    /// <summary>One immutable project inventory for a preparation wave; final publication validates a fresh scan.</summary>
+    ProjectInventoryResult Inventory(ModuleInputs project) => project.Scan();
 }
 
 /// <summary>
@@ -46,7 +89,7 @@ internal interface ICompileContext
 /// L3 rebuild as Debug IL that makes it hot; after that body edits take L1 and additive
 /// edits L2. A full rebuild can switch heat back ("cool all" / perf play).
 /// </remarks>
-internal sealed class ModuleSession
+internal sealed partial class ModuleSession
 {
     /// <summary>Soft size cap (R10: about 5k lines).</summary>
     internal const int SoftCapLines = 5000;
@@ -62,12 +105,17 @@ internal sealed class ModuleSession
     readonly IAnalysis? _analysis;
     readonly ModuleCompiler _compiler;
     readonly bool _startHot;
-    readonly SyntaxTree _usings = ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
+    SyntaxTree? _usings;
+    SyntaxTree Usings => _usings ??= ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
     GeneratorDriver _driver = ModuleCompiler.Driver();
     ModuleState? _state;
     int _sizeLevel;
     readonly ModuleInputs? _project;
-    readonly string? _graph;
+    string? _graph;
+    readonly Dictionary<string, string> _sourceOwners = new(ModuleState.Paths);
+    // This is observed discovery, used only to reject mutations around opaque
+    // dependencies; it is not claimed to be the source of their loaded images.
+    readonly Dictionary<string, string> _observedSources = new(ModuleState.Paths);
     internal string WatchDirectory => _project is { } project ? Path.Combine(project.Project, project.AuthoringRoot) : Dir;
 
     // Latest text on disk; differs from the state's texts while the module has compile errors.
@@ -85,26 +133,49 @@ internal sealed class ModuleSession
         _analysis = analysis;
         _compiler = new ModuleCompiler(name, assemblies);
         _project = ModuleInputs.Read(Dir);
-        _graph = _project is { } project ? Graph(project.Scan()) : null;
+        if (_project is { } project)
+        {
+            var inventory = project.Scan();
+            _graph = Graph(inventory);
+            foreach (var source in inventory.Sources)
+                _observedSources[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
+            foreach (var source in inventory.Sources.Where(source => source.Editor))
+                _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
+        }
     }
 
     /// <summary>The committed state (null until the first successful build).</summary>
     internal ModuleState? State => _state;
     internal uint InitialGeneration;
-    internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
-        outcome.Next is { } next && MatchesInventory() && MatchesInputs(next, context);
-
-    bool MatchesInventory()
+    /// <summary>Whether saved bytes differ from this module's last committed input snapshot.</summary>
+    internal bool SavedSourcesChanged(ICompileContext context)
     {
-        if (_project is not { } project) return true;
-        var current = project.Scan();
-        return current.Diagnostics.Length == 0 && Graph(current) == _graph;
+        if (LoadedTexts is not { } texts) return false;
+        var inventory = _project is { } project ? context.Inventory(project) : null;
+        if (inventory is not null && (inventory.Diagnostics.Length != 0 || Graph(inventory) != _graph)) return false;
+        return !SourcesMatch(texts, SourceFiles(inventory));
+    }
+
+    internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
+        outcome.Next is { } next ? MatchesCurrentInputs(next, context)
+            : outcome.Kind == OutcomeKind.None && _published is { } published && MatchesPublishedInputs(published, context);
+
+    bool MatchesCurrentInputs(ModuleState state, ICompileContext context)
+    {
+        var current = _project?.Scan();
+        if (current is not null && (current.Diagnostics.Length != 0 || Graph(current) != _graph || OpaqueInventoryChanged(current, context) || OwnershipChanged(current, context))) return false;
+        if (current is not null) ObserveUnloadedDomains(current, context);
+        return MatchesInputs(state, context, SourceFiles(current));
     }
 
     /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
     internal void Commit(Outcome o)
     {
-        if (o.Next is { } next) _state = next;
+        if (o.Next is { } next)
+        {
+            _state = next.AnalyzerClean && !o.ValidatedInputs ? next with { AnalyzerClean = false } : next;
+            _published = null;
+        }
         _diagnosticReferencesChanged = !o.ValidatedInputs;
     }
 
@@ -122,25 +193,67 @@ internal sealed class ModuleSession
         _diagnosticReferencesChanged = true;
         _state = s with
         {
+            AnalyzerClean = false,
             User = s.User.ReplaceReference(old, now),
             Final = s.Final.ReplaceReference(old, now),
             DepRefs = s.DepRefs.SetItem(name, now),
         };
     }
 
-    internal IEnumerable<string> SourceFiles() => _project is { } project
-        ? project.Scan().Modules.Single(m => m.Name == Name).Sources.Select(s => ProjectInventory.ProjectPath(Path.Combine(project.Project, s.StoragePath)))
-        : Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p));
+    internal IEnumerable<string> SourceFiles() => SourceFiles(_project?.Scan());
 
-    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References, Sources = m.Sources.Select(s => s.StoragePath) }));
+    string[] SourceFiles(ProjectInventoryResult? inventory) => _project is { } project
+        ? [.. inventory!.Modules.Single(m => m.Name == Name).Sources.Select(s => ProjectInventory.ProjectPath(Path.Combine(project.Project, s.StoragePath)))]
+        : [.. Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p)).Order(ModuleState.Paths)];
 
-    Outcome? CheckInventory(Phases timing)
+    // Source membership belongs to its existing module. Only module definitions,
+    // dependency edges or domains require rebuilding the player's module graph.
+    internal static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References }));
+
+    // A removal and an addition spanning owners can be a move even when both
+    // modules already exist. Preserve L4 conservatively for that ambiguous case;
+    // ordinary additions/removals in one module do not change the loaded graph.
+    bool OwnershipChanged(ProjectInventoryResult inventory, ICompileContext context)
     {
-        if (_project is not { } project) return null;
-        var inventory = project.Scan();
+        if (_project is not { } project) return false;
+        var states = inventory.Modules.Select(module => (module.Name, Paths: context.CommittedPaths(module.Name)))
+            .Where(module => module.Paths is not null).ToArray();
+        var loaded = new HashSet<string>(states.Select(module => module.Name), StringComparer.Ordinal);
+        var previous = new Dictionary<string, string>(ModuleState.Paths);
+        // Editor-only domains may not be loaded by a player. Keep their discovered
+        // membership while replacing loaded modules with their last-good sources.
+        foreach (var (path, owner) in _sourceOwners)
+            if (!loaded.Contains(owner)) previous[path] = owner;
+        foreach (var module in states)
+            foreach (var path in module.Paths!) previous[path] = module.Name;
+        var current = inventory.Sources.ToDictionary(source => ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath)), source => source.Module, ModuleState.Paths);
+        var removed = previous.Where(pair => !current.ContainsKey(pair.Key)).Select(pair => pair.Value).ToHashSet(StringComparer.Ordinal);
+        return current.Any(pair => !previous.ContainsKey(pair.Key) && removed.Any(owner => owner != pair.Value));
+    }
+
+    void ObserveUnloadedDomains(ProjectInventoryResult inventory, ICompileContext context)
+    {
+        if (_project is not { } project) return;
+        _sourceOwners.Clear();
+        foreach (var source in inventory.Sources)
+            if (source.Editor && context.Reference(source.Module) is null)
+                _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
+    }
+
+    Outcome? CheckInventory(Phases timing, ICompileContext context, out string[] files)
+    {
+        files = [];
+        if (_project is not { } project)
+        {
+            files = SourceFiles(null);
+            return context.HasOpaqueSourceOwnership && LoadedPaths is { } paths && !paths.ToHashSet(ModuleState.Paths).SetEquals(files)
+                ? OpaqueInventoryFailure(timing) : null;
+        }
+        var inventory = context.Inventory(project);
         if (inventory.Diagnostics.Length > 0)
             return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. inventory.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
-        if (Graph(inventory) != _graph)
+        if (OpaqueInventoryChanged(inventory, context)) return OpaqueInventoryFailure(timing);
+        if (Graph(inventory) != _graph || OwnershipChanged(inventory, context))
         {
             // Compile the entire candidate gameplay graph before asking the player
             // to restart. Broken moves retain the running last-good generation.
@@ -149,8 +262,26 @@ internal sealed class ModuleSession
                 return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. candidate.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
             return new(this, OutcomeKind.Restart) { ReloadKind = AbiConst.ReloadL4, Timing = timing, Escalation = Escalation.Requested };
         }
+        files = SourceFiles(inventory);
+        // Gameplay membership comes from committed states. Only retain observed
+        // unloaded editor sources here; refreshing them handles later editor-file
+        // additions without copying the entire project into every module session.
+        ObserveUnloadedDomains(inventory, context);
         return null;
     }
+
+    bool OpaqueInventoryChanged(ProjectInventoryResult inventory, ICompileContext context)
+    {
+        if (!context.HasOpaqueSourceOwnership || _project is not { } project) return false;
+        return Graph(inventory) != _graph || inventory.Sources.Length != _observedSources.Count
+            || inventory.Sources.Any(source => !_observedSources.TryGetValue(ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath)), out var owner) || owner != source.Module);
+    }
+
+    Outcome OpaqueInventoryFailure(Phases timing) => new(this, OutcomeKind.Errors)
+    {
+        Timing = timing, ValidatedInputs = false,
+        Extra = [(AraCodes.LoadFailed, "error", "Source ownership or module graph changes require republishing the opaque prebuilt dependencies and reloading Play; their committed source ownership is unknown. Loaded code was retained.")],
+    };
 
     internal bool IsIgnored(string path)
     {
@@ -176,9 +307,8 @@ internal sealed class ModuleSession
         var surfaces = ImmutableDictionary.CreateBuilder<string, string?>();
         foreach (var name in References)
         {
-            var dep = ctx.Dependency(name) ?? throw new InvalidOperationException($"module `{Name}` references `{name}`, which has not built");
-            refs[name] = dep.Reference;
-            surfaces[name] = dep.Surface;
+            refs[name] = ctx.Reference(name) ?? throw new InvalidOperationException($"module `{Name}` references `{name}`, which has not built");
+            surfaces[name] = ctx.Surface(name);
         }
         return (refs.ToImmutable(), surfaces.ToImmutable());
     }
@@ -187,11 +317,12 @@ internal sealed class ModuleSession
     internal Outcome Initial(ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(0, Stopwatch.GetTimestamp());
-        if (CheckInventory(p) is { } invalid) return invalid;
+        if (ReadOnlyPublished) return ReadOnlyWork(p);
+        if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         _disk.Clear();
-        foreach (var path in SourceFiles())
+        foreach (var path in files)
         {
             var full = ProjectInventory.ProjectPath(path);
             var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
@@ -199,25 +330,28 @@ internal sealed class ModuleSession
             texts[full] = text;
             trees[full] = ModuleCompiler.Parse(full, text);
         }
-        var hot = (_state?.Hot ?? _startHot) && ctx.Enc;
+        var hot = (LoadedHot ?? _startHot) && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
-        var user = _compiler.Create([.. trees.Values, _usings], hot, refs.Values);
+        var user = _compiler.Create([.. trees.Values, Usings], hot, refs.Values);
         var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
             null, hot, 0, null, surfaces, refs);
         p.Parse = p.Mark();
-        var kind = _state is null ? AbiConst.ReloadInitial : AbiConst.ReloadL3;
-        return Build(user, start, kind, _state is null ? Escalation.None : Escalation.Requested, p, [.. trees.Values], null, ctx, true, ct);
+        var kind = Loaded ? AbiConst.ReloadL3 : AbiConst.ReloadInitial;
+        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, [.. trees.Values], null, ctx, true, ct);
     }
 
     /// <summary>A full image of the committed state, hot or cold (heat change, or the host asked for one).</summary>
     internal Outcome Full(Escalation escalation, bool? hot, ICompileContext ctx, CancellationToken ct = default)
     {
-        if (_state is not { } s) return Initial(ctx, ct);
+        if (_state is not { } s)
+            return _published is null ? Initial(ctx, ct) : BuildPublished(ctx, new Phases(0, Stopwatch.GetTimestamp()),
+                null, CompileIntent.CommittedCode, escalation, hot, ct);
         var h = (hot ?? s.Hot) && ctx.Enc;
         var user = h == s.Hot ? s.User : s.User.WithOptions(ModuleCompiler.Options(h));
-        var current = MatchesInputs(s, ctx);
+        var current = MatchesCurrentInputs(s, ctx);
         var outcome = Build(user, s with { Hot = h }, AbiConst.ReloadL3, escalation, new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
         outcome.ValidatedInputs = current;
+        outcome.Intent = CompileIntent.CommittedCode;
         return outcome;
     }
 
@@ -226,9 +360,17 @@ internal sealed class ModuleSession
     /// against it) when every dependency kept the surface this code was compiled against,
     /// otherwise rebuild against the new code (L3, <see cref="Escalation.Dependency"/>).
     /// </summary>
-    internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default)
+    internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default, CompileIntent intent = CompileIntent.CurrentSources)
     {
+        var timing = new Phases(0, Stopwatch.GetTimestamp());
+        if (ReadOnlyPublished) return ReadOnlyWork(timing);
+        string[] files = [];
+        // Current project candidates may require L4. Explicit committed-code work
+        // only validates that drift; it must not compile or request activation of it.
+        if (intent == CompileIntent.CurrentSources && CheckInventory(timing, ctx, out files) is { } invalid) return invalid;
         _diagnosticReferencesChanged = true;
+        if (_state is null && _published is not null)
+            return BuildPublished(ctx, timing, intent == CompileIntent.CurrentSources ? files : null, intent, Escalation.Dependency, null, ct);
         var s = _state ?? throw new InvalidOperationException($"module `{Name}` has not built");
         var (refs, surfaces) = Dependencies(ctx);
         var user = s.User;
@@ -239,48 +381,88 @@ internal sealed class ModuleSession
             user = user.ReplaceReference(old, now);
             final = final.ReplaceReference(old, now);
         }
-        var same = References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
+        var rebound = s with { User = user, Final = final, DepRefs = refs, AnalyzerClean = false };
+        // Rebuild/heat work refers to committed code throughout the cascade. A
+        // dependent's unrelated disk edits must never hitchhike on that request.
+        var (current, changes) = intent == CompileIntent.CurrentSources
+            ? ReadSources(rebound, files) : (rebound, new List<FileChange>());
+        if (intent == CompileIntent.CurrentSources && changes.Count > 0 && ctx.Enc && !current.Hot)
+            current = current with { User = current.User.WithOptions(ModuleCompiler.Options(true)), Hot = true };
+        var validated = intent == CompileIntent.CurrentSources || MatchesCurrentInputs(rebound, ctx);
+        timing.Parse = timing.Mark();
+        var same = changes.Count == 0 && References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
         if (same)
         {
-            var problems = Problems(final, [], final.GetDiagnostics(ct), []);
-            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(new Phases(0, Stopwatch.GetTimestamp()), problems);
+            var problems = Problems(final, [], final.GetDiagnostics(ct), [], out var clean, ct);
+            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error))
+            {
+                var failure = Errors(timing, problems);
+                failure.ValidatedInputs = validated;
+                failure.Intent = intent;
+                return failure;
+            }
             return new Outcome(this, OutcomeKind.Relink)
             {
                 ReloadKind = AbiConst.ReloadL3,
                 Escalation = Escalation.Relink,
-                ValidatedInputs = MatchesInputs(s, ctx, dependencies: false),
+                ValidatedInputs = validated,
+                Intent = intent,
                 Problems = problems,
-                Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1 },
+                Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1, AnalyzerClean = clean },
             };
         }
-        var outcome = Build(user, s with { DepRefs = refs }, AbiConst.ReloadL3, Escalation.Dependency,
-            new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
-        outcome.ValidatedInputs = MatchesInputs(s, ctx, dependencies: false);
+        var outcome = Build(current.User, current, AbiConst.ReloadL3, Escalation.Dependency,
+            timing, [.. changes.Where(c => c.New is not null).Select(c => c.New!)], null, ctx, false, ct);
+        outcome.ValidatedInputs = validated;
+        outcome.Intent = intent;
         return outcome;
     }
 
-    bool MatchesInputs(ModuleState state, ICompileContext ctx, bool dependencies = true)
+    static bool MatchesInputs(ModuleState state, ICompileContext ctx, string[] files)
     {
-        var files = SourceFiles().Select(ProjectInventory.ProjectPath).ToArray();
-        return files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text)
-            && (!dependencies || References.All(name => state.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference)));
+        return SourcesMatch(state, files)
+            && state.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)));
     }
 
+    static bool SourcesMatch(ModuleState state, string[] files) =>
+        SourcesMatch(state.Texts, files);
+
+    static bool SourcesMatch(ImmutableDictionary<string, string> texts, string[] files) =>
+        files.Length == texts.Count && files.All(path => texts.TryGetValue(path, out var text) && ModuleSource.ReadWithRetry(path, text) == text);
+
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
-    internal static string? ReadWithRetry(string path)
+    internal static string? ReadWithRetry(string path) => ModuleSource.ReadWithRetry(path, null);
+
+    // One immutable membership snapshot per evaluation. Read every current source
+    // once: watcher overflow, missed notices and exact last-good restoration must
+    // still validate actual bytes rather than trusting timestamps or queued paths.
+    (ModuleState State, List<FileChange> Changes) ReadSources(ModuleState state, string[] files)
     {
-        var sw = Stopwatch.StartNew();
-        while (true)
+        _disk.Clear();
+        foreach (var path in files)
         {
-            try
-            {
-                if (!File.Exists(path)) return null;
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            }
-            catch (IOException) when (sw.ElapsedMilliseconds < 200) { Thread.Yield(); }
+            state.Texts.TryGetValue(path, out var previous);
+            _disk[path] = ModuleSource.ReadWithRetry(path, previous)
+                ?? throw new FileNotFoundException("module source disappeared while capturing inputs", path);
         }
+        var changes = new List<FileChange>();
+        var trees = state.Trees.ToBuilder();
+        var texts = state.Texts.ToBuilder();
+        foreach (var path in _disk.Keys.Union(state.Texts.Keys, ModuleState.Paths))
+        {
+            var had = state.Texts.TryGetValue(path, out var oldText);
+            var has = _disk.TryGetValue(path, out var newText);
+            if (had && has && oldText == newText) continue;
+            var oldTree = had ? state.Trees[path] : null;
+            var newTree = !has ? null : oldTree is null ? ModuleCompiler.Parse(path, newText!)
+                : ModuleText.Update(path, oldTree, oldText!, newText!);
+            changes.Add(new FileChange(path, oldTree, newTree));
+            if (newTree is null) { trees.Remove(path); texts.Remove(path); }
+            else { trees[path] = newTree; texts[path] = newText!; }
+        }
+        var user = state.User;
+        foreach (var change in changes) user = Apply(user, change);
+        return (state with { User = user, Trees = trees.ToImmutable(), Texts = texts.ToImmutable() }, changes);
     }
 
     /// <summary>
@@ -290,47 +472,27 @@ internal sealed class ModuleSession
     internal Outcome Compile(IEnumerable<string> paths, long tEvent, ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(tEvent, Stopwatch.GetTimestamp());
-        if (CheckInventory(p) is { } invalid) return invalid;
-        if (_state is not { } s) return Initial(ctx, ct);
-        HashSet<string>? membership = _project is null ? null : new(SourceFiles().Select(ProjectInventory.ProjectPath), ModuleState.Paths);
-        if (membership is not null)
-        {
-            foreach (var removed in _disk.Keys.Where(path => !membership.Contains(path)).ToArray()) _disk.Remove(removed);
-            paths = paths.Concat(membership.Where(path => !_disk.ContainsKey(path)));
-        }
-        foreach (var path in paths.Concat(SourceFiles()).Concat(s.Texts.Keys).Distinct(ModuleState.Paths))
-        {
-            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || (membership is null ? IsIgnored(path) : !membership.Contains(ProjectInventory.ProjectPath(path)))) continue;
-            var full = ProjectInventory.ProjectPath(path);
-            if (ReadWithRetry(full) is { } text) _disk[full] = text;
-            else _disk.Remove(full);
-        }
-        var changes = new List<FileChange>();
-        var trees = s.Trees.ToBuilder();
-        var texts = s.Texts.ToBuilder();
-        foreach (var path in _disk.Keys.Union(s.Texts.Keys, ModuleState.Paths).ToList())
-        {
-            var had = s.Texts.TryGetValue(path, out var oldText);
-            var has = _disk.TryGetValue(path, out var newText);
-            if (had && has && oldText == newText) continue;
-            var oldTree = had ? s.Trees[path] : null;
-            var newTree = has ? ModuleCompiler.Parse(path, newText!) : null;
-            changes.Add(new FileChange(path, oldTree, newTree));
-            if (newTree is null) { trees.Remove(path); texts.Remove(path); }
-            else { trees[path] = newTree; texts[path] = newText!; }
-        }
+        if (ReadOnlyPublished) return ReadOnlyWork(p);
+        if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
+        if (_state is not { } s)
+            return _published is null ? Initial(ctx, ct) : BuildPublished(ctx, p, files, CompileIntent.CurrentSources,
+                _published.Hot ? Escalation.Requested : Escalation.Cold, null, ct, ownEdit: true);
+        var (nextState, changes) = ReadSources(s, files);
         if (changes.Count == 0)
         {
-            var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), []);
+            var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), [], out var clean, ct);
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
-            var validated = MatchesInputs(s, ctx);
+            var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Reference(name)));
+            var nextClean = _diagnosticReferencesChanged ? clean : s.AnalyzerClean;
             if (validated) _diagnosticReferencesChanged = false;
-            return new Outcome(this, OutcomeKind.None) { ValidatedInputs = validated, Problems = problems };
+            return new Outcome(this, OutcomeKind.None)
+            {
+                Next = nextClean == s.AnalyzerClean ? s : s with { AnalyzerClean = nextClean },
+                ValidatedInputs = validated, Problems = problems,
+            };
         }
-        var next = s.User;
-        foreach (var c in changes) next = Apply(next, c);
+        var next = nextState.User;
         var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
-        var nextState = s with { User = next, Trees = trees.ToImmutable(), Texts = texts.ToImmutable() };
 
         var escalation = !ctx.Enc || !s.Hot ? Escalation.Cold : Escalation.None;
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
@@ -345,7 +507,7 @@ internal sealed class ModuleSession
             {
                 var g = Generate(next, ct);
                 p.Generate = p.Mark();
-                if (g.Diags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(g.Final, g.Diags, [], changed));
+                if (g.Diags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(g.Final, g.Diags, [], changed, out _, ct));
                 if (!Same(g.Generated, s.Generated)) (escalation, reuse) = (Escalation.Generated, g);
             }
         }
@@ -354,11 +516,18 @@ internal sealed class ModuleSession
             var final = s.Final;
             foreach (var c in changes) final = Apply(final, c);
             nextState = nextState with { Final = final };
+            // Declarations can change policy on another partial file. Accessor edits
+            // can also synthesize backing fields; directives may alter declarations.
+            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !EditClassifier.DocsChanged(changes)
+                && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
+                && cls.Bodies.All(body => body.New is MethodDeclarationSyntax method && !method.Modifiers.Any(SyntaxKind.PartialKeyword))
+                && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true);
+            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : [.. nextState.Trees.Values];
             if (cls.Bodies.Count == 0 && !cls.Additive)
             {
-                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), changed);
+                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, out var triviaClean, ct, module: true);
                 if (checkedProblems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, checkedProblems);
-                return new Outcome(this, OutcomeKind.None) { Next = nextState, Problems = checkedProblems, ValidatedInputs = true };
+                return new Outcome(this, OutcomeKind.None) { Next = nextState with { AnalyzerClean = triviaClean }, Problems = checkedProblems, ValidatedInputs = true };
             }
             ModuleDelta? delta = null;
             ImmutableArray<Diagnostic> errors = [];
@@ -372,7 +541,8 @@ internal sealed class ModuleSession
                 Trace.WriteLine($"module `{Name}`: EmitDifference threw, taking L3: {e.Message}");
             }
             p.Emit = p.Mark();
-            var problems = Problems(final, [], errors, changed);
+            var bodies = ordinaryBodies && s.AnalyzerClean ? cls.Bodies.Select(body => (MethodDeclarationSyntax)body.New).ToArray() : null;
+            var problems = Problems(final, [], errors, analyze, out var clean, ct, module: !ordinaryBodies, bodies: bodies);
             p.Analyze = p.Mark();
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
@@ -386,7 +556,8 @@ internal sealed class ModuleSession
                     Problems = problems,
                     ValidatedInputs = true,
                     Timing = p,
-                    Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces },
+                    Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces,
+                        AnalyzerClean = clean && (!ordinaryBodies || s.AnalyzerClean) },
                 };
             }
             escalation = Escalation.EmitFailed;
@@ -429,14 +600,28 @@ internal sealed class ModuleSession
 
     /// <summary>Errors and Ara diagnostics: generator, compiler (from emit) and analyzers (skipped when there are errors).</summary>
     List<Diagnostic> Problems(Compilation final, ImmutableArray<Diagnostic> generator, ImmutableArray<Diagnostic> emit,
-        IReadOnlyCollection<SyntaxTree> changed, Task<ImmutableArray<Diagnostic>>? analysis = null)
+        IReadOnlyCollection<SyntaxTree> changed, out bool analyzerClean, CancellationToken ct, PendingAnalysis? analysis = null, bool module = false,
+        IReadOnlyCollection<MethodDeclarationSyntax>? bodies = null)
     {
+        analyzerClean = false;
+        ct.ThrowIfCancellationRequested();
         var list = generator.Concat(emit).Where(Diagnostics.Reportable).ToList();
         if (list.All(d => d.Severity != DiagnosticSeverity.Error))
         {
-            if (analysis is not null) list.AddRange(analysis.GetAwaiter().GetResult().Where(Diagnostics.Reportable));
-            else if (_analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees) list.AddRange(_analysis.Analyze(final, trees, Profile).Where(Diagnostics.Reportable));
+            ImmutableArray<Diagnostic>? raw = analysis?.Complete();
+            if (raw is null && _analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees)
+                raw = module || _diagnosticReferencesChanged ? _analysis.AnalyzeModule(final, trees, Profile, ct)
+                    : bodies is not null ? _analysis.AnalyzeBodies(final, bodies, Profile, ct)
+                    : _analysis.Analyze(final, trees, Profile, ct);
+            if (raw is { } diagnostics)
+            {
+                // Warnings, infos and hidden diagnostics also revoke the clean proof.
+                // Custom analysis providers keep their full-tree fallback and earn no proof.
+                analyzerClean = _analysis is AnalyzerSet && diagnostics.IsEmpty;
+                list.AddRange(diagnostics.Where(Diagnostics.Reportable));
+            }
         }
+        ct.ThrowIfCancellationRequested();
         return list;
     }
 
@@ -444,8 +629,8 @@ internal sealed class ModuleSession
         _diagnosticReferencesChanged ? final.SyntaxTrees.Where(tree => _disk.ContainsKey(tree.FilePath)).ToArray() : changed;
 
     /// <summary>
-    /// Generator (unless reused), full emit and analyzers (in parallel with the emit, over
-    /// <paramref name="analyze"/>), then the EnC baseline. <paramref name="start"/> is the next
+    /// Generator (unless reused), full emit and all user-tree analyzers (in parallel
+    /// with the emit), then the EnC baseline. <paramref name="start"/> is the next
     /// state without its compilations, image facts and generation.
     /// </summary>
     Outcome Build(CSharpCompilation user, ModuleState start, uint kind, Escalation escalation, Phases p,
@@ -455,35 +640,62 @@ internal sealed class ModuleSession
     {
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
         p.Generate += p.Mark();
-        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze));
-        var analysisTrees = AnalysisTrees(final, analyze);
-        var analysis = _analysis is not null && analysisTrees.Count > 0 ? Task.Run(() => _analysis.Analyze(final, analysisTrees, Profile), ct) : null;
-        var (image, errors) = ModuleCompiler.Emit(final, ct);
-        p.Emit = p.Mark();
-        var problems = Problems(final, genDiags, errors, analyze, analysis);
-        p.Analyze = p.Mark();
-        if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
-        var o = new Outcome(this, OutcomeKind.Image)
+        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze, out _, ct));
+        // A changed base, attribute or overload can affect unchanged companion files.
+        // Validate the exact candidate snapshot, including committed-code rebuilds.
+        var analysisTrees = start.Trees.Values.ToArray();
+        var analysis = _analysis is not null && analysisTrees.Length > 0
+            ? new PendingAnalysis(token => _analysis.AnalyzeModule(final, analysisTrees, Profile, token), ct) : null;
+        Outcome? evaluated = null;
+        Exception? primary = null;
+        try
         {
-            ValidatedInputs = true,
-            ReloadKind = kind,
-            Escalation = escalation,
-            Image = image,
-            Problems = problems,
-            Timing = p,
-            Next = start with
+            var (image, errors) = ModuleCompiler.Emit(final, ct);
+            p.Emit = p.Mark();
+            var problems = Problems(final, genDiags, errors, analyze, out var clean, ct, analysis);
+            p.Analyze = p.Mark();
+            if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error))
+                return evaluated = Errors(p, problems);
+            var o = new Outcome(this, OutcomeKind.Image)
             {
-                User = user,
-                Final = final,
-                Generated = generated,
-                Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
-                Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? 0) + 1,
-                Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,
-                DepSurfaces = Dependencies(ctx).Surfaces,
-            },
-        };
-        CheckSize(o, start.Texts);
-        return o;
+                ValidatedInputs = true,
+                ReloadKind = kind,
+                Escalation = escalation,
+                Image = image,
+                Problems = problems,
+                Timing = p,
+                Next = start with
+                {
+                    User = user,
+                    Final = final,
+                    Generated = generated,
+                    AnalyzerClean = clean,
+                    Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
+                    Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? _published?.Generation ?? 0) + 1,
+                    Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,
+                    DepSurfaces = Dependencies(ctx).Surfaces,
+                },
+            };
+            CheckSize(o, start.Texts);
+            return evaluated = o;
+        }
+        catch (Exception error) { primary = error; throw; }
+        finally
+        {
+            // An emit error can skip Problems' normal wait, and emit itself can throw.
+            // Drain our request before this evaluation may yield the coordinator worker.
+            analysis?.Dispose();
+            if (analysis?.Failure is { } failure)
+            {
+                if (primary is not null) primary.Data[PendingAnalysis.FailureKey] = failure;
+                else evaluated?.Extra.Add((AraCodes.CompileServer, "error", $"Analyzer request failed while retaining the emit error: {failure}"));
+            }
+            if (analysis is { Failures.IsEmpty: false })
+            {
+                if (primary is not null) primary.Data[PendingAnalysis.DiagnosticsKey] = analysis.Failures;
+                else evaluated?.Problems.AddRange(analysis.Failures.Where(Diagnostics.Reportable));
+            }
+        }
     }
 
     /// <summary>Reports the module once each time it crosses the soft cap (info) or 8k lines (warning).</summary>
@@ -503,8 +715,9 @@ internal sealed class ModuleSession
     /// Runs the delta and full-image paths once without sending anything (S2: the first
     /// EmitDifference costs ~150 ms cold, a second full emit ~200 ms), so the first real edit is warm.
     /// </summary>
-    internal void Prewarm(ICompileContext ctx)
+    internal void Prewarm(ICompileContext ctx, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_state is not { } s) return;
         var pick = s.Trees.FirstOrDefault(kv => kv.Value.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Any(m => m.Body is not null && !m.Body.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>().Any()));
@@ -515,14 +728,19 @@ internal sealed class ModuleSession
         var cls = EditClassifier.Classify([change], ctx.Caps);
         var next = s.User.ReplaceSyntaxTree(tree, edited);
         var warm = _driver;
-        if (s.Hot && s.Baseline is not null && cls.Escalation == Escalation.None)
+        try
         {
-            var final = s.Final.ReplaceSyntaxTree(tree, edited);
-            var (edits, added) = EditClassifier.ToSemanticEdits(cls, s.Final, final);
-            ModuleCompiler.EmitDelta(final, s.Baseline, edits, added);
+            ct.ThrowIfCancellationRequested();
+            if (s.Hot && s.Baseline is not null && cls.Escalation == Escalation.None)
+            {
+                var final = s.Final.ReplaceSyntaxTree(tree, edited);
+                var (edits, added) = EditClassifier.ToSemanticEdits(cls, s.Final, final);
+                ModuleCompiler.EmitDelta(final, s.Baseline, edits, added, ct);
+            }
+            var (debugFinal, _, _) = Generate(next.WithOptions(ModuleCompiler.Options(true)), ct);
+            ModuleCompiler.Emit(debugFinal, ct);
+            ct.ThrowIfCancellationRequested();
         }
-        var (debugFinal, _, _) = Generate(next.WithOptions(ModuleCompiler.Options(true)), default);
-        ModuleCompiler.Emit(debugFinal);
-        _driver = warm;
+        finally { _driver = warm; }
     }
 }

@@ -42,16 +42,16 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   `ara-play-host::open_project` publishes before validation; export uses this inventory.
 - `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from private inputs or legacy `ara.module.toml`
   (`references = ["Core"]`, `profile = "gameplay" | "editor"`: the API allowlist, ARA05xx).
-- Binding design: native `Transform` keeps its checked pointer view. Every other engine
-  component gets a generated typed struct and AOT-safe JSON codec. `World.Get/Read/Set`
-  dispatch through `IComponent<T>`; callback-local copies flush in first-access order
-  before returning to Rust. `HostApi.component_json` uses `SimRegistry`'s typed/dynamic
+- Binding design: `Transform` keeps the canonical native prefix; five checked physics
+  views use native pointers when available and fall back to AOT-safe JSON codecs.
+  `World.Get/Read/Set` dispatch through `IComponent<T>`; command access keeps validated
+  codec copies until returning to Rust. `HostApi.component_json` uses `SimRegistry`'s typed/dynamic
   ECS codecs, including default materialization and validation; no shadow gameplay store.
   Strings/assets/entity references use schema text, lists use arrays, maps use ordinal
   dictionaries, nested records/enums have generated codecs. `Commands.Add/Remove` share
   the normal deterministic command buffer, journaling, rejection rollback and undo.
-  Raw `[Query]` columns still require validated native views; accessor components use
-  World access in behaviours/commands. Schema blittability alone never proves Rust layout.
+  Raw `[Query]` columns require checked native layouts. Velocity, PhysicsId, PhysicsPose,
+  CharacterController and VehicleTelemetry qualify; schema blittability alone is not proof.
   `layout_hash` includes all engine fields and nested records/enums; project/module
   types do not change the engine ABI. L3 column migration keeps engine storage intact.
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
@@ -65,6 +65,8 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   (`ESC_RUNTIME_REJECTED`, `ARA0905`).
 - **L3** anything else (signatures, struct fields, attributes, removals, Ara declarations,
   cold modules, debugger attached) → a new collectible ALC; columns migrate field by field.
+  Editing a cold module heats its new generation; a hot wrapper can retain L1 while its
+  unchanged referenced math module remains cold (`ecs_kernel_bench --kernel-module`).
 - **L4** `RELOAD_L4` + `ARA0926`: engine bindings (`Ara.Runtime.dll`) changed on disk, or a
   retired generation stays alive (`ARA0927`). The last good code keeps running; restarting
   the play process from a snapshot is the play process owner's job. Inventory membership
@@ -79,9 +81,9 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   chain, new ALC bound to A's new generation) when A's public surface is unchanged, or
   rebuilds it (`ESC_DEPENDENCY`). All swap at one boundary (`ReloadReport::cascade`). If a
   dependent no longer compiles, nothing applies (`ARA0925` on both).
-- C# systems: `ecs::system::ScriptQuery`, a custom `SystemParam` registering column/resource
-  access with bevy's scheduler, one `run_system` call per chunk on the compute task pool
-  (serial when writing a resource or taking `Commands`). Conflicts order by `(Order, name)`.
+- C# systems: `ScriptQuery` registers access; chunk calls parallelize rows (serial for
+  resource writes/`Commands`). Last writers/readers preserve `(Order, name, id)` hazards.
+  Chains or zero workers use caller dispatch; forks retain parallel system scheduling.
 - Behaviours and commands run with exclusive world access published to C# as a `Scope`
   (`host/ctx.rs`). Commands journal first-seen bytes; rejection or a fault restores them;
   `undo` is all or nothing and converts saved bytes across layout migrations.
@@ -117,11 +119,17 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   - `reload`: v1 L1/L3 path. `levels`: L1/L2/L3 edits against a running game.
     `modules`: cascades, relink vs rebuild, breaking edits, cycles. `nondisruption`: the four
     D20 guarantees. `restart`: L4 (runs from a private copy of `Ara.Host`'s output).
+  - `prebuilt_watch`: zero-compile published startup, first leaf/root L3, atomic dependents,
+    later L1, failure/recovery and explicit unwatched images with broken saved sources.
   - `aot`: NativeAOT sample. `run_worker`: limits.
+  - `kernel_module_reload`: Game L1 and an atomic cold Kernel L3/dependent relink;
+    full native identities, fields, SIMD tails, heats and generation transitions.
 - Each CLR test file is its own process (one .NET runtime per process); tests in a file
   share it through `support::clr_lock()`. `support::Live` writes inline modules and ticks.
 - Latency: `cargo run -p ara-script --release --example reload_bench [-- --edits 60 --verbose]`
   prints a p50/p95 phase table per level and the system CPU load during the run.
+  `--single-file` edits the large combined script; `--dotnet-bin <absolute projects-bin>`
+  selects a private SDK, and `--output <target/file.json>` retains raw edits/reports.
 ## Gotchas
 - One .NET runtime per process. `DOTNET_MODIFIABLE_ASSEMBLIES=debug` (EnC) is set before
   it starts; on non-Windows, start the host before other threads read the environment.
@@ -134,6 +142,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   instead (same cost). Only smaller modules, L1/L2, or a Defender exclusion (the user's call) avoid it.
 - NativeAOT publish needs `vswhere.exe` on PATH (`tests/support::publish_aot` adds it).
 - `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
-- Tags are 1 byte in C#. Native chunk loops stay allocation-free; variable-value access
+- Tags are 1 byte in C#. Native views retain codec wire/journal bytes; variable-value access
   allocates callback-local copies. Keep bulk hot loops in native views.
 Historical reload measurements: [script-host-benchmarks](../../docs/dev/script-host-benchmarks.md).

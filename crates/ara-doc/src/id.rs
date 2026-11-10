@@ -11,17 +11,25 @@ use std::hash::{BuildHasher, RandomState};
 use ara_schema::grammar::split_id;
 use serde::{Deserialize, Serialize};
 
+/// Checks borrowed and owned inputs with the same grammar and error text.
+fn validate_id(s: &str) -> Result<(), String> {
+    split_id(s).map(|_| ()).ok_or_else(|| {
+        format!("`{s}` is not a valid ID (expected `<prefix>_<base32>`, e.g. `e_8b21`)")
+    })
+}
+
 macro_rules! id_type {
     ($(#[doc = $doc:literal])+ $name:ident) => {
         $(#[doc = $doc])+
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-        #[serde(try_from = "String", into = "String")]
+        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+        #[serde(try_from = "String")]
         pub struct $name(String);
 
         impl $name {
             /// Parses and validates an ID.
             pub fn parse(s: &str) -> Result<Self, String> {
-                split_id(s).map(|_| $name(s.to_owned())).ok_or_else(|| format!("`{s}` is not a valid ID (expected `<prefix>_<base32>`, e.g. `e_8b21`)"))
+                validate_id(s)?;
+                Ok(Self(s.to_owned()))
             }
 
             /// The ID text.
@@ -38,7 +46,14 @@ macro_rules! id_type {
         impl TryFrom<String> for $name {
             type Error = String;
             fn try_from(s: String) -> Result<Self, String> {
-                $name::parse(&s)
+                validate_id(&s)?;
+                Ok(Self(s))
+            }
+        }
+
+        impl Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.serialize_str(&self.0)
             }
         }
 
@@ -142,6 +157,45 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    #[test]
+    fn owned_ids_retain_storage_and_match_borrowed_validation() {
+        let record = String::from("e_8b21");
+        let record_pointer = record.as_ptr();
+        let record = RecordId::try_from(record).expect("valid record");
+        assert_eq!(record.as_str().as_ptr(), record_pointer);
+        let asset = String::from("pf_12345678");
+        let asset_pointer = asset.as_ptr();
+        let asset = AssetId::try_from(asset).expect("valid asset");
+        assert_eq!(asset.as_str().as_ptr(), asset_pointer);
+        assert_eq!(
+            serde_json::to_string(&record).expect("record JSON"),
+            "\"e_8b21\""
+        );
+        assert_eq!(
+            serde_json::to_string(&asset).expect("asset JSON"),
+            "\"pf_12345678\""
+        );
+        for input in [
+            "e_0",
+            "pf_12345678",
+            "",
+            "E_0",
+            "abcd_0",
+            "e_",
+            "e_!",
+            "e_é",
+            "e_1234567890123456789012345",
+        ] {
+            assert_eq!(RecordId::parse(input), RecordId::try_from(input.to_owned()));
+            assert_eq!(AssetId::parse(input), AssetId::try_from(input.to_owned()));
+        }
+        assert_eq!(
+            serde_json::from_value::<RecordId>(serde_json::json!("e_8b21")).expect("serde ID"),
+            record
+        );
+        assert!(serde_json::from_value::<AssetId>(serde_json::json!("bad!")).is_err());
+    }
 
     #[test]
     fn minted_ids_are_valid_and_avoid_collisions() {

@@ -14,7 +14,8 @@ internal sealed record ModuleInputs(string Project, string AuthoringRoot, string
         var inputs = File.Exists(path) ? JsonSerializer.Deserialize<ModuleInputs>(File.ReadAllText(path), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) : null;
         return inputs is null ? null : inputs with { Project = ProjectInventory.ProjectPath(inputs.Project) };
     }
-    internal ProjectInventoryResult Scan() => ProjectInventory.Scan(new(Project, AuthoringRoot));
+    /// <summary>Ownership only: warm sessions already retain the loaded publication identities.</summary>
+    internal ProjectInventoryResult Scan() => ProjectInventory.Scan(new(Project, AuthoringRoot), hydratePublications: false);
 }
 internal sealed record SourceFile(string Path, string StoragePath, string Module, bool Editor);
 internal sealed record ProjectModule(string Name, string Directory, bool Hot, string[] References, string Profile,
@@ -49,7 +50,8 @@ internal static class ProjectInventory
         return result;
     }
 
-    internal static ProjectInventoryResult Scan(InventoryRequest request)
+    /// <summary>Discovers ownership; public/project scans also validate and hydrate existing publications by default.</summary>
+    internal static ProjectInventoryResult Scan(InventoryRequest request, bool hydratePublications = true)
     {
         var diagnostics = new List<JsonObject>();
         var modules = new Dictionary<string, Module>(StringComparer.OrdinalIgnoreCase);
@@ -169,7 +171,7 @@ internal static class ProjectInventory
             var module = new ProjectModule(m.Name, Storage(m.Owner.Directory), m.Owner.Hot, resolved[m.Name], m.Editor ? "editor" : "gameplay", state,
                 state + "/" + m.Name + ".types.json", state + "/bin/" + m.Name + ".dll", [.. m.Sources.OrderBy(s => s.Path, StringComparer.Ordinal)]);
             var marker = Path.Combine(project, state, "published.sha256");
-            if (File.Exists(marker))
+            if (hydratePublications && File.Exists(marker))
             {
                 try
                 {

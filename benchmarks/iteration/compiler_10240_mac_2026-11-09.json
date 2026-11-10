@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-09",
+  "scope": "Scaling observation only: 16 independent modules, 640 generated component/query scripts each, all10240 authored files edited before each full project compile request. Source writes outside timing; inventory/read/parse/generation/analysis/emit/output/protocol inside. First three of six requests excluded; three warm samples, not a robust tail distribution.",
+  "quality": "Compile probe rejects error diagnostics and any returned module not fully compiled. Final separate audit confirms all 16 nonempty module assemblies and 10240 authored source files at expected last revision. This does not execute emitted IL or establish reload/migration/first tick.",
+  "limits": "Single fresh compile-server process, no matched baseline or Unity process. Resource context captured after launch and after completion; no strict initial timing guard or continuous interference proof. AC observed with no agent power action. Current .NET10.0.14 differs from earlier historical 5120 fixtures: do not pool or infer a scaling ratio. Peak RSS belongs to server only. Full emit, no live delta.",
+  "report": {
+    "modules": 16,
+    "files_per_module": 640,
+    "generated_components": 10240,
+    "edited_sources_per_request": 10240,
+    "first_ms": 13744.724750009482,
+    "warm_ms": [
+      13889.769874993362,
+      14468.157625000458,
+      14280.225709007937
+    ],
+    "p50_ms": 14280.225709007937,
+    "p95_ms": 14468.157625000458,
+    "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+    "server_sha256": "f3ee347834ec165cacfdf62e42ec15bc33bbdde26db1be5dcfe46c5ccd273041",
+    "runtime": {
+      "version": "10.0.14",
+      "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+      "error": null
+    },
+    "dotnet_host": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "architecture": "arm64",
+    "peak_rss_bytes": 1934458880
+  },
+  "provenance": {
+    "utc_captured_after_launch": "2026-11-08T22:51:55.502239+00:00",
+    "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true\n",
+    "artifacts_sha256": {
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Analyzers.dll": "19437f22703f7dc42e46b3695b0e994987269617605b74bc7142b2bc1d888f1e",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Runtime.dll": "43e28ff8e94ad3324033a6f88888345e32c37071f76ab039585ea3386aa9746b",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Editor.dll": "84893dc5ce29dd0024a3e3586dad62530f2da4bb581891e64af3ac59b41799fd",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Analyzers.CodeFixes.dll": "2a437ffa09993bec66dcff2e97227b706c8710daf7d9a8ee05308eebc4063b69",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll": "f3ee347834ec165cacfdf62e42ec15bc33bbdde26db1be5dcfe46c5ccd273041",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Generators.dll": "240c28db659faa8baff7ec85ae752e90d5db1838546a90d15bc93c174a787fa6"
+    },
+    "source_sha256": {
+      "dotnet/src/Ara.CompileServer/ModuleWatcher.cs": "53cdf532b9cb5c38c45cf78eb5ce4a7cb4c726852b175116a0fea4b108bb1fb6",
+      "dotnet/src/Ara.CompileServer/Diagnostics.cs": "f2356024c67f31d6cb752714441bdf8eccfdb4c77b1e22b56766689c2c86beed",
+      "dotnet/src/Ara.CompileServer/Protocol.cs": "a8ba40fc2d7004872da0c5e49d159f56ce547ec12eec22587e19dcb804a2359e",
+      "dotnet/src/Ara.CompileServer/CompileDiagnostics.cs": "4eca221cfbae01d9f29ff713527b67b54921b07482c7b85db824f8049dbfde02",
+      "dotnet/src/Ara.CompileServer/Outcome.cs": "b069406be7e4c4512c358d256782d8eb0369657be4d85846465ec0bce260e8b0",
+      "dotnet/src/Ara.CompileServer/ProjectCompiler.cs": "fa2526bd6b6013797069a8de321915eac272524a5a5b29d15ed710a2dcffb782",
+      "dotnet/src/Ara.CompileServer/CodeFixRunner.cs": "04d666f48c73e7087dc6c3e2f2d8f86f2747cd0f41f89a0c4951215c2b252cb4",
+      "dotnet/src/Ara.CompileServer/Coordinator.cs": "21744b707795c2c9c89872de3ec774ff3ae79874d827d4c22644fdfc7b21ab4a",
+      "dotnet/src/Ara.CompileServer/ModuleCompiler.cs": "d811f568553357d3bb000ad890284cdee8e3d4097e5e1eb9c5fbf1a764161e54",
+      "dotnet/src/Ara.CompileServer/EditorRunner.cs": "96ff817094a4e6d0cb20c6227e2b020959e0a3080e60b57fe95608de458d689f",
+      "dotnet/src/Ara.CompileServer/ProjectCompilations.cs": "6ec1bbfd67d581dd2cc30fd61beced9aaaee290c6fdf361f23b6e06acab9bc80",
+      "dotnet/src/Ara.CompileServer/ProjectInventory.cs": "872262e02eef83e9c013a8763f76de2c1ea0d9a2d0595dfbfdb8d7a58ae721cb",
+      "dotnet/src/Ara.CompileServer/AnalyzerSet.cs": "bd611776dc4d3a65970cb4192ba4129d4d306c2cd08407a3f0eaae77949ef61d",
+      "dotnet/src/Ara.CompileServer/EditClassifier.cs": "c71fbd6c84d02907216d138873357c03bfa97a893a67b9fcf5de0edd3b2b43fe",
+      "dotnet/src/Ara.CompileServer/ModuleSession.cs": "149cba5deadaa40b1a1e53acfe21f53e092ea5ce8c5eb083afaa12480ef7d9c0",
+      "dotnet/src/Ara.CompileServer/SourceClaims.cs": "1bb08cbd69748a434c6cbf48aedb55852e144a48d2dd3eb2c4e9d3f942044401",
+      "dotnet/src/Ara.CompileServer/Program.cs": "0ddbce01aebe552a7df04e5c4291e635fb61111cf4f460621bb382f778f98b57",
+      "dotnet/src/Ara.Generators/Docs.cs": "e22fd2cd4b3316d4f8c7453b6f6982228eb230615cffd8ab9021952b938e6d60",
+      "dotnet/src/Ara.Generators/ModuleGenerator.cs": "a541c8db5f7e892cff4e443f5eb4ac3e2aa35319b52cfbe13aa4c6a4972b691f",
+      "dotnet/src/Ara.Generators/Polyfills.cs": "46d1d486ed083c11e036591c4dfa0ba0d0d7a189b4a9b537d38633f41f5f4312",
+      "dotnet/src/Ara.Generators/Emit.Query.cs": "79af604889da4f65cb520be5bed0cc390658f2527a2ab3ed15d8c73848621b64",
+      "dotnet/src/Ara.Generators/Extract.Query.cs": "62d358f6ca2afcdd281511e19766aaddae8a2bc8cdf21936b172a15df095bc95",
+      "dotnet/src/Ara.Generators/Models.cs": "ad8bc6f162123d098a0b892cdc238d6a22bdf33b49a9990561939a1d5251d18b",
+      "dotnet/src/Ara.Generators/Emit.cs": "a4b4bbddd7b4a15405c6b4a7f0ac1bd7d9b3f8e9a7398905d48fdf246921c23e",
+      "dotnet/src/Ara.Generators/Json.cs": "f75826b6d7f12702450ce5b168b650fe2459c7beefd20f4f9af26aa0e0f75d68",
+      "dotnet/src/Ara.Generators/Extract.cs": "db87e252f2b146affddc9d176975fa7be179a8633af976990dc04433a80f0142",
+      "dotnet/src/Ara.Generators/Schema.cs": "ce181448d594714a7a39159b4495e009d019f37403d7d45bcc49161eb150e260",
+      "dotnet/src/Ara.Generators/Descriptors.cs": "8d58346e4a0bb02304a9e9e1c0f5c21374fd8acca4816b8759cf2205bd99fd2a",
+      "dotnet/src/Ara.Analyzers/Rules.cs": "5761be3a72afa6f877b4cd754d5b401657a468ee030fe86f4f39a4646ba2d361",
+      "dotnet/src/Ara.Analyzers/AllocationAnalyzer.cs": "32fab40f5377a4d087e867f5b1d415a243dd09fc61748051e85603f6088e0ca7",
+      "dotnet/src/Ara.Analyzers/UnityAnalyzer.cs": "9704e60949098fc82ea77a69874d3da682d0c6e892e9187ecff4ce8382d7c673",
+      "dotnet/src/Ara.Analyzers/DeterminismAnalyzer.cs": "59c9c419b77c4b8a31c7043ff5c77cc4c3bdca806be62bfeac662829fe34e6f2",
+      "dotnet/src/Ara.Analyzers/ApiProfiles.cs": "a0bc6bcd3fe7291ce13183eb4cca82eff645c995ad577f848009a9f2b95e8cb3",
+      "dotnet/src/Ara.Analyzers/Symbols.cs": "076ca1e92532ae3138f46c5881d82b81b3c9a916f6520ffddfab7cab52a0e33a",
+      "dotnet/src/Ara.Analyzers/AotAnalyzer.cs": "e2aa8d9830faa0d4215c8916838afb2aabf55cbeb9a1f29cd06358405865ad13",
+      "dotnet/src/Ara.Analyzers/ApiAccessAnalyzer.cs": "4279d78a57ccbed60d75b69fe0631781fdf71f01d9985fa4652ca59614867a1b",
+      "dotnet/src/Ara.Analyzers/StateAnalyzer.cs": "df19b529dba70c5d74c3e0835db2856397a1aecd626f056cc872168ee37dbe48"
+    },
+    "git_head": "0d1b593fb336c7a20263eb9a7d43e227a65e4286",
+    "command": "nice -n 10 python3 benchmarks/iteration/compiler_scale.py --modules 16 --files 640 --samples 3 --edit-all --output target/perf-feature-parity/compiler10240/run01.json",
+    "limitations": "Context is an observation after launch, not a strict before/after timing gate. Generated independent modules, full emit only, not detection/load/migration/first-correct-tick or Unity comparison.",
+    "after": {
+      "utc": "2026-11-08T22:53:33.831254+00:00",
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true\n",
+      "active_processes": [
+        {
+          "pid": 23408,
+          "cpu_percent": 7.2,
+          "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+        }
+      ]
+    },
+    "artifacts_unchanged": true,
+    "active_processes": [
+      {
+        "pid": 22126,
+        "cpu_percent": 330.4,
+        "command": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet"
+      }
+    ]
+  },
+  "final_output_audit": {
+    "project": "target/iteration-perf/compiler-scale-22116-optimized",
+    "modules": [
+      {
+        "module": "module0",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "f3e1af44c7abde1be8366d7f80cb38d0b0c3b201118483c2f524d4191cb752e3"
+      },
+      {
+        "module": "module1",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "37c5aa1e589d5b5b04d06e453509f3cee953a4c5f799ed0dd22f2daa81bb20b3"
+      },
+      {
+        "module": "module2",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "cae1dd31a5e9107a694adeaf840ae902e167b488a5d256e58ba253edad21634c"
+      },
+      {
+        "module": "module3",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "9007488c297c30a41db9427bd00949d4a58128bbc0f70631c6c9b15fcbeca8de"
+      },
+      {
+        "module": "module4",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "25bade84a4c4b6f0e7e7f4e0edfae0ea6b2d952b8574e2a2059162678e04b79f"
+      },
+      {
+        "module": "module5",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "ca6eeea12b85d74aae05a8bf313750dbc35d9882809a32d5e0948808fa75109a"
+      },
+      {
+        "module": "module6",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "bfd2f0b7cddc40803be3456133d198d4ac35554296497951414dd2be30aa6a8b"
+      },
+      {
+        "module": "module7",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "d7ec7514aff624fc42132dc3c20f5bf8b4bacbd28f53c4f1f8e8760753a9b552"
+      },
+      {
+        "module": "module8",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "f07f0b27008d4fc78a06014d59ac478764e8644ab9974f4f5ae6f0d9f3088cb9"
+      },
+      {
+        "module": "module9",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 748544,
+        "assembly_sha256": "b21634c770af01e5c3b778201385dc6f48165eab03f642b2eb3b23a0b9964b04"
+      },
+      {
+        "module": "module10",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "e38aab089616ab31e292fcaf283a17ea22f8211213b00bb71ee6e97deac33056"
+      },
+      {
+        "module": "module11",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "6f7bc9e39ee2f37553d650706c764a721f21b8c4b47fc5ffb6673bcadf67d934"
+      },
+      {
+        "module": "module12",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "8704b46b98721fd9cda3406569243a6587f82eb6f3c52a4824b05d163dc02e79"
+      },
+      {
+        "module": "module13",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "99f97191ae9e8f839bbd16b659d4a0411dc619910603b69e9610ba0008f37119"
+      },
+      {
+        "module": "module14",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "6763d120442d67ae4ce14588a6219e31cb149f260a0a3e758669a47b1eedfbc5"
+      },
+      {
+        "module": "module15",
+        "authored_sources": 640,
+        "final_revision_multiplier": 6,
+        "assembly_bytes": 751104,
+        "assembly_sha256": "193b9c03a24d542a222144017789ae01ddc409fd86372d55aaeca14ca59a479e"
+      }
+    ],
+    "limitations": "Final emitted assembly/source presence, not IL behavior execution or per-request response inventory validation."
+  }
+}
