@@ -46,12 +46,14 @@ impl MetalDevice {
         if dependency {
             rec.wait = (rec.wait.0 | wait.0, rec.wait.1 | wait.1);
             if matches!(rec.active, Active::Compute(_)) {
-                // A dependency discovered after this encoder opened may name a
-                // producer in an earlier encoder. Local stage barriers cannot
-                // order that producer; consume its queue wait here as well.
-                let queue_wait = rec.take_wait(COMPUTE_STAGES);
+                // This encoder can consume an earlier encoder's producer. It
+                // also may end before the actual consumer (e.g. pass timing
+                // splits transfer from dispatch), so keep the queue dependency
+                // pending for the next encoder as well as ordering this one.
+                let (after, waiting) = rec.wait;
+                let before = waiting & COMPUTE_STAGES;
                 if let Active::Compute(encoder) = &rec.active {
-                    if let Some((after, before)) = queue_wait {
+                    if !before.is_empty() {
                         encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
                             after,
                             before,

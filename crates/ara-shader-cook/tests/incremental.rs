@@ -1,10 +1,6 @@
 use anyhow::{Context, Result};
 use ara_shader_cook::{Toolchain, cook};
 #[test]
-#[cfg_attr(
-    target_os = "macos",
-    ignore = "Slang cannot load dxc for DXIL on macOS; Windows is the canonical cook host"
-)]
 fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
     let base =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-shader-cook/tests");

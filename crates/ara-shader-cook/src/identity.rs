@@ -9,7 +9,10 @@ use std::{
     process::Command,
 };
 
+#[cfg(not(target_os = "macos"))]
 const RECIPE:&[u8]=b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation";
+#[cfg(target_os = "macos")]
+const RECIPE: &[u8] = b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation|macos-hlsl-dxc-cli|-O2|-Zpc|-enable-16bit-types|-HV2021";
 #[derive(PartialEq, Serialize, Deserialize)]
 struct File {
     path: PathBuf,
@@ -41,6 +44,35 @@ fn files(tools: &Toolchain) -> Result<Vec<File>> {
             let path = bin.join(name);
             if path.is_file() {
                 paths.push(path);
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(bin) = executable.parent() {
+        let dxc = bin.join("dxc");
+        if dxc.is_file() {
+            paths.push(dxc.canonicalize()?);
+        }
+        if let Some(root) = bin.parent() {
+            let lib = root.join("lib");
+            if lib.is_dir() {
+                let mut libraries = fs::read_dir(lib)?
+                    .map(|e| e.map(|e| e.path()))
+                    .collect::<std::io::Result<Vec<_>>>()?;
+                libraries.retain(|p| {
+                    p.file_name().is_some_and(|name| {
+                        let name = name.to_string_lossy();
+                        (name.starts_with("libslang") || name.starts_with("libdxcompiler"))
+                            && name.ends_with(".dylib")
+                    })
+                });
+                libraries.sort();
+                for library in libraries {
+                    let library = library.canonicalize()?;
+                    if !paths.contains(&library) {
+                        paths.push(library);
+                    }
+                }
             }
         }
     }

@@ -129,3 +129,102 @@ kernel void produce(constant TopLevel& t [[buffer(2)]]) {
     gpu.collect().unwrap();
     gpu.assert_clean().unwrap();
 }
+
+#[test]
+fn copy_dependency_survives_the_timed_consumer_opening_a_new_encoder() {
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    gpu.set_pass_timing(true);
+    let words = 4 * 1024 * 1024;
+    let pattern = 0x1234_5678u32;
+    let data = vec![pattern; words];
+    let bytes = bytemuck::cast_slice(&data);
+    let source = gpu
+        .create_buffer(bytes.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)
+        .unwrap();
+    gpu.upload(source, bytes).unwrap();
+    let zeros = vec![0; bytes.len()];
+    let shader = r#"
+kernel void consume(constant TopLevel& t [[buffer(2)]]) {
+    device uint* p=t.buffers[t.root[0]].data;
+    t.buffers[t.root[1]].data[0]=p[0]+p[t.root[2]/2]+p[t.root[2]-1];
+}
+"#;
+    let pipeline = gpu.msl_pipeline_from(
+        shader,
+        &[(Stage::Compute, "consume")],
+        &RenderState::default(),
+        Some([1, 1, 1]),
+    );
+    let mut rec = gpu.begin(Queue::Graphics);
+    let mut snapshots = Vec::new();
+    rec.barriers([Barrier {
+        resource: Resource::Buffer(source),
+        before: Access::HostWrite,
+        after: Access::CopySource,
+        handoff: None,
+    }]);
+    for _ in 0..8 {
+        let copied = gpu
+            .create_buffer(
+                bytes.len() as u64,
+                vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )
+            .unwrap();
+        gpu.upload(copied, &zeros).unwrap();
+        let output = gpu
+            .create_buffer(4, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+            .unwrap();
+        let input_slot = gpu.storage_buffer(copied).unwrap().index;
+        let output_slot = gpu.storage_buffer(output).unwrap().index;
+        rec.barriers([Barrier {
+            resource: Resource::Buffer(copied),
+            before: Access::HostWrite,
+            after: Access::CopyDestination,
+            handoff: None,
+        }]);
+        rec.push(Command::CopyBufferRange {
+            source,
+            source_offset: 0,
+            destination: copied,
+            destination_offset: 0,
+            size: bytes.len() as u64,
+        });
+        rec.barriers([Barrier {
+            resource: Resource::Buffer(copied),
+            before: Access::CopyDestination,
+            after: Access::ShaderRead,
+            handoff: None,
+        }]);
+        // The barrier was encountered in the copy's encoder. Timestamping opens
+        // another encoder for the consumer, which still owes the queue dependency.
+        rec.push(Command::BeginPass("timed transfer consumer".into()));
+        rec.push(Command::Pipeline(pipeline));
+        rec.push(Command::Constants(RootConstants {
+            words: [input_slot, output_slot, words as u32, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        rec.push(Command::EndPass);
+        rec.barriers([Barrier {
+            resource: Resource::Buffer(output),
+            before: Access::Storage,
+            after: Access::HostRead,
+            handoff: None,
+        }]);
+        snapshots.push((copied, output));
+    }
+    let point = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(point).unwrap();
+    for (copied, output) in snapshots {
+        assert_eq!(
+            gpu.read(output).unwrap(),
+            pattern.wrapping_mul(3).to_le_bytes()
+        );
+        gpu.retire(Resource::Buffer(copied)).unwrap();
+        gpu.retire(Resource::Buffer(output)).unwrap();
+    }
+    gpu.retire(Resource::Buffer(source)).unwrap();
+    gpu.retire_pipeline(pipeline).unwrap();
+    gpu.collect().unwrap();
+    gpu.assert_clean().unwrap();
+}
