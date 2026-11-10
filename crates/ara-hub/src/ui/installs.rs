@@ -316,7 +316,11 @@ fn published(s: &HubApp) -> El<HubApp> {
                     }),
             );
         }
-        let notes: String = release.notes.chars().take(260).collect();
+        // A plain excerpt; the notes themselves render as Markdown.
+        let notes: String = super::markdown::plain(&release.notes)
+            .chars()
+            .take(260)
+            .collect();
         let v = version.clone();
         let mut body = card(l).pad(16.0).gap(10.0).child(head);
         if let Some(job) = job {

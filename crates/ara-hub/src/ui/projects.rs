@@ -11,7 +11,7 @@ use stillkit::{Role, TextRole};
 
 use super::images::Pic;
 use super::{HubApp, create};
-use crate::model::{Hub, Intent, Layout, Project, Sort, State, text as fmt};
+use crate::model::{Hub, Intent, Layout, Project, Sort, State, View, text as fmt};
 
 /// Sidebar, page padding: what the grid can't use of the window's width.
 const CHROME: f32 = 224.0 + 64.0;
@@ -128,27 +128,106 @@ pub(super) fn columns(s: &HubApp, min: f32) -> u16 {
     (((width + GAP) / (min + GAP)).floor() as u16).clamp(1, 6)
 }
 
-/// First run: one welcoming line, then the templates as the hero.
+/// First run: a welcome with the two ways in (New project, Add existing), then the
+/// templates at their usual size.
 fn first_run(s: &HubApp) -> El<HubApp> {
     let l = &s.look;
     let c = &l.c;
     let hub = &s.hub;
+    let start = |key: &'static str,
+                 glyph,
+                 primary: bool,
+                 title: &'static str,
+                 copy: &'static str,
+                 intent: Intent| {
+        let hover = c.hover_surface.0;
+        let badge = el()
+            .size(40.0)
+            .radius(10.0)
+            .align(Align::Center)
+            .justify(stillkit::el::Justify::Center);
+        let badge = if primary {
+            badge
+                .fill(c.primary.0)
+                .child(icon(glyph).size(18.0).color(c.primary_foreground.0))
+        } else {
+            badge
+                .fill(l.well())
+                .child(icon(glyph).size(18.0).color(c.foreground.0))
+        };
+        row()
+            .key(key)
+            .h(76.0)
+            .w(0.0)
+            .grow(1.0)
+            .pad(16.0)
+            .gap(14.0)
+            .align(Align::Center)
+            .radius(l.radius.md)
+            .fill(l.well())
+            .role(Role::Button)
+            .label(title)
+            .hovered(move |e| e.fill(hover))
+            .on_press(move |s: &mut HubApp| s.intent(intent.clone()))
+            .child(badge)
+            .child(
+                col()
+                    .gap(3.0)
+                    .w(0.0)
+                    .grow(1.0)
+                    .child(text(title).text_size(14.0).color(c.foreground.0))
+                    .child(
+                        text(copy)
+                            .text_size(12.0)
+                            .wrap(2)
+                            .color(c.muted_foreground.0),
+                    ),
+            )
+    };
     let welcome = card(l)
-        .pad(20.0)
+        .pad(28.0)
+        .gap(18.0)
         .child(
-            row().gap(14.0).align(Align::Center)
-                .child(el().size(40.0).radius(10.0).fill(c.primary.0.with_alpha(0.14)).align(Align::Center).justify(stillkit::el::Justify::Center).child(icon(icons::FOLDER_PLUS).size(20.0).color(c.info_foreground.0)))
-                .child(col().gap(4.0).grow(1.0)
-                    .child(text("No projects yet").font(TextRole::Headline).color(c.foreground.0))
-                    .child(text("Start from a template below, add a project folder you already have, or drop a folder onto this window.").text_size(12.0).wrap(2).color(c.muted_foreground.0))),
+            col()
+                .gap(6.0)
+                .child(text("Welcome to Ara").text_size(22.0).color(c.foreground.0))
+                .child(
+                    text("Create your first project, or add a project folder you already have. You can also drop a folder onto this window.")
+                        .text_size(13.0)
+                        .wrap(3)
+                        .max_w(560.0)
+                        .color(c.muted_foreground.0),
+                ),
+        )
+        .child(
+            row()
+                .gap(12.0)
+                .child(start(
+                    "welcome-new",
+                    icons::PLUS,
+                    true,
+                    "New project",
+                    "A blank scene or one of the templates below",
+                    Intent::Navigate(View::Create),
+                ))
+                .child(start(
+                    "welcome-add",
+                    icons::FOLDER_OPEN,
+                    false,
+                    "Add existing",
+                    "Open a project folder from disk",
+                    Intent::AddExisting,
+                )),
         );
     let mut out = col().gap(20.0).child(welcome);
     if !hub.templates.is_empty() {
+        // Columns follow the width, not the template count: one template is one
+        // normal tile, never a full-width banner.
         out = out
             .child(section(
                 l,
                 "Start from a template",
-                Some("Outpost and Showcase are real-art samples."),
+                Some("Outpost and Showcase are real-art samples: open one to see what Ara renders today."),
                 Vec::new(),
             ))
             .child(

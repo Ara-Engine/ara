@@ -278,7 +278,7 @@ fn identity(l: &Look, release: &ara_update::Manifest) -> El<HubApp> {
     r
 }
 
-/// Release notes in a bounded, scrolling well.
+/// Release notes (Markdown) in a bounded, scrolling well.
 fn notes(l: &Look, notes: &str) -> El<HubApp> {
     col()
         .max_h(180.0)
@@ -287,12 +287,7 @@ fn notes(l: &Look, notes: &str) -> El<HubApp> {
         .radius(l.radius.sm)
         .fill(l.c.muted.0)
         .border(1.0, l.c.border.0)
-        .child(
-            text(notes.to_owned())
-                .text_size(12.0)
-                .wrap(200)
-                .color(l.c.foreground.0),
-        )
+        .child(super::markdown::render(l, notes))
 }
 
 fn update(s: &HubApp) -> (El<HubApp>, bool) {
