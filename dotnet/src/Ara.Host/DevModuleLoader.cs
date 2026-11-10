@@ -46,6 +46,7 @@ public sealed class DevModuleLoader : IModuleLoader
         // Staged view (compile-client thread): the image and the deltas the server built on.
         public byte[] Pe = [];
         public byte[] Pdb = [];
+        public string? PublishedFingerprint;
         public readonly List<(byte[] Md, byte[] Il, byte[] Pdb)> Chain = [];
         public Assembly? Staged;
         public readonly ManualResetEventSlim Ready = new(false);
@@ -86,6 +87,11 @@ public sealed class DevModuleLoader : IModuleLoader
         var root = doc.RootElement;
         var server = root.TryGetProperty("compileServer", out var cs) && cs.ValueKind == JsonValueKind.String ? cs.GetString() : null;
         _serverDll = server;
+        // A watched or source-only dependent needs every dependency represented in
+        // the server, even an unwatched one. Unprovable images compile normally.
+        var compileGraph = server is not null && root.GetProperty("modules").EnumerateArray().Any(spec =>
+            spec.TryGetProperty("watch", out var active) && active.GetBoolean()
+            || !spec.TryGetProperty("assembly", out var image) || image.ValueKind != JsonValueKind.String);
         var waiting = new List<Module>();
         var rc = 0;
         foreach (var spec in root.GetProperty("modules").EnumerateArray())
@@ -103,23 +109,25 @@ public sealed class DevModuleLoader : IModuleLoader
                 m = new Module((uint)_modules.Count, name, refs, profile) { Dir = dir, Hot = hot, Watch = watch };
                 _modules.Add(m);
             }
-            // A watched module whose published assembly is newer than its sources starts from
-            // that image; the compile server watches without rebuilding it (Play start used to
-            // recompile every module the editor had just published).
-            var prebuilt = assembly is not null && (!watch || server is not null && Current(dir, assembly));
-            if (prebuilt && watch)
+            // Capture exact publication identity before either consumer sees the image.
+            // Missing or stale snapshots compile normally; timestamps cannot prove identity.
+            if (assembly is not null && compileGraph)
+                foreach (var dep in refs.Select(Find)) dep?.Ready.Wait(TimeSpan.FromMinutes(3));
+            var published = assembly is not null && compileGraph
+                ? PublishedSnapshot.TryCapture(dir, assembly, name, hot, refs, profile, reference => Find(reference)?.PublishedFingerprint) : null;
+            if (!watch && assembly is not null && compileGraph && published is null)
             {
-                try
+                try { published = PublishedSnapshot.CaptureReadOnly(dir, assembly, name, hot, refs, profile, reference => Find(reference)?.PublishedFingerprint); }
+                catch (Exception error)
                 {
-                    _client ??= new CompileClient(server!, this, checked(++_compileBinding));
-                    _client.Watch(m.Slot, name, dir, hot, refs, profile, watch, initial: false, generation: 1);
-                }
-                catch (Exception e)
-                {
-                    Diag.ReportException(AraCodes.CompileServer, "error", $"compile server: {e.Message}", e);
-                    return 1;
+                    Diag.ReportException(AraCodes.LoadFailed, "error", $"module `{name}`: cannot load explicit prebuilt `{assembly}`: {error.Message}", error);
+                    m.Failed = true;
+                    m.Ready.Set();
+                    rc = 1;
+                    continue;
                 }
             }
+            var prebuilt = assembly is not null && (compileGraph ? published is not null : !watch);
             if (prebuilt)
             {
                 // Modules arrive in dependency order: what this one references is staged (or failed) first.
@@ -128,16 +136,23 @@ public sealed class DevModuleLoader : IModuleLoader
                 try
                 {
                     var pdbPath = Path.ChangeExtension(assembly!, ".pdb");
-                    Stage([(m, File.ReadAllBytes(assembly!), File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : [], 0, hot, report)]);
+                    Stage([(m, published?.Pe ?? File.ReadAllBytes(assembly!), published?.Pdb ?? (File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : []), 0, hot, report)], publication: published);
+                    if (published is not null && server is not null)
+                    {
+                        _client ??= new CompileClient(server, this, checked(++_compileBinding));
+                        _client.Watch(m.Slot, name, dir, hot, refs, profile, watch, initial: false, generation: 0, published: published);
+                    }
+                    continue;
                 }
+                catch (PublishedDependencyChangedException) when (published is { HasCommittedSources: true }) { /* Compile against the newly staged dependency instead. */ }
                 catch (Exception e)
                 {
                     Diag.ReportException(AraCodes.LoadFailed, "error", $"module `{name}`: cannot load `{assembly}`: {e.Message}", e);
                     m.Failed = true;
                     m.Ready.Set();
                     rc = 1;
+                    continue;
                 }
-                continue;
             }
             if (server is null)
             {
@@ -171,32 +186,6 @@ public sealed class DevModuleLoader : IModuleLoader
         return rc;
     }
 
-    /// <summary>
-    /// True when <paramref name="assembly"/> was written after every source the module's
-    /// <c>module.inputs.json</c> lists (no inputs file or an unreadable one: false, compile).
-    /// </summary>
-    static bool Current(string dir, string assembly)
-    {
-        try
-        {
-            var inputs = Path.Combine(dir, "module.inputs.json");
-            if (!File.Exists(inputs) || !File.Exists(assembly)) return false;
-            using var doc = JsonDocument.Parse(File.ReadAllText(inputs));
-            var project = doc.RootElement.GetProperty("project").GetString() ?? "";
-            var built = File.GetLastWriteTimeUtc(assembly);
-            foreach (var source in doc.RootElement.GetProperty("sources").EnumerateArray())
-            {
-                var path = Path.Combine(project, source.GetProperty("storagePath").GetString() ?? "");
-                if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) > built) return false;
-            }
-            return true;
-        }
-        catch (Exception e) when (e is IOException or JsonException or KeyNotFoundException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     Module? Find(uint slot)
     {
         lock (_lock) return slot < _modules.Count ? _modules[(int)slot] : null;
@@ -213,10 +202,18 @@ public sealed class DevModuleLoader : IModuleLoader
     /// generated <c>Register</c> and pre-JITs the entry points (compile-client thread), then
     /// queues one swap for the next tick boundary. If any module fails, none is staged.
     /// </summary>
-    void Stage(IReadOnlyList<(Module M, byte[] Pe, byte[] Pdb, uint Generation, bool Hot, ReloadReport Report)> batch, ulong recovery = 0)
+    sealed class PublishedDependencyChangedException : Exception { }
+
+    void Stage(IReadOnlyList<(Module M, byte[] Pe, byte[] Pdb, uint Generation, bool Hot, ReloadReport Report)> batch, ulong recovery = 0,
+        PublishedSnapshot? publication = null)
     {
         Dictionary<string, Assembly> view;
-        lock (_lock) view = _modules.Where(m => m.Staged is not null).ToDictionary(m => m.Name, m => m.Staged!);
+        lock (_lock)
+        {
+            if (publication is not null && publication.Dependencies.Any(pair => Find(pair.Key)?.PublishedFingerprint != pair.Value))
+                throw new PublishedDependencyChangedException();
+            view = _modules.Where(m => m.Staged is not null).ToDictionary(m => m.Name, m => m.Staged!);
+        }
         var staged = new List<(Module M, ModuleLoadContext Alc, Assembly Asm, ModuleSwap Swap, bool Relink, byte[] Pe, byte[] Pdb)>();
         try
         {
@@ -281,6 +278,7 @@ public sealed class DevModuleLoader : IModuleLoader
             foreach (var s in staged)
             {
                 s.M.Staged = s.Asm;
+                s.M.PublishedFingerprint = publication?.Fingerprint;
                 if (!s.Relink)
                 {
                     (s.M.Pe, s.M.Pdb) = (s.Pe, s.Pdb);
@@ -419,6 +417,7 @@ public sealed class DevModuleLoader : IModuleLoader
         var (slot, generation, kind, changed, origin, t, md, il, pdb) =
             (r.U32(), r.U32(), r.U32(), r.U32(), r.U32(), r.Timing(), r.Bytes(), r.Bytes(), r.Bytes());
         if (Find(slot) is not { } m) return;
+        m.PublishedFingerprint = null;
         m.Chain.Add((md, il, pdb));
         if (Debugger.IsAttached)
         {

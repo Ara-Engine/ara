@@ -106,7 +106,7 @@ fn prepared_runtime_moves_to_owner_and_continues_its_same_ecs_physics_world() ->
     }))?;
     let worker = thread::spawn(move || {
         World::prepare_packed(
-            &scene,
+            scene,
             Arc::new(ara_runtime::assets::MemoryAssets::default()),
         )
     });

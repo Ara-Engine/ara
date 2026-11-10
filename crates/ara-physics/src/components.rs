@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Stable simulation identity; nonzero and unique within a physics world.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Component, Schema, Serialize, Deserialize)]
+#[repr(C)]
 #[ara(component, module = "physics")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct PhysicsId {
@@ -16,6 +17,7 @@ pub struct PhysicsId {
 
 /// Resolved world-space pose in meters. Hierarchy/scale resolution runs before physics.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[repr(C)]
 #[ara(component, module = "physics")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct PhysicsPose {

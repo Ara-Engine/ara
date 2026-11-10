@@ -23,8 +23,7 @@ pub(super) fn invoke<T: DeserializeOwned>(
     mut request: Value,
 ) -> Result<T, Diagnostic> {
     static SESSION: OnceLock<Mutex<Option<Session>>> = OnceLock::new();
-    let tools =
-        ToolPaths::locate(root).ok_or_else(|| failure("installed C# project tools are missing"))?;
+    let tools = ToolPaths::locate(root).ok_or_else(|| failure(ToolPaths::MISSING))?;
     let directory = tools
         .compile_server
         .parent()

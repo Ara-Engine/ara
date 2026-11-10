@@ -3,7 +3,9 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Collections.Immutable;
 using Ara.Hosting;
+using Microsoft.CodeAnalysis;
 
 namespace Ara.CompileServer;
 
@@ -32,7 +34,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal TimeSpan AgentQuiet = TimeSpan.FromMilliseconds(150);
     readonly Func<long> _clock;
 
-    enum WorkKind { Initial, Change, Heat, Rebuild, Recover }
+    enum WorkKind { Initial, Change, Heat, Rebuild, Recover, PublishedRebind }
 
     sealed class Work(WorkKind kind, uint slot, uint origin, long tEvent)
     {
@@ -63,7 +65,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly Thread _worker;
     readonly ModuleWatcher _watcher;
     CancellationTokenSource? _agentRun;
+    Task? _agentCancellation;
     Dictionary<ModuleSession, Outcome>? _cascade;
+    Dictionary<(string Project, string AuthoringRoot), ProjectInventoryResult>? _waveInventories;
     bool _busy;
     bool _compiling;
     bool _restartSent;
@@ -95,11 +99,12 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     }
 
     /// <summary>
-    /// Adds a module (after the modules it references), builds its first image and watches its
-    /// folder. A reference to a module that is not watched yet is refused with a diagnostic.
+    /// Adds a module after its references, adopting captured publication facts or building the
+    /// first image, then watches its folder. Unknown module references are refused.
     /// </summary>
     internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyList<string> assemblies,
-        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0)
+        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0,
+        PublishedSnapshot? published = null)
     {
         lock (_lock)
         {
@@ -108,26 +113,28 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             {
                 var attempt = Begin(slot, name, profile, track: false);
                 SendDiagnostics(slot, dir, [], [(AraCodes.UnknownModule, "error",
-                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, supplied: attempt);
+                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, validated: false, supplied: attempt);
                 return;
             }
             var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
+            if (published is not null && !m.ImportPublished(published, this)) initial = true;
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
-            if (watch) _watcher.Watch(slot, m.WatchDirectory);
+            if (watch && !m.ReadOnlyPublished) _watcher.Watch(slot, m.WatchDirectory);
             foreach (var a in assemblies) WatchReference(a);
-            if (initial) _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
+            if (initial) Enqueue(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
+            else if (m.PublishedReferencesDrift(this))
+                Enqueue(new Work(WorkKind.PublishedRebind, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
+            else if (m.PublishedSourcesDrift)
+                Enqueue(new Work(WorkKind.Change, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
         }
         _wake.Set();
     }
 
     /// <summary>Explicit recovery always validates current inputs and emits one atomic fresh-image swap.</summary>
-    internal void Recover(ulong ticket)
-    {
-        lock (_lock) _human.AddLast(new Work(WorkKind.Recover, 0, AbiConst.OriginHuman, Stopwatch.GetTimestamp()) { Recovery = ticket });
-        _wake.Set();
-    }
+    internal void Recover(ulong ticket) =>
+        Enqueue(new Work(WorkKind.Recover, 0, AbiConst.OriginHuman, Stopwatch.GetTimestamp()) { Recovery = ticket });
 
     /// <summary>
     /// Compile changed bytes, or register/retire a source.replace version before/after materialization.
@@ -159,6 +166,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 
     internal void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
     {
+        lock (_lock) if (_bySlot.TryGetValue(slot, out var module) && module.ReadOnlyPublished) return;
         uint origin;
         var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
         var current = canonical.Where(path => ModuleWatcher.IsSourceInput(path) && !Directory.Exists(path))
@@ -210,7 +218,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 else _human.AddLast(w);
                 var target = same ?? w;
                 if (w.Kind == WorkKind.Change && _agent.Remove(w.Slot, out var pending)) target.Paths.UnionWith(pending.Paths);
-                _agentRun?.Cancel(); // human work preempts a running agent compile
+                // Request cancellation immediately, but run provider callbacks outside
+                // the scheduler lock. The worker observes this task before becoming idle.
+                if (_agentRun is not null) _agentCancellation ??= _agentRun.CancelAsync();
             }
         }
         _wake.Set();
@@ -274,31 +284,49 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 _wake.WaitOne(wait);
                 continue;
             }
-            Priority(agent);
             try
             {
+                Priority(agent);
                 Run(w, ct);
             }
-            catch (OperationCanceledException) when (agent && !_stop.IsCancellationRequested)
+            catch (OperationCanceledException error) when (_stop.IsCancellationRequested && PendingAnalysis.IsCancellation(error, ct))
             {
+                // Closing Play cancels outstanding human and agent work alike.
+                AnalysisFailure(error);
+            }
+            catch (OperationCanceledException error) when (agent && !_stop.IsCancellationRequested && PendingAnalysis.IsCancellation(error, ct))
+            {
+                AnalysisFailure(error);
                 CancelAttempts();
                 Log(0, $"agent compile of module `{_bySlot[w.Slot].Name}` yielded to a human edit; requeued");
                 Enqueue(w);
             }
-            catch (Exception e) when (e is not OperationCanceledException)
+            catch (Exception e)
             {
                 if (_bySlot.TryGetValue(w.Slot, out var failed))
                     SendDiagnostics(failed.Slot, failed.Dir, [], [(AraCodes.CompileServer, "error", e.Message)], 0, w.Origin, validated: false);
                 Log(2, $"module {w.Slot}: {e}");
+                AnalysisFailure(e);
                 if (w.Recovery != 0) RecoveryFinished(w.Recovery, "failed");
             }
             finally
             {
+                CancellationTokenSource? run;
+                Task? cancelled;
+                lock (_lock)
+                {
+                    run = _agentRun;
+                    cancelled = _agentCancellation;
+                    _agentRun = null;
+                    _agentCancellation = null;
+                }
+                try { cancelled?.GetAwaiter().GetResult(); }
+                catch (Exception error) { Log(2, $"agent cancellation callback failed: {error}"); }
+                run?.Dispose();
                 CancelAttempts();
                 lock (_lock)
                 {
                     _busy = false;
-                    _agentRun = null;
                     Monitor.PulseAll(_lock);
                 }
                 CompileState(false);
@@ -307,18 +335,24 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         }
     }
 
-    static readonly Process Self = Process.GetCurrentProcess();
-
-    /// <summary>Human compiles at normal priority; agent compiles and idle time below normal (D20, A13).</summary>
-    static void Priority(bool? agent)
+    void AnalysisFailure(Exception primary)
     {
-        try
+        if (primary.Data[PendingAnalysis.FailureKey] is Exception failure)
+            Log(2, $"analyzer request also failed while retaining the original failure: {failure}");
+        if (primary.Data[PendingAnalysis.DiagnosticsKey] is ImmutableArray<Diagnostic> diagnostics)
+            foreach (var diagnostic in diagnostics) Log(2, diagnostic.ToString());
+    }
+
+    readonly HashSet<string> _priorityFailures = new(StringComparer.Ordinal);
+
+    /// <summary>Restores the helper's launch budget for humans and backgrounds agent/idle work (D20, A13).</summary>
+    void Priority(bool? agent)
+    {
+        if (CompilePriority.Apply(agent) is { } failure && _priorityFailures.Add(failure))
         {
-            var cls = agent == false ? ProcessPriorityClass.Normal : ProcessPriorityClass.BelowNormal;
-            if (Self.PriorityClass != cls) Self.PriorityClass = cls;
-            Thread.CurrentThread.Priority = agent == true ? ThreadPriority.BelowNormal : ThreadPriority.Normal;
+            try { Log(1, failure); }
+            catch (Exception error) when (error is IOException or ObjectDisposedException) { /* the host is already closing */ }
         }
-        catch (Exception) { /* not allowed on this platform: priorities are a latency aid only */ }
     }
 
     void Run(Work w, CancellationToken ct)
@@ -330,31 +364,34 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             return;
         }
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
-        if (w.Kind == WorkKind.Heat && m.State is { } current && current.Hot == (w.Hot && Enc)) return;
+        if (w.Kind == WorkKind.Heat && m.LoadedHot == (w.Hot && Enc)) return;
         Begin(m.Slot, m.Name, m.Profile);
         CompileState(true);
         switch (w.Kind)
         {
             case WorkKind.Initial:
-                var unbuilt = m.References.Where(r => _byName[r].State is null).ToList();
+                var unbuilt = m.References.Where(r => !_byName[r].Loaded).ToList();
                 if (unbuilt.Count > 0)
                 {
                     SendDiagnostics(m.Slot, m.Dir, [], [(AraCodes.DependencyFailed, "error",
-                        $"module `{m.Name}` is not built because {string.Join(", ", unbuilt.Select(u => $"`{u}`"))} did not build")], 0, w.Origin);
+                        $"module `{m.Name}` is not built because {string.Join(", ", unbuilt.Select(u => $"`{u}`"))} did not build")], 0, w.Origin, validated: false);
                     return;
                 }
                 Handle(Evaluated(m.Initial(this, ct), ct), w.Origin, ct);
-                m.Prewarm(this);
+                m.Prewarm(this, ct);
                 break;
             case WorkKind.Change:
                 Handle(Evaluated(m.Compile(w.Paths, w.TEvent, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Heat:
-                if (m.State is { } s && s.Hot == (w.Hot && Enc)) return;
+                if (m.LoadedHot == (w.Hot && Enc)) return;
                 Handle(Evaluated(m.Full(Escalation.Requested, w.Hot, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Rebuild:
                 Handle(Evaluated(m.Full(w.Escalation, null, this, ct), ct), w.Origin, ct);
+                break;
+            case WorkKind.PublishedRebind:
+                Handle(Evaluated(m.Cascade(this, ct), ct), w.Origin, ct);
                 break;
         }
     }
@@ -414,16 +451,19 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         switch (o.Kind)
         {
             case OutcomeKind.None:
+                if (!ValidateForPublication([o], o, origin, cancellation)) return;
                 if (o.Next is not null) { m.Commit(o); RebindDependents(m); }
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Errors:
+                if (TryEditWave(o, origin, cancellation)) return;
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, o.Timing.ToTiming().ServerUs, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Restart:
                 _out.Send(MessageKind.Restart, new Protocol.Writer().U32(m.Slot).Str("module/source domain boundary changed; restart Play from the current snapshot to load the new inventory (L4)").ToArray());
                 return;
             case OutcomeKind.Delta:
+                if (!ValidateForPublication([o], o, origin, cancellation)) return;
                 m.Commit(o);
                 RebindDependents(m);
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
@@ -449,7 +489,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         {
             if (m == root || !m.References.Any(names.Contains)) continue;
             names.Add(m.Name);
-            if (m.State is not null) list.Add(m);
+            if (m.Loaded) list.Add(m);
         }
         return list;
     }
@@ -468,21 +508,28 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             foreach (var d in order)
             {
                 Begin(d.Slot, d.Name, d.Profile);
-                var o = d.Cascade(this, cancellation);
+                var o = d.Cascade(this, cancellation, root.Intent);
+                if (o.Kind == OutcomeKind.Restart)
+                {
+                    Handle(o, origin, cancellation);
+                    return;
+                }
                 if (o.Kind == OutcomeKind.Errors)
                 {
+                    if (TryEditWave(root, origin, cancellation)) return;
                     o.Extra.Add((AraCodes.DependencyFailed, "error",
                         $"module `{d.Name}` does not compile against the change to `{root.Module.Name}`; both keep their last good version"));
-                    SendDiagnostics(d.Slot, d.Dir, o.Problems, o.Extra, 0, origin);
+                    SendDiagnostics(d.Slot, d.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                     SendDiagnostics(root.Module.Slot, root.Module.Dir, root.Problems.Where(p => p.Severity != Microsoft.CodeAnalysis.DiagnosticSeverity.Error).ToList(),
                         [(AraCodes.DependencyFailed, "error", $"the change to `{root.Module.Name}` breaks module `{d.Name}` (see its diagnostics); nothing was applied")],
-                        root.Timing.ToTiming().ServerUs, origin);
+                        root.Timing.ToTiming().ServerUs, origin, root.ValidatedInputs);
                     return;
                 }
                 _cascade[d] = o;
                 outcomes.Add(o);
             }
             cancellation.ThrowIfCancellationRequested();
+            if (!ValidateForPublication(outcomes, root, origin, cancellation)) return;
             foreach (var o in outcomes) o.Module.Commit(o);
             foreach (var o in outcomes) SendDiagnostics(o.Module.Slot, o.Module.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
             SendReload(outcomes, origin);
@@ -493,12 +540,149 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         }
     }
 
+    // A refactor can change independent roots before their shared dependent.
+    // Expand only a failed source attempt; successful L1/single-root work keeps
+    // its usual path and never inspects unrelated saved modules.
+    bool TryEditWave(Outcome trigger, uint origin, CancellationToken cancellation)
+    {
+        if (trigger.Intent != CompileIntent.CurrentSources || !trigger.Module.Loaded) return false;
+        var previousCascade = _cascade;
+        var previousInventories = _waveInventories;
+        _waveInventories = [];
+        try
+        {
+            var closures = new Dictionary<ModuleSession, HashSet<ModuleSession>>();
+            HashSet<ModuleSession> Closure(ModuleSession module)
+            {
+                if (!closures.TryGetValue(module, out var closure))
+                    closures[module] = closure = new HashSet<ModuleSession>(Dependents(module)) { module };
+                return closure;
+            }
+            var affected = new HashSet<ModuleSession>(Closure(trigger.Module));
+            var inspected = new HashSet<ModuleSession>();
+            var expanded = false;
+            while (true)
+            {
+                var grew = false;
+                foreach (var module in _modules)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (!module.Loaded || module.ReadOnlyPublished || affected.Contains(module)) continue;
+                    var closure = Closure(module);
+                    // Join through an affected dependent, never merely through
+                    // a shared unchanged ancestor or an unrelated saved edit.
+                    if (!closure.Overlaps(affected) || !inspected.Add(module)) continue;
+                    if (!module.SavedSourcesChanged(this)) continue;
+                    affected.UnionWith(closure);
+                    grew = expanded = true;
+                }
+                if (!grew) break;
+            }
+            if (!expanded) return false;
+            var order = _modules.Where(affected.Contains).ToArray();
+            foreach (var module in order)
+                if (!_attempts.ContainsKey(module.Slot)) Begin(module.Slot, module.Name, module.Profile);
+            _cascade = [];
+            var outcomes = new List<Outcome>();
+            foreach (var module in order)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var outcome = module == trigger.Module && trigger.Kind == OutcomeKind.Image && module.MatchesCurrent(trigger, this)
+                    ? trigger : module.Cascade(this, cancellation);
+                if (outcome.Kind == OutcomeKind.Restart)
+                {
+                    Handle(outcome, origin, cancellation);
+                    return true;
+                }
+                if (outcome.Kind == OutcomeKind.Errors)
+                {
+                    foreach (var member in order)
+                    {
+                        if (member == module)
+                            SendDiagnostics(member.Slot, member.Dir, outcome.Problems, outcome.Extra, 0, origin, outcome.ValidatedInputs);
+                        else
+                        {
+                            _cascade.TryGetValue(member, out var staged);
+                            SendDiagnostics(member.Slot, member.Dir, [],
+                                [(AraCodes.DependencyFailed, "error", $"source edit wave failed in `{module.Name}`; every module keeps its last good code")],
+                                0, origin, staged?.ValidatedInputs ?? false);
+                        }
+                    }
+                    return true;
+                }
+                _cascade[module] = outcome;
+                outcomes.Add(outcome);
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if (!ValidateForPublication(outcomes, trigger, origin, cancellation)) return true;
+            foreach (var outcome in outcomes) outcome.Module.Commit(outcome);
+            foreach (var outcome in outcomes)
+                SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, outcome.Problems, outcome.Extra, 0, origin, outcome.ValidatedInputs);
+            SendReload(outcomes, origin);
+            return true;
+        }
+        finally
+        {
+            _cascade = previousCascade;
+            _waveInventories = previousInventories;
+        }
+    }
+
+    bool ValidateForPublication(IReadOnlyList<Outcome> outcomes, Outcome trigger, uint origin, CancellationToken cancellation)
+    {
+        var current = outcomes.All(outcome => outcome.Module.MatchesCurrent(outcome, this));
+        cancellation.ThrowIfCancellationRequested();
+        if (current) return true;
+        // Includes deltas and diagnostic-only restoration. Stale candidates may
+        // neither publish executable bytes nor clear an older current error scope.
+        foreach (var outcome in outcomes)
+            SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, [], [], 0, origin, validated: false);
+        if (trigger.Intent == CompileIntent.CurrentSources)
+        {
+            Log(0, "script inputs changed during preparation; nothing applied, recompiling current inputs");
+            Enqueue(new Work(WorkKind.Change, trigger.Module.Slot, origin, Stopwatch.GetTimestamp()));
+        }
+        else Log(0, "script inputs changed during a committed-code rebuild; nothing applied and current source inputs remain unvalidated");
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public ProjectInventoryResult Inventory(ModuleInputs project)
+    {
+        if (_waveInventories is null) return project.Scan();
+        var key = (project.Project, project.AuthoringRoot);
+        if (!_waveInventories.TryGetValue(key, out var inventory)) _waveInventories[key] = inventory = project.Scan();
+        return inventory;
+    }
+
     /// <inheritdoc/>
     public ModuleState? Dependency(string name)
     {
         if (!_byName.TryGetValue(name, out var m)) return null;
         return _cascade is not null && _cascade.TryGetValue(m, out var o) && o.Next is { } prepared ? prepared : m.State;
     }
+
+    /// <inheritdoc/>
+    public MetadataReference? Reference(string name) => Dependency(name)?.Reference
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedReference : null);
+
+    /// <inheritdoc/>
+    public string? Surface(string name) => Dependency(name)?.Surface;
+
+    /// <inheritdoc/>
+    public ImmutableDictionary<string, string>? CommittedTexts(string name) => Dependency(name)?.Texts
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedTexts : null);
+
+    /// <inheritdoc/>
+    public IEnumerable<string>? CommittedPaths(string name) => Dependency(name)?.Texts.Keys
+        ?? (_byName.TryGetValue(name, out var module) ? module.LoadedPaths : null);
+
+    /// <inheritdoc/>
+    public bool HasOpaqueSourceOwnership => _modules.Any(module => module.ReadOnlyPublished && module.LoadedPaths is null);
+
+    /// <inheritdoc/>
+    public string? PublishedFingerprint(string name) => _cascade is not null && _byName.TryGetValue(name, out var candidate) && _cascade.ContainsKey(candidate)
+        ? null : _byName.TryGetValue(name, out var module) ? module.PublicationFingerprint : null;
 
     /// <inheritdoc/>
     public bool HasDependents(ModuleSession module) => _modules.Any(m => m.References.Contains(module.Name));
@@ -630,7 +814,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         }
     }
 
-    /// <summary>Stops the worker and every watcher.</summary>
+    /// <summary>Requests worker cancellation and stops watchers; the host separately bounds helper-process shutdown.</summary>
     public void Dispose()
     {
         _stop.Cancel();

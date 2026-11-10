@@ -69,6 +69,7 @@ pub struct BenchWorld {
     pub(super) v: Vec<Vec4>,
     grid: Grid,
     pub(super) sorted: super::sorted::SortedGrid,
+    pub(super) queries: super::queries::CachedQueries,
 }
 
 impl BenchWorld {
@@ -83,6 +84,7 @@ impl BenchWorld {
                     .id()
             })
             .collect();
+        let queries = super::queries::CachedQueries::new(&mut world);
         Self {
             world,
             entities,
@@ -92,6 +94,7 @@ impl BenchWorld {
             v: vec![Vec4::ZERO; n],
             grid: Grid::new(n),
             sorted: super::sorted::SortedGrid::new(n),
+            queries,
         }
     }
 
@@ -179,6 +182,43 @@ impl BenchWorld {
         self.queue.apply(&mut self.world);
     }
 
+    /// Checks the complete churn identity contract, separately from float output.
+    pub fn check_churn_ids(&self, steps: u32) {
+        for (slot, &entity) in self.entities.iter().enumerate() {
+            let group = slot as u32 / 10_000;
+            let within = slot as u32 % 10_000;
+            let expected = if steps <= group {
+                slot as u32
+            } else {
+                let last = steps - 1;
+                let frame = last - (last - group) % 10;
+                100_000 + frame * 10_000 + within
+            };
+            let id = self
+                .world
+                .get::<StableId>(entity)
+                .expect("every live slot has an identity");
+            assert_eq!(id.0, expected, "churn identity at slot {slot}");
+            assert!(self.world.get::<Position>(entity).is_some());
+            assert!(self.world.get::<Velocity>(entity).is_some());
+            assert!(self.world.get::<Rotation>(entity).is_some());
+        }
+    }
+
+    /// Exact original identities/components for nonstructural kernels, outside timing.
+    pub fn check_static_ids(&self) {
+        for (slot, &entity) in self.entities.iter().enumerate() {
+            let id = self
+                .world
+                .get::<StableId>(entity)
+                .expect("original live identity");
+            assert_eq!(id.0 as usize, slot, "identity at slot {slot}");
+            assert!(self.world.get::<Position>(entity).is_some());
+            assert!(self.world.get::<Velocity>(entity).is_some());
+            assert!(self.world.get::<Rotation>(entity).is_some());
+        }
+    }
+
     /// Sort by logical slot, independent of ECS allocation/playback order.
     pub fn records(&mut self) -> Vec<[f32; 12]> {
         let n = self.entities.len();
@@ -188,16 +228,24 @@ impl BenchWorld {
             "live entity count is invariant"
         );
         let mut records = vec![[0.0; 12]; n];
+        let mut seen = vec![false; n];
         for (id, p, v, q) in self
             .world
             .query::<(&StableId, &Position, &Velocity, &Rotation)>()
             .iter(&self.world)
         {
-            let record = &mut records[id.0 as usize % n];
+            let slot = id.0 as usize % n;
+            assert!(!seen[slot], "logical slots must be unique");
+            seen[slot] = true;
+            let record = &mut records[slot];
             record[..4].copy_from_slice(&p.0.to_array());
             record[4..8].copy_from_slice(&v.0.to_array());
             record[8..].copy_from_slice(&q.0.to_array());
         }
+        assert!(
+            seen.into_iter().all(|present| present),
+            "every logical slot is present"
+        );
         records
     }
 }

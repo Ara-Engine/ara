@@ -64,7 +64,7 @@ impl App {
                         }
                     };
                     let (world, build_ms) =
-                        World::prepare_game(&content.scene, net.as_ref(), content.source)?;
+                        World::prepare_game(content.scene, net.as_ref(), content.source)?;
                     Ok(Prepared {
                         world,
                         build_ms,

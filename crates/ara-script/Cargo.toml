@@ -17,6 +17,7 @@ ara-components.workspace = true
 ara-doc.workspace = true
 ara-json.workspace = true
 ara-runtime = { path = "../ara-runtime" }
+ara-physics = { path = "../ara-physics" }
 ara-sim = { path = "../ara-sim" }
 ara-diag.workspace = true
 ara-schema.workspace = true

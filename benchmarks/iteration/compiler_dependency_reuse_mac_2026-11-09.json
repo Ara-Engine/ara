@@ -1,0 +1,886 @@
+{
+  "date": "2026-11-09",
+  "scope": "Internal full project compilation: one shared constant edit rebuilds eight unchanged 256-script consumers (2048 component/query scripts plus Core), three discarded requests and four measured requests per process. One accepted baseline-then-candidate pair only; no reversed-order or Unity/Play/startup/delta claim.",
+  "baseline_commit": "bf3a04b3a",
+  "candidate": "Reuse unchanged parsed source trees across configuration changes; recreate semantic compilation and generator driver on dependency/heat/profile changes. Ownership-scan optimization was not in these measured SDKs.",
+  "quality": {
+    "full_compiler_tests_passed": 157,
+    "fresh_reference_error_recovery_pe_pdb_generated_output_test": true,
+    "all_7_request_schemas_equal_between_processes": true,
+    "zero_build_warnings_errors": true,
+    "source_review": "no remaining must-fix",
+    "legacy_non_fanout_functional_smoke_passed": true
+  },
+  "summary": {
+    "p50_ms": {
+      "baseline_ms": 5021.959500008961,
+      "candidate_ms": 3569.093312500627,
+      "lower_percent": 28.93026491961438
+    },
+    "p95_ms": {
+      "baseline_ms": 5376.520249992609,
+      "candidate_ms": 4401.3962500030175,
+      "lower_percent": 18.136712123253552
+    }
+  },
+  "reports": {
+    "baseline": {
+      "modules": 9,
+      "files_per_module": 256,
+      "generated_components": 2048,
+      "edited_sources_per_request": 1,
+      "dependency_fanout": true,
+      "artifact_sha256_per_request": [
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "b5cae8913beba1b79b5453b004a744deb9cc7a52af3349fa9679f8c2a6ff7990",
+            "pdb": "01af78bbebdfe4c4436f949922c2265aebdcb4117e228541d05a4f35a412520f"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "bb8b9f4c9a9de5a7214989e67e212a7f45ad83f260251218402edb955c7645cc",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "8a75d8c7ea93591be6d3295b4ef033e5548255545b6920c90c667d109b962610",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "688e99082008c7fb6915b0705c58ad5547051b2a8fafe2d6bdbea84e3a72818e",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "b0bf25b7977f3c9f8396a27acf592eb9aeb2327e208e83f93e91f464cb65821a",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "fa9df8dac95536e0a4909fa0b526722b30fc258db6addff687533f009f98124f",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "8f7da1437141360f5bb26b57fad980dd40e0413fb752d888dc007a9b6b8264cd",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "1be11b809ad219c129ff2464ca302203eb221196e2756e825b999606b0787fcc",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "8a1cb022f70aa38c6e8fa5b40c2c42bc37c77e0c1eb8a6b2caebd3e5cf0c8019",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "c9688049949ac9f69ba176ddf7dc415be437211919403174c6f17a058a69a810",
+            "pdb": "cba2e4ef5edb8dc4e8611b505df2801ef6f8c5c187a60bd5d4fb6b3e9c6f61ed"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "379b98f6ff23d875e024e1f458229a67198cf619accdae4a43775b0edbf967ca",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "f6d0369038cf7ff8ec1056031a1ef6faa4e6de85473903990a96db96eec3ad86",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "1acc070e3c6e7c1f5abe6848ece33b5a903f99f740096273c0a207c3dbb94f86",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "197021daef2ec31e342354cda38fbfa16a0ac474250ce22779e08d60e4c77377",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "61a38660b3e5be88d3363203ddf32707ca057d21c7fab519570f6b0b07143362",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "0cb74c8a2da340a98de082fd3c4944a5d322cec921f69cb27b2e8317aafe90ab",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "a5038cc6f74c8a0020fb1ad3e9be36957592ea8d00f029eb2a2b244f2becb4d9",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "ad022f80766405c159d8d7429cabba2575019fff7ef4624f1947c0b793f8d879",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "e7d7e1670a93a78d5fc3d3698ef4797c1ef865d55a39cc85da789d8900670b24",
+            "pdb": "38d32a08710ee541ead07b4e8139967ff717edc0e6d773b1ce9b03f0fcf3d785"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "229b00c5359c08f65de273c2c6c5e4df345134e36b5a665816ababbd0200ca97",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "6962448807ef537a63ffa52a93bfeb632052ef2372f3140789da3ced626a37c4",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "d7eb414e1f3d7179ea70e1af3667a24b2c76eee4adce26984f5ea332f1dcf094",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "b25bd7f540d55d668c4a5966624f386d37d288dc69699afb2d542957a448d1f2",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "1587e856b7988d3d6c2b3a8633262a0b26c202c401586e945d9d7dcd00688b37",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "fd472090558d98beb7d6530e8f723d3fb543efef597e00dfd13a691974acc8b4",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "04a86610bc727502abb755ad6c9324317c30b08243cf96eb271317f9347dcd00",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "ff1be9bf678d55a9c7684afd91d2699aa5295200b56cd59202685bea56315ba1",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "1fc115c24a54fc0b1e5894fe552016dfc17b200766b627ba4fb4212ea2fc1caf",
+            "pdb": "ded385c57cb05f752874dab7cacf75b201f43360d339c8756fbb50608dc9f998"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "58062b27f893ee7b6863863a7af528520554889a83f651e404da3c7118c274d6",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "75caf780e20a9f37b3d6fe784a21844c97ef7ec4dd664407874183992aa34760",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "4acae7f53638fb9fbdf31b302e033dea4cfd7cb07b90ba7aa77ae1518a59531c",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "2d5e433ae1f0f4d40e8700b081583e1b685f0d3d2a7a4091f0c25c7b308e1870",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "5a7f61fc2bae8acb9a2fac17179f40d2c03577bff92fdaab4289309a390d2966",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "419a21fc300d5ea9f15c8046e4dba3261c201e7a5de3f52ccd3ada44ca1f9ad1",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "5dbc53f017b8ccd6cc6ead87dcd86874db2f9440df2a978e69438950549681bb",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "9551fa60400c3b6d83b0c3d530e5185010f2ab489c377b5ee3d03605e4c4ff30",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "7a89ba941b597c11e9be5478645e90aa166a454cb445b01bbbcf309a113404ef",
+            "pdb": "c5ad5f81e55fd48cebc12490e3a57105e41f6f51daac70b7d6dad87b5d5c336c"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "6d3c3f16d3fc3b2d6c65fe1ef2d64df386b3f9ad09dc9f9f06ff63e080c6f945",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "1ae00968604267955fbd92ef4cf9d9f0ff8b5f8409b13892bed3bd4b73ee7abd",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "16deb6c57a8b8a15d52fac67c5f5e082e76d8afc414560aead89a38349d86307",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "0d13a400597d9dc3ebb406d77997860baf25c7a5b466398f79884a73d89724bb",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "d10849ce0f704c9e23a634cf7ee00b003fa294fa993ab344633240737f02723c",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "f867f00606966e58b0253da330a24faf897467f96a5d7912fb18d134764fa2ec",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "ea0ef606434f68607ea5d537bd8dea1461275b2d761be3c25664ec672b443ba5",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "7871b225ec353f6f1b527449fd9d2b1c6296df0b21cb2516e823720cd40a4959",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "d225f3ff55c73f2ecc364baa6b74969de8287d6258692692303ab50b17889b50",
+            "pdb": "f829caa8ebc09db5eab9e4c1a9dc9aa77b9d95163844c581dfd5292e47633255"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "a5b87bad1ace64b67ff952346567797b298de04a5ecf6a0cefcc2eac264ce033",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "39b3b883411d09175248c0f6f91c8b6039363c8ed57a822f9f5f149a31ab72fe",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "f13e08f808aeab9d1c7d96649407db2af459d63c9532f59aef3e14fd359e85d2",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "685dfc7bffd3df8ed94c8ce8dca2fb86ee857e2daa53a29a6283c2f6f9cf0cc5",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "332cbdd52cd58521f478e5f924a4cb8162f682788e425c2f979d7deba2e92ba9",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "2ad74d408ebe9065fb281ee8d8f83dd31883acc1165893409b4eecb1f5aab9a2",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "098b1c491840efd6fe1080c4fce8ddac3581336b7a878961ac440dd27fd713b8",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "b3437690ce5ff9fad1dfc6f36f252379ac98500d814ef4839c95707b00059936",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "d3eea9520b0b4e3fa41109f10e90e95495e9c6a21a4ae1d6d658c0420bf6ee7f",
+            "pdb": "48bf0e940a3d1d8ef4c4895290c0bfb4ee867713995b08416fec1e62a4bbe0d3"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "2683866ebce18b6d02107caf05f566a0e499212c7f83d3fc158db8f8c74c7658",
+            "pdb": "be17c9829762db5c73ce6aca365db42011c16a00b55c1637fbfbb9db388f3e91"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "c6c3c0a8e58079b193ed03d7e590403ed369839089fbb628a60347b955f0f619",
+            "pdb": "8adb4d7662a8ec343a005b0352b2ec57a31742f56f7d62cc45769b512b1f9555"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "d497d5c8bbf6b1ca9d061fe25f2ffa8a8def259021ff9f8282f5705cba4978b3",
+            "pdb": "f965688cbedbbf610e6de0fce329c87a26d03798340b044c4092b39a4df17e83"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "6ece903836b294ffa3e502394063d3dbbc9ab2702ed685296abe4b16d6aa6bda",
+            "pdb": "e2d61428f16bedca6a6f76e712e77c0d052c4af6a9a5a47958d60460715168f0"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "41c6ebbf70898abe318f46a9565ee4f8c26bba872633152b594b3ae53cdba4f0",
+            "pdb": "d83d2d5c229cb850afaab89c863fdb97a06324c2ae86f2a080bb6a736efdd6c0"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "9aee2b6337bb8f81317b65b6ef39c1b4921170f161355102b784ff04fdc0a739",
+            "pdb": "cc680eaa926040f6331df2484dc44f3fb9e3a11bb9686a53c7f2b65475e6a1aa"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "5392c4295030a4c87872cbb3d83636a3306f3834ec49175a4c9c892267dff9ef",
+            "pdb": "844c2697f1e9aa938c02df7389c18f81ff42e6e99187d9d43d27e0c169bcb071"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "48576f54a3614866e8d15befed39591cefb30c2d58356925b0509696f438e07d",
+            "pdb": "7655758446cd7774572f2c28d53b4d79f6e10ba3d6332c970d6013edadf2f751"
+          }
+        }
+      ],
+      "first_ms": 7084.004125004867,
+      "warm_ms": [
+        5213.277625007322,
+        4459.458166005788,
+        4830.6413750106,
+        5376.520249992609
+      ],
+      "p50_ms": 5021.959500008961,
+      "p95_ms": 5376.520249992609,
+      "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-tree-reuse-20261109/baseline-sdk/Ara.CompileServer.dll",
+      "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329",
+      "runtime": {
+        "version": "10.0.14",
+        "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+        "error": null
+      },
+      "dotnet_host": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "architecture": "arm64",
+      "peak_rss_bytes": 607191040
+    },
+    "candidate": {
+      "modules": 9,
+      "files_per_module": 256,
+      "generated_components": 2048,
+      "edited_sources_per_request": 1,
+      "dependency_fanout": true,
+      "artifact_sha256_per_request": [
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "9da362e8798fc839ec8365748df34421372d01455b51c01ce393ed07aa19ecb5",
+            "pdb": "6c2eb502db5cdcae18c8206117b713cad33174d74f8146837dff1366d6b94d42"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "85b519adfff7645f64ca6692439bcfa27e2884743b87bc550c35600574cfe1e6",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "ca62f6f302327377e22545e077c68f0c092331ed2e608dd2eada6cf807c4fa55",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "64542919ffe22a824f62852246379f8e1a7ab88f79ba404f9d4ce92833c4ae79",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "5de3a2b05363b5dcc1ab7438d877170e169715b3b5da6209b5e6680c489e888d",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "905f458cab1e1b1fcae5627f4af84835aba4bb3384ba8184e1cbe29884619bdb",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "f45a80c9f642b5c9ad49ffe50457efda2b639dce814de67ede4eb2753f035681",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "32dac4aca3ba11bdb27db68096786538b7b120d1b4eac0283ef6988cc3f16b82",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "8ced046be450c88b55d203ae5f5f783b6544c7dd17d07070fe05d2281b30087b",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "bed2e10256037bc6cd7c2e3a45aa5bb25c646be8e451a73a45571f26ccc706b2",
+            "pdb": "1b0f2504f683cc2ac33e94064f33b96c3745242bd7750022999896fe513be74b"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "e691ee868186ef2b5630dfac2673db3fe17dc012b0ae60624e856c6c8de73877",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "d879aaf2795d11a31b3b6efeea4892d41ac77f217c903bed5a07a852fa0d8c31",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "91050f6af9b21abcca4bd83eb0f53dbe3b53d18e09d43c98f75c0c19a3c5b26b",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "6cf0a55a99ee92235940380049b9309cbdaa643da5a55110b78c9fa52798970a",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "6338a3b74370ef28b6679085306b5102a6375353b0c6070c6939970eff307f33",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "ad72bc8dc0404846ffe511355bb0023aff3932dc33d882fdd7d7d9d1d6862162",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "ccd410ded9d4ab56e093803f5e901592fc5e54131a8263f3f144f23d6676c909",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "ab56823e59ab0b3409a93b15477054761267a03bf5af36253951d1df04cc4202",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "f00b8b802731610c8c4f7588d1cee8c55b2cc1d0720155e7ec0ec873f3c6734d",
+            "pdb": "1da733896c2e67de61e5d62d26732726d9b97f7255f2293c5cc51bb0d8625ec8"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "0ac2943dbf7b956e5cb8890702eddca813b22649ab7ab713fc9faf033e8632ca",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "1227261a8cd48c8ea9221743613a57fef97d59cfeb32d1b132fe616c36b27933",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "53b9af3f1bd9372d035ed5bd000920868f632761bf5a974624697245d586ff8a",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "85d539b8829509d423a906aac3d4ddb2f40664476ae2ca104ef9916cf9aeb320",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "4ce33417ec48dd317a07ad7675dab974d646cef6089d7e17ec2352d3b5c117c1",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "76cc9af207b78a58f6de402e470b8ee796d5f449fb70f37a95ccecf10aa022ab",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "a557f2cd772af06de6feaeaf7c25895107a9b69ae2d720e3bebea5e9c37a93be",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "68016cae3f05063af179c27d69cf949bfe0b40f88e127ca6f8f802f2fa497f43",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "a63538533c3440a6415c6a2bc2c747033e295a4cc4201e7f3a2f5c531982c5df",
+            "pdb": "5f282b0236bf498fd732d94007d0f9506d6527b2c15f9ecdd7798a21a07ba388"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "1a8d6970f0947a30b9481300700f3c3776993a5a130015ba7228731fba2555dc",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "69a810d5aac746c504e1ef6ecdd45bd6b366e7a72592bb0299f3234007583e7c",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "bbbeb2abb36f91b9ca7b1d4185bec5766a4682d729f7050030b410db35d841f1",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "20c8532f7dc81a98c6f2cb10dd047226e94b8b9373423d3e274db2a492eb1460",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "8b7955bc9e7063e9f3460d21a97b7e3e16620933ee0361a11cd8c8df519bb45e",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "e4de3f36a96b3eacd0360968a05148e2aa3c393185cc8185aa6e66b7bc611377",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "56afa4f72539e69fee450544c6a22db212b1f8af42f0e19700bcda00dea5d9c4",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "7b0e4f7705fa9d4c91209b4e55f7e871bc2fbea70d1147dcd27d11f4231d01a5",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "99323ce7b46e7ff75de8796bfe25e840c3c92f0e7b708fac0cee3616fbb53111",
+            "pdb": "d753b82bd308d305ef7e6f482bbf084b506ae8c3a167ae6f09eb6de97b76139c"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "b251bacb39f2be83e12100ff7059ef4209590b4414c9abdf974786e0f3df8e4e",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "80de946a5dd928275cd9694abb8f4d9596b6a6296d9e5902ef635b8ad5d6c2fe",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "25220f46d41a56da5af769f3ab573d1090ec6b65b41aba8f0c6a5237ce804411",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "16b57bd04a6f789fe0822a6f9e0c87571cfcf6c97aba14139ab2eae55693b720",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "8197b954c315df47c01110afad08fff7526231ae68014e115b10fc72bd8f4100",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "788b1c0daeaa312f18b5c4081b6dde76ee52aade5b10b85aee514413774397a8",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "5de3d4179b0f174ef43e55d8d1db76791bb81abe15057495165c9d2fd765b274",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "4c2851599542f879112d4f77e95f4c76ed19f0499b5e90d1a4357dcde50c1a24",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "ebb4bc5491c1a317b870ca571a5ea170437918c6666a0036fb6e98b0ae5f570f",
+            "pdb": "71b4da217b1fb5e9074dc715f434e42a9616c4abf9c14d0e88f0f5550e9756e8"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "b641bb9a404db272b036f74c0420a59246436e7f358a340f62cc97068f8c6783",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "5e1b63408cd9c377cba487b530c56fb3fb7cfaefc5ed8d0364c5434db3e551d5",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "2f4c093419300b5010c0106e0b433730678ab731cb337bcaefb52746b150dbe1",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "39c174ef34153605d0c43fbcf156e8589e62dcba5425daaa1ed073ec53507c52",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "d45833529f9d88f931439f0a9f8a409621660cee9243a8360013d2d7cf742637",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "bb003d40772851c57c4f8ab3abeeccf566ad0b6b6c0b24e314332b53dc5abec9",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "2691a2e0c7a1d16bb244cf4085aac21cf4ece2b2295db63ec6683b54b74da882",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "3e388fa81f3f8d874f306a29eaf1a35850789f9083545015a672c99c39be769e",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        },
+        {
+          "core": {
+            "schema": "51257e7df9676e39db51f5c99092cc23f486a19658b08bef82b00a9a36d01c00",
+            "pe": "31f711eb201ada9d69cf42c1bb1681a90b2b617d90289be6641fcf4d1cc0e3c1",
+            "pdb": "55c065af1e9fe6cd72b67144aed0576c710d2ec4603c4e4b947dc1addf7a4181"
+          },
+          "module0": {
+            "schema": "96fcecf260f7ea440eaa9fe8b31f411e59aac19cd0408ae3a31f7dadc307d24e",
+            "pe": "60ace807dc7c6720a0faa8ec93a05eb21ae7b4992330d94a90ead260de8365be",
+            "pdb": "0ad6b52a3a7b5314331e5641d43014a32aaea7b841dc4472c06cad442523b915"
+          },
+          "module1": {
+            "schema": "0abcac8b087b15bfce191b7d61fbbb54ab1c673910b2206d01d854967f2b8b05",
+            "pe": "d14577a3d4c00769c590a52b8c7d1145527b747ac347820ff842d89b7be1d2ed",
+            "pdb": "8840690fe54883b39a75aa9744cecc0ab6db3debedb26c30a2257041c5bc6b4f"
+          },
+          "module2": {
+            "schema": "d0eb9bfce81b7920fc91171651a92d45f9b6bbe0fc4b0eca5f433368a0d1790f",
+            "pe": "221ae3418fca6857f514379f89fc4b086a8b060f7de3fbb226be48658a20be48",
+            "pdb": "56d9d98e59e2016751f0664cc0c676268653ed5df195e5a0ece035ade912902e"
+          },
+          "module3": {
+            "schema": "7405ddc60377f237b92d2e1ad7633be34da1d321a3983d8aadc0926d8a59751c",
+            "pe": "2a8f59599cd391ef3a7b7fc2b89927ede4c01195a6b44f96183d2e3e2c8a96e5",
+            "pdb": "1085f6e846b351e78dda37de100d41d4a13672760ba5cf18fab5db321e13f3c1"
+          },
+          "module4": {
+            "schema": "f16b0af36fa7addd3221a8fd19612aa168eb40c2c312fcea2a42ffe5a59e10ed",
+            "pe": "f6eee43bd2f3f286632044c8d6ab21a8fcf33a476068f417e693a1556d95f50b",
+            "pdb": "3edc2c3c7ce3062f28185105db20435de8daedf9930b62c837d9c2a0fc62514a"
+          },
+          "module5": {
+            "schema": "b73bf01dc0eaff232384c5e817a05e20ce61df120d60c7c755e42d3caaaf5394",
+            "pe": "a24c22046a708f8d417c4c9af083649464b994eb6eccabf3a9c39c7e7acd6040",
+            "pdb": "200883ced38b5f5d8db9c56ce086daad41486357b0347e1c28ccc2f7f0a0c5d4"
+          },
+          "module6": {
+            "schema": "ba728e624ef06da618da59fb380cbc9bb27eabdff6f2ad0e56cad4956a62a3c8",
+            "pe": "f41252e567f07fcb14aa1b1f8e48c69135230ebdeb816c4e521dcd05e2f534ce",
+            "pdb": "60957e3fa4f0c2599539a32669151246fc4eb669c18d5f329ac47a75a3b628e2"
+          },
+          "module7": {
+            "schema": "03bc7601b8b9b462b1f075f5b836f014d96db3befa4013c840274479847d99ba",
+            "pe": "bfbfab428c388d7618ff1e1d80641c20665f76c7d14f4b255ce97ed57839e63d",
+            "pdb": "cea650ff8485c0842c714b900495862ec6b5e4d3e2bb90f67241ddb11e81971b"
+          }
+        }
+      ],
+      "first_ms": 6910.249000007752,
+      "warm_ms": [
+        4401.3962500030175,
+        3861.4645409979858,
+        3235.7056250039022,
+        3276.722084003268
+      ],
+      "p50_ms": 3569.093312500627,
+      "p95_ms": 4401.3962500030175,
+      "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-tree-reuse-20261109/candidate-sdk/Ara.CompileServer.dll",
+      "server_sha256": "d072e4c18faf7feb6b29122af54df7b2096c0b375b2aa5c974564395b5981891",
+      "runtime": {
+        "version": "10.0.14",
+        "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+        "error": null
+      },
+      "dotnet_host": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "architecture": "arm64",
+      "peak_rss_bytes": 617791488
+    }
+  },
+  "sdk_file_sha256": {
+    "baseline": {
+      "Ara.Analyzers.pdb": "e91526baf81fef4884581f996633d97855744e1340d07a88d7b48bfb90cdd9ca",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "Ara.Runtime.pdb": "40f89b27483ef7f25414cc1d7f9383c8077d5f53217b688e64b712341a651b50",
+      "Ara.CompileServer.xml": "eac79a99a154133b08fb9829a75f01600e7df99029f2b6d16674ee899c9024a1",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Ara.Analyzers.dll": "708f6802b58a7a9bee261265b06511205487a11bd47295e709f4d45e0ac70232",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Runtime.dll": "ed78bd20d558dbdd39d6179932914b22e20351287daeac360c9763782a2a18c6",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "Ara.Editor.dll": "dc573b1d2c204b45f382d804709a89d3af4ff9be49ccea9e7fd914e5f14d63c3",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Ara.CompileServer.pdb": "493cb5e9a57438970b92f572ce87d3825fdf758b740b196ad96b376a0166c86f",
+      "Ara.Analyzers.CodeFixes.pdb": "560f06525d4200fa5774771b72ae867bc770a717af3a9770137462fcf55c04e2",
+      "Ara.Generators.pdb": "8ce798aa2aacc6f1bac466b25698551d5fa7f4055a96186d03aed9fed7167e8e",
+      "Ara.CompileServer": "62d9a1e2c3802aa766afd3278c28449f6f6c508fb94bcc14cd1ccfebaf8f1628",
+      "Ara.Editor.pdb": "dc34afa50e06fcac7e8b41a33bf0915ff495346eb389225abf0f23451d6e461f",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.Analyzers.CodeFixes.dll": "1054d08f3c8bba9ce3adff91e600c6ffc523725d52b7cb121449bfc397f334b4",
+      "Ara.CompileServer.dll": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.Generators.dll": "fe162bd3593a0c68a0df1d27a246e2c286f8fc0ad706daba56d5075f59c67d88"
+    },
+    "candidate": {
+      "Ara.Analyzers.pdb": "885a9d4e505d085cdff9a916aedc6819136b5aca06a3f0b46b99e74272127706",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "Ara.Runtime.pdb": "a29442af2a8c0e0139e30622090f7eccb15738e0fa0cebed17e4b8926a065c40",
+      "Ara.CompileServer.xml": "f01cd44c56f23dd541453616e9404390a0a3fb014d4203348a80d835fd99786e",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Ara.Analyzers.dll": "84dbfb210e20ed531356e34b5cd5abdf7d47e66ba214ac8ea53510a499354726",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Runtime.dll": "4fc297a4d2bd0d13b3dad90702549593dbd087046963510721db284038188ad3",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "Ara.Editor.dll": "e192c1581bf26b9ecdabecf168aa485d3715fca11d60a57c086afc5625cd6265",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Ara.CompileServer.pdb": "cdcf665ad50847ae5d363c5840f077b9edbaa7ed5846c15c451ebdef3daa37ba",
+      "Ara.Analyzers.CodeFixes.pdb": "6d6ba67a2c1bf6730cc06c67a37436d6138ef397051e5b9787ae431fc25dc41a",
+      "Ara.Generators.pdb": "f512ecf797028093ba12c28ac1a0b1249b51cbff8d97ee7a116edaebafb1ef73",
+      "Ara.CompileServer": "62d9a1e2c3802aa766afd3278c28449f6f6c508fb94bcc14cd1ccfebaf8f1628",
+      "Ara.Editor.pdb": "db1eea75558213e7fd0ed16f7d61d7e7702d0130da60e3d55278cbcb3071288c",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.Analyzers.CodeFixes.dll": "f7a356ab56402146f7ba88395dcab6ec0c0fce188ec59117c60befdf964fe8cc",
+      "Ara.CompileServer.dll": "d072e4c18faf7feb6b29122af54df7b2096c0b375b2aa5c974564395b5981891",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.Generators.dll": "884fa902d106a988ccaec9efa71d4f3d90db1feb718e995e3512a3e3a070ba61"
+    }
+  },
+  "changed_sdk_files": [
+    "Ara.Analyzers.pdb",
+    "Ara.Runtime.pdb",
+    "Ara.CompileServer.xml",
+    "Ara.Analyzers.dll",
+    "Ara.Runtime.dll",
+    "Ara.Editor.dll",
+    "Ara.CompileServer.pdb",
+    "Ara.Analyzers.CodeFixes.pdb",
+    "Ara.Generators.pdb",
+    "Ara.Editor.pdb",
+    "Ara.Analyzers.CodeFixes.dll",
+    "Ara.CompileServer.dll",
+    "Ara.Generators.dll"
+  ],
+  "raw_receipts": {
+    "target/compiler-tree-reuse-20261109/guarded02/r1-baseline.json": "af4c0941a7ed184aed371d66ab608b28a39a61dea31feedd255751804eefdb0f",
+    "target/compiler-tree-reuse-20261109/guarded02/r1-candidate.json": "f62943e36d20f069b87b8f00958e3d8852a5e9084eb9699490344e4eb940b9e1",
+    "target/compiler-tree-reuse-20261109/guarded02/r2-candidate.json": "839c04f08803bdc490e5054a5032976f905b5f6b3e540322e030c895a1c6bf2c",
+    "target/compiler-tree-reuse-20261109/guarded03/r2-candidate.json": "e2e7bfe68c5a0ea3c528f3089611f3824cc009fff64ceec73ade4903598efa4c",
+    "target/compiler-tree-reuse-20261109/run_guarded_02.py": "40b76a7d8ff8644255325a890096ad6618017cb41aaf6689533d2544532ca565",
+    "target/compiler-tree-reuse-20261109/run_guarded_03.py": "abef738cbdf1052377fb4ce15e313e85a000bcf3627febc7edc57cf1358f7941",
+    "target/compiler-tree-reuse-20261109/solution-build.log": "ceadb607f8b4ff9d805486a35f7726a45927a6c17816dbe98460ef335d0b9ff0",
+    "target/compiler-tree-reuse-20261109/full-tests.log": "19f8425062a9614c4927858ce79cd925e7e07aa4e0e4df5610060d6274a06442",
+    "target/compiler-tree-reuse-20261109/focused-tests.log": "bff647206d240e11fefda40984563609a6e1c2b7241917e98b812aa0a8013649",
+    "target/compiler-tree-reuse-20261109/il-audit.log": "833908b3ee0ec8c486eb002df03e9ec8c91ae607f496a57c479e2bf91f54daf6",
+    "target/compiler-tree-reuse-20261109/legacy-functional-smoke.json": "e5f1c4c5a6a8db1181345e10d2b20180d65bf9f47f796c50889bef111fe8c507"
+  },
+  "rejected_attempts": [
+    "baseline-r1.log: harness incorrectly read a Rust-published schema path before Rust publication; corrected to hash explicit returned schema",
+    "baseline-r1-fixed: unrelated active cargo/rustc; timings unaccepted",
+    "guarded01: unrelated ara-editor test detected before launch; no child started",
+    "guarded02/r2-candidate: own newly launched server missed between ps snapshots; conservatively rejected, ownership guard corrected",
+    "guarded03/r2-candidate: new active Unity compiler daemon; rejected, no reverse baseline launched"
+  ],
+  "limitations": [
+    "Four measured requests per process; p95 is the maximum of four, not a stable tail estimate.",
+    "One accepted engine order; reverse order remains unfinished.",
+    "PE/PDB include per-fixture source paths; exact fresh-byte equivalence is tested on identical paths, not asserted between these distinct fixture roots.",
+    "CPU guards sample process activity every 100ms, not continuously."
+  ],
+  "source_sha256": {
+    "baseline_ProjectCompilations.cs": "6ec1bbfd67d581dd2cc30fd61beced9aaaee290c6fdf361f23b6e06acab9bc80",
+    "candidate_ProjectCompilations.cs": "77312e9bd5463652f7d5bf40312030c12dcdd2ed8fcd453f39993cd86b7314c0",
+    "benchmark": "25e9b8c2f8650ad8de0d8adc06f33732c3911fbab4ee5dcdeb8be16bea2f0f0d"
+  },
+  "build_identity": {
+    "baseline_embedded_revision": "4b24516a7b170e3d2278e0cb3280bdb13e4647e1",
+    "baseline_source_includes": "the published-module fix later committed as bf3a04b3a",
+    "candidate_embedded_revision": "bf3a04b3a38a7b7510ef4ee7dee8cc33c263fec8",
+    "metadata_difference": "Git revision in informational versions/source-link changes SDK hashes. Method-body audit found only ProjectCompilations.Generate changed; all other changed managed DLLs have identical method names/signatures/IL/local/EH metadata."
+  },
+  "method_body_audit": [
+    {
+      "file": "Ara.Analyzers.CodeFixes.dll",
+      "changedMethods": []
+    },
+    {
+      "file": "Ara.Analyzers.dll",
+      "changedMethods": []
+    },
+    {
+      "file": "Ara.CompileServer.dll",
+      "changedMethods": [
+        "Generate"
+      ]
+    },
+    {
+      "file": "Ara.Editor.dll",
+      "changedMethods": []
+    },
+    {
+      "file": "Ara.Generators.dll",
+      "changedMethods": []
+    },
+    {
+      "file": "Ara.Runtime.dll",
+      "changedMethods": []
+    }
+  ]
+}

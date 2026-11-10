@@ -417,4 +417,3 @@ impl Native {
         (&self.changes.rows.list, &self.changes.skins.list)
     }
 }
-
