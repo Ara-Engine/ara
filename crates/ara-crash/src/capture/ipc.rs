@@ -153,15 +153,7 @@ mod tests {
 
     #[test]
     fn long_base_falls_back_before_creating_any_directory() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("target/crash-ipc");
-        std::fs::create_dir_all(&root).unwrap();
-        let root = std::path::absolute(&root).unwrap();
-        let dir = tempfile::tempdir_in(root).unwrap();
+        let dir = crate::test_paths::directory();
         let long = dir.path().join("deep-profile-".repeat(14));
         let socket = SocketPath::in_bases(&[long.clone(), dir.path().to_owned()]).unwrap();
         assert!(!long.exists());
