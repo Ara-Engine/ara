@@ -53,6 +53,8 @@ struct Object {
     world: [f32; 16],
     /// The posed mesh and joint count of a skinned object.
     skin: Option<(MeshId, usize)>,
+    /// The joint palette last sent for a skinned object (empty until the first).
+    pose: Vec<Mat4>,
 }
 
 /// Renderlab handles for everything the frame draws.
@@ -367,6 +369,7 @@ impl Scene {
                     material_slot,
                     world,
                     skin,
+                    pose: Vec::new(),
                 },
             );
         }
@@ -388,7 +391,12 @@ impl Scene {
             debug_assert_eq!(self.palette.len(), joints);
             // The identity joint rigid vertices bind to (`influence`).
             self.palette.push(Mat4::IDENTITY);
-            engine.set_joint_palette(posed, &self.palette)?;
+            // An unchanged pose is not sent again: Renderlab refits (RT) or re-caches
+            // (non-RT) a posed mesh every time its palette is set.
+            if object.pose != self.palette {
+                engine.set_joint_palette(posed, &self.palette)?;
+                object.pose.clone_from(&self.palette);
+            }
         }
         Ok(())
     }
