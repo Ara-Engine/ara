@@ -775,6 +775,201 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             };
             act(e, "editor.layout.close", json!({"panel": panel}))
         }
+        // Edit: the entity clipboard, finding, history.
+        "edit.copy" | "edit.cut" => {
+            let ids = target.entities(&e.state);
+            let records: Vec<Value> = ids
+                .iter()
+                .filter_map(|id| s.resolved.get(id))
+                .map(|x| {
+                    let mut record = x.record.clone();
+                    record.retain(|k, _| ara_doc::is_component_key(k) || k == "name");
+                    Value::Object(record.into_iter().collect())
+                })
+                .collect();
+            if records.is_empty() {
+                Err("Select an entity to copy".into())
+            } else {
+                s.local.copy = Some(ara_json::to_canonical_string(
+                    &json!({"ara.entities": records}),
+                ));
+                s.local.entity_clipboard = Some(records);
+                if id == "edit.cut" {
+                    apply(
+                        e,
+                        vec![json!({"cmd": "entity.delete", "args": {"entities": ids}})],
+                        "Cut entities",
+                    )
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        "edit.paste" | "edit.paste_child" => match s.local.entity_clipboard.clone() {
+            Some(records) => {
+                let parent = (id == "edit.paste_child")
+                    .then(|| target.entity(&e.state).map(str::to_owned))
+                    .flatten();
+                let commands = records
+                    .iter()
+                    .map(|r| {
+                        let mut components = r.clone();
+                        let name = components
+                            .as_object_mut()
+                            .and_then(|m| m.remove("name"))
+                            .unwrap_or_else(|| json!("Entity"));
+                        let mut args = json!({"name": name, "components": components});
+                        if let Some(parent) = &parent {
+                            args["parent"] = json!(parent);
+                        }
+                        json!({"cmd": "entity.create", "args": args})
+                    })
+                    .collect();
+                match e.apply(commands, "Paste entities", None) {
+                    Ok(result) => {
+                        let ids: Vec<String> = result["outputs"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|o| o["id"].as_str().map(str::to_owned))
+                            .collect();
+                        select(e, ids)
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            }
+            None => Err("Copy an entity first".into()),
+        },
+        "edit.find_scene" => {
+            s.local.focus = Some("hierarchy/search");
+            Ok(())
+        }
+        "edit.find_project" => act(e, "editor.layout.show", json!({"panel": "assets"})).map(|()| {
+            s.local.focus = Some("assets/search");
+        }),
+        "edit.goto" => {
+            s.local.palette = Some((String::new(), 0));
+            s.local.focus = Some("palette/query");
+            Ok(())
+        }
+        "edit.history" => act(e, "editor.layout.show", json!({"panel": "history"})),
+        "edit.shortcuts" | "help.shortcuts" => {
+            super::preferences::open(s, crate::settings::Scope::User);
+            if let Some(view) = s.local.settings.as_mut() {
+                view.category = Some("Keyboard shortcuts");
+            }
+            Ok(())
+        }
+        // Inspector fields (their right-click menu).
+        "field.copy" | "field.copy_path" | "field.paste" | "field.reset" => {
+            let Target::Field(path) = target else {
+                e.report_failure(&*anyhow::anyhow!("Choose a field"));
+                return;
+            };
+            let path = path.clone();
+            let first = s.inspected().first().cloned();
+            let e = &mut s.editor;
+            match id {
+                "field.copy" => {
+                    let value = first.and_then(|entity| {
+                        let (component, field) = path.split_once('.')?;
+                        s.resolved
+                            .get(&entity)?
+                            .record
+                            .get(component)?
+                            .get(field)
+                            .cloned()
+                    });
+                    s.local.copy = value.as_ref().map(ara_json::to_canonical_string);
+                    s.local.field_clipboard = value;
+                    Ok(())
+                }
+                "field.copy_path" => {
+                    s.local.copy = first.map(|entity| format!("{}.{path}", reference(e, &entity)));
+                    Ok(())
+                }
+                "field.paste" => match s.local.field_clipboard.clone() {
+                    Some(value) => {
+                        let commands =
+                            crate::inspector::edit_commands(s.inspected(), &path, &value);
+                        apply(&mut s.editor, commands, "Paste value")
+                    }
+                    None => Err("Copy a value first".into()),
+                },
+                _ => {
+                    let commands = s
+                        .inspected()
+                        .iter()
+                        .map(|entity| json!({"cmd": "editor.property.reset", "args": {"entity": entity, "path": path}}))
+                        .collect();
+                    apply(&mut s.editor, commands, "Reset value")
+                }
+            }
+        }
+        // Components (their ⋯ menu).
+        "component.reset" | "component.copy" | "component.paste" | "component.remove" => {
+            let Target::Component(name) = target else {
+                e.report_failure(&*anyhow::anyhow!("Choose a component"));
+                return;
+            };
+            let name = name.clone();
+            match id {
+                "component.reset" => super::inspector::component_values(s, &name, None),
+                "component.copy" => {
+                    let value = s
+                        .inspected()
+                        .first()
+                        .and_then(|entity| s.resolved.get(entity))
+                        .and_then(|x| x.record.get(&name).cloned());
+                    s.local.component_clipboard = value.map(|v| (name.clone(), v));
+                }
+                "component.paste" => {
+                    if let Some((kind, value)) = s.local.component_clipboard.clone()
+                        && kind == name
+                    {
+                        super::inspector::component_values(s, &name, Some(&value));
+                    }
+                }
+                _ => {
+                    let commands = s
+                        .inspected()
+                        .iter()
+                        .map(|entity| json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}}))
+                        .collect();
+                    s.apply(commands, &format!("Remove {name}"));
+                }
+            }
+            Ok(())
+        }
+        // Hierarchy filters: Unity's search syntax in the Hierarchy's field.
+        id if id.starts_with("hierarchy.filter.")
+            && !matches!(
+                id,
+                "hierarchy.filter.save" | "hierarchy.filter.apply" | "hierarchy.filter.remove"
+            ) =>
+        {
+            s.local.hierarchy_query = match id.trim_start_matches("hierarchy.filter.") {
+                "lights" => "t:light",
+                "cameras" => "t:camera",
+                "meshes" => "t:meshrenderer",
+                "audio" => "t:audio",
+                "effects" => "t:vfx",
+                "prefabs" => "is:prefab",
+                _ => "",
+            }
+            .to_owned();
+            Ok(())
+        }
+        // Help.
+        "help.docs" => crate::shell::ops::open_docs(e),
+        "help.logs" => crate::shell::ops::open_external(&e.host.root().join(".ara")),
+        "console.copy" => match target {
+            Target::Text(text) => {
+                s.local.copy = Some(text.clone());
+                Ok(())
+            }
+            _ => Err("Choose a message".into()),
+        },
         "build.current" => {
             super::build_page::build(s);
             Ok(())
@@ -931,6 +1126,11 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x5A) => "edit.undo",
         (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
         (true, false, 0x53) => "file.save",
+        (true, false, 0x43) => "edit.copy",
+        (true, false, 0x58) => "edit.cut",
+        (true, false, 0x56) => "edit.paste",
+        (true, false, 0x46) => "edit.find_scene",
+        (true, true, 0x46) => "edit.find_project",
         (true, true, 0x42) => "build.current",
         (true, false, 0x4E) => "file.new_scene",
         (true, false, 0x4F) => "file.open",

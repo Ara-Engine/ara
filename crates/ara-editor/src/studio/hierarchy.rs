@@ -31,10 +31,13 @@ struct Row {
 }
 
 /// Whether entity `id` (`record`) matches every term of a Hierarchy search: `t:Light`
-/// matches a component type, other words the name (Unity's search syntax).
+/// matches a component type, `is:prefab` prefab instances, other words the name (Unity's
+/// search syntax).
 fn matches(terms: &[String], id: &str, name: &str, record: &ara_doc::Record) -> bool {
     let name = name.to_lowercase();
     terms.iter().all(|term| match term.strip_prefix("t:") {
+        // `is:prefab`: instance roots and their members.
+        None if term == "is:prefab" => id.contains('/') || record.get("prefab").is_some(),
         Some(kind) => record
             .keys()
             .filter(|k| ara_doc::is_component_key(k))

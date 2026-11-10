@@ -236,7 +236,7 @@ fn paste_as_new(s: &Studio) -> Option<El<Studio>> {
 /// Resets `component` on every inspected entity (prefab instances back to their prefab),
 /// or with `paste`, sets every field from those values (defaults where they have none),
 /// as one undo step.
-fn component_values(s: &mut Studio, component: &str, paste: Option<&Value>) {
+pub(super) fn component_values(s: &mut Studio, component: &str, paste: Option<&Value>) {
     let db = s.editor.host.store().schema();
     let Some(ara_schema::Shape::Struct { fields, .. }) = db.get(component).map(|t| &t.shape) else {
         return;

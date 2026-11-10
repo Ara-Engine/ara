@@ -527,6 +527,48 @@ fn view_selection_and_transform_commands_run_in_the_studio() {
 }
 
 #[test]
+fn copy_paste_fields_components_and_filters_run_in_the_studio() {
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str, target: crate::catalog::Target| {
+        rt.update(|s| super::commands::run(s, id, &target));
+        settle(rt);
+    };
+    use crate::catalog::Target;
+    // Copy the box and paste it: a second box, selected.
+    let before = rt.state().resolved.len();
+    run(&mut rt, "edit.copy", Target::None);
+    run(&mut rt, "edit.paste", Target::None);
+    assert_eq!(rt.state().resolved.len(), before + 1);
+    let pasted = rt.state().editor.state.selection.clone();
+    assert!(pasted.len() == 1 && pasted[0] != "e_box", "{pasted:?}");
+    // A field's value copies to another entity.
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    run(
+        &mut rt,
+        "field.copy",
+        Target::Field("Transform.position".into()),
+    );
+    assert!(rt.state().local.field_clipboard.is_some());
+    // Removing a component from the component menu.
+    run(
+        &mut rt,
+        "component.remove",
+        Target::Component("MeshRenderer".into()),
+    );
+    assert!(
+        rt.state().resolved["e_box"]
+            .record
+            .get("MeshRenderer")
+            .is_none()
+    );
+    // Hierarchy filters type the search for you.
+    run(&mut rt, "hierarchy.filter.lights", Target::None);
+    assert_eq!(rt.state().local.hierarchy_query, "t:light");
+    assert!(rt.find("row/e_sun").is_some() && rt.find("row/e_lamp").is_none());
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
