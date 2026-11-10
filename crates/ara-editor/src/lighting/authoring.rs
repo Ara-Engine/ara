@@ -1,6 +1,8 @@
 //! Presets lower to existing typed entity/nested commands, never document writes.
 use super::*;
 use crate::commands::nested::Operation;
+use crate::shell::collection_adapter;
+use std::collections::BTreeMap;
 
 /// Actual reflected component to create at the Scene camera's authoring pivot.
 #[derive(Clone, Copy, Debug)]
@@ -119,33 +121,4 @@ pub(crate) fn preset_commands(
         Preset::Interior => "Append interior look overrides",
     };
     Ok((calls, why))
-}
-
-impl Shell {
-    /// One undoable creation, then explicit human selection; local volumes start with no overrides.
-    pub(crate) fn create_lighting(
-        &mut self,
-        editor: &mut Editor,
-        kind: Create,
-    ) -> ara_ui::Result<()> {
-        let (name, commands) = create_commands(kind, editor.state.camera.target);
-        let result = editor.apply(commands, &format!("Create {name}"), None)?;
-        if let Some(entity) = result["outputs"][0]["id"].as_str() {
-            editor.action("editor.select", json!({"entities":[entity]}))?;
-            self.reveal_lighting(editor, entity)?;
-        }
-        self.open_lighting(editor)
-    }
-
-    /// Append instead of replacing a captured array: agent-authored groups and other values survive.
-    pub(crate) fn lighting_preset(
-        &mut self,
-        editor: &mut Editor,
-        preset: Preset,
-    ) -> ara_ui::Result<()> {
-        let resolved = self.resolved(editor)?;
-        let (calls, why) = preset_commands(editor, &resolved, preset)?;
-        editor.apply(calls, why, None)?;
-        self.rebuild(editor)
-    }
 }

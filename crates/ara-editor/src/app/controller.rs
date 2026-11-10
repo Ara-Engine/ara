@@ -43,7 +43,7 @@ pub(super) struct Controller {
     icon: Option<u64>,
     marquee: Option<selection::Press>,
     /// A Mesh Paint stroke in progress.
-    paint: Option<paint::Stroke>,
+    paint: crate::painter::Painter,
 }
 impl Controller {
     /// Whether any mouse button is held (window moves persist after release).
@@ -434,7 +434,7 @@ impl Controller {
                 }
                 if pressed
                     && scancode == 41
-                    && (self.marquee.is_some() || self.gizmo.is_some() || self.paint.is_some())
+                    && (self.marquee.is_some() || self.gizmo.is_some() || self.paint.active())
                 {
                     // A viewport gesture owns Escape before menu mnemonics,
                     // text composition or any other Shell early return.
@@ -549,7 +549,7 @@ impl Controller {
                         .is_none()
                     && !editor.state.palette
                     && shell.menu.is_none();
-                if self.paint.is_some() && self.buttons[1] {
+                if self.paint.active() && self.buttons[1] {
                     scene_dirty |= self.drive_paint(editor, shell, renderer.size())?;
                 } else if self.gizmo.is_some() {
                     if self.gizmo.as_ref().is_some_and(|g| g.typed.is_empty()) {
@@ -823,7 +823,7 @@ impl Controller {
                         let native_scrub = shell.input.scrubbing();
                         if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
-                        } else if self.paint.is_some() {
+                        } else if self.paint.active() {
                             self.finish_paint(editor, true)?;
                             scene_dirty = true;
                         } else if self.gizmo.is_some() {

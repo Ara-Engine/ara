@@ -52,7 +52,7 @@ pub(super) fn id(field: &str, pointer: &str) -> String {
 
 /// Build commands rather than whole-field snapshots; later calls observe earlier batch ops.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn commands(
+pub(crate) fn commands(
     editor: &Editor,
     selection: &[String],
     field: &Field,

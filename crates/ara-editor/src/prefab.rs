@@ -134,7 +134,7 @@ pub fn from_selection(
             1 => format!("prefabs/{slug}.prefab"),
             _ => format!("prefabs/{slug}_{index}.prefab"),
         })
-        .find(|path| crate::shell::ops::authored::available(files, workspace, path))
+        .find(|path| crate::authored::available(files, workspace, path))
         .ok_or("No unused prefab path")?;
     let variant = instance(editor.host.store(), &editor.state.doc, root).is_some();
     let cmd = if variant {

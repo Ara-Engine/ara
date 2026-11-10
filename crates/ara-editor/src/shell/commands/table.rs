@@ -438,31 +438,7 @@ pub(crate) fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
     }
     act(e, method, params)
 }
-pub(crate) fn play_params(e: &Editor) -> Value {
-    let s = &e.state.settings;
-    let text = |k: &str| s.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
-    let mode = text("play.mode");
-    let mut params = json!({
-        "window": true,
-        "mode": mode,
-        "processMode": text("play.processMode"),
-        "tickHz": text("play.tickHz").parse::<u32>().unwrap_or(60),
-        "startPaused": s.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false),
-        "seed": s.get("play.seed").and_then(Value::as_f64).unwrap_or(0.) as u64,
-        "hotReload": s.get("play.hotReload").and_then(Value::as_bool).unwrap_or(true),
-    });
-    if mode != "local" {
-        let clients = s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32;
-        params["clients"] = json!(clients);
-        params["conditions"] = json!(crate::shell::play_controls::conditions(s, clients));
-    }
-    // View > Rendering Debug: only sent when something is turned off.
-    let debug = e.state.render_debug;
-    if debug != ara_render::RenderDebug::default() {
-        params["renderDebug"] = json!(debug);
-    }
-    params
-}
+pub(crate) use crate::play_controls::start_params as play_params;
 fn simulate(s: &mut Shell, e: &mut Editor) -> R {
     if e.state.playing.is_some() {
         return s.control_play(e, None, false);

@@ -11,7 +11,6 @@ mod network;
 mod runtime;
 #[cfg(test)]
 mod tests;
-pub(crate) use network::conditions;
 
 pub(crate) fn player_label(player: usize, count: usize) -> String {
     match player {

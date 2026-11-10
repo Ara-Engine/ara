@@ -93,7 +93,7 @@ pub(crate) struct SceneView {
 impl SceneView {
     /// Entity `address`'s drawn model primitives (Mesh Paint targets): draw identity,
     /// model generation, primitive index and model-to-world.
-    pub(super) fn paint_targets(
+    pub(crate) fn paint_targets(
         &self,
         address: &str,
     ) -> Vec<(

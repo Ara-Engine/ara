@@ -30,6 +30,7 @@ mod inspector;
 mod layer;
 mod lighting;
 mod material_stats;
+mod mesh_paint;
 mod panels;
 mod preferences;
 mod present;
@@ -109,7 +110,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     rt.frame(Duration::ZERO);
     rt.present(&mut surface, (0, 0))?;
     chrome_parts(&surface, &rt);
-    surface.show_active(false);
+    // In the background (automated captures, tests beside a person's work) the window
+    // shows without activating or taking focus; otherwise it comes forward, active.
+    if options.background {
+        rt.touch(|s| s.local.background = true);
+        surface.show();
+    } else {
+        surface.show_active(false);
+    }
 
     // The renderer starts on a worker; the window keeps drawing and taking input meanwhile.
     let scene_rect = rt
@@ -201,7 +209,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     }
     rt.update(|s| {
         let store = s.editor.host.store();
-        s.assets = Some(crate::shell::assets::Browser::new(
+        s.assets = Some(crate::assets::Browser::new(
             s.editor.host.root(),
             store.schema(),
             store.workspace().reference_root(),
@@ -246,11 +254,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.mark("authority");
         pass.phase("studio.assets");
         // Assets and the diagnostics bus.
-        if rt.touch(|s| {
-            s.assets
-                .as_mut()
-                .is_some_and(crate::shell::assets::Browser::poll)
-        }) {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::assets::Browser::poll)) {
             rt.update(|_| {});
         }
         // Tile pictures for the open folder, rendered off-thread.
@@ -480,6 +484,76 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
+        // Mesh Paint: the Scene view's presses and drags as world rays on the selection's
+        // meshes; a press on none of them selects as a click would.
+        let input = rt.touch(|s| std::mem::take(&mut s.local.paint_input));
+        // The ring follows the pointer only when it moved (a hit test seeds every mesh).
+        let hover = rt
+            .touch(|s| s.local.paint_hover.take())
+            .filter(|_| rt.state().editor.state.paint.is_some());
+        if (!input.is_empty() || hover.is_some()) && rt.state().local.scene.ready {
+            let size = renderer.size();
+            let ray = |s: &Studio, (u, v): (f32, f32)| {
+                s.editor
+                    .state
+                    .camera
+                    .ray(size, [u * 2.0 - 1.0, 1.0 - v * 2.0])
+            };
+            rt.update(|s| {
+                for event in input {
+                    use state::PaintInput;
+                    let result = match event {
+                        PaintInput::Down(u, v) => match ray(s, (u, v)) {
+                            Some(r) => {
+                                s.painter
+                                    .begin(&mut s.editor, &view, &scene_view, r)
+                                    .map(|hit| {
+                                        if !hit {
+                                            s.local.pick = Some(scene::Pick {
+                                                u,
+                                                v,
+                                                additive: false,
+                                                context: None,
+                                            });
+                                        }
+                                    })
+                            }
+                            None => Ok(()),
+                        },
+                        PaintInput::Move(u, v) => match ray(s, (u, v)) {
+                            Some(r) => s.painter.drive(&mut s.editor, r).map(drop),
+                            None => Ok(()),
+                        },
+                        PaintInput::Up => s.painter.finish(&mut s.editor, true),
+                        PaintInput::Cancel => s.painter.finish(&mut s.editor, false),
+                    };
+                    if let Err(error) = result {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                }
+                s.local.painting = s.painter.active();
+                // The brush ring: the radius at the hit's distance, in view px.
+                if let Some((u, v)) = hover {
+                    s.local.paint_ring = (|| {
+                        let settings = s.editor.state.paint?;
+                        let ray = ray(s, (u, v))?;
+                        let point =
+                            crate::painter::Painter::hit(&s.editor, &view, &scene_view, ray)?;
+                        let camera = s.editor.state.camera;
+                        let distance = (point - camera.position()).length().max(1e-3);
+                        let rect = s.local.rects.get("scene/view")?;
+                        let half = (camera.fov_y_degrees.to_radians() * 0.5).tan();
+                        let px = settings.radius / (distance * half) * rect.height() * 0.5;
+                        Some((u * rect.width(), v * rect.height(), px))
+                    })();
+                }
+            });
+            scene_dirty = true;
+        }
+        // Mesh Paint off: no ring.
+        if rt.state().editor.state.paint.is_none() && rt.state().local.paint_ring.is_some() {
+            rt.update(|s| s.local.paint_ring = None);
+        }
         // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
         let game_rect = rt
             .natives()
@@ -510,6 +584,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
         {
             let scale = rt.scale();
+            // Input goes to the client Play's controls act on.
+            game.client = rt.state().play.client;
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
@@ -576,6 +652,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         if rt.touch(|s| std::mem::take(&mut s.play.release)) {
             rt.update(|s| s.local.game_captured = false);
+        }
+        // The Profiler's player: its targets, its frames while it records.
+        let profiler_shown =
+            rt.find("profiler/record").is_some() || rt.find("profiler/stop").is_some();
+        if rt.touch(|s| profiler::poll(s, profiler_shown)) {
+            rt.update(|_| {});
         }
         // C#: a reload in Play, module discovery for the IDE.
         if rt.touch(scripts::poll) {
@@ -710,13 +792,13 @@ fn fly(s: &mut Studio, dt: f32, fast: bool) {
 }
 
 /// The gizmo handles to light: the one under the pointer and the one dragged.
-fn gizmo_state(s: &Studio) -> crate::shell::overlay::GizmoState {
+fn gizmo_state(s: &Studio) -> crate::overlay::GizmoState {
     // While dragging, the gizmo draws at the previewed pose, not the committed one.
     let offset = match (&s.local.gizmo, &s.editor.gesture) {
         (Some(_), Some(g)) => g.world_delta(s.editor.state.selection.first().map(String::as_str)),
         _ => glam::Mat4::IDENTITY,
     };
-    crate::shell::overlay::GizmoState {
+    crate::overlay::GizmoState {
         hover: s.local.gizmo_hover,
         active: s.local.gizmo.as_ref().map(|d| d.handle),
         offset,
@@ -846,6 +928,8 @@ fn pump(
                 });
             }
             Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+            // A person activated a window opened in the background: it behaves as usual.
+            Event::Activated => rt.touch(|s| s.local.background = false),
             // Files from another app import into the folder Assets shows.
             Event::FilesDropped(_) => {
                 let files = stillkit::take_dropped_files();
@@ -898,7 +982,9 @@ fn pump(
     let painted = trace::time("ui frame", Duration::from_millis(3), || {
         rt.frame(started.elapsed().saturating_sub(rt.now()))
     });
-    if let Some(key) = rt.touch(|s| s.local.focus.take()) {
+    if let Some(key) = rt.touch(|s| s.local.focus.take())
+        && !rt.state().local.background
+    {
         rt.focus(key);
     }
     if let Some(text) = rt.touch(|s| s.local.copy.take()) {
@@ -935,7 +1021,7 @@ fn pump(
         );
         // While a tab is dragged: every area and tab, to drop it among.
         if rt.state().local.tab_drag.is_some() {
-            keys.extend(dock::drag_keys(&rt.state().editor.state.layout));
+            keys.extend(dock::all_drag_keys(rt.state()));
         }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {

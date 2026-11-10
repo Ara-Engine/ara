@@ -405,7 +405,7 @@ fn state_details(
                 .unwrap_or_default()
                 .to_owned(),
             None if node.kind == ara_anim::graph::NodeKind::Clip => "No clip".to_owned(),
-            _ => crate::shell::inspector_panel::sentence(
+            _ => crate::names::sentence(
                 &serde_json::to_value(node.kind)
                     .ok()
                     .and_then(|v| v.as_str().map(str::to_owned))

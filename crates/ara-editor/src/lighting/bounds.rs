@@ -55,7 +55,7 @@ impl VolumeBounds {
 
 /// Build once when the diagnostics collector's source/selection geometry changes.
 /// The caller supplies its cached world matrix and visibility decision.
-pub(in crate::shell) fn from_entity(
+pub(crate) fn from_entity(
     entity: &str,
     record: &ara_doc::Record,
     actual_world: Mat4,
@@ -82,7 +82,7 @@ pub(in crate::shell) fn from_entity(
 }
 
 #[cfg(test)]
-pub(super) fn selected(
+pub(crate) fn selected(
     entities: &Resolved,
     selection: &[String],
     hidden: &BTreeSet<String>,

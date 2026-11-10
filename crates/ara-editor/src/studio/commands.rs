@@ -7,7 +7,7 @@ use serde_json::json;
 use super::Studio;
 use crate::Editor;
 use crate::catalog::Target;
-use crate::shell::commands::table::play_params;
+use crate::play_controls::start_params as play_params;
 use serde_json::Value;
 
 /// What running a command gives back: done, or why not.
@@ -240,7 +240,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "create.group" => {
             let selected = target.entities(&e.state);
-            match crate::shell::hierarchy_actions::group(e, &s.resolved, &selected) {
+            match crate::hierarchy_actions::group(e, &s.resolved, &selected) {
                 Ok(parent) => select(e, vec![parent]),
                 Err(error) => Err(error),
             }
@@ -852,6 +852,47 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             };
             view(e, json!({"maximized": next}))
         }
+        // Move to New Window: the panel floats over the main window, near its middle.
+        "window.float" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            let (w, h) = s.size;
+            let rect = [
+                w * 0.25,
+                h * 0.2,
+                (w * 0.4).max(320.0),
+                (h * 0.5).max(240.0),
+            ];
+            act(
+                &mut s.editor,
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "float", "rect": rect}),
+            )
+            .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
+        }
+        // Gather: every floating window back inside the main window.
+        "window.gather" => {
+            let size = s.size;
+            let windows: Vec<(String, [i32; 4])> = e
+                .state
+                .floating
+                .iter()
+                .map(|f| (f.id.clone(), f.rect))
+                .collect();
+            for (id, r) in windows {
+                let [x, y, w, h] = r.map(|v| v as f32);
+                let fitted = [
+                    x.clamp(0.0, (size.0 - w).max(0.0)),
+                    y.clamp(0.0, (size.1 - h).max(0.0)),
+                    w,
+                    h,
+                ];
+                super::dock::place_window(s, &id, fitted);
+            }
+            Ok(())
+        }
         // Add Tab: `panel@beside` opens `panel` as a tab in the area holding `beside`.
         "window.add_tab" => match target {
             Target::Text(text) => match text
@@ -1121,8 +1162,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         // Help.
-        "help.docs" => crate::shell::ops::open_docs(e),
-        "help.logs" => crate::shell::ops::open_external(&e.host.root().join(".ara")),
+        "help.docs" => crate::system::open_docs(e),
+        "help.logs" => crate::system::open_external(&e.host.root().join(".ara")),
         "console.clear" => {
             s.logs.clear();
             s.local.console_open = None;
@@ -1488,6 +1529,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             _ => Err("Choose a Scene overlay".into()),
         },
         // Panels' own switches.
+        "console.machine" => {
+            s.local.console_machine = !s.local.console_machine;
+            Ok(())
+        }
         "console.errors" | "console.warnings" | "console.info" => {
             let i = match id {
                 "console.errors" => 0,
@@ -1587,7 +1632,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "lighting.probe.cancel" => super::lighting::cancel(s),
         "lighting.preset.manual" | "lighting.preset.interior" => {
-            use crate::shell::lighting::authoring::Preset;
+            use crate::lighting::authoring::Preset;
             let preset = match id {
                 "lighting.preset.manual" => Preset::ManualExposure,
                 _ => Preset::Interior,
@@ -1599,6 +1644,68 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Some(entity) => select(e, vec![entity])
                 .and_then(|()| act(e, "editor.focus", json!({"panel": "inspector"}))),
             None => Err("Choose a lighting entity".into()),
+        },
+        // Mesh Paint: on and off, and the brush (each change turns it on).
+        "window.mesh_paint" => act(e, "editor.layout.show", json!({"panel": "mesh-paint"})),
+        "paint.mode" => {
+            // Its panel shows first: a layout action writes the window's state back.
+            if e.state.paint.take().is_none() {
+                let _ = act(e, "editor.layout.show", json!({"panel": "mesh-paint"}));
+                e.state.paint = Some(Default::default());
+            }
+            Ok(())
+        }
+        id if id.starts_with("paint.tool.") => {
+            match crate::paint::PaintTool::parse(id.trim_start_matches("paint.tool.")) {
+                Some(tool) => {
+                    super::mesh_paint::edit(s, |p| p.tool = tool);
+                    Ok(())
+                }
+                None => Err(format!("{id}: unknown command").into()),
+            }
+        }
+        id if id.starts_with("paint.") => {
+            use crate::paint::PaintSettings;
+            let change: Option<fn(&mut PaintSettings)> = match id.trim_start_matches("paint.") {
+                "channel.red" => Some(|p| p.channels[0] = !p.channels[0]),
+                "channel.green" => Some(|p| p.channels[1] = !p.channels[1]),
+                "channel.blue" => Some(|p| p.channels[2] = !p.channels[2]),
+                "channel.alpha" => Some(|p| p.channels[3] = !p.channels[3]),
+                "color.white" => Some(|p| p.color = [1.0, 1.0, 1.0, 1.0]),
+                "color.black" => Some(|p| p.color = [0.0, 0.0, 0.0, 1.0]),
+                "color.red" => Some(|p| p.color = [1.0, 0.0, 0.0, 1.0]),
+                "color.green" => Some(|p| p.color = [0.0, 1.0, 0.0, 1.0]),
+                "color.blue" => Some(|p| p.color = [0.0, 0.0, 1.0, 1.0]),
+                "swap" => Some(|p| std::mem::swap(&mut p.color, &mut p.erase)),
+                "radius.up" => Some(|p| p.radius = (p.radius * 1.25).min(100.0)),
+                "radius.down" => Some(|p| p.radius = (p.radius / 1.25).max(0.005)),
+                "strength.up" => Some(|p| p.strength = (p.strength + 0.1).min(1.0)),
+                "strength.down" => Some(|p| p.strength = (p.strength - 0.1).max(0.0)),
+                "falloff.up" => Some(|p| p.falloff = (p.falloff + 0.1).min(1.0)),
+                "falloff.down" => Some(|p| p.falloff = (p.falloff - 0.1).max(0.0)),
+                _ => None,
+            };
+            match change {
+                Some(change) => {
+                    super::mesh_paint::edit(s, change);
+                    Ok(())
+                }
+                None => Err(format!("{id}: unknown command").into()),
+            }
+        }
+        "profiler.record" => {
+            super::profiler::toggle_record(s);
+            Ok(())
+        }
+        "profiler.refresh" => match s.editor.play_profiling.as_mut() {
+            Some(backend) => backend.refresh_targets().map_err(|d| {
+                d.first()
+                    .map_or("The players could not be listed".to_owned(), |d| {
+                        d.message.clone()
+                    })
+                    .into()
+            }),
+            None => Err("Player profiling is not available in this editor".into()),
         },
         "tools.cs.reload" => super::scripts::reload(s),
         "tools.cs.solution" => super::scripts::solution(s),
@@ -1761,7 +1868,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose a saved search or favourite".into()),
         },
-        "tools.terminal" => crate::shell::ops::open_terminal(e.host.root()),
+        "tools.terminal" => crate::system::open_terminal(e.host.root()),
         "tools.references" => match asset_of(e, target) {
             Some(path) => {
                 s.local.inspect_asset = true;
@@ -1772,11 +1879,12 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         // Window › a panel (last, so the window.* commands above take theirs first).
         id if id.starts_with("window.") => {
             let panel = id.trim_start_matches("window.");
-            // Tool pages open floating in the legacy window; the studio draws no floating
-            // windows yet, so they dock in the centre beside the Scene.
+            // Tool pages open floating by default (the legacy window's habit); here a page
+            // that was not open docks beside the Scene. One already floating stays so.
+            let open = crate::state::panel_visible(&e.state, panel);
             act(e, "editor.layout.show", json!({"panel": panel}))
                 .and_then(|_| {
-                    if e.state.floating.iter().any(|f| holds(&f.root, panel)) {
+                    if !open && e.state.floating.iter().any(|f| holds(&f.root, panel)) {
                         act(
                             e,
                             "editor.layout.move",
@@ -1795,6 +1903,60 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
     }
     if let Err(error) = result {
         s.editor.report_failure(&*error);
+    }
+}
+
+/// Whether command `id` applies to `target` now, so a context menu lists only what does
+/// (a probe's capture for probes, a prefab's overrides for instances, Paste with something
+/// copied). Commands it does not know about always apply.
+pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
+    let e = &s.editor;
+    let record = |key: &str| {
+        target
+            .entity(&e.state)
+            .and_then(|id| s.resolved.get(id))
+            .is_some_and(|row| row.record.contains_key(key))
+    };
+    let instance = || {
+        target
+            .entity(&e.state)
+            .is_some_and(|id| crate::prefab::instance(e.host.store(), &e.state.doc, id).is_some())
+    };
+    match id {
+        "lighting.probe.recapture" => record("ReflectionProbe"),
+        "lighting.probe.cancel" => super::lighting::capturing(s),
+        "lighting.inspect" => [
+            "Light",
+            "ReflectionProbe",
+            "PostProcessVolume",
+            "HeightFog",
+            "FogVolume",
+            "Sky",
+        ]
+        .into_iter()
+        .any(record),
+        "prefab.open" | "prefab.revert_all" | "prefab.unpack" | "prefab.apply_all" => instance(),
+        "prefab.apply_override" | "prefab.revert_override" => match target {
+            Target::Field(path) => super::inspector::field_of(s, path)
+                .is_some_and(|f| f.provenance == crate::inspector::Provenance::Override),
+            _ => false,
+        },
+        "edit.paste" => s.local.entity_clipboard.is_some(),
+        "field.paste" => s.local.field_clipboard.is_some(),
+        "component.paste" => match target {
+            Target::Component(kind) => s
+                .local
+                .component_clipboard
+                .as_ref()
+                .is_some_and(|(copied, _)| copied == kind),
+            _ => s.local.component_clipboard.is_some(),
+        },
+        "assets.open_ide" => match target {
+            Target::Asset(path) => path.ends_with(".cs"),
+            _ => false,
+        },
+        "lighting.preset.manual" | "lighting.preset.interior" => record("PostProcessVolume"),
+        _ => true,
     }
 }
 

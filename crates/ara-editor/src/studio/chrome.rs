@@ -23,6 +23,7 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
+        .children(dock::floating(s))
         .children(drag_chip(s))
         .children(dock::drag_preview(s))
         // Menus at a point hang from an element of no size: an overlay never closes on a
@@ -314,8 +315,14 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
     for item in items {
         match item {
             Item::Separator => out.push(Line::Separator),
-            // Only what the editor runs is listed.
-            Item::Command(id) if crate::catalog::get(id).is_some() => out.push(Line::Command(id)),
+            // Only what the editor runs; a context menu, only what applies to what was
+            // clicked (the menu bar keeps every entry).
+            Item::Command(id)
+                if crate::catalog::get(id).is_some()
+                    && (*target == Target::None || commands::applies(s, id, target)) =>
+            {
+                out.push(Line::Command(id))
+            }
             Item::Sub(title, sub) if depth < 2 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));
@@ -410,8 +417,8 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
                 .collect()
         }
         Dynamic::GizmoTypes => {
-            let settings = crate::shell::overlay::gizmos::Settings::read(&e.state);
-            crate::shell::overlay::gizmos::TYPES
+            let settings = crate::overlay::gizmos::Settings::read(&e.state);
+            crate::overlay::gizmos::TYPES
                 .iter()
                 .map(|g| {
                     entry(

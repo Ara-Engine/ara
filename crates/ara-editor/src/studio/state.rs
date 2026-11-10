@@ -266,6 +266,9 @@ pub struct Local {
     pub console_search: String,
     /// The Console merges repeated records (Unity's Collapse).
     pub console_collapse: bool,
+    /// The Console's group of this computer's messages (graphics drivers, overlay layers)
+    /// is open.
+    pub console_machine: bool,
     /// Entities copied with Edit › Copy: each one's name and components.
     pub entity_clipboard: Option<Vec<serde_json::Value>>,
     /// A field value copied from the Inspector's field menu.
@@ -324,6 +327,15 @@ pub struct Local {
     pub profiling: bool,
     /// The Profiler's picked frame (its id), or None for the newest.
     pub profile_frame: Option<u64>,
+    /// What the Profiler records: a running Play player, or (None) the editor itself.
+    pub(crate) profiler_target: Option<crate::play_profiling::Scope>,
+    /// The player request in flight and what it asked.
+    pub(crate) profiler_ticket:
+        Option<(crate::play_profiling::Ticket, crate::play_profiling::Action)>,
+    /// When the players to profile were last listed, and the player's frames last read.
+    pub profiler_polled: Option<(std::time::Instant, std::time::Instant)>,
+    /// The picked player records (its last status said so).
+    pub profiler_player_recording: bool,
     /// The Lighting panel's filter.
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
@@ -339,14 +351,29 @@ pub struct Local {
     pub note: Option<(String, std::time::Instant)>,
     /// A one-field question open (Save Layout As): what it asks, and the text typed.
     pub prompt: Option<Prompt>,
+    /// Opened in the background (`--background`): fields are not given keyboard focus (on
+    /// Windows that would bring the window forward) until a person activates the window.
+    pub background: bool,
     /// The renderer's device report (`DeviceInfo` as JSON), once it runs.
     pub device: String,
     /// About Ara or System Info, open.
     pub(crate) about: Option<super::about::Page>,
+    /// Mesh Paint input from the Scene view for the host to run (it holds the renderer's
+    /// scene): presses, drags and releases, at places across the view (0..1).
+    pub paint_input: Vec<PaintInput>,
+    /// A Mesh Paint stroke is under way (the host reports it).
+    pub painting: bool,
+    /// Where the pointer rests in Mesh Paint mode (0..1 across the view), for the host to
+    /// place the brush ring.
+    pub paint_hover: Option<(f32, f32)>,
+    /// The brush ring: its centre and radius in view px, over the mesh under the pointer.
+    pub paint_ring: Option<(f32, f32, f32)>,
     /// The History transaction opened to its changes.
     pub history_open: Option<String>,
     /// The History search: transactions whose description or author match.
     pub history_search: String,
+    /// A floating window being moved or resized.
+    pub float_drag: Option<FloatDrag>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
     /// Each Scene overlay's length along its edge when last shown expanded (design px), so
@@ -372,7 +399,7 @@ pub struct Local {
     /// Fly keys held down (W A S D Q E, as virtual keys).
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
-    pub gizmo_hover: Option<crate::shell::overlay::Handle>,
+    pub gizmo_hover: Option<crate::overlay::Handle>,
     /// A change to the OS window the host makes on its next pass.
     pub window: Option<WindowRequest>,
     /// Problems shown: errors, warnings.
@@ -381,6 +408,44 @@ pub struct Local {
     pub problems_search: String,
     /// Problems rows opened to their explanation (Why?), by bus sequence number.
     pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A floating window being moved (its title bar) or resized (its corner).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FloatDrag {
+    /// The window's id.
+    pub id: String,
+    /// Resized, else moved.
+    pub resize: bool,
+    /// Its rect when the gesture began (design px).
+    pub start: [f32; 4],
+    /// The pointer's travel since (design px).
+    pub travel: (f32, f32),
+}
+
+impl FloatDrag {
+    /// The rect the gesture gives now.
+    pub fn rect(&self) -> [f32; 4] {
+        let [x, y, w, h] = self.start;
+        let (dx, dy) = self.travel;
+        match self.resize {
+            true => [x, y, w + dx, h + dy],
+            false => [x + dx, y + dy, w, h],
+        }
+    }
+}
+
+/// A Mesh Paint pointer event from the Scene view, at a place across it (0..1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PaintInput {
+    /// The left button went down: paint, fill, flood or pick there.
+    Down(f32, f32),
+    /// The stroke moved there.
+    Move(f32, f32),
+    /// Released: the stroke commits.
+    Up,
+    /// Escape or focus loss: the stroke is dropped.
+    Cancel,
 }
 
 /// A one-field question: its title, the text typed, and what Enter does with it.
@@ -418,7 +483,7 @@ pub struct Studio {
     /// The window's size in design px.
     pub size: (f32, f32),
     /// The project's files, scanned in the background (Assets).
-    pub(crate) assets: Option<crate::shell::assets::Browser>,
+    pub(crate) assets: Option<crate::assets::Browser>,
     /// Asset thumbnails rendered off-thread (models, materials, textures), by storage path.
     pub(crate) previews: Previews,
     /// The diagnostics bus so far (Console, Problems), oldest first.
@@ -438,6 +503,8 @@ pub struct Studio {
     pub(crate) importer: crate::asset_import::Importer,
     /// C# requests in flight: a reload in Play, module discovery for the IDE.
     pub(crate) scripts: super::scripts::Scripts,
+    /// Mesh Paint's stroke under way (run by the host on the Scene's meshes).
+    pub(crate) painter: crate::painter::Painter,
 }
 
 impl Studio {
@@ -465,6 +532,7 @@ impl Studio {
             play: Default::default(),
             importer: Default::default(),
             scripts: Default::default(),
+            painter: Default::default(),
         };
         studio.resolve();
         studio
