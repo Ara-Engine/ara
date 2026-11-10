@@ -1131,6 +1131,20 @@ fn the_profiler_shows_scopes_under_their_callers() {
 }
 
 #[test]
+fn problems_list_files_with_errors_first() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.act("editor.layout.show", json!({"panel": "problems"}));
+    });
+    settle(&mut rt);
+    let top = |rt: &Runtime<Studio>, seq: u64| rt.find(&format!("problems/{seq}")).map(|r| r.top);
+    // The error (5) above both warnings (3 and 4), though its file sorts last by name.
+    let (error, warning) = (top(&rt, 5).unwrap(), top(&rt, 4).unwrap());
+    assert!(error < warning, "{error} < {warning}");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
