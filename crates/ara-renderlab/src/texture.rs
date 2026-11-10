@@ -26,6 +26,19 @@ pub(crate) fn chain(size: [u32; 2], top: Vec<u8>, role: TextureRole) -> Texture 
     Texture { role, mips }
 }
 
+/// Mean linear RGB of sRGB-encoded RGBA8 texels (zero for an empty image).
+pub(crate) fn mean_linear(rgba8: &[u8]) -> [f32; 3] {
+    let texels = rgba8.as_chunks::<4>().0;
+    let mut sum = [0f64; 3];
+    for p in texels {
+        for (s, c) in sum.iter_mut().zip(p) {
+            *s += f64::from(srgb_to_linear(*c));
+        }
+    }
+    let n = texels.len().max(1) as f64;
+    sum.map(|s| (s / n) as f32)
+}
+
 fn srgb_to_linear(value: u8) -> f32 {
     let v = f32::from(value) / 255.;
     if v <= 0.04045 {
@@ -117,6 +130,14 @@ fn halve(mip: &Mip, role: TextureRole) -> Mip {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_mean_of_an_emissive_map_is_linear() {
+        // Half the texels white, half black: half the linear light, not sRGB 128.
+        let m = mean_linear(&[255, 255, 255, 255, 0, 0, 0, 255]);
+        assert!(m.iter().all(|c| (c - 0.5).abs() < 1e-3), "{m:?}");
+        assert_eq!(mean_linear(&[]), [0.; 3]);
+    }
 
     #[test]
     fn chains_reach_one_texel_and_filter_by_role() {
