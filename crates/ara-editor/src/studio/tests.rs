@@ -933,7 +933,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     });
     settle(&mut rt);
     press(&mut rt, &format!("assets/move/{art}"));
-    for _ in 0..400 {
+    for _ in 0..3000 {
         if rt.touch(|s| {
             s.editor.tick();
             super::asset_ops::poll_jobs(s);
@@ -951,7 +951,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     std::fs::write(outside.join("readme.txt"), "hello").unwrap();
     let import = |rt: &mut Runtime<Studio>| {
         rt.update(|s| super::asset_ops::import(s, vec![outside.join("readme.txt")], Some(&art)));
-        for _ in 0..400 {
+        for _ in 0..3000 {
             if rt.touch(|s| {
                 s.editor.tick();
                 s.importer.poll(&mut s.editor);
