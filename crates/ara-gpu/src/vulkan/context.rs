@@ -332,7 +332,20 @@ impl Gpu {
 
     /// A startup-only blocking submit; frame work uses submit2 with timelines.
     pub fn immediate(&self, record: impl FnOnce(vk::CommandBuffer)) -> Result<()> {
-        let cmd = self.commands(false)?;
+        self.immediate_on(false, record)
+    }
+    pub(crate) fn immediate_on(
+        &self,
+        compute: bool,
+        record: impl FnOnce(vk::CommandBuffer),
+    ) -> Result<()> {
+        let queue = if compute { self.compute } else { self.graphics };
+        let pool = if compute {
+            self.compute_pool
+        } else {
+            self.graphics_pool
+        };
+        let cmd = self.commands(compute)?;
         // SAFETY: This command buffer is fresh and has no submitted use.
         unsafe {
             self.begin(cmd)?;
@@ -343,12 +356,12 @@ impl Gpu {
             self.device.end_command_buffer(cmd)?;
             let buffers = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
             self.device.queue_submit2(
-                self.graphics,
+                queue,
                 &[vk::SubmitInfo2::default().command_buffer_infos(&buffers)],
                 vk::Fence::null(),
             )?;
-            self.measure_host_wait(|| self.device.queue_wait_idle(self.graphics))?;
-            self.device.free_command_buffers(self.graphics_pool, &[cmd]);
+            self.measure_host_wait(|| self.device.queue_wait_idle(queue))?;
+            self.device.free_command_buffers(pool, &[cmd]);
         }
         Ok(())
     }

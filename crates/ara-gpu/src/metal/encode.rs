@@ -713,6 +713,10 @@ impl MetalDevice {
                 rec.timestamp(2 + 2 * pass);
                 rec.cmd.popDebugGroup();
             }
+            Command::RefitAccelerationStructure(structure) => {
+                let encoder = rec.compute(self)?;
+                self.encode_as_refit(encoder, *structure)?;
+            }
             Command::BuildAccelerationStructure(structure) => {
                 let encoder = rec.compute(self)?;
                 self.encode_as_build(encoder, *structure)?;

@@ -693,7 +693,7 @@ impl MetalDevice {
         for value in self.accelerations.values_mut() {
             value.last[queue.index()] = point.value;
         }
-        self.mark_built(&list.commands)?;
+        self.mark_built(&list.commands, queue)?;
         self.pending.push(Pending {
             point,
             allocator,

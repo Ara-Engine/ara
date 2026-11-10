@@ -43,10 +43,11 @@ Owns the native GPU boundary.
   sample count and explicit vertex layouts. `DrawVertexBuffers` binds up to eight
   streams, including per-instance records. `ResolveImage` resolves backed 4x color
   targets outside rendering; both images need transfer use and attachment usage.
-- `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
-  `TriangleRange` selects checked aligned byte ranges in shared vertex/index
-  allocations; indices remain local to the range. Multiple BLAS builds and their
-  transformed TLAS instances can share one upload and submission.
+- `AccelerationDesc` selects BLAS geometry or TLAS instances. `AccelerationOptions`
+  enables rebuild/refit/compaction and reserves TLAS capacity. `update_instances`
+  uploads on the owning queue; rebuild permits count changes, refit preserves count.
+  BLAS compaction is a blocking setup operation returning a fresh identity; compacted
+  BLASes can refit, while a rebuild requires an uncompacted allocation.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
   `resource_dir` finds executable-relative installed shaders before checkout data;
   a distribution with engine.json never silently falls back to checkout shaders.
@@ -81,8 +82,7 @@ Declare every resource reachable through root indices in the graph.
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle
 immediately; allocation and descriptor reuse wait for both queue timelines.
 Retention is conservative across published resources in v0. A live TLAS prevents
-its BLAS from retiring. Static acceleration structures build once; replacement
-uses a fresh identity. Pipelines also retire through queue completion.
+its BLAS from retiring. Default static acceleration structures build once; options enable repeated builds/refits. Pipelines also retire through queue completion.
 Completed images/pipelines release identities on the owner; their destruction and
 uncached buffer-memory frees run on one worker (one active/one queued batch).
 Backpressure retains completed objects locally; device teardown drains and joins.
@@ -146,5 +146,5 @@ remain unverified until that run. Metal gaps tests use native transfers and MSL
 probes (converter download needs Apple sign-in).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
-Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): static BLAS/TLAS built on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.
+Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): BLAS/TLAS built/refit on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.
 Test: `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 cargo test -p ara-gpu --lib metal`, and once without shader validation; Vulkan GPU tests are ignored on macOS.

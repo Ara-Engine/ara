@@ -321,7 +321,7 @@ impl VulkanDevice {
         // Conservative retention also covers resources reached indirectly through shader indices.
         for command in &list.commands {
             if let Command::BuildAccelerationStructure(h) = command {
-                self.accelerations.get_mut(*h)?.raw.built = true;
+                self.mark_as_built(*h, queue)?;
             }
         }
         {
