@@ -50,8 +50,9 @@ internal static class ProjectInventory
         return result;
     }
 
-    /// <summary>Discovers ownership; public/project scans also validate and hydrate existing publications by default.</summary>
-    internal static ProjectInventoryResult Scan(InventoryRequest request, bool hydratePublications = true)
+    /// <summary>Discovers ownership; public scans hydrate publications, while build callers may filter work they validate themselves.</summary>
+    internal static ProjectInventoryResult Scan(InventoryRequest request, bool hydratePublications = true,
+        Predicate<ProjectModule>? publicationFilter = null)
     {
         var diagnostics = new List<JsonObject>();
         var modules = new Dictionary<string, Module>(StringComparer.OrdinalIgnoreCase);
@@ -171,7 +172,7 @@ internal static class ProjectInventory
             var module = new ProjectModule(m.Name, Storage(m.Owner.Directory), m.Owner.Hot, resolved[m.Name], m.Editor ? "editor" : "gameplay", state,
                 state + "/" + m.Name + ".types.json", state + "/bin/" + m.Name + ".dll", [.. m.Sources.OrderBy(s => s.Path, StringComparer.Ordinal)]);
             var marker = Path.Combine(project, state, "published.sha256");
-            if (hydratePublications && File.Exists(marker))
+            if (hydratePublications && (publicationFilter?.Invoke(module) ?? true) && File.Exists(marker))
             {
                 try
                 {
