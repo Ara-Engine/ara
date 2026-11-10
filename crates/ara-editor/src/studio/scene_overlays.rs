@@ -251,6 +251,59 @@ pub(super) fn update(s: &mut Studio, id: &str, change: impl FnOnce(&mut Dock)) {
     save(s, id, d);
 }
 
+/// The saved overlay presets' names (`viewport.overlayPresets`).
+pub(super) fn presets(s: &Studio) -> Vec<String> {
+    s.editor
+        .state
+        .settings
+        .get("viewport.overlayPresets")
+        .and_then(Value::as_object)
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+/// Saves the overlays' layout as preset `name`, loads it, or deletes it (`action`).
+pub(super) fn preset(s: &mut Studio, action: &str, name: &str) -> ara_ui::Result<()> {
+    let mut presets = s
+        .editor
+        .state
+        .settings
+        .get("viewport.overlayPresets")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    // A preset is one string: `id=edge:corner:offset[:collapsed][:hidden]` pairs, `;` apart.
+    match action {
+        "save" => {
+            let text = saved(s)
+                .iter()
+                .filter_map(|(id, dock)| Some(format!("{id}={}", dock.as_str()?)))
+                .collect::<Vec<_>>()
+                .join(";");
+            presets.insert(name.to_owned(), json!(text));
+        }
+        "load" => {
+            let text = presets
+                .get(name)
+                .and_then(Value::as_str)
+                .ok_or("That preset is gone")?;
+            let layout: serde_json::Map<String, Value> = text
+                .split(';')
+                .filter_map(|pair| pair.split_once('='))
+                .filter(|(id, dock)| def(id).is_some() && Dock::parse(dock).is_some())
+                .map(|(id, dock)| (id.to_owned(), json!(dock)))
+                .collect();
+            set(s, "viewport.overlays", Value::Object(layout));
+            return Ok(());
+        }
+        _ => {
+            presets.remove(name).ok_or("That preset is gone")?;
+        }
+    }
+    set(s, "viewport.overlayPresets", Value::Object(presets));
+    Ok(())
+}
+
 /// Puts every overlay back where it starts.
 pub(super) fn reset(s: &mut Studio) {
     s.act(
@@ -292,6 +345,69 @@ fn set(s: &mut Studio, key: &str, value: Value) {
     s.act("editor.settings.set", json!({"key": key, "value": value}));
 }
 
+/// An overlay's length along its edge while collapsed to its icon (grip and icon).
+const COLLAPSED: f32 = 44.0;
+
+/// Records each expanded overlay's length along its edge from the rects the host just
+/// reported (a squeezed or collapsed one keeps its last expanded length).
+pub(super) fn measure(s: &mut Studio) {
+    for d in &OVERLAYS {
+        let vertical = dock(s, d.id).vertical();
+        if let Some(r) = s.local.rects.get(&format!("scene/overlay/{}", d.id)) {
+            let length = if vertical { r.height() } else { r.width() };
+            if length > COLLAPSED + 4.0 {
+                s.local.overlay_lengths.insert(d.id, length);
+            }
+        }
+    }
+}
+
+/// Overlays that do not fit along their edge, shown collapsed to their icons until the
+/// view has room again (Unity's overflow): the ones farthest from their corners go first.
+fn squeezed(s: &Studio) -> std::collections::BTreeSet<&'static str> {
+    let mut out = std::collections::BTreeSet::new();
+    let Some(view) = s.local.rects.get("scene/view") else {
+        return out;
+    };
+    for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
+        let room = match edge {
+            Edge::Top | Edge::Bottom => view.width(),
+            Edge::Left | Edge::Right => view.height(),
+        } - 2.0 * INSET;
+        // This edge's shown overlays, nearest their corner first, each with its length.
+        let mut items: Vec<(f32, &'static str, f32)> = OVERLAYS
+            .iter()
+            .filter_map(|d| {
+                let at = dock(s, d.id);
+                (at.edge == edge && !at.hidden).then(|| {
+                    let length = match at.collapsed {
+                        true => COLLAPSED,
+                        false => s
+                            .local
+                            .overlay_lengths
+                            .get(d.id)
+                            .copied()
+                            .unwrap_or(COLLAPSED),
+                    };
+                    (at.offset, d.id, length)
+                })
+            })
+            .collect();
+        items.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut total: f32 = items.iter().map(|(_, _, l)| l + 6.0).sum();
+        for (_, id, length) in items {
+            if total <= room {
+                break;
+            }
+            if length > COLLAPSED {
+                total -= length - COLLAPSED;
+                out.insert(id);
+            }
+        }
+    }
+    out
+}
+
 /// The overlays over the Scene view: one stack per edge and corner, then the overlay
 /// being dragged at the pointer, with its landing edge marked.
 pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
@@ -311,11 +427,12 @@ pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
             .or_default()
             .push((at.offset, d));
     }
+    let squeezed = squeezed(s);
     let mut out = Vec::new();
     for ((edge, end), mut items) in stacks {
         items.sort_by(|a, b| a.0.total_cmp(&b.0));
         let edge = [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right][edge as usize];
-        out.push(stack(s, edge, end, &items));
+        out.push(stack(s, edge, end, &items, &squeezed));
     }
     if let Some(drag) = dragging {
         out.extend(ghost(s, drag));
@@ -325,7 +442,13 @@ pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
 
 /// One edge corner's overlays, laid out from the corner; each offset is kept as a gap
 /// from the overlay before it (measured last frame), so overlays never overlap.
-fn stack(s: &Studio, edge: Edge, end: bool, items: &[(f32, &'static Def)]) -> El<Studio> {
+fn stack(
+    s: &Studio,
+    edge: Edge,
+    end: bool,
+    items: &[(f32, &'static Def)],
+    squeezed: &std::collections::BTreeSet<&'static str>,
+) -> El<Studio> {
     let vertical = matches!(edge, Edge::Left | Edge::Right);
     let mut reach = 0.0;
     let mut children = Vec::new();
@@ -340,7 +463,7 @@ fn stack(s: &Studio, edge: Edge, end: bool, items: &[(f32, &'static Def)]) -> El
         if gap > 0.0 {
             children.push(if vertical { el().h(gap) } else { el().w(gap) });
         }
-        children.push(overlay(s, d, vertical));
+        children.push(overlay(s, d, vertical, squeezed.contains(d.id)));
     }
     if end {
         children.reverse();
@@ -433,11 +556,13 @@ fn ghost(s: &Studio, drag: Drag) -> Vec<El<Studio>> {
     vec![hint, ghost]
 }
 
-/// One overlay: its grip, then its tools (or only its icon when collapsed).
-fn overlay(s: &Studio, d: &'static Def, vertical: bool) -> El<Studio> {
+/// One overlay: its grip, then its tools (or only its icon when collapsed, or `squeezed`
+/// for room).
+fn overlay(s: &Studio, d: &'static Def, vertical: bool, squeezed: bool) -> El<Studio> {
     let l = &s.look;
     let id = d.id;
-    let at = dock(s, id);
+    let mut at = dock(s, id);
+    at.collapsed |= squeezed;
     let body = if at.collapsed {
         collapsed(s, d)
     } else {
@@ -658,6 +783,50 @@ pub(super) fn menu_items(s: &Studio) -> Vec<El<Studio>> {
         );
     }
     items.push(menu_separator(l));
+    // Presets (Unity's overlay presets): every saved layout, and Save Preset As.
+    let presets = presets(s);
+    if !presets.is_empty() {
+        items.push(menu_heading(l, "Presets"));
+    }
+    for name in presets {
+        let (load, remove) = (Target::Text(name.clone()), Target::Text(name.clone()));
+        items.push(
+            menu_item(
+                l,
+                &format!("scene/overlays/preset/{name}"),
+                Some(icons::LAYOUT_GRID),
+                &name,
+                None,
+                false,
+            )
+            .on_press(move |s: &mut Studio| {
+                s.local.overlays_menu = false;
+                commands::run(s, "view.overlays.preset.load", &load);
+            })
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Delete this preset")
+                    .size(18.0)
+                    .key(format!("scene/overlays/preset/{name}/delete"))
+                    .on_press(move |s: &mut Studio| {
+                        commands::run(s, "view.overlays.preset.delete", &remove)
+                    }),
+            ),
+        );
+    }
+    items.push(
+        menu_item(
+            l,
+            "scene/overlays/save",
+            Some(icons::BOOKMARK),
+            "Save Preset As…",
+            None,
+            false,
+        )
+        .on_press(|s: &mut Studio| {
+            s.local.overlays_menu = false;
+            commands::run(s, "view.overlays.preset.save", &Target::None);
+        }),
+    );
     items.push(
         menu_item(
             l,

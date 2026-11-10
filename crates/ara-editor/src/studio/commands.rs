@@ -1435,6 +1435,25 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose a gizmo type in the Gizmos menu".into()),
         },
+        // Overlay presets: saved under a name asked for, loaded or deleted by name.
+        "view.overlays.preset.save"
+        | "view.overlays.preset.load"
+        | "view.overlays.preset.delete" => {
+            let action = id.trim_start_matches("view.overlays.preset.");
+            match target {
+                Target::Text(name) => super::scene_overlays::preset(s, action, name.trim()),
+                _ if action == "save" => {
+                    s.local.prompt = Some(super::state::Prompt {
+                        title: "Save overlay preset as",
+                        text: String::new(),
+                        then: "view.overlays.preset.save",
+                    });
+                    s.local.focus = Some("prompt/field");
+                    Ok(())
+                }
+                _ => Err("Choose an overlay preset".into()),
+            }
+        }
         "view.overlays.collapse" => match target {
             Target::Panel(overlay) => {
                 super::scene_overlays::update(s, overlay, |d| d.collapsed = !d.collapsed);

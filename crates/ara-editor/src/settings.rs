@@ -309,6 +309,15 @@ pub const DEFS: &[Def] = &[
         Lit::Empty,
     ),
     def(
+        "viewport.overlayPresets",
+        User,
+        "Viewport",
+        "Scene toolbar presets",
+        "Saved Scene toolbar layouts by name (each toolbar=dock pairs, ; apart), from the Overlays menu's Save Preset As.",
+        Kind::Map,
+        Lit::Empty,
+    ),
+    def(
         "viewport.cameraSpeed",
         User,
         "Viewport",
