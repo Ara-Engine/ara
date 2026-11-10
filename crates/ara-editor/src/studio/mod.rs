@@ -346,7 +346,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // A hidden (minimized) window shows no frames: render none. A covered one skips
         // presents on its own (the 1 ms present wait).
         #[cfg(any(windows, target_os = "macos"))]
-        let shown = surface.is_visible();
+        let shown = visible(surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let shown = true;
         if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
@@ -589,7 +589,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .map(|(_, r)| r);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
         #[cfg(any(windows, target_os = "macos"))]
-        let visible = surface.is_visible();
+        let visible = visible(surface);
         #[cfg(not(any(windows, target_os = "macos")))]
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
@@ -872,12 +872,36 @@ pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
 
+/// Whether the window shows on screen. Linux's stillkit surface does not report it
+/// yet, so there the window counts as shown.
+fn visible(surface: &Surface) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = surface;
+        true
+    }
+    #[cfg(not(target_os = "linux"))]
+    surface.is_visible()
+}
+
+/// Whether the window is maximized (the drawn Restore button). Linux's stillkit surface
+/// does not report it yet, so there it reads as not maximized.
+fn maximized(surface: &Surface) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = surface;
+        false
+    }
+    #[cfg(not(target_os = "linux"))]
+    surface.is_maximized()
+}
+
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface) -> state::Frame {
     let s = surface.scale();
     state::Frame {
         inset: surface.system_controls().map_or(0.0, |r| r.right / s),
-        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
+        controls: (!cfg!(target_os = "macos")).then(|| maximized(surface)),
     }
 }
 
@@ -997,7 +1021,7 @@ fn pump(
             }
             Event::SettingChanged => rt.set_reduced_motion(reduced_motion()),
             #[cfg(any(windows, target_os = "macos"))]
-            Event::VisibilityChanged => rt.set_visible(surface.is_visible()),
+            Event::VisibilityChanged => rt.set_visible(visible(surface)),
             Event::Invoke(hit) => match surface.take_accessibility_action(hit) {
                 Some(action) => {
                     rt.accessibility_action(hit, &action);
