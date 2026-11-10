@@ -19,7 +19,7 @@ The Mac compiles those paths and runs their pure tests, not a Vulkan device.
 | Raster | Depth comparisons/bias, cull/winding, vertex layouts and instance streams, per-target blend. Metal draw/depth/blend pixel probes pass. |
 | Buffer heap | Up to 4,096 storage buffers, clamped to Vulkan device limits. Metal high-slot shader probe passes. |
 | Dynamic ray tracing | Reserved TLAS capacity, rebuild/refit and BLAS compaction. Existing cooked query probes exercise 4,096 instances and changed geometry/transforms on both queues. |
-| Ray-query hit vertex positions | **Skipped:** direct position fetch is not enabled or exposed. Slang’s position-fetch intrinsic lacks a DXIL target; a portable shader helper needs verification. |
+| Ray-query hit vertex positions | `HitGeometry::publish` plus the shared shader helper fetch retained indexed object-space positions. Native Metal query/geometry test passes; the direct intrinsic remains unavailable for DXIL. |
 | Compute-only family optional | Vulkan prefers it, then falls back to graphics; pure selection tests pass. This has no equivalent Metal family requirement. |
 | Barriers | Batch commands and checked byte/mip/layer ranges. Vulkan emits one dependency call; Metal conservatively synchronizes stages. Native transfer/range probes pass. |
 | Memory | Private resources suballocate Metal heaps/Vulkan blocks; completion gates reuse. Metal native heap sharing, preparation ownership and blocked-retirement probes pass. |
@@ -139,3 +139,12 @@ legacy rendering commands continue to work. See the [migration design](../design
 
 Decision override: D36 supersedes S1's dedicated compute-family assumption.
 No other locked decision is overridden.
+
+`hit_geometry::SHADER` works unchanged as Slang source and through its three MSL
+adapter macros. `HitGeometry::publish` encodes the same AS-validated position/index
+range in 32 bytes, including offsets/stride/counts and heap slots. Records use native
+TLAS instance ordinals, not custom IDs. The validated Metal test hits primitive 1 in
+instance 1 with padding, nonzero offsets, reordered indices and a mirrored/scaled
+transform, then checks all nine original object-space coordinates exactly. Instance
+and primitive overflow return invalid. The helper also compiles to SPIR-V locally;
+DXIL/cooked-helper and Vulkan runtime execution remain for the PC.

@@ -49,7 +49,8 @@
   enables rebuild/refit/compaction and reserves TLAS capacity. `update_instances`
   uploads on the owning queue; rebuild permits count changes, refit preserves count.
   BLAS compaction is a blocking setup operation returning a fresh identity; compacted
-  BLASes can refit, while a rebuild requires an uncompacted allocation.
+  BLASes can refit; rebuild needs uncompacted storage. `hit_geometry` publishes
+  retained mesh ranges for shader position fetch by instance ordinal/primitive.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
   `resource_dir` finds executable-relative installed shaders before checkout data;
   a distribution with engine.json never silently falls back to checkout shaders.
@@ -137,13 +138,12 @@ Metal: global IOSurfaces (`metal::external`, private copy queue, same-session tr
 `prepare_pipelines` admits two PSO batches (running/queued/ready); poll/cancel never waits. One compiler owns a private persisted cache.
 Caches check vendor/device/UUID/driver and save atomically; cooked artifact and layout hashes are checked separately.
 Adopt ready pipeline handles on the owner and retire normally. Keep the last presentation or skip draws until ready.
-
 ## Verification
 
-Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
+`CARGO_BUILD_JOBS=2`. Gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
 Vulkan GPU tests run on the PC; all Mac-written Vulkan changes remain unverified.
-Metal gaps tests use native transfers and MSL probes; fresh converter artifacts are cooked on Windows (docs/dev/macos.md).
+Metal gaps tests use native transfers and MSL probes; fresh converter artifacts cook on Windows (docs/dev/macos.md).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI (`abi.rs`) keeps the MSC 4.0.3 prefix and appends comparison samplers; one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
 Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): BLAS/TLAS built/refit on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.

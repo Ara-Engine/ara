@@ -8,6 +8,7 @@ pub mod commands;
 pub mod cooked;
 mod cpu;
 pub mod descriptors;
+pub mod hit_geometry;
 #[cfg(target_os = "macos")]
 pub mod metal;
 pub mod raster;
