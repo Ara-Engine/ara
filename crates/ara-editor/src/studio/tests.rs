@@ -392,6 +392,34 @@ fn the_inspector_locks_searches_and_copies_component_values() {
     press(&mut rt, "component/MeshRenderer/more");
     press(&mut rt, "component/MeshRenderer/reset");
     assert_ne!(roughness(&rt), json!(0.9), "reset to its default");
+    // Move Up puts the renderer above Transform, and the order is saved.
+    let top = |rt: &Runtime<Studio>, c: &str| rt.find(&format!("component/{c}")).expect(c).top;
+    assert!(top(&rt, "Transform") < top(&rt, "MeshRenderer"));
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/up");
+    settle(&mut rt);
+    assert!(top(&rt, "MeshRenderer") < top(&rt, "Transform"), "moved up");
+    let saved = rt
+        .state()
+        .editor
+        .state
+        .settings
+        .get("inspector.componentOrder")
+        .cloned();
+    assert!(
+        saved
+            .as_ref()
+            .and_then(Value::as_str)
+            .is_some_and(|o| o.starts_with("MeshRenderer,Transform")),
+        "{saved:?}"
+    );
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/down");
+    settle(&mut rt);
+    assert!(
+        top(&rt, "Transform") < top(&rt, "MeshRenderer"),
+        "and back down"
+    );
 }
 
 #[test]

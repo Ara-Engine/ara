@@ -132,6 +132,15 @@ pub const RECENT_COLORS: usize = 12;
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
     def(
+        "inspector.componentOrder",
+        User,
+        "Inspector",
+        "Component order",
+        "The Inspector's component sections in this order (names, comma-separated), set by Move Up and Move Down; the rest follow, Transform first. Data order is unchanged.",
+        Kind::Text,
+        Lit::S(""),
+    ),
+    def(
         "scripts.ide",
         User,
         "Scripts",

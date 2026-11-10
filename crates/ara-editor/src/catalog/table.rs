@@ -2876,4 +2876,18 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Edit project-wide texture quality and typed per-importer defaults.",
     },
+    Command {
+        id: "component.move_up",
+        title: "Move Up",
+        icon: "chevron-up",
+        keys: "",
+        summary: "Move this section up in the Inspector.",
+    },
+    Command {
+        id: "component.move_down",
+        title: "Move Down",
+        icon: "chevron-down",
+        keys: "",
+        summary: "Move this section down in the Inspector.",
+    },
 ];

@@ -1722,6 +1722,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             None => Err("Select a C# script".into()),
         },
+        "component.move_up" | "component.move_down" => match target {
+            Target::Component(name) => {
+                match super::inspector::move_component(s, name, id == "component.move_down") {
+                    true => Ok(()),
+                    false => Err("It is already at that end".into()),
+                }
+            }
+            _ => Err("Choose a component".into()),
+        },
         "component.add" => {
             s.local.add_component = Some(Default::default());
             s.local.focus = Some("inspector/add/search");
