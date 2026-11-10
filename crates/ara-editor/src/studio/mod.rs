@@ -770,6 +770,11 @@ fn pump(
     if rt.state().local.quit {
         return Ok(true);
     }
+    match rt.touch(|s| s.local.window.take()) {
+        Some(state::WindowRequest::Minimize) => surface.minimize(),
+        Some(state::WindowRequest::Maximize) => surface.toggle_maximize(),
+        None => {}
+    }
     while let Some((id, event)) = next_event() {
         if id != surface.id() {
             continue;

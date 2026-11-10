@@ -54,6 +54,54 @@ impl Default for Page {
     }
 }
 
+/// What a preview toggle does to one emitter (the effect itself is unchanged).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Emitter {
+    /// Fold or unfold its stack.
+    Collapse,
+    /// Leave it out of the preview, or bring it back.
+    Hide,
+    /// Preview only it, or every emitter again.
+    Isolate,
+}
+
+impl Page {
+    /// Runs the preview again from tick 0.
+    pub(super) fn restart(&mut self) {
+        if let Some(stream) = self.stream.as_mut() {
+            stream.restart();
+        }
+    }
+
+    /// Advances the paused preview one tick.
+    pub(super) fn step(&mut self) {
+        if let Some(stream) = self.stream.as_mut() {
+            stream.step();
+        }
+    }
+
+    /// Runs the preview at `rate` percent (its fixed tick is unchanged).
+    pub(super) fn set_rate(&mut self, rate: u32) {
+        self.rate = rate.clamp(1, 1000);
+    }
+
+    /// Flips one of emitter `name`'s preview toggles.
+    pub(super) fn emitter(&mut self, name: &str, toggle: Emitter) {
+        let flip = |set: &mut BTreeSet<String>| {
+            if !set.remove(name) {
+                set.insert(name.to_owned());
+            }
+        };
+        match toggle {
+            Emitter::Collapse => flip(&mut self.collapsed),
+            Emitter::Hide => flip(&mut self.hidden),
+            Emitter::Isolate => {
+                self.isolated = (self.isolated.as_deref() != Some(name)).then(|| name.to_owned())
+            }
+        }
+    }
+}
+
 /// The effect document the page edits: the selected resource when it is one, else the
 /// project's first effect.
 pub(super) fn document(s: &Studio) -> Option<String> {
@@ -381,11 +429,7 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
                 if collapsed { "Expand" } else { "Collapse" },
             )
             .size(20.0)
-            .on_press(move |s: &mut Studio| {
-                if !s.vfx.collapsed.remove(&n1) {
-                    s.vfx.collapsed.insert(n1.clone());
-                }
-            }),
+            .on_press(move |s: &mut Studio| s.vfx.emitter(&n1, Emitter::Collapse)),
         )
         .child(icon(icons::SPARKLE).size(14.0).color(accent))
         .child(
@@ -404,11 +448,7 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
                 hidden,
             )
             .size(22.0)
-            .on_press(move |s: &mut Studio| {
-                if !s.vfx.hidden.remove(&n2) {
-                    s.vfx.hidden.insert(n2.clone());
-                }
-            }),
+            .on_press(move |s: &mut Studio| s.vfx.emitter(&n2, Emitter::Hide)),
         )
         .child(
             toggle_button(
@@ -419,13 +459,7 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
                 isolated,
             )
             .size(22.0)
-            .on_press(move |s: &mut Studio| {
-                s.vfx.isolated = if s.vfx.isolated.as_deref() == Some(n3.as_str()) {
-                    None
-                } else {
-                    Some(n3.clone())
-                };
-            }),
+            .on_press(move |s: &mut Studio| s.vfx.emitter(&n3, Emitter::Isolate)),
         );
     let mut out = col()
         .w(CARD)
@@ -827,11 +861,7 @@ fn timeline(s: &Studio) -> El<Studio> {
         .child(
             icon_button(l, Tone::Ghost, Size::Sm, icons::REFRESH_CCW, "Restart")
                 .key("vfx/restart")
-                .on_press(|s: &mut Studio| {
-                    if let Some(stream) = s.vfx.stream.as_mut() {
-                        stream.restart();
-                    }
-                }),
+                .on_press(|s: &mut Studio| s.vfx.restart()),
         )
         .child(
             icon_button(
@@ -853,11 +883,7 @@ fn timeline(s: &Studio) -> El<Studio> {
                 "Step one frame",
             )
             .key("vfx/step")
-            .on_press(|s: &mut Studio| {
-                if let Some(stream) = s.vfx.stream.as_mut() {
-                    stream.step();
-                }
-            }),
+            .on_press(|s: &mut Studio| s.vfx.step()),
             !playing,
         ))
         .child(rates)

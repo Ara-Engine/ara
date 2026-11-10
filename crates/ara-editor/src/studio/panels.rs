@@ -923,6 +923,49 @@ fn tile(
         }))
 }
 
+/// A severity filter (Console, Problems): its icon in `tint` and its count, a soft fill
+/// while shown; the caller says what a press flips.
+fn level_toggle(
+    l: &ara_kit::look::Look,
+    key: String,
+    on: bool,
+    tint: stillkit::Rgba,
+    glyph: stillkit::icons::Icon,
+    label: &str,
+    count: usize,
+) -> El<Studio> {
+    let c = &l.c;
+    let hover = c.hover_surface.0;
+    row()
+        .key(key)
+        .h(24.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .radius(l.radius.sm)
+        .fill(if on {
+            c.raised.0
+        } else {
+            stillkit::Rgba::TRANSPARENT
+        })
+        .color(if on {
+            c.foreground.0
+        } else {
+            c.muted_foreground.0
+        })
+        .cascade_ink()
+        .label(format!("{label}: {count}"))
+        .tooltip(format!("{} {label}", if on { "Hide" } else { "Show" }))
+        .checked(on)
+        .hovered(move |e| e.fill(hover))
+        .child(
+            icon(glyph)
+                .size(13.0)
+                .color(if on { tint } else { tint.with_alpha(0.45) }),
+        )
+        .child(text(count.to_string()).text_size(12.0).weight(560))
+}
+
 fn severity_glyph(l: &ara_kit::look::Look, severity: ara_diag::Severity) -> El<Studio> {
     let c = &l.c;
     let (glyph, ink) = match severity {
@@ -985,38 +1028,17 @@ fn console(s: &Studio) -> El<Studio> {
     // Severity filters: the icon in its colour and the count, a soft fill while shown.
     let c = &l.c;
     let toggle = |i: usize, glyph, label: &str| {
-        let on = s.local.console[i];
         let tint = [c.destructive.0, c.warning.0, c.info.0][i];
-        let hover = c.hover_surface.0;
-        row()
-            .key(format!("console/level/{i}"))
-            .h(24.0)
-            .pad_x(8.0)
-            .gap(6.0)
-            .align(Align::Center)
-            .radius(l.radius.sm)
-            .fill(if on {
-                c.raised.0
-            } else {
-                stillkit::Rgba::TRANSPARENT
-            })
-            .color(if on {
-                c.foreground.0
-            } else {
-                c.muted_foreground.0
-            })
-            .cascade_ink()
-            .label(format!("{label}: {}", counts[i]))
-            .tooltip(format!("{} {label}", if on { "Hide" } else { "Show" }))
-            .checked(on)
-            .hovered(move |e| e.fill(hover))
-            .on_press(move |s: &mut Studio| s.local.console[i] = !s.local.console[i])
-            .child(
-                icon(glyph)
-                    .size(13.0)
-                    .color(if on { tint } else { tint.with_alpha(0.45) }),
-            )
-            .child(text(counts[i].to_string()).text_size(12.0).weight(560))
+        level_toggle(
+            l,
+            format!("console/level/{i}"),
+            s.local.console[i],
+            tint,
+            glyph,
+            label,
+            counts[i],
+        )
+        .on_press(move |s: &mut Studio| s.local.console[i] = !s.local.console[i])
     };
     let toolbar = row()
         .h(super::style::TOOLBAR)
@@ -1349,13 +1371,75 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Stu
 fn problems(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let mut groups: std::collections::BTreeMap<&str, Vec<&LogRow>> =
-        std::collections::BTreeMap::new();
-    for r in s
+    let all: Vec<&LogRow> = s
         .logs
         .iter()
         .filter(|r| r.severity != ara_diag::Severity::Info)
-    {
+        .collect();
+    let errors = all
+        .iter()
+        .filter(|r| r.severity == ara_diag::Severity::Error)
+        .count();
+    let toolbar = row()
+        .h(super::style::TOOLBAR)
+        .pad_x(8.0)
+        .gap(4.0)
+        .align(Align::Center)
+        .child(
+            level_toggle(
+                l,
+                "problems/level/0".into(),
+                s.local.problems[0],
+                c.destructive.0,
+                icons::CIRCLE_X,
+                "Errors",
+                errors,
+            )
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "problems.errors", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            level_toggle(
+                l,
+                "problems/level/1".into(),
+                s.local.problems[1],
+                c.warning.0,
+                icons::TRIANGLE_ALERT,
+                "Warnings",
+                all.len() - errors,
+            )
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "problems.warnings", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            row().w(240.0).child(
+                search(
+                    l,
+                    "problems/search",
+                    "Search problems",
+                    &s.local.problems_search,
+                    None,
+                    |f| f.on_input(|s: &mut Studio, t| s.local.problems_search = t.to_owned()),
+                    |s: &mut Studio| s.local.problems_search.clear(),
+                )
+                .grow(1.0),
+            ),
+        );
+    let query = s.local.problems_search.trim().to_lowercase();
+    let shown = |r: &&&LogRow| {
+        s.local.problems[usize::from(r.severity != ara_diag::Severity::Error)]
+            && (query.is_empty()
+                || r.message.to_lowercase().contains(&query)
+                || r.code.to_lowercase().contains(&query)
+                || r.source
+                    .as_deref()
+                    .is_some_and(|f| f.to_lowercase().contains(&query)))
+    };
+    let mut groups: std::collections::BTreeMap<&str, Vec<&LogRow>> =
+        std::collections::BTreeMap::new();
+    for r in all.iter().filter(shown) {
         groups
             .entry(
                 r.source
@@ -1365,89 +1449,159 @@ fn problems(s: &Studio) -> El<Studio> {
             .or_default()
             .push(r);
     }
-    if groups.is_empty() {
-        return empty(
+    let body = if all.is_empty() {
+        empty(
             l,
             icons::CIRCLE_CHECK,
             "No problems",
             "Errors and warnings in the project's files and scenes show here, grouped by file.",
             None,
-        );
-    }
-    let mut out = col().pad(8.0).gap(8.0);
-    for (file, rows) in groups {
-        let mut card = col()
-            .radius(super::style::RADIUS)
-            .fill(super::style::tones(l).band)
-            .child(
-                row()
-                    .h(30.0)
-                    .pad_x(10.0)
-                    .gap(8.0)
-                    .align(Align::Center)
-                    .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
-                    .child(
-                        text(file.to_owned())
-                            .text_size(12.0)
-                            .weight(600)
-                            .color(c.foreground.0)
-                            .grow(1.0),
-                    )
-                    .child(count(l, rows.len(), false)),
-            );
-        for r in rows {
-            // Its typed fixes, one click each (the same ones agents apply).
-            let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
-                text(r.message.clone())
-                    .text_size(12.0)
-                    .wrap(3)
-                    .color(c.foreground.0),
-            );
-            if !r.diagnostic.fixes.is_empty() {
-                let mut fixes = row().gap(4.0);
-                for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(2) {
-                    let diagnostic = r.diagnostic.clone();
-                    fixes = fixes.child(
-                        button(
-                            l,
-                            Tone::Secondary,
-                            Size::Sm,
-                            Some(icons::WRENCH),
-                            &fix.title,
+        )
+    } else if groups.is_empty() {
+        empty(
+            l,
+            icons::SEARCH,
+            "Nothing matches",
+            "Show errors and warnings again, or change the search.",
+            None,
+        )
+    } else {
+        let mut out = col().pad(8.0).gap(8.0);
+        for (file, rows) in groups {
+            let mut card = col()
+                .radius(super::style::RADIUS)
+                .fill(super::style::tones(l).band)
+                .child(
+                    row()
+                        .h(30.0)
+                        .pad_x(10.0)
+                        .gap(8.0)
+                        .align(Align::Center)
+                        .child(icon(icons::FILE).size(13.0).color(c.muted_foreground.0))
+                        .child(
+                            text(file.to_owned())
+                                .text_size(12.0)
+                                .weight(600)
+                                .color(c.foreground.0)
+                                .grow(1.0),
                         )
-                        .on_press(move |s: &mut Studio| {
-                            if let Err(error) =
-                                crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                            {
-                                s.editor
-                                    .report_failure(&std::io::Error::other(error.to_string()));
-                            }
-                            s.resolve();
-                        }),
-                    );
-                }
-                message = message.child(fixes);
+                        .child(count(l, rows.len(), false)),
+                );
+            for r in rows {
+                card = card.child(problem(s, r));
             }
-            card = card.child(
-                row()
-                    .min_h(32.0)
-                    .pad_x(10.0)
-                    .pad_y(6.0)
-                    .gap(10.0)
-                    .align(Align::Center)
-                    .child(severity_glyph(l, r.severity))
-                    .child(message)
-                    .child(
-                        text(r.code.clone())
-                            .text_size(10.5)
-                            .family(mono())
-                            .color(c.muted_foreground.0),
-                    ),
+            out = out.child(card);
+        }
+        col().grow(1.0).min_h(0.0).scroll(Axis::Vertical).child(out)
+    };
+    col().grow(1.0).min_h(0.0).child(toolbar).child(body)
+}
+
+/// One problem: its message and typed fixes (the same ones agents apply), Why? to read
+/// what its code means and usually causes, and Go to for the entity it names.
+fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let open = s.local.problems_open.contains(&r.seq);
+    let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
+        text(r.message.clone())
+            .text_size(12.0)
+            .wrap(3)
+            .color(c.foreground.0),
+    );
+    if !r.diagnostic.fixes.is_empty() {
+        let mut fixes = row().gap(4.0);
+        for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(2) {
+            let diagnostic = r.diagnostic.clone();
+            fixes = fixes.child(
+                button(
+                    l,
+                    Tone::Secondary,
+                    Size::Sm,
+                    Some(icons::WRENCH),
+                    &fix.title,
+                )
+                .on_press(move |s: &mut Studio| {
+                    if let Err(error) =
+                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
+                    {
+                        s.editor
+                            .report_failure(&std::io::Error::other(error.to_string()));
+                    }
+                    s.resolve();
+                }),
             );
         }
-        out = out.child(card);
+        message = message.child(fixes);
     }
-    col().grow(1.0).min_h(0.0).scroll(Axis::Vertical).child(out)
+    let doc = ara_diag::catalog::get(r.diagnostic.code);
+    if open && let Some(doc) = doc {
+        message = message
+            .child(
+                text(format!("{}: {}", doc.title, doc.summary()))
+                    .text_size(11.5)
+                    .wrap(4)
+                    .color(c.muted_foreground.0),
+            )
+            .children(doc.causes.first().map(|cause| {
+                text(format!("Usually: {cause}"))
+                    .text_size(11.5)
+                    .wrap(3)
+                    .color(c.muted_foreground.0)
+            }));
+    }
+    let seq = r.seq.to_string();
+    let why = super::scene_overlays::toggle(
+        l,
+        icons::LIGHTBULB,
+        "Why? What this means and usually causes",
+        open,
+    )
+    .key(format!("problems/{}/why", r.seq))
+    .on_press(move |s: &mut Studio| {
+        super::commands::run(
+            s,
+            "problems.explain",
+            &crate::catalog::Target::Text(seq.clone()),
+        )
+    });
+    let location = &r.diagnostic.location;
+    let go = location.record.clone().map(|record| {
+        let scene = location.doc.clone();
+        icon_button(
+            l,
+            Tone::Ghost,
+            Size::Sm,
+            icons::CROSSHAIR,
+            "Go to: select and frame it",
+        )
+        .key(format!("problems/{}/go", r.seq))
+        .on_press(move |s: &mut Studio| {
+            if let Some(scene) = scene.as_ref().filter(|d| **d != s.editor.state.doc) {
+                s.act("editor.scene.open", json!({"scene": scene}));
+                s.resolve();
+            }
+            let entity = crate::catalog::Target::Entity(record.clone());
+            super::commands::run(s, "edit.select_entity", &entity);
+        })
+    });
+    row()
+        .key(format!("problems/{}", r.seq))
+        .min_h(32.0)
+        .pad_x(10.0)
+        .pad_y(6.0)
+        .gap(10.0)
+        .align(Align::Center)
+        .child(severity_glyph(l, r.severity))
+        .child(message)
+        .child(
+            text(r.code.clone())
+                .text_size(10.5)
+                .family(mono())
+                .color(c.muted_foreground.0),
+        )
+        .children(doc.map(|_| why))
+        .children(go)
 }
 
 /// Places the model or prefab at storage `path` where the pointer let go: on the ground

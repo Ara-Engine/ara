@@ -654,6 +654,114 @@ fn the_game_view_letterboxes_to_its_aspect_and_maximizes() {
 }
 
 #[test]
+fn problems_filter_explain_and_go_to_what_they_name() {
+    let mut rt = open();
+    let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
+    diagnostic.location.record = Some("e_lamp".into());
+    let row = |seq: u64, severity, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
+        seq,
+        severity,
+        code: "ARA0001".into(),
+        message: diagnostic.message.clone(),
+        origin: "engine".into(),
+        at: 0,
+        source: Some("levels/main.scene".into()),
+        count: 1,
+        diagnostic: std::sync::Arc::new(diagnostic),
+    };
+    let warning = ara_diag::Diagnostic::warning(ara_diag::Code(1), "Box is odd");
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "problems"}));
+        s.logs = vec![
+            row(1, ara_diag::Severity::Error, diagnostic),
+            row(2, ara_diag::Severity::Warning, warning),
+        ];
+        s.local.log_seen = 2;
+    });
+    settle(&mut rt);
+    assert!(rt.find("problems/1").is_some() && rt.find("problems/2").is_some());
+    press(&mut rt, "problems/level/1");
+    assert!(rt.find("problems/2").is_none(), "warnings hidden");
+    rt.update(|s| s.local.problems_search = "nothing like it".into());
+    settle(&mut rt);
+    assert!(rt.find("problems/1").is_none());
+    rt.update(|s| s.local.problems_search.clear());
+    settle(&mut rt);
+    press(&mut rt, "problems/1/why");
+    assert!(rt.state().local.problems_open.contains(&1));
+    press(&mut rt, "problems/1/go");
+    assert_eq!(rt.state().editor.state.selection, vec!["e_lamp".to_owned()]);
+}
+
+#[test]
+fn named_targets_run_as_agents_and_the_palette_send_them() {
+    let mut rt = open();
+    settle(&mut rt);
+    use crate::catalog::Target;
+    let run = |rt: &mut Runtime<Studio>, id: &str, target: Target| {
+        rt.update(|s| super::commands::run(s, id, &target));
+        settle(rt);
+    };
+    let failures = |rt: &mut Runtime<Studio>| {
+        rt.update(|s| {
+            s.poll_logs();
+        });
+        rt.state()
+            .logs
+            .iter()
+            .filter(|r| r.severity == ara_diag::Severity::Error)
+            .count()
+    };
+    let before = failures(&mut rt);
+    run(
+        &mut rt,
+        "field.set",
+        Target::Text("Transform.position=[1,2,3]".into()),
+    );
+    assert_eq!(position(&rt, "e_box"), json!([1, 2, 3]));
+    let txn = rt
+        .state()
+        .editor
+        .host
+        .store()
+        .history()
+        .last()
+        .unwrap()
+        .id
+        .0
+        .clone();
+    run(&mut rt, "snap.set", Target::Text("move:0.25".into()));
+    assert_eq!(rt.state().editor.state.move_snap, 0.25);
+    run(
+        &mut rt,
+        "edit.select_entity",
+        Target::Entity("e_lamp".into()),
+    );
+    assert_eq!(rt.state().editor.state.selection, vec!["e_lamp".to_owned()]);
+    run(&mut rt, "view.camera.fov.set", Target::Text("60°".into()));
+    assert_eq!(rt.state().editor.state.camera.fov_y_degrees, 60.0);
+    run(&mut rt, "console.errors", Target::None);
+    assert!(!rt.state().local.console[0]);
+    run(&mut rt, "view.tool.select", Target::None);
+    assert!(rt.state().editor.state.hide_gizmos);
+    // A transaction copies whole (History's Copy).
+    run(&mut rt, "history.copy", Target::Text(txn.clone()));
+    assert!(
+        rt.state()
+            .local
+            .copy
+            .as_deref()
+            .is_some_and(|t| t.contains(&txn))
+    );
+    run(&mut rt, "window.minimize", Target::None);
+    assert_eq!(
+        rt.state().local.window,
+        Some(super::state::WindowRequest::Minimize)
+    );
+    assert_eq!(failures(&mut rt), before, "nothing failed");
+}
+
+#[test]
 fn a_prefab_instance_lists_its_overrides_to_apply_or_revert() {
     let mut rt = open();
     rt.update(|s| {
