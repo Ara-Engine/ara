@@ -469,6 +469,10 @@ impl Gpu {
                     acceleration,
                     mesh,
                     info,
+                    queue_flags: [
+                        families[graphics_family as usize].queue_flags,
+                        families[compute_family as usize].queue_flags,
+                    ],
                     validation,
                     memory,
                     debug,

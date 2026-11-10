@@ -31,7 +31,14 @@ impl VulkanDevice {
         let mut depth_format = None;
         let mut samples = crate::texture::SampleCount::One;
         let mut extent = [0u32; 2];
+        let queue_flags = super::copy_queue::capabilities(
+            list.queue,
+            self.context.queue_flags[list.queue.index()],
+        );
         for c in &list.commands {
+            super::copy_queue::validate(c, queue_flags, |image| {
+                Ok(self.images.get(image)?.raw.aspect)
+            })?;
             match c {
                 Command::Barrier(_) | Command::Barriers(_) => {
                     if rendering {

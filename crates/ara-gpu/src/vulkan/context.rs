@@ -270,6 +270,8 @@ pub struct NativeDevice {
     pub mesh: ash::ext::mesh_shader::Device,
     /// Immutable device, driver and capability provenance.
     pub info: DeviceInfo,
+    /// Actual native capabilities of the selected graphics and compute families.
+    pub(super) queue_flags: [vk::QueueFlags; 2],
     /// Stable callback state, retained through instance teardown.
     pub validation: Box<Validation>,
     /// Queried acceleration-build scratch alignment.

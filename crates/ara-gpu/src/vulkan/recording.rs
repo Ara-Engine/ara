@@ -1,3 +1,4 @@
+mod copy_queue;
 mod validation;
 use super::image_copy::copy_bytes;
 use super::*;

@@ -291,3 +291,44 @@ helper, slope-bias raster probe, attachment ranges, dynamic AS and post replay a
 included. Cooker incremental recovery and permutation tests now run on Mac rather
 than skipping DXIL. The all-targets `clippy -- -D warnings` and workspace formatter
 are required at this checkpoint. Native Vulkan must retest the resulting PR head.
+
+## Vulkan queue-family review fixes
+
+Main `d8015f178` is merged. A shared-family image handoff now changes the layout
+on release only; its acquire uses the new layout on both sides while retaining
+destination synchronization scopes. Distinct-family ownership transfers still
+encode matching old/new layout pairs and family indices. The pure regression
+failed before the fix (`GENERAL` on acquire instead of `SHADER_READ_ONLY_OPTIMAL`).
+The forced-shared-family hardware test now dispatches a storage-image producer and
+a sampled-image consumer across the two logical queues and checks every output
+word, both in an aliased deferred queue and in ordinary submissions.
+
+Vulkan now caches the selected physical families' capability flags and rejects
+depth/stencil buffer-image copies on a family without graphics capability. This
+covers `UploadImage`, `ReadImage` and both regional forms, before native recording
+or submission-state changes. Use `Queue::Graphics` for those copies on a dedicated
+compute device; logical compute remains legal when its family supports graphics.
+Color copies remain legal on compute-only families. Ara does not enable
+maintenance10; the restrictions are documented in
+[upload VUID 07739](https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdCopyBufferToImage.html)
+and [readback VUID 10216](https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdCopyImageToBuffer.html).
+The pure regression admitted all eight D16/D32 × whole/regional × upload/readback
+cases before the fix and rejects them after it. A native-device test forces the
+compute-only preflight capability even on a universal-family Radeon, checks all
+eight rejections and verifies the submission counter stays unchanged.
+
+Mac checks: the Vulkan-only unit selection passes **25**, with **13** native
+hardware tests ignored; all-targets clippy with `-D warnings` and the 117-package
+formatter pass. `ara-gpu` plus `ara-gpu-replay` pass **108**, with **31** ignored,
+in each Metal API+shader-validation and API-only run. Both original faults have
+recorded red/green runs under `target/ara-gpu/vulkan-review-*.log`. No shaders or
+artifact cohorts changed, and these fixes override no decision.
+
+Native Vulkan verification of this patch remains pending on Linux Radeon and
+Windows NVIDIA. In addition to the full suites, run these library filters with
+Khronos and synchronization validation enabled:
+
+```sh
+cargo test -p ara-gpu --lib shared_family_submits_both_queue_classes_on_hardware -- --nocapture
+cargo test -p ara-gpu --lib forced_compute_only_depth_copies_fail_before_native_submission -- --nocapture
+```
