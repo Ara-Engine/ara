@@ -181,6 +181,44 @@ fn a_move_with_surface_or_vertex_snapping_asks_the_host_instead_of_stepping() {
 }
 
 #[test]
+fn a_value_that_differs_across_the_selection_shows_a_dash_and_takes_one_for_all() {
+    let mut rt = open();
+    // A second box, rougher than the first.
+    rt.update(|s| {
+        s.apply(
+            vec![json!({"cmd": "entity.create", "args": {"id": "e_crate", "name": "Crate", "components": {"Transform": {"position": [2, 0, 0]}, "MeshRenderer": {"shape": "box", "roughness": 0.9}}}})],
+            "Add a crate",
+        );
+        s.select(vec!["e_box".into(), "e_crate".into()], false);
+    });
+    settle(&mut rt);
+    let key = "field/MeshRenderer.roughness";
+    let shown = rt
+        .tree()
+        .into_iter()
+        .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key));
+    let shown = shown.expect("the field shows");
+    assert_eq!(
+        shown.value.or(shown.text).as_deref(),
+        Some("—"),
+        "shows a dash"
+    );
+    let r = rt.find(key).expect("the field");
+    rt.pointer_move(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.center().x, r.center().y);
+    rt.pointer_up(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.type_text("0.25");
+    rt.key(0x0D);
+    settle(&mut rt);
+    for id in ["e_box", "e_crate"] {
+        let v = &rt.state().resolved[id].record["MeshRenderer"]["roughness"];
+        assert_eq!(v.as_f64(), Some(0.25), "{id} takes it: {v}");
+    }
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);

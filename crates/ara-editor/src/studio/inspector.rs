@@ -860,13 +860,21 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let path = f.path.clone();
-    if f.mixed {
+    // Values that differ across the selection show "—" and, as in Unity, take a new value
+    // for all of them. A mixed vector stays read-only: its axes commit from the first
+    // selected entity's.
+    let scalar = matches!(
+        f.widget,
+        Widget::Number { .. } | Widget::Bool | Widget::Enum { .. } | Widget::Text
+    );
+    if f.mixed && !scalar {
         return text("—").text_size(12.0).color(c.muted_foreground.0);
     }
     match &f.widget {
         Widget::Number { .. } => {
             let shown = match &s.local.draft {
                 Some((p, v)) if *p == f.path => v.as_f64().unwrap_or(0.0),
+                _ if f.mixed => f64::NAN,
                 _ => f.value.as_f64().unwrap_or(0.0),
             };
             number(
@@ -981,7 +989,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             ..
         } => color_field(s, f, *count, *hdr),
         Widget::Bool => {
-            let on = f.value.as_bool().unwrap_or(false);
+            // Mixed reads as off: a press turns it on for all.
+            let on = !f.mixed && f.value.as_bool().unwrap_or(false);
             let p = f.path.clone();
             row().child(
                 checkbox(l, format!("field/{}", f.path), &f.label, on)
@@ -989,7 +998,10 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             )
         }
         Widget::Enum { options } => {
-            let current = f.value.as_str().unwrap_or("").to_owned();
+            let current = match f.mixed {
+                true => "—".to_owned(),
+                false => f.value.as_str().unwrap_or("").to_owned(),
+            };
             let key = format!("field/{}", f.path);
             let open = s.local.select.as_deref() == Some(key.as_str());
             let k = key.clone();
@@ -1025,7 +1037,9 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
         }
         Widget::Text => {
             let p = f.path.clone();
+            let mixed = f.mixed;
             let shown = match &f.value {
+                _ if mixed => String::new(),
                 Value::String(s) => s.clone(),
                 Value::Null => String::new(),
                 other => other.to_string(),
@@ -1035,9 +1049,16 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 Size::Sm,
                 format!("field/{}", f.path),
                 None,
-                "",
+                if mixed { "—" } else { "" },
                 &shown,
-                move |x| x.on_submit(move |s: &mut Studio, t| commit(s, &p, json!(t), "Edit text")),
+                move |x| {
+                    x.on_submit(move |s: &mut Studio, t| {
+                        // Enter on an untouched mixed field keeps each value.
+                        if !(mixed && t.is_empty()) {
+                            commit(s, &p, json!(t), "Edit text")
+                        }
+                    })
+                },
             )
         }
         Widget::Asset { .. } | Widget::Entity if !f.read_only => {
@@ -1218,8 +1239,9 @@ fn parse_hex(text: &str) -> Option<[f32; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
 }
 
-/// A number box announced as `name`: the value to edit, its unit after it as a quiet label
-/// (not part of what you type, as in Unreal); a new value on Enter.
+/// A number box announced as `name`: the value to edit (NaN shows "—", values that differ
+/// across the selection), its unit after it as a quiet label (not part of what you type, as
+/// in Unreal); a new value on Enter.
 fn number(
     l: &ara_kit::look::Look,
     key: &str,
@@ -1229,7 +1251,12 @@ fn number(
     read_only: bool,
     commit: impl Fn(&mut Studio, f64) + 'static,
 ) -> El<Studio> {
-    let shown = show(value);
+    // NaN: values that differ across the selection.
+    let shown = if value.is_nan() {
+        "—".to_owned()
+    } else {
+        show(value)
+    };
     let unit = unit.filter(|u| !u.is_empty()).map(str::to_owned);
     let label = unit
         .clone()
