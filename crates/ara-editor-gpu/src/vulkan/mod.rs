@@ -1,4 +1,6 @@
 //! Native Vulkan UiGpu adapter, sharing ara-render's device and offscreen scene texture.
+#[cfg(all(test, windows))]
+mod hwnd_tests;
 mod overlay;
 mod pipeline;
 mod resources;
@@ -534,6 +536,20 @@ impl NativeUi {
     pub unsafe fn create_present(&self, gpu: &UiDevice, window: &Window) -> Result<Present> {
         // SAFETY: forwarded caller contract.
         unsafe { Present::new(gpu, window) }
+    }
+    /// Create a presentation into a studio child HWND at an explicit pixel size.
+    /// # Safety
+    /// `gpu` is this adapter's device; retain it and the owner-thread HWND until
+    /// retirement after queue idle. The device must enable Win32 surface extensions.
+    #[cfg(windows)]
+    pub unsafe fn create_hwnd_present(
+        &self,
+        gpu: &UiDevice,
+        hwnd: std::num::NonZeroIsize,
+        size: [u32; 2],
+    ) -> Result<Present> {
+        // SAFETY: forwarded native-owner contract.
+        unsafe { Present::from_hwnd(gpu, hwnd, size) }
     }
     /// Present the last completed UI target.
     /// # Safety
