@@ -400,7 +400,10 @@ fn assets(s: &Studio) -> El<Studio> {
                 .rsplit('/')
                 .next()
                 .is_some_and(|n| n.starts_with('.'));
-            if hidden || (!s.local.assets_view.show_all && a.is_noise()) {
+            // Support files, and the project's own files at its root (ara.project.json,
+            // notes), show with Show All Files.
+            let root_file = a.kind != "folder" && !a.path.trim_end_matches('/').contains('/');
+            if hidden || (!s.local.assets_view.show_all && (a.is_noise() || root_file)) {
                 false
             } else if let Some(only) = s.local.assets_view.filter {
                 category(a) == Some(only)
