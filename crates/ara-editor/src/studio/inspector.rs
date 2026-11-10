@@ -92,8 +92,8 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             ),
         );
     }
-    // Transform leads, as in every engine; the rest keep their record order.
-    order.sort_by_key(|c| c != "Transform");
+    // The order Move Up and Move Down set, then Transform first, then record order.
+    sort_components(s, &mut order);
     for component in order {
         page = page.child(section(s, &component, &by_component[&component]));
     }
@@ -1285,6 +1285,68 @@ fn field_menu(s: &Studio, f: &Field, value: &str) -> stillkit::el::Overlay<Studi
     menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.field_menu = None)
 }
 
+/// The Inspector's component order (`inspector.componentOrder`): names in their set
+/// order first, then Transform, then the rest as the record lists them.
+pub(super) fn sort_components(s: &Studio, components: &mut [String]) {
+    let saved: Vec<&str> = s
+        .editor
+        .state
+        .settings
+        .get("inspector.componentOrder")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .collect();
+    components.sort_by_key(|name| {
+        saved
+            .iter()
+            .position(|n| n == name)
+            .unwrap_or(saved.len() + usize::from(name != "Transform"))
+    });
+}
+
+/// Moves `component` one place up (or down) among the inspected selection's sections,
+/// saved as the user's component order; whether it moved.
+pub(super) fn move_component(s: &mut Studio, component: &str, down: bool) -> bool {
+    let selection = s.inspected();
+    let Some(doc) = s.editor.host.store().workspace().doc(&s.editor.state.doc) else {
+        return false;
+    };
+    let changes = s.editor.agent_fields();
+    let fields = crate::inspector::fields(
+        s.editor.host.store().schema(),
+        doc,
+        &s.resolved,
+        selection,
+        &changes,
+    );
+    // The sections as the Inspector shows them, unfiltered.
+    let mut shown: Vec<String> = Vec::new();
+    for f in &fields {
+        let component = f.path.split('.').next().unwrap_or("");
+        if !shown.iter().any(|c| c == component) {
+            shown.push(component.to_owned());
+        }
+    }
+    sort_components(s, &mut shown);
+    let Some(at) = shown.iter().position(|c| c == component) else {
+        return false;
+    };
+    let to = match down {
+        true if at + 1 < shown.len() => at + 1,
+        false if at > 0 => at - 1,
+        _ => return false,
+    };
+    shown.swap(at, to);
+    s.act(
+        "editor.settings.set",
+        json!({"key": "inspector.componentOrder", "value": shown.join(",")}),
+    );
+    true
+}
+
 /// A component's ⋯ menu: reset it, copy and paste its values, fold the others, remove it.
 fn component_menu(s: &Studio, component: &str) -> El<Studio> {
     let l = &s.look;
@@ -1333,6 +1395,20 @@ fn component_menu(s: &Studio, component: &str) -> El<Studio> {
                 can_paste,
             ),
             menu_separator(l),
+            menu_item(l, &format!("component/{component}/up"), Some(icons::CHEVRON_UP), "Move Up", None, false).on_press({
+                let name = component.to_owned();
+                move |s: &mut Studio| {
+                    s.local.component_menu = None;
+                    move_component(s, &name, false);
+                }
+            }),
+            menu_item(l, &format!("component/{component}/down"), Some(icons::CHEVRON_DOWN), "Move Down", None, false).on_press({
+                let name = component.to_owned();
+                move |s: &mut Studio| {
+                    s.local.component_menu = None;
+                    move_component(s, &name, true);
+                }
+            }),
             menu_item(l, &format!("component/{component}/fold"), Some(icons::CHEVRONS_UP_DOWN), "Fold Others", None, false).on_press(move |s: &mut Studio| {
                 s.local.component_menu = None;
                 let all: Vec<String> = s.resolved.get(&s.inspected()[0]).map(|e| e.record.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect()).unwrap_or_default();

@@ -462,7 +462,7 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     ranked.sort_by_key(|(_, (_, _, own))| std::cmp::Reverse(*own));
     let mut table = col().gap(1.0).child(header(
         l,
-        if s.editor.profile_baseline.is_some() {
+        if s.editor.profile_baseline.is_some() && !s.local.profiler_hide_compare {
             &["Scope", "Calls", "Total", "Self", "vs base"]
         } else {
             &["Scope", "Calls", "Total", "Self"]
@@ -473,6 +473,7 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
         .editor
         .profile_baseline
         .as_ref()
+        .filter(|_| !s.local.profiler_hide_compare)
         .map(|base| (means(profile), means(base)));
     for (label, (calls, total, own)) in ranked.into_iter().take(24) {
         let name = profile
