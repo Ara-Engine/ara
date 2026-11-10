@@ -15,7 +15,7 @@ use stillkit::el::{Align, El, Justify, PointerPhase, col, el, icon, menu, popove
 
 use super::Studio;
 use super::commands;
-use crate::shell::commands::Target;
+use crate::catalog::Target;
 use crate::state::Tool;
 
 /// Gap between a docked overlay and the view's edge, and between overlays.

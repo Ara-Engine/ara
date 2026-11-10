@@ -346,14 +346,14 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::UNDO_2), "Undo").on_press(
                 |s: &mut Studio| {
-                    super::commands::run(s, "edit.undo", &crate::shell::commands::Target::None)
+                    super::commands::run(s, "edit.undo", &crate::catalog::Target::None)
                 },
             ),
         )
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::REDO_2), "Redo").on_press(
                 |s: &mut Studio| {
-                    super::commands::run(s, "edit.redo", &crate::shell::commands::Target::None)
+                    super::commands::run(s, "edit.redo", &crate::catalog::Target::None)
                 },
             ),
         )

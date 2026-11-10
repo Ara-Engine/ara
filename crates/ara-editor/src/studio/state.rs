@@ -249,6 +249,8 @@ pub struct Local {
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
     pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// What Isolate Selection hid, to show again when it is run a second time.
+    pub isolated: Option<Vec<String>>,
     /// The Scene tab's Overlays menu, open.
     pub overlays_menu: bool,
     /// The open reference picker (an asset or entity field): its path and the search typed.
@@ -261,8 +263,8 @@ pub struct Local {
     pub select: Option<String>,
     /// The open context menu: its layout, what it acts on, and where (window design px).
     pub(crate) context: Option<(
-        crate::shell::commands::menus::Context,
-        crate::shell::commands::Target,
+        crate::catalog::menus::Context,
+        crate::catalog::Target,
         (f32, f32),
     )>,
     /// An element to focus once the view shows it (a command that opened a field).

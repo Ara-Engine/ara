@@ -9,7 +9,7 @@ use stillkit::el::{Align, El, Handled, Justify, PointerPhase, col, el, icon, nat
 use stillkit::{Button, Cursor, Rgba};
 
 use super::{SCENE_LAYER, Studio, commands, gizmo};
-use crate::shell::commands::Target;
+use crate::catalog::Target;
 
 /// A pick the host resolves against the renderer after the frame: where (0..1 across the
 /// view), and whether it adds to the selection.

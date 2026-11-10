@@ -484,7 +484,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .scroll(Axis::Vertical)
             // Empty space: the folder's own menu (create, refresh, import), as in Unity.
             .on_context_menu(move |s: &mut Studio, x, y| {
-                use crate::shell::commands::{Target, menus::Context};
+                use crate::catalog::{Target, menus::Context};
                 s.local.context = Some((Context::Assets, Target::Folder(here.clone()), (x, y)));
             })
             .child(if size == TileSize::List {
@@ -826,7 +826,7 @@ fn tile(
         .on_context_menu({
             let path = a.path.clone();
             move |s: &mut Studio, x, y| {
-                use crate::shell::commands::{Target, menus::Context};
+                use crate::catalog::{Target, menus::Context};
                 s.act("editor.workspace", json!({"asset": path}));
                 s.local.context = Some(if folder {
                     (Context::Folder, Target::Folder(path.clone()), (x, y))

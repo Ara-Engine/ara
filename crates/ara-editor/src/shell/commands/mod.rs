@@ -6,58 +6,14 @@
 //! Menu paths are derived from [`menus::MENUS`], so they never drift.
 mod extensions;
 pub(crate) mod keys;
-pub(crate) mod menus;
+pub(crate) use crate::catalog::menus;
 pub(crate) mod table;
 use super::Shell;
 use crate::{Editor, state::EditorState};
 pub(crate) use extensions::{bar_titles, entries, lookup, registered_menu_path};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// What a command acts on: the right-clicked row, field, tab or nothing.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Target {
-    /// The current selection or focused panel.
-    #[default]
-    None,
-    /// A scene entity address.
-    Entity(String),
-    /// A project-relative asset path.
-    Asset(String),
-    /// A project-relative folder.
-    Folder(String),
-    /// An inspector field path (`Transform.position`).
-    Field(String),
-    /// An inspector component name.
-    Component(String),
-    /// A dock panel id.
-    Panel(String),
-    /// A graph node id in the active resource.
-    Node(String),
-    /// A scene document id (Open Recent).
-    Doc(String),
-    /// A floating window id.
-    Window(String),
-    /// Plain text (console rows, profiler spans).
-    Text(String),
-}
-impl Target {
-    /// The entity this command applies to: the target, else the primary selection.
-    pub fn entity<'a>(&'a self, state: &'a EditorState) -> Option<&'a str> {
-        match self {
-            Self::Entity(e) => Some(e),
-            _ => state.selection.first().map(String::as_str),
-        }
-    }
-    /// Entities this command applies to: the target if it is outside the selection.
-    pub fn entities(&self, state: &EditorState) -> Vec<String> {
-        match self {
-            Self::Entity(e) if !state.selection.contains(e) => vec![e.clone()],
-            _ => state.selection.clone(),
-        }
-    }
-}
+pub use crate::catalog::Target;
 /// Inputs to availability checks; built from navigation state and the op store.
 pub(crate) struct Ctx<'a> {
     pub state: &'a EditorState,

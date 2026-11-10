@@ -9,8 +9,8 @@ use stillkit::el::{
 };
 
 use super::{Studio, commands, dock};
-use crate::shell::commands::Target;
-use crate::shell::commands::menus::{Item, MENUS};
+use crate::catalog::Target;
+use crate::catalog::menus::{Item, MENUS};
 
 /// The whole window.
 pub fn view(s: &Studio) -> El<Studio> {
@@ -62,8 +62,8 @@ fn drag_chip(s: &Studio) -> Option<El<Studio>> {
 /// commands run on that target.
 fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
     let (kind, target, (x, y)) = s.local.context.clone()?;
-    let items = crate::shell::commands::menus::context(kind);
-    let panel = menu_panel(&s.look, entries(s, items, true, &target))
+    let items = crate::catalog::menus::context(kind);
+    let panel = menu_panel(&s.look, entries(s, items, &target))
         .max_h(560.0)
         .scroll(Axis::Vertical);
     Some(
@@ -234,7 +234,7 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
         });
     if open {
         b = b.fill(l.c.raised.0).color(l.c.foreground.0);
-        let panel = menu_panel(l, entries(s, items, false, &Target::None))
+        let panel = menu_panel(l, entries(s, items, &Target::None))
             .max_h(560.0)
             .scroll(Axis::Vertical);
         b = b.overlay(menu(panel).on_dismiss(|s: &mut Studio| s.local.menu = None));
@@ -252,17 +252,16 @@ enum Line {
 
 /// Flattens registry items: a submenu becomes a separator and a heading over its entries.
 /// `hide` drops commands the studio doesn't run yet (context menus stay short).
-fn lines(items: &'static [Item], depth: usize, hide: bool, out: &mut Vec<Line>) {
+fn lines(items: &'static [Item], depth: usize, out: &mut Vec<Line>) {
     for item in items {
         match item {
             Item::Separator => out.push(Line::Separator),
-            Item::Command(id) if !(hide && commands::missing(id).is_some()) => {
-                out.push(Line::Command(id))
-            }
+            // Only what the editor runs is listed.
+            Item::Command(id) if crate::catalog::get(id).is_some() => out.push(Line::Command(id)),
             Item::Sub(title, sub) if depth < 2 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));
-                lines(sub, depth + 1, hide, out);
+                lines(sub, depth + 1, out);
             }
             Item::Command(_) | Item::Sub(..) | Item::Dynamic(_) => {}
         }
@@ -271,10 +270,10 @@ fn lines(items: &'static [Item], depth: usize, hide: bool, out: &mut Vec<Line>) 
 
 /// Menu entries for registry items, with no empty headings and no leading, trailing or
 /// doubled separators; commands act on `target`.
-fn entries(s: &Studio, items: &'static [Item], hide: bool, target: &Target) -> Vec<El<Studio>> {
+fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio>> {
     let l = &s.look;
     let mut all = Vec::new();
-    lines(items, 0, hide, &mut all);
+    lines(items, 0, &mut all);
     let mut clean: Vec<Line> = Vec::new();
     for (i, line) in all.iter().enumerate() {
         match line {
@@ -296,8 +295,7 @@ fn entries(s: &Studio, items: &'static [Item], hide: bool, target: &Target) -> V
         .collect()
 }
 
-/// One registry command as a menu item: its icon, title and shortcut; unavailable with
-/// its reason when the studio doesn't run it yet.
+/// One command as a menu item: its icon, title, shortcut and summary.
 fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Studio>> {
     let target = target.clone();
     let l = &s.look;
@@ -322,10 +320,7 @@ fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Stud
         s.local.context = None;
         commands::run(s, id, &target);
     });
-    Some(match commands::missing(id) {
-        Some(reason) => enabled(item.description(reason), false),
-        None => item.description(spec.summary),
-    })
+    Some(item.description(spec.summary))
 }
 
 /// Play, Pause/Resume, Step and Stop, centred in the title bar.
@@ -532,10 +527,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         return recent.chain(rest).take(14).collect();
     }
     let mut all: Vec<(i32, Entry)> = Vec::new();
-    for spec in crate::shell::commands::all()
-        .iter()
-        .filter(|spec| commands::ported(spec.id))
-    {
+    for spec in crate::catalog::all() {
         if let Some(sc) = score(query, spec.title) {
             // Recency only breaks ties between similar matches.
             let recent = if s.local.recent_commands.contains(&spec.id) {

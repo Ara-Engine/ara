@@ -470,8 +470,8 @@ fn row_el(
                     s.select(vec![id.clone()], false);
                 }
                 s.local.context = Some((
-                    crate::shell::commands::menus::Context::Entity,
-                    crate::shell::commands::Target::Entity(id.clone()),
+                    crate::catalog::menus::Context::Entity,
+                    crate::catalog::Target::Entity(id.clone()),
                     (x, y),
                 ));
             }
@@ -556,7 +556,7 @@ fn navigate(
             tx.focus("hierarchy/rename");
         }
         _ => match super::commands::for_key(key, tx.modifiers()) {
-            Some(id) => super::commands::run(s, id, &crate::shell::commands::Target::None),
+            Some(id) => super::commands::run(s, id, &crate::catalog::Target::None),
             None => return Handled::No,
         },
     }

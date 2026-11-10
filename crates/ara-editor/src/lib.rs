@@ -8,6 +8,7 @@ mod asset_service;
 pub(crate) mod asset_tools;
 mod authoring;
 mod capture;
+pub(crate) mod catalog;
 pub mod codes;
 mod commands;
 mod editor;
