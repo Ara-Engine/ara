@@ -219,8 +219,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     } else {
         s.resolved.len().to_string()
     };
+    let storage = workspace.path_of(&s.editor.state.doc).map(str::to_owned);
     let root = row()
         .key("hierarchy/scene")
+        .on_context_menu(move |s: &mut Studio, x, y| {
+            let target = storage
+                .clone()
+                .map_or(crate::catalog::Target::None, crate::catalog::Target::Asset);
+            s.local.context = Some((crate::catalog::menus::Context::Scene, target, (x, y)));
+        })
         .h(22.0)
         .grow(1.0)
         .pad_x(8.0)

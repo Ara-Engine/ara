@@ -1023,6 +1023,37 @@ fn a_settings_slider_previews_while_dragged_and_commits_once() {
 }
 
 #[test]
+fn the_scene_header_has_the_scenes_own_menu() {
+    let mut rt = open();
+    settle(&mut rt);
+    let header = rt.find("hierarchy/scene").unwrap();
+    rt.right_click(header.center().x, header.center().y);
+    settle(&mut rt);
+    let context = rt.state().local.context.clone();
+    assert!(
+        matches!(&context, Some((crate::catalog::menus::Context::Scene, crate::catalog::Target::Asset(p), _)) if p.ends_with("main.scene")),
+        "{context:?}"
+    );
+    for id in [
+        "file.save",
+        "assets.set_main",
+        "assets.show",
+        "create.empty",
+    ] {
+        assert!(rt.find(&format!("cmd/{id}")).is_some(), "{id} is offered");
+    }
+    // Create Empty from the scene's menu goes at the root, not under the selection.
+    let before = rt.state().resolved.len();
+    press(&mut rt, "cmd/create.empty");
+    let made: Vec<_> = rt.state().editor.state.selection.clone();
+    assert_eq!(rt.state().resolved.len(), before + 1);
+    assert!(
+        rt.state().resolved[&made[0]].parent.is_none(),
+        "a root entity"
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2326,6 +2357,20 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The scene header's own menu.
+        let header = rt.find("hierarchy/scene").unwrap();
+        rt.right_click(header.center().x, header.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-scene-menu.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.context = None);
+        settle(&mut rt);
         let row = rt.find("row/e_box").unwrap();
         rt.right_click(row.center().x, row.center().y);
         for _ in 0..30 {
