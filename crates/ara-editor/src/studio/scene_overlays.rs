@@ -724,8 +724,15 @@ fn overlay(s: &Studio, d: &'static Def, vertical: bool, squeezed: bool) -> El<St
     } else {
         group(l, vertical)
     };
+    // A toolbar: one Tab stop, arrows along it (WAI toolbar pattern).
     let base = base
         .key(format!("scene/overlay/{id}"))
+        .role(stillkit::Role::Toolbar)
+        .focus_group(if vertical {
+            stillkit::el::Orientation::Vertical
+        } else {
+            stillkit::el::Orientation::Horizontal
+        })
         .opacity(if moving { 0.4 } else { 1.0 })
         .label(d.title)
         .on_context_menu(move |s: &mut Studio, x, y| s.local.overlay_menu = Some((id, (x, y))));

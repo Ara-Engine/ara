@@ -295,7 +295,10 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     // List, then three tile sizes (Unity's slider, as steps).
-    let mut sizes = row().gap(1.0);
+    // One Tab stop for the view sizes (on the current one), arrows between them.
+    let mut sizes = row()
+        .gap(1.0)
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (size, glyph, label) in [
         (TileSize::List, icons::LIST, "List"),
         (TileSize::Small, icons::GRID_3X3, "Small tiles"),
@@ -355,7 +358,8 @@ fn assets(s: &Studio) -> El<Studio> {
         .pad_y(2.0)
         .gap(3.0)
         .align(Align::Center)
-        .flow_wrap();
+        .flow_wrap()
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (id, label, glyph) in FILTERS {
         let on = view.filter == Some(id);
         let tint = category_tint(l, id);

@@ -4239,6 +4239,54 @@ fn a_transition_s_blend_curve_shapes_it_and_straightens_back() {
 }
 
 #[test]
+fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspector() {
+    let mut rt = open();
+    settle(&mut rt);
+    let mut stops: Vec<(String, String)> = Vec::new();
+    for _ in 0..60 {
+        rt.key(0x09);
+        rt.frame(FRAME);
+        if let Some(n) = rt.tree().into_iter().find(|n| n.focused) {
+            let key = n.key.map(|k| k.to_string()).unwrap_or_default();
+            stops.push((key, n.label.map(|l| l.to_string()).unwrap_or_default()));
+        }
+    }
+    // Within one pass round the window (60 Tabs cover more than one here).
+    let pass = stops
+        .iter()
+        .skip(1)
+        .position(|s| *s == stops[0])
+        .map_or(stops.len(), |at| at + 1);
+    let stops = &stops[..pass];
+    let count = |prefix: &str| stops.iter().filter(|(k, _)| k.starts_with(prefix)).count();
+    assert_eq!(count("menu/"), 1, "the menu bar is one stop: {stops:?}");
+    assert_eq!(
+        count("row/"),
+        1,
+        "the Hierarchy is one stop, on its selected row"
+    );
+    assert_eq!(
+        count("scene/view.tool."),
+        1,
+        "the Tools overlay is one stop"
+    );
+    assert!(
+        !stops.iter().any(|(k, _)| k.ends_with("/scrub")),
+        "scrub labels are drag handles, not stops"
+    );
+    let position: Vec<&str> = stops
+        .iter()
+        .filter(|(k, _)| k.starts_with("field/Transform.position/"))
+        .map(|(_, l)| l.as_str())
+        .collect();
+    assert_eq!(
+        position,
+        ["Position X", "Position Y", "Position Z"],
+        "field to field, named"
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
