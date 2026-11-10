@@ -654,6 +654,27 @@ fn the_game_view_letterboxes_to_its_aspect_and_maximizes() {
 }
 
 #[test]
+fn the_play_menu_sets_mode_clients_network_and_start_paused() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "play/options");
+    assert!(rt.find("play/simulate").is_some(), "Simulate while stopped");
+    assert!(rt.find("play/clients").is_none(), "Local has no clients");
+    press(&mut rt, "play/mode/host");
+    press(&mut rt, "play/clients/more");
+    assert!(rt.find("play/network/2").is_some(), "a row per client");
+    press(&mut rt, "play/network/1");
+    press(&mut rt, "play/paused");
+    let s = rt.state();
+    assert_eq!(s.editor.state.settings["play.mode"], json!("host"));
+    assert_eq!(s.editor.state.settings["play.clients"], json!(2.0));
+    assert_eq!(crate::play_controls::network_profile(&s.editor, 1), "lan");
+    assert_eq!(crate::play_controls::network_profile(&s.editor, 2), "clean");
+    assert_eq!(s.editor.state.settings["play.startPaused"], json!(true));
+    assert!(s.local.play_menu, "settings keep the menu open");
+}
+
+#[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
     let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
@@ -907,6 +928,23 @@ fn captures() {
         )
         .unwrap();
         rt.key(stillkit::el::KeyCode::ESCAPE.0);
+        // The Play menu, as host with two clients.
+        rt.update(|s| {
+            for id in ["play.mode.host", "play.clients.more"] {
+                super::commands::run(s, id, &crate::catalog::Target::None);
+            }
+            s.local.play_menu = true;
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-play.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.play_menu = false);
         rt.update(|s| {
             super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
         });

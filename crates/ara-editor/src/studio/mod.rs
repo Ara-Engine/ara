@@ -33,6 +33,7 @@ mod panels;
 mod preferences;
 mod profiler;
 mod references;
+mod running;
 mod scene;
 mod scene_overlays;
 pub mod state;
@@ -563,6 +564,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // A running export: its stage, cooking progress and result.
         if rt.touch(|s| s.builder.poll_build(&mut s.editor)) {
             rt.update(|_| {});
+        }
+        // Play's runtime controls: their running job, and Simulate once the player is live.
+        let ready = rt.state().local.game.live;
+        if rt.touch(|s| s.play.poll(&mut s.editor, ready)) {
+            rt.update(|_| {});
+        }
+        if rt.touch(|s| std::mem::take(&mut s.play.release)) {
+            rt.update(|s| s.local.game_captured = false);
         }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {

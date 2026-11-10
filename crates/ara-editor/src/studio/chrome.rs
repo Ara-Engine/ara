@@ -381,6 +381,7 @@ fn play_controls(s: &Studio) -> El<Studio> {
                 .on_press(run("play.stop")),
             playing.is_some(),
         ));
+    group = group.child(play_menu(s));
     if playing.is_some() {
         group = group.child(chip(
             l,
@@ -394,6 +395,243 @@ fn play_controls(s: &Studio) -> El<Studio> {
         ));
     }
     group
+}
+
+/// Play's options beside Stop (Unreal's Play dropdown): the mode, clients and their network
+/// conditions, Start Paused, and Simulate; while Play runs, Eject or Possess, reading the
+/// selection's running values, and keeping runtime changes.
+fn play_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let open = s.local.play_menu;
+    let mut trigger = icon_button(
+        l,
+        Tone::Ghost,
+        Size::Sm,
+        icons::CHEVRON_DOWN,
+        "Play options",
+    )
+    .key("play/options")
+    .expanded(open)
+    .on_press(|s: &mut Studio| s.local.play_menu = !s.local.play_menu);
+    if !open {
+        return trigger;
+    }
+    let run = |id: &'static str| {
+        move |s: &mut Studio| {
+            s.local.play_menu = false;
+            commands::run(s, id, &Target::None);
+        }
+    };
+    // Settings stay open on change, so several can be set in one visit.
+    let set = |id: &'static str| move |s: &mut Studio| commands::run(s, id, &Target::None);
+    let settings = &s.editor.state.settings;
+    let mode = settings
+        .get("play.mode")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("local");
+    let clients = settings
+        .get("play.clients")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(1.0) as usize;
+    let paused = settings
+        .get("play.startPaused")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let playing = s.editor.state.playing.is_some();
+    let mut items = vec![menu_heading(l, "Play as")];
+    for (value, title, id) in [
+        ("local", "Local", "play.mode.local"),
+        ("host", "Host and clients", "play.mode.host"),
+        (
+            "dedicated",
+            "Dedicated server and clients",
+            "play.mode.dedicated",
+        ),
+    ] {
+        items.push(enabled(
+            menu_check(l, &format!("play/mode/{value}"), title, mode == value).on_press(set(id)),
+            !playing,
+        ));
+    }
+    if mode != "local" {
+        items.push(
+            row()
+                .key("play/clients")
+                .h(28.0)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .child(
+                    text("Clients")
+                        .text_size(12.5)
+                        .color(c.foreground.0)
+                        .grow(1.0),
+                )
+                .child(enabled(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::MINUS, "Fewer clients")
+                        .key("play/clients/fewer")
+                        .on_press(set("play.clients.fewer")),
+                    !playing && clients > 1,
+                ))
+                .child(
+                    text(clients.to_string())
+                        .text_size(12.5)
+                        .family(mono())
+                        .color(c.foreground.0),
+                )
+                .child(enabled(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "More clients")
+                        .key("play/clients/more")
+                        .on_press(set("play.clients.more")),
+                    !playing && clients < 16,
+                )),
+        );
+        // Each client's network conditions: a press moves to the next profile.
+        for player in 1..=clients.min(16) {
+            let current = crate::play_controls::network_profile(&s.editor, player);
+            let at = crate::play_controls::PROFILES
+                .iter()
+                .position(|(name, _)| *name == current)
+                .unwrap_or(0);
+            let (_, label) = crate::play_controls::PROFILES[at];
+            let (next, _) =
+                crate::play_controls::PROFILES[(at + 1) % crate::play_controls::PROFILES.len()];
+            items.push(enabled(
+                row()
+                    .key(format!("play/network/{player}"))
+                    .h(26.0)
+                    .pad_x(8.0)
+                    .gap(8.0)
+                    .align(Align::Center)
+                    .radius(l.radius.sm)
+                    .hovered({
+                        let hover = c.hover_surface.0;
+                        move |e| e.fill(hover)
+                    })
+                    .label(format!("Client {player} network: {label}"))
+                    .tooltip("Network conditions for the next Play: press for the next")
+                    .on_press(move |s: &mut Studio| {
+                        if let Err(error) =
+                            crate::play_controls::set_network_profile(&mut s.editor, player, next)
+                        {
+                            s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                        }
+                    })
+                    .child(icon(icons::WIFI).size(13.0).color(c.muted_foreground.0))
+                    .child(
+                        text(format!("Client {player}"))
+                            .text_size(12.0)
+                            .color(c.foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(text(label).text_size(11.5).color(c.muted_foreground.0)),
+                !playing,
+            ));
+        }
+    }
+    items.push(enabled(
+        menu_check(l, "play/paused", "Start paused", paused).on_press(set("play.start_paused")),
+        !playing,
+    ));
+    items.push(menu_separator(l));
+    let busy = s.play.busy();
+    if playing {
+        let ejected = s.play.ejected();
+        items.push(enabled(
+            menu_item(
+                l,
+                "play/eject",
+                Some(icons::VIDEO),
+                if ejected {
+                    "Ejected: possess the selection to return"
+                } else {
+                    "Eject"
+                },
+                Some("F8"),
+                false,
+            )
+            .on_press(run("play.eject")),
+            !busy && !ejected,
+        ));
+        items.push(enabled(
+            menu_item(
+                l,
+                "play/possess",
+                Some(icons::USER),
+                "Possess Selected",
+                None,
+                false,
+            )
+            .on_press(run("play.possess")),
+            !busy && !s.editor.state.selection.is_empty(),
+        ));
+        items.push(menu_separator(l));
+        for (key, glyph, title, id) in [
+            (
+                "play/inspect",
+                icons::SCAN_EYE,
+                "Read Running Values",
+                "play.inspect",
+            ),
+            (
+                "play/keep",
+                icons::SAVE,
+                "Keep Runtime Changes…",
+                "play.keep",
+            ),
+            (
+                "play/keep-driven",
+                icons::SAVE,
+                "Keep Including Driven Values…",
+                "play.keep_driven",
+            ),
+        ] {
+            items.push(enabled(
+                menu_item(l, key, Some(glyph), title, None, false).on_press(run(id)),
+                !busy && !s.editor.state.selection.is_empty(),
+            ));
+        }
+    } else {
+        items.push(
+            menu_item(
+                l,
+                "play/simulate",
+                Some(icons::PLAY),
+                "Simulate",
+                Some("Alt+F5"),
+                false,
+            )
+            .tooltip("Run the scene through a spectator camera, with no player actor")
+            .on_press(run("play.simulate")),
+        );
+    }
+    items.push(
+        menu_item(
+            l,
+            "play/settings",
+            Some(icons::SETTINGS),
+            "Play Settings…",
+            None,
+            false,
+        )
+        .on_press(run("play.settings")),
+    );
+    if let Some(message) = &s.play.message {
+        items.push(
+            row().pad_x(8.0).pad_y(6.0).max_w(300.0).child(
+                text(message.clone())
+                    .text_size(11.5)
+                    .wrap(4)
+                    .color(c.muted_foreground.0),
+            ),
+        );
+    }
+    trigger = trigger.overlay(
+        stillkit::el::menu(menu_panel(l, items).min_w(280.0))
+            .on_dismiss(|s: &mut Studio| s.local.play_menu = false),
+    );
+    trigger
 }
 
 fn status_bar(s: &Studio) -> El<Studio> {

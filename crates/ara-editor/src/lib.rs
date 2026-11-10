@@ -25,6 +25,7 @@ mod loading;
 mod native;
 pub mod paint;
 mod persist;
+pub(crate) mod play_controls;
 pub mod prefab;
 mod probe_capture;
 mod script_assets;
