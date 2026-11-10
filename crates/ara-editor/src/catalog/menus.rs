@@ -204,17 +204,8 @@ pub(crate) const MENUS: &[Menu] = &[
         items: &[
             C("edit.undo"),
             C("edit.redo"),
+            // A transaction's own commands (inspect, copy, page) are on its row in History.
             C("edit.history"),
-            Sub(
-                "History",
-                &[
-                    C("history.inspect"),
-                    C("history.copy"),
-                    S,
-                    C("history.older"),
-                    C("history.newer"),
-                ],
-            ),
             S,
             C("edit.cut"),
             C("edit.copy"),
