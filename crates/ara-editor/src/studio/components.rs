@@ -293,22 +293,31 @@ fn picker(s: &Studio, p: &Picker) -> El<Studio> {
         None => String::new(),
     };
     let hover = c.hover_surface.0;
-    let new_script = row()
-        .key("inspector/add/script")
-        .h(28.0)
-        .pad_x(12.0)
-        .gap(8.0)
-        .align(Align::Center)
-        .color(c.foreground.0)
-        .cascade_ink()
-        .label("New script")
-        .tooltip("Create a C# behaviour, name it, and attach it once it compiles")
-        .hovered(move |e| e.fill(hover))
-        .on_press(|s: &mut Studio| {
-            super::commands::run(s, "component.new_script", &crate::catalog::Target::None)
-        })
-        .child(icon(icons::FILE_CODE).size(13.0))
-        .child(text("New script…").text_size(12.0));
+    // Lined up with the list's rows: their gutter, inset, gap and rounded hover.
+    let new_script = row().pad_x(6.0).pad_y(2.0).child(
+        row()
+            .key("inspector/add/script")
+            .h(26.0)
+            .grow(1.0)
+            .pad_x(8.0)
+            .gap(9.0)
+            .align(Align::Center)
+            .radius(super::style::RADIUS)
+            .color(c.foreground.0)
+            .cascade_ink()
+            .label("New script")
+            .tooltip("Create a C# behaviour, name it, and attach it once it compiles")
+            .hovered(move |e| e.fill(hover))
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "component.new_script", &crate::catalog::Target::None)
+            })
+            .child(
+                icon(icons::FILE_CODE)
+                    .size(14.0)
+                    .color(c.muted_foreground.0),
+            )
+            .child(text("New script…").text_size(12.5).weight(500)),
+    );
     panel.child(list).child(new_script).child(
         row()
             .min_h(44.0)
