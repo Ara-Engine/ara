@@ -37,11 +37,16 @@ impl Pool {
         let desc = MTLHeapDescriptor::new();
         desc.setStorageMode(MTLStorageMode::Private);
         desc.setHazardTrackingMode(MTLHazardTrackingMode::Untracked);
-        let bytes = size
-            .size
-            .max(BLOCK)
-            .checked_next_multiple_of(65536)
-            .ok_or_else(|| GpuError::Contract("Heap size overflow".into()))?;
+        // Medium/large images rarely pack into a fixed block (for example three
+        // half-resolution targets leave almost a target's worth of unusable tail).
+        // Match those heaps to the request; retain blocks for small shared ranges.
+        let bytes = if size.size >= BLOCK / 8 {
+            size.size
+        } else {
+            BLOCK
+        }
+        .checked_next_multiple_of(65536)
+        .ok_or_else(|| GpuError::Contract("Heap size overflow".into()))?;
         desc.setSize(bytes);
         let heap = device
             .newHeapWithDescriptor(&desc)

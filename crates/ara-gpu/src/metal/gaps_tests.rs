@@ -222,14 +222,29 @@ fn runtime_buffer_heap_addresses_slots_beyond_128_without_an_abi_change() {
 #[test]
 #[ignore = "CPU timing; run through ara-dev gpu"]
 fn barrier_recording_timing() {
+    #[derive(serde::Serialize)]
+    struct Samples {
+        mode: &'static str,
+        record_us: Vec<f64>,
+        submit_us: Vec<f64>,
+        total_us: Vec<f64>,
+    }
     let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
     gpu.set_pass_timing(false);
     let b = gpu
         .create_buffer(4096, vk::BufferUsageFlags::TRANSFER_DST, false)
         .unwrap();
-    for batched in [false, true] {
-        let mut samples = Vec::new();
-        for iteration in 0..120 {
+    let mut samples = ["individual", "batched"].map(|mode| Samples {
+        mode,
+        record_us: Vec::new(),
+        submit_us: Vec::new(),
+        total_us: Vec::new(),
+    });
+    // Alternate AB/BA pairs, with identical work, so thermal/drift effects cannot
+    // systematically favor the mode measured second. GPU waits stay outside CPU time.
+    for iteration in 0..220 {
+        for mode in [iteration % 2, 1 - iteration % 2] {
+            let start = std::time::Instant::now();
             let mut rec = gpu.begin(Queue::Graphics);
             rec.push(Command::FillBuffer {
                 destination: b,
@@ -243,7 +258,7 @@ fn barrier_recording_timing() {
                 after: Access::CopyDestination,
                 handoff: None,
             });
-            if batched {
+            if mode == 1 {
                 rec.barriers(barriers);
             } else {
                 for barrier in barriers {
@@ -251,21 +266,44 @@ fn barrier_recording_timing() {
                 }
             }
             let list = rec.finish();
-            let start = std::time::Instant::now();
+            let submit = std::time::Instant::now();
             let p = gpu.submit(list, &[]).unwrap();
-            let elapsed = start.elapsed().as_secs_f64() * 1e6;
+            let end = std::time::Instant::now();
             gpu.wait(p).unwrap();
             if iteration >= 20 {
-                samples.push(elapsed);
+                samples[mode]
+                    .record_us
+                    .push((submit - start).as_secs_f64() * 1e6);
+                samples[mode]
+                    .submit_us
+                    .push((end - submit).as_secs_f64() * 1e6);
+                samples[mode]
+                    .total_us
+                    .push((end - start).as_secs_f64() * 1e6);
             }
         }
-        samples.sort_by(f64::total_cmp);
+    }
+    for sample in &samples {
+        let mut record = sample.record_us.clone();
+        let mut submit = sample.submit_us.clone();
+        let mut total = sample.total_us.clone();
+        for values in [&mut record, &mut submit, &mut total] {
+            values.sort_by(f64::total_cmp);
+        }
         eprintln!(
-            "barriers256 mode={} median_cpu_us={:.3}",
-            if batched { "recorder" } else { "individual" },
-            samples[samples.len() / 2]
+            "barriers256 mode={} samples={} record_p50_us={:.3} submit_p50_us={:.3} total_p50_us={:.3} total_p95_us={:.3}",
+            sample.mode,
+            total.len(),
+            record[100],
+            submit[100],
+            total[100],
+            total[190]
         );
     }
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-gpu/barrier-timing.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    cooked::write_json(&path, &samples).unwrap();
 }
 
 #[test]

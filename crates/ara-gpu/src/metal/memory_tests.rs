@@ -1,6 +1,7 @@
 //! Heap sharing and completion-gated range reuse, plus an explicit footprint probe.
 use super::*;
 use crate::commands::Command;
+mod mixed;
 #[test]
 fn private_resources_share_heaps_and_retired_ranges_wait_for_gpu_completion() {
     let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
