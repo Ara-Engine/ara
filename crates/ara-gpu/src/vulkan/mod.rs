@@ -30,8 +30,8 @@ mod reload;
 pub use reload::ShaderStatus;
 mod queue_gate;
 pub use queue_gate::QueueGate;
-mod submission;
 mod staging;
+mod submission;
 mod surface;
 pub use submission::SubmissionStats;
 pub(crate) mod timestamps;
@@ -392,6 +392,10 @@ impl VulkanDevice {
             return Err(GpuError::Contract("Readback still in flight".into()));
         }
         Ok(self.context.read(b.raw)?)
+    }
+    /// Publish or reuse an immutable sampler. Slots are stable for this device's lifetime.
+    pub fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        self.heap.sampler(&self.context, desc)
     }
     /// Publish a sampled image into a fresh immutable descriptor slot.
     pub fn sampled_image(&mut self, image: Image, depth: bool) -> Result<HeapIndex> {

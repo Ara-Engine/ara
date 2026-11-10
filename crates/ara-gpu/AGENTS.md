@@ -9,6 +9,10 @@ Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad10
   `new` retains optional RT. Windowed devices request KHR/EXT HIGH; denial retries MEDIUM.
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
+- `Command::FillBuffer` repeats a u32 pattern over aligned ranges (zero clears).
+  `UpdateBuffer` has no 64 KiB cap: large Vulkan writes use completion-gated
+  staging chunks; Metal uses its pooled per-submission scratch. Updates order
+  surrounding buffer accesses; fills use graph transfer barriers.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access; `info()`, `wait_idle()` and `host_wait_stats()` are the portable forms both backends (`GpuDevice`) provide. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.
@@ -61,13 +65,17 @@ The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampl
 A full storage heap waits (bounded) for retired storage images' last use, then collects (`reclaim_storage`); Vulkan sRGB images created with STORAGE are MUTABLE_FORMAT|EXTENDED_USAGE with a UNORM `storage_view` (`storage_alias`) that `storage_image` publishes (shaders encode sRGB; Metal still needs the equivalent pixel-format view); window devices enable swapchain_maintenance1 present scaling.
 `DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
 material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
-Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
+Binding 2 reserves three default samplers: material repeat (up to 16x anisotropic where the
 device allows; native materials sample it with gradients), environment U repeat/V clamp
 and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy changes
 mip blending for every read through the material sampler, explicit LODs and gradients
 alike (NVIDIA blends over the first half of each LOD step only, reaching the coarser
 mip at .5): readers that need exact trilinear blend two levels themselves or use
-another sampler. Root constants are 32 bytes.
+another sampler. `sampler(&SamplerDesc)` caches immutable descriptions in 64 slots
+(defaults occupy 0..3): nearest/linear filters, Repeat/MirrorRepeat/ClampToEdge,
+optional comparison, and up to 16x anisotropy. New shaders use a runtime sampler
+array at Vulkan binding 2 / DXIL s0 space0. Converter table address stays at byte
+64; old static-sampler metallibs keep working. Root constants are 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle

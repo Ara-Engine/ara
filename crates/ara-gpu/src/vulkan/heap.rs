@@ -51,7 +51,8 @@ pub(super) struct Heap {
     pub set: vk::DescriptorSet,
     set_layout: vk::DescriptorSetLayout,
     pool: vk::DescriptorPool,
-    samplers: [vk::Sampler; 3],
+    samplers: Vec<vk::Sampler>,
+    sampler_descs: Vec<crate::sampler::SamplerDesc>,
     free_acceleration: Vec<u32>,
     free_images: Vec<u32>,
     free_buffers: Vec<u32>,
@@ -59,6 +60,71 @@ pub(super) struct Heap {
     storage: Vec<(Image, vk::ImageView, HeapIndex)>,
 }
 impl Heap {
+    pub fn sampler(
+        &mut self,
+        gpu: &Context,
+        desc: &crate::sampler::SamplerDesc,
+    ) -> Result<HeapIndex> {
+        use crate::sampler::{AddressMode as A, Filter as F};
+        desc.validate()?;
+        if let Some(index) = self.sampler_descs.iter().position(|d| d == desc) {
+            return Ok(HeapIndex {
+                index: index as u32,
+            });
+        }
+        if self.samplers.len() >= crate::sampler::SAMPLER_CAPACITY as usize {
+            return Err(GpuError::Contract("Sampler heap exhausted".into()));
+        }
+        let filter = |f| match f {
+            F::Nearest => vk::Filter::NEAREST,
+            F::Linear => vk::Filter::LINEAR,
+        };
+        let address = |a| match a {
+            A::Repeat => vk::SamplerAddressMode::REPEAT,
+            A::MirrorRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+            A::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        };
+        let anisotropy = (desc.anisotropy as f32).min(material_anisotropy(gpu));
+        // SAFETY: validated immutable descriptor; the device retains this sampler through teardown.
+        let sampler = unsafe {
+            gpu.device.create_sampler(
+                &vk::SamplerCreateInfo::default()
+                    .min_filter(filter(desc.min))
+                    .mag_filter(filter(desc.mag))
+                    .mipmap_mode(match desc.mip {
+                        F::Nearest => vk::SamplerMipmapMode::NEAREST,
+                        F::Linear => vk::SamplerMipmapMode::LINEAR,
+                    })
+                    .address_mode_u(address(desc.address[0]))
+                    .address_mode_v(address(desc.address[1]))
+                    .address_mode_w(address(desc.address[2]))
+                    .compare_enable(desc.compare.is_some())
+                    .compare_op(desc.compare.unwrap_or_default().vk())
+                    .anisotropy_enable(anisotropy > 1.0)
+                    .max_anisotropy(anisotropy)
+                    .max_lod(vk::LOD_CLAMP_NONE),
+                None,
+            )
+        }
+        .map_err(anyhow::Error::from)?;
+        let index = self.samplers.len() as u32;
+        let info = [vk::DescriptorImageInfo::default().sampler(sampler)];
+        // SAFETY: a fresh partially bound slot is never read by earlier submissions.
+        unsafe {
+            gpu.device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::default()
+                    .dst_set(self.set)
+                    .dst_binding(2)
+                    .dst_array_element(index)
+                    .descriptor_type(vk::DescriptorType::SAMPLER)
+                    .image_info(&info)],
+                &[],
+            );
+        }
+        self.samplers.push(sampler);
+        self.sampler_descs.push(*desc);
+        Ok(HeapIndex { index })
+    }
     pub fn usage(&self, gpu: &Context) -> DescriptorUsage {
         DescriptorUsage {
             sampled_images: gpu.info.sampled_image_capacity as usize - self.free_images.len(),
@@ -75,7 +141,7 @@ impl Heap {
             let mut guard = super::guard::Objects::new(&gpu.device);
             let flags = vk::DescriptorBindingFlags::UPDATE_AFTER_BIND
                 | vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-            let mut binding_flags = vec![flags, flags, vk::DescriptorBindingFlags::empty(), flags];
+            let mut binding_flags = vec![flags, flags, flags, flags];
             let mut bindings = vec![
                 (0, vk::DescriptorType::SAMPLED_IMAGE, 128),
                 (
@@ -83,7 +149,11 @@ impl Heap {
                     vk::DescriptorType::STORAGE_BUFFER,
                     gpu.info.storage_buffer_capacity,
                 ),
-                (2, vk::DescriptorType::SAMPLER, 3),
+                (
+                    2,
+                    vk::DescriptorType::SAMPLER,
+                    crate::sampler::SAMPLER_CAPACITY,
+                ),
                 (3, vk::DescriptorType::STORAGE_IMAGE, STORAGE_IMAGES),
             ];
             if gpu.info.ray_tracing {
@@ -212,7 +282,8 @@ impl Heap {
                 set,
                 set_layout,
                 pool,
-                samplers,
+                samplers: samplers.to_vec(),
+                sampler_descs: crate::sampler::SamplerDesc::defaults().to_vec(),
                 free_acceleration: if gpu.info.ray_tracing {
                     (0..16).rev().collect()
                 } else {
@@ -372,8 +443,8 @@ impl Heap {
             gpu.device.destroy_descriptor_pool(self.pool, None);
             gpu.device
                 .destroy_descriptor_set_layout(self.set_layout, None);
-            for sampler in self.samplers {
-                gpu.device.destroy_sampler(sampler, None);
+            for sampler in &self.samplers {
+                gpu.device.destroy_sampler(*sampler, None);
             }
         }
     }

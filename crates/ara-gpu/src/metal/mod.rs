@@ -40,9 +40,9 @@ pub mod external;
 #[cfg(test)]
 mod external_tests;
 #[cfg(test)]
-mod gaps_tests;
-#[cfg(test)]
 mod format_tests;
+#[cfg(test)]
+mod gaps_tests;
 mod info;
 mod native;
 mod native_access;
@@ -451,6 +451,10 @@ impl MetalDevice {
         }
         resources::read(&b.raw)
     }
+    /// Publish or reuse an immutable sampler. Slots are stable for this device's lifetime.
+    pub fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        native::pool(|| self.tables.sampler(&self.device, desc))
+    }
     /// Publish a sampled image into a fresh immutable texture-table slot.
     pub fn sampled_image(&mut self, image: Image, _depth: bool) -> Result<HeapIndex> {
         let value = self.images.get_mut(image)?;
@@ -855,6 +859,10 @@ impl MetalDevice {
 }
 
 impl Device for MetalDevice {
+    fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        MetalDevice::sampler(self, desc)
+    }
+
     fn queues(&self) -> [descriptors::QueueInfo; 2] {
         [Queue::Graphics, Queue::Compute].map(|id| descriptors::QueueInfo {
             id,

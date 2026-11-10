@@ -1,6 +1,10 @@
 use super::*;
 
 impl Device for VulkanDevice {
+    fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        VulkanDevice::sampler(self, desc)
+    }
+
     fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
         VulkanDevice::retire_pipeline(self, pipeline)
     }

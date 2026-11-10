@@ -81,43 +81,40 @@ impl Table {
     }
 }
 
-/// Anisotropic filtering ceiling of the material sampler (wrap/wrap, index 0), as the
-/// Vulkan heap's `MATERIAL_ANISOTROPY`. Metal accepts 1 to 16.
-const MATERIAL_ANISOTROPY: objc2_foundation::NSUInteger = 16;
-
-/// The root signature's static samplers, matching the Vulkan immutable samplers:
-/// trilinear, unclamped LOD, with (U, V) addressing wrap/wrap, wrap/clamp and
-/// clamp/clamp; W always clamps. Only wrap/wrap, the material sampler that native
-/// material passes sample with explicit gradients, is anisotropic
-/// ([`MATERIAL_ANISOTROPY`]); the others are read at explicit LODs.
-fn static_samplers(
+fn sampler_state(
     device: &ProtocolObject<dyn MTLDevice>,
-) -> Result<[Retained<ProtocolObject<dyn MTLSamplerState>>; abi::SAMPLERS as usize]> {
-    let (wrap, clamp) = (
-        MTLSamplerAddressMode::Repeat,
-        MTLSamplerAddressMode::ClampToEdge,
-    );
-    let sampler = |u, v, anisotropy| {
-        let descriptor = MTLSamplerDescriptor::new();
-        descriptor.setMinFilter(MTLSamplerMinMagFilter::Linear);
-        descriptor.setMagFilter(MTLSamplerMinMagFilter::Linear);
-        descriptor.setMipFilter(MTLSamplerMipFilter::Linear);
-        descriptor.setMaxAnisotropy(anisotropy);
-        descriptor.setLodMaxClamp(f32::MAX);
-        descriptor.setSAddressMode(u);
-        descriptor.setTAddressMode(v);
-        descriptor.setRAddressMode(clamp);
-        // Converter sampler tables hold the sampler's resource ID.
-        descriptor.setSupportArgumentBuffers(true);
-        device
-            .newSamplerStateWithDescriptor(&descriptor)
-            .ok_or_else(|| nil("static sampler"))
+    desc: &crate::sampler::SamplerDesc,
+) -> Result<Retained<ProtocolObject<dyn MTLSamplerState>>> {
+    use crate::sampler::{AddressMode as A, Filter as F};
+    desc.validate()?;
+    let filter = |f| match f {
+        F::Nearest => MTLSamplerMinMagFilter::Nearest,
+        F::Linear => MTLSamplerMinMagFilter::Linear,
     };
-    Ok([
-        sampler(wrap, wrap, MATERIAL_ANISOTROPY)?,
-        sampler(wrap, clamp, 1)?,
-        sampler(clamp, clamp, 1)?,
-    ])
+    let address = |a| match a {
+        A::Repeat => MTLSamplerAddressMode::Repeat,
+        A::MirrorRepeat => MTLSamplerAddressMode::MirrorRepeat,
+        A::ClampToEdge => MTLSamplerAddressMode::ClampToEdge,
+    };
+    let d = MTLSamplerDescriptor::new();
+    d.setMinFilter(filter(desc.min));
+    d.setMagFilter(filter(desc.mag));
+    d.setMipFilter(match desc.mip {
+        F::Nearest => MTLSamplerMipFilter::Nearest,
+        F::Linear => MTLSamplerMipFilter::Linear,
+    });
+    d.setSAddressMode(address(desc.address[0]));
+    d.setTAddressMode(address(desc.address[1]));
+    d.setRAddressMode(address(desc.address[2]));
+    d.setMaxAnisotropy(desc.anisotropy as usize);
+    d.setLodMaxClamp(f32::MAX);
+    if let Some(compare) = desc.compare {
+        d.setCompareFunction(super::native::compare(compare));
+    }
+    d.setSupportArgumentBuffers(true);
+    device
+        .newSamplerStateWithDescriptor(&d)
+        .ok_or_else(|| nil("sampler"))
 }
 
 /// The four root-signature tables, in root-parameter order, then the static samplers.
@@ -128,14 +125,20 @@ pub(super) struct Tables {
     pub accelerations: Table,
     samplers: Table,
     /// Kept alive for the sampler table's resource IDs.
-    _sampler_states: [Retained<ProtocolObject<dyn MTLSamplerState>>; abi::SAMPLERS as usize],
+    sampler_states: Vec<(
+        crate::sampler::SamplerDesc,
+        Retained<ProtocolObject<dyn MTLSamplerState>>,
+    )>,
 }
 
 impl Tables {
     pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Result<Self> {
-        let sampler_states = static_samplers(device)?;
+        let sampler_states = crate::sampler::SamplerDesc::defaults()
+            .into_iter()
+            .map(|desc| sampler_state(device, &desc).map(|state| (desc, state)))
+            .collect::<Result<Vec<_>>>()?;
         let mut samplers = Table::new(device, abi::SAMPLERS, "ara.samplers", "Sampler")?;
-        for state in &sampler_states {
+        for (_, state) in &sampler_states {
             samplers.insert(TableEntry::sampler(state.gpuResourceID().to_raw()))?;
         }
         Ok(Self {
@@ -154,8 +157,26 @@ impl Tables {
                 "Acceleration",
             )?,
             samplers,
-            _sampler_states: sampler_states,
+            sampler_states,
         })
+    }
+    pub fn sampler(
+        &mut self,
+        device: &ProtocolObject<dyn MTLDevice>,
+        desc: &crate::sampler::SamplerDesc,
+    ) -> Result<HeapIndex> {
+        desc.validate()?;
+        if let Some(index) = self.sampler_states.iter().position(|(d, _)| d == desc) {
+            return Ok(HeapIndex {
+                index: index as u32,
+            });
+        }
+        let state = sampler_state(device, desc)?;
+        let slot = self
+            .samplers
+            .insert(TableEntry::sampler(state.gpuResourceID().to_raw()))?;
+        self.sampler_states.push((*desc, state));
+        Ok(slot)
     }
     /// Table addresses for a top-level argument buffer.
     pub fn top_level(&self, root: [u32; 8]) -> abi::TopLevel {

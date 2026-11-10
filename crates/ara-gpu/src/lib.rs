@@ -7,11 +7,12 @@ mod attachments;
 pub mod commands;
 pub mod cooked;
 mod cpu;
-mod transfers;
 pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;
+pub mod sampler;
 pub mod shared;
+mod transfers;
 #[cfg(feature = "fidelity-lab")]
 pub mod tunables;
 pub mod vulkan;
@@ -277,6 +278,8 @@ pub trait Device {
     fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()>;
     /// Publish immutable resource indices in the global heap.
     fn heap(&mut self) -> &mut impl BindlessHeap;
+    /// Publish or reuse an immutable sampler in the global sampler table.
+    fn sampler(&mut self, desc: &sampler::SamplerDesc) -> Result<HeapIndex>;
     /// Start owned recording with no long-lived device or ECS borrow.
     fn begin(&self, queue: Queue) -> commands::Recorder;
     /// Submit work and signal the next timeline value on its queue.

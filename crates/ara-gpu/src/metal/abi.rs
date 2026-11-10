@@ -26,7 +26,7 @@ pub const STORAGE_IMAGES: u32 = 128;
 /// Acceleration-structure table capacity (`RaytracingAccelerationStructure[16] : t0, space4`).
 pub const ACCELERATIONS: u32 = 16;
 /// Static samplers of the root signature (`SamplerState s0..s2 : space0`).
-pub const SAMPLERS: u32 = 3;
+pub const SAMPLERS: u32 = crate::sampler::SAMPLER_CAPACITY;
 
 /// One converter descriptor-table entry (`IRDescriptorTableEntry`): a GPU address for
 /// buffers and acceleration-structure headers, a resource ID for textures and
