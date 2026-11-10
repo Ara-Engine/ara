@@ -3,10 +3,7 @@
 //! connects in one click, and offers manual steps only where it can't be connected.
 use super::*;
 use ara_agents::{Client, Setup};
-use std::{
-    path::PathBuf,
-    sync::mpsc::{Receiver, Sender, channel},
-};
+use std::path::PathBuf;
 
 /// What a client row's button does.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -19,60 +16,18 @@ pub(crate) enum AgentAction {
     Copy,
 }
 
-/// Detection and setup results, delivered by background probes.
-pub(crate) struct AgentSetups {
-    setup: BTreeMap<Client, Setup>,
-    manual: Option<Client>,
-    /// The `ara` CLI that agents launch (`<ara> mcp`), beside the editor.
-    ara: Option<PathBuf>,
-    send: Sender<(Client, Setup)>,
-    receive: Receiver<(Client, Setup)>,
-}
-
-impl Default for AgentSetups {
-    fn default() -> Self {
-        let (send, receive) = channel();
-        Self {
-            setup: BTreeMap::new(),
-            manual: None,
-            ara: None,
-            send,
-            receive,
-        }
-    }
-}
-
-/// The engine build's `ara` CLI, installed beside the editor.
-fn ara_cli() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let ara = exe.with_file_name(format!("ara{}", std::env::consts::EXE_SUFFIX));
-    ara.is_file().then(|| dunce::simplified(&ara).to_path_buf())
-}
+pub(crate) use crate::agent_setup::AgentSetups;
 
 impl Shell {
     /// Open the dialog and probe every client again (they may have changed since).
     pub(crate) fn open_agents(&mut self) {
-        let agents = &mut self.agents;
-        agents.setup.clear();
-        agents.manual = None;
-        agents.ara = ara_cli();
-        for client in Client::ALL {
-            let send = agents.send.clone();
-            // One thread each: every probe waits on the client's CLI.
-            std::thread::spawn(move || {
-                let _ = send.send((client, ara_agents::detect(client)));
-            });
-        }
+        self.agents.probe();
         self.dialog = Some(Dialog::Agents);
     }
 
     /// Apply finished probes and setups; true when the dialog should redraw.
     pub(crate) fn poll_agents(&mut self, _editor: &mut Editor) -> ara_ui::Result<bool> {
-        let mut changed = false;
-        for (client, setup) in self.agents.receive.try_iter() {
-            self.agents.setup.insert(client, setup);
-            changed = true;
-        }
+        let changed = self.agents.poll();
         Ok(changed && matches!(self.dialog, Some(Dialog::Agents)))
     }
 
@@ -83,24 +38,11 @@ impl Shell {
     }
 
     pub(super) fn agent_action(&mut self, client: Client, action: AgentAction) {
-        let agents = &mut self.agents;
         match action {
-            AgentAction::Connect => {
-                let Some(ara) = agents.ara.clone() else {
-                    return;
-                };
-                agents.setup.insert(client, Setup::Working);
-                let send = agents.send.clone();
-                std::thread::spawn(move || {
-                    let _ = send.send((client, ara_agents::setup(client, &ara)));
-                });
-            }
-            AgentAction::Manual => {
-                agents.manual = (agents.manual != Some(client)).then_some(client);
-            }
+            AgentAction::Connect => self.agents.connect(client),
+            AgentAction::Manual => self.agents.toggle_manual(client),
             AgentAction::Copy => {
-                let ara = agents.ara.clone().unwrap_or_else(|| PathBuf::from("ara"));
-                self.copy_text(ara_agents::manual(&ara, client));
+                self.copy_text(self.agents.manual_text(client));
                 self.status_note = Some(format!("Copied the {} setup", client.name()));
             }
         }
