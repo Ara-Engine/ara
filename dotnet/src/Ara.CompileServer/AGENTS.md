@@ -18,6 +18,9 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 - `ProjectSourceCapture`: fully reads each project source and derives its hash once
   per request. Fingerprints and `ProjectSnapshot` manifests share that captured hash;
   no extra source capture survives the request, including publication-cache hits.
+  Warm preparation compares decoded contents against the active module's retained
+  strings, reusing only exact EOF matches. Cold reads keep File.ReadAllText; warm
+  reads preserve its read-only sharing and BOM/fallback defaults, with pooled read-ahead.
 - `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
   changes, sharing their existing source strings instead of retaining equal rereads.
   Configuration changes still rebuild semantic compilations and generator drivers.
