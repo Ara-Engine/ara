@@ -7,7 +7,8 @@ reachability. This adds prerequisites; it does not migrate Renderlab itself.
 ## Feature status
 
 Every Vulkan implementation below is **native-unverified** until run on Windows.
-The Mac compiles those paths and runs their pure tests, not a Vulkan device.
+The Mac runs shared API/pure tests, not a Vulkan device; native Vulkan compilation
+and execution belong to the PC pass.
 
 | Gap | Implementation and Mac verification |
 |---|---|
@@ -103,21 +104,38 @@ allowed foreign load for these allocation-size counters, not timing claims.
 
 Reproduce with the opt-in `mixed_allocation_footprint` library test through
 `ara-dev gpu --foreign-cpu-percent 100 --foreign-gpu-percent 100`; it writes canonical
-JSON under `target/ara-gpu/mixed-allocation.json`. CPU barrier timing now alternates
-200 AB/BA measured pairs after warm-up and reports recording/submit/total p50 and
-p95, excluding GPU waits. Default-threshold attempts refused timing due foreign
-CPU load (including 24.65% and a later 99.99% peak against the 10% limit). No quiet
-CPU result is claimed; failed lease evidence is under `target/ara-dev/gpu-load/`.
-The paired probe is ready to run when the shared Mac is quiet.
+JSON under `target/ara-gpu/mixed-allocation.json`.
+
+The quiet CPU barrier measurement completed on 2026-11-10 after earlier attempts
+were refused for foreign CPU load. It alternates 200 AB/BA measured pairs of 256
+barriers after 20 warm-up pairs. Pass timestamps are disabled; host record/submit
+measurements exclude GPU waits. Both variants execute the same dependencies.
+
+| 256-barrier variant | Record p50 (µs) | Submit p50 (µs) | Total p50 (µs) | Total p95 (µs) |
+|---|---:|---:|---:|---:|
+| Individual commands | 3.291 | 73.916 | 77.250 | 87.375 |
+| One batch | 0.500 | 14.292 | 14.833 | 32.709 |
+
+The total median improves about 5.21× for this microbenchmark, not for a full frame.
+`ara-dev gpu` returned **valid** with unchanged default thresholds: foreign CPU peak
+5.64%, GPU peak 1.02%. Raw samples are in `target/ara-gpu/barrier-timing.json`;
+guard evidence is `target/ara-dev/gpu-load/71855-1794312745221.json`.
+
+Compile the library tests first, locate the test executable with Cargo's JSON
+artifact output, then run that executable's `barrier_recording_timing --ignored
+--nocapture --test-threads=1` through `ara-dev gpu --timeout 30 --no-wait --`.
+Set `MTL_DEBUG_LAYER=0 MTL_SHADER_VALIDATION=0`; running Cargo inside the lease would
+include compilation load. The [WGSL replay report](renderlab-wgsl-replay.md) records
+separately guarded GPU pass costs.
 
 Windows is the canonical shader cook host and has Metal Shader Converter 4.0.3.
 Fresh v4 artifacts are being produced there, then verified on Metal; no Mac install
 is needed. Native MSL tests already cover regular and comparison tables. The direct
 Slang `CommittedGetIntersectionTriangleVertexPositions()` probe compiles for SPIR-V
 but is rejected for DXIL (including `sm_6_10`) by Slang 2026.18.3 with E36107,
-“unavailable features in entry point,” before the converter runs. A shared shader
-helper can reconstruct the triangle from committed instance/primitive IDs and
-retained vertex/index heap entries; native position-return remains unverified.
+“unavailable features in entry point,” before the converter runs. The shared shader
+helper below reconstructs the triangle from committed instance/primitive IDs and
+retained vertex/index heap entries; the direct intrinsic remains unavailable on DXIL.
 
 On Windows, run the focused gates above without the Metal environment variables,
 plus the native allocation test:

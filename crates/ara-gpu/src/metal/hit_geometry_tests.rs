@@ -53,7 +53,7 @@ fn hit_positions_fetch_known_indexed_geometry_without_the_intrinsic() {
                 [1., 0., 0., 20., 0., 1., 0., 0., 0., 0., 1., 0.]
             },
             custom_index: 91 + i,
-            mask: 255,
+            mask: if i == 0 { 0 } else { 255 },
         });
     }
     let tlas = gpu

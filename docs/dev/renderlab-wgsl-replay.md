@@ -122,7 +122,25 @@ For timing, first compile tests, then run only `naga_post_pass_timing` through
 and records 20 samples per pass, using GPU timestamps outside setup/readback work.
 The image sizes are tiny: any reported cost is this replay's launch/filter cost,
 not a full-resolution renderer claim. Accept timing evidence only if the default
-foreign-load guard returns valid. Quiet timing results are pending.
+foreign-load guard returns valid.
+
+On 2026-11-10, the guarded run returned **valid** at the unchanged default thresholds
+(foreign CPU peak 7.70%, GPU peak 1.37%). GPU timestamp results:
+
+| Stage | Output extent | Median (µs) | p95 (µs) |
+|---|---|---:|---:|
+| Bloom downsample 0 | 9×6 | 19.542 | 20.000 |
+| Bloom downsample 1 | 5×3 | 20.917 | 21.667 |
+| Bloom upsample | 9×6 | 20.167 | 21.958 |
+| Post tone | 17×11 | 27.708 | 29.625 |
+
+These tiny dispatch/draw costs do not predict 1080p throughput or compare against
+wgpu. Setup, native MSL compilation, upload and readback are outside the GPU pass
+timestamps. The eight warm-up frames precede 20 measured frames; every frame also
+passes the CPU-reference assertions. An earlier attempt was refused for load and
+is excluded. Raw timing output is under
+`target/ara-gpu/wgsl-replay/timing-74604-31/`; accepted guard evidence is
+`target/ara-dev/gpu-load/74554-1794313060519.json`.
 
 ## Limits and next decision
 
