@@ -3,14 +3,15 @@
 use crate::gaps::Gaps;
 use anyhow::Result;
 use ara_render_fidelity::ToneMapper;
+use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{
     components::LightKind,
     extract::{LightView, RenderFrame},
 };
 use ara_runtime_render::{ExternalView, fidelity::EnvironmentMap};
 use renderlab::engine::{
-    Camera, Exposure, HeightFog, Light, PostSettings, ReflectionSettings, Settings, Sun,
-    Tonemapper, Vec3, VolumetricFog,
+    Camera, DepthOfField, Exposure, Light, PostSettings, ReflectionSettings, Settings, Sun,
+    Tonemapper, Vec3,
 };
 use std::{borrow::Cow, f32::consts::PI};
 
@@ -62,8 +63,8 @@ pub(crate) fn sun(frame: &RenderFrame) -> Option<Sun> {
 
 /// Where a frame's sky comes from.
 pub(crate) enum SkySource<'a> {
-    /// Renderlab's physical atmosphere, for an authored sky atmosphere.
-    Atmosphere,
+    /// Renderlab's physical atmosphere, from an authored sky atmosphere.
+    Atmosphere(renderlab::engine::AtmosphereMedium),
     /// An equirectangular radiance image (cd/m²): the content's HDRI, or the
     /// gradient sky. `environment` prepares it for `Sky::Map`.
     Map {
@@ -73,16 +74,12 @@ pub(crate) enum SkySource<'a> {
 }
 
 /// The sky that lights and backs the frame. An authored physical sky maps to
-/// Renderlab's Earth atmosphere; an environment map or the gradient sky is drawn
-/// and lights the scene as it is.
+/// Renderlab's atmosphere with its medium (`atmosphere::medium`); an environment map
+/// or the gradient sky is drawn and lights the scene as it is.
 pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a> {
     let frame = view.frame;
-    if frame.look.sky.is_some() {
-        gaps.unsupported(
-            "authored sky atmosphere parameters",
-            "the sky is Renderlab's default Earth atmosphere",
-        );
-        return SkySource::Atmosphere;
+    if let Some(sky) = &frame.look.sky {
+        return SkySource::Atmosphere(crate::atmosphere::medium(sky, gaps));
     }
     if frame.environment.sky_light != 1. {
         gaps.unsupported(
@@ -106,8 +103,11 @@ pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a>
 }
 
 /// Local lights. Ara's `lumens` is point-equivalent: 4 pi times the candela.
-pub(crate) fn lights(lights: &[LightView], gaps: &mut Gaps) -> Vec<Light> {
-    let mut out = Vec::with_capacity(lights.len());
+pub(crate) fn lights<'a>(
+    lights: impl IntoIterator<Item = &'a LightView>,
+    gaps: &mut Gaps,
+) -> Vec<Light> {
+    let mut out = Vec::new();
     for light in lights {
         let intensity = light.lumens.max(0.) / (4. * PI);
         let candela = light.color.map(|c| c.max(0.) * intensity);
@@ -179,35 +179,59 @@ impl Metering {
         Self { stops: None }
     }
 
-    /// The stops to render the next frame with; `fallback` seeds the first.
-    pub fn stops(&self, fallback: f32) -> f32 {
-        self.stops.unwrap_or(fallback)
+    /// The stops to render the next frame with: the meter (`fallback` seeds the first)
+    /// plus the look's exposure compensation.
+    pub fn stops(&self, fallback: f32, look: &FrameEnvironment) -> f32 {
+        self.stops.unwrap_or(fallback) + look.compensation
     }
 
-    /// Feeds the frame rendered with `stops` (display-encoded RGBA8) back.
-    /// Returns whether the meter moved (false inside its dead band).
-    pub fn observe(&mut self, stops: f32, rgba8: &[u8]) -> bool {
+    /// Feeds the frame rendered with `stops` (display-encoded RGBA8) back, metering as
+    /// Ara's automatic exposure does: the log mean of the luminance between the look's
+    /// low and high percentiles, steered to middle grey before compensation and kept
+    /// within its EV100 limits. Returns whether the meter moved (false inside its dead
+    /// band).
+    pub fn observe(&mut self, look: &FrameEnvironment, stops: f32, rgba8: &[u8]) -> bool {
         // Every 37th pixel: a few thousand samples of a 1080p frame.
-        let (mut sum, mut count) = (0f64, 0u32);
-        for pixel in rgba8.as_chunks::<4>().0.iter().step_by(37) {
-            let linear = |v: u8| (f32::from(v) / 255.).powf(2.2);
-            let luminance =
-                0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2]);
-            sum += f64::from(luminance.max(1e-4).ln());
-            count += 1;
-        }
-        if count == 0 {
+        let mut samples: Vec<f32> = rgba8
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .step_by(37)
+            .map(|pixel| {
+                let linear = |v: u8| (f32::from(v) / 255.).powf(2.2);
+                (0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2]))
+                    .max(1e-4)
+                    .ln()
+            })
+            .collect();
+        if samples.is_empty() {
             return false;
         }
-        let mean = (sum / f64::from(count)).exp() as f32;
-        let error = (0.18 / mean).log2();
+        samples.sort_by(f32::total_cmp);
+        let limits = &look.auto_exposure;
+        let at =
+            |p: f32| ((samples.len() as f32 * p.clamp(0., 1.)) as usize).min(samples.len() - 1);
+        let (low, high) = (
+            at(limits.low_percentile),
+            at(limits.high_percentile).max(at(limits.low_percentile) + 1),
+        );
+        let trimmed = &samples[low..high.min(samples.len())];
+        let mean = (trimmed.iter().sum::<f32>() / trimmed.len().max(1) as f32).exp();
+        // Meter without the compensation the frame was rendered with.
+        let meter = stops - look.compensation;
+        let error = (0.18 / (mean / look.compensation.exp2())).log2();
         // A dead band keeps a settled image (and its temporal history) still.
         let step = if error.abs() < 0.15 {
             0.
         } else {
             (0.5 * error).clamp(-1., 1.)
         };
-        self.stops = Some((stops + step).clamp(-24., 8.));
+        let stops_at = |ev: f32| ara_render_fidelity::settings::exposure_from_ev100(ev, 0.).log2();
+        let (darkest, brightest) = (
+            stops_at(limits.maximum_ev100),
+            stops_at(limits.minimum_ev100),
+        );
+        self.stops = Some((meter + step).clamp(darkest.min(brightest), brightest.max(darkest)));
         step != 0.
     }
 }
@@ -231,7 +255,7 @@ pub(crate) fn exposure_stops(view: &ExternalView<'_>, metering: &Metering) -> (f
             view.look.manual_exposure(1.).max(1e-12).log2() + grey,
             false,
         ),
-        None => (metering.stops(fallback), true),
+        None => (metering.stops(fallback, view.look), true),
     }
 }
 
@@ -244,19 +268,37 @@ pub(crate) fn settings(
     gaps: &mut Gaps,
 ) -> Settings {
     let (frame, look) = (view.frame, view.look);
-    let fog = frame.look.fog.is_some();
-    if fog {
-        gaps.unsupported(
-            "authored height-fog parameters",
-            "fog uses Renderlab's default medium",
-        );
-    }
+    let fog = frame
+        .look
+        .fog
+        .as_ref()
+        .map(|fog| crate::atmosphere::fog(fog, gaps));
     if !frame.look.fog_volumes.is_empty() {
         gaps.unsupported("local fog volumes", "they are not drawn");
     }
-    if look.lens.depth_of_field.is_some() {
-        gaps.unsupported("depth of field", "the image is sharp at every depth");
-    }
+    // Depth of field: Ara's lens is a full-frame camera whose focal length follows the
+    // vertical field of view on a 24 mm sensor, as Renderlab's physical lens takes it.
+    let depth_of_field = look
+        .lens
+        .depth_of_field
+        .zip(frame.camera)
+        .map(|(dof, camera)| {
+            if dof.near != 1. || dof.far != 1. {
+                gaps.unsupported(
+                    "separate near and far depth-of-field strengths",
+                    "both sides blur physically",
+                );
+            }
+            let focal = (12. / (camera.fov.to_radians() * 0.5).tan()).clamp(1., 1000.);
+            DepthOfField {
+                focus_distance_m: dof.focus_distance.max(focal / 1000. + 0.01).min(1e7),
+                focal_length_mm: focal,
+                f_number: dof.aperture.clamp(0.5, 64.),
+                sensor_height_mm: 24.,
+                // Ara's largest radius is about 2% of the render height.
+                max_radius_px: (0.02 * view.size[1] as f32).clamp(1., 32.),
+            }
+        });
     if look.lut.is_some() {
         gaps.unsupported("colour lookup tables", "the grade is not applied");
     }
@@ -270,8 +312,8 @@ pub(crate) fn settings(
     Settings {
         exposure: Exposure::Manual { stops },
         aerial_perspective: frame.look.sky.is_some(),
-        height_fog: fog.then(HeightFog::default),
-        volumetric_fog: fog.then(VolumetricFog::default),
+        height_fog: fog.map(|(height, _)| height),
+        volumetric_fog: fog.and_then(|(_, volumetric)| volumetric),
         reflections: ReflectionSettings {
             max_roughness: max_reflection_roughness
                 .unwrap_or(defaults.reflections.max_roughness)
@@ -282,6 +324,19 @@ pub(crate) fn settings(
             bloom: look.bloom.clamp(0., 1.),
             motion_blur: look.lens.motion_blur > 0.,
             tonemapper: Tonemapper::Filmic,
+            depth_of_field,
+            // The grade itself is baked into the colour lookup table (`grade`).
+            lut_strength: if crate::grade::lut_needed(look) {
+                1.
+            } else {
+                0.
+            },
+            // Ara darkens by 1 / (1 + 2.5 v |d|²)² (d from the centre, aspect-corrected),
+            // Renderlab by up to its strength at the corners: equal at a 16:9 corner.
+            vignette: {
+                let v = look.grading.vignette.clamp(0., 1.);
+                1. - 1. / ((1. + 2.6 * v) * (1. + 2.6 * v))
+            },
             ..defaults.post
         },
         ..defaults
@@ -343,12 +398,22 @@ mod tests {
 
     #[test]
     fn metering_steers_toward_middle_grey_and_rests_in_its_dead_band() {
+        let mut look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
         let mut metering = Metering::new();
-        assert_eq!(metering.stops(-3.), -3.);
-        metering.observe(-3., &[255; 4 * 64]);
-        assert!(metering.stops(0.) < -3., "a white frame stops down");
+        assert_eq!(metering.stops(-3., &look), -3.);
+        metering.observe(&look, -3., &[255; 4 * 64]);
+        assert!(metering.stops(0., &look) < -3., "a white frame stops down");
         // sRGB 118 is about 18% linear: no change.
-        metering.observe(-5., &[118; 4 * 64]);
-        assert_eq!(metering.stops(0.), -5.);
+        metering.observe(&look, -5., &[118; 4 * 64]);
+        assert_eq!(metering.stops(0., &look), -5.);
+        // Compensation renders brighter, and the meter does not fight it.
+        look.compensation = 1.;
+        assert_eq!(metering.stops(0., &look), -4.);
+        metering.observe(&look, -4., &[160; 4 * 64]);
+        assert_eq!(metering.stops(0., &look), -4.);
+        // The EV100 limits bound the meter: EV100 5 is about -5.3 stops.
+        look.auto_exposure.maximum_ev100 = 5.;
+        metering.observe(&look, -4., &[255; 4 * 64]);
+        assert!(metering.stops(0., &look) - look.compensation >= -5.27 - 1e-3);
     }
 }
