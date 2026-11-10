@@ -29,6 +29,18 @@ pub fn chosen<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
     }
 }
 
+/// The keyboard's row in a popup list (the palette, Add Component, Create): the ink's
+/// tone at 8%, which shows against the Float material in either theme (Raised, `chosen`,
+/// is the same white as a light popup and near the dark one's tone).
+pub fn active<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
+    if on { el.fill(active_fill(l)) } else { el }
+}
+
+/// [`active`]'s fill, for rows that set their own.
+pub fn active_fill(l: &Look) -> stillkit::Rgba {
+    l.c.foreground.0.with_alpha(0.08)
+}
+
 /// A popup's panel (menus, the palette, the Create browser, dialogs): the Float material.
 pub fn float<S: 'static>(l: &Look, el: El<S>) -> El<S> {
     Material::Float.paint(l, el)
