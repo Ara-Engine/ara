@@ -702,6 +702,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 }
             });
         }
+        // Agents: the clients are looked for once the Connect rows show; answers redraw.
+        if rt.find("agents/connect").is_some() && !rt.state().local.agent_setups.probed {
+            rt.update(agents::probe_clients);
+        }
+        if rt.touch(|s| s.local.agent_setups.poll()) {
+            rt.update(|_| {});
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});

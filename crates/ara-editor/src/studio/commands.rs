@@ -1823,6 +1823,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         },
         "agents.connect" => {
             s.local.agents_connect = true;
+            super::agents::probe_clients(s);
             act(
                 &mut s.editor,
                 "editor.layout.show",

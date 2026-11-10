@@ -758,6 +758,52 @@ fn an_assets_details_say_what_it_is_and_holds() {
     assert!(has("Components: Transform 4"), "most common first");
 }
 
+/// Agent clients as a probe might find them (no client's CLI runs in tests).
+fn found_clients(s: &mut Studio) {
+    use ara_agents::{Client, Setup};
+    let setups = &mut s.local.agent_setups;
+    setups.probed = true;
+    setups.ara = Some(PathBuf::from("/opt/ara/ara"));
+    setups.setup.insert(Client::Claude, Setup::Connected);
+    setups.setup.insert(Client::Codex, Setup::Available);
+    setups.setup.insert(Client::Cursor, Setup::Missing);
+    setups.setup.insert(
+        Client::OpenCode,
+        Setup::Failed("opencode.json is not JSON".into()),
+    );
+    super::agents::draw_logos(s);
+}
+
+#[test]
+fn agent_clients_connect_or_show_their_manual_steps() {
+    let mut rt = open();
+    rt.update(|s| {
+        found_clients(s);
+        s.act("editor.layout.show", json!({"panel": "agents"}));
+    });
+    settle(&mut rt);
+    // Each client offers the one action that fits what was found.
+    assert!(
+        rt.find("agents/codex/connect").is_some(),
+        "installed: Connect"
+    );
+    assert!(rt.find("agents/opencode/retry").is_some(), "failed: Retry");
+    assert!(
+        rt.find("agents/claude/connect").is_none(),
+        "already connected"
+    );
+    // Where the editor cannot connect it: manual steps, copied as a whole.
+    press(&mut rt, "agents/cursor/manual");
+    press(&mut rt, "agents/cursor/copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(
+        copied.contains("/opt/ara/ara") && copied.contains("mcp"),
+        "{copied}"
+    );
+    // Any other client: the raw command, with its own Copy (below the fold here).
+    assert!(rt.find("agents/connect/copy").is_some());
+}
+
 #[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
@@ -2015,6 +2061,7 @@ fn captures() {
             rt.set_background(Some(background));
         }
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+        rt.update(found_clients);
         for panel in [
             "assets",
             "console",
