@@ -57,6 +57,28 @@ fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
     act(e, method, params)
 }
 
+/// The asset a command acts on: its asset or folder target, else the selected entity's
+/// model (as Assets lists it), else the asset picked in Assets.
+fn asset_of(e: &Editor, target: &Target) -> Option<String> {
+    match target {
+        Target::Asset(p) | Target::Folder(p) => return Some(p.clone()),
+        _ => {}
+    }
+    let model = target.entity(&e.state).and_then(|entity| {
+        let resolved = crate::world::resolve(e.host.store(), &e.state.doc).ok()?;
+        let reference = resolved
+            .get(entity)?
+            .record
+            .get("MeshRenderer")?
+            .get("model")?
+            .as_str()?
+            .to_owned();
+        let path = reference.trim_start_matches('@');
+        Some(path.split('#').next().unwrap_or(path).to_owned())
+    });
+    model.or_else(|| e.state.asset_path.clone())
+}
+
 /// `roots` and everything under them, roots first.
 fn with_descendants(resolved: &ara_doc::prefab::Resolved, roots: &[String]) -> Vec<String> {
     let mut out: Vec<String> = roots.to_vec();
@@ -486,6 +508,117 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             None => Err("Select a prefab instance".into()),
         },
+        "play.mode.local" | "play.mode.host" | "play.mode.dedicated" => {
+            let mode = id.trim_start_matches("play.mode.");
+            set(e, "play.mode", json!(mode))
+        }
+        "play.clients.more" | "play.clients.fewer" => {
+            let n = e
+                .state
+                .settings
+                .get("play.clients")
+                .and_then(Value::as_f64)
+                .unwrap_or(1.0);
+            let n = if id.ends_with("more") {
+                n + 1.0
+            } else {
+                n - 1.0
+            };
+            set(e, "play.clients", json!(n.clamp(1.0, 8.0)))
+        }
+        "play.start_paused" => {
+            let on = e
+                .state
+                .settings
+                .get("play.startPaused")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            set(e, "play.startPaused", json!(!on))
+        }
+        "play.restart" => play(e, "play.restart", json!({"background": true})),
+        "play.review" => act(e, "editor.focus", json!({"panel": "history"})).and_then(|()| {
+            act(
+                e,
+                "editor.search",
+                json!({"panel": "history", "query": "Keep"}),
+            )
+        }),
+        "play.settings" => {
+            super::preferences::open(s, crate::settings::Scope::Project);
+            if let Some(view) = s.local.settings.as_mut() {
+                view.category = Some("Networking & Play");
+            }
+            Ok(())
+        }
+        "file.new_scene" => {
+            super::asset_create::create(s, "scene");
+            Ok(())
+        }
+        "file.open" => {
+            s.local.palette = Some(("#".into(), 0));
+            s.local.focus = Some("palette/query");
+            Ok(())
+        }
+        "file.close_document" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            act(e, "editor.layout.close", json!({"panel": panel}))
+        }
+        "file.exit" => {
+            s.local.quit = true;
+            Ok(())
+        }
+        "file.new_project" | "file.open_project" => {
+            let new = id == "file.new_project";
+            crate::hub_launch::open(e.host.root(), new, false).and_then(|request| {
+                match request.error {
+                    Some(error) => Err(error.into()),
+                    None => Ok(()),
+                }
+            })
+        }
+        "assets.show" => match asset_of(e, target) {
+            Some(path) => {
+                let folder = path
+                    .trim_end_matches('/')
+                    .rsplit_once('/')
+                    .map_or("", |(d, _)| d)
+                    .to_owned();
+                act(
+                    e,
+                    "editor.workspace",
+                    json!({"folder": folder, "asset": path}),
+                )
+                .and_then(|()| act(e, "editor.layout.show", json!({"panel": "assets"})))
+            }
+            None => Err("The selection has no asset".into()),
+        },
+        "assets.favourite.toggle" => {
+            let path = match target {
+                Target::Asset(p) | Target::Folder(p) => p.clone(),
+                _ => e
+                    .state
+                    .asset_path
+                    .clone()
+                    .unwrap_or_else(|| e.state.asset_folder.clone()),
+            };
+            let folder = matches!(target, Target::Folder(_))
+                || path.ends_with('/')
+                || e.state.asset_path.is_none();
+            act(
+                e,
+                "editor.workspace",
+                json!({"favourite": path, "favouriteFolder": folder}),
+            )
+        }
+        "assets.validate" => act(e, "editor.validate", json!({}))
+            .and_then(|()| act(e, "editor.focus", json!({"panel": "problems"}))),
+        "assets.search.scope" => {
+            let only = e.state.asset_search_folder_only;
+            act(e, "editor.workspace", json!({"folderOnly": !only}))
+        }
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
         _ => Err(format!("{id}: unknown command").into()),
     };
@@ -510,6 +643,10 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x5A) => "edit.undo",
         (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
         (true, false, 0x53) => "file.save",
+        (true, false, 0x4E) => "file.new_scene",
+        (true, false, 0x4F) => "file.open",
+        (true, false, 0x57) => "file.close_document",
+        (true, false, 0x42) => "assets.show",
         (true, false, 0x44) => "edit.duplicate",
         (true, false, 0x41) => "edit.select_all",
         (true, true, 0x41) => "edit.deselect",

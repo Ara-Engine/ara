@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)] // Pure captured invocations; no process is launched.
 use super::*;
+use serde_json::json;
 
 #[test]
 fn new_and_open_keep_literal_unicode_argv_and_the_same_config() {
