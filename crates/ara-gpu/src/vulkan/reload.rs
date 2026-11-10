@@ -35,7 +35,7 @@ struct Entry {
     active: CookedPipeline,
 }
 enum Request {
-    Track(Entry),
+    Track(Box<Entry>),
     Forget(Pipeline),
     Reload,
     Stop,
@@ -203,7 +203,7 @@ impl Worker {
                                         .unwrap_or_default()
                                 });
                             }
-                            entries.push(entry);
+                            entries.push(*entry);
                         }
                         Ok(Request::Forget(handle)) => {
                             let directory = entries
@@ -338,11 +338,11 @@ impl Worker {
                 .cohorts
                 .entry(directory.to_owned())
                 .or_insert_with(|| cooked.key.clone());
-            self.sender.send(Request::Track(Entry {
+            self.sender.send(Request::Track(Box::new(Entry {
                 handle,
                 manifest: path.clone(),
                 active: cooked.clone(),
-            }))?;
+            })))?;
         }
         Ok(())
     }

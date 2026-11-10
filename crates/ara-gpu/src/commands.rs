@@ -70,6 +70,23 @@ pub enum Command {
     },
     /// Indexed mesh draw.
     Draw(Draw),
+    /// Indexed instanced draw with explicit vertex-buffer bindings.
+    DrawVertexBuffers {
+        /// Streams in pipeline layout order.
+        vertices: Vec<crate::raster::VertexBinding>,
+        /// U32 index buffer.
+        indices: Buffer,
+        /// First U32 index.
+        first_index: u32,
+        /// Nonzero index count per instance.
+        index_count: u32,
+        /// Signed offset added to each fetched index.
+        vertex_offset: i32,
+        /// Nonzero instance count.
+        instances: u32,
+        /// First instance record and shader instance identity.
+        first_instance: u32,
+    },
     /// One GPU-generated non-indexed instanced draw (four u32 argument words).
     /// Vertex data is fetched from declared shader storage by SV_VertexID.
     DrawIndirect {
@@ -193,6 +210,14 @@ pub enum Command {
         offset: u64,
         /// Nonempty, four-byte-aligned data copied during command recording.
         bytes: Vec<u8>,
+    },
+    /// Resolve mip zero of a backed multisample color attachment to one sample.
+    /// Source/destination use transfer layouts; transient attachments need in-pass resolves.
+    ResolveImage {
+        /// Multisampled transfer source.
+        source: Image,
+        /// Equally sized single-sample transfer destination.
+        destination: Image,
     },
     /// Copy mip zero between distinct, equally sized and formatted color images.
     CopyImage {

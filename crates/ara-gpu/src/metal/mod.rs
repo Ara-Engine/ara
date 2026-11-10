@@ -51,6 +51,8 @@ mod parity_tests;
 mod pipeline;
 mod prepare;
 pub mod present;
+#[cfg(test)]
+mod raster_tests;
 mod reload;
 mod resources;
 #[cfg(test)]

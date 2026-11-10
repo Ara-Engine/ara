@@ -10,6 +10,8 @@
 //! wait on all earlier queue work, which keeps Vulkan's cross-submission barrier
 //! semantics conservative. Each draw and dispatch binds a fresh top-level argument
 //! buffer (root constants plus table addresses) through the argument table.
+mod transfers;
+
 use super::MetalDevice;
 use super::abi::{ARGUMENT_BUFFER_BIND_POINT, VERTEX_BUFFER_BIND_POINT};
 use super::native::nil;
@@ -104,6 +106,7 @@ struct Recording<'a> {
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
     formats: (Vec<MTLPixelFormat>, Option<MTLPixelFormat>),
+    samples: crate::texture::SampleCount,
     /// Timestamp heap and the list's first slot, laid out as in [`super::timestamps`];
     /// none for an untimed list.
     heap: Option<(&'a ProtocolObject<dyn MTL4CounterHeap>, usize)>,
@@ -166,6 +169,7 @@ impl MetalDevice {
             bound: None,
             root: [0; 8],
             formats: (Vec::new(), None),
+            samples: crate::texture::SampleCount::One,
             heap,
             stamp: None,
             aliases: Vec::new(),
@@ -268,6 +272,9 @@ impl MetalDevice {
                 depth,
             } => self.clear_depth(rec, *origin, *size, *depth)?,
             Command::Draw(draw) => {
+                if rec.pipeline.is_some_and(|p| self.pipelines.get(p).is_ok_and(|p| matches!(p,NativePipeline::Render{raster,..} if !raster.vertex_layouts.is_empty()))) {
+                    return Err(GpuError::Contract("Explicit vertex layouts require DrawVertexBuffers".into()));
+                }
                 let indices = &self.buffers.get(draw.indices)?.raw;
                 let vertices = &self.buffers.get(draw.vertices)?.raw;
                 let first = u64::from(draw.first_index) * 4;
@@ -297,6 +304,79 @@ impl MetalDevice {
                             index_address,
                             (end - first) as usize,
                         );
+                }
+            }
+            Command::DrawVertexBuffers {
+                vertices,
+                indices,
+                first_index,
+                index_count,
+                vertex_offset,
+                instances,
+                first_instance,
+            } => {
+                let handle = rec
+                    .pipeline
+                    .ok_or_else(|| GpuError::Contract("Draw without pipeline".into()))?;
+                let NativePipeline::Render { raster, .. } = self.pipelines.get(handle)? else {
+                    return Err(GpuError::Contract(
+                        "Vertex draw needs raster pipeline".into(),
+                    ));
+                };
+                let layouts = &raster.vertex_layouts;
+                if layouts.is_empty()
+                    || layouts.len() != vertices.len()
+                    || *index_count == 0
+                    || *instances == 0
+                {
+                    return Err(GpuError::Contract(
+                        "Vertex stream count or draw count mismatch".into(),
+                    ));
+                }
+                for (binding, layout) in vertices.iter().zip(layouts) {
+                    let raw = &self.buffers.get(binding.buffer)?.raw;
+                    let records = if layout.step == crate::raster::VertexStep::Instance {
+                        u64::from(*first_instance) + u64::from(*instances)
+                    } else {
+                        1
+                    };
+                    let length = records * u64::from(layout.stride);
+                    if !binding.offset.is_multiple_of(4)
+                        || binding
+                            .offset
+                            .checked_add(length)
+                            .is_none_or(|end| end > raw.size)
+                        || !raw.usage.contains(vk::BufferUsageFlags::VERTEX_BUFFER)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid vertex stream range or usage".into(),
+                        ));
+                    }
+                }
+                let raw = &self.buffers.get(*indices)?.raw;
+                let first = u64::from(*first_index) * 4;
+                let length = u64::from(*index_count) * 4;
+                if first + length > raw.size
+                    || !raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                {
+                    return Err(GpuError::Contract("Invalid index range".into()));
+                }
+                let address = raw.buffer.gpuAddress() + first;
+                self.bind_render(rec, DrawKind::Indexed)?;
+                for (i, binding) in vertices.iter().enumerate() {
+                    let raw = &self.buffers.get(binding.buffer)?.raw;
+                    // SAFETY: checked resident vertex stream range; argument-table bindings are snapshotted by the draw.
+                    unsafe {
+                        self.table.setAddress_atIndex(
+                            raw.buffer.gpuAddress() + binding.offset,
+                            VERTEX_BUFFER_BIND_POINT + i,
+                        );
+                    }
+                }
+                // SAFETY: index and vertex streams are resident and retained; counts and instance stream ranges are checked.
+                unsafe {
+                    rec.render()?.drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferLength_instanceCount_baseVertex_baseInstance(
+                    MTLPrimitiveType::Triangle,*index_count as usize,MTLIndexType::UInt32,address,length as usize,*instances as usize,*vertex_offset as isize,*first_instance as usize);
                 }
             }
             Command::DrawIndirect { arguments, offset } => {
@@ -554,6 +634,50 @@ impl MetalDevice {
                 source,
                 destination,
             } => self.copy_image_buffer(rec, *destination, *source, false)?,
+            Command::ResolveImage {
+                source,
+                destination,
+            } => {
+                if matches!(rec.active, Active::Render(_)) {
+                    return Err(GpuError::Contract(
+                        "Resolve must be outside rendering".into(),
+                    ));
+                }
+                let a = &self.images.get(*source)?.raw;
+                let b = &self.images.get(*destination)?.raw;
+                if a.shape.samples != crate::texture::SampleCount::Four
+                    || b.shape.samples != crate::texture::SampleCount::One
+                    || a.size != b.size
+                    || a.info.pixel != b.info.pixel
+                    || a.info.depth
+                    || a.shape.layers != 1
+                    || b.shape.layers != 1
+                    || !a.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !b.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                    || !b.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                {
+                    return Err(GpuError::Contract("Invalid color resolve".into()));
+                }
+                rec.end();
+                let pass = MTL4RenderPassDescriptor::new();
+                // SAFETY: attachment zero is in the fixed color attachment array.
+                let attachment = unsafe { pass.colorAttachments().objectAtIndexedSubscript(0) };
+                attachment.setTexture(Some(&a.texture));
+                attachment.setResolveTexture(Some(&b.texture));
+                attachment.setLoadAction(MTLLoadAction::Load);
+                attachment.setStoreAction(MTLStoreAction::StoreAndMultisampleResolve);
+                let encoder = rec
+                    .cmd
+                    .renderCommandEncoderWithDescriptor(&pass)
+                    .ok_or_else(|| nil("resolve encoder"))?;
+                encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
+                    MTLStages::All,
+                    MTLStages::Fragment,
+                    MTL4VisibilityOptions::Device,
+                );
+                encoder.endEncoding();
+                rec.wait = (MTLStages::All, RENDER_STAGES.union(COMPUTE_STAGES));
+            }
             Command::CopyImage {
                 source,
                 destination,
@@ -609,6 +733,15 @@ impl MetalDevice {
         depth: Option<&Attachment>,
         size: [u32; 2],
     ) -> Result<Retained<ProtocolObject<dyn MTL4RenderCommandEncoder>>> {
+        let mut samples = None;
+        for attachment in colors.iter().chain(depth) {
+            let image = &self.images.get(attachment.image)?.raw;
+            if samples.is_some_and(|s| s != image.shape.samples) {
+                return Err(GpuError::Contract("Attachment sample counts differ".into()));
+            }
+            samples = Some(image.shape.samples);
+        }
+        rec.samples = samples.unwrap_or_default();
         let pass = MTL4RenderPassDescriptor::new();
         pass.setRenderTargetWidth(size[0] as usize);
         pass.setRenderTargetHeight(size[1] as usize);
@@ -705,11 +838,13 @@ impl MetalDevice {
             self.clear = Some(super::clear::Clear::cooked(&self.device)?);
         }
         let clear = self.clear.as_mut().expect("clear pipeline loaded above");
-        let state = clear.pipeline(&self.compiler, &rec.formats.0)?;
+        let state = clear.pipeline(&self.compiler, &rec.formats.0, rec.samples)?;
         let depth_state = clear.depth.clone();
         let encoder = rec.render()?;
         encoder.setRenderPipelineState(&state);
         encoder.setDepthStencilState(Some(&depth_state));
+        encoder.setCullMode(MTLCullMode::None);
+        encoder.setDepthBias_slopeScale_clamp(0.0, 0.0, 0.0);
         let (viewport, scissor) = view(origin, size);
         encoder.setViewport(viewport);
         encoder.setScissorRect(scissor);
@@ -742,17 +877,24 @@ impl MetalDevice {
             colors,
             depth_format,
             vertex_stride,
+            raster,
         } = self.pipelines.get(handle)?
         else {
             return Err(GpuError::Contract("Draw with a compute pipeline".into()));
         };
         let encoder = rec.render()?;
-        if *colors != rec.formats.0 || *depth_format != rec.formats.1 {
+        if *colors != rec.formats.0
+            || *depth_format != rec.formats.1
+            || raster.samples != rec.samples
+        {
             return Err(GpuError::Contract(
                 "Pipeline and rendering attachment formats differ".into(),
             ));
         }
-        if kind != DrawKind::Fullscreen && (*vertex_stride != 0) != (kind == DrawKind::Indexed) {
+        if kind != DrawKind::Fullscreen
+            && (*vertex_stride != 0 || !raster.vertex_layouts.is_empty())
+                != (kind == DrawKind::Indexed)
+        {
             return Err(GpuError::Contract(
                 "Draw kind does not match the pipeline vertex input".into(),
             ));
@@ -760,6 +902,19 @@ impl MetalDevice {
         if rec.bound != Some(handle) {
             encoder.setRenderPipelineState(state);
             encoder.setDepthStencilState(depth.as_deref());
+            encoder.setCullMode(match raster.cull {
+                crate::raster::CullMode::None => MTLCullMode::None,
+                crate::raster::CullMode::Front => MTLCullMode::Front,
+                crate::raster::CullMode::Back => MTLCullMode::Back,
+            });
+            encoder.setFrontFacingWinding(
+                if raster.front_face == crate::raster::FrontFace::Clockwise {
+                    MTLWinding::Clockwise
+                } else {
+                    MTLWinding::CounterClockwise
+                },
+            );
+            encoder.setDepthBias_slopeScale_clamp(raster.depth_bias, raster.depth_bias_slope, 0.0);
             rec.bound = Some(handle);
         }
         self.bind_top_level(rec)
@@ -797,141 +952,6 @@ impl MetalDevice {
         unsafe {
             self.table
                 .setAddress_atIndex(chunk.gpuAddress() + offset, ARGUMENT_BUFFER_BIND_POINT);
-        }
-        Ok(())
-    }
-
-    /// GPU address of an indirect argument record in an `INDIRECT_BUFFER` buffer.
-    fn indirect_address(&self, buffer: crate::Buffer, offset: u64, len: u64) -> Result<u64> {
-        let raw = &self.buffers.get(buffer)?.raw;
-        if !offset.is_multiple_of(4)
-            || offset.checked_add(len).is_none_or(|end| end > raw.size)
-            || !raw.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
-        {
-            return Err(GpuError::Contract("Indirect record exceeds buffer".into()));
-        }
-        Ok(raw.buffer.gpuAddress() + offset)
-    }
-
-    fn copy_buffer(
-        &self,
-        rec: &mut Recording,
-        source: crate::Buffer,
-        source_offset: u64,
-        destination: crate::Buffer,
-        destination_offset: u64,
-        size: u64,
-    ) -> Result<()> {
-        let (from, to) = (self.buffers.get(source)?, self.buffers.get(destination)?);
-        let fits =
-            |offset: u64, total: u64| offset.checked_add(size).is_some_and(|end| end <= total);
-        if source == destination
-            || size == 0
-            || !size.is_multiple_of(4)
-            || !source_offset.is_multiple_of(4)
-            || !destination_offset.is_multiple_of(4)
-            || !fits(source_offset, from.raw.size)
-            || !fits(destination_offset, to.raw.size)
-        {
-            return Err(GpuError::Contract("Invalid buffer copy".into()));
-        }
-        let (from, to) = (from.raw.buffer.clone(), to.raw.buffer.clone());
-        // SAFETY: both ranges were bounds-checked; the buffers are distinct and resident.
-        unsafe {
-            rec.compute(self)?
-                .copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
-                    &from,
-                    source_offset as usize,
-                    &to,
-                    destination_offset as usize,
-                    size as usize,
-                );
-        }
-        Ok(())
-    }
-
-    /// Tightly packed buffer <-> image copies of every level, finest first.
-    fn copy_image_buffer(
-        &self,
-        rec: &mut Recording,
-        buffer: crate::Buffer,
-        image: crate::Image,
-        upload: bool,
-    ) -> Result<()> {
-        let raw = &self.images.get(image)?.raw;
-        let mut offset = 0;
-        for mip in 0..raw.levels {
-            let region = crate::texture::ImageRegion {
-                mip,
-                origin: [0; 3],
-                extent: raw.shape.extent(raw.size, mip),
-                base_layer: 0,
-                layer_count: raw.shape.layers,
-            };
-            let (_, bytes) = raw.shape.region(
-                raw.size,
-                region,
-                raw.info.block,
-                u64::from(raw.info.block_bytes),
-            )?;
-            self.copy_image_region_buffer(rec, buffer, image, offset, region, upload)?;
-            offset += bytes;
-        }
-        Ok(())
-    }
-
-    fn copy_image_region_buffer(
-        &self,
-        rec: &mut Recording,
-        buffer: crate::Buffer,
-        image: crate::Image,
-        offset: u64,
-        region: crate::texture::ImageRegion,
-        upload: bool,
-    ) -> Result<()> {
-        let b = &self.buffers.get(buffer)?.raw;
-        let i = &self.images.get(image)?.raw;
-        let (row, total) =
-            i.shape
-                .region(i.size, region, i.info.block, u64::from(i.info.block_bytes))?;
-        if !offset.is_multiple_of(4)
-            || !offset.is_multiple_of(u64::from(i.info.block_bytes))
-            || offset.checked_add(total).is_none_or(|end| end > b.size)
-            || !b.usage.contains(if upload {
-                vk::BufferUsageFlags::TRANSFER_SRC
-            } else {
-                vk::BufferUsageFlags::TRANSFER_DST
-            })
-            || !i.usage.contains(if upload {
-                vk::ImageUsageFlags::TRANSFER_DST
-            } else {
-                vk::ImageUsageFlags::TRANSFER_SRC
-            })
-        {
-            return Err(GpuError::Contract(
-                "Invalid buffer/texture copy usage, offset or capacity".into(),
-            ));
-        }
-        let plane = row * u64::from(region.extent[1].div_ceil(i.info.block));
-        let per_layer = plane * u64::from(region.extent[2]);
-        let option = if i.info.depth {
-            MTLBlitOption::DepthFromDepthStencil
-        } else {
-            MTLBlitOption::None
-        };
-        let encoder = rec.compute(self)?;
-        for layer in 0..region.layer_count {
-            let at = offset + u64::from(layer) * per_layer;
-            // SAFETY: validated footprint and native subresources; buffers and textures stay resident.
-            unsafe {
-                if upload {
-                    encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin_options(
-                        &b.buffer,at as usize,row as usize,plane as usize,extent(region.extent),&i.texture,(region.base_layer+layer) as usize,region.mip as usize,origin(region.origin),option);
-                } else {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                        &i.texture,(region.base_layer+layer) as usize,region.mip as usize,origin(region.origin),extent(region.extent),&b.buffer,at as usize,row as usize,plane as usize,option);
-                }
-            }
         }
         Ok(())
     }
