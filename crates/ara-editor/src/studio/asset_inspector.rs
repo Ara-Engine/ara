@@ -161,6 +161,9 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
             ),
         );
     }
+    if let Some(asset) = asset {
+        body = body.child(band(l, "Details")).children(details(s, asset));
+    }
     if let Some(browser) = &s.assets {
         let (uses, used_by) = crate::asset_links::links(browser, workspace, path);
         for (title, links) in [("Uses", uses), ("Used by", used_by)] {
@@ -203,6 +206,91 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
         .grow(1.0)
         .scroll(Axis::Vertical)
         .child(body)
+}
+
+/// A file's size as people read it.
+pub(super) fn bytes(n: u64) -> String {
+    match n {
+        n if n >= 1 << 30 => format!("{:.1} GB", n as f64 / f64::from(1u32 << 30)),
+        n if n >= 1 << 20 => format!("{:.1} MB", n as f64 / f64::from(1u32 << 20)),
+        n if n >= 1 << 10 => format!("{:.1} KB", n as f64 / 1024.0),
+        n => format!("{n} bytes"),
+    }
+}
+
+/// What the asset is: its kind, size on disk and when it last changed; for an authored
+/// document (scene, prefab, graph…) how many entities or records it holds and which
+/// components they carry, most common first.
+fn details(s: &Studio, asset: &crate::assets::Asset) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let line = |label: &str, value: String| {
+        row()
+            .label(format!("{label}: {value}"))
+            .min_h(ROW + 2.0)
+            .pad_x(12.0)
+            .pad_y(2.0)
+            .gap(8.0)
+            .align(Align::Start)
+            .child(
+                text(label.to_owned())
+                    .text_size(12.0)
+                    .color(c.muted_foreground.0)
+                    .w(96.0)
+                    .min_w(96.0),
+            )
+            .child(
+                text(value)
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(2)
+                    .grow(1.0)
+                    .min_w(0.0),
+            )
+    };
+    let kind = asset
+        .document_kind
+        .as_deref()
+        .unwrap_or(asset.kind.as_str());
+    let mut out = vec![line("Kind", crate::names::sentence(kind))];
+    if let Ok(meta) = std::fs::metadata(s.editor.host.root().join(&asset.path)) {
+        out.push(line("Size", bytes(meta.len())));
+        if let Some(ago) = meta.modified().ok().and_then(|at| at.elapsed().ok()) {
+            out.push(line("Modified", crate::turns::ago(ago)));
+        }
+    }
+    let workspace = s.editor.host.store().workspace();
+    if let Some(doc) = crate::asset_links::namespace::document(workspace, asset) {
+        let records = doc.records();
+        let mut tally: std::collections::BTreeMap<&str, usize> = Default::default();
+        for record in records.values() {
+            for key in record.keys().filter(|k| ara_doc::is_component_key(k)) {
+                *tally.entry(key.as_str()).or_default() += 1;
+            }
+        }
+        let noun = if kind == "scene" || kind == "prefab" {
+            "Entities"
+        } else {
+            "Records"
+        };
+        out.push(line(noun, records.len().to_string()));
+        if !tally.is_empty() {
+            let mut common: Vec<_> = tally.into_iter().collect();
+            common.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let shown: Vec<String> = common
+                .iter()
+                .take(6)
+                .map(|(name, n)| format!("{} {n}", super::inspector::spaced(name)))
+                .collect();
+            let more = common.len().saturating_sub(6);
+            let mut summary = shown.join(" · ");
+            if more > 0 {
+                summary.push_str(&format!(" · {more} more"));
+            }
+            out.push(line("Components", summary));
+        }
+    }
+    out
 }
 
 /// A section heading, as component headers are.
