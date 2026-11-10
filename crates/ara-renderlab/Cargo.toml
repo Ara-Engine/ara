@@ -37,6 +37,8 @@ wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
 ash038 = { package = "ash", version = "0.38", default-features = false, features = ["std"] }
 # Foliage instance transforms, in the glam the extracted frame uses.
 glam34 = { workspace = true }
+# Ara's colour grade (`ara_render_fidelity::colour::Grading`) takes this glam's vectors.
+glam30 = { workspace = true }
 
 [dev-dependencies]
 ara-render = { path = "../ara-render" }

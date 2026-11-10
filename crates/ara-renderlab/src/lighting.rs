@@ -278,6 +278,18 @@ pub(crate) fn settings(
             bloom: look.bloom.clamp(0., 1.),
             motion_blur: look.lens.motion_blur > 0.,
             tonemapper: Tonemapper::Filmic,
+            // The grade itself is baked into the colour lookup table (`grade`).
+            lut_strength: if crate::grade::lut_needed(look) {
+                1.
+            } else {
+                0.
+            },
+            // Ara darkens by 1 / (1 + 2.5 v |d|²)² (d from the centre, aspect-corrected),
+            // Renderlab by up to its strength at the corners: equal at a 16:9 corner.
+            vignette: {
+                let v = look.grading.vignette.clamp(0., 1.);
+                1. - 1. / ((1. + 2.6 * v) * (1. + 2.6 * v))
+            },
             ..defaults.post
         },
         ..defaults

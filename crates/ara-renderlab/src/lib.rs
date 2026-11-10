@@ -29,6 +29,8 @@ mod gaps;
 #[cfg(not(target_vendor = "apple"))]
 mod bridge;
 #[cfg(not(target_vendor = "apple"))]
+mod grade;
+#[cfg(not(target_vendor = "apple"))]
 mod lighting;
 #[cfg(not(target_vendor = "apple"))]
 mod scene;
