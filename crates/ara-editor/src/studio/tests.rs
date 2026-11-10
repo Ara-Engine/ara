@@ -884,6 +884,22 @@ fn agent_clients_connect_or_show_their_manual_steps() {
 }
 
 #[test]
+fn a_hovered_hierarchy_row_offers_its_eye_and_lock() {
+    let mut rt = open();
+    settle(&mut rt);
+    let row = rt.find("row/e_lamp").unwrap();
+    rt.pointer_move(row.center().x, row.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.hierarchy_hover.as_deref(), Some("e_lamp"));
+    // Elsewhere: no row stays hovered.
+    let inspector = rt.find("component/Transform").unwrap();
+    rt.pointer_move(inspector.center().x, inspector.center().y);
+    settle(&mut rt);
+    super::hierarchy::unhover(&mut rt);
+    assert!(rt.state().local.hierarchy_hover.is_none());
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2168,6 +2184,21 @@ fn captures() {
             )
             .unwrap();
         }
+        // A hovered Hierarchy row, its eye and lock offered.
+        let lamp = rt.find("row/e_lamp").unwrap();
+        rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-hierarchy-hover.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
         let row = rt.find("row/e_box").unwrap();
         rt.right_click(row.center().x, row.center().y);
         for _ in 0..30 {
