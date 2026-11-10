@@ -23,6 +23,8 @@ this crate alone.
 
 - `scene.rs`: draws to Renderlab meshes, materials and objects, shared by content
   key; GPU-skinned primitives posed from `RenderFrame::palettes`.
+- `batch.rs`: past Renderlab's group limit, which static groups merge into world-space
+  batches per material, and which (last resort) are left out.
 - `texture.rs`: cooked KTX2 (BC7/BC5) to Renderlab's RGBA8 mip chains.
 - `lighting.rs`: camera, sun, sky source, local lights, exposure and display settings.
 - `environment.rs`: HDRI and gradient skies prepared for `Sky::Map` (CPU, once per sky, on a
@@ -52,7 +54,7 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 | Feature | On the Renderlab path today | What it would take | Blocks deleting `ara-render`? |
 |---|---|---|---|
 | Frame cost | On Showcase at 1080p (RTX 4070 SUPER, Renderlab `4652ea3`): 33 ms (RT) and 62 ms (non-RT) against 3.0 ms for `ara-render` at Epic; about 15 and 50 ms with `ARA_RENDERLAB_SKY=constant` | Renderlab's own work, not the bridge's. A bound sky map costs about 15 ms in its shading pass, in its reflection rays' environment lookups (reported to its thread; 38 ms in its mip-chain layout, which the bridge avoids). The rest is glossy reflections and its GI cache | Yes |
-| More than 64 mesh-material groups | Draws past the 64th group are left out (`ARA_RENDERLAB_LIMIT`); terrain tiles take at most half the groups | Renderlab's `TRACED_DRAWS` is not one constant: its non-RT shadow frame, program lists and glass reflections hold tables sized for 64 (Ara-Engine/renderlab#2 lists them). Until that lands, merge static draws per material in the bridge | Yes: real levels exceed it |
+| More than 256 mesh-material groups | Past 256, opaque static groups that share a material merge into one world-space batch per material, fewest objects first (`batch.rs`); a batch whose members move is rebuilt each frame. Draws are left out only when merging still does not fit (more distinct materials than the limit). Terrain tiles take at most half the groups. Both report `ARA_RENDERLAB_LIMIT` | Renderlab#2 raised `TRACED_DRAWS` from 64 to 256 at no cost when unused on non-RT and 1 to 2% on RT (Radeon 760M). Beyond that: growable per-draw tables in Renderlab, or its virtual geometry | No: nothing is left out below 256 distinct materials |
 | Terrain and foliage levels of detail, terrain layer maps, foliage wind | Resident tiles draw as full-resolution meshes, coloured by their splat layers' base colour factors (white without layers); foliage instances draw their rule's model parts, standing still, at most 60,000 parts | A splat-blend program in WGSL for layer maps; Renderlab mesh LODs or its virtual geometry for distance; a vertex hook for wind | Yes |
 | A sky light strength other than 1 | The sky lights the scene as brightly as it looks (HDRI and gradient skies are drawn and light the scene) | Separate light and background scales in Renderlab's `Sky::Map` | No |
 | VFX graph effects | Not drawn | Renderlab's emitter covers rate, sphere spawn, lifetime, velocity, gravity, drag, two-key size and colour, and soft sprites. Ara's effects also need curl noise, vortex and attractor forces, box, cone and mesh spawn shapes, bursts, curves, collisions, flipbooks, ribbons, mesh particles, particle lights, events and more than 2,048 particles per emitter: all seven library effects use at least one | Yes |
@@ -87,8 +89,9 @@ scene with a constant sky of the sky image's mean radiance, to measure what the 
 ## Test
 
 - `cargo test -p ara-renderlab --lib`: pure conversions (no GPU).
-- `cargo test -p ara-renderlab --test render`: a hand-built frame and an HDR sky
-  through the presenter on each path the adapter supports.
+- `cargo test -p ara-renderlab --test render`: a hand-built frame, an HDR sky and a
+  601-group crowd (batching; boxes moved and removed) through the presenter on each
+  path the adapter supports.
 - A GPU check renders a real scene: `ara-player --renderer renderlab-rt --headless
   --capture <png> --root <export>` (see the PR that added this crate for the commands).
 
