@@ -9,8 +9,7 @@ use stillkit::el::{Align, El, Handled, Justify, PointerPhase, col, el, icon, nat
 use stillkit::{Button, Cursor, Rgba};
 
 use super::{SCENE_LAYER, Studio, commands, gizmo};
-use crate::shell::commands::Target;
-use crate::state::Tool;
+use crate::catalog::Target;
 
 /// A pick the host resolves against the renderer after the frame: where (0..1 across the
 /// view), and whether it adds to the selection.
@@ -69,8 +68,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                             w: size.0,
                             h: size.1,
                         };
-                        let ground =
-                            crate::shell::overlay::ground_point(&s.editor.state.camera, rect, at);
+                        let ground = crate::overlay::ground_point(&s.editor.state.camera, rect, at);
                         (
                             super::create::Anchor::Point(window.0, window.1),
                             ground.map(|p| [p.x, p.y, p.z]),
@@ -81,6 +79,11 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 super::create::toggle(s, anchor, place);
                 return Handled::Yes;
             }
+            // ` opens the Overlays menu (Unity).
+            if key.0 == 0xC0 && !tx.modifiers().ctrl && !tx.modifiers().meta {
+                s.local.overlays_menu = !s.local.overlays_menu;
+                return Handled::Yes;
+            }
             // While flying, the fly keys steer instead of switching tools.
             if s.local.flying && super::FLY_KEYS.contains(&key.0) {
                 return Handled::Yes;
@@ -89,16 +92,47 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 gizmo::end(s, true);
                 return Handled::Yes;
             }
-            match commands::for_key(key.0, tx.modifiers()) {
+            // Esc puts a piloted Camera's move under way back.
+            if key == stillkit::el::KeyCode::ESCAPE && s.local.pilot.active() {
+                match s.local.pilot.cancel(&mut s.editor) {
+                    Ok(true) => {
+                        pilot_note(s);
+                        return Handled::Yes;
+                    }
+                    Ok(false) => {}
+                    Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
+                }
+            }
+            match commands::for_key(s, key.0, tx.modifiers()) {
                 Some(id) => {
-                    commands::run(s, id, &Target::None);
+                    commands::run(s, &id, &Target::None);
                     Handled::Yes
                 }
                 None => Handled::No,
             }
         })
-        .child(toolbar(s))
-        .child(orientation(s));
+        .children(super::scene_overlays::layer(s))
+        .children(s.local.marquee.map(|(a, b, _)| {
+            let c = &l.c;
+            el().absolute(a[0].min(b[0]), a[1].min(b[1]))
+                .w((a[0] - b[0]).abs())
+                .h((a[1] - b[1]).abs())
+                .fill(c.primary.0.with_alpha(0.1))
+                .border(1.0, c.primary.0.with_alpha(0.7))
+        }))
+        // Mesh Paint's brush on the mesh under the pointer: its radius, and inside it where
+        // the falloff starts.
+        .children(s.local.paint_ring.into_iter().flat_map(|(x, y, r)| {
+            let falloff = s.editor.state.paint.map_or(0.5, |p| p.falloff);
+            let ring = |radius: f32, alpha: f32| {
+                el().absolute(x - radius, y - radius)
+                    .size(radius * 2.0)
+                    .radius(radius)
+                    .border(1.5, stillkit::Rgba::new(1.0, 1.0, 1.0, alpha))
+            };
+            let inner = (r * (1.0 - falloff)).max(1.0);
+            [ring(r.max(2.0), 0.9), ring(inner, 0.45)]
+        }));
     // Flying: the speed, which the wheel changes.
     if s.local.flying {
         let speed = s
@@ -170,6 +204,32 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
 /// Camera navigation and picking from the pointer's story on the view.
 fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el::Tx) -> bool {
     let at = [e.local.x, e.local.y];
+    // Mesh Paint takes the left button (Alt still orbits): the host paints the meshes.
+    if s.editor.state.paint.is_some() && e.size.0 > 0.0 && !e.mods.alt {
+        use super::state::PaintInput;
+        let (u, v) = (e.local.x / e.size.0, e.local.y / e.size.1);
+        match (e.phase, e.button) {
+            (PointerPhase::Hover, _) => s.local.paint_hover = Some((u, v)),
+            (PointerPhase::Down, Button::Left) => {
+                s.local.paint_input.push(PaintInput::Down(u, v));
+                return true;
+            }
+            (PointerPhase::Move, Button::Left) => {
+                s.local.paint_hover = Some((u, v));
+                s.local.paint_input.push(PaintInput::Move(u, v));
+                return true;
+            }
+            (PointerPhase::Up, Button::Left) => {
+                s.local.paint_input.push(PaintInput::Up);
+                return true;
+            }
+            (PointerPhase::Cancel, _) => {
+                s.local.paint_input.push(PaintInput::Cancel);
+                return true;
+            }
+            _ => {}
+        }
+    }
     // The gizmo takes the left button before picking and orbiting.
     match (e.phase, e.button) {
         (PointerPhase::Hover, _) => {
@@ -197,6 +257,15 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         }
         _ => {}
     }
+    // Pilot Camera commits a move when it ends, so it needs to know one is under way.
+    match (e.phase, e.button) {
+        (PointerPhase::Down, Button::Middle) => s.local.navigating = true,
+        (PointerPhase::Down, Button::Left) if e.mods.alt => s.local.navigating = true,
+        (PointerPhase::Up | PointerPhase::Cancel, Button::Middle | Button::Left) => {
+            s.local.navigating = false
+        }
+        _ => {}
+    }
     let camera = &mut s.editor.state.camera;
     match (e.phase, e.button) {
         (PointerPhase::Down, Button::Right) => s.local.flying = true,
@@ -218,6 +287,20 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         (PointerPhase::Move, Button::Left) if e.mods.alt => {
             camera.orbit([e.delta.x * 0.008, e.delta.y * 0.008])
         }
+        // A drag from empty space selects what its box covers (Shift adds).
+        (PointerPhase::Move, Button::Left)
+            if !e.mods.alt && e.travel().x.abs() + e.travel().y.abs() >= 4.0 =>
+        {
+            let start = [at[0] - e.travel().x, at[1] - e.travel().y];
+            s.local.marquee = Some((start, at, e.mods.shift));
+        }
+        (PointerPhase::Up, Button::Left) if s.local.marquee.is_some() => {
+            if let Some((from, to, additive)) = s.local.marquee.take() {
+                let ids = marquee_hits(s, from, to, e.size);
+                s.select(ids, additive);
+            }
+        }
+        (PointerPhase::Cancel, _) if s.local.marquee.is_some() => s.local.marquee = None,
         (PointerPhase::Up, Button::Left)
             if !e.mods.alt && e.travel().x.abs() + e.travel().y.abs() < 4.0 && e.size.0 > 0.0 =>
         {
@@ -234,97 +317,40 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
     true
 }
 
-/// The floating toolbar: transform tools, space and pivot, snapping, then view controls.
-fn toolbar(s: &Studio) -> El<Studio> {
-    let l = &s.look;
-    let st = &s.editor.state;
-    let tool = |id: &'static str, glyph, label: &str, on: bool| {
-        glass_toggle(l, glyph, label, on)
-            .key(format!("scene/{id}"))
-            .on_press(move |s: &mut Studio| commands::run(s, id, &Target::None))
+/// The entities whose origins project inside the box from `a` to `b` (view px) of a view
+/// `size`, front to back; hidden and locked ones are left out, as clicks leave them.
+fn marquee_hits(s: &Studio, a: [f32; 2], b: [f32; 2], size: (f32, f32)) -> Vec<String> {
+    let rect = ara_ui::paint::Box2 {
+        x: 0.0,
+        y: 0.0,
+        w: size.0,
+        h: size.1,
     };
-    let tools = glass_group(l)
-        .child(tool(
-            "view.tool.move",
-            icons::MOVE_3D,
-            "Move (W)",
-            st.tool == Tool::Translate,
-        ))
-        .child(tool(
-            "view.tool.rotate",
-            icons::ROTATE_3D,
-            "Rotate (E)",
-            st.tool == Tool::Rotate,
-        ))
-        .child(tool(
-            "view.tool.scale",
-            icons::SCALE_3D,
-            "Scale (R)",
-            st.tool == Tool::Scale,
-        ))
-        .child(tool(
-            "view.tool.universal",
-            icons::MOVE,
-            "Universal (T)",
-            st.tool == Tool::Universal,
-        ));
-    let space = glass_group(l)
-        .child(
-            glass_label(
-                l,
-                if st.local { icons::BOX } else { icons::GLOBE },
-                if st.local { "Local" } else { "World" },
-            )
-            .key("scene/space")
-            .on_press(|s: &mut Studio| commands::run(s, "view.space", &Target::None)),
-        )
-        .child(
-            glass_label(
-                l,
-                icons::CROSSHAIR,
-                if st.centre { "Centre" } else { "Pivot" },
-            )
-            .key("scene/pivot")
-            .on_press(|s: &mut Studio| commands::run(s, "view.pivot", &Target::None)),
-        )
-        .child(
-            glass_toggle(l, icons::MAGNET, "Snapping", st.snapping)
-                .key("scene/snap")
-                .on_press(|s: &mut Studio| commands::run(s, "snap.toggle", &Target::None)),
-        );
-    let projection = if st.camera.projection == crate::state::CameraProjection::Perspective {
-        "Perspective"
-    } else {
-        "Orthographic"
-    };
-    let views = glass_group(l)
-        .child(
-            glass_label(l, icons::VIDEO, projection)
-                .key("scene/projection")
-                .on_press(|s: &mut Studio| {
-                    commands::run(s, "view.camera.perspective", &Target::None)
-                }),
-        )
-        .child(
-            glass_label(l, icons::FOCUS, "Frame")
-                .key("scene/frame")
-                .on_press(|s: &mut Studio| commands::run(s, "view.frame", &Target::None)),
-        );
-    row()
-        .absolute(8.0, 8.0)
-        .gap(8.0)
-        .child(tools)
-        .child(space)
-        .child(el().w(8.0))
-        .child(views)
+    let (x0, x1) = (a[0].min(b[0]), a[0].max(b[0]));
+    let (y0, y1) = (a[1].min(b[1]), a[1].max(b[1]));
+    let state = &s.editor.state;
+    let camera = state.camera;
+    let eye = camera.position();
+    let mut hits: Vec<(f32, String)> = crate::world::world_transforms(&s.resolved)
+        .into_iter()
+        .filter(|(id, _)| !state.hidden.contains(id) && !state.locked.contains(id))
+        .filter_map(|(id, m)| {
+            let origin = m.w_axis.truncate();
+            let [x, y] = crate::overlay::project(&camera, rect, origin)?;
+            ((x0..=x1).contains(&x) && (y0..=y1).contains(&y))
+                .then(|| ((origin - eye).length(), id))
+        })
+        .collect();
+    hits.sort_by(|p, q| p.0.total_cmp(&q.0));
+    hits.into_iter().map(|(_, id)| id).collect()
 }
 
-/// The top-right corner: the orientation gizmo, and the frame rate under it while frames run.
-fn orientation(s: &Studio) -> El<Studio> {
+/// The Orientation overlay: the axis gizmo, and the frame rate under it while frames run.
+pub(super) fn orientation_widget(s: &Studio) -> El<Studio> {
     let mut corner = col().gap(6.0).align(Align::End).child(axes(s));
     if let Some((fps, ms)) = s.local.scene.fps.filter(|_| s.local.scene.ready) {
         corner = corner.child(
-            glass_group(&s.look).h(22.0).pad_x(8.0).child(
+            row().h(18.0).pad_x(6.0).child(
                 text(format!("{fps:.0} fps  {ms:.1} ms"))
                     .text_size(10.5)
                     .family(mono())
@@ -332,12 +358,7 @@ fn orientation(s: &Studio) -> El<Studio> {
             ),
         );
     }
-    row()
-        .absolute(0.0, 8.0)
-        .w_full()
-        .justify(Justify::End)
-        .child(corner)
-        .child(el().w(8.0))
+    corner
 }
 
 /// The axis gizmo's size and its arms' length, design px.
@@ -493,43 +514,43 @@ fn glass_group(l: &ara_kit::look::Look) -> El<Studio> {
         .fill(super::style::tones(l).strip.with_alpha(0.94))
 }
 
-/// An icon toggle in a Scene group: the chosen tone while on, like a selected row.
-fn glass_toggle(
-    l: &ara_kit::look::Look,
-    glyph: stillkit::icons::Icon,
-    label: &str,
-    on: bool,
-) -> El<Studio> {
-    let c = &l.c;
-    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
-    super::style::chosen(l, row(), on)
-        .size(22.0)
-        .align(Align::Center)
-        .justify(Justify::Center)
-        .radius(super::style::RADIUS)
-        .color(if on { ink } else { c.muted_foreground.0 })
-        .cascade_ink()
-        .label(label)
-        .tooltip(label)
-        .checked(on)
-        .hovered(move |e| if on { e } else { e.fill(hover).color(ink) })
-        .child(icon(glyph).size(14.0))
+/// The open scene resolved afresh, for Pilot's checks of the Camera and its ancestors.
+fn pilot_lookup(editor: &crate::Editor) -> ara_ui::Result<crate::pilot::Lookup> {
+    crate::world::resolve(editor.host.store(), &editor.state.doc)
+        .map(std::sync::Arc::new)
+        .map_err(|_| "The open scene does not resolve; see Problems".into())
 }
 
-/// An icon and label button in a Scene group.
-fn glass_label(l: &ara_kit::look::Look, glyph: stillkit::icons::Icon, label: &str) -> El<Studio> {
-    let c = &l.c;
-    let (hover, ink) = (super::style::tones(l).hover, c.foreground.0);
-    row()
-        .h(22.0)
-        .pad_x(7.0)
-        .gap(5.0)
-        .align(Align::Center)
-        .radius(super::style::RADIUS)
-        .color(c.muted_foreground.0)
-        .cascade_ink()
-        .label(label)
-        .hovered(move |e| e.fill(hover).color(ink))
-        .child(icon(glyph).size(13.0))
-        .child(text(label).text_size(super::style::TEXT))
+/// Shows what Pilot last said in the status bar.
+fn pilot_note(s: &mut Studio) {
+    if let Some(note) = s.local.pilot.take_note() {
+        super::note(s, note);
+    }
+}
+
+/// Pilot Selected Camera on and off: the Scene view takes the selected Camera's pose.
+pub(super) fn toggle_pilot(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<()> {
+    let result = s
+        .local
+        .pilot
+        .toggle(&mut s.editor, entity, &mut pilot_lookup);
+    pilot_note(s);
+    result
+}
+
+/// After a pass's input: a move under way (`navigating`) stays transient, and one that
+/// ended, or a single step such as a wheel notch (`steered`), commits to the Camera as one
+/// undoable edit; whether it changed the scene.
+pub(super) fn poll_pilot(s: &mut Studio, steered: bool) -> bool {
+    if !s.local.pilot.active() {
+        return false;
+    }
+    let navigating = s.local.navigating || s.local.flying;
+    let result = s
+        .local
+        .pilot
+        .poll(&mut s.editor, navigating, steered, &mut pilot_lookup);
+    pilot_note(s);
+    // A stopped pilot has said why in the status bar.
+    result.unwrap_or_default()
 }

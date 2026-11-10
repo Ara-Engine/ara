@@ -1,6 +1,8 @@
 //! Build-form geometry under the real editor resets; exporting never runs here.
 #![allow(clippy::unwrap_used)]
 use super::*;
+use crate::build::profile_name;
+use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[test]
@@ -114,7 +116,7 @@ fn package_form_uses_all_real_formats_and_a_distinct_confirm_command() {
     assert_eq!(json!(shell.build_options.format), "linuxTar");
     assert!(!shell.choice_open());
     assert!(
-        shell.build.is_none(),
+        shell.builder.job.is_none(),
         "choosing the format does not start an export"
     );
     assert_eq!(editor.host.store().revision(), revision);

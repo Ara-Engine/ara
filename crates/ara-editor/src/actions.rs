@@ -40,7 +40,7 @@ pub(crate) enum Control {
         job: String,
     },
     /// Run a registry command on the window thread at the next frame boundary.
-    Command(String, crate::shell::commands::Target),
+    Command(String, crate::catalog::Target),
     Extensions(crate::extensions::Catalog),
 }
 /// Mirror effective settings and the human's settings undo labels into navigation.
@@ -330,47 +330,11 @@ impl EditorService {
             }));
         }
         if method == "editor.commands" {
-            use crate::shell::commands::{Ctx, Target, export, keymap};
-            let state = &self.navigation.state;
-            let target = Target::None;
-            let cx = Ctx {
-                state,
-                extensions: &self.extensions.catalog,
-                store: cx.store(),
-                target: &target,
-                clipboard_entities: false,
-                clipboard_value: false,
-                clipboard_component: false,
-                component_position: None,
-                logs: crate::shell::LogView::default(),
-                assets_show_all: false,
-                game: (true, "free", false),
-                starting: false,
-                pilot: false,
-                probe_capture_blocker: Some(
-                    "Probe availability is reported by the active editor window",
-                ),
-                probe_cancel_blocker: Some(
-                    "Capture cancellation requires the owning editor window",
-                ),
-                probe_debug_capabilities: None,
-                profiler_target_blocker: None,
-                profiler_freeze_blocker: None,
-                profiler_compare_blocker: None,
-                profiler_compare_active: state.profiler_compare,
-                script_recovery_blocker: Some(
-                    "C# reload availability is reported by the active editor window",
-                ),
-                // The window's build job is not visible here; the project's state is.
-                build: crate::shell::commands::BuildState {
-                    running: false,
-                    built: false,
-                    profile: !crate::shell::build::presets(cx.root()).is_empty(),
-                },
-            };
-            return Ok(
-                json!({"commands": export(&cx, &keymap(state, &self.extensions.catalog)), "generation":self.extensions.catalog.generation}),
-            );
+            let catalog = &self.extensions.catalog;
+            return Ok(json!({
+                "commands": crate::catalog::export(&self.navigation.state, catalog),
+                "generation": catalog.generation,
+            }));
         }
         if method == "editor.command" {
             let p: EditorCommand = parse(params)?;
@@ -383,14 +347,14 @@ impl EditorService {
             {
                 return self.extension_command(cx, p);
             }
-            if crate::shell::commands::get(&p.id).is_none() {
+            if crate::catalog::get(&p.id).is_none() {
                 return Err(vec![crate::invalid(format!(
                     "no command `{}`; see editor.commands",
                     p.id
                 ))]);
             }
             let target = match p.target {
-                None => crate::shell::commands::Target::None,
+                None => crate::catalog::Target::None,
                 Some(v) => serde_json::from_value(v)
                     .map_err(|e| vec![crate::invalid(format!("invalid target: {e}"))])?,
             };
@@ -410,6 +374,7 @@ impl EditorService {
                         Kind::Number { min, max, step, unit } => ("number", Value::Null, json!({"min": min, "max": max, "step": step, "unit": unit})),
                         Kind::Text => ("text", Value::Null, Value::Null),
                         Kind::Map => ("map", Value::Null, Value::Null),
+                        Kind::List => ("list", Value::Null, Value::Null),
                         Kind::Colors { max } => ("colors", Value::Null, json!({"max": max})),
                     };
                     json!({"key": d.key, "scope": d.scope, "category": d.category, "label": d.label, "description": d.description, "control": control, "options": options, "range": range, "value": self.settings.value(d.key), "modified": self.settings.modified(d.key)})
@@ -725,18 +690,10 @@ impl EditorService {
             "editor.view" => {
                 let p: EditorView = parse(params)?;
                 if let Some(mode) = p.view_mode {
-                    if !matches!(
-                        mode.as_str(),
-                        "lit"
-                            | "baseColor"
-                            | "normals"
-                            | "depth"
-                            | "roughnessMetal"
-                            | "entityIds"
-                            | "shadowCascades"
-                            | "wireframe"
-                            | "litWireframe"
-                    ) {
+                    if !crate::app::viewport::VIEW_MODES
+                        .iter()
+                        .any(|(name, ..)| *name == mode)
+                    {
                         return Err(vec![crate::invalid(format!("unknown view mode `{mode}`"))]);
                     }
                     state.view_mode = mode;

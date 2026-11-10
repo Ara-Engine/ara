@@ -1,0 +1,1334 @@
+//! Build > Build Current Profile: export the project as a real game (the packed
+//! runtime player) through `ara-export` on a worker thread.
+//! - The profile is `settings/builds/<name>.export.json` (legacy `presets/` works).
+//!   Without one, Build creates the
+//!   portable default (`build_profile.create`: Windows, real runtime, plain folder).
+//!   Profiles hold no machine paths: the runtime template (this engine's
+//!   ara-player.exe, its PDB and the current shader cohorts) is zipped and pinned at
+//!   build time under `.ara/export/`.
+//! - The status bar shows the stage and cooking progress; export diagnostics go to
+//!   the bus with their `ARA-EXP-*` codes, so Problems explains them.
+//! - The result lands in `builds/<profile>/<build-id>/`; Run Build launches it (one
+//!   headless frame with a capture in offscreen runs, never a window).
+//! - C# modules anywhere beneath the shared authored root ship with the game: the export finds
+//!   them and publishes them NativeAOT (needs the .NET SDK on the building machine).
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{Receiver, Sender, channel};
+
+use crate::Editor;
+use ara_export::preset::PackageFormat;
+use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
+
+/// The profile Build Current Profile creates when the project has none.
+pub(crate) const DEFAULT_PROFILE: &str = "windows";
+
+/// What the export thread reports to the window.
+pub(crate) enum BuildEvent {
+    /// A stage started (`template`, `content`, `assemble`, `verify`, ...).
+    Stage(String),
+    /// Cooking progress: completed and requested cooks.
+    Cooking(usize, usize),
+    /// A warning or error, as bus-ready diagnostic JSON.
+    Diagnostic(Value),
+    /// The export ended: the folder holding the game, or why it failed.
+    Finished(Result<Built, String>),
+}
+
+/// A finished export.
+pub(crate) struct Built {
+    /// The shipped folder with the named application, its data and notices.
+    pub game: PathBuf,
+    /// Seconds the export took.
+    pub seconds: f64,
+    /// The export's own verification ran the game (not only static checks).
+    pub executed: bool,
+    /// Actual package files listed by the completed distribution manifest.
+    pub packages: Vec<PackageArtifact>,
+}
+
+/// One package emitted by the exporter, with its authoritative content identity.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PackageArtifact {
+    /// Full path after the staged export has reached its final envelope.
+    pub path: PathBuf,
+    /// BLAKE3 declared by the completed distribution manifest.
+    pub hash: String,
+    /// Complete package byte length.
+    pub bytes: u64,
+    /// Whether delivery must preserve executable permission.
+    pub executable: bool,
+}
+
+/// A running export.
+pub(crate) struct BuildJob {
+    events: Receiver<BuildEvent>,
+    profile_creation: Option<ProfileCreation>,
+    /// The export worker waits until canonical files and their journal are saved.
+    saving: Option<(ara_host::FileCommitReceipt, Sender<()>)>,
+    /// Profile name, for the status bar.
+    pub preset: String,
+    /// Current stage.
+    pub stage: String,
+    /// Cooking progress (completed, requested), while content cooks.
+    pub cooking: Option<(usize, usize)>,
+}
+
+struct ProfileCreation {
+    job: String,
+    build_after: bool,
+    destination: Option<PathBuf>,
+}
+
+/// A launched build: what it printed, or why it did not start.
+pub(crate) type RunResult = Result<String, String>;
+
+struct Sink(Sender<BuildEvent>);
+
+impl ara_export::event::EventSink for Sink {
+    fn emit(&mut self, event: &ara_export::event::Event) -> std::io::Result<()> {
+        use ara_export::event::EventKind;
+        let message = match &event.kind {
+            EventKind::Progress { status, .. } if status == "started" => {
+                Some(BuildEvent::Stage(event.stage.clone()))
+            }
+            EventKind::Cooking {
+                completed, total, ..
+            } => Some(BuildEvent::Cooking(*completed, *total)),
+            EventKind::Warning(d) | EventKind::Error(d) => {
+                let error = matches!(event.kind, EventKind::Error(_));
+                let code = ara_diag::catalog::lookup(&d.code)
+                    .map(|doc| doc.code)
+                    .unwrap_or(crate::codes::BUILD);
+                let mut message = d.message.clone();
+                if let Some(fix) = d.fixes.first() {
+                    message.push_str(&format!(" Fix: {fix}"));
+                }
+                let diagnostic = if error {
+                    ara_diag::Diagnostic::error(code, message)
+                } else {
+                    ara_diag::Diagnostic::warning(code, message)
+                }
+                .subject(ara_diag::Subject::system("export"));
+                serde_json::to_value(&diagnostic)
+                    .ok()
+                    .map(BuildEvent::Diagnostic)
+            }
+            _ => None,
+        };
+        if let Some(message) = message {
+            let _ = self.0.send(message);
+        }
+        Ok(())
+    }
+}
+
+/// Named export profiles, with settings/builds taking precedence over legacy presets.
+pub(crate) fn presets(root: &Path) -> Vec<String> {
+    for directory in ["settings/builds", "presets"] {
+        let mut names: Vec<String> = std::fs::read_dir(root.join(directory))
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+            .filter_map(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .strip_suffix(".export.json")
+                    .map(str::to_owned)
+            })
+            .collect();
+        if !names.is_empty() {
+            names.sort();
+            return names;
+        }
+    }
+    Vec::new()
+}
+
+fn profile_path(root: &Path, name: &str) -> PathBuf {
+    let current = root
+        .join("settings/builds")
+        .join(format!("{name}.export.json"));
+    if current.is_file() {
+        current
+    } else {
+        root.join("presets").join(format!("{name}.export.json"))
+    }
+}
+
+struct Launch {
+    executable: PathBuf,
+    data: PathBuf,
+    report: PathBuf,
+}
+
+/// Resolve the actual shipped entry point and data from the store-neutral manifest.
+/// Canonical project-path validation rejects absolute paths and junction escapes.
+fn launch(game: &Path) -> anyhow::Result<Launch> {
+    use anyhow::{Context, ensure};
+    let game = dunce::canonicalize(game)?;
+    let output = game.parent().context("the export has no report folder")?;
+    let manifest: ara_export::distribution::DistributionManifest =
+        serde_json::from_slice(&std::fs::read(output.join("distribution.json"))?)?;
+    ensure!(
+        manifest.format == "ara.distribution/1"
+            && manifest.files.contains_key(&manifest.entry_point),
+        "the export manifest does not identify a shipped application"
+    );
+    let executable = ara_export::tools::project_path(&game, &manifest.entry_point)?;
+    ensure!(
+        executable.is_file(),
+        "the exported game executable is missing"
+    );
+    let data = if manifest.platform == "macos" {
+        let contents = executable
+            .parent()
+            .and_then(Path::parent)
+            .context("the macOS bundle has no Contents folder")?;
+        let relative = contents
+            .join("Resources")
+            .strip_prefix(&game)?
+            .to_path_buf();
+        ara_export::tools::project_path(&game, &relative.to_string_lossy().replace('\\', "/"))?
+    } else {
+        ara_gpu::cooked::player_data_root(&game)
+    };
+    ensure!(
+        data.is_dir() && data.join("ara-launch.json").is_file(),
+        "the exported game launch configuration is missing"
+    );
+    std::fs::create_dir_all(output.join("report"))?;
+    let report = ara_export::tools::project_path(output, "report")?;
+    Ok(Launch {
+        executable,
+        data,
+        report,
+    })
+}
+
+/// Locate the shipping C# manifest through the same platform-aware resolver as Run Build.
+pub(crate) fn scripts_manifest(game: &Path) -> anyhow::Result<PathBuf> {
+    Ok(launch(game)?.data.join("game/scripts.json"))
+}
+
+/// Log a build message (ARA4505 unless it carries an export code) on the bus, so
+/// Console and Problems show it.
+fn log(editor: &mut Editor, diagnostic: ara_diag::Diagnostic) {
+    let diagnostic = diagnostic.subject(ara_diag::Subject::system("export"));
+    if let Ok(value) = serde_json::to_value(&diagnostic) {
+        let _ = editor.action(
+            "diag.report",
+            json!({"diagnostics": [value], "engine": true}),
+        );
+    }
+}
+
+/// The portable default profile: Windows, the real game runtime, a plain folder; C#
+/// modules are found by the export. Its runtime template is pinned at build time
+/// (`runtime_template`), so the file is unpinned (`ExportPreset::to_unpinned_text`).
+fn default_profile(root: &Path) -> anyhow::Result<ara_export::ExportPreset> {
+    let authored = ara_host::project::authored_root(root);
+    let relative = authored
+        .strip_prefix(root)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let content = if relative.is_empty() { "." } else { &relative };
+    let preset: ara_export::ExportPreset = serde_json::from_value(json!({
+        "platform": "windows",
+        "config": "dev",
+        "lane": "nativeAot",
+        "playerTemplate": "runtime",
+        "scriptProject": "",
+        "assembly": "AraGame",
+        "content": content,
+        "templates": [],
+    }))?;
+    Ok(preset)
+}
+
+/// The engine the editor runs from: an installed engine (`resources/<package>` beside
+/// the executable) or a checkout (`crates/<package>/cooked` above it).
+fn engine_root(exe_dir: &Path) -> Option<PathBuf> {
+    if exe_dir.join("engine.json").is_file() || exe_dir.join("resources/ara-render").is_dir() {
+        return Some(exe_dir.into());
+    }
+    exe_dir
+        .ancestors()
+        .find(|dir| dir.join("crates/ara-render/cooked").is_dir())
+        .map(Into::into)
+}
+
+fn pin(path: &Path) -> anyhow::Result<ara_export::preset::ArtifactPin> {
+    use anyhow::Context;
+    let source = std::path::absolute(path)?;
+    Ok(ara_export::preset::ArtifactPin {
+        hash: blake3::hash(&std::fs::read(&source)?).to_string(),
+        source: source
+            .to_str()
+            .context("the template path is not UTF-8")?
+            .to_owned(),
+    })
+}
+
+/// Zips this engine's player and current shader cohorts into the project's
+/// `.ara/export/` and pins it (with the player's PDB) for `config`.
+fn runtime_template(
+    project: &Path,
+    config: ara_export::preset::Configuration,
+    send: &Sender<BuildEvent>,
+) -> anyhow::Result<ara_export::preset::TemplatePin> {
+    use anyhow::Context;
+    let exe = std::env::current_exe()?;
+    let dir = exe.parent().context("the editor's folder")?;
+    let player = dir.join("ara-player.exe");
+    let symbols = dir.join("ara_player.pdb");
+    let engine = engine_root(dir).unwrap_or_else(|| dir.to_owned());
+    let _ = send.send(BuildEvent::Stage("checking engine installation".into()));
+    if let Err(error) = ara_export::preflight::runtime(&player, &engine, Some(&symbols)) {
+        let diagnostic = ara_export::preflight::diagnostic(&engine, &format!("{error:#}"));
+        if let Ok(value) = serde_json::to_value(diagnostic) {
+            let _ = send.send(BuildEvent::Diagnostic(value));
+        }
+        return Err(error);
+    }
+    let zip = project.join(".ara/export/templates/runtime-windows-x64.zip");
+    // Rebuilt each time: the player or its shader cohorts may have changed.
+    let _ = std::fs::remove_file(&zip);
+    ara_export::build_runtime_template(&player, &engine, &zip)?;
+    let template = pin(&zip)?;
+    Ok(ara_export::preset::TemplatePin {
+        platform: ara_export::preset::Platform::Windows,
+        arch: "x64".into(),
+        config,
+        hash: template.hash,
+        source: template.source,
+        symbols: Some(pin(&symbols)?),
+    })
+}
+
+/// Exports `preset` (its runtime template filled in) into `output`.
+fn export(
+    root: PathBuf,
+    mut preset: ara_export::ExportPreset,
+    output: PathBuf,
+    stable_parent: Option<PathBuf>,
+    send: &Sender<BuildEvent>,
+) -> anyhow::Result<Built> {
+    let started = std::time::Instant::now();
+    if preset.player_template == ara_export::preset::PlayerTemplate::Runtime
+        && preset.templates.is_empty()
+    {
+        let _ = send.send(BuildEvent::Stage("runtime template".into()));
+        preset.templates = vec![runtime_template(&root, preset.config, send)?];
+    }
+    let request = ara_export::ExportRequest {
+        project: root.clone(),
+        preset,
+        output: output.clone(),
+        cache: root.join(".ara/export/cache"),
+        device: None,
+        allow_emulator: false,
+    };
+    let summary = ara_export::export(&request, &mut Sink(send.clone()))?;
+    let output = if let Some(parent) = stable_parent {
+        publish_build(&output, &parent, &summary.build_id)?
+    } else {
+        output
+    };
+    Ok(Built {
+        game: output.join("build"),
+        seconds: started.elapsed().as_secs_f64(),
+        executed: summary.verify.runtime_executed,
+        packages: package_artifacts(&output)?,
+    })
+}
+
+/// Runs on the export worker. Package names come from its manifest, never guesses
+/// based on a format or application name; canonical containment also rejects escapes.
+fn package_artifacts(output: &Path) -> anyhow::Result<Vec<PackageArtifact>> {
+    let manifest: ara_export::distribution::DistributionManifest =
+        serde_json::from_slice(&std::fs::read(output.join("distribution.json"))?)?;
+    anyhow::ensure!(
+        manifest.format == "ara.distribution/1",
+        "unsupported distribution manifest"
+    );
+    manifest
+        .packages
+        .into_iter()
+        .map(|(name, identity)| {
+            let path = ara_export::tools::project_path(output, &name)?;
+            let metadata = std::fs::metadata(&path)?;
+            anyhow::ensure!(
+                metadata.is_file() && metadata.len() == identity.bytes,
+                "the completed package {name} is missing or has a different byte length"
+            );
+            Ok(PackageArtifact {
+                path,
+                hash: identity.hash,
+                bytes: identity.bytes,
+                executable: identity.executable,
+            })
+        })
+        .collect()
+}
+
+fn package_preset(
+    mut preset: ara_export::ExportPreset,
+    format: ara_export::preset::PackageFormat,
+) -> anyhow::Result<ara_export::ExportPreset> {
+    preset.packaging = format;
+    // Runtime pins are supplied by this engine on the existing export worker.
+    // All platform/package/tooling rules still apply to the authored profile.
+    preset.to_unpinned_text()?;
+    Ok(preset)
+}
+
+/// Claim a new content-identified developer folder; an existing build is preserved.
+fn publish_build(staged: &Path, parent: &Path, build_id: &str) -> anyhow::Result<PathBuf> {
+    anyhow::ensure!(
+        build_id.len() == 64 && build_id.bytes().all(|b| b.is_ascii_hexdigit()),
+        "the export returned an invalid build identity"
+    );
+    std::fs::create_dir_all(parent)?;
+    let mut suffix = 1_u32;
+    let destination = loop {
+        let name = if suffix == 1 {
+            build_id.to_owned()
+        } else {
+            format!("{build_id}-{suffix}")
+        };
+        let path = parent.join(name);
+        match std::fs::create_dir(&path) {
+            Ok(()) => break path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => suffix += 1,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    // The manifest moves last: the claimed folder is not a completed export until
+    // every shipped file, report, package and symbol archive has moved into it.
+    let mut entries = std::fs::read_dir(staged)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.file_name() == "distribution.json");
+    for entry in entries {
+        std::fs::rename(entry.path(), destination.join(entry.file_name()))?;
+    }
+    std::fs::remove_dir(staged)?;
+    Ok(destination)
+}
+
+/// Typed preference shared by Settings, the Build window and the build commands: the
+/// profile Build uses.
+pub(crate) const PROFILE_SETTING: &str = "build.profile";
+
+/// Profile names accepted by the build API, resolved from cached project entries.
+/// Canonical settings/builds entries take precedence over indexed legacy presets.
+pub(crate) fn profiles(files: &[AuthoredFile]) -> Vec<String> {
+    let mut names = BTreeMap::new();
+    for file in files {
+        if !matches!(&file.scope, AuthoredScope::Project)
+            || !matches!(&file.role, AuthoredRole::BuildPreset)
+        {
+            continue;
+        }
+        let Some((name, canonical)) = profile_name(&file.storage_path) else {
+            continue;
+        };
+        names
+            .entry(name.to_owned())
+            .and_modify(|existing: &mut bool| *existing |= canonical)
+            .or_insert(canonical);
+    }
+    names.into_keys().collect()
+}
+
+pub(crate) fn profile_name(storage: &str) -> Option<(&str, bool)> {
+    let (name, canonical) = storage
+        .strip_prefix("settings/builds/")
+        .map(|name| (name, true))
+        .or_else(|| storage.strip_prefix("presets/").map(|name| (name, false)))?;
+    let name = name.strip_suffix(".export.json")?;
+    (!name.is_empty() && !name.contains(['/', '\\']) && !name.chars().any(char::is_control))
+        .then_some((name, canonical))
+}
+
+/// The package formats the Package action offers, with their titles.
+pub(crate) fn package_formats() -> [(PackageFormat, &'static str); 6] {
+    [
+        (PackageFormat::Folder, "Plain folder"),
+        (PackageFormat::WindowsPortable, "Windows portable ZIP"),
+        (PackageFormat::WindowsInstaller, "Windows installer + ZIP"),
+        (PackageFormat::LinuxAppimage, "Linux AppImage"),
+        (PackageFormat::LinuxTar, "Linux tar.gz"),
+        (PackageFormat::AndroidPlay, "Android APK + AAB"),
+    ]
+}
+
+/// The profile Build uses among `names`: the chosen one (never a stand-in when it is
+/// gone), else the portable default, else the first.
+pub(crate) fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&'a str> {
+    if !selected.is_empty() {
+        return names
+            .iter()
+            .find(|name| name.as_str() == selected)
+            .map(String::as_str)
+            .ok_or_else(|| {
+                format!("Build profile '{selected}' is unavailable. Choose an indexed profile.")
+                    .into()
+            });
+    }
+    names
+        .iter()
+        .find(|name| name.as_str() == DEFAULT_PROFILE)
+        .or_else(|| names.first())
+        .map(String::as_str)
+        .ok_or_else(|| {
+            "Create a build profile first, then wait for the project index to refresh".into()
+        })
+}
+
+/// The editor's builds: the running export or profile creation, the last finished build
+/// and its packages, and a headless Run Build. A window owns one, polls it each pass
+/// ([`Builder::poll_build`]) and shows its [`Builder::note`]. Hidden windows (captures,
+/// verification) pass `offscreen`: Run Build stays headless and nothing opens.
+#[derive(Default)]
+pub(crate) struct Builder {
+    /// The running export (Build > Build Current Profile).
+    pub job: Option<BuildJob>,
+    /// The last finished build's game folder (Run Build, Open Build Folder).
+    pub last_build: Option<PathBuf>,
+    pub(crate) last_packages: Vec<PackageArtifact>,
+    /// A running headless Run Build (offscreen runs).
+    pub run: Option<Receiver<RunResult>>,
+    /// The capture the last headless Run Build wrote.
+    pub last_run: Option<PathBuf>,
+    /// What the window's status bar says about the build, taken as it is shown.
+    pub note: Option<String>,
+}
+
+impl Builder {
+    /// Create the default profile through one undoable command and asynchronous file job.
+    pub(crate) fn create_build_profile(&mut self, editor: &mut Editor) -> ara_ui::Result<String> {
+        if self.job.is_some() {
+            return Err("a build or profile creation is already running".into());
+        }
+        let text = default_profile(editor.host.root())
+            .and_then(|p| p.to_unpinned_text())
+            .map_err(|e| format!("{e:#}"))?;
+        let preset: Value = ara_json::parse(&text).map_err(|error| error.to_string())?;
+        let result = editor.apply_to(
+            ara_host::project::MARKER,
+            vec![json!({"cmd":"build_profile.create","args":{"name":DEFAULT_PROFILE,"preset":preset}})],
+            "Create the default build profile",
+        )?;
+        if result["preparing"] == true {
+            let job = result["job"]
+                .as_str()
+                .ok_or("profile preparation returned no job")?
+                .to_owned();
+            let (_, events) = channel();
+            self.job = Some(BuildJob {
+                events,
+                saving: None,
+                profile_creation: Some(ProfileCreation {
+                    job,
+                    build_after: false,
+                    destination: None,
+                }),
+                preset: DEFAULT_PROFILE.into(),
+                stage: "creating profile".into(),
+                cooking: None,
+            });
+            self.note = Some("Creating the build profile…".into());
+        }
+        Ok(DEFAULT_PROFILE.into())
+    }
+
+    /// Start exporting with the first profile, creating the default one when the
+    /// project has none (Build > Build Current Profile).
+    pub(crate) fn build_current(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        if self.job.is_some() {
+            return Err("an export is already running".into());
+        }
+        let root = dunce::simplified(editor.host.root());
+        let preset = match presets(root).into_iter().next() {
+            Some(preset) => preset,
+            None => {
+                let preset = self.create_build_profile(editor)?;
+                if let Some(job) = &mut self.job
+                    && let Some(creation) = &mut job.profile_creation
+                {
+                    creation.build_after = true;
+                    return Ok(());
+                }
+                preset
+            }
+        };
+        self.build_profile(editor, &preset, None)
+    }
+
+    /// Build a selected profile into a new chosen export folder, or by content ID
+    /// under `builds/<profile>/<build-id>` when no destination is supplied.
+    /// Relative destinations resolve from the project root; existing outputs are refused.
+    /// The build dialog calls this after its profile/destination selection is confirmed.
+    pub fn build_profile(
+        &mut self,
+        editor: &mut Editor,
+        profile: &str,
+        destination: Option<PathBuf>,
+    ) -> ara_ui::Result<()> {
+        self.start_profile(editor, profile, destination, None)
+    }
+
+    /// Package a profile through the same saved-file boundary and export worker.
+    /// The selected format belongs to this job; authored profiles stay unchanged.
+    pub(crate) fn package_profile(
+        &mut self,
+        editor: &mut Editor,
+        profile: &str,
+        destination: Option<PathBuf>,
+        format: ara_export::preset::PackageFormat,
+    ) -> ara_ui::Result<()> {
+        self.start_profile(editor, profile, destination, Some(format))
+    }
+
+    fn start_profile(
+        &mut self,
+        editor: &mut Editor,
+        profile: &str,
+        destination: Option<PathBuf>,
+        package: Option<ara_export::preset::PackageFormat>,
+    ) -> ara_ui::Result<()> {
+        if let Some(job) = &mut self.job {
+            if job.preset == profile
+                && package.is_none()
+                && let Some(creation) = &mut job.profile_creation
+            {
+                creation.build_after = true;
+                creation.destination = destination;
+                return Ok(());
+            }
+            return Err("an export is already running".into());
+        }
+        // The host's root is canonical (`\\?\C:\…` on Windows); build tools such as
+        // MSBuild cannot evaluate verbatim paths, so the export gets the plain form.
+        let root = dunce::simplified(editor.host.root()).to_path_buf();
+        if !presets(&root).iter().any(|name| name == profile) {
+            return Err(format!(
+                "unknown build profile {profile}; choose a profile from settings/builds/"
+            )
+            .into());
+        }
+        let preset = profile.to_owned();
+        let text = std::fs::read_to_string(profile_path(&root, &preset))?;
+        let parsed =
+            ara_export::ExportPreset::from_unpinned_text(&text).map_err(|e| format!("{e:#}"))?;
+        let parsed = match package {
+            Some(format) => package_preset(parsed, format).map_err(|error| format!("{error:#}"))?,
+            None => parsed,
+        };
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let stable_parent = destination
+            .is_none()
+            .then(|| root.join("builds").join(&preset));
+        let output = destination
+            .map(|path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    root.join(path)
+                }
+            })
+            .unwrap_or_else(|| {
+                root.join("builds")
+                    .join(&preset)
+                    .join(format!(".export-{}-{stamp}", std::process::id()))
+            });
+        if output.exists() {
+            return Err("the build destination already exists; choose a new folder".into());
+        }
+        let (send, events) = channel();
+        let receipt = editor.host.queue_flush();
+        let (saved, ready) = channel();
+        std::thread::spawn(move || {
+            let result = ready
+                .recv()
+                .map_err(|_| "The build stopped before project files were saved".to_owned())
+                .and_then(|()| {
+                    export(root, parsed, output, stable_parent, &send).map_err(|e| format!("{e:#}"))
+                });
+            let _ = send.send(BuildEvent::Finished(result));
+        });
+        self.job = Some(BuildJob {
+            events,
+            profile_creation: None,
+            saving: Some((receipt, saved)),
+            preset: preset.clone(),
+            stage: "saving project".into(),
+            cooking: None,
+        });
+        self.note = Some(format!("Building {preset}…"));
+        Ok(())
+    }
+
+    /// Build > Run Build: launch the last build. Offscreen (verification) runs step
+    /// it headless for one tick and capture `report/run.png` outside the shipped folder.
+    pub(crate) fn run_build(&mut self, editor: &mut Editor, offscreen: bool) -> ara_ui::Result<()> {
+        let game = self
+            .last_build
+            .clone()
+            .ok_or("Build the project first (Build Current Profile)")?;
+        let launch = launch(&game).map_err(|error| format!("{error:#}"))?;
+        let player = launch.executable;
+        let mut command = std::process::Command::new(&player);
+        command
+            .current_dir(&launch.report)
+            .arg("--root")
+            .arg(&launch.data);
+        if offscreen {
+            let capture = launch.report.join("run.png");
+            command
+                .args(["--headless", "--ticks", "1", "--capture"])
+                .arg(&capture)
+                .env("ARA_CONFIG_DIR", launch.report.join("run-profile"))
+                .env("ARA_CRASH_DIR", launch.report.join("run-crashes"));
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x0800_0000 | 0x0000_4000); // CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS
+            }
+            let (send, results) = channel();
+            std::thread::spawn(move || {
+                let result = command
+                    .output()
+                    .map_err(|e| format!("{} did not start: {e}", player.display()))
+                    .and_then(|out| {
+                        let text = String::from_utf8_lossy(&out.stderr).into_owned();
+                        if out.status.success() && capture.is_file() {
+                            Ok(capture.display().to_string())
+                        } else {
+                            let tail: String = text
+                                .lines()
+                                .rev()
+                                .take(6)
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .rev()
+                                .collect::<Vec<_>>()
+                                .join(" · ");
+                            Err(format!("the build exited with {}: {tail}", out.status))
+                        }
+                    });
+                let _ = send.send(result);
+            });
+            self.run = Some(results);
+            self.note = Some("Running the build headless for one frame…".into());
+        } else {
+            command
+                .spawn()
+                .map_err(|e| format!("{} did not start: {e}", player.display()))?;
+            self.note = Some(format!("Started {}", player.display()));
+        }
+        let _ = editor;
+        Ok(())
+    }
+
+    /// Drain export and run events at a frame boundary; true when the UI should rebuild.
+    pub(crate) fn poll_build(&mut self, editor: &mut Editor) -> bool {
+        let mut changed = false;
+        let save_result = self
+            .job
+            .as_ref()
+            .and_then(|job| job.saving.as_ref())
+            .and_then(|(receipt, _)| editor.host.poll_flush(*receipt));
+        if let Some(result) = save_result {
+            let job = self.job.as_mut().expect("save receipt belongs to a build");
+            let (_, saved) = job.saving.take().expect("pending save receipt");
+            match result {
+                Ok(()) => {
+                    let _ = saved.send(());
+                    job.stage = "starting".into();
+                }
+                Err(errors) => {
+                    drop(saved);
+                    job.stage = "could not save project".into();
+                    for error in errors {
+                        log(editor, error);
+                    }
+                }
+            }
+            changed = true;
+        }
+        if let Some(results) = &self.run
+            && let Ok(result) = results.try_recv()
+        {
+            self.run = None;
+            changed = true;
+            match result {
+                Ok(capture) => {
+                    self.last_run = Some(PathBuf::from(&capture));
+                    let shown = dunce::simplified(std::path::Path::new(&capture))
+                        .strip_prefix(dunce::simplified(editor.host.root()))
+                        .map_or_else(
+                            |_| capture.clone(),
+                            |p| p.to_string_lossy().replace('\\', "/"),
+                        );
+                    self.note = Some(format!("The build ran one frame: {shown}"));
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::info(
+                            crate::codes::BUILD,
+                            format!("The build ran one frame and captured {capture}"),
+                        ),
+                    );
+                }
+                Err(error) => {
+                    self.note = Some("The build did not run: see Problems".into());
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::error(
+                            crate::codes::BUILD,
+                            format!("Run Build failed: {error}"),
+                        ),
+                    );
+                }
+            }
+        }
+        let profile_status = self
+            .job
+            .as_ref()
+            .and_then(|job| job.profile_creation.as_ref())
+            .map(|creation| editor.action("jobs.status", json!({"job":creation.job})));
+        if let Some(status) = profile_status {
+            match status {
+                Ok(status) if status["status"] == "running" => {
+                    if let Some(message) = status["message"]
+                        .as_str()
+                        .filter(|message| !message.is_empty())
+                        && let Some(job) = &mut self.job
+                        && job.stage != message
+                    {
+                        job.stage = message.to_owned();
+                        changed = true;
+                    }
+                }
+                Ok(status) if status["status"] == "done" => {
+                    let job = self
+                        .job
+                        .take()
+                        .expect("profile completion has a pending build job");
+                    let creation = job
+                        .profile_creation
+                        .expect("profile completion owns its job");
+                    self.note = Some(format!("Created the {} build profile", job.preset));
+                    if creation.build_after
+                        && let Err(error) =
+                            self.build_profile(editor, &job.preset, creation.destination)
+                    {
+                        log(
+                            editor,
+                            ara_diag::Diagnostic::error(crate::codes::BUILD, error.to_string()),
+                        );
+                        self.note = Some("The build did not start: see Problems".into());
+                    }
+                    return true;
+                }
+                result => {
+                    let message = match result {
+                        Err(error) => error.to_string(),
+                        Ok(status) => status["diagnostics"]
+                            .as_array()
+                            .map(|diagnostics| {
+                                diagnostics
+                                    .iter()
+                                    .filter_map(|diagnostic| diagnostic["message"].as_str())
+                                    .collect::<Vec<_>>()
+                                    .join("; ")
+                            })
+                            .filter(|message| !message.is_empty())
+                            .unwrap_or_else(|| "Profile creation was cancelled".into()),
+                    };
+                    self.job = None;
+                    self.note = Some("The profile was not created: see Problems".into());
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::error(crate::codes::BUILD, message),
+                    );
+                    return true;
+                }
+            }
+            return changed;
+        }
+        let Some(job) = &mut self.job else {
+            return changed;
+        };
+        let mut finished = None;
+        while let Ok(event) = job.events.try_recv() {
+            changed = true;
+            match event {
+                BuildEvent::Stage(stage) => {
+                    job.stage = stage;
+                    job.cooking = None;
+                }
+                BuildEvent::Cooking(completed, total) => job.cooking = Some((completed, total)),
+                BuildEvent::Diagnostic(diagnostic) => {
+                    let _ = editor.action(
+                        "diag.report",
+                        json!({"diagnostics": [diagnostic], "engine": true}),
+                    );
+                }
+                BuildEvent::Finished(result) => finished = Some(result),
+            }
+        }
+        if let Some(result) = finished {
+            let preset = job.preset.clone();
+            self.job = None;
+            match result {
+                Ok(built) => {
+                    let ran = if built.executed {
+                        "; it ran in verification"
+                    } else {
+                        ""
+                    };
+                    let packages = if built.packages.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "; packages: {}",
+                            built
+                                .packages
+                                .iter()
+                                .map(|artifact| artifact.path.display().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+                    self.note = Some(format!(
+                        "Built {preset} in {:.0} s{ran}: {}{packages}",
+                        built.seconds,
+                        built.game.display()
+                    ));
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::info(
+                            crate::codes::BUILD,
+                            format!(
+                                "Built {preset} in {:.0} s{ran}: {}{packages}",
+                                built.seconds,
+                                built.game.display()
+                            ),
+                        )
+                        .data(json!({"packages":built.packages})),
+                    );
+                    self.last_packages = built.packages;
+                    self.last_build = Some(built.game);
+                }
+                Err(error) => {
+                    self.note = Some("The build failed: see Problems".into());
+                    log(
+                        editor,
+                        ara_diag::Diagnostic::error(
+                            crate::codes::BUILD,
+                            format!("Build failed: {error}"),
+                        ),
+                    );
+                }
+            }
+        }
+        changed
+    }
+
+    /// Read-only artifact proof for the last successfully completed build/package.
+    pub(crate) fn package_result(&self) -> Value {
+        json!({"game":self.last_build,"packages":self.last_packages})
+    }
+
+    /// Reveal only a path present in the last actual package receipt.
+    pub(crate) fn reveal_package(
+        &mut self,
+        target: &crate::catalog::Target,
+        offscreen: bool,
+    ) -> ara_ui::Result<()> {
+        let crate::catalog::Target::Text(path) = target else {
+            return Err("Choose a completed package file".into());
+        };
+        let artifact = self
+            .last_packages
+            .iter()
+            .find(|artifact| artifact.path.to_str() == Some(path.as_str()))
+            .ok_or("That package is no longer the current build result")?;
+        let directory = artifact
+            .path
+            .parent()
+            .ok_or("The package has no output folder")?;
+        if !offscreen {
+            crate::system::open_external(directory)?;
+        }
+        self.note = Some(format!("Package: {}", artifact.path.display()));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn new() -> anyhow::Result<Self> {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let root = std::env::var_os("ARA_TEST_ROOT")
+                .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    if cfg!(windows) {
+                        PathBuf::from("D:/AraBuild/ux-hub-evidence")
+                    } else {
+                        std::env::temp_dir()
+                    }
+                })
+                .join("editor-build-layout");
+            std::fs::create_dir_all(&root)?;
+            let directory = root.join(format!(
+                "{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&directory)?;
+            Ok(Self(directory))
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn manifest(output: &Path, entry: &str, platform: &str) -> anyhow::Result<()> {
+        ara_export::tools::write_json(
+            &output.join("distribution.json"),
+            &json!({
+                "format":"ara.distribution/1", "buildId":"fixture", "platform":platform,
+                "entryPoint":entry, "files":{entry:{"hash":"fixture","bytes":0,"executable":true}},
+                "packages":{}, "symbols":"symbols/fixture.zip", "signing":"unsigned"
+            }),
+        )
+    }
+
+    #[test]
+    fn settings_profiles_take_precedence_and_legacy_profiles_still_work() -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        let root = &scratch.0;
+        std::fs::create_dir_all(root.join("presets"))?;
+        std::fs::write(root.join("presets/legacy.export.json"), "legacy")?;
+        assert_eq!(presets(root), ["legacy"]);
+        assert_eq!(
+            profile_path(root, "legacy"),
+            root.join("presets/legacy.export.json")
+        );
+        std::fs::create_dir_all(root.join("settings/builds/not-a-profile.export.json"))?;
+        std::fs::write(root.join("settings/builds/windows.export.json"), "current")?;
+        std::fs::write(root.join("presets/windows.export.json"), "old")?;
+        assert_eq!(presets(root), ["windows"]);
+        assert_eq!(
+            profile_path(root, "windows"),
+            root.join("settings/builds/windows.export.json")
+        );
+        let default = default_profile(root)?;
+        assert!(default.templates.is_empty());
+        assert_eq!(
+            default.content,
+            ara_doc::AUTHORING_ROOT,
+            "all build profiles use the current authored root"
+        );
+        assert!(
+            ara_export::ExportPreset::from_unpinned_text(&default.to_unpinned_text()?)?
+                .templates
+                .is_empty()
+        );
+        std::fs::write(
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )?;
+        let chosen = ara_host::project::authored_root(root);
+        assert_eq!(
+            default_profile(root)?.content,
+            chosen.strip_prefix(root)?.to_string_lossy()
+        );
+        assert!(
+            !chosen.exists(),
+            "reading the chosen root never creates or migrates it"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn run_build_resolves_a_relocated_named_application_and_external_reports() -> anyhow::Result<()>
+    {
+        let scratch = Scratch::new()?;
+        let output = scratch.0.join("first");
+        let game = output.join("build");
+        std::fs::create_dir_all(game.join("data"))?;
+        std::fs::write(game.join("Outpost.exe"), b"player fixture")?;
+        ara_export::tools::write_json(
+            &game.join("data/ara-launch.json"),
+            &json!({"contract":"ara.player.runtime/1","pack":"game.arapack"}),
+        )?;
+        std::fs::create_dir_all(game.join("data/game"))?;
+        std::fs::write(game.join("data/game/scripts.json"), b"{}")?;
+        manifest(&output, "Outpost.exe", "windows")?;
+        let moved = scratch.0.join("relocated");
+        std::fs::rename(&output, &moved)?;
+        let launch = launch(&moved.join("build"))?;
+        assert_eq!(
+            launch.executable,
+            dunce::canonicalize(moved.join("build/Outpost.exe"))?
+        );
+        assert_eq!(launch.data, dunce::canonicalize(moved.join("build/data"))?);
+        assert_eq!(launch.report, dunce::canonicalize(moved.join("report"))?);
+        let scripts = scripts_manifest(&moved.join("build"))?;
+        assert!(scripts.is_file());
+        assert_eq!(scripts, launch.data.join("game/scripts.json"));
+        assert!(!moved.join("build/game/scripts.json").exists());
+        assert!(
+            !launch
+                .report
+                .starts_with(dunce::canonicalize(moved.join("build"))?)
+        );
+        assert!(!moved.join("build/run.png").exists());
+        for entry in ["../outside.exe", "C:/outside.exe", "data/../../outside.exe"] {
+            manifest(&moved, entry, "windows")?;
+            assert!(super::launch(&moved.join("build")).is_err(), "{entry}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn macos_manifest_locates_bundle_resources_without_assuming_the_players_name()
+    -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        let game = scratch.0.join("build");
+        std::fs::create_dir_all(game.join("Salvage.app/Contents/MacOS"))?;
+        std::fs::create_dir_all(game.join("Salvage.app/Contents/Resources"))?;
+        std::fs::write(
+            game.join("Salvage.app/Contents/MacOS/Salvage"),
+            b"player fixture",
+        )?;
+        std::fs::write(
+            game.join("Salvage.app/Contents/Resources/ara-launch.json"),
+            b"{}",
+        )?;
+        std::fs::create_dir_all(game.join("Salvage.app/Contents/Resources/game"))?;
+        std::fs::write(
+            game.join("Salvage.app/Contents/Resources/game/scripts.json"),
+            b"{}",
+        )?;
+        manifest(&scratch.0, "Salvage.app/Contents/MacOS/Salvage", "macos")?;
+        let launch = launch(&game)?;
+        assert_eq!(
+            launch.data,
+            dunce::canonicalize(game.join("Salvage.app/Contents/Resources"))?
+        );
+        assert!(launch.executable.ends_with("MacOS/Salvage"));
+        let scripts = scripts_manifest(&game)?;
+        assert!(scripts.is_file());
+        assert_eq!(scripts, launch.data.join("game/scripts.json"));
+        assert!(!game.join("game/scripts.json").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn completed_package_receipt_reaches_the_retained_shell_without_authoring_changes()
+    -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        std::fs::create_dir_all(scratch.0.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
+        std::fs::write(
+            scratch.0.join("ara.project.json"),
+            ara_json::to_canonical_string(&json!({
+                "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Package receipt","main":"levels/main.scene"
+            })),
+        )?;
+        std::fs::write(
+            scratch
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join("levels/main.scene"),
+            ara_json::to_canonical_string(&json!({
+                "$schema":"ara://schema/scene/1","id":"sc_packagereceipt","records":{}
+            })),
+        )?;
+        let mut editor =
+            Editor::open_with(&scratch.0, Some(scratch.0.join(".ara/test-settings.json")))
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut shell = Builder::default();
+        let revision = editor.host.store().revision();
+        let package = PackageArtifact {
+            path: scratch.0.join("Custom result.zip"),
+            hash: "b".repeat(64),
+            bytes: 47,
+            executable: false,
+        };
+        let (send, events) = channel();
+        shell.job = Some(BuildJob {
+            events,
+            profile_creation: None,
+            saving: None,
+            preset: "windows".into(),
+            stage: "packaging".into(),
+            cooking: None,
+        });
+        send.send(BuildEvent::Finished(Ok(Built {
+            game: scratch.0.join("build"),
+            seconds: 2.,
+            executed: false,
+            packages: vec![package.clone()],
+        })))?;
+        assert!(shell.poll_build(&mut editor));
+        assert!(shell.job.is_none());
+        assert_eq!(shell.package_result()["packages"], json!([package]));
+        assert_eq!(editor.host.store().revision(), revision);
+        assert!(
+            shell
+                .note
+                .as_deref()
+                .is_some_and(|note| note.contains("Custom result.zip"))
+        );
+        shell
+            .reveal_package(
+                &crate::catalog::Target::Text(
+                    package
+                        .path
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
+                        .into(),
+                ),
+                true,
+            )
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(
+            shell
+                .reveal_package(&crate::catalog::Target::Text("unrelated.zip".into()), true)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn package_override_validates_real_formats_without_requiring_runtime_pins_early()
+    -> anyhow::Result<()> {
+        use ara_export::preset::{AndroidSigning, ArtifactPin, Configuration, PackageFormat};
+        let scratch = Scratch::new()?;
+        let original = default_profile(&scratch.0)?;
+        for format in [
+            PackageFormat::Folder,
+            PackageFormat::WindowsPortable,
+            PackageFormat::WindowsInstaller,
+            PackageFormat::LinuxAppimage,
+            PackageFormat::LinuxTar,
+            PackageFormat::AndroidPlay,
+        ] {
+            let mut profile = original.clone();
+            let pin = ArtifactPin {
+                hash: "a".repeat(64),
+                source: "tools/package-runtime".into(),
+            };
+            match format {
+                PackageFormat::WindowsInstaller => profile.installer_stub = Some(pin),
+                PackageFormat::LinuxAppimage => {
+                    profile.platform = ara_export::Platform::Linux;
+                    profile.appimage_runtime = Some(pin);
+                }
+                PackageFormat::LinuxTar => profile.platform = ara_export::Platform::Linux,
+                PackageFormat::AndroidPlay => {
+                    profile.platform = ara_export::Platform::Android;
+                    profile.config = Configuration::Release;
+                    profile.signing = Some(AndroidSigning {
+                        keystore: "release.keystore".into(),
+                        alias: "game".into(),
+                        store_password_env: "TEST_STORE_PASSWORD".into(),
+                        key_password_env: "TEST_KEY_PASSWORD".into(),
+                    });
+                }
+                _ => {}
+            }
+            let lowered = package_preset(profile, format)?;
+            assert_eq!(
+                serde_json::to_value(lowered.packaging)?,
+                serde_json::to_value(format)?
+            );
+            assert!(
+                lowered.templates.is_empty(),
+                "the worker still owns engine runtime pinning"
+            );
+        }
+        assert_eq!(serde_json::to_value(original.packaging)?, "folder");
+        assert!(package_preset(original.clone(), PackageFormat::LinuxTar).is_err());
+        assert!(package_preset(original.clone(), PackageFormat::WindowsInstaller).is_err());
+        assert!(package_preset(original, PackageFormat::AndroidPlay).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn completed_packages_use_manifest_paths_and_reject_missing_or_escaping_artifacts()
+    -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        let name = "Localized package 玩家.zip";
+        let bytes = b"complete package";
+        std::fs::write(scratch.0.join(name), bytes)?;
+        let hash = blake3::hash(bytes).to_string();
+        let mut manifest = json!({"format":"ara.distribution/1","buildId":"fixture","platform":"windows",
+            "entryPoint":"Game.exe","files":{},"packages":{name:{"hash":hash,"bytes":bytes.len(),"executable":false}},
+            "symbols":"symbols/fixture.zip","signing":"unsigned"});
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        let artifacts = package_artifacts(&scratch.0)?;
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].path,
+            dunce::canonicalize(scratch.0.join(name))?
+        );
+        assert_eq!(artifacts[0].hash, hash);
+        assert_eq!(artifacts[0].bytes, bytes.len() as u64);
+        manifest["packages"][name]["bytes"] = json!(bytes.len() + 1);
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        assert!(package_artifacts(&scratch.0).is_err());
+        manifest["packages"] = json!({"../outside.zip":{"hash":hash,"bytes":0,"executable":false}});
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        assert!(package_artifacts(&scratch.0).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn content_identified_builds_preserve_an_existing_result() -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        let parent = scratch.0.join("builds/windows");
+        let id = "a".repeat(64);
+        for index in [1, 2] {
+            let staged = scratch.0.join(format!("staged-{index}"));
+            std::fs::create_dir_all(staged.join("build/data"))?;
+            std::fs::write(staged.join("build/Outpost.exe"), format!("player {index}"))?;
+            std::fs::write(staged.join("distribution.json"), b"fixture")?;
+            let result = publish_build(&staged, &parent, &id)?;
+            assert_eq!(
+                result,
+                parent.join(if index == 1 {
+                    id.clone()
+                } else {
+                    format!("{id}-2")
+                })
+            );
+            assert!(!staged.exists());
+        }
+        assert_eq!(
+            std::fs::read_to_string(parent.join(&id).join("build/Outpost.exe"))?,
+            "player 1"
+        );
+        Ok(())
+    }
+}

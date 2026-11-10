@@ -26,6 +26,24 @@ struct Row {
     children: bool,
     open: bool,
     glyph: stillkit::icons::Icon,
+    /// Part of a prefab instance (its root or inside it): drawn in the prefab colour.
+    prefab: bool,
+}
+
+/// Whether entity `id` (`record`) matches every term of a Hierarchy search: `t:Light`
+/// matches a component type, `is:prefab` prefab instances, other words the name (Unity's
+/// search syntax).
+fn matches(terms: &[String], id: &str, name: &str, record: &ara_doc::Record) -> bool {
+    let name = name.to_lowercase();
+    terms.iter().all(|term| match term.strip_prefix("t:") {
+        // `is:prefab`: instance roots and their members.
+        None if term == "is:prefab" => id.contains('/') || record.get("prefab").is_some(),
+        Some(kind) => record
+            .keys()
+            .filter(|k| ara_doc::is_component_key(k))
+            .any(|k| k.to_lowercase().contains(kind)),
+        None => name.contains(term.as_str()) || id.to_lowercase() == *term,
+    })
 }
 
 /// The icon for what an entity is, by its components.
@@ -56,7 +74,7 @@ pub(super) fn glyph(record: &ara_doc::Record) -> stillkit::icons::Icon {
 }
 
 /// The visible rows: depth-first in sibling order, collapsed branches skipped, filtered by
-/// `query` (matches and their ancestors, all open).
+/// `query` ([`matches`] and their ancestors, all open).
 fn rows(s: &Studio, query: &str) -> Vec<Row> {
     let resolved = &s.resolved;
     let mut children: BTreeMap<Option<&str>, Vec<(&str, &str, &str)>> = BTreeMap::new();
@@ -71,12 +89,12 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
     for list in children.values_mut() {
         list.sort();
     }
-    let query = query.trim().to_lowercase();
-    let keep: Option<BTreeSet<&str>> = (!query.is_empty()).then(|| {
+    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let keep: Option<BTreeSet<&str>> = (!terms.is_empty()).then(|| {
         let mut keep = BTreeSet::new();
         for (id, e) in resolved.iter() {
             let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
-            if name.to_lowercase().contains(&query) {
+            if matches(&terms, id, name, &e.record) {
                 let mut at = Some(id.as_str());
                 while let Some(a) = at.filter(|a| keep.insert(*a)) {
                     at = resolved.get(a).and_then(|e| e.parent.as_deref());
@@ -112,6 +130,7 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
                 children: has_children,
                 open,
                 glyph: glyph(record),
+                prefab: id.contains('/') || record.get("prefab").is_some(),
             });
             if has_children && open {
                 walk(Some(id), depth + 1, s, children, keep, out);
@@ -129,7 +148,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let search = search(
         l,
         "hierarchy/search",
-        "Filter entities",
+        "Filter: name, or t:Light",
         &query,
         None,
         |f| f.on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into()),
@@ -160,13 +179,17 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         let (hidden, locked) = (s.editor.state.hidden.clone(), s.editor.state.locked.clone());
         let rename = s.local.rename.clone();
         let drop = s.local.row_drag.as_ref().and_then(|d| d.target.clone());
+        let hovered = s.local.hierarchy_hover.clone();
         virtual_list("hierarchy/rows", rows.len(), ROW, move |range| {
             range
                 .map(|i| {
                     row_el(
                         l,
                         (&built, i),
-                        selection.contains(&built[i].id),
+                        (
+                            selection.contains(&built[i].id),
+                            hovered.as_ref() == Some(&built[i].id),
+                        ),
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
                         rename.as_ref(),
@@ -223,15 +246,125 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         .pad_y(4.0)
         .gap(3.0)
-        .child(row().pad_x(4.0).child(search.h(22.0).grow(1.0)))
+        .child(
+            row()
+                .pad_x(4.0)
+                .gap(2.0)
+                .child(search.h(22.0).grow(1.0))
+                .child(filter_menu(s)),
+        )
         .child(row().pad_x(4.0).child(root))
         .child(body)
+}
+
+/// The saved Hierarchy filters (`hierarchy.filters`: name to query), by name.
+pub(super) fn saved_filters(s: &Studio) -> Vec<(String, String)> {
+    s.editor
+        .state
+        .settings
+        .get("hierarchy.filters")
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, query)| Some((name.clone(), query.as_str()?.to_owned())))
+        .collect()
+}
+
+/// The Hierarchy's filter menu (Unity's search filters): the type filters, the saved
+/// ones, and Save This Filter for what is typed.
+fn filter_menu(s: &Studio) -> El<Studio> {
+    use crate::catalog::Target;
+    let l = &s.look;
+    const KEY: &str = "hierarchy/filters";
+    let open = s.local.select.as_deref() == Some(KEY);
+    let query = s.local.hierarchy_query.trim().to_owned();
+    let mut b = super::scene_overlays::toggle(l, icons::FUNNEL, "Filters", !query.is_empty())
+        .key(KEY)
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if !open {
+        return b;
+    }
+    let run = |id: &'static str, target: Target| {
+        move |s: &mut Studio| {
+            s.local.select = None;
+            super::commands::run(s, id, &target);
+        }
+    };
+    let mut items = vec![menu_heading(l, "Show")];
+    for (id, title, filter) in [
+        ("hierarchy.filter.lights", "Lights", "t:light"),
+        ("hierarchy.filter.cameras", "Cameras", "t:camera"),
+        ("hierarchy.filter.meshes", "Meshes", "t:meshrenderer"),
+        ("hierarchy.filter.audio", "Audio", "t:audio"),
+        ("hierarchy.filter.effects", "Effects", "t:vfx"),
+        ("hierarchy.filter.prefabs", "Prefab instances", "is:prefab"),
+    ] {
+        items.push(
+            menu_check(l, &format!("{KEY}/{id}"), title, query == filter)
+                .on_press(run(id, Target::None)),
+        );
+    }
+    let saved = saved_filters(s);
+    if !saved.is_empty() {
+        items.push(menu_separator(l));
+        items.push(menu_heading(l, "Saved"));
+    }
+    for (name, filter) in saved {
+        items.push(
+            menu_check(l, &format!("{KEY}/saved/{name}"), &name, query == filter)
+                .on_press(run("hierarchy.filter.apply", Target::Text(name.clone())))
+                .child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Remove this filter")
+                        .size(18.0)
+                        .key(format!("{KEY}/saved/{name}/remove"))
+                        .on_press(run("hierarchy.filter.remove", Target::Text(name))),
+                ),
+        );
+    }
+    items.push(menu_separator(l));
+    items.push(enabled(
+        menu_item(
+            l,
+            &format!("{KEY}/save"),
+            Some(icons::BOOKMARK),
+            "Save This Filter",
+            None,
+            false,
+        )
+        .on_press(run("hierarchy.filter.save", Target::None)),
+        !query.is_empty(),
+    ));
+    items.push(enabled(
+        menu_item(
+            l,
+            &format!("{KEY}/clear"),
+            Some(icons::X),
+            "Clear Filter",
+            None,
+            false,
+        )
+        .on_press(run("hierarchy.filter.all", Target::None)),
+        !query.is_empty(),
+    ));
+    b = b.overlay(
+        stillkit::el::menu(menu_panel(l, items).min_w(220.0))
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::End)
+            .on_dismiss(|s: &mut Studio| s.local.select = None),
+    );
+    b
 }
 
 fn row_el(
     l: &ara_kit::look::Look,
     (rows, at): (&std::sync::Arc<Vec<Row>>, usize),
-    selected: bool,
+    (selected, hovered): (bool, bool),
     hidden: bool,
     locked: bool,
     rename: Option<&(String, String)>,
@@ -315,7 +448,14 @@ fn row_el(
         None => text(r.name.clone())
             .text_size(12.0)
             .grow(1.0)
-            .color(if hidden { muted } else { ink }),
+            .color(if hidden {
+                muted
+            } else if r.prefab {
+                // Prefab instances read in the prefab colour, as Unity's do.
+                c.info_foreground.0
+            } else {
+                ink
+            }),
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
@@ -328,7 +468,12 @@ fn row_el(
             .cascade_ink()
             .label(label)
             .tooltip(label)
-            .opacity(if on { 1.0 } else { 0.0 })
+            // Shown while set, and on the row under the pointer; faint there when unset.
+            .opacity(match (on, hovered) {
+                (true, _) => 1.0,
+                (false, true) => 0.55,
+                (false, false) => 0.0,
+            })
             .hovered(move |e| e.opacity(1.0).color(ink))
             .on_press(move |s: &mut Studio| s.act(method, json!({"entity": id, "enabled": !on})))
             .child(icon(glyph).size(13.0))
@@ -375,6 +520,12 @@ fn row_el(
         .on_pointer({
             let rows = rows.clone();
             move |s: &mut Studio, e, tx| {
+                if e.phase == PointerPhase::Hover {
+                    if s.local.hierarchy_hover.as_ref() != Some(&pid) {
+                        s.local.hierarchy_hover = Some(pid.clone());
+                    }
+                    return true;
+                }
                 if e.button != stillkit::Button::Left {
                     return false;
                 }
@@ -447,8 +598,8 @@ fn row_el(
                     s.select(vec![id.clone()], false);
                 }
                 s.local.context = Some((
-                    crate::shell::commands::menus::Context::Entity,
-                    crate::shell::commands::Target::Entity(id.clone()),
+                    crate::catalog::menus::Context::Entity,
+                    crate::catalog::Target::Entity(id.clone()),
                     (x, y),
                 ));
             }
@@ -532,8 +683,8 @@ fn navigate(
             s.local.rename = Some((r.id.clone(), r.name.clone()));
             tx.focus("hierarchy/rename");
         }
-        _ => match super::commands::for_key(key, tx.modifiers()) {
-            Some(id) => super::commands::run(s, id, &crate::shell::commands::Target::None),
+        _ => match super::commands::for_key(s, key, tx.modifiers()) {
+            Some(id) => super::commands::run(s, &id, &crate::catalog::Target::None),
             None => return Handled::No,
         },
     }
@@ -546,7 +697,7 @@ fn drop_rows(s: &mut Studio, source: &str, target: &str, place: ara_ui::drag_dro
     if source == target {
         return;
     }
-    let plan = crate::shell::drag::content::hierarchy::commands(
+    let plan = crate::hierarchy_actions::reparent::commands(
         &s.resolved,
         &s.editor.state.selection,
         source,
@@ -558,5 +709,19 @@ fn drop_rows(s: &mut Studio, source: &str, target: &str, place: ara_ui::drag_dro
         Ok(commands) if !commands.is_empty() => s.apply(commands, "Move in hierarchy"),
         Ok(_) => {}
         Err(reason) => s.editor.report_failure(&std::io::Error::other(reason)),
+    }
+}
+
+/// Forgets the hovered Hierarchy row once the pointer has left it (rows learn they are
+/// hovered, never that the pointer left); the host runs it every pass.
+pub(super) fn unhover(rt: &mut stillkit::el::Runtime<Studio>) {
+    let Some(id) = rt.state().local.hierarchy_hover.clone() else {
+        return;
+    };
+    let still = rt
+        .presented(&format!("row/{id}"))
+        .is_some_and(|shown| shown.state == stillkit::interact::State::Hover);
+    if !still {
+        rt.update(|s| s.local.hierarchy_hover = None);
     }
 }
