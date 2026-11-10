@@ -1868,6 +1868,24 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Ok(())
             }
         },
+        // The startup scene: a scene asset, or the scene open now.
+        "assets.set_main" | "build.main_scene" => {
+            let doc = match (id, target) {
+                ("assets.set_main", Target::Asset(path)) => {
+                    let workspace = s.editor.host.store().workspace();
+                    workspace
+                        .docs()
+                        .find(|(storage, doc)| storage == path && doc.kind == "scene")
+                        .map(|(_, doc)| doc.id.to_string())
+                }
+                ("assets.set_main", _) => None,
+                _ => Some(s.editor.state.doc.clone()),
+            };
+            match doc {
+                Some(doc) => super::build_page::set_main(s, &doc),
+                None => Err("Choose a scene".into()),
+            }
+        }
         "view.camera.pilot" => {
             let entity = target.entity(&s.editor.state).map(str::to_owned);
             super::scene::toggle_pilot(s, entity.as_deref())
@@ -2094,6 +2112,7 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
             record("ReflectionProbe")
         }
         "view.camera.pilot" => record("Camera"),
+        "assets.set_main" => matches!(target, Target::Asset(path) if path.ends_with(".scene")),
         "lighting.probe.cancel" => super::lighting::capturing(s),
         "lighting.inspect" => [
             "Light",

@@ -3205,6 +3205,20 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Compare explicitly scoped frozen captures.",
     },
+    Command {
+        id: "assets.set_main",
+        title: "Set as Startup Scene",
+        icon: "play",
+        keys: "",
+        summary: "Open this scene first when the project starts (ara.project.json's main), as one undoable change.",
+    },
+    Command {
+        id: "build.main_scene",
+        title: "Start with the Open Scene",
+        icon: "play",
+        keys: "",
+        summary: "Make the scene open now the one the project starts with, as one undoable change.",
+    },
 ];
 
 /// Commands the menus name whose feature is not built yet; each one's summary says what
