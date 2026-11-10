@@ -75,7 +75,7 @@ internal static class ProjectCompiler
                         return;
                     }
                 var assembly = Path.Combine(root, module.AssemblyPath);
-                var capture = ProjectSourceCapture.Read(root, module.Sources);
+                var capture = compilations.ReadSources(assembly, root, module.Sources);
                 var sources = capture.Sources;
                 var configuration = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
