@@ -464,32 +464,29 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
     assert!(rt.state().local.profiler_hide_compare);
     // Two floating windows: focusing the first brings it to the front.
     rt.update(|s| {
-        for (id, panel) in [("float-a", "console"), ("float-b", "problems")] {
-            s.editor.state.floating.push(ara_ui::docking::Floating {
-                id: id.into(),
-                rect: [40, 40, 400, 300],
-                root: ara_ui::docking::DockNode::Area {
-                    id: format!("{id}-area"),
-                    tabs: vec![panel.into()],
-                    active: 0,
-                },
-            });
+        for panel in ["console", "problems"] {
+            s.act(
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "float", "rect": [40.0, 40.0, 400.0, 300.0]}),
+            );
         }
     });
+    let order = |rt: &Runtime<Studio>| -> Vec<String> {
+        rt.state()
+            .editor
+            .state
+            .floating
+            .iter()
+            .map(|f| f.id.clone())
+            .collect()
+    };
+    let first = order(&rt).first().cloned().expect("two floating windows");
     run(
         &mut rt,
         "window.focus_window",
-        Target::Window("float-a".into()),
+        Target::Window(first.clone()),
     );
-    let order: Vec<_> = rt
-        .state()
-        .editor
-        .state
-        .floating
-        .iter()
-        .map(|f| f.id.clone())
-        .collect();
-    assert_eq!(order, ["float-b", "float-a"]);
+    assert_eq!(order(&rt).last(), Some(&first), "in front");
     // Commands not built yet say why instead of failing.
     run(&mut rt, "file.save_as", Target::None);
     assert!(
@@ -768,10 +765,11 @@ fn sample_logs(s: &mut Studio) {
                origin: &str,
                source: Option<&str>,
                count: u64| {
+        let number = ara_diag::Code::parse(code).expect("sample diagnostic code is valid");
         let diagnostic = match severity {
-            Severity::Error => ara_diag::Diagnostic::error(ara_diag::Code(seq as u16), message),
-            Severity::Warning => ara_diag::Diagnostic::warning(ara_diag::Code(seq as u16), message),
-            _ => ara_diag::Diagnostic::info(ara_diag::Code(seq as u16), message),
+            Severity::Error => ara_diag::Diagnostic::error(number, message),
+            Severity::Warning => ara_diag::Diagnostic::warning(number, message),
+            _ => ara_diag::Diagnostic::info(number, message),
         };
         super::state::LogRow {
             seq,
@@ -789,7 +787,7 @@ fn sample_logs(s: &mut Studio) {
         row(
             1,
             Severity::Info,
-            "ARA0001",
+            "ARA4508",
             "Project opened: 4 entities in levels/main.scene",
             "engine",
             None,
@@ -1023,6 +1021,280 @@ fn a_settings_slider_previews_while_dragged_and_commits_once() {
 }
 
 #[test]
+fn the_scene_header_has_the_scenes_own_menu() {
+    let mut rt = open();
+    settle(&mut rt);
+    let header = rt.find("hierarchy/scene").unwrap();
+    rt.right_click(header.center().x, header.center().y);
+    settle(&mut rt);
+    let context = rt.state().local.context.clone();
+    assert!(
+        matches!(&context, Some((crate::catalog::menus::Context::Scene, crate::catalog::Target::Asset(p), _)) if p.ends_with("main.scene")),
+        "{context:?}"
+    );
+    for id in [
+        "file.save",
+        "assets.set_main",
+        "assets.show",
+        "create.empty",
+    ] {
+        assert!(rt.find(&format!("cmd/{id}")).is_some(), "{id} is offered");
+    }
+    // Create Empty from the scene's menu goes at the root, not under the selection.
+    let before = rt.state().resolved.len();
+    press(&mut rt, "cmd/create.empty");
+    let made: Vec<_> = rt.state().editor.state.selection.clone();
+    assert_eq!(rt.state().resolved.len(), before + 1);
+    assert!(
+        rt.state().resolved[&made[0]].parent.is_none(),
+        "a root entity"
+    );
+}
+
+#[test]
+fn the_assets_footer_names_the_selection_or_the_folder() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "assets"}));
+        s.act(
+            "editor.workspace",
+            json!({"folder": ara_doc::AUTHORING_ROOT, "asset": ""}),
+        );
+    });
+    settle(&mut rt);
+    let footer = |rt: &Runtime<Studio>| {
+        rt.tree()
+            .into_iter()
+            .find(|shown| shown.key.as_deref() == Some("assets/footer"))
+            .and_then(|shown| shown.label.as_deref().map(str::to_owned))
+    };
+    let folder = footer(&rt).unwrap_or_default();
+    assert!(
+        folder.contains(" items") || folder.contains(" item"),
+        "{folder}"
+    );
+    let path = rt
+        .state()
+        .assets
+        .as_ref()
+        .and_then(|b| b.items.iter().find(|a| a.path.ends_with("main.scene")))
+        .map(|a| a.path.clone())
+        .unwrap();
+    rt.update(|s| s.act("editor.workspace", json!({"asset": path.clone()})));
+    settle(&mut rt);
+    assert_eq!(footer(&rt), Some(path), "the selected asset's path");
+}
+
+#[test]
+fn the_inspectors_debug_mode_shows_the_record() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "inspector/raw");
+    assert!(rt.find("inspector/record").is_some(), "the record shows");
+    assert!(
+        rt.find("component/Transform").is_none(),
+        "instead of the fields"
+    );
+    press(&mut rt, "inspector/record/copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(
+        copied.contains("MeshRenderer") && copied.contains("Transform"),
+        "{copied}"
+    );
+    press(&mut rt, "inspector/raw");
+    assert!(
+        rt.find("component/Transform").is_some(),
+        "back to the fields"
+    );
+}
+
+#[test]
+fn the_profiler_shows_scopes_under_their_callers() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    press(&mut rt, "profiler/tree");
+    let parent = "profiler/call/studio.scene";
+    let child = "profiler/call/studio.scene/scene.render";
+    assert!(rt.find(parent).is_some(), "a root scope");
+    assert!(rt.find(child).is_none(), "its callee waits until it opens");
+    press(&mut rt, parent);
+    assert!(rt.find(child).is_some(), "opened: what it called");
+    press(&mut rt, "profiler/flat");
+    assert!(rt.find(parent).is_none(), "the flat list again");
+}
+
+#[test]
+fn problems_list_files_with_errors_first() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.act("editor.layout.show", json!({"panel": "problems"}));
+    });
+    settle(&mut rt);
+    let top = |rt: &Runtime<Studio>, seq: u64| rt.find(&format!("problems/{seq}")).map(|r| r.top);
+    // The error (5) above both warnings (3 and 4), though its file sorts last by name.
+    let (error, warning) = (top(&rt, 5).unwrap(), top(&rt, 4).unwrap());
+    assert!(error < warning, "{error} < {warning}");
+}
+
+#[test]
+fn a_console_rows_menu_copies_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.local.console_open = None;
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    let row = rt.find("console/row/4").unwrap();
+    rt.right_click(row.center().x, row.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.console_open, Some(4), "its details open");
+    press(&mut rt, "cmd/console.copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(copied.starts_with("ARA3302: Light Sun"), "{copied}");
+}
+
+#[test]
+fn empty_hierarchy_space_the_profiler_and_the_status_bar_have_menus() {
+    use crate::catalog::menus::Context;
+    let mut rt = open();
+    settle(&mut rt);
+    let kind = |rt: &Runtime<Studio>| rt.state().local.context.as_ref().map(|c| c.0);
+    let right_click = |rt: &mut Runtime<Studio>, x: f32, y: f32| {
+        rt.update(|s| s.local.context = None);
+        settle(rt);
+        rt.right_click(x, y);
+        settle(rt);
+    };
+    // Below the last row: the Hierarchy's own menu; on a row, the entity's.
+    let post = rt.find("row/e_post").unwrap();
+    right_click(&mut rt, post.center().x, post.bottom + 60.0);
+    assert_eq!(kind(&rt), Some(Context::Hierarchy));
+    right_click(&mut rt, post.center().x, post.center().y);
+    assert_eq!(kind(&rt), Some(Context::Entity));
+    let status = rt.find("status").unwrap();
+    right_click(&mut rt, status.left + 300.0, status.center().y);
+    assert_eq!(kind(&rt), Some(Context::Status));
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    let strip = rt
+        .find("profiler/track")
+        .or_else(|| rt.find("profiler/calls"))
+        .unwrap();
+    right_click(&mut rt, strip.center().x, strip.center().y);
+    assert_eq!(kind(&rt), Some(Context::Profiler));
+}
+
+#[test]
+fn the_palette_finds_settings() {
+    let mut rt = open();
+    rt.update(|s| s.local.palette = Some(("camera speed".into(), 0)));
+    settle(&mut rt);
+    press(&mut rt, "palette/0");
+    let view = rt.state().local.settings.clone();
+    assert!(
+        view.as_ref()
+            .is_some_and(|v| v.query == "Camera speed" && v.scope == crate::settings::Scope::User),
+        "{view:?}"
+    );
+}
+
+#[test]
+fn a_splitter_drag_is_kept_in_the_layout_without_a_failure() {
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    let ratio = |rt: &Runtime<Studio>| match &rt.state().editor.state.layout {
+        ara_ui::docking::DockNode::Split { ratio, .. } => *ratio,
+        _ => panic!("the default layout splits at its root"),
+    };
+    let before = ratio(&rt);
+    // The host reports the splits' rects; the drag reads them.
+    let keys = super::dock::rect_keys(&rt.state().editor.state.layout);
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let hit = rt.find("splitter/split/").expect("the root splitter");
+    let (x, y) = (hit.center().x, hit.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 60.0, y + 60.0);
+    rt.frame(FRAME);
+    rt.pointer_up(x + 60.0, y + 60.0);
+    settle(&mut rt);
+    // The authority keeps the new ratio (a later sync leaves it), and writes the file.
+    let after = ratio(&rt);
+    assert!((after - before).abs() > 0.01, "{before} -> {after}");
+    rt.update(|s| {
+        s.act("editor.focus", json!({"panel": "hierarchy"}));
+    });
+    assert!(
+        (ratio(&rt) - after).abs() < 1e-4,
+        "kept across the next action"
+    );
+    let file = root.join(".ara/editor-layout.json");
+    let written = (0..200).any(|_| {
+        std::thread::sleep(Duration::from_millis(10));
+        std::fs::read_to_string(&file).is_ok_and(|text| {
+            text.contains(&format!("{after}")) || text.contains(&format!("{:.3}", after))
+        })
+    });
+    assert!(written, "{} holds the new ratio {after}", file.display());
+    // Nothing failed on the way: no error reached the status bar or the Console.
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    settle(&mut rt);
+    let errors: Vec<_> = rt
+        .state()
+        .logs
+        .iter()
+        .filter(|r| r.severity == ara_diag::Severity::Error)
+        .map(|r| r.message.clone())
+        .collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rt.find("status/log").is_none());
+}
+
+#[test]
+fn menus_cascade_their_submenus() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "menu/File");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "folded under Build & Export"
+    );
+    let hover = |rt: &mut Runtime<Studio>, key: &str| {
+        let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+        rt.pointer_move(r.center().x, r.center().y);
+        settle(rt);
+    };
+    hover(&mut rt, "sub/Build & Export");
+    assert!(
+        rt.find("cmd/build.current").is_some(),
+        "beside it, on hover"
+    );
+    hover(&mut rt, "cmd/file.save");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "another row closes it"
+    );
+    assert_eq!(rt.state().local.menu, Some("File"), "the menu stays");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -1238,13 +1510,16 @@ fn the_console_searches_collapses_and_clear_stays_clear() {
     let row = |seq: u64, message: &str| super::state::LogRow {
         seq,
         severity: ara_diag::Severity::Warning,
-        code: "ARA0001".into(),
+        code: crate::codes::DIAGNOSTIC_SAMPLE.to_string(),
         message: message.into(),
         origin: "engine".into(),
         at: 0,
         source: None,
         count: 1,
-        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(ara_diag::Code(1), message)),
+        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(
+            crate::codes::DIAGNOSTIC_SAMPLE,
+            message,
+        )),
     };
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "console"}));
@@ -1389,7 +1664,7 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
             ),
             row(
                 2,
-                ara_diag::Diagnostic::warning(ara_diag::Code(1), "The project warns"),
+                ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "The project warns"),
             ),
         ];
         s.local.log_seen = 2;
@@ -1411,12 +1686,13 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
 #[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
-    let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
+    let mut diagnostic =
+        ara_diag::Diagnostic::error(crate::codes::DIAGNOSTIC_SAMPLE, "Lamp is broken");
     diagnostic.location.record = Some("e_lamp".into());
     let row = |seq: u64, severity, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
         seq,
         severity,
-        code: "ARA0001".into(),
+        code: diagnostic.code.to_string(),
         message: diagnostic.message.clone(),
         origin: "engine".into(),
         at: 0,
@@ -1424,7 +1700,7 @@ fn problems_filter_explain_and_go_to_what_they_name() {
         count: 1,
         diagnostic: std::sync::Arc::new(diagnostic),
     };
-    let warning = ara_diag::Diagnostic::warning(ara_diag::Code(1), "Box is odd");
+    let warning = ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "Box is odd");
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "problems"}));
         s.logs = vec![
@@ -2058,6 +2334,7 @@ fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
         rt.find("cmd/window.maximize").is_some(),
         "the tab's menu opens"
     );
+    press(&mut rt, "sub/Add Tab");
     press(&mut rt, "cmd/window.add_tab/Import");
     settle(&mut rt);
     let area = |rt: &Runtime<Studio>, panel: &str| super::dock::area_holding(rt.state(), panel);
@@ -2152,13 +2429,15 @@ fn menus_list_scenes_and_layouts_and_filters_and_layouts_save_by_name() {
         crate::state::saved_layouts(rt.state().editor.host.root()).contains(&"Wide".to_owned())
     );
     press(&mut rt, "menu/Window");
+    press(&mut rt, "sub/Layouts");
     assert!(
         rt.find("cmd/layout.load/Wide").is_some(),
-        "Window lists saved layouts"
+        "Window › Layouts lists saved layouts"
     );
     press(&mut rt, "menu/Window");
     // Open Recent lists the project's scenes.
     press(&mut rt, "menu/File");
+    press(&mut rt, "sub/Open Recent");
     assert!(
         rt.find("cmd/file.open_scene/levels/main.scene").is_some(),
         "File › Open Recent lists scenes"
@@ -2326,6 +2605,104 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The menu bar's menus.
+        for menu in ["File", "Edit", "View", "Window", "Help"] {
+            rt.update(|s| s.local.menu = Some(menu));
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!(
+                "{}-menu-{}.png",
+                if light { "light" } else { "dark" },
+                menu.to_lowercase()
+            );
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+        }
+        // A submenu open beside its menu.
+        rt.update(|s| {
+            s.local.menu = Some("File");
+            s.local.submenu = Some("Build & Export");
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-menu-cascade.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            s.local.menu = None;
+            s.local.submenu = None;
+        });
+        // A Hierarchy search, its match marked in each name.
+        rt.update(|s| s.local.hierarchy_query = "o".into());
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-hierarchy-search.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.hierarchy_query.clear());
+        // The Profiler's call tree, one scope open.
+        rt.update(|s| {
+            super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+            s.local.profiler_tree = true;
+            s.local.profiler_open.insert("studio.scene".into());
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-profiler-tree.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.profiler_tree = false);
+        // The Inspector's Debug mode: the record itself.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "inspector"}));
+            s.local.inspector_raw = true;
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-inspector-debug.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.inspector_raw = false);
+        // The scene header's own menu.
+        let header = rt.find("hierarchy/scene").unwrap();
+        rt.right_click(header.center().x, header.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-scene-menu.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.context = None);
+        settle(&mut rt);
         let row = rt.find("row/e_box").unwrap();
         rt.right_click(row.center().x, row.center().y);
         for _ in 0..30 {
@@ -2465,6 +2842,20 @@ fn captures() {
             rt.frame(FRAME);
         }
         let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        // A search reaches settings too.
+        rt.update(|s| s.local.palette = Some(("camera".into(), 0)));
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-palette-search.png",
+            if light { "light" } else { "dark" }
+        );
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),

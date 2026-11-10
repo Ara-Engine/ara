@@ -1,0 +1,38 @@
+{
+    "version": "1.1",
+    "parameters": [
+
+    ],
+    "globalScope": {
+        "kind": "none",
+        "parameters": [
+
+        ]
+    },
+    "entryPoints": [
+        {
+            "name": "depthOnly",
+            "stage": "fragment",
+            "scope": {
+                "kind": "none",
+                "parameters": [
+
+                ]
+            },
+            "result": {
+                "semanticName": "SV_DEPTH",
+                "type": {
+                    "kind": "scalar",
+                    "scalarType": "float32",
+                    "sizes": [
+
+                    ]
+                }
+            },
+            "bindings": [
+
+            ]
+        }
+    ],
+    "bindlessSpaceIndex": 0
+}
