@@ -51,9 +51,9 @@ internal static class ProjectCompiler
         var orderedBuilds = inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay")
             .Select(m => new BuildState(m, Attempt(request, m))).ToArray();
         var builds = orderedBuilds.ToDictionary(b => b.Module.Name, StringComparer.OrdinalIgnoreCase);
-        var toolHash = Hash(File.ReadAllBytes(typeof(ProjectCompiler).Assembly.Location));
-        var runtimeHash = Hash(File.ReadAllBytes(typeof(Behaviour).Assembly.Location));
-        var generatorHash = Hash(File.ReadAllBytes(typeof(Ara.Generators.ModuleGenerator).Assembly.Location));
+        var toolHash = HashFile(typeof(ProjectCompiler).Assembly.Location);
+        var runtimeHash = HashFile(typeof(Behaviour).Assembly.Location);
+        var generatorHash = HashFile(typeof(Ara.Generators.ModuleGenerator).Assembly.Location);
         var graph = new Lazy<string>(() => ModuleSession.Graph(inventory), LazyThreadSafetyMode.ExecutionAndPublication);
 
         void Build(BuildState build)
@@ -75,12 +75,12 @@ internal static class ProjectCompiler
                         return;
                     }
                 var assembly = Path.Combine(root, module.AssemblyPath);
-                var capture = ProjectSourceCapture.Read(root, module.Sources);
+                var capture = compilations.ReadSources(assembly, root, module.Sources);
                 var sources = capture.Sources;
                 var configuration = Hash(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
-                    editorHash = module.Profile == "editor" ? Hash(File.ReadAllBytes(typeof(Ara.Editor.EditorRegistry).Assembly.Location)) : "",
+                    editorHash = module.Profile == "editor" ? HashFile(typeof(Ara.Editor.EditorRegistry).Assembly.Location) : "",
                     references = module.References.Select(r => new { name = r, hash = builds[r].Module.Fingerprint }),
                 }));
                 var fingerprint = Hash(JsonSerializer.SerializeToUtf8Bytes(new
@@ -217,6 +217,13 @@ internal static class ProjectCompiler
     }
 
     static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    /// <summary>Read every SDK byte without an assembly-sized temporary array.</summary>
+    internal static string HashFile(string path)
+    {
+        using var file = File.OpenRead(path);
+        return Convert.ToHexStringLower(SHA256.HashData(file));
+    }
 
     static CompileAttempt Attempt(ProjectBuildRequest request, ProjectModule module) => request.DiagnosticContext is { } context
         ? new(module.Name, module.Profile, context)

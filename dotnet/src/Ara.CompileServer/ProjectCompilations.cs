@@ -21,6 +21,14 @@ internal sealed class ProjectCompilations
         foreach (var path in _modules.Keys.Where(path => !active.Contains(path)).ToArray()) _modules.TryRemove(path, out _);
     }
 
+    /// <summary>Read current file contents while offering this module's existing strings for exact comparison.</summary>
+    internal ProjectSourceCapture ReadSources(string output, string project, SourceFile[] files)
+    {
+        _modules.TryGetValue(output, out var previous);
+        return ProjectSourceCapture.Read(project, files, previous is null ? null
+            : path => previous.Sources.TryGetValue(path, out var source) ? source.Text : null);
+    }
+
     /// <summary>Reuses unchanged parsed text; dependency/configuration changes rebuild semantic and generator state.</summary>
     internal (GeneratorDriver Driver, Compilation Final, ImmutableArray<Diagnostic> Diagnostics, SyntaxTree[] Trees) Generate(
         string output, string configuration, ModuleCompiler compiler, bool hot,
