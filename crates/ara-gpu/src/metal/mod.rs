@@ -1116,3 +1116,6 @@ impl Drop for MetalDevice {
 
 #[cfg(test)]
 mod attachment_tests;
+
+#[cfg(test)]
+mod hit_geometry_tests;
