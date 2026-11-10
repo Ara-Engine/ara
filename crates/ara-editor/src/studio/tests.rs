@@ -4551,6 +4551,71 @@ fn a_prefab_dragged_onto_a_hierarchy_row_lands_under_that_entity() {
 }
 
 #[test]
+fn a_script_fault_shows_its_stack_with_each_frame_s_source() {
+    let mut rt = open();
+    let frame = |method: &str, file: Option<&str>, line: Option<u32>| json!({"method": method, "file": file, "line": line, "column": line.map(|_| 9)});
+    let exception = json!({
+        "schema": 1, "type": "System.InvalidOperationException", "message": "No target",
+        "frames": [
+            frame("PlayerControl.Update()", Some("content/scripts/PlayerControl.cs"), Some(42)),
+            frame("Ara.Runtime.Tick()", None, None),
+        ],
+        "inners": [{
+            "schema": 1, "type": "System.NullReferenceException", "message": "target was null",
+            "frames": [frame("Targeting.Find()", Some("content/scripts/Targeting.cs"), Some(7))],
+            "inners": [], "truncated": false
+        }],
+        "truncated": false
+    });
+    let diagnostic = ara_diag::Diagnostic::error(
+        ara_diag::codes::UNRESOLVED_REF,
+        "PlayerControl.Update threw",
+    )
+    .data(json!({"exception": exception}));
+    let entry = json!({"seq": 9, "at": 0, "origin": "script", "diagnostic": serde_json::to_value(&diagnostic).unwrap()});
+    let row = super::state::LogRow::from_entry(&entry).expect("a bus record reads");
+    rt.update(|s| {
+        s.logs = vec![row];
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.local.console_open = Some(9);
+    });
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("InvalidOperationException: No target")),
+        "the fault"
+    );
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("Caused by System.NullReferenceException")),
+        "its cause"
+    );
+    assert!(
+        texts.iter().any(|t| t == "at Ara.Runtime.Tick()"),
+        "a frame without a source"
+    );
+    assert!(
+        rt.find("console/detail/frame/0").is_some(),
+        "PlayerControl.cs:42 opens"
+    );
+    assert!(
+        rt.find("console/detail/frame/1").is_none(),
+        "no link without a file"
+    );
+    assert!(
+        rt.find("console/detail/frame/2").is_some(),
+        "the cause's frame opens too"
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
