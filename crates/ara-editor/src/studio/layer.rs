@@ -52,11 +52,16 @@ impl Layer {
         }
         // Windows' bounded blit may still read the target the next draw resizes.
         #[cfg(windows)]
-        if let Some((present, _, _)) = &mut self.present {
-            // SAFETY: the layer and renderer retain the presentation's creating device.
-            return unsafe {
-                present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))
-            };
+        {
+            if let Some((present, _, _)) = &mut self.present {
+                // SAFETY: the layer and renderer retain the presentation's creating device.
+                if !unsafe {
+                    present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))?
+                } {
+                    return Ok(false);
+                }
+            }
+            self.ui.order_before_scene(ui_device(renderer.gpu()))?;
         }
         let _ = renderer;
         Ok(true)
