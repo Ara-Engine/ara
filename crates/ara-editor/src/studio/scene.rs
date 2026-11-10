@@ -109,6 +109,19 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .h((a[1] - b[1]).abs())
                 .fill(c.primary.0.with_alpha(0.1))
                 .border(1.0, c.primary.0.with_alpha(0.7))
+        }))
+        // Mesh Paint's brush on the mesh under the pointer: its radius, and inside it where
+        // the falloff starts.
+        .children(s.local.paint_ring.into_iter().flat_map(|(x, y, r)| {
+            let falloff = s.editor.state.paint.map_or(0.5, |p| p.falloff);
+            let ring = |radius: f32, alpha: f32| {
+                el().absolute(x - radius, y - radius)
+                    .size(radius * 2.0)
+                    .radius(radius)
+                    .border(1.5, stillkit::Rgba::new(1.0, 1.0, 1.0, alpha))
+            };
+            let inner = (r * (1.0 - falloff)).max(1.0);
+            [ring(r.max(2.0), 0.9), ring(inner, 0.45)]
         }));
     // Flying: the speed, which the wheel changes.
     if s.local.flying {
@@ -181,6 +194,32 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
 /// Camera navigation and picking from the pointer's story on the view.
 fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el::Tx) -> bool {
     let at = [e.local.x, e.local.y];
+    // Mesh Paint takes the left button (Alt still orbits): the host paints the meshes.
+    if s.editor.state.paint.is_some() && e.size.0 > 0.0 && !e.mods.alt {
+        use super::state::PaintInput;
+        let (u, v) = (e.local.x / e.size.0, e.local.y / e.size.1);
+        match (e.phase, e.button) {
+            (PointerPhase::Hover, _) => s.local.paint_hover = Some((u, v)),
+            (PointerPhase::Down, Button::Left) => {
+                s.local.paint_input.push(PaintInput::Down(u, v));
+                return true;
+            }
+            (PointerPhase::Move, Button::Left) => {
+                s.local.paint_hover = Some((u, v));
+                s.local.paint_input.push(PaintInput::Move(u, v));
+                return true;
+            }
+            (PointerPhase::Up, Button::Left) => {
+                s.local.paint_input.push(PaintInput::Up);
+                return true;
+            }
+            (PointerPhase::Cancel, _) => {
+                s.local.paint_input.push(PaintInput::Cancel);
+                return true;
+            }
+            _ => {}
+        }
+    }
     // The gizmo takes the left button before picking and orbiting.
     match (e.phase, e.button) {
         (PointerPhase::Hover, _) => {

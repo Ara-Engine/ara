@@ -1089,6 +1089,43 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn mesh_paint_sets_its_brush_and_sends_scene_presses_to_the_host() {
+    use crate::catalog::Target;
+    use crate::paint::PaintTool;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "paint.mode", &Target::None));
+    settle(&mut rt);
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    assert!(rt.state().editor.state.paint.is_some(), "Mesh Paint is on");
+    assert!(rt.find("paint/mode").is_some(), "its panel shows");
+    press(&mut rt, "paint/tool/fill");
+    press(&mut rt, "paint/paint.channel.alpha");
+    press(&mut rt, "paint/paint.color.red");
+    press(&mut rt, "paint/swap");
+    let p = rt.state().editor.state.paint.unwrap();
+    assert_eq!(p.tool, PaintTool::Fill);
+    assert!(!p.channels[3], "alpha off");
+    assert_eq!(p.erase, [1.0, 0.0, 0.0, 1.0], "red swapped to erase");
+    rt.update(|s| super::commands::run(s, "paint.radius.up", &Target::None));
+    assert!(rt.state().editor.state.paint.unwrap().radius > p.radius);
+    // A press in the Scene goes to the host's painter, not to picking.
+    let view = rt.find("scene/view").unwrap();
+    rt.pointer_move(view.center().x, view.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(view.center().x, view.center().y);
+    rt.frame(FRAME);
+    assert!(matches!(
+        rt.state().local.paint_input.first(),
+        Some(super::state::PaintInput::Down(..))
+    ));
+    rt.pointer_up(view.center().x, view.center().y);
+    rt.update(|s| super::commands::run(s, "paint.mode", &Target::None));
+    assert!(rt.state().editor.state.paint.is_none(), "off again");
+}
+
+#[test]
 fn lighting_recaptures_probes_and_applies_look_presets() {
     use crate::catalog::Target;
     let mut rt = open();
@@ -1400,7 +1437,14 @@ fn captures() {
         }
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         for panel in [
-            "assets", "console", "problems", "agents", "history", "lighting", "profiler",
+            "assets",
+            "console",
+            "problems",
+            "agents",
+            "history",
+            "lighting",
+            "profiler",
+            "mesh-paint",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)

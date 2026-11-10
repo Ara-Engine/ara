@@ -30,6 +30,7 @@ mod inspector;
 mod layer;
 mod lighting;
 mod material_stats;
+mod mesh_paint;
 mod panels;
 mod preferences;
 mod present;
@@ -479,6 +480,76 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 });
             }
+        }
+        // Mesh Paint: the Scene view's presses and drags as world rays on the selection's
+        // meshes; a press on none of them selects as a click would.
+        let input = rt.touch(|s| std::mem::take(&mut s.local.paint_input));
+        // The ring follows the pointer only when it moved (a hit test seeds every mesh).
+        let hover = rt
+            .touch(|s| s.local.paint_hover.take())
+            .filter(|_| rt.state().editor.state.paint.is_some());
+        if (!input.is_empty() || hover.is_some()) && rt.state().local.scene.ready {
+            let size = renderer.size();
+            let ray = |s: &Studio, (u, v): (f32, f32)| {
+                s.editor
+                    .state
+                    .camera
+                    .ray(size, [u * 2.0 - 1.0, 1.0 - v * 2.0])
+            };
+            rt.update(|s| {
+                for event in input {
+                    use state::PaintInput;
+                    let result = match event {
+                        PaintInput::Down(u, v) => match ray(s, (u, v)) {
+                            Some(r) => {
+                                s.painter
+                                    .begin(&mut s.editor, &view, &scene_view, r)
+                                    .map(|hit| {
+                                        if !hit {
+                                            s.local.pick = Some(scene::Pick {
+                                                u,
+                                                v,
+                                                additive: false,
+                                                context: None,
+                                            });
+                                        }
+                                    })
+                            }
+                            None => Ok(()),
+                        },
+                        PaintInput::Move(u, v) => match ray(s, (u, v)) {
+                            Some(r) => s.painter.drive(&mut s.editor, r).map(drop),
+                            None => Ok(()),
+                        },
+                        PaintInput::Up => s.painter.finish(&mut s.editor, true),
+                        PaintInput::Cancel => s.painter.finish(&mut s.editor, false),
+                    };
+                    if let Err(error) = result {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                }
+                s.local.painting = s.painter.active();
+                // The brush ring: the radius at the hit's distance, in view px.
+                if let Some((u, v)) = hover {
+                    s.local.paint_ring = (|| {
+                        let settings = s.editor.state.paint?;
+                        let ray = ray(s, (u, v))?;
+                        let point =
+                            crate::painter::Painter::hit(&s.editor, &view, &scene_view, ray)?;
+                        let camera = s.editor.state.camera;
+                        let distance = (point - camera.position()).length().max(1e-3);
+                        let rect = s.local.rects.get("scene/view")?;
+                        let half = (camera.fov_y_degrees.to_radians() * 0.5).tan();
+                        let px = settings.radius / (distance * half) * rect.height() * 0.5;
+                        Some((u * rect.width(), v * rect.height(), px))
+                    })();
+                }
+            });
+            scene_dirty = true;
+        }
+        // Mesh Paint off: no ring.
+        if rt.state().editor.state.paint.is_none() && rt.state().local.paint_ring.is_some() {
+            rt.update(|s| s.local.paint_ring = None);
         }
         // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
         let game_rect = rt

@@ -16,6 +16,7 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "assets" => assets(s),
         "console" => console(s),
         "problems" => problems(s),
+        "mesh-paint" => super::mesh_paint::view(s),
         "agents" => super::agents::agents(s),
         "history" => super::agents::history(s),
         "lighting" => super::lighting::view(s),

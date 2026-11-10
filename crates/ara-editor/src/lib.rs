@@ -27,6 +27,7 @@ pub mod inspector;
 mod loading;
 mod native;
 pub mod paint;
+pub(crate) mod painter;
 mod persist;
 pub(crate) mod play_controls;
 pub mod prefab;

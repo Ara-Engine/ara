@@ -343,6 +343,16 @@ pub struct Local {
     pub device: String,
     /// About Ara or System Info, open.
     pub(crate) about: Option<super::about::Page>,
+    /// Mesh Paint input from the Scene view for the host to run (it holds the renderer's
+    /// scene): presses, drags and releases, at places across the view (0..1).
+    pub paint_input: Vec<PaintInput>,
+    /// A Mesh Paint stroke is under way (the host reports it).
+    pub painting: bool,
+    /// Where the pointer rests in Mesh Paint mode (0..1 across the view), for the host to
+    /// place the brush ring.
+    pub paint_hover: Option<(f32, f32)>,
+    /// The brush ring: its centre and radius in view px, over the mesh under the pointer.
+    pub paint_ring: Option<(f32, f32, f32)>,
     /// The History transaction opened to its changes.
     pub history_open: Option<String>,
     /// The History search: transactions whose description or author match.
@@ -381,6 +391,19 @@ pub struct Local {
     pub problems_search: String,
     /// Problems rows opened to their explanation (Why?), by bus sequence number.
     pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A Mesh Paint pointer event from the Scene view, at a place across it (0..1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PaintInput {
+    /// The left button went down: paint, fill, flood or pick there.
+    Down(f32, f32),
+    /// The stroke moved there.
+    Move(f32, f32),
+    /// Released: the stroke commits.
+    Up,
+    /// Escape or focus loss: the stroke is dropped.
+    Cancel,
 }
 
 /// A one-field question: its title, the text typed, and what Enter does with it.
@@ -438,6 +461,8 @@ pub struct Studio {
     pub(crate) importer: crate::asset_import::Importer,
     /// C# requests in flight: a reload in Play, module discovery for the IDE.
     pub(crate) scripts: super::scripts::Scripts,
+    /// Mesh Paint's stroke under way (run by the host on the Scene's meshes).
+    pub(crate) painter: crate::painter::Painter,
 }
 
 impl Studio {
@@ -465,6 +490,7 @@ impl Studio {
             play: Default::default(),
             importer: Default::default(),
             scripts: Default::default(),
+            painter: Default::default(),
         };
         studio.resolve();
         studio
