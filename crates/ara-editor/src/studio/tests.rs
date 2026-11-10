@@ -1267,6 +1267,33 @@ fn a_splitter_drag_is_kept_in_the_layout_without_a_failure() {
 }
 
 #[test]
+fn menus_cascade_their_submenus() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "menu/File");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "folded under Build & Export"
+    );
+    let hover = |rt: &mut Runtime<Studio>, key: &str| {
+        let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+        rt.pointer_move(r.center().x, r.center().y);
+        settle(rt);
+    };
+    hover(&mut rt, "sub/Build & Export");
+    assert!(
+        rt.find("cmd/build.current").is_some(),
+        "beside it, on hover"
+    );
+    hover(&mut rt, "cmd/file.save");
+    assert!(
+        rt.find("cmd/build.current").is_none(),
+        "another row closes it"
+    );
+    assert_eq!(rt.state().local.menu, Some("File"), "the menu stays");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2302,6 +2329,7 @@ fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
         rt.find("cmd/window.maximize").is_some(),
         "the tab's menu opens"
     );
+    press(&mut rt, "sub/Add Tab");
     press(&mut rt, "cmd/window.add_tab/Import");
     settle(&mut rt);
     let area = |rt: &Runtime<Studio>, panel: &str| super::dock::area_holding(rt.state(), panel);
@@ -2396,13 +2424,15 @@ fn menus_list_scenes_and_layouts_and_filters_and_layouts_save_by_name() {
         crate::state::saved_layouts(rt.state().editor.host.root()).contains(&"Wide".to_owned())
     );
     press(&mut rt, "menu/Window");
+    press(&mut rt, "sub/Layouts");
     assert!(
         rt.find("cmd/layout.load/Wide").is_some(),
-        "Window lists saved layouts"
+        "Window › Layouts lists saved layouts"
     );
     press(&mut rt, "menu/Window");
     // Open Recent lists the project's scenes.
     press(&mut rt, "menu/File");
+    press(&mut rt, "sub/Open Recent");
     assert!(
         rt.find("cmd/file.open_scene/levels/main.scene").is_some(),
         "File › Open Recent lists scenes"
@@ -2570,6 +2600,41 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The menu bar's menus.
+        for menu in ["File", "Edit", "Window", "Help"] {
+            rt.update(|s| s.local.menu = Some(menu));
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!(
+                "{}-menu-{}.png",
+                if light { "light" } else { "dark" },
+                menu.to_lowercase()
+            );
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+        }
+        // A submenu open beside its menu.
+        rt.update(|s| {
+            s.local.menu = Some("File");
+            s.local.submenu = Some("Build & Export");
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-menu-cascade.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            s.local.menu = None;
+            s.local.submenu = None;
+        });
         // A Hierarchy search, its match marked in each name.
         rt.update(|s| s.local.hierarchy_query = "o".into());
         for _ in 0..30 {
