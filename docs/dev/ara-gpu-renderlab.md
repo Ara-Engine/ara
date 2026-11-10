@@ -19,7 +19,7 @@ The Mac compiles those paths and runs their pure tests, not a Vulkan device.
 | Raster | Depth comparisons/bias, cull/winding, vertex layouts and instance streams, per-target blend. Metal draw/depth/blend pixel probes pass. |
 | Buffer heap | Up to 4,096 storage buffers, clamped to Vulkan device limits. Metal high-slot shader probe passes. |
 | Dynamic ray tracing | Reserved TLAS capacity, rebuild/refit and BLAS compaction. Existing cooked query probes exercise 4,096 instances and changed geometry/transforms on both queues. |
-| Ray-query hit vertex positions | **Skipped:** direct position fetch is not enabled or exposed. Metal converter tooling/authentication blocks proving the portable shader contract. |
+| Ray-query hit vertex positions | **Skipped:** direct position fetch is not enabled or exposed. Slang’s position-fetch intrinsic lacks a DXIL target; a portable shader helper needs verification. |
 | Compute-only family optional | Vulkan prefers it, then falls back to graphics; pure selection tests pass. This has no equivalent Metal family requirement. |
 | Barriers | Batch commands and checked byte/mip/layer ranges. Vulkan emits one dependency call; Metal conservatively synchronizes stages. Native transfer/range probes pass. |
 | Memory | Private resources suballocate Metal heaps/Vulkan blocks; completion gates reuse. Metal native heap sharing, preparation ownership and blocked-retirement probes pass. |
@@ -71,18 +71,52 @@ and compute. The full suite also presents ten SDL frames and imports an IOSurfac
 from another process. Shader cooker structural/dependency tests pass; its DXIL
 integration tests remain explicitly ignored on macOS.
 
-The opt-in native allocation-footprint probe ran through `ara-dev gpu`. Raw bytes:
-requested 552956640; separate native allocations 592412672; pooled heaps 562036736
-across 67 heaps. This is a Mac allocation-count measurement, not the original PC
-resource set or a timing result. The guard explicitly allowed foreign load because
-this records native allocation sizes. Quiet CPU barrier timing was deferred because
-other editor/player and GPU work was active; no speedup claim is made.
+The opt-in native allocation probes run through `ara-dev gpu`. The buffer-only
+fixture requested 552956640 bytes; separate allocations took 592412672, pooled heaps
+562036736. A mixed 1080p fixture now covers **1,324 resources**: 512 vertex/index
+pairs, 256 mipmapped material maps and 44 render targets, depth pyramids and volume
+LUTs. The count/scale matches the earlier PC test; this is a new synthetic inventory,
+not a capture of that PC resource set.
 
-The Metal Shader Converter download redirects to Apple Developer sign-in, where
-interactive password/passkey authentication is required. No converter was installed.
-A fresh v4 converter cook (including comparison sampling) and direct ray-query hit
-position fetch remain blocked. Existing cooked v3 Metal shaders still run and prove
-prefix compatibility; native MSL tests cover the new table behavior.
+| Mixed inventory | Native bytes | Over requested |
+|---|---:|---:|
+| Requested texels/buffer bytes | 553379568 | — |
+| Separate native allocations (before suballocation) | 573769096 | 3.68% |
+| Original fixed 8 MiB heaps | 586678272 | 6.02% |
+| Tuned heaps (small blocks; matching heaps from 1 MiB) | 569245696 | 2.87% |
+
+A reconstruction of the [original recipe](https://github.com/Ara-Engine/renderlab/blob/71ea35542346c70a2eea0b48d8ef05a931876979/docs/gpu-layer-bench.md#L257-L266)
+also ran: 1,000 log-spaced storage buffers (256 B to 1 MiB), 24 1080p RGBA16Float
+storage/sample images and 300 64×64 RGBA8 sampled images. The source does not give
+the original buffer rounding; this fixture specifies four-byte rounding, so it is
+not a byte-identical replay. Requested 529479412 bytes; separate native allocations
+544722772 bytes (+2.88%); pooled heaps 538443776 bytes (+1.69%), 40 heaps. Run
+`historical_allocation_footprint` to reproduce `target/ara-gpu/historical-allocation.json`.
+
+The realistic mix exposed wasted tails in medium image heaps. Matching their heaps
+to the native requirement saves 17432576 bytes versus the first pool, and 4523400
+bytes versus separate allocations. The final set has 59 heaps and 4964352 unused
+heap bytes. This measures native allocation reservation, not resident physical pages
+or full renderer memory (device tables, host staging, AS and driver caches excluded).
+It does not reproduce or supersede the PC's 16.7% Vulkan result. The guard explicitly
+allowed foreign load for these allocation-size counters, not timing claims.
+
+Reproduce with the opt-in `mixed_allocation_footprint` library test through
+`ara-dev gpu --foreign-cpu-percent 100 --foreign-gpu-percent 100`; it writes canonical
+JSON under `target/ara-gpu/mixed-allocation.json`. CPU barrier timing now alternates
+200 AB/BA measured pairs after warm-up and reports recording/submit/total p50 and
+p95, excluding GPU waits. Default-threshold attempts refused timing due foreign
+CPU load; the latest peak was 24.65% against the 10% limit. No quiet CPU result is
+claimed yet; the failed lease evidence is under `target/ara-dev/gpu-load/`.
+
+Windows is the canonical shader cook host and has Metal Shader Converter 4.0.3.
+Fresh v4 artifacts are being produced there, then verified on Metal; no Mac install
+is needed. Native MSL tests already cover regular and comparison tables. The direct
+Slang `CommittedGetIntersectionTriangleVertexPositions()` probe compiles for SPIR-V
+but is rejected for DXIL (including `sm_6_10`) by Slang 2026.18.3 with E36107,
+“unavailable features in entry point,” before the converter runs. A shared shader
+helper can reconstruct the triangle from committed instance/primitive IDs and
+retained vertex/index heap entries; native position-return remains unverified.
 
 On Windows, run the focused gates above without the Metal environment variables,
 plus the native allocation test:

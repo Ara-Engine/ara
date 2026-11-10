@@ -68,9 +68,10 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
   (ARA6007) and the Metal backend refuses those pipelines with `ARA_GPU_CONTRACT`.
 - `crates/ara-shader-cook/metal/root-signature.json` is the one global root
   signature. It mirrors the Vulkan set-0 layout; the runtime side of the same
-  layout is `crates/ara-gpu/src/metal/abi.rs`. The converter appends the three
-  static samplers as a fifth table, so every stage's top-level argument buffer is
-  32 constant bytes plus five table addresses (72 bytes).
+  layout is `crates/ara-gpu/src/metal/abi.rs`. The v4 layout has regular and
+  comparison sampler tables at bytes 64 and 72: 32 constant bytes plus six table
+  addresses (80 bytes). New runtimes accept the old v3 72-byte prefix; new cooks
+  carry v4. Fresh converter cooks must verify both tables on Metal.
 
 ## Status
 
