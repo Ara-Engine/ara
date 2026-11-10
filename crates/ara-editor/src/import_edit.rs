@@ -5,9 +5,12 @@ use crate::Editor;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
-
 /// Applies `changes` as one undo step; `false` when they lower to no command.
-pub(crate) fn apply_changes(editor: &mut Editor, changes: Vec<Change>, why: &str) -> ara_ui::Result<bool> {
+pub(crate) fn apply_changes(
+    editor: &mut Editor,
+    changes: Vec<Change>,
+    why: &str,
+) -> ara_ui::Result<bool> {
     let revision = editor.host.store().revision();
     let commands = lower(editor, changes)?;
     if commands.is_empty() {
