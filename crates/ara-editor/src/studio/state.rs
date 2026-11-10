@@ -344,6 +344,8 @@ pub struct Local {
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
     pub lighting_menu: Option<&'static str>,
+    /// The light whose colour-temperature menu is open in the Lighting list.
+    pub lighting_color: Option<String>,
     /// The Play options menu (mode, clients, network, Simulate, Eject, Keep), open.
     pub play_menu: bool,
     /// File operations still running on host jobs: each job and what it does.

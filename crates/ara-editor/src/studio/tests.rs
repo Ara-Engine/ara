@@ -665,6 +665,46 @@ fn keyboard_shortcuts_record_clear_and_reset_a_binding() {
 }
 
 #[test]
+fn the_lighting_list_mixes_lights_in_place() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.lighting", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let light = |rt: &Runtime<Studio>| rt.state().resolved["e_sun"].record["Light"].clone();
+    // Intensity: typed in the row, Enter applies.
+    press(&mut rt, "lighting/e_sun/intensity");
+    rt.key_with(
+        stillkit::el::KeyCode::of('A').0,
+        stillkit::el::Modifiers::CTRL,
+    );
+    rt.type_text("12000");
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    settle(&mut rt);
+    assert_eq!(light(&rt)["intensity"], json!(12000.0));
+    // A colour temperature from the swatch's menu.
+    press(&mut rt, "lighting/e_sun/color");
+    press(&mut rt, "lighting/e_sun/kelvin/1900");
+    let color = light(&rt)["color"].clone();
+    assert!(
+        color[0].as_f64().unwrap() > color[2].as_f64().unwrap(),
+        "candlelight is warm: {color}"
+    );
+    // The eye hides it in the Scene only.
+    press(&mut rt, "lighting/e_sun/eye");
+    assert!(rt.state().editor.state.hidden.contains("e_sun"));
+    // Rows that are not lights have no mixer.
+    assert!(rt.find("lighting/e_post/intensity").is_none());
+    // The curve runs warm to cool, its brightest channel 1.
+    let [warm, cool] = [
+        super::lighting::kelvin(1900.0),
+        super::lighting::kelvin(10000.0),
+    ];
+    assert!(
+        warm[0] == 1.0 && warm[2] < 0.2 && cool[2] == 1.0 && cool[0] < 1.0,
+        "{warm:?} {cool:?}"
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
