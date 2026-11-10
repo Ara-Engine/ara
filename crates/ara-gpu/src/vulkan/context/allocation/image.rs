@@ -53,6 +53,7 @@ pub(crate) fn pooled_image(
         let mut memory = vk::DeviceMemory::null();
         let mut view = vk::ImageView::null();
         let mut storage_view = None;
+        let mut attachment_view = None;
         let result = (|| -> Result<_> {
             let mut dedicated = vk::MemoryDedicatedRequirements::default();
             let mut req2 = vk::MemoryRequirements2::default().push(&mut dedicated);
@@ -108,8 +109,16 @@ pub(crate) fn pooled_image(
             }
             device.bind_image_memory(handle, memory, suballocation.map_or(0, |s| s.offset))?;
             // The image's own format cannot be stored to: its view leaves storage out.
-            let mut own = vk::ImageViewUsageCreateInfo::default()
-                .usage(usage & !vk::ImageUsageFlags::STORAGE);
+            let shader_chain = mip_levels > 1 && usage.contains(vk::ImageUsageFlags::SAMPLED);
+            let view_levels = if shader_chain { mip_levels } else { 1 };
+            let view_usage = if shader_chain {
+                vk::ImageUsageFlags::SAMPLED
+            } else if alias.is_some() {
+                usage & !vk::ImageUsageFlags::STORAGE
+            } else {
+                usage
+            };
+            let mut own = vk::ImageViewUsageCreateInfo::default().usage(view_usage);
             let mut view_info = vk::ImageViewCreateInfo::default()
                 .image(handle)
                 .view_type(if shape.dimension == crate::texture::TextureDimension::D3 {
@@ -122,13 +131,51 @@ pub(crate) fn pooled_image(
                 .format(format)
                 .subresource_range(
                     range(aspect)
-                        .level_count(mip_levels)
+                        .level_count(view_levels)
                         .layer_count(shape.layers),
                 );
-            if alias.is_some() {
+            if alias.is_some() || shader_chain {
                 view_info = view_info.push(&mut own);
             }
-            view = device.create_image_view(&view_info, None)?;
+            let viewable = usage.intersects(
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::ImageUsageFlags::INPUT_ATTACHMENT,
+            );
+            if viewable {
+                view = device.create_image_view(&view_info, None)?;
+            }
+            if shader_chain
+                && usage.intersects(
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                )
+            {
+                let mut attachment_usage = vk::ImageViewUsageCreateInfo::default().usage(
+                    usage
+                        & (vk::ImageUsageFlags::COLOR_ATTACHMENT
+                            | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT),
+                );
+                attachment_view = Some(
+                    device.create_image_view(
+                        &vk::ImageViewCreateInfo::default()
+                            .image(handle)
+                            .view_type(if shape.layers > 1 {
+                                vk::ImageViewType::TYPE_2D_ARRAY
+                            } else {
+                                vk::ImageViewType::TYPE_2D
+                            })
+                            .format(format)
+                            .subresource_range(
+                                range(aspect).level_count(1).layer_count(shape.layers),
+                            )
+                            .push(&mut attachment_usage),
+                        None,
+                    )?,
+                );
+            }
             if usage.contains(vk::ImageUsageFlags::STORAGE) {
                 let mut storage =
                     vk::ImageViewUsageCreateInfo::default().usage(vk::ImageUsageFlags::STORAGE);
@@ -158,6 +205,7 @@ pub(crate) fn pooled_image(
                 suballocation,
                 view,
                 storage_view,
+                attachment_view,
                 width,
                 height,
                 mip_levels,
@@ -175,6 +223,9 @@ pub(crate) fn pooled_image(
                 }
                 if let Some(storage) = storage_view {
                     device.destroy_image_view(storage, None);
+                }
+                if let Some(attachment) = attachment_view {
+                    device.destroy_image_view(attachment, None);
                 }
                 device.destroy_image(handle, None);
                 if let Some(slice) = suballocation {

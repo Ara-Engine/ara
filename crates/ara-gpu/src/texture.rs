@@ -44,6 +44,8 @@ pub struct ImageShape {
     pub mip_levels: u32,
     /// Raster samples per texel.
     pub samples: SampleCount,
+    /// Attachment-only transient storage (tile memory where supported).
+    pub transient: bool,
 }
 impl Default for ImageShape {
     fn default() -> Self {
@@ -53,6 +55,7 @@ impl Default for ImageShape {
             layers: 1,
             mip_levels: 1,
             samples: SampleCount::One,
+            transient: false,
         }
     }
 }
@@ -62,6 +65,51 @@ pub struct TextureDesc {
     pub image: crate::descriptors::ImageDesc,
     /// Depth, layers, mip and sample counts.
     pub shape: ImageShape,
+}
+impl TextureDesc {
+    /// Buffer bytes for a whole-image transfer, mip zero first. Pixels are packed
+    /// inside each mip; depth mips start on four-byte boundaries. Padding is untouched.
+    pub fn copy_byte_len(&self) -> Result<u64> {
+        self.shape.validate(self.image.size)?;
+        if self.shape.samples != SampleCount::One {
+            return Err(GpuError::Contract(
+                "Resolve multisample images before buffer copies".into(),
+            ));
+        }
+        let bytes = u64::from(self.image.format.texel_bytes());
+        let align = if matches!(
+            self.image.format,
+            crate::descriptors::Format::Depth16Unorm | crate::descriptors::Format::Depth32Float
+        ) {
+            4
+        } else {
+            bytes
+        };
+        let mut total = 0u64;
+        for mip in 0..self.shape.mip_levels {
+            total = total
+                .checked_next_multiple_of(align)
+                .ok_or_else(|| GpuError::Contract("Copy footprint overflow".into()))?;
+            let extent = self.shape.extent(self.image.size, mip);
+            let size = extent
+                .into_iter()
+                .chain([self.shape.layers])
+                .try_fold(bytes, |n, v| n.checked_mul(u64::from(v)))
+                .ok_or_else(|| GpuError::Contract("Copy footprint overflow".into()))?;
+            total = total
+                .checked_add(size)
+                .ok_or_else(|| GpuError::Contract("Copy footprint overflow".into()))?;
+        }
+        Ok(total)
+    }
+    pub(crate) fn vk_usage(&self) -> ash::vk::ImageUsageFlags {
+        let usage = self.image.vk_usage();
+        if self.shape.transient {
+            usage | ash::vk::ImageUsageFlags::TRANSIENT_ATTACHMENT
+        } else {
+            usage
+        }
+    }
 }
 /// A rectangular range of one mip, in texels. Layers remain separate from depth.
 #[derive(Debug, Clone, Copy)]

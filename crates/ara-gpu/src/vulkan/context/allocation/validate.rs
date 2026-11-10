@@ -18,6 +18,15 @@ pub(crate) fn validate_image(
     } = *desc;
     let [width, height] = size;
     shape.validate(size)?;
+    if shape.dimension == crate::texture::TextureDimension::D3
+        && usage.intersects(
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    {
+        return Err(GpuError::Contract(
+            "3D textures expose sampled/storage views, not raster attachments".into(),
+        ));
+    }
     crate::attachments::validate_usage(usage)?;
     if matches!(
         format,

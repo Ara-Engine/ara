@@ -165,7 +165,7 @@ pub(super) fn build(
     state: &RenderState,
     threads: Option<[u32; 3]>,
 ) -> Result<NativePipeline> {
-    state.raster.validate()?;
+    state.validate()?;
     let function = |library: &ProtocolObject<dyn MTLLibrary>, name: &str| {
         let descriptor = MTL4LibraryFunctionDescriptor::new();
         descriptor.setName(Some(&NSString::from_str(name)));

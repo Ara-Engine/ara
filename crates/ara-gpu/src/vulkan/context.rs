@@ -401,6 +401,9 @@ impl Drop for Gpu {
                 if let Some(storage) = image.storage_view {
                     self.device.destroy_image_view(storage, None);
                 }
+                if let Some(view) = image.attachment_view {
+                    self.device.destroy_image_view(view, None);
+                }
                 self.device.destroy_image(image.handle, None);
                 if image.suballocation.is_none() {
                     self.device.free_memory(image.memory, None);

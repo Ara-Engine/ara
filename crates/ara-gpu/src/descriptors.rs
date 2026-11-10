@@ -86,6 +86,16 @@ pub struct QueueInfo {
 }
 
 impl Format {
+    /// Bytes in one texel of the uncompressed portable format.
+    pub fn texel_bytes(self) -> u32 {
+        match self {
+            Self::Rgba32Float | Self::Rgba32Uint => 16,
+            Self::Rgba16Float | Self::Rg32Uint => 8,
+            Self::R16Float | Self::Depth16Unorm => 2,
+            _ => 4,
+        }
+    }
+
     /// The ash format both backends use as their shared resource vocabulary.
     pub fn vk(self) -> ash::vk::Format {
         use ash::vk::Format as F;

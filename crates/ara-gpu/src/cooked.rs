@@ -250,6 +250,21 @@ pub struct RenderState {
     #[serde(default)]
     pub raster: crate::raster::RasterState,
 }
+impl RenderState {
+    pub(crate) fn validate(&self) -> crate::Result<()> {
+        self.raster.validate()?;
+        if self.color_formats.len() > 8
+            || (!self.raster.blends.is_empty()
+                && self.raster.blends.len() != self.color_formats.len())
+            || (!self.raster.vertex_layouts.is_empty() && self.vertex_stride != 0)
+        {
+            return Err(crate::GpuError::Contract(
+                "Invalid attachment count, blend count or ambiguous vertex layout".into(),
+            ));
+        }
+        Ok(())
+    }
+}
 /// Runtime pipeline manifest, content-addressed by the cook.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CookedPipeline {

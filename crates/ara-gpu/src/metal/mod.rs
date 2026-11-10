@@ -443,7 +443,7 @@ impl MetalDevice {
                 &self.device,
                 desc.image.size,
                 desc.image.format.vk(),
-                desc.image.vk_usage(),
+                desc.vk_usage(),
                 desc.shape,
                 Some(&mut self.memory),
             )

@@ -56,6 +56,17 @@ pub enum Command {
         /// Render extent.
         size: [u32; 2],
     },
+    /// Render and resolve color attachments in the same pass, including transient MSAA.
+    BeginRenderingResolved {
+        /// Multisampled color outputs.
+        colors: Vec<Attachment>,
+        /// One optional single-sample resolve target per color output.
+        resolves: Vec<Option<Image>>,
+        /// Optional multisampled depth output.
+        depth: Option<Attachment>,
+        /// Render extent.
+        size: [u32; 2],
+    },
     /// Dynamic viewport and scissor; used for atlas quadrants.
     Viewport {
         /// Top-left pixel.
@@ -132,7 +143,7 @@ pub enum Command {
     },
     /// End dynamic rendering.
     EndRendering,
-    /// Buffer-to-image upload with tightly packed pixels.
+    /// Whole-image upload; packed mip pixels, with depth mips aligned to four bytes.
     UploadImage {
         /// Staging buffer.
         source: Buffer,
@@ -145,7 +156,7 @@ pub enum Command {
         source: Buffer,
         /// Transfer destination texture.
         destination: Image,
-        /// Byte offset, aligned to four and the texel block size.
+        /// Byte offset aligned to the texel block size (also four bytes for depth).
         buffer_offset: u64,
         /// Texture subresource and rectangle.
         region: crate::texture::ImageRegion,
@@ -156,7 +167,7 @@ pub enum Command {
         source: Image,
         /// Transfer destination buffer.
         destination: Buffer,
-        /// Byte offset, aligned to four and the texel block size.
+        /// Byte offset aligned to the texel block size (also four bytes for depth).
         buffer_offset: u64,
         /// Texture subresource and rectangle.
         region: crate::texture::ImageRegion,
@@ -231,7 +242,7 @@ pub enum Command {
         /// Transfer destination.
         destination: Image,
     },
-    /// Image-to-buffer readback with tightly packed pixels.
+    /// Whole-image readback; same layout as UploadImage. Depth mip padding is untouched.
     ReadImage {
         /// Copy source.
         source: Image,
@@ -318,6 +329,12 @@ impl TimestampSpan {
 }
 
 impl Command {
+    pub(crate) fn resolves(&self) -> Option<&[Option<Image>]> {
+        match self {
+            Self::BeginRenderingResolved { resolves, .. } => Some(resolves),
+            _ => None,
+        }
+    }
     pub(crate) fn barriers(&self) -> impl Iterator<Item = crate::sync::ResourceBarrier> + '_ {
         let single = match self {
             Self::Barrier(b) => Some((*b).into()),

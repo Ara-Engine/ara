@@ -61,13 +61,25 @@ impl VulkanDevice {
                     colors,
                     depth,
                     size,
+                }
+                | Command::BeginRenderingResolved {
+                    colors,
+                    depth,
+                    size,
+                    ..
                 } => {
+                    let resolves = command.resolves().unwrap_or(&[]);
                     let ops = scopes
                         .next()
                         .expect("attachments::ops lists every rendering scope of the list");
-                    let attachment = |a: &Attachment, depth: bool, ops: Ops| -> Result<_> {
-                        Ok(vk::RenderingAttachmentInfo::default()
-                            .image_view(self.images.get(a.image)?.raw.view)
+                    let attachment = |a: &Attachment,
+                                      depth: bool,
+                                      ops: Ops,
+                                      resolve: Option<Image>|
+                     -> Result<_> {
+                        let raw = self.images.get(a.image)?.raw;
+                        let mut info = vk::RenderingAttachmentInfo::default()
+                            .image_view(raw.attachment_view.unwrap_or(raw.view))
                             .image_layout(if depth {
                                 vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL
                             } else {
@@ -96,16 +108,40 @@ impl VulkanDevice {
                                         float32: a.clear.unwrap_or([0.; 4]),
                                     },
                                 }
-                            }))
+                            });
+                        if let Some(target) = resolve {
+                            let target = self.images.get(target)?.raw;
+                            let integer = matches!(
+                                raw.format,
+                                vk::Format::R32_UINT
+                                    | vk::Format::R32G32_UINT
+                                    | vk::Format::R32G32B32A32_UINT
+                                    | vk::Format::R32_SINT
+                                    | vk::Format::R32G32_SINT
+                                    | vk::Format::R32G32B32A32_SINT
+                            );
+                            info = info
+                                .resolve_mode(if integer {
+                                    vk::ResolveModeFlags::SAMPLE_ZERO
+                                } else {
+                                    vk::ResolveModeFlags::AVERAGE
+                                })
+                                .resolve_image_view(target.attachment_view.unwrap_or(target.view))
+                                .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                        }
+                        Ok(info)
                     };
                     let depth = depth
                         .as_ref()
-                        .map(|a| attachment(a, true, ops[colors.len()]))
+                        .map(|a| attachment(a, true, ops[colors.len()], None))
                         .transpose()?;
                     let colors = colors
                         .iter()
                         .zip(&ops)
-                        .map(|(a, ops)| attachment(a, false, *ops))
+                        .enumerate()
+                        .map(|(index, (a, ops))| {
+                            attachment(a, false, *ops, resolves.get(index).copied().flatten())
+                        })
                         .collect::<Result<Vec<_>>>()?;
                     let mut info = vk::RenderingInfo::default()
                         .render_area(vk::Rect2D {

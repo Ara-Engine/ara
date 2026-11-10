@@ -51,7 +51,9 @@ pub(crate) fn ops(commands: &[Command], transient: impl Fn(Image) -> bool) -> Ve
                 }
             }
         }
-        if let Command::BeginRendering { colors, depth, .. } = command {
+        if let Command::BeginRendering { colors, depth, .. }
+        | Command::BeginRenderingResolved { colors, depth, .. } = command
+        {
             let discarded = discarded_after(&commands[index + 1..]);
             let attachments = colors
                 .iter()
@@ -75,6 +77,9 @@ pub(crate) fn ops(commands: &[Command], transient: impl Fn(Image) -> bool) -> Ve
             scopes.push(attachments.map(op).collect());
             // The scope writes its attachments: their contents are defined now.
             undefined.retain(|i| !colors.iter().chain(depth).any(|a| a.image == *i));
+            if let Some(resolves) = command.resolves() {
+                undefined.retain(|i| !resolves.iter().flatten().any(|r| r == i));
+            }
         }
     }
     scopes
