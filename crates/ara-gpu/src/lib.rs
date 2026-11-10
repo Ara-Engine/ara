@@ -7,6 +7,7 @@ mod attachments;
 pub mod commands;
 pub mod cooked;
 mod cpu;
+mod transfers;
 pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;

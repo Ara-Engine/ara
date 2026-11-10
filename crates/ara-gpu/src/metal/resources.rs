@@ -44,6 +44,11 @@ pub(super) fn buffer(
     if size == 0 || usage.is_empty() {
         return Err(GpuError::Contract("Empty buffer".into()));
     }
+    let usage = if host {
+        usage | vk::BufferUsageFlags::TRANSFER_DST
+    } else {
+        usage
+    };
     let length = usize::try_from(size)
         .ok()
         .filter(|&length| length as u64 <= device.maxBufferLength() as u64)

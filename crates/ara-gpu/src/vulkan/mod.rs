@@ -31,6 +31,7 @@ pub use reload::ShaderStatus;
 mod queue_gate;
 pub use queue_gate::QueueGate;
 mod submission;
+mod staging;
 mod surface;
 pub use submission::SubmissionStats;
 pub(crate) mod timestamps;
@@ -91,6 +92,7 @@ pub struct VulkanDevice {
     cache: vk::PipelineCache,
     cache_path: PathBuf,
     pending: Vec<recording::Pending>,
+    staging: Vec<staging::Chunk>,
     query_cache: queries::Cache,
     #[cfg(test)]
     query_pool_creations: usize,
@@ -239,6 +241,7 @@ impl VulkanDevice {
             cache,
             cache_path,
             pending: Vec::new(),
+            staging: Vec::new(),
             query_cache: queries::Cache::default(),
             #[cfg(test)]
             query_pool_creations: 0,

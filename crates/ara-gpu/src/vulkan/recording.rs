@@ -75,6 +75,23 @@ impl VulkanDevice {
     /// Within a deferred frame this records a logical point; end the scope before
     /// host waits. Consecutive same-queue lists share a native submission.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
+        self.validate_commands(&list)?;
+        let point = TimelinePoint {
+            queue: list.queue,
+            value: self.submitted[list.queue.index()] + 1,
+        };
+        let result = self.submit_staged(list, waits);
+        if result.is_err() {
+            self.cancel_staging(point);
+        }
+        result
+    }
+
+    fn submit_staged(
+        &mut self,
+        list: CommandList,
+        waits: &[TimelinePoint],
+    ) -> Result<TimelinePoint> {
         self.poll_shader_reload();
         crate::cpu_scope!("GPU.submit");
         // A synchronous helper's resolve used to finish its writes before the
@@ -109,9 +126,9 @@ impl VulkanDevice {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
             }
         }
-        self.validate_commands(&list)?;
         let queue = list.queue;
         self.prepare_submission(queue)?;
+        let staging = self.stage_updates(&list)?;
         let cmd = self.context.commands(queue == Queue::Compute)?;
         let mut guard = super::guard::Objects::new(&self.context.device);
         guard.push(super::guard::Object::Commands(
@@ -216,7 +233,14 @@ impl VulkanDevice {
             })
             .into_iter();
             for command in super::timestamps::commands(&list.commands) {
-                self.encode(cmd, queue, query, &mut timestamp, &mut scopes, command)?;
+                self.encode(
+                    cmd,
+                    queue,
+                    (query, &mut timestamp),
+                    &mut scopes,
+                    command,
+                    staging.get(&(command as *const Command)).copied(),
+                )?;
             }
         }
         // SAFETY: Query `required-1` is reserved for the submission's completed
@@ -703,6 +727,24 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Invalid buffer copy range".into()));
                     }
                 }
+                Command::FillBuffer {
+                    destination,
+                    offset,
+                    size,
+                    ..
+                } => {
+                    let destination = self.buffers.get(*destination)?.raw;
+                    crate::transfers::validate_fill(*offset, *size, destination.size)?;
+                    if rendering
+                        || !destination
+                            .usage
+                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid buffer fill scope or usage".into(),
+                        ));
+                    }
+                }
                 Command::UpdateBuffer {
                     destination,
                     offset,
@@ -711,7 +753,6 @@ impl VulkanDevice {
                     let destination = self.buffers.get(*destination)?.raw;
                     if rendering
                         || bytes.is_empty()
-                        || bytes.len() > 65536
                         || bytes.len() % 4 != 0
                         || offset % 4 != 0
                         || offset
