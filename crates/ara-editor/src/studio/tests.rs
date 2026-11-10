@@ -569,6 +569,51 @@ fn copy_paste_fields_components_and_filters_run_in_the_studio() {
 }
 
 #[test]
+fn the_console_searches_collapses_and_clear_stays_clear() {
+    let mut rt = open();
+    let row = |seq: u64, message: &str| super::state::LogRow {
+        seq,
+        severity: ara_diag::Severity::Warning,
+        code: "ARA0001".into(),
+        message: message.into(),
+        origin: "engine".into(),
+        at: 0,
+        source: None,
+        count: 1,
+        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(ara_diag::Code(1), message)),
+    };
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.logs = vec![row(1, "same"), row(2, "same"), row(3, "other")];
+        s.local.log_seen = 3;
+    });
+    settle(&mut rt);
+    assert!(rt.find("console/row/2").is_some() && rt.find("console/row/3").is_some());
+    press(&mut rt, "console/collapse");
+    assert!(
+        rt.find("console/row/1").is_none(),
+        "repeats merge into the latest"
+    );
+    assert!(rt.find("console/row/2").is_some());
+    rt.update(|s| s.local.console_search = "oth".into());
+    settle(&mut rt);
+    assert!(rt.find("console/row/2").is_none() && rt.find("console/row/3").is_some());
+    press(&mut rt, "console/clear");
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    assert!(
+        rt.state().logs.iter().all(|r| r.seq > 3),
+        "cleared records stay gone"
+    );
+    press(&mut rt, "console/error-pause");
+    assert_eq!(
+        rt.state().editor.state.settings["console.errorPause"],
+        json!(true)
+    );
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

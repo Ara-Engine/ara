@@ -353,6 +353,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             act(e, "editor.preferences", json!({"reduceMotion": on}))
         }
         "play.start" => {
+            let clear = e
+                .state
+                .settings
+                .get("console.clearOnPlay")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if clear && e.state.playing.is_none() {
+                s.logs.clear();
+            }
             if e.state.playing == Some(false) {
                 play(e, "play.resume", json!({}))
             } else {
@@ -963,6 +972,23 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         // Help.
         "help.docs" => crate::shell::ops::open_docs(e),
         "help.logs" => crate::shell::ops::open_external(&e.host.root().join(".ara")),
+        "console.clear" => {
+            s.logs.clear();
+            s.local.console_open = None;
+            Ok(())
+        }
+        "console.collapse" => {
+            s.local.console_collapse = !s.local.console_collapse;
+            Ok(())
+        }
+        "console.clear_on_play" | "console.error_pause" => {
+            let key = if id == "console.clear_on_play" {
+                "console.clearOnPlay"
+            } else {
+                "console.errorPause"
+            };
+            flip_setting(e, key, false)
+        }
         "console.copy" => match target {
             Target::Text(text) => {
                 s.local.copy = Some(text.clone());

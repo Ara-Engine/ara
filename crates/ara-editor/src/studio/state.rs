@@ -249,6 +249,13 @@ pub struct Local {
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
     pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// The last bus record read into the Console (Clear keeps it, so cleared records stay
+    /// gone).
+    pub log_seen: u64,
+    /// The Console's search: records whose message, code, origin or source match.
+    pub console_search: String,
+    /// The Console merges repeated records (Unity's Collapse).
+    pub console_collapse: bool,
     /// Entities copied with Edit › Copy: each one's name and components.
     pub entity_clipboard: Option<Vec<serde_json::Value>>,
     /// A field value copied from the Inspector's field menu.
@@ -438,9 +445,11 @@ impl Studio {
         true
     }
 
-    /// Reads new bus records into [`Self::logs`] (bounded to the last 2000); whether any came.
+    /// Reads new bus records into [`Self::logs`] (bounded to the last 2000), pausing Play
+    /// on an error with Error Pause on; whether any came.
     pub fn poll_logs(&mut self) -> bool {
-        let since = self.logs.last().map_or(0, |r| r.seq);
+        // Read on from the last record seen, so Clear stays clear.
+        let since = self.local.log_seen;
         let Ok(logs) = self.editor.action(
             "logs",
             json!({"group": false, "limit": 500, "since": since}),
@@ -456,6 +465,21 @@ impl Studio {
                 .filter_map(LogRow::from_entry)
                 .filter(|r| r.seq > since),
         );
+        self.local.log_seen = self.logs.last().map_or(since, |r| r.seq.max(since));
+        // Error Pause: an error during Play pauses it.
+        let error = self.logs[before..]
+            .iter()
+            .any(|r| r.severity == ara_diag::Severity::Error);
+        let pause = self
+            .editor
+            .state
+            .settings
+            .get("console.errorPause")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if error && pause && self.editor.state.playing == Some(true) {
+            super::commands::run(self, "play.pause", &crate::catalog::Target::None);
+        }
         let excess = self.logs.len().saturating_sub(2000);
         self.logs.drain(..excess);
         self.logs.len() != before || excess > 0

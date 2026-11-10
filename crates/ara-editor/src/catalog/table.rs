@@ -1917,4 +1917,32 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Remove the module from its stage.",
     },
+    Command {
+        id: "console.clear",
+        title: "Clear Console",
+        icon: "trash",
+        keys: "",
+        summary: "Hide the messages logged so far; new ones still appear.",
+    },
+    Command {
+        id: "console.collapse",
+        title: "Collapse Repeated Messages",
+        icon: "layers",
+        keys: "",
+        summary: "Group repeated messages with the same source location and origin.",
+    },
+    Command {
+        id: "console.clear_on_play",
+        title: "Clear on Play",
+        icon: "play",
+        keys: "",
+        summary: "Clear previous Console messages when Play starts.",
+    },
+    Command {
+        id: "console.error_pause",
+        title: "Error Pause",
+        icon: "circle-pause",
+        keys: "",
+        summary: "Pause Play when an error is logged.",
+    },
 ];
