@@ -67,13 +67,29 @@ impl VulkanDevice {
                     colors,
                     depth,
                     size,
+                }
+                | Command::BeginRenderingResolved {
+                    colors,
+                    depth,
+                    size,
+                    ..
                 } => {
+                    if colors.len() > 8 || c.resolves().is_some_and(|r| r.len() != colors.len()) {
+                        return Err(GpuError::Contract(
+                            "Invalid color/resolve target count".into(),
+                        ));
+                    }
                     if rendering || list.queue != Queue::Graphics || size.contains(&0) {
                         return Err(GpuError::Contract("Invalid rendering scope".into()));
                     }
                     let mut attachment_samples = None;
                     for a in colors.iter().chain(depth.iter()) {
                         let i = self.images.get(a.image)?;
+                        if i.raw.shape.dimension != crate::texture::TextureDimension::D2 {
+                            return Err(GpuError::Contract(
+                                "Rendering requires 2D attachments".into(),
+                            ));
+                        }
                         if attachment_samples.is_some_and(|s| s != i.raw.shape.samples) {
                             return Err(GpuError::Contract(
                                 "Attachment sample counts differ".into(),
@@ -82,6 +98,49 @@ impl VulkanDevice {
                         attachment_samples = Some(i.raw.shape.samples);
                         if size[0] > i.raw.width || size[1] > i.raw.height {
                             return Err(GpuError::Contract("Attachment extent too small".into()));
+                        }
+                    }
+                    for a in colors {
+                        let raw = self.images.get(a.image)?.raw;
+                        if raw.aspect != vk::ImageAspectFlags::COLOR
+                            || !raw.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                        {
+                            return Err(GpuError::Contract(
+                                "Invalid color attachment usage or aspect".into(),
+                            ));
+                        }
+                    }
+                    if let Some(a) = depth {
+                        let raw = self.images.get(a.image)?.raw;
+                        if raw.aspect != vk::ImageAspectFlags::DEPTH
+                            || !raw
+                                .usage
+                                .contains(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                        {
+                            return Err(GpuError::Contract(
+                                "Invalid depth attachment usage or aspect".into(),
+                            ));
+                        }
+                    }
+                    if let Some(resolves) = c.resolves() {
+                        for (a, target) in colors.iter().zip(resolves) {
+                            if let Some(target) = target {
+                                let a = self.images.get(a.image)?.raw;
+                                let b = self.images.get(*target)?.raw;
+                                if a.shape.samples != crate::texture::SampleCount::Four
+                                    || b.shape.samples != crate::texture::SampleCount::One
+                                    || a.width != b.width
+                                    || a.height != b.height
+                                    || a.format != b.format
+                                    || b.shape.dimension != crate::texture::TextureDimension::D2
+                                    || a.shape.layers != b.shape.layers
+                                    || !b.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                                {
+                                    return Err(GpuError::Contract(
+                                        "Invalid in-pass color resolve".into(),
+                                    ));
+                                }
+                            }
                         }
                     }
                     samples = attachment_samples.unwrap_or_default();
@@ -482,6 +541,12 @@ impl VulkanDevice {
                     let source = self.images.get(*source)?.raw;
                     let destination = self.images.get(*destination)?.raw;
                     if rendering
+                        || source.shape.dimension != crate::texture::TextureDimension::D2
+                        || destination.shape.dimension != crate::texture::TextureDimension::D2
+                        || source.shape.layers != 1
+                        || destination.shape.layers != 1
+                        || source.shape.samples != crate::texture::SampleCount::One
+                        || destination.shape.samples != crate::texture::SampleCount::One
                         || source.handle == destination.handle
                         || source.format != destination.format
                         || source.width != destination.width

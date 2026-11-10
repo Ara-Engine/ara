@@ -231,7 +231,18 @@ impl MetalDevice {
                 colors,
                 depth,
                 size,
+            }
+            | Command::BeginRenderingResolved {
+                colors,
+                depth,
+                size,
+                ..
             } => {
+                if command.resolves().is_some_and(|r| r.len() != colors.len()) {
+                    return Err(GpuError::Contract(
+                        "Resolve target count differs from colors".into(),
+                    ));
+                }
                 if queue != Queue::Graphics
                     || size.contains(&0)
                     || matches!(rec.active, Active::Render(_))
@@ -239,7 +250,13 @@ impl MetalDevice {
                     return Err(GpuError::Contract("Invalid rendering scope".into()));
                 }
                 rec.end();
-                let encoder = self.begin_rendering(rec, colors, depth.as_ref(), *size)?;
+                let encoder = self.begin_rendering(
+                    rec,
+                    colors,
+                    depth.as_ref(),
+                    *size,
+                    command.resolves().unwrap_or(&[]),
+                )?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
                 rec.stamp = None;
@@ -665,6 +682,15 @@ impl MetalDevice {
             } => {
                 let (from, to) = (self.images.get(*source)?, self.images.get(*destination)?);
                 if source == destination
+                    || from.raw.info.depth
+                    || from.raw.shape.dimension != crate::texture::TextureDimension::D2
+                    || to.raw.shape.dimension != crate::texture::TextureDimension::D2
+                    || from.raw.shape.layers != 1
+                    || to.raw.shape.layers != 1
+                    || from.raw.shape.samples != crate::texture::SampleCount::One
+                    || to.raw.shape.samples != crate::texture::SampleCount::One
+                    || !from.raw.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !to.raw.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
                     || from.raw.size != to.raw.size
                     || from.raw.info.pixel != to.raw.info.pixel
                 {
@@ -717,10 +743,19 @@ impl MetalDevice {
         colors: &[Attachment],
         depth: Option<&Attachment>,
         size: [u32; 2],
+        resolves: &[Option<crate::Image>],
     ) -> Result<Retained<ProtocolObject<dyn MTL4RenderCommandEncoder>>> {
+        if colors.len() > 8 {
+            return Err(GpuError::Contract("Too many color attachments".into()));
+        }
         let mut samples = None;
         for attachment in colors.iter().chain(depth) {
             let image = &self.images.get(attachment.image)?.raw;
+            if image.shape.dimension != crate::texture::TextureDimension::D2 {
+                return Err(GpuError::Contract(
+                    "Rendering requires 2D attachments".into(),
+                ));
+            }
             if samples.is_some_and(|s| s != image.shape.samples) {
                 return Err(GpuError::Contract("Attachment sample counts differ".into()));
             }
@@ -742,7 +777,13 @@ impl MetalDevice {
             .expect("attachments::ops lists every rendering scope of the list");
         for (index, (attachment, ops)) in colors.iter().zip(&ops).enumerate() {
             let image = self.images.get(attachment.image)?;
-            if image.raw.info.depth || image.raw.size != size {
+            if image.raw.info.depth
+                || image.raw.size != size
+                || !image
+                    .raw
+                    .usage
+                    .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            {
                 return Err(GpuError::Contract("Color attachment mismatch".into()));
             }
             // SAFETY: Metal supports eight color attachments; more fails validation.
@@ -751,6 +792,25 @@ impl MetalDevice {
             let (load, store) = actions(*ops);
             color.setLoadAction(load);
             color.setStoreAction(store);
+            if let Some(target) = resolves.get(index).copied().flatten() {
+                let target = &self.images.get(target)?.raw;
+                if image.raw.shape.samples != crate::texture::SampleCount::Four
+                    || target.shape.samples != crate::texture::SampleCount::One
+                    || image.raw.size != target.size
+                    || image.raw.info.pixel != target.info.pixel
+                    || target.shape.dimension != crate::texture::TextureDimension::D2
+                    || image.raw.shape.layers != target.shape.layers
+                    || !target.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                {
+                    return Err(GpuError::Contract("Invalid in-pass color resolve".into()));
+                }
+                color.setResolveTexture(Some(&target.texture));
+                color.setStoreAction(if ops.store {
+                    MTLStoreAction::StoreAndMultisampleResolve
+                } else {
+                    MTLStoreAction::MultisampleResolve
+                });
+            }
             if let Some([r, g, b, a]) = attachment.clear {
                 color.setClearColor(MTLClearColor {
                     red: f64::from(r),
@@ -762,7 +822,13 @@ impl MetalDevice {
         }
         if let Some(attachment) = depth {
             let image = self.images.get(attachment.image)?;
-            if !image.raw.info.depth || image.raw.size != size {
+            if !image.raw.info.depth
+                || image.raw.size != size
+                || !image
+                    .raw
+                    .usage
+                    .contains(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            {
                 return Err(GpuError::Contract("Depth attachment mismatch".into()));
             }
             let target = pass.depthAttachment();

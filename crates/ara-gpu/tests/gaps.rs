@@ -377,3 +377,156 @@ fn batched_subresource_ranges_touch_one_array_mip_and_reject_overflow() -> Resul
     gpu.assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn transient_msaa_resolves_inside_the_pass_into_mip_zero() -> Result<()> {
+    let mut gpu = device("inline-resolve")?;
+    let source = gpu.create_texture(&TextureDesc {
+        image: ImageDesc {
+            size: [8, 8],
+            format: Format::Rgba8,
+            sampled: false,
+            storage: false,
+            attachment: true,
+            copy_source: false,
+            copy_destination: false,
+        },
+        shape: ImageShape {
+            samples: SampleCount::Four,
+            transient: true,
+            ..Default::default()
+        },
+    })?;
+    let target = gpu.create_texture(&TextureDesc {
+        image: ImageDesc {
+            size: [8, 8],
+            format: Format::Rgba8,
+            sampled: true,
+            storage: false,
+            attachment: true,
+            copy_source: true,
+            copy_destination: false,
+        },
+        shape: ImageShape {
+            mip_levels: 4,
+            ..Default::default()
+        },
+    })?;
+    let output = gpu.create_readback_buffer(256)?;
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([
+        barrier(Resource::Image(source), Access::Undefined, Access::Color),
+        barrier(Resource::Image(target), Access::Undefined, Access::Color),
+    ]);
+    rec.push(Command::BeginRenderingResolved {
+        colors: vec![Attachment {
+            image: source,
+            clear: Some([0.25, 0.5, 0.75, 1.]),
+        }],
+        resolves: vec![Some(target)],
+        depth: None,
+        size: [8, 8],
+    });
+    rec.push(Command::EndRendering);
+    rec.barriers([barrier(
+        Resource::Image(target),
+        Access::Color,
+        Access::CopySource,
+    )]);
+    rec.push(Command::ReadImageRegion {
+        source: target,
+        destination: output,
+        buffer_offset: 0,
+        region: ImageRegion {
+            mip: 0,
+            origin: [0; 3],
+            extent: [8, 8, 1],
+            base_layer: 0,
+            layer_count: 1,
+        },
+    });
+    rec.barriers([barrier(
+        Resource::Buffer(output),
+        Access::CopyDestination,
+        Access::HostRead,
+    )]);
+    let p = gpu.submit(rec.finish(), &[])?;
+    gpu.wait(p)?;
+    assert!(
+        gpu.read(output)?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [64, 128, 191, 255])
+    );
+    gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn odd_sized_half_float_and_depth_mips_use_their_required_alignment() -> Result<()> {
+    let mut gpu = device("odd-mips")?;
+    for (format, bytes) in [(Format::R16Float, 20), (Format::Depth16Unorm, 22)] {
+        let desc = TextureDesc {
+            image: ImageDesc {
+                size: [3, 3],
+                format,
+                sampled: true,
+                storage: false,
+                attachment: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+            shape: ImageShape {
+                mip_levels: 2,
+                ..Default::default()
+            },
+        };
+        assert_eq!(desc.copy_byte_len()?, bytes);
+        let image = gpu.create_texture(&desc)?;
+        let input = gpu.create_buffer(bytes, ara_gpu::vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+        let output = gpu.create_readback_buffer(bytes)?;
+        let mut expected = vec![0x3c; bytes as usize];
+        if format == Format::Depth16Unorm {
+            expected[18..20].fill(0);
+        }
+        gpu.upload(input, &expected)?;
+        gpu.upload(output, &vec![0; bytes as usize])?;
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.barriers([
+            barrier(
+                Resource::Buffer(input),
+                Access::HostWrite,
+                Access::CopySource,
+            ),
+            barrier(
+                Resource::Image(image),
+                Access::Undefined,
+                Access::CopyDestination,
+            ),
+        ]);
+        rec.push(Command::UploadImage {
+            source: input,
+            destination: image,
+        });
+        rec.barriers([barrier(
+            Resource::Image(image),
+            Access::CopyDestination,
+            Access::CopySource,
+        )]);
+        rec.push(Command::ReadImage {
+            source: image,
+            destination: output,
+        });
+        rec.barriers([barrier(
+            Resource::Buffer(output),
+            Access::CopyDestination,
+            Access::HostRead,
+        )]);
+        let p = gpu.submit(rec.finish(), &[])?;
+        gpu.wait(p)?;
+        assert_eq!(gpu.read(output)?, expected);
+    }
+    gpu.assert_clean()?;
+    Ok(())
+}

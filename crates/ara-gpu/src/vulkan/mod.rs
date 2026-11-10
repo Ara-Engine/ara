@@ -362,7 +362,7 @@ impl VulkanDevice {
             desc.image.size,
             desc.image.format.vk(),
             desc.shape.mip_levels,
-            desc.image.vk_usage(),
+            desc.vk_usage(),
         );
         native.shape = desc.shape;
         self.context.validate_image(&native)?;
@@ -535,7 +535,14 @@ impl VulkanDevice {
     }
     /// Native image view for native integrations.
     pub fn image_view(&self, image: Image) -> Result<vk::ImageView> {
-        Ok(self.images.get(image)?.raw.view)
+        let raw = self.images.get(image)?.raw;
+        let view = raw.attachment_view.unwrap_or(raw.view);
+        if view == vk::ImageView::null() {
+            return Err(GpuError::Contract(
+                "Transfer-only image has no native view".into(),
+            ));
+        }
+        Ok(view)
     }
     /// Native mip-zero extent, including render-size ID targets under upscaling.
     pub fn image_extent(&self, image: Image) -> Result<[u32; 2]> {

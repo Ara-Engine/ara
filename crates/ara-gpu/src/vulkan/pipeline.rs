@@ -89,7 +89,7 @@ pub(super) fn create_inner(
                 (Stage::Vertex, "previewVertex") | (Stage::Fragment, "previewFragment")
             )
         });
-    cooked.state.raster.validate()?;
+    cooked.state.validate()?;
     if cooked.version != 1
         || (!binding_layout_compatible(&cooked.binding_layout_hash)
             && !(legacy_preview && cooked.binding_layout_hash == legacy_preview_layout_hash()))

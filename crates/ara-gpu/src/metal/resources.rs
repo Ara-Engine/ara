@@ -131,6 +131,15 @@ pub(super) fn image_pooled(
 ) -> Result<NativeImage> {
     use crate::texture::{SampleCount, TextureDimension};
     shape.validate(size)?;
+    if shape.dimension == TextureDimension::D3
+        && usage.intersects(
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    {
+        return Err(GpuError::Contract(
+            "3D textures expose sampled/storage views, not raster attachments".into(),
+        ));
+    }
     if shape.layers > 2048
         || (shape.dimension == TextureDimension::D3 && size[0].max(size[1]).max(shape.depth) > 2048)
         || (usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) && shape.mip_levels != 1)

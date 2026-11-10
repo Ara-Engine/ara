@@ -37,6 +37,9 @@ impl Object {
                     if let Some(storage) = image.storage_view {
                         device.destroy_image_view(storage, None);
                     }
+                    if let Some(view) = image.attachment_view {
+                        device.destroy_image_view(view, None);
+                    }
                     device.destroy_image(image.handle, None);
                     if image.suballocation.is_none() {
                         device.free_memory(image.memory, None);

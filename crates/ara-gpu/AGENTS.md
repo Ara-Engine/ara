@@ -26,7 +26,8 @@
   with the same bounds and in-flight-use checks as `upload`.
 - `create_texture(&TextureDesc)` adds volumes, arrays, mip chains on all uses and
   explicit sample counts. `UploadImageRegion`, `ReadImageRegion`, `CopyImageRegion`
-  use checked texel rectangles/mips/layers. Whole transfers visit mips finest first.
+  use checked texel rectangles/mips/layers. `copy_byte_len` sizes packed whole transfers,
+  finest mip first; depth mip starts align to four bytes (padding is untouched).
   `sampled_view`/`storage_view` publish immutable mip/layer views; graph reachability
   and retirement follow the parent image. Storage views expose one mip.
 - `Handle<T>`: arena/device identity plus a 64-bit generation. Shader `HeapIndex`
@@ -41,7 +42,8 @@
 - `RenderState::raster` adds depth compare/bias, cull/winding, per-target blend,
   sample count and explicit vertex layouts. `DrawVertexBuffers` binds up to eight
   streams, including per-instance records. `ResolveImage` resolves backed 4x color
-  targets outside rendering; both images need transfer use and attachment usage.
+  targets outside rendering; `BeginRenderingResolved` supports in-pass resolves and
+  `ImageShape::transient` MSAA attachments. Resolve targets need attachment usage.
 - `AccelerationDesc` selects BLAS geometry or TLAS instances. `AccelerationOptions`
   enables rebuild/refit/compaction and reserves TLAS capacity. `update_instances`
   uploads on the owning queue; rebuild permits count changes, refit preserves count.
@@ -137,12 +139,10 @@ Adopt ready pipeline handles on the owner and retire normally. Keep the last pre
 
 ## Verification
 
-Optional `tracy` zones need an executable client (`ara-player --features tracy`).
-
 Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
-Vulkan GPU tests run on the PC with validation; Vulkan changes made on the Mac
-remain unverified until that run. Metal gaps tests use native transfers and MSL
+Vulkan GPU tests run on the PC; all Mac-written Vulkan changes remain unverified.
+Metal gaps tests use native transfers and MSL
 probes (converter download needs Apple sign-in).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI (`abi.rs`) keeps the MSC 4.0.3 prefix and appends comparison samplers; one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.

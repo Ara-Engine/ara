@@ -31,6 +31,8 @@ impl MetalDevice {
         let fits =
             |offset: u64, total: u64| offset.checked_add(size).is_some_and(|end| end <= total);
         if source == destination
+            || !from.raw.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
+            || !to.raw.usage.contains(vk::BufferUsageFlags::TRANSFER_DST)
             || size == 0
             || !size.is_multiple_of(4)
             || !source_offset.is_multiple_of(4)
@@ -64,8 +66,13 @@ impl MetalDevice {
         upload: bool,
     ) -> Result<()> {
         let raw = &self.images.get(image)?.raw;
-        let mut offset = 0;
+        let mut offset = 0u64;
         for mip in 0..raw.levels {
+            offset = offset.next_multiple_of(if raw.info.depth {
+                4
+            } else {
+                u64::from(raw.info.block_bytes)
+            });
             let region = crate::texture::ImageRegion {
                 mip,
                 origin: [0; 3],
@@ -99,7 +106,7 @@ impl MetalDevice {
         let (row, total) =
             i.shape
                 .region(i.size, region, i.info.block, u64::from(i.info.block_bytes))?;
-        if !offset.is_multiple_of(4)
+        if (i.info.depth && !offset.is_multiple_of(4))
             || !offset.is_multiple_of(u64::from(i.info.block_bytes))
             || offset.checked_add(total).is_none_or(|end| end > b.size)
             || !b.usage.contains(if upload {
