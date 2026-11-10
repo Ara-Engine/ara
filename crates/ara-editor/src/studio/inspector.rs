@@ -78,6 +78,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .gap(3.0)
         .child(header(s))
         .children(prefab_bar(s))
+        .children(super::running::section(s))
         .child(search_row(s));
     if order.is_empty() && !query.is_empty() {
         page = page.child(

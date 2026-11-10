@@ -1157,6 +1157,25 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 json!({"panel": "history", "query": "Keep"}),
             )
         }),
+        // Play's runtime controls (`crate::play_controls`): Simulate, Eject and Possess,
+        // reading and editing running values, and keeping them.
+        "play.simulate" => s.play.simulate(e),
+        "play.eject" => s.play.control(e, None, false),
+        "play.possess" => match target.entity(&e.state).map(str::to_owned) {
+            Some(entity) => s.play.control(e, Some(entity), false),
+            None => Err("Select an entity the player can control".into()),
+        },
+        "play.inspect" => s.play.inspect(e),
+        "play.runtime.patch" => s.play.apply(e),
+        "play.runtime.discard" => s.play.discard(e),
+        "play.keep" | "play.keep_driven" => s.play.keep_changes(e, id == "play.keep_driven"),
+        "play.keep.apply" => s.play.keep_apply(e),
+        "play.keep.cancel" => s.play.keep_cancel(e),
+        "play.keep.refresh" => s.play.keep_refresh(e),
+        "play.options" | "play.network_profile" => {
+            s.local.play_menu = true;
+            Ok(())
+        }
         "play.settings" => {
             super::preferences::open(s, crate::settings::Scope::Project);
             if let Some(view) = s.local.settings.as_mut() {
@@ -1527,6 +1546,9 @@ pub(super) fn spec(id: &str) -> Option<&'static crate::catalog::Command> {
 pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'static str> {
     let c = mods.ctrl;
     let sh = mods.shift;
+    if mods.alt {
+        return (key == 0x74).then_some("play.simulate");
+    }
     Some(match (c, sh, key) {
         (true, false, 0x5A) => "edit.undo",
         (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
@@ -1573,6 +1595,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (false, false, 0x75) => "play.pause",
         (false, false, 0x76) => "play.step",
         (false, true, 0x74) => "play.stop",
+        (false, false, 0x77) => "play.eject",
         _ => return None,
     })
 }

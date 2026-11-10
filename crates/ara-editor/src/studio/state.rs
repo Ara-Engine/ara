@@ -318,6 +318,8 @@ pub struct Local {
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
     pub lighting_menu: Option<&'static str>,
+    /// The Play options menu (mode, clients, network, Simulate, Eject, Keep), open.
+    pub play_menu: bool,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
@@ -387,6 +389,8 @@ pub struct Studio {
     pub vfx: super::vfx::Page,
     /// Builds: the running export, the last build and its packages (`studio::build_page`).
     pub(crate) builder: crate::build::Builder,
+    /// Play's runtime controls: Inspect, runtime edits, Keep, Eject and Possess, Simulate.
+    pub(crate) play: crate::play_controls::PlayControls,
 }
 
 impl Studio {
@@ -411,6 +415,7 @@ impl Studio {
             graph: Default::default(),
             vfx: Default::default(),
             builder: Default::default(),
+            play: Default::default(),
         };
         studio.resolve();
         studio
