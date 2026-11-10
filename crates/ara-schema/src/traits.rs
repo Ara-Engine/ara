@@ -104,5 +104,6 @@ pub struct Color(pub [f32; 4]);
 
 /// A rotation quaternion `[x, y, z, w]`; defaults to identity.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(transparent)]
 #[serde(transparent)]
 pub struct Quat(pub [f32; 4]);

@@ -397,6 +397,7 @@ impl Shell {
             success: token("--success-foreground"),
             chart: [1, 2, 3, 4, 5, 6].map(|n| token(&format!("--chart-{n}"))),
             shadow: ara_ui::style::Color(0, 0, 0, if dark { 90 } else { 22 }),
+            select: token("--warning"),
         };
         self.canvas_display.commands.clear();
         self.canvas_display.glyphs.clear();

@@ -1,0 +1,62 @@
+{
+  "date": "2026-11-08",
+  "scope": "Full project compilation, 64 independent modules with 80 generated component/query scripts each. One source edited in every module before each request. Nine requests: the first three (including the initial cold compile) are excluded; six warm samples are timed. Authored source creation is outside timing; inventory, source reading, parsing/generation/analysis/emission, output writing and protocol response are inside. No live delta, Play startup or cross-engine comparison.",
+  "interpretation": "Scaling observation on the two-worker compiler, not a baseline comparison or commercial-project latency guarantee. Generated fixture has small uniform scripts.",
+  "report": {
+    "modules": 64,
+    "files_per_module": 80,
+    "generated_components": 5120,
+    "first_ms": 7453.597375,
+    "warm_ms": [
+      6284.290000000002,
+      6264.056792000001,
+      6214.099124999997,
+      6178.051375000003,
+      6367.9839999999995,
+      6162.8945
+    ],
+    "p50_ms": 6239.077958499999,
+    "p95_ms": 6367.9839999999995,
+    "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+    "server_sha256": "764014d08da65e2134453ab8044c14bbb14d998921be937fa02579a5e417966d",
+    "runtime": {
+      "version": "10.0.7",
+      "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+      "error": null
+    },
+    "dotnet_host": "/usr/local/share/dotnet/dotnet",
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "architecture": "arm64",
+    "peak_rss_bytes": 998981632,
+    "edited_sources_per_request": 64
+  },
+  "all_sources_edited": {
+    "modules": 64,
+    "files_per_module": 80,
+    "generated_components": 5120,
+    "edited_sources_per_request": 5120,
+    "first_ms": 7231.125333999999,
+    "warm_ms": [
+      6658.675249999998,
+      6592.693375,
+      6681.999709000003,
+      6530.899083999998,
+      6495.762292000002,
+      6796.083582999998
+    ],
+    "p50_ms": 6625.6843125,
+    "p95_ms": 6796.083582999998,
+    "server": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+    "server_sha256": "081bfc78987c04249e8afea4a29f7f2cd5730c47e36a8d26dd959d3c5266489f",
+    "runtime": {
+      "version": "10.0.7",
+      "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+      "error": null
+    },
+    "dotnet_host": "/usr/local/share/dotnet/dotnet",
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "architecture": "arm64",
+    "peak_rss_bytes": 1063862272
+  },
+  "all_sources_edited_scope": "Same 64-module/5,120-script fixture with every source changed before each compile request; authored writes outside the timer. Six warm samples after excluding the first three requests. This later run uses the final related-wave compiler binary; project compilation code is unchanged."
+}

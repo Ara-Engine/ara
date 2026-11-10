@@ -3,7 +3,7 @@ use super::*;
 use ara_components::render::SceneLook;
 use ara_doc::prefab::Resolved;
 
-pub(super) fn component(name: &str) -> bool {
+pub(crate) fn component(name: &str) -> bool {
     matches!(
         name,
         "Light"
@@ -14,11 +14,11 @@ pub(super) fn component(name: &str) -> bool {
             | "ReflectionProbe"
     )
 }
-pub(super) fn lighting(record: &ara_doc::Record) -> bool {
+pub(crate) fn lighting(record: &ara_doc::Record) -> bool {
     record.keys().any(|name| component(name))
 }
 
-pub(super) struct Row {
+pub(crate) struct Row {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -50,7 +50,7 @@ pub(super) fn pose(matrix: glam::Mat4) -> Option<(Vec3, glam::Quat, Vec3)> {
     Some((scale, rotation.normalize(), translation))
 }
 
-pub(super) fn volume(entities: &Resolved, id: &str) -> Option<PostVolume> {
+pub(crate) fn volume(entities: &Resolved, id: &str) -> Option<PostVolume> {
     let row = entities.get(id)?;
     let volume: PostProcessVolume =
         serde::Deserialize::deserialize(row.record.get("PostProcessVolume")?).ok()?;
@@ -70,7 +70,7 @@ pub(super) fn volume(entities: &Resolved, id: &str) -> Option<PostVolume> {
     })
 }
 
-pub(super) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row> {
+pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row> {
     let fog = entities
         .iter()
         .find(|(id, row)| {

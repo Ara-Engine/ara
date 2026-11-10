@@ -8,9 +8,9 @@ using Ara.Hosting;
 //
 // Started by the game or editor process (Ara.Host's CompileClient). Connects to its pipe and
 // exits with its parent. Idle and agent compiles run below normal priority; the human's run at
-// normal priority while the host raises its tick threads above normal (A13, D20).
-try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; }
-catch (Exception) { /* not allowed on this platform: compiles still run out of process */ }
+// their launch budget while the host raises its tick threads above normal (A13, D20).
+// Capture that budget before backgrounding every CLI/session mode, including startup.
+if (CompilePriority.Apply(null) is { } priorityFailure) Console.Error.WriteLine(priorityFailure);
 
 if (args.Contains("--inventory", StringComparer.Ordinal))
 {
@@ -23,13 +23,14 @@ if (args.Contains("--inventory", StringComparer.Ordinal))
 if (args.Contains("--project-session", StringComparer.Ordinal))
 {
     if (int.TryParse(Arg("--parent"), out var projectParent) && projectParent != 0) _ = Task.Run(() => WatchParent(projectParent));
+    var compilations = new ProjectCompilations();
     while (await Console.In.ReadLineAsync() is { } line)
     {
         using var input = System.Text.Json.JsonDocument.Parse(line);
         var operation = input.RootElement.GetProperty("operation").GetString();
         var result = operation switch {
             "--inventory" => ProjectInventory.Scan(input.RootElement.Deserialize<InventoryRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing inventory request")),
-            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request")),
+            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request"), compilations: compilations),
             _ => throw new ArgumentException("unknown project operation"),
         };
         await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(result, CodeFixRunner.Json));
@@ -105,7 +106,8 @@ while (Protocol.Receive(pipe) is { } msg)
             var (slot, name, dir, hot, refs, modules, profile, watch) = (r.U32(), r.Str(), r.Str(), r.Bool(), r.Strs(), r.Strs(), r.Str(), r.Bool());
             var initial = r.Remaining == 0 || r.Bool();
             var generation = r.Remaining == 0 ? 0 : r.U32();
-            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation);
+            var published = r.Remaining > 0 && r.Bool() ? PublishedSnapshot.Read(r) : null;
+            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation, published);
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());
@@ -150,5 +152,10 @@ sealed class PipeSink(Stream pipe) : IMessageSink
     {
         try { Protocol.Send(pipe, kind, payload); }
         catch (IOException) { Environment.Exit(0); } // the host is gone
+        catch (ObjectDisposedException)
+        {
+            // Main owns this pipe and may close it while cancelled work finishes.
+            // Let main preserve its own exit status, including protocol failures.
+        }
     }
 }

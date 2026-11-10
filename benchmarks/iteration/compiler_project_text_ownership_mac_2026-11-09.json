@@ -1,0 +1,743 @@
+{
+  "date": "2026-11-09",
+  "baseline_source_commit": "df17327ddb8450c5a1a07d334db7f4703378029a",
+  "scope": "Actual ProjectCompilations.Generate string ownership, synthetic newly supplied source strings, same dependencies and fresh-compilation full-output parity. No source I/O, allocation, peak RSS, latency or gameplay measurement.",
+  "change": "Keep the existing source string when ModuleText.Update returns the identical prior tree. Changed files and paths keep their new text/tree. No added cache or read/hash shortcut.",
+  "design": {
+    "fresh_processes": 4,
+    "profiles": [
+      {
+        "name": "small",
+        "files": 16,
+        "utf16_units_per_source": 4096
+      },
+      {
+        "name": "large",
+        "files": 16,
+        "utf16_units_per_source": 131072
+      }
+    ],
+    "steps_per_process": 6,
+    "steps": [
+      "cold",
+      "equal fresh strings",
+      "half bodies edited",
+      "heat/configuration change",
+      "one invalid source",
+      "repair"
+    ],
+    "actual_generate_calls": 24,
+    "fresh_oracle_generate_calls": 24,
+    "ownership": "NoInlining producer returns only weak string/tree observers and output values. Actual cache stays alive. Forced full GC after scope exit; required tree/text remains valid.",
+    "full_diagnostic_keys": "Sorted multiset preserving duplicate count, ID, severity, message/display, source path/span, additional locations and properties. Raw actual diagnostic order retained.",
+    "first_failed_fixture": "proof-01 cold baseline rejected reordered hidden CS8019 diagnostics. Captured complete arrays prove identical five diagnostics; corrected comparison sorts complete keys without dropping diagnostics. Original source/app snapshots and failure retained."
+  },
+  "results": [
+    {
+      "arm": "baseline",
+      "profile": "small",
+      "sources": 16,
+      "utf16_units_per_source": 4096,
+      "rows": [
+        {
+          "wave": 0,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "12bec912903d0e5cb7cb0fa6a7256393e5dc21539dd1a08bdc4f141d68a24927",
+          "Pdb": "152180f11f33568962dd75833dd5d3b173630a71d240c5e36a103b18aea0b293",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 1,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "12bec912903d0e5cb7cb0fa6a7256393e5dc21539dd1a08bdc4f141d68a24927",
+          "Pdb": "152180f11f33568962dd75833dd5d3b173630a71d240c5e36a103b18aea0b293",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 2,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "d9755bbd690359c711ff8ea825f894f20b275f57c0eb8297c52d5b3516f66ad0",
+          "Pdb": "2d9a52ff0cb5f4246897e1fe7dfaadc113aed10490ce3c7e62c84538add38f9f",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 3,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "b1da91ed986dc84a477dd59a8b6b1d1569bd2d7488ef348ab40b24f429728616",
+          "Pdb": "8853f203870e5288a869c19e7f0d2b4e089edc603df13c6150dad23038d76780",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 4,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": null,
+          "Pdb": null,
+          "Diagnostics": [
+            "{\"Id\":\"CS0103\",\"Severity\":3,\"Message\":\"The name \\u0027Missing\\u0027 does not exist in the current context\",\"Display\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs(1,57): error CS0103: The name \\u0027Missing\\u0027 does not exist in the current context\",\"Path\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs\",\"SourceSpan\":{\"Start\":56,\"End\":63,\"Length\":7,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs(1,57): error CS0103: The name 'Missing' does not exist in the current context"
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 5,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "b1da91ed986dc84a477dd59a8b6b1d1569bd2d7488ef348ab40b24f429728616",
+          "Pdb": "8853f203870e5288a869c19e7f0d2b4e089edc603df13c6150dad23038d76780",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        }
+      ],
+      "sdk_sha256": "e8901e01c9fce04b24e2903e3a85463b33f140079b513c6d4b1914e08fc37fc8",
+      "runtime": "10.0.14",
+      "timings_accepted": false,
+      "scope": "Actual Generate ownership and fresh full-output parity; no allocation, peak RSS or latency claim."
+    },
+    {
+      "arm": "candidate",
+      "profile": "small",
+      "sources": 16,
+      "utf16_units_per_source": 4096,
+      "rows": [
+        {
+          "wave": 0,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "12bec912903d0e5cb7cb0fa6a7256393e5dc21539dd1a08bdc4f141d68a24927",
+          "Pdb": "152180f11f33568962dd75833dd5d3b173630a71d240c5e36a103b18aea0b293",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 1,
+          "fresh_input_strings_alive": 0,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 0,
+          "Pe": "12bec912903d0e5cb7cb0fa6a7256393e5dc21539dd1a08bdc4f141d68a24927",
+          "Pdb": "152180f11f33568962dd75833dd5d3b173630a71d240c5e36a103b18aea0b293",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 2,
+          "fresh_input_strings_alive": 8,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 8,
+          "Pe": "d9755bbd690359c711ff8ea825f894f20b275f57c0eb8297c52d5b3516f66ad0",
+          "Pdb": "2d9a52ff0cb5f4246897e1fe7dfaadc113aed10490ce3c7e62c84538add38f9f",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 3,
+          "fresh_input_strings_alive": 0,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 0,
+          "Pe": "b1da91ed986dc84a477dd59a8b6b1d1569bd2d7488ef348ab40b24f429728616",
+          "Pdb": "8853f203870e5288a869c19e7f0d2b4e089edc603df13c6150dad23038d76780",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 4,
+          "fresh_input_strings_alive": 1,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 1,
+          "Pe": null,
+          "Pdb": null,
+          "Diagnostics": [
+            "{\"Id\":\"CS0103\",\"Severity\":3,\"Message\":\"The name \\u0027Missing\\u0027 does not exist in the current context\",\"Display\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs(1,57): error CS0103: The name \\u0027Missing\\u0027 does not exist in the current context\",\"Path\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs\",\"SourceSpan\":{\"Start\":56,\"End\":63,\"Length\":7,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/small/File0.cs(1,57): error CS0103: The name 'Missing' does not exist in the current context"
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 5,
+          "fresh_input_strings_alive": 1,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 1,
+          "Pe": "b1da91ed986dc84a477dd59a8b6b1d1569bd2d7488ef348ab40b24f429728616",
+          "Pdb": "8853f203870e5288a869c19e7f0d2b4e089edc603df13c6150dad23038d76780",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        }
+      ],
+      "sdk_sha256": "2cad20a38817d5141968dafbdfa73a893eecb4d0fd40d0dff1e4a920fb04f5ef",
+      "runtime": "10.0.14",
+      "timings_accepted": false,
+      "scope": "Actual Generate ownership and fresh full-output parity; no allocation, peak RSS or latency claim."
+    },
+    {
+      "arm": "baseline",
+      "profile": "large",
+      "sources": 16,
+      "utf16_units_per_source": 131072,
+      "rows": [
+        {
+          "wave": 0,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "0a845af6e6d0c9ba6e4d1da4f51c265ca294daa38cac43ee9ab8cdb58a9ab4b1",
+          "Pdb": "4b9128db491edc052aa2fa34f75f6a0a876724a4c6fde425bbccfb0447e7bda3",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 1,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "0a845af6e6d0c9ba6e4d1da4f51c265ca294daa38cac43ee9ab8cdb58a9ab4b1",
+          "Pdb": "4b9128db491edc052aa2fa34f75f6a0a876724a4c6fde425bbccfb0447e7bda3",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 2,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "9b8860e68f05e7a230d6b9ff72218f567e8d714003eb8bf4211d1e6cb9ccd123",
+          "Pdb": "03e3e144ef9e998d446718a74086d35b4845f09f22357a782eaa2dc4acdaadbd",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 3,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "bbe4f9178b43c06064a796e3ef3864fe724f2b758d8c0c0b02cd7d5800133884",
+          "Pdb": "8197cde865cac69398fc38eb618337fba19168b2271ce0b4257a12a6228d7f7d",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 4,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": null,
+          "Pdb": null,
+          "Diagnostics": [
+            "{\"Id\":\"CS0103\",\"Severity\":3,\"Message\":\"The name \\u0027Missing\\u0027 does not exist in the current context\",\"Display\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs(1,57): error CS0103: The name \\u0027Missing\\u0027 does not exist in the current context\",\"Path\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs\",\"SourceSpan\":{\"Start\":56,\"End\":63,\"Length\":7,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs(1,57): error CS0103: The name 'Missing' does not exist in the current context"
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 5,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 16,
+          "Pe": "bbe4f9178b43c06064a796e3ef3864fe724f2b758d8c0c0b02cd7d5800133884",
+          "Pdb": "8197cde865cac69398fc38eb618337fba19168b2271ce0b4257a12a6228d7f7d",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        }
+      ],
+      "sdk_sha256": "e8901e01c9fce04b24e2903e3a85463b33f140079b513c6d4b1914e08fc37fc8",
+      "runtime": "10.0.14",
+      "timings_accepted": false,
+      "scope": "Actual Generate ownership and fresh full-output parity; no allocation, peak RSS or latency claim."
+    },
+    {
+      "arm": "candidate",
+      "profile": "large",
+      "sources": 16,
+      "utf16_units_per_source": 131072,
+      "rows": [
+        {
+          "wave": 0,
+          "fresh_input_strings_alive": 16,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 16,
+          "Pe": "0a845af6e6d0c9ba6e4d1da4f51c265ca294daa38cac43ee9ab8cdb58a9ab4b1",
+          "Pdb": "4b9128db491edc052aa2fa34f75f6a0a876724a4c6fde425bbccfb0447e7bda3",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 1,
+          "fresh_input_strings_alive": 0,
+          "cold_input_strings_alive": 16,
+          "expected_fresh_alive": 0,
+          "Pe": "0a845af6e6d0c9ba6e4d1da4f51c265ca294daa38cac43ee9ab8cdb58a9ab4b1",
+          "Pdb": "4b9128db491edc052aa2fa34f75f6a0a876724a4c6fde425bbccfb0447e7bda3",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 2,
+          "fresh_input_strings_alive": 8,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 8,
+          "Pe": "9b8860e68f05e7a230d6b9ff72218f567e8d714003eb8bf4211d1e6cb9ccd123",
+          "Pdb": "03e3e144ef9e998d446718a74086d35b4845f09f22357a782eaa2dc4acdaadbd",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 3,
+          "fresh_input_strings_alive": 0,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 0,
+          "Pe": "bbe4f9178b43c06064a796e3ef3864fe724f2b758d8c0c0b02cd7d5800133884",
+          "Pdb": "8197cde865cac69398fc38eb618337fba19168b2271ce0b4257a12a6228d7f7d",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 4,
+          "fresh_input_strings_alive": 1,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 1,
+          "Pe": null,
+          "Pdb": null,
+          "Diagnostics": [
+            "{\"Id\":\"CS0103\",\"Severity\":3,\"Message\":\"The name \\u0027Missing\\u0027 does not exist in the current context\",\"Display\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs(1,57): error CS0103: The name \\u0027Missing\\u0027 does not exist in the current context\",\"Path\":\"/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs\",\"SourceSpan\":{\"Start\":56,\"End\":63,\"Length\":7,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-text-residency-20261109/corpus/large/File0.cs(1,57): error CS0103: The name 'Missing' does not exist in the current context"
+          ],
+          "required_trees_and_texts_valid": true
+        },
+        {
+          "wave": 5,
+          "fresh_input_strings_alive": 1,
+          "cold_input_strings_alive": 8,
+          "expected_fresh_alive": 1,
+          "Pe": "bbe4f9178b43c06064a796e3ef3864fe724f2b758d8c0c0b02cd7d5800133884",
+          "Pdb": "8197cde865cac69398fc38eb618337fba19168b2271ce0b4257a12a6228d7f7d",
+          "Diagnostics": [
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(1,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":0,\"End\":20,\"Length\":20,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(2,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":21,\"End\":61,\"Length\":40,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(3,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":62,\"End\":87,\"Length\":25,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(4,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":88,\"End\":117,\"Length\":29,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}",
+            "{\"Id\":\"CS8019\",\"Severity\":0,\"Message\":\"Unnecessary using directive.\",\"Display\":\"\\u003Cara-global-usings\\u003E.cs(5,1): hidden CS8019: Unnecessary using directive.\",\"Path\":\"\\u003Cara-global-usings\\u003E.cs\",\"SourceSpan\":{\"Start\":118,\"End\":135,\"Length\":17,\"IsEmpty\":false},\"Additional\":[],\"Properties\":[]}"
+          ],
+          "RawDiagnostics": [
+            "<ara-global-usings>.cs(4,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(3,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(2,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(1,1): hidden CS8019: Unnecessary using directive.",
+            "<ara-global-usings>.cs(5,1): hidden CS8019: Unnecessary using directive."
+          ],
+          "required_trees_and_texts_valid": true
+        }
+      ],
+      "sdk_sha256": "2cad20a38817d5141968dafbdfa73a893eecb4d0fd40d0dff1e4a920fb04f5ef",
+      "runtime": "10.0.14",
+      "timings_accepted": false,
+      "scope": "Actual Generate ownership and fresh full-output parity; no allocation, peak RSS or latency claim."
+    }
+  ],
+  "exact_cross_arm_pe_pdb_and_diagnostic_key_parity": true,
+  "source_and_app_before_after_unchanged": true,
+  "runtime_guard": {
+    "before": "proof-01 begin, before either variant observation attempt",
+    "after": "after proof-02, same installed shared runtime files",
+    "equal": true,
+    "runtime_file_count": 188
+  },
+  "timings_accepted": false,
+  "limitations": [
+    "Weak-reference counts establish object ownership in these fixtures, not total heap or resident bytes.",
+    "Fresh source strings are synthesized; actual file reading is outside this experiment.",
+    "No analyzer-policy change. Only Generate/emit is exercised here; production compiler tests and Rust publication lifecycle are separate gates.",
+    "No universal speed, GC pause, peak RSS or Unity/Unreal claim.",
+    "One fresh process per arm/profile; forced-GC observations are not natural application memory-pressure traces."
+  ],
+  "production_source_sha256": "7de3ce13e74350fbb65ee88a6db24f30c3d76cfbe8d4392a63182078abfaa852",
+  "proof_sha256": {
+    "target/compiler-project-text-residency-20261109/proof-02/report.json": "c52a866c0f80af5ca4d7ff1e93ddbd8234423054d4136293937cbd67c36c14da",
+    "target/compiler-project-text-residency-20261109/ROOT-DIAGNOSTIC-ORDER.json": "34f16591bfb777d689476cd1c320a8d8428565f8e87c4c2126b62a8e739a1e7e",
+    "target/compiler-project-text-residency-20261109/proof-01/report.json": "161ebc60107e45f8cca17e725b6c4bd7ac515cad0de80224b4d9b7b778bf47e9",
+    "target/compiler-project-text-residency-20261109/proof-01/diagnostic-run.stderr": "f691ff21e73f6d8fa42fe52eaf5ee0977d0c03b0cddeb052712adaf00e0f6959"
+  },
+  "production_verification": {
+    "solution_warnings": 0,
+    "solution_errors": 0,
+    "compiler_tests_passed": 216,
+    "compiler_tests_failed": 0,
+    "compiler_tests_skipped": 0,
+    "actual_rust_project_lifecycle_passed": 1,
+    "ara_script_all_targets_clippy": "passed; warnings denied",
+    "workspace_format": "passed, 114 packages",
+    "gates": [
+      {
+        "name": "solution",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "build",
+          "dotnet/Ara.slnx",
+          "-c",
+          "Release",
+          "--no-restore",
+          "-m:2",
+          "-p:UseSharedCompilation=false",
+          "-v:q"
+        ],
+        "deadline_seconds": 180,
+        "exit": 0
+      },
+      {
+        "name": "compiler-tests",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "test",
+          "dotnet/tests/Ara.CompileServer.Tests/Ara.CompileServer.Tests.csproj",
+          "-c",
+          "Release",
+          "--no-build",
+          "--",
+          "xUnit.MaxParallelThreads=2"
+        ],
+        "deadline_seconds": 300,
+        "exit": 0
+      },
+      {
+        "name": "project-lifecycle",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "cargo",
+          "test",
+          "-p",
+          "ara-script",
+          "--test",
+          "project_lifecycle",
+          "--",
+          "--nocapture"
+        ],
+        "deadline_seconds": 180,
+        "exit": 0
+      },
+      {
+        "name": "clippy",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "cargo",
+          "clippy",
+          "-p",
+          "ara-script",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "deadline_seconds": 180,
+        "exit": 0
+      },
+      {
+        "name": "fmt",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "cargo",
+          "run",
+          "-p",
+          "ara-dev",
+          "--",
+          "fmt",
+          "--check"
+        ],
+        "deadline_seconds": 180,
+        "exit": 0
+      }
+    ],
+    "proof_sha256": {
+      "target/compiler-project-text-residency-20261109/production-gates/clippy.stderr": "307f3f1c1e019cda2f97b5a307602575c2a63ed0de924da49b5fc180a06f0269",
+      "target/compiler-project-text-residency-20261109/production-gates/clippy.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target/compiler-project-text-residency-20261109/production-gates/compiler-tests.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target/compiler-project-text-residency-20261109/production-gates/compiler-tests.stdout": "1052976629316e1410bff29b8ad15a333240f6f647e62ab0712cb64a19e530fa",
+      "target/compiler-project-text-residency-20261109/production-gates/fmt.stderr": "40be600116a55ca198debfd9aa4a1c12c440a96f4ac6227958d23ee9bcbfb5c3",
+      "target/compiler-project-text-residency-20261109/production-gates/fmt.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target/compiler-project-text-residency-20261109/production-gates/project-lifecycle.stderr": "84c399f0fd159a3f332b878e83298eedc68af07dce91ec11c1874878e9d3776a",
+      "target/compiler-project-text-residency-20261109/production-gates/project-lifecycle.stdout": "462c372d8bba25cd6fb148e4918659729d3e7d27082d806a65cc12ce3a1bfe49",
+      "target/compiler-project-text-residency-20261109/production-gates/report.json": "795d6fb692ece3d8bfe429959e1ff1633c8ce5ee37ed8e365c4aaf33d6fdc12b",
+      "target/compiler-project-text-residency-20261109/production-gates/solution.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target/compiler-project-text-residency-20261109/production-gates/solution.stdout": "72146e09bc3bfcd059c07f76b10f93cc3ac19d284e585d92c3c87120b86d3dc1"
+    }
+  }
+}

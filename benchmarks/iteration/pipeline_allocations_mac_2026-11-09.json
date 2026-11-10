@@ -1,0 +1,976 @@
+{
+  "phase": "pipeline",
+  "scope": "CPU decoded scene preparation with owned transfer, nested variable values and prefabs. Compare clone-once materialization, reusable validation paths and owned IDs as one allocation-reduction bundle. Excludes full Play/asset/GPU readiness; no competitor claim.",
+  "date_utc": "2026-11-08T21:27:19.472056+00:00",
+  "git_head": "120258288a39f14e7b3e9b3276fa606e66389d48",
+  "dirty_sources": true,
+  "script_sha256": "2d4f624846dd1cd26e522ecf77c6ff5bf72c9ee55575c593a4ee9db8cc3f59c7",
+  "source_sha256": {
+    "crates/ara-script/src/ecs/system.rs": "e7d681d64df597cfc9320573af836ad21f35dc1563487a595d4d9fb64411e261",
+    "crates/ara-script/src/host/bindings.rs": "50ecaedfa87d094dd515c508de717406b6cc9c36ba90743ef9ccf4f2395a4165",
+    "crates/ara-script/src/host/ctx.rs": "43347ce85f871f1ad6c31126388210408bbcd04049e9ad9ef9bd5f65826aa81e",
+    "crates/ara-script/src/ecs/cmdbuf.rs": "a4748b7393b7e976d27eef2ad92beac1a42e65ed165ad4d168ec18c8745efdc9",
+    "crates/ara-play/src/lib.rs": "0e40e93a4c5bf1897e7ce59dcf98469807d1b11c5c58ffd07c804080f0e4026a",
+    "crates/ara-player/src/world.rs": "31e123ffe52759e812152604b3e1e9651baeb188f8a2a344228d4c46185b6ab3",
+    "dotnet/src/Ara.Generators/Docs.cs": "e22fd2cd4b3316d4f8c7453b6f6982228eb230615cffd8ab9021952b938e6d60",
+    "dotnet/src/Ara.Generators/ModuleGenerator.cs": "a541c8db5f7e892cff4e443f5eb4ac3e2aa35319b52cfbe13aa4c6a4972b691f",
+    "dotnet/src/Ara.Generators/Polyfills.cs": "46d1d486ed083c11e036591c4dfa0ba0d0d7a189b4a9b537d38633f41f5f4312",
+    "dotnet/src/Ara.Generators/Emit.Query.cs": "79af604889da4f65cb520be5bed0cc390658f2527a2ab3ed15d8c73848621b64",
+    "dotnet/src/Ara.Generators/Extract.Query.cs": "62d358f6ca2afcdd281511e19766aaddae8a2bc8cdf21936b172a15df095bc95",
+    "dotnet/src/Ara.Generators/Models.cs": "ad8bc6f162123d098a0b892cdc238d6a22bdf33b49a9990561939a1d5251d18b",
+    "dotnet/src/Ara.Generators/Emit.cs": "a4b4bbddd7b4a15405c6b4a7f0ac1bd7d9b3f8e9a7398905d48fdf246921c23e",
+    "dotnet/src/Ara.Generators/Json.cs": "f75826b6d7f12702450ce5b168b650fe2459c7beefd20f4f9af26aa0e0f75d68",
+    "dotnet/src/Ara.Generators/Extract.cs": "db87e252f2b146affddc9d176975fa7be179a8633af976990dc04433a80f0142",
+    "dotnet/src/Ara.Generators/Schema.cs": "ce181448d594714a7a39159b4495e009d019f37403d7d45bcc49161eb150e260",
+    "dotnet/src/Ara.Generators/Descriptors.cs": "8d58346e4a0bb02304a9e9e1c0f5c21374fd8acca4816b8759cf2205bd99fd2a",
+    "crates/ara-schema/src/validate.rs": "fb36a40795f6141fa2d1a741b72490152d64b11086843b6677b611aaf637549f",
+    "crates/ara-doc/src/id.rs": "60897be3df44088b706afa8a98bf5941b7bcbbb7779fa813fa256afaf1fae196",
+    "crates/ara-sim/src/dynamic.rs": "01480421d258e4edd3ffb03687053dec8e4bb2f0673aa6a51aec5eb2efc74666",
+    "crates/ara-sim/src/registry.rs": "6e1d6c3850274ab45790a185e798ce040fe6a5bd80ec5c4183e6bf7b62701e57",
+    "crates/ara-sim/src/projection.rs": "614ce8e0e2872e4fd1ccb1500027e1842edd095af65da062484c4c4da36e496a",
+    "crates/ara-script/examples/batch_query_bench.rs": "ca3f433deab8d5fd731d425f110d77b417e16cef8df438077aeec139132d78e1",
+    "crates/ara-script/examples/query_tick_bench.rs": "06173f79b247f94cd810d1f77db8d2c19624a26c4f57c03e234f485c43cdede0",
+    "crates/ara-script/examples/sparse_query_bench.rs": "7b8b7fb6a66f77be334a88ecc2362e0b3e70224998f69f676a68c2b4b44cce3b",
+    "crates/ara-play/examples/scene_prepare_bench.rs": "343666dd91a9d7077aa2bd15c347e9edb8739a56214ce78826f86f42af50a268"
+  },
+  "method": "Two fresh-process rounds with reversed order, nice10. Kernel samples exclude setup/verification; separate untimed Rust allocation counts. Resource guards before/after cannot prove continuous absence of interference. Worker arguments are pool workers plus a participating caller, not total hardware cores.",
+  "results": [
+    {
+      "name": "r0-10000-before",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:27:19.504789+00:00",
+        "load": [
+          1.955078125,
+          1.9609375,
+          2.90380859375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t53%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 402,
+            "cpu_percent": 5.4,
+            "command": "/usr/libexec/dasd"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:27:21.429071+00:00",
+        "load": [
+          2.19873046875,
+          2.01123046875,
+          2.916015625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t54%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 35646,
+            "cpu_percent": 84.0,
+            "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/clippy-driver"
+          },
+          {
+            "pid": 35648,
+            "cpu_percent": 85.5,
+            "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/clippy-driver"
+          }
+        ],
+        "active_compilers": [
+          {
+            "pid": 35646,
+            "cpu_percent": 84.0,
+            "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/clippy-driver"
+          },
+          {
+            "pid": 35648,
+            "cpu_percent": 85.5,
+            "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/clippy-driver"
+          }
+        ]
+      },
+      "resource_guard_passed": false,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 6.250125,
+        "encode_ms": 2.4632500000000004,
+        "cbor_bytes": 1702009,
+        "p50_ms": 129.57679199999998,
+        "p95_ms": 133.225833,
+        "phases": [
+          {
+            "decode_ms": 14.121500000000001,
+            "workspace_ms": 0.9217080000000001,
+            "projection_ms": 101.118,
+            "decoded_scene_drop_ms": 0.00175,
+            "total_ms": 116.16312500000001
+          },
+          {
+            "decode_ms": 13.914124999999999,
+            "workspace_ms": 0.907041,
+            "projection_ms": 114.75395900000001,
+            "decoded_scene_drop_ms": 0.001542,
+            "total_ms": 129.57679199999998
+          },
+          {
+            "decode_ms": 13.961417,
+            "workspace_ms": 0.997375,
+            "projection_ms": 118.261792,
+            "decoded_scene_drop_ms": 0.0050409999999999995,
+            "total_ms": 133.225833
+          }
+        ],
+        "rust_allocations_per_preparation": 3775723,
+        "rust_allocated_bytes_per_preparation": 234133781,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 31.497625000000003,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "5a6415d30bb9f46c46b230558e410f2b656e07f2d09860d181e97759cdb7b121",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-10000-before",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:07.349261+00:00",
+        "load": [
+          4.30322265625,
+          2.49462890625,
+          2.72265625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t62%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 35798,
+            "cpu_percent": 7.3,
+            "command": "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)"
+          },
+          {
+            "pid": 43920,
+            "cpu_percent": 6.6,
+            "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:34:08.753861+00:00",
+        "load": [
+          4.03857421875,
+          2.4697265625,
+          2.71240234375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t62%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.201417,
+        "encode_ms": 1.572292,
+        "cbor_bytes": 1702009,
+        "p50_ms": 118.832458,
+        "p95_ms": 120.36354200000001,
+        "phases": [
+          {
+            "decode_ms": 14.193458000000001,
+            "workspace_ms": 0.915334,
+            "projection_ms": 103.72175,
+            "decoded_scene_drop_ms": 0.001625,
+            "total_ms": 118.832458
+          },
+          {
+            "decode_ms": 14.62875,
+            "workspace_ms": 0.972333,
+            "projection_ms": 104.76058300000001,
+            "decoded_scene_drop_ms": 0.0015,
+            "total_ms": 120.36354200000001
+          },
+          {
+            "decode_ms": 12.8775,
+            "workspace_ms": 0.925459,
+            "projection_ms": 102.318875,
+            "decoded_scene_drop_ms": 0.0013340000000000001,
+            "total_ms": 116.123334
+          }
+        ],
+        "rust_allocations_per_preparation": 3775723,
+        "rust_allocated_bytes_per_preparation": 234133781,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 29.273833,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "3f0afe3a2a108d2fbe082c461b6488e7a8a103ba1fda85f4cea72d7fd9e2e256",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-10000-after",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:08.778034+00:00",
+        "load": [
+          4.03857421875,
+          2.4697265625,
+          2.71240234375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t62%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:34:10.235440+00:00",
+        "load": [
+          4.03857421875,
+          2.4697265625,
+          2.71240234375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t62%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 7.401375,
+        "encode_ms": 2.315667,
+        "cbor_bytes": 1702009,
+        "p50_ms": 96.66920800000001,
+        "p95_ms": 97.483209,
+        "phases": [
+          {
+            "decode_ms": 13.922334,
+            "workspace_ms": 0.9921660000000001,
+            "projection_ms": 81.751167,
+            "decoded_scene_drop_ms": 0.003292,
+            "total_ms": 96.66920800000001
+          },
+          {
+            "decode_ms": 14.416417000000001,
+            "workspace_ms": 0.9250830000000001,
+            "projection_ms": 82.13825,
+            "decoded_scene_drop_ms": 0.003292,
+            "total_ms": 97.483209
+          },
+          {
+            "decode_ms": 13.544459,
+            "workspace_ms": 0.843083,
+            "projection_ms": 81.51795800000001,
+            "decoded_scene_drop_ms": 0.001584,
+            "total_ms": 95.907375
+          }
+        ],
+        "rust_allocations_per_preparation": 2793190,
+        "rust_allocated_bytes_per_preparation": 185292907,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 27.217709,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "74b604ea6351f69a5ffd51a843e5c90980367e1d52aa022cd1708e766d62310d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-100000-before",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:10.258162+00:00",
+        "load": [
+          4.03857421875,
+          2.4697265625,
+          2.71240234375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t62%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:34:24.528725+00:00",
+        "load": [
+          3.50048828125,
+          2.42919921875,
+          2.693359375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 47.405415999999995,
+        "encode_ms": 20.650917,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1213.306959,
+        "p95_ms": 1223.45875,
+        "phases": [
+          {
+            "decode_ms": 142.26225,
+            "workspace_ms": 10.828333,
+            "projection_ms": 1060.213833,
+            "decoded_scene_drop_ms": 0.002334,
+            "total_ms": 1213.306959
+          },
+          {
+            "decode_ms": 145.74912500000002,
+            "workspace_ms": 11.311541,
+            "projection_ms": 1066.3959169999998,
+            "decoded_scene_drop_ms": 0.001958,
+            "total_ms": 1223.45875
+          },
+          {
+            "decode_ms": 133.630541,
+            "workspace_ms": 10.815292000000001,
+            "projection_ms": 1063.470875,
+            "decoded_scene_drop_ms": 0.001958,
+            "total_ms": 1207.919208
+          }
+        ],
+        "rust_allocations_per_preparation": 37703392,
+        "rust_allocated_bytes_per_preparation": 2345064586,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 307.41391600000003,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "073b8bdf074e3c0fddf58b3808529a79b88c6003b294960f22c9a2bf20e5dd7f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-100000-after",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:24.552358+00:00",
+        "load": [
+          3.50048828125,
+          2.42919921875,
+          2.693359375
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:34:36.671489+00:00",
+        "load": [
+          3.115234375,
+          2.3818359375,
+          2.6728515625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 35798,
+            "cpu_percent": 5.6,
+            "command": "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 44.852333,
+        "encode_ms": 17.564916999999998,
+        "cbor_bytes": 17271213,
+        "p50_ms": 985.428416,
+        "p95_ms": 1004.747209,
+        "phases": [
+          {
+            "decode_ms": 140.22141599999998,
+            "workspace_ms": 9.875292,
+            "projection_ms": 834.1505420000001,
+            "decoded_scene_drop_ms": 0.001792,
+            "total_ms": 984.24925
+          },
+          {
+            "decode_ms": 147.240792,
+            "workspace_ms": 10.136916,
+            "projection_ms": 847.367334,
+            "decoded_scene_drop_ms": 0.001917,
+            "total_ms": 1004.747209
+          },
+          {
+            "decode_ms": 134.007917,
+            "workspace_ms": 10.366584,
+            "projection_ms": 841.052,
+            "decoded_scene_drop_ms": 0.001542,
+            "total_ms": 985.428416
+          }
+        ],
+        "rust_allocations_per_preparation": 27878359,
+        "rust_allocated_bytes_per_preparation": 1856286837,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 276.364,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "f556b502d7946bbcd04b66946ec9468aa9be305ce3cc8fe90c5b69b41d1b35f7",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-100000-after",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:36.695085+00:00",
+        "load": [
+          3.115234375,
+          2.3818359375,
+          2.6728515625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 35798,
+            "cpu_percent": 5.6,
+            "command": "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:34:48.926381+00:00",
+        "load": [
+          2.80615234375,
+          2.3466796875,
+          2.65478515625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 44350,
+            "cpu_percent": 5.8,
+            "command": "AsideUpdater"
+          },
+          {
+            "pid": 44355,
+            "cpu_percent": 9.1,
+            "command": "/usr/libexec/mdmclient"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 44.243249999999996,
+        "encode_ms": 17.847666,
+        "cbor_bytes": 17271213,
+        "p50_ms": 998.591791,
+        "p95_ms": 1013.096375,
+        "phases": [
+          {
+            "decode_ms": 142.74475,
+            "workspace_ms": 10.508875000000002,
+            "projection_ms": 845.333625,
+            "decoded_scene_drop_ms": 0.004292,
+            "total_ms": 998.591791
+          },
+          {
+            "decode_ms": 148.357542,
+            "workspace_ms": 10.969458,
+            "projection_ms": 853.766958,
+            "decoded_scene_drop_ms": 0.002208,
+            "total_ms": 1013.096375
+          },
+          {
+            "decode_ms": 135.732667,
+            "workspace_ms": 10.303041,
+            "projection_ms": 845.501042,
+            "decoded_scene_drop_ms": 0.002833,
+            "total_ms": 991.5397919999999
+          }
+        ],
+        "rust_allocations_per_preparation": 27878359,
+        "rust_allocated_bytes_per_preparation": 1856286837,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 276.20612500000004,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "416a9a5c56de5c11e8048116b8f35693d38b11a3674063e812fcdb5c6929c523",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-100000-before",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:34:48.950023+00:00",
+        "load": [
+          2.80615234375,
+          2.3466796875,
+          2.65478515625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 44350,
+            "cpu_percent": 5.8,
+            "command": "AsideUpdater"
+          },
+          {
+            "pid": 44355,
+            "cpu_percent": 9.1,
+            "command": "/usr/libexec/mdmclient"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:35:03.419809+00:00",
+        "load": [
+          2.68798828125,
+          2.3349609375,
+          2.64697265625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 44.69325,
+        "encode_ms": 17.31025,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1239.820916,
+        "p95_ms": 1240.3625,
+        "phases": [
+          {
+            "decode_ms": 146.186875,
+            "workspace_ms": 10.951374999999999,
+            "projection_ms": 1082.680834,
+            "decoded_scene_drop_ms": 0.001709,
+            "total_ms": 1239.820916
+          },
+          {
+            "decode_ms": 148.710666,
+            "workspace_ms": 10.943875,
+            "projection_ms": 1080.705334,
+            "decoded_scene_drop_ms": 0.0022500000000000003,
+            "total_ms": 1240.3625
+          },
+          {
+            "decode_ms": 137.94175,
+            "workspace_ms": 10.835417,
+            "projection_ms": 1077.9012500000001,
+            "decoded_scene_drop_ms": 0.001792,
+            "total_ms": 1226.680292
+          }
+        ],
+        "rust_allocations_per_preparation": 37703392,
+        "rust_allocated_bytes_per_preparation": 2345064586,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 305.47999999999996,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "205a1137c7849648dd98a4d82073677470030cc006f0ffc6cba7c8afd1c79f8a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-10000-after",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:35:03.443911+00:00",
+        "load": [
+          2.68798828125,
+          2.3349609375,
+          2.64697265625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:35:04.681041+00:00",
+        "load": [
+          2.552734375,
+          2.3125,
+          2.63720703125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.466375,
+        "encode_ms": 1.803083,
+        "cbor_bytes": 1702009,
+        "p50_ms": 98.602542,
+        "p95_ms": 99.522041,
+        "phases": [
+          {
+            "decode_ms": 15.445875,
+            "workspace_ms": 0.861,
+            "projection_ms": 82.29404099999999,
+            "decoded_scene_drop_ms": 0.00125,
+            "total_ms": 98.602542
+          },
+          {
+            "decode_ms": 15.444125,
+            "workspace_ms": 0.948,
+            "projection_ms": 83.12866700000001,
+            "decoded_scene_drop_ms": 0.001166,
+            "total_ms": 99.522041
+          },
+          {
+            "decode_ms": 14.532125,
+            "workspace_ms": 0.956375,
+            "projection_ms": 82.40670899999999,
+            "decoded_scene_drop_ms": 0.0014160000000000002,
+            "total_ms": 97.89679199999999
+          }
+        ],
+        "rust_allocations_per_preparation": 2793190,
+        "rust_allocated_bytes_per_preparation": 185292907,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 26.670875,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "88f5975394b5a7f873fb6298233e81e4f25bd0a99809fdd81620c1002be69c71",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-10000-before",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:35:04.704142+00:00",
+        "load": [
+          2.552734375,
+          2.3125,
+          2.63720703125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:35:06.130056+00:00",
+        "load": [
+          2.552734375,
+          2.3125,
+          2.63720703125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t63%; charging; (no estimate) present: true",
+        "active_processes": [],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.8265,
+        "encode_ms": 1.862292,
+        "cbor_bytes": 1702009,
+        "p50_ms": 120.237834,
+        "p95_ms": 121.11337499999999,
+        "phases": [
+          {
+            "decode_ms": 15.029792,
+            "workspace_ms": 0.9825,
+            "projection_ms": 104.22379099999999,
+            "decoded_scene_drop_ms": 0.001542,
+            "total_ms": 120.237834
+          },
+          {
+            "decode_ms": 14.754208,
+            "workspace_ms": 0.920792,
+            "projection_ms": 105.436334,
+            "decoded_scene_drop_ms": 0.001666,
+            "total_ms": 121.11337499999999
+          },
+          {
+            "decode_ms": 14.117208,
+            "workspace_ms": 0.9871249999999999,
+            "projection_ms": 103.30654200000001,
+            "decoded_scene_drop_ms": 0.00125,
+            "total_ms": 118.41233299999999
+          }
+        ],
+        "rust_allocations_per_preparation": 3775723,
+        "rust_allocated_bytes_per_preparation": 234133781,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 29.520917,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "43cd78b8d09cb06f5c62330260e321e7ccb088ffc8667707893d72da621abf64",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "executables": {
+    "target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1": {
+      "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1"
+    },
+    "target/perf/examples/scene_prepare_bench": {
+      "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c",
+      "sha256": "22ea88aeb75c4df47c5490302b6e0e898a4139b801d649050e3eec509922c11c"
+    }
+  },
+  "later_source_changes": [
+    {
+      "changes": {
+        "crates/ara-script/src/ecs/system.rs": {
+          "compiled_source": "e7d681d64df597cfc9320573af836ad21f35dc1563487a595d4d9fb64411e261",
+          "current_source": "5ef719555549c251b02dc6cff9b9dccbaad1574ebac94941c16fc9abce2c40a8"
+        }
+      },
+      "note": "Retain original compiled-source evidence and execute frozen binaries; these source edits are not rebuilt into this profile."
+    }
+  ],
+  "controller_revisions": [
+    "2d4f624846dd1cd26e522ecf77c6ff5bf72c9ee55575c593a4ee9db8cc3f59c7"
+  ],
+  "resume_blocks": [],
+  "complete": true,
+  "quality_audit": "Every valid before/after initial, changed, portable and changed-portable hash agrees at each scale. Full canonical mirror, identity retention and portable restore assertions passed.",
+  "host_profile": "Apple M5 Pro, macOS27, AC; perf opt3/LTOoff/codegen256, nice10, two reversed fresh-process rounds. Invalid compiler-overlap attempt retained and excluded.",
+  "allocation_scope": "Separate untimed preparation after latency samples; counts are Rust allocation requests and cumulative requested bytes, not live/peak RAM or managed allocations.",
+  "verification": "Four-crate tests and all-target clippy for ara-schema/ara-doc/ara-sim/ara-play pass. Independent allocation source review found no must-fix. Exact nested diagnostics/order/location/fixes and serialized output retained; canonical doc, simulation/restore/replay suites pass.",
+  "summary": {
+    "10000": {
+      "before": {
+        "process_p50_ms": [
+          118.832458,
+          120.237834
+        ],
+        "median_process_p50_ms": 119.535146,
+        "rust_allocations": 3775723,
+        "rust_allocated_bytes": 234133781
+      },
+      "after": {
+        "process_p50_ms": [
+          96.66920800000001,
+          98.602542
+        ],
+        "median_process_p50_ms": 97.635875,
+        "rust_allocations": 2793190,
+        "rust_allocated_bytes": 185292907
+      }
+    },
+    "100000": {
+      "before": {
+        "process_p50_ms": [
+          1213.306959,
+          1239.820916
+        ],
+        "median_process_p50_ms": 1226.5639375,
+        "rust_allocations": 37703392,
+        "rust_allocated_bytes": 2345064586
+      },
+      "after": {
+        "process_p50_ms": [
+          985.428416,
+          998.591791
+        ],
+        "median_process_p50_ms": 992.0101035,
+        "rust_allocations": 27878359,
+        "rust_allocated_bytes": 1856286837
+      }
+    }
+  }
+}

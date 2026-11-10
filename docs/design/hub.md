@@ -35,7 +35,16 @@ The Hub is sound. Its clutter:
 - **Setup shares Hub's language.** A compact native dialog distinguishes upgrade from replacing the same version, names the destination, explains rollback, and keeps projects/settings. Its states can all be rendered offscreen.
 - **The sidebar shows at most one card.** An update indicator outranks agent onboarding. "Connect an AI agent" shows only while no agent is around, and never on the Agents page.
 - **Each project card has one action:** Open (or "Install 0.0.3-alpha and open"), Open editor for a headless project, or Close for an open one; a headless project also keeps its Close. Everything else lives in the card's ⋯ menu: open in the editor or headless, close, rename, show in Explorer and remove from the list.
-- **No-image tiles** read like avatars, with 30 px initials. The project's ID picks one of six looks: the `info` or `success` tinted surface with initials in its colour, or the neutral `raised` surface with chart-coloured initials. Never the warning or error tints, which would read as a problem.
+- **No-image tiles get generated cover art** (`ara_kit::art::cover`): a soft mesh gradient seeded by the project's ID, in the theme's palette, so a new project looks finished rather than empty. Thumbnails replace it once the project has one.
 - **First run:** a single welcome row ("No projects yet", one line on what to do), then the templates and samples as the hero.
 - **Installs:** Release notes is a compact button.
 - **Agents:** live activity comes first when anyone is attached; the setup steps follow. When nobody is attached, the setup steps lead and the empty state follows.
+
+## On stillkit (D34)
+
+The Hub runs on stillkit with Ara's look from `ara-kit`: one CPU-drawn window that redraws only what changed and sleeps while idle.
+- **Title bar:** 40 px, with the ⌘K launcher centred (projects, templates, pages and actions, keyboard-first), the update pill and the theme toggle. The macOS traffic lights are centred in it.
+- **Projects:** cover-art cards with legible state chips, or a dense list.
+- **Create:** a full-window flow with each dry-run problem under its field.
+- **One dialog surface** carries every decision flow.
+- **Headless capture:** `ara-hub --capture DIR` renders every page, menu and dialog in both themes through the real view.

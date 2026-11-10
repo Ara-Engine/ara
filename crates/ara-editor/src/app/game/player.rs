@@ -13,7 +13,7 @@ const RESIZE_EVERY: Duration = Duration::from_millis(400);
 
 /// One player's imported surfaces, the frame it shows and its resize requests.
 #[derive(Default)]
-pub(super) struct PlayerView {
+pub(crate) struct PlayerView {
     shown: Option<PlaySurface>,
     pending: Option<PlaySurface>,
     /// Size and UI scale last requested from the player, and when.

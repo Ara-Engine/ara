@@ -7,7 +7,7 @@
 //! fault everything it wrote is restored, so a rejected command leaves the world
 //! unchanged.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ara_diag::Diagnostic;
 use ara_schema::StructLayout;
@@ -20,9 +20,12 @@ use serde_json::{Map, Value, json};
 use super::ScriptHost;
 use super::ctx::Journal;
 use super::registry::{self, ScriptComponent, ScriptData};
-use crate::abi::{CommandCall, RUN_BAD_ID, RUN_DISABLED, RUN_OK, RUN_REJECTED};
+use crate::abi::{
+    CMD_DESPAWN, CMD_INSERT, CMD_REMOVE, CommandCall, RUN_BAD_ID, RUN_DISABLED, RUN_OK,
+    RUN_REJECTED,
+};
 use crate::codes;
-use crate::ecs::cmdbuf::{self, Applied, CmdBuf, ScriptCatalog};
+use crate::ecs::cmdbuf::{self, Applied, CmdBuf, Op, ScriptCatalog};
 use crate::value;
 
 /// One component value a command changed.
@@ -224,6 +227,11 @@ impl ScriptHost {
                 }
             });
         }
+        if let Err(problem) = self.check_structural_preimages(world, &buf.ops) {
+            self.restore(world, &journal);
+            cmdbuf::discard(world, &buf.ops);
+            return Err(problem);
+        }
         let writes = self.collect_writes(world, &journal);
         let resources = self.collect_resource_writes(world, &journal);
         let mut structural = Vec::new();
@@ -252,6 +260,67 @@ impl ScriptHost {
             cues: cues.iter().filter_map(|c| self.decode_cue(c)).collect(),
             layouts,
         })
+    }
+
+    /// Native gameplay may produce values the validated JSON undo path cannot restore.
+    /// Check every affected existing supplement before applying any structural op.
+    fn check_structural_preimages(&self, world: &World, ops: &[Op]) -> Result<(), Diagnostic> {
+        let mut affected = BTreeSet::new();
+        for op in ops {
+            match op.op {
+                CMD_INSERT | CMD_REMOVE => {
+                    affected.insert((op.entity, op.type_index));
+                }
+                CMD_DESPAWN => {
+                    affected.extend(
+                        self.registry
+                            .components
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, c)| c.native && c.json)
+                            .map(|(i, _)| (op.entity, i as u32)),
+                    );
+                }
+                _ => {}
+            }
+        }
+        let catalog = world.resource::<ScriptCatalog>();
+        for (bits, index) in affected {
+            let Some(comp) = self
+                .registry
+                .components
+                .get(index as usize)
+                .filter(|c| c.native && c.json)
+            else {
+                continue;
+            };
+            let Some(entity) = Entity::try_from_bits(bits) else {
+                continue;
+            };
+            if !world
+                .get_entity(entity)
+                .is_ok_and(|e| e.contains_id(comp.id))
+            {
+                continue;
+            }
+            let reject = |detail| {
+                Diagnostic::error(
+                    codes::COMMAND_REJECTED,
+                    format!(
+                        "cannot save undo state for `{}` on {}: {detail}",
+                        comp.name,
+                        value::entity_json(bits)
+                    ),
+                )
+            };
+            let before = catalog
+                .read(world, entity, index)
+                .ok_or_else(|| reject("component could not be read".into()))?;
+            catalog
+                .validate_json_preimage(index, &before)
+                .map_err(reject)?;
+        }
+        Ok(())
     }
 
     fn collect_writes(&self, world: &World, journal: &Journal) -> Vec<ComponentWrite> {

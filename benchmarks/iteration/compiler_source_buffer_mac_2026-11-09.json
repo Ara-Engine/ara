@@ -1,0 +1,2556 @@
+{
+  "date": "2026-11-09",
+  "source_base_commit": "1ba4e6044e3362b611bf70dbaf5fe1dc3f2b4cc6",
+  "baseline_reader_source_commit": "c9789fa06a9f9e7906ecfa07ea952da210624e13",
+  "baseline_reader": "Already-shipped exact decoded-string reuse implementation; not the earlier ReadToEnd allocation baseline.",
+  "scope": "Pool the private 4096-byte read-ahead block while retaining exact file reads, unchanged StreamReader UTF/BOM/decoder behavior and shipped decoded-text equality/reference reuse. This packet measures standalone managed allocation and GC counts, not compilation latency.",
+  "fixture": "Synthetic valid ASCII C# files: 1,000 \u00d7 256 bytes; 1,000 \u00d7 4,096 bytes; 100 \u00d7 262,144 bytes. Each selected file changes one literal near its beginning on every pass. 100% means all files edited, not full-content replacement. BOM and malformed Unicode cases belong to quality checks, not allocation profiles.",
+  "timings_accepted": false,
+  "latency_claim": "All elapsed fields in every linked artifact are permanently unaccepted. No compile-time, time-to-play, native/Unity/Unreal comparison, peak RSS or speedup claim.",
+  "configuration": {
+    "fresh_processes": 18,
+    "profiles": [
+      {
+        "name": "small",
+        "source_count": 1000,
+        "utf8_bytes_per_source": 256
+      },
+      {
+        "name": "4k",
+        "source_count": 1000,
+        "utf8_bytes_per_source": 4096
+      },
+      {
+        "name": "large",
+        "source_count": 100,
+        "utf8_bytes_per_source": 262144
+      }
+    ],
+    "edit_percentages": [
+      0,
+      1,
+      100
+    ],
+    "warmups_per_process": 2,
+    "measured_passes_per_process": 5,
+    "runtime": "10.0.14",
+    "process_arm_order": "Alternating arm order across nine configurations; one process per arm/configuration. No reversed pair per configuration, retries or extra cells.",
+    "counter": "GC.GetTotalAllocatedBytes(precise:true), whole process; corpus creation/producer edits/explicit GC/full ordinal validation/JSON output excluded from read allocation windows.",
+    "explicit_forced_generation_2_collection_before_each_pass": true,
+    "timeout_seconds_per_process": 180,
+    "environment_overrides": {
+      "DOTNET_ROOT": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet",
+      "DOTNET_CLI_HOME": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/cli-home",
+      "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+      "DOTNET_NOLOGO": "1",
+      "DOTNET_TieredCompilation": "0",
+      "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE": "true"
+    },
+    "effective_PATH": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet:/opt/homebrew/Caskroom/codex/0.164.0/codex-path:/Users/islam/.codeium/windsurf/bin:/Users/islam/.opencode/bin:/Users/islam/Library/Android/sdk/emulator:/Users/islam/Library/Android/sdk/platform-tools:/Users/islam/Library/Android/sdk/cmdline-tools/latest/bin:/opt/homebrew/opt/openjdk@17/bin:/Users/islam/.local/share/gem/ruby/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/islam/.local/bin:/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/opt/X11/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/opt/homebrew/bin:/Users/islam/.codex/tmp/arg0-macos/codex-arg0L2qTO3:/opt/homebrew/Caskroom/codex/0.164.0/codex-path:/Users/islam/.codeium/windsurf/bin:/Users/islam/.unity/bin:/Users/islam/.railway/bin:/Users/islam/.opencode/bin:/Users/islam/Library/Android/sdk/emulator:/Users/islam/Library/Android/sdk/platform-tools:/Users/islam/Library/Android/sdk/cmdline-tools/latest/bin:/opt/homebrew/opt/openjdk@17/bin:/Users/islam/.local/share/gem/ruby/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/islam/.local/bin:/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/sbin:/Users/islam/.cargo/bin:/Users/islam/.orbstack/bin:/Users/islam/.lmstudio/bin:/Users/islam/.orbstack/bin:/Users/islam/.lmstudio/bin",
+    "inherited_dotnet_environment": {},
+    "checksum_formula": "Unchecked sum, over all returned sources, of UTF16 length plus first and last code units. Every UTF16 unit is also independently compared ordinally with the producer expected text outside the allocation window.",
+    "process_architecture": "Arm64"
+  },
+  "results": [
+    {
+      "profile": "small",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 7672896,
+      "candidate_median_allocated_bytes": 3544896,
+      "fraction_fewer_allocated_bytes": 0.5379976478242374,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "small",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 7684096,
+      "candidate_median_allocated_bytes": 3556096,
+      "fraction_fewer_allocated_bytes": 0.537213486140725,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "small",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 8793120,
+      "candidate_median_allocated_bytes": 4664896,
+      "fraction_fewer_allocated_bytes": 0.46948341430572993,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 7672896,
+      "candidate_median_allocated_bytes": 3544896,
+      "fraction_fewer_allocated_bytes": 0.5379976478242374,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 7837696,
+      "candidate_median_allocated_bytes": 3709696,
+      "fraction_fewer_allocated_bytes": 0.526685393258427,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 24153344,
+      "candidate_median_allocated_bytes": 20025344,
+      "fraction_fewer_allocated_bytes": 0.17090801174363268,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 768096,
+      "candidate_median_allocated_bytes": 355296,
+      "fraction_fewer_allocated_bytes": 0.5374328208973878,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 1823240,
+      "candidate_median_allocated_bytes": 1410440,
+      "fraction_fewer_allocated_bytes": 0.226410127026612,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 106284512,
+      "candidate_median_allocated_bytes": 105871712,
+      "fraction_fewer_allocated_bytes": 0.0038839149019190833,
+      "all_sources_equal_and_checksums_match": true
+    }
+  ],
+  "raw_allocations": [
+    {
+      "execution_order": 1,
+      "profile": "small",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/01-small-p0-baseline.log",
+        "sha256": "206684cbed948c130c9ee67b272c7ec3167ce3e8030ca959c449b7a14a50c099"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161210-7640400-10677/result.json",
+        "sha256": "0a6a697db721c2eafa1e826db9c17459fdfabe1a5ddd9e53ceb55e3ae7d7393d"
+      },
+      "source_count": 1000,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        7672896,
+        7672896,
+        7672896,
+        7672896,
+        7672896
+      ],
+      "reused_prior_strings": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 2,
+      "profile": "small",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/02-small-p0-candidate.log",
+        "sha256": "25d72f2a190535c074bad37515da526cbae7a95e7ad75022cf4f5f3001f08197"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161211-4542140-10686/result.json",
+        "sha256": "1b7a17d1e60b6d7bca88fa96dd32e0828cb25e13b650bf8baaff1f7d2994306a"
+      },
+      "source_count": 1000,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        3544896,
+        3544896,
+        3544896,
+        3544896,
+        3544896
+      ],
+      "reused_prior_strings": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 3,
+      "profile": "small",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/03-small-p1-candidate.log",
+        "sha256": "9894cb4bf79f50dc19d4748a306e1f33d1d81e7f834126ad06d49b095421009c"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161212-1161080-10691/result.json",
+        "sha256": "e1ce2de210a7ff5346c2795981bff2f94dea5760d9718a4ee4048bcb3563ac65"
+      },
+      "source_count": 1000,
+      "changed_sources": 10,
+      "allocated_bytes_process_wide_precise": [
+        3556096,
+        3556096,
+        3556096,
+        3556096,
+        3555424
+      ],
+      "reused_prior_strings": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 4,
+      "profile": "small",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/04-small-p1-baseline.log",
+        "sha256": "99a35a1095069a82a4b19dc4dced603a6c210b42687abe3ba7868a7bd8359e31"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161213-0117840-10717/result.json",
+        "sha256": "d010fbc02b0c6801fbae4483803d64eb567151fe6dc21be305b036013118ae4e"
+      },
+      "source_count": 1000,
+      "changed_sources": 10,
+      "allocated_bytes_process_wide_precise": [
+        7684096,
+        7684096,
+        7684096,
+        7684096,
+        7684096
+      ],
+      "reused_prior_strings": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 5,
+      "profile": "small",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/05-small-p100-baseline.log",
+        "sha256": "5669948e271e2482e035dc2e9cc9df49c22a55d5e9d29ed1120aed8ae9e0007f"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161213-7126060-10720/result.json",
+        "sha256": "423309704ef15415e2bdde48980e047451e29e68cdd60e64eff755c253c98333"
+      },
+      "source_count": 1000,
+      "changed_sources": 1000,
+      "allocated_bytes_process_wide_precise": [
+        8793120,
+        8793120,
+        8793120,
+        8793120,
+        8793120
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 6,
+      "profile": "small",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/06-small-p100-candidate.log",
+        "sha256": "35a35411d33bb1db65da3fd9aafe652d28e51adea436e874fd85d7361efe08cd"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161215-1020860-10724/result.json",
+        "sha256": "d0256a459e8cdf6e456d217435a3f8bdbc879ae406195fc853633c3e41ea99c8"
+      },
+      "source_count": 1000,
+      "changed_sources": 1000,
+      "allocated_bytes_process_wide_precise": [
+        4664896,
+        4664896,
+        4664896,
+        4664896,
+        4664896
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 7,
+      "profile": "4k",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "4k",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/07-4k-p0-candidate.log",
+        "sha256": "b1fcb1d0f4c5548add7cd13870322b2be77616db9d61079891f80bb2b3a38995"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161216-5926760-10745/result.json",
+        "sha256": "f14c2323593a273b3174859e073824b4452524ba586684c0ff26bfba61384814"
+      },
+      "source_count": 1000,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        3544896,
+        3544896,
+        3544224,
+        3544896,
+        3544896
+      ],
+      "reused_prior_strings": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 8,
+      "profile": "4k",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "4k",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/08-4k-p0-baseline.log",
+        "sha256": "a8964bf2b040be57d2ea955e43f563558e93479f3ba336d551f2269ec16770fb"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161217-4082480-10866/result.json",
+        "sha256": "8bcd8bf9f22e10113499310d28dcd9475e880a7181757991d27ceb8d46bcf272"
+      },
+      "source_count": 1000,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        7672896,
+        7672896,
+        7672896,
+        7672896,
+        7672224
+      ],
+      "reused_prior_strings": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 9,
+      "profile": "4k",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "4k",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/09-4k-p1-baseline.log",
+        "sha256": "54d45118fd8eed08ad4e41ae202ba36543b789b53b1808c8664a43361bbe40fc"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161218-2784220-10882/result.json",
+        "sha256": "75ad600bf6eed36dd7719ede0205473cfd1680df7cf11666e5cd5c8147995e1c"
+      },
+      "source_count": 1000,
+      "changed_sources": 10,
+      "allocated_bytes_process_wide_precise": [
+        7837696,
+        7837696,
+        7837024,
+        7837696,
+        7837696
+      ],
+      "reused_prior_strings": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 10,
+      "profile": "4k",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "4k",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/10-4k-p1-candidate.log",
+        "sha256": "6de62661ee0553f3819758f4ffeddb32e6750b87f3edd4e0b3908d8634d8fd24"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161219-2441660-10909/result.json",
+        "sha256": "2fd824d3255edf24c37d7c0240f4aeb50461a2d23be47f3b186546a10575e96e"
+      },
+      "source_count": 1000,
+      "changed_sources": 10,
+      "allocated_bytes_process_wide_precise": [
+        3709696,
+        3709696,
+        3709696,
+        3709696,
+        3709696
+      ],
+      "reused_prior_strings": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 11,
+      "profile": "4k",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "4k",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/11-4k-p100-candidate.log",
+        "sha256": "483d8206735c36278e7daf4ccfa99a6414e9f2a2017743a93f2afb00aa0ea8fa"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161219-7895080-10916/result.json",
+        "sha256": "1eb781281bfbfbe8ea64e2dbf5c7df9a792f9b105e39bd29408fbba170daa3d9"
+      },
+      "source_count": 1000,
+      "changed_sources": 1000,
+      "allocated_bytes_process_wide_precise": [
+        20025344,
+        20025344,
+        20025344,
+        20025344,
+        20025344
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 12,
+      "profile": "4k",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "4k",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/12-4k-p100-baseline.log",
+        "sha256": "732b9679e1b3fec44750f60d19f8e577ef760d7787e56ae111d27e467ef27521"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161221-6907340-11007/result.json",
+        "sha256": "8b76f30886e48b843e885d7a3f19c76890915ede709b08eea6586d2d69077d20"
+      },
+      "source_count": 1000,
+      "changed_sources": 1000,
+      "allocated_bytes_process_wide_precise": [
+        24153344,
+        24153344,
+        24153344,
+        24153344,
+        24153344
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ],
+      "gen0_collections": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 13,
+      "profile": "large",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/13-large-p0-baseline.log",
+        "sha256": "4e4034608fc69157def97780e23802a1585742c5516dcf7963fa30c95b9a29e6"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161223-8617790-11137/result.json",
+        "sha256": "339c3f61abe9a41c84b7355c78f2d0232e67e8505208d13e598c066a81b1b54e"
+      },
+      "source_count": 100,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        768096,
+        768096,
+        768096,
+        768096,
+        767424
+      ],
+      "reused_prior_strings": [
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 14,
+      "profile": "large",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "0"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/14-large-p0-candidate.log",
+        "sha256": "7fe2dc37d7b3bc4017ebcf574b0ad5f33e9bc22187cd0007b1e336d67b391e4e"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161224-5007440-11153/result.json",
+        "sha256": "287d191801d27df7fcd5edf9dd90f5e1264b1056cb73e5efa548243ff80034e6"
+      },
+      "source_count": 100,
+      "changed_sources": 0,
+      "allocated_bytes_process_wide_precise": [
+        355296,
+        355296,
+        355296,
+        355296,
+        355296
+      ],
+      "reused_prior_strings": [
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 15,
+      "profile": "large",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/15-large-p1-candidate.log",
+        "sha256": "ed76fe36d766c369a13bf0dfecb7b4739baa994f0856b381ae7006830d2a626e"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161225-1091950-11187/result.json",
+        "sha256": "204c8d1ee8aa9c819e1391d05084557857e7d1b89ab295f130692044a35b8c59"
+      },
+      "source_count": 100,
+      "changed_sources": 1,
+      "allocated_bytes_process_wide_precise": [
+        1410440,
+        1410440,
+        1410440,
+        1410440,
+        1410440
+      ],
+      "reused_prior_strings": [
+        99,
+        99,
+        99,
+        99,
+        99
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 16,
+      "profile": "large",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "1"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/16-large-p1-baseline.log",
+        "sha256": "aceb216a2e1105c6fd56701bc6fb0349ed171d6fd48bc6fac73abc4f0c4ae186"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161225-7044600-11224/result.json",
+        "sha256": "3edb323742ff2dbd459abe7f256fe9090441c17731142f457a84f018758b41c0"
+      },
+      "source_count": 100,
+      "changed_sources": 1,
+      "allocated_bytes_process_wide_precise": [
+        1822568,
+        1823240,
+        1823240,
+        1823240,
+        1822568
+      ],
+      "reused_prior_strings": [
+        99,
+        99,
+        99,
+        99,
+        99
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 17,
+      "profile": "large",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/17-large-p100-baseline.log",
+        "sha256": "9c7bbe6f272227d33c2cf7835d0ab297416512b331de19d07213cfa78d69b6d2"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161226-2004550-11244/result.json",
+        "sha256": "affc2a0b0d5a85dced757e33e028c703f39d8e4082a2b42b4767a067940958d5"
+      },
+      "source_count": 100,
+      "changed_sources": 100,
+      "allocated_bytes_process_wide_precise": [
+        106283840,
+        106284512,
+        106284512,
+        106284512,
+        106284512
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "gen1_collections": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    },
+    {
+      "execution_order": 18,
+      "profile": "large",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "100"
+      ],
+      "exit_code": 0,
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/18-large-p100-candidate.log",
+        "sha256": "67fbe30ea69fea1bc4cb2a3dabdc8c8ca461e0cd737ddb8cb6a43cc69412aa51"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161227-0831710-11259/result.json",
+        "sha256": "0899d7ab99d81d83d57c46e0e9b9f19b55070188db9ac4bf7e53524de80c9510"
+      },
+      "source_count": 100,
+      "changed_sources": 100,
+      "allocated_bytes_process_wide_precise": [
+        105871040,
+        105871712,
+        105871712,
+        105871712,
+        105871040
+      ],
+      "reused_prior_strings": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ],
+      "gen0_collections": [
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "gen1_collections": [
+        3,
+        2,
+        2,
+        2,
+        2
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_sources_ordinal_equal": true,
+      "timings_accepted": false
+    }
+  ],
+  "validation": {
+    "all18_processes_exit_zero": true,
+    "all90_measured_passes_full_text_ordinal_equal": true,
+    "all_expected_prior_reference_counts_match_both_arms": true,
+    "all9_paired_checksum_arrays_equal": true,
+    "all_source_app_actual_runtime_before_after_hashes_match": true,
+    "no_source_reads_skipped": true,
+    "only_current_prior_strings_retained": true,
+    "observed_gc": "Raw Gen0/1/2 counts are recorded for all five passes. No standalone GC-count or latency guarantee is inferred from these short runs.",
+    "integration_full_suite": {
+      "tests": 216,
+      "passed": 216,
+      "configuration": "xUnit.MaxParallelThreads=2; original test timeouts and production/internal concurrency unchanged",
+      "diagnostic_proof": "xUnit log confirms parallel test collections = on [2 threads]",
+      "log": {
+        "path": "target/compiler-source-buffer-production-20261109/full-tests-two-collections.log",
+        "sha256": "a1487628e644c9a69081cf5a5ac9b17b3e3bcac4f7e3e4ef284c397256a6f3cc"
+      },
+      "earlier_default_parallel_run": {
+        "tests": 216,
+        "passed": 213,
+        "failed_timeouts": 3,
+        "log": {
+          "path": "target/compiler-source-buffer-production-20261109/full-tests.log",
+          "sha256": "1c2f4005743089363da5aa49a96ff10de4bdcb7650c5f5efbd79997d19423e18"
+        },
+        "limits": "Foreign Android emulator observed around1100%CPU. All3 failures passed isolated without source/timeout changes; this does not isolate scheduling from load."
+      },
+      "isolated_logs": [
+        {
+          "path": "target/compiler-source-buffer-production-20261109/project-session-isolated.log",
+          "sha256": "3fc675face0a4fb504ee8e21df75d964e2d9f70eff158c1d74a3236b1a59d383"
+        },
+        {
+          "path": "target/compiler-source-buffer-production-20261109/other-timeouts-isolated.log",
+          "sha256": "6a17f5ac4274446d411ccf67fedba1d89fa6a3d426b515ae88a5e967717fc645"
+        }
+      ],
+      "real_clr_checks": {
+        "tests": 9,
+        "passed": 9,
+        "log": {
+          "path": "target/compiler-source-buffer-production-20261109/clr-tests.log",
+          "sha256": "2536bc346b6a4462bb2dcf81c9b6d8c9672ffb78bee6b84cef7453067b4b8de1"
+        },
+        "shutdown_exception_found": "Closed local pipe in worker finalization produced ObjectDisposedException on helper shutdown; tracked for separate fix before handover."
+      },
+      "solution_build": {
+        "warnings": 0,
+        "errors": 0,
+        "log": {
+          "path": "target/compiler-source-buffer-production-20261109/build.log",
+          "sha256": "c8d7e1b5ac13d45c590a95af2709c911cbec15d4dc82dfdef4d238c528ac0a48"
+        }
+      },
+      "clippy": {
+        "path": "target/compiler-source-buffer-production-20261109/clippy.log",
+        "sha256": "fc59ab3e7671c8731befbbc47587709c67732b9d7c31f1b2d28bd55c0d5a7a8a"
+      },
+      "fmt": {
+        "path": "target/compiler-source-buffer-production-20261109/fmt.log",
+        "sha256": "d91b17e8eebecf406bf0006382b7f8cdfaa39085dc08bbec12837ff172123070"
+      },
+      "final_after_shutdown_fix": {
+        "compiler_tests": 216,
+        "passed": 216,
+        "full_suite_log": {
+          "path": "target/compiler-shutdown-disconnect-20261109/full-tests.log",
+          "sha256": "950ab7cb762a81866b68636c62ed9a0ea7e9b2dad31a6286d302a822e7fe0ce2"
+        },
+        "solution_build": {
+          "path": "target/compiler-shutdown-disconnect-20261109/build-final.log",
+          "sha256": "51a1807b7e3c869f7c5444de367f5ca6e5a421247b6dcb4c3bd7df44bfc32028"
+        },
+        "real_clr_tests": 9,
+        "real_clr_passed": 9,
+        "real_clr_log": {
+          "path": "target/compiler-shutdown-disconnect-20261109/clr-after.log",
+          "sha256": "3a94233b0213d2e42be8f7e716ed7c4f8dc1ddc39551269c0dee6d88d096f582"
+        },
+        "closed_pipe_shutdown_exceptions": 0,
+        "controlled_shutdown_probe_summary": {
+          "path": "target/compiler-shutdown-disconnect-20261109/proof-01/summary.json",
+          "sha256": "b5486ea1f94b2c2a00100d94ec0270dabd649b1f570aab74f06515e93c23a10c"
+        },
+        "scheduling_limits": "Two test collections, original deadlines and internal concurrent requests retained. This is quality validation, not timing acceptance."
+      }
+    }
+  },
+  "quality": {
+    "accepted_report": {
+      "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240652223429000/report.json",
+      "sha256": "a79fb8681425e47c3c8e3779029023604d58f2e69cdd1da6a0bfcfdd82b20808"
+    },
+    "result": {
+      "path": "target/compiler-source-buffer-pool-20261109/runs/20261109-161055-3987870-7042/result.json",
+      "sha256": "b898e0c671a4dfd00941f136564a2bd6a928c07e2a6d36d36f98e7553c6386ac"
+    },
+    "source_snapshot": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240652223429000/sources",
+    "gates": [
+      {
+        "name": "build",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "build",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/SourceReadReuse.csproj",
+          "-c",
+          "Release",
+          "-m:2",
+          "--disable-build-servers",
+          "-p:UseSharedCompilation=false",
+          "-v:minimal"
+        ],
+        "exit": 0,
+        "log": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/proof/quality-1794240652223429000/build.log",
+        "log_sha256": "2c1d9813fb59594bf6430e0c8a1a007a6438572e7b26d953cc7e1fac489b4e3e"
+      },
+      {
+        "name": "quality",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll",
+          "--verify"
+        ],
+        "exit": 0,
+        "log": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-buffer-pool-20261109/proof/quality-1794240652223429000/quality.log",
+        "log_sha256": "b3c549f1725c94081b04b698e27d42b91a16bb5c3e7f68092de37a7520c8c3a9"
+      }
+    ],
+    "differential_reads": 87,
+    "byte_stream_cases": 29,
+    "decoded_eof_and_reference_requirements": {
+      "full_eof_read_for_equal_source": true,
+      "equal_decoded_text_returns_exact_prior_reference": true,
+      "changed_text_new_string": true,
+      "prefix_eof_exact_shorter_string": true
+    },
+    "covered_cases": [
+      "4,096-char boundaries and first mismatch at 4,095/4,096",
+      "Initial empty file, file addition/removal and restored same mtime",
+      "UTF8/16/32 BOM and invalid decoder units, CRLF and surrogates",
+      "FileShare.ReadWrite|Delete, open-handle replacement and 200 ms IO retry",
+      "4 KiB underlying read requests for 1 KiB reader calls, including oversized pool bucket",
+      "Large-read and nonseekable bypass, short reads, cross-block remainder, zero read and EOF",
+      "Char/byte pool exception return, rent failure, inner dispose failure, pool return failure and idempotence",
+      "Raw FileStream outer-scope ownership after constructor failure"
+    ],
+    "fragmented_decoding_observations": [
+      {
+        "encoding": "utf-8",
+        "preamble_hex": "EFBBBF",
+        "fragment_cap": 1,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-8",
+        "preamble_hex": "EFBBBF",
+        "fragment_cap": 3,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-8",
+        "preamble_hex": "EFBBBF",
+        "fragment_cap": 4095,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16",
+        "preamble_hex": "FFFE",
+        "fragment_cap": 1,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 8224,
+        "candidate_utf16_units": 8224,
+        "baseline_exact_utf16le_sha256": "533C904FB745B698DF5A936300C1B8A298BC936EB65C66F5F2ACCF9298F6B26C",
+        "candidate_exact_utf16le_sha256": "533C904FB745B698DF5A936300C1B8A298BC936EB65C66F5F2ACCF9298F6B26C",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16",
+        "preamble_hex": "FFFE",
+        "fragment_cap": 3,
+        "baseline_current_encoding": "utf-16",
+        "candidate_current_encoding": "utf-16",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16",
+        "preamble_hex": "FFFE",
+        "fragment_cap": 4095,
+        "baseline_current_encoding": "utf-16",
+        "candidate_current_encoding": "utf-16",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16BE",
+        "preamble_hex": "FEFF",
+        "fragment_cap": 1,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 8224,
+        "candidate_utf16_units": 8224,
+        "baseline_exact_utf16le_sha256": "1005FD02992D4950247A20CB6E67043E2CDE6BB636E03C094987E99A64D2F0E4",
+        "candidate_exact_utf16le_sha256": "1005FD02992D4950247A20CB6E67043E2CDE6BB636E03C094987E99A64D2F0E4",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16BE",
+        "preamble_hex": "FEFF",
+        "fragment_cap": 3,
+        "baseline_current_encoding": "utf-16BE",
+        "candidate_current_encoding": "utf-16BE",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-16BE",
+        "preamble_hex": "FEFF",
+        "fragment_cap": 4095,
+        "baseline_current_encoding": "utf-16BE",
+        "candidate_current_encoding": "utf-16BE",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32",
+        "preamble_hex": "FFFE0000",
+        "fragment_cap": 1,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 16440,
+        "candidate_utf16_units": 16440,
+        "baseline_exact_utf16le_sha256": "5ABD71BC1342069874E5693DA2CBF0E1A4A88EC021DFFA3E2AC0FD84E26AC794",
+        "candidate_exact_utf16le_sha256": "5ABD71BC1342069874E5693DA2CBF0E1A4A88EC021DFFA3E2AC0FD84E26AC794",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32",
+        "preamble_hex": "FFFE0000",
+        "fragment_cap": 3,
+        "baseline_current_encoding": "utf-16",
+        "candidate_current_encoding": "utf-16",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 8219,
+        "candidate_utf16_units": 8219,
+        "baseline_exact_utf16le_sha256": "DBCCE9EC1DECE30CE88B7433808B76670BDC8C39055FF13100597E1CE78346BE",
+        "candidate_exact_utf16le_sha256": "DBCCE9EC1DECE30CE88B7433808B76670BDC8C39055FF13100597E1CE78346BE",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32",
+        "preamble_hex": "FFFE0000",
+        "fragment_cap": 4095,
+        "baseline_current_encoding": "utf-32",
+        "candidate_current_encoding": "utf-32",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32BE",
+        "preamble_hex": "0000FEFF",
+        "fragment_cap": 1,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 16440,
+        "candidate_utf16_units": 16440,
+        "baseline_exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806",
+        "candidate_exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32BE",
+        "preamble_hex": "0000FEFF",
+        "fragment_cap": 3,
+        "baseline_current_encoding": "utf-8",
+        "candidate_current_encoding": "utf-8",
+        "baseline_equals_original_text": false,
+        "candidate_equals_original_text": false,
+        "baseline_utf16_units": 16440,
+        "candidate_utf16_units": 16440,
+        "baseline_exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806",
+        "candidate_exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      },
+      {
+        "encoding": "utf-32BE",
+        "preamble_hex": "0000FEFF",
+        "fragment_cap": 4095,
+        "baseline_current_encoding": "utf-32BE",
+        "candidate_current_encoding": "utf-32BE",
+        "baseline_equals_original_text": true,
+        "candidate_equals_original_text": true,
+        "baseline_utf16_units": 4111,
+        "candidate_utf16_units": 4111,
+        "baseline_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7",
+        "candidate_equals_baseline": true,
+        "candidate_reuses_exact_baseline_prior": true
+      }
+    ],
+    "production_compiler_assembly_emit_proofs": [
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "7cc4cee2cabe8f64d867176d14ba687a83b069eaea77f4f5aca284ecad307a89",
+        "pdb_sha256": "007c467703d4f1eda0c0ff014c052fd6bf4d745330b180db5152d7a405329fa9",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10424,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      },
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "46e7ddd89dafa0c2b2e35b07058531429114814eacdfd9d558931fecc66a841a",
+        "pdb_sha256": "3b0fa144bd253c9ec0a47732396bc0359f10e9186b68d1b70c4ad6953b646262",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10436,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      },
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "471be2199431a6275264eb49ee14b7cbb0b2b9baa8b49b8ff497ce2f658ad503",
+        "pdb_sha256": "31d03d6368384aa8639b2650abfdb608e0c6248b76c85b42433e50fa41b6aec5",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10436,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      }
+    ],
+    "emit_requirements": "Each of three valid-source comparisons requires Success=true, nonempty PE and exact complete PE/PDB byte equality, identical assembly/path and ModuleCompiler parse options (LanguageVersion.Latest, DocumentationMode.Parse, UTF8). Actual copied product compiler is Microsoft.CodeAnalysis.CSharp 5.3.0.0 because of product VersionOverride; no SDK compiler substitution.",
+    "source_sha256_before_and_after_equal": {
+      "target/compiler-source-buffer-pool-20261109/Directory.Build.props": "f36aed04cdc5f62d9863740b674337fc31a060e1f453accc6a0c57e69ee414ac",
+      "target/compiler-source-buffer-pool-20261109/Original/ModuleSource.cs.txt": "8422bc92ea8fca585bd60b5d0ec3c88b2d2756f3095ad29b861699b9e29a766b",
+      "target/compiler-source-buffer-pool-20261109/Original/assemblies/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "target/compiler-source-buffer-pool-20261109/Original/assemblies/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "target/compiler-source-buffer-pool-20261109/PLAN.md": "cfc6d2a7991a4ad9a3a2cf59159245779fd45e9bb75c1d03c19bff708849577e",
+      "target/compiler-source-buffer-pool-20261109/Reference/provenance.json": "6fdfa77ef48f6f4ce0ca42c49c1bdb408e812475b6d9010a9cb3b67c5fd73e55",
+      "target/compiler-source-buffer-pool-20261109/SourceReadReuse.csproj": "b02aa45991bb4bfcd372d5df2cc5609833fda7eb6b7b6aa139ab810420cfd0b1",
+      "target/compiler-source-buffer-pool-20261109/Src/AllocationProbe.cs": "cca67c77f4ac8391285e8b5d50513a20d8bce48712aebfb8f5ddb1b475daa1c4",
+      "target/compiler-source-buffer-pool-20261109/Src/ByteStreamQuality.cs": "739b41d14238749760c6da3dd0493e9c767aad3e596abf1e01de4342403da038",
+      "target/compiler-source-buffer-pool-20261109/Src/EmitProbe.cs": "9eacf8509c36c02c35b49ea9f1acd5f86acc24cbc66553acd05ef5ff143f718f",
+      "target/compiler-source-buffer-pool-20261109/Src/ModuleSource.cs": "58085f3c3871eac232c9c2d6a353d5de38646c42ea564b2bd7b2dc40bc85ca20",
+      "target/compiler-source-buffer-pool-20261109/Src/OriginalSource.cs": "3d48bf4777d702e40c3327b06a019570f52485811585e9753e558209bcd9977c",
+      "target/compiler-source-buffer-pool-20261109/Src/PooledReadAheadStream.cs": "07b154374574aa9c96b03fb2ec84a9395ed43fd8548e582a3e92ff3008a38a9e",
+      "target/compiler-source-buffer-pool-20261109/Src/Program.cs": "012b714ffeda2216803626a666cca1aea25132c8d45c876a9c9cc4a9cc8261cd",
+      "target/compiler-source-buffer-pool-20261109/Src/Quality.cs": "16844ed3864d5c16239e7ee71d80c17971fca5d28f970524acc5c7413cef2851",
+      "target/compiler-source-buffer-pool-20261109/Src/ShippedModuleSource.cs": "cf4f6f3c54537874d9d5a3b2b1127572eb699d353a3a139e34c4eb36b8f43b67",
+      "target/compiler-source-buffer-pool-20261109/build_quality.py": "6d6d2fcc99eaac8055b6c123c9eb414446450fff306984d0a3d66f1c591de80a",
+      "target/compiler-source-buffer-pool-20261109/source-freeze-01.json": "6880446b7715b8848f49a27af7246ef5be23a634a81495a1923880d4cae7ff2c"
+    },
+    "actual_app_sha256": {
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse": "82ed86f729b0b3f04a45c920594ccab8d314b2932fa7e3d4e93d42a7d414de39",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.deps.json": "9c6bb2e8573d458a985ed35bd393e3349e7230ea74bc0fcb019dc7ae8abbcae4",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.dll": "0b2ed3618ab3138a5af4fcd8d413c0ff504d837d7de6a4ed9d6fad93f0cfdc3e",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.pdb": "e3c15ae405c43a01ad4620d2a819d7da4c6da8cde1d1ddf3b5aba54a5fb1979a",
+      "target/compiler-source-buffer-pool-20261109/artifacts/bin/SourceReadReuse/release/SourceReadReuse.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc"
+    },
+    "actual_runtime_sha256_before_and_after_equal": {
+      "target/toolchains/dotnet/dotnet": "09448be14f72ee40d5ddaaf6039e9103c1dfdab1b975982aa68b537c4fad4a9b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/.version": "b9754dc907d29a69007a652af41cd6658aa5c9a3afd511ce548785d8450cb78c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib": "704493d2348cb314bb3a68bb426b7d536f9b84e4ec9ce3c6fc3054c5a35f8921",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.CoreLib.dll": "f3dbc0161042e1519953162ee8b8ab6908e1377d07b8e88c987a910963c2be33"
+    }
+  },
+  "preserved_failures_and_fixture_diagnosis": {
+    "initial_build_failure": {
+      "report": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240407497393000/report.json",
+        "sha256": "edd9e438c0d0f802c0defa6ae69d228ba8b574b84e416cafca1739e473178152"
+      },
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240407497393000/build.log",
+        "sha256": "ddddd9b45147bf4d6f69efca3a679d852b7ff3d17547961c1852b69d186342fe"
+      },
+      "cause": "CA2022 in three deliberately throwing Read fixtures with ignored return counts. Mechanical correction includes any unexpected returned count in the failure message; no analyzer suppression."
+    },
+    "fragmented_oracle_failure": {
+      "report": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240438330748000/report.json",
+        "sha256": "d32d50782ef4cad861984d93fbe38873a2815136cf9f755beef55cf9c0df3b1a"
+      },
+      "log": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240438330748000/quality.log",
+        "sha256": "0a76ac55b99b7c8f08913284c642886c095c9e812efa836ea91be1ab240a0247"
+      },
+      "original_fixture": {
+        "path": "target/compiler-source-buffer-pool-20261109/proof/quality-1794240438330748000/sources/Src/ByteStreamQuality.cs",
+        "sha256": "99776491c72a6e8616a4863f777321023653bd90cab71da10c084c142d592053"
+      },
+      "cause": "Fixture incorrectly required original Unicode text after every fragmented UTF16/32 BOM read. Unchanged StreamReader itself does not guarantee this when initial fragments are too small for encoding detection."
+    },
+    "isolated_diagnosis": {
+      "report": {
+        "path": "target/compiler-source-buffer-pool-20261109/diagnosis-01/proof/attempt-1794240592571783000/report.json",
+        "sha256": "ff1209ff85bf005fba3927646bf67bdd334b5d5e529e1a6cadbcc7ae79bcdca3"
+      },
+      "result": {
+        "path": "target/compiler-source-buffer-pool-20261109/diagnosis-01/proof/attempt-1794240592571783000/result.json",
+        "sha256": "2eb03a17d2470ed7814a016ba210ee12ee532621686dc05ed109c9c985d2dc99"
+      },
+      "finite_cells": 18,
+      "encoding_variants": 6,
+      "fragment_caps": [
+        1,
+        3,
+        4095
+      ],
+      "all18_exact_baseline_candidate_readtoend_results_equal": true,
+      "all18_shipped_comparison_results_equal_and_reuse_exact_baseline_prior": true,
+      "observed_original_text_assumption_failures_in_both_arms": 6,
+      "observations": [
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "",
+          "fragment_cap": 1,
+          "source_byte_sha256": "CEC143E0DD1C4121E780BD4A6643923F4CB542682BF7F46EC9F7D4A372630A81",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "",
+          "fragment_cap": 3,
+          "source_byte_sha256": "CEC143E0DD1C4121E780BD4A6643923F4CB542682BF7F46EC9F7D4A372630A81",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "CEC143E0DD1C4121E780BD4A6643923F4CB542682BF7F46EC9F7D4A372630A81",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "EFBBBF",
+          "fragment_cap": 1,
+          "source_byte_sha256": "9B5AB95ECC2F60871F07305B904C6977D9F3A5D728EF7DC72B5862FA2CB7C7A7",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "EFBBBF",
+          "fragment_cap": 3,
+          "source_byte_sha256": "9B5AB95ECC2F60871F07305B904C6977D9F3A5D728EF7DC72B5862FA2CB7C7A7",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-8",
+          "encoding_code_page": 65001,
+          "preamble_hex": "EFBBBF",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "9B5AB95ECC2F60871F07305B904C6977D9F3A5D728EF7DC72B5862FA2CB7C7A7",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-16",
+          "encoding_code_page": 1200,
+          "preamble_hex": "FFFE",
+          "fragment_cap": 1,
+          "source_byte_sha256": "C188C8835F765A7B915A1BCFC872657B90CC1B00A6DA2012A0D0E5D41AA4F754",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "533C904FB745B698DF5A936300C1B8A298BC936EB65C66F5F2ACCF9298F6B26C"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "533C904FB745B698DF5A936300C1B8A298BC936EB65C66F5F2ACCF9298F6B26C"
+          },
+          "candidate_compared": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "533C904FB745B698DF5A936300C1B8A298BC936EB65C66F5F2ACCF9298F6B26C"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-16",
+          "encoding_code_page": 1200,
+          "preamble_hex": "FFFE",
+          "fragment_cap": 3,
+          "source_byte_sha256": "C188C8835F765A7B915A1BCFC872657B90CC1B00A6DA2012A0D0E5D41AA4F754",
+          "baseline_current_encoding": "utf-16",
+          "candidate_readtoend_current_encoding": "utf-16",
+          "candidate_compared_current_encoding": "utf-16",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-16",
+          "encoding_code_page": 1200,
+          "preamble_hex": "FFFE",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "C188C8835F765A7B915A1BCFC872657B90CC1B00A6DA2012A0D0E5D41AA4F754",
+          "baseline_current_encoding": "utf-16",
+          "candidate_readtoend_current_encoding": "utf-16",
+          "candidate_compared_current_encoding": "utf-16",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-16BE",
+          "encoding_code_page": 1201,
+          "preamble_hex": "FEFF",
+          "fragment_cap": 1,
+          "source_byte_sha256": "797973EA683BB999887FCBA6582D40773D7A7F8686E0E7522BA67BFFB1DD31AC",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "1005FD02992D4950247A20CB6E67043E2CDE6BB636E03C094987E99A64D2F0E4"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "1005FD02992D4950247A20CB6E67043E2CDE6BB636E03C094987E99A64D2F0E4"
+          },
+          "candidate_compared": {
+            "utf16_units": 8224,
+            "exact_utf16le_sha256": "1005FD02992D4950247A20CB6E67043E2CDE6BB636E03C094987E99A64D2F0E4"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-16BE",
+          "encoding_code_page": 1201,
+          "preamble_hex": "FEFF",
+          "fragment_cap": 3,
+          "source_byte_sha256": "797973EA683BB999887FCBA6582D40773D7A7F8686E0E7522BA67BFFB1DD31AC",
+          "baseline_current_encoding": "utf-16BE",
+          "candidate_readtoend_current_encoding": "utf-16BE",
+          "candidate_compared_current_encoding": "utf-16BE",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-16BE",
+          "encoding_code_page": 1201,
+          "preamble_hex": "FEFF",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "797973EA683BB999887FCBA6582D40773D7A7F8686E0E7522BA67BFFB1DD31AC",
+          "baseline_current_encoding": "utf-16BE",
+          "candidate_readtoend_current_encoding": "utf-16BE",
+          "candidate_compared_current_encoding": "utf-16BE",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-32",
+          "encoding_code_page": 12000,
+          "preamble_hex": "FFFE0000",
+          "fragment_cap": 1,
+          "source_byte_sha256": "992B5D7AB490C20594CA3F0482D9CC35A2E8429A07B81F27B4996EC6A774DEE5",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "5ABD71BC1342069874E5693DA2CBF0E1A4A88EC021DFFA3E2AC0FD84E26AC794"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "5ABD71BC1342069874E5693DA2CBF0E1A4A88EC021DFFA3E2AC0FD84E26AC794"
+          },
+          "candidate_compared": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "5ABD71BC1342069874E5693DA2CBF0E1A4A88EC021DFFA3E2AC0FD84E26AC794"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-32",
+          "encoding_code_page": 12000,
+          "preamble_hex": "FFFE0000",
+          "fragment_cap": 3,
+          "source_byte_sha256": "992B5D7AB490C20594CA3F0482D9CC35A2E8429A07B81F27B4996EC6A774DEE5",
+          "baseline_current_encoding": "utf-16",
+          "candidate_readtoend_current_encoding": "utf-16",
+          "candidate_compared_current_encoding": "utf-16",
+          "baseline": {
+            "utf16_units": 8219,
+            "exact_utf16le_sha256": "DBCCE9EC1DECE30CE88B7433808B76670BDC8C39055FF13100597E1CE78346BE"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 8219,
+            "exact_utf16le_sha256": "DBCCE9EC1DECE30CE88B7433808B76670BDC8C39055FF13100597E1CE78346BE"
+          },
+          "candidate_compared": {
+            "utf16_units": 8219,
+            "exact_utf16le_sha256": "DBCCE9EC1DECE30CE88B7433808B76670BDC8C39055FF13100597E1CE78346BE"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-32",
+          "encoding_code_page": 12000,
+          "preamble_hex": "FFFE0000",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "992B5D7AB490C20594CA3F0482D9CC35A2E8429A07B81F27B4996EC6A774DEE5",
+          "baseline_current_encoding": "utf-32",
+          "candidate_readtoend_current_encoding": "utf-32",
+          "candidate_compared_current_encoding": "utf-32",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        },
+        {
+          "encoding": "utf-32BE",
+          "encoding_code_page": 12001,
+          "preamble_hex": "0000FEFF",
+          "fragment_cap": 1,
+          "source_byte_sha256": "9C44359244A6C975606D5B7ECB2825A870504C00C9DB7E03085B6624177AA8D8",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_compared": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-32BE",
+          "encoding_code_page": 12001,
+          "preamble_hex": "0000FEFF",
+          "fragment_cap": 3,
+          "source_byte_sha256": "9C44359244A6C975606D5B7ECB2825A870504C00C9DB7E03085B6624177AA8D8",
+          "baseline_current_encoding": "utf-8",
+          "candidate_readtoend_current_encoding": "utf-8",
+          "candidate_compared_current_encoding": "utf-8",
+          "baseline": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_compared": {
+            "utf16_units": 16440,
+            "exact_utf16le_sha256": "84A0ACE40C84FDE5B3F29848041E04DA903D7B83FDD714A9B50CDA21FAC86806"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": false,
+          "original_text_equals_candidate": false,
+          "original_text_equals_compared": false
+        },
+        {
+          "encoding": "utf-32BE",
+          "encoding_code_page": 12001,
+          "preamble_hex": "0000FEFF",
+          "fragment_cap": 4095,
+          "source_byte_sha256": "9C44359244A6C975606D5B7ECB2825A870504C00C9DB7E03085B6624177AA8D8",
+          "baseline_current_encoding": "utf-32BE",
+          "candidate_readtoend_current_encoding": "utf-32BE",
+          "candidate_compared_current_encoding": "utf-32BE",
+          "baseline": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_compared": {
+            "utf16_units": 4111,
+            "exact_utf16le_sha256": "0B9E05A72D808B906908B1619E1FF90B1F9D7A951743FC643B6F447C270DC6B7"
+          },
+          "candidate_readtoend_equals_baseline": true,
+          "candidate_compared_equals_baseline": true,
+          "candidate_reuses_exact_baseline_prior": true,
+          "original_text_equals_baseline": true,
+          "original_text_equals_candidate": true,
+          "original_text_equals_compared": true
+        }
+      ]
+    },
+    "corrected_quality_oracle": "For each fragmented input, a fresh independent ProbeStream with the same cap feeds unchanged StreamReader.ReadToEnd. Its exact decoded string is the candidate prior; require full ordinal/hash equality, exact prior-reference reuse and equal detected encoding. Record original-text equality for both arms. Do not require a fixed baseline-defect count across runtime versions.",
+    "candidate_wrapper_module_and_shipped_helper_unchanged_between_failed_and_accepted_quality": true,
+    "failed_source_and_diagnosis_preserved": true
+  },
+  "runtime_source_provenance": {
+    "vmr_commit": "0427b9abbead3fa64c6655eb4290c537397131fa",
+    "runtime_commit": "6aa72daa24f66c01c3d7b6a32519e9d21396deec",
+    "installed_runtime": "10.0.14",
+    "files": [
+      {
+        "path": "Reference/BufferedFileStreamStrategy.cs",
+        "url": "https://raw.githubusercontent.com/dotnet/dotnet/0427b9abbead3fa64c6655eb4290c537397131fa/src/runtime/src/libraries/System.Private.CoreLib/src/System/IO/Strategies/BufferedFileStreamStrategy.cs",
+        "sha256": "8882b37601e63fd68f4d6f01a330530d888fa6ca384c436d0214d520360260ae"
+      },
+      {
+        "path": "Reference/FileStreamHelpers.cs",
+        "url": "https://raw.githubusercontent.com/dotnet/dotnet/0427b9abbead3fa64c6655eb4290c537397131fa/src/runtime/src/libraries/System.Private.CoreLib/src/System/IO/Strategies/FileStreamHelpers.cs",
+        "sha256": "d62b716dc9969d9cb96d6b97875312e953fc9d3daa0d99db33d0f18a12551446"
+      },
+      {
+        "path": "Reference/StreamReader.cs",
+        "url": "https://raw.githubusercontent.com/dotnet/dotnet/0427b9abbead3fa64c6655eb4290c537397131fa/src/runtime/src/libraries/System.Private.CoreLib/src/System/IO/StreamReader.cs",
+        "sha256": "9e570db6c4ca8cbdf8065bacb8212ece0cb5a4216738217eb99c3e8018e488b9"
+      },
+      {
+        "path": "Reference/FileStream.cs",
+        "url": "https://raw.githubusercontent.com/dotnet/dotnet/0427b9abbead3fa64c6655eb4290c537397131fa/src/runtime/src/libraries/System.Private.CoreLib/src/System/IO/FileStream.cs",
+        "sha256": "50a6636b1f2de8ff0baf1f861b8098dc9c9b893ab85abeb80c76a923bf4c9a69"
+      },
+      {
+        "path": "Reference/source-manifest.json",
+        "url": "https://raw.githubusercontent.com/dotnet/dotnet/0427b9abbead3fa64c6655eb4290c537397131fa/src/source-manifest.json",
+        "sha256": "33851205223d10e88b6b91bfa33d0f5564ac5df90ad1f0b236be6f3819e33e46"
+      }
+    ],
+    "source_only": true
+  },
+  "runtime_implementation_finding": {
+    "private_file_buffer": "BufferedFileStreamStrategy.EnsureBufferAllocated uses GC.AllocateUninitializedArray<byte>(_bufferSize); default FileStream buffer4096. FileStreamHelpers disables this strategy at bufferSize<=1.",
+    "unchanged_reader": "Default StreamReader keeps a 1,024-byte input buffer, decoder, char buffer, BOM detection and decoder replacement semantics. Merely disabling FileStream buffering would expose 1 KiB underlying reads; the pooled wrapper retains logical 4 KiB read-ahead.",
+    "options_preserved": [
+      "FileMode.Open",
+      "FileAccess.Read",
+      "FileShare.ReadWrite|FileShare.Delete",
+      "FileOptions.None and OS caching defaults",
+      "synchronous reads and existing200ms IOException retry",
+      "no metadata/hash shortcut;no custom decoder;no new dependency/reflection"
+    ]
+  },
+  "production_source_binding": {
+    "integration_status": "Production working-tree snapshot; parent owns final checks/commit. Binding permits only the listed namespace/header/helper-delegation differences.",
+    "baseline_original_file": {
+      "path": "target/compiler-source-buffer-pool-20261109/Original/ModuleSource.cs.txt",
+      "sha256": "8422bc92ea8fca585bd60b5d0ec3c88b2d2756f3095ad29b861699b9e29a766b"
+    },
+    "baseline_original_matches_commit_file_byte_exact": true,
+    "baseline_commit_file_sha256": "8422bc92ea8fca585bd60b5d0ec3c88b2d2756f3095ad29b861699b9e29a766b",
+    "production_wrapper": {
+      "path": "dotnet/src/Ara.CompileServer/PooledReadAheadStream.cs",
+      "sha256": "590e0f17350cc50ab540a7cafc9e822ce75f88ab20be572b2443966d37728422"
+    },
+    "prototype_wrapper": {
+      "path": "target/compiler-source-buffer-pool-20261109/Src/PooledReadAheadStream.cs",
+      "sha256": "07b154374574aa9c96b03fb2ec84a9395ed43fd8548e582a3e92ff3008a38a9e"
+    },
+    "wrapper_exact_after_removing_three_line_MIT_header_blank_and_normalizing_namespace": true,
+    "production_module": {
+      "path": "dotnet/src/Ara.CompileServer/ModuleSource.cs",
+      "sha256": "54806e81de99da9cbd815155e5a6c6171d8e4c097e7dd2656a72178f3c31fa64"
+    },
+    "prototype_module": {
+      "path": "target/compiler-source-buffer-pool-20261109/Src/ModuleSource.cs",
+      "sha256": "58085f3c3871eac232c9c2d6a353d5de38646c42ea564b2bd7b2dc40bc85ca20"
+    },
+    "prototype_shipped_helper": {
+      "path": "target/compiler-source-buffer-pool-20261109/Src/ShippedModuleSource.cs",
+      "sha256": "cf4f6f3c54537874d9d5a3b2b1127572eb699d353a3a139e34c4eb36b8f43b67"
+    },
+    "readwithretry_exact_after_replacing_prototype_ShippedModuleSource_ReadDecoded_delegation_with_local_ReadDecoded": true,
+    "production_readwithretry_method_sha256": "6b47c9ef887ebd4637d57bf80d7862cf08083bb696b09d6d0656ee44ad4db8b2",
+    "readdecoded_method_byte_exact_to_shipped_prototype": true,
+    "production_readdecoded_method_sha256": "6d7ea8ecebb176056499e08270d4bd83a098a74940d30b5f9a629c476486a673",
+    "mit_attribution_notice": {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "26c4019bd262dae27388df573017e3853b1a5a1e91a37a41f5a264630e09e81e"
+    },
+    "runtime_reference_license": {
+      "path": "target/compiler-source-buffer-pool-20261109/Reference/DOTNET-LICENSE.TXT",
+      "sha256": "ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b"
+    }
+  },
+  "raw_proof": {
+    "allocation_report": {
+      "path": "target/compiler-source-buffer-pool-20261109/proof/allocations-1794240730583483000/report.json",
+      "sha256": "29ed7520701ad0d7159f49ce87560273bcee5f031c6ea0cea7e13790b207955d"
+    },
+    "allocation_controller": {
+      "path": "target/compiler-source-buffer-pool-20261109/allocation_matrix.py",
+      "sha256": "4b3bbe338ef8a544c91a03083632de25c53fdbf98e36390c1c1cb12a371a8774"
+    },
+    "quality_controller": {
+      "path": "target/compiler-source-buffer-pool-20261109/build_quality.py",
+      "sha256": "6d6d2fcc99eaac8055b6c123c9eb414446450fff306984d0a3d66f1c591de80a"
+    },
+    "source_and_actual_runtime_manifest_reference": "The allocation report contains complete before/after hashes for source/project/props/compiler references/app/actual installed runtime files; all matched.",
+    "allocation_input_source_sha256": {
+      "target/compiler-source-buffer-pool-20261109/Directory.Build.props": "f36aed04cdc5f62d9863740b674337fc31a060e1f453accc6a0c57e69ee414ac",
+      "target/compiler-source-buffer-pool-20261109/Original/ModuleSource.cs.txt": "8422bc92ea8fca585bd60b5d0ec3c88b2d2756f3095ad29b861699b9e29a766b",
+      "target/compiler-source-buffer-pool-20261109/Original/assemblies/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "target/compiler-source-buffer-pool-20261109/Original/assemblies/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "target/compiler-source-buffer-pool-20261109/PLAN.md": "cfc6d2a7991a4ad9a3a2cf59159245779fd45e9bb75c1d03c19bff708849577e",
+      "target/compiler-source-buffer-pool-20261109/Reference/provenance.json": "6fdfa77ef48f6f4ce0ca42c49c1bdb408e812475b6d9010a9cb3b67c5fd73e55",
+      "target/compiler-source-buffer-pool-20261109/SourceReadReuse.csproj": "b02aa45991bb4bfcd372d5df2cc5609833fda7eb6b7b6aa139ab810420cfd0b1",
+      "target/compiler-source-buffer-pool-20261109/Src/AllocationProbe.cs": "cca67c77f4ac8391285e8b5d50513a20d8bce48712aebfb8f5ddb1b475daa1c4",
+      "target/compiler-source-buffer-pool-20261109/Src/ByteStreamQuality.cs": "739b41d14238749760c6da3dd0493e9c767aad3e596abf1e01de4342403da038",
+      "target/compiler-source-buffer-pool-20261109/Src/EmitProbe.cs": "9eacf8509c36c02c35b49ea9f1acd5f86acc24cbc66553acd05ef5ff143f718f",
+      "target/compiler-source-buffer-pool-20261109/Src/ModuleSource.cs": "58085f3c3871eac232c9c2d6a353d5de38646c42ea564b2bd7b2dc40bc85ca20",
+      "target/compiler-source-buffer-pool-20261109/Src/OriginalSource.cs": "3d48bf4777d702e40c3327b06a019570f52485811585e9753e558209bcd9977c",
+      "target/compiler-source-buffer-pool-20261109/Src/PooledReadAheadStream.cs": "07b154374574aa9c96b03fb2ec84a9395ed43fd8548e582a3e92ff3008a38a9e",
+      "target/compiler-source-buffer-pool-20261109/Src/Program.cs": "012b714ffeda2216803626a666cca1aea25132c8d45c876a9c9cc4a9cc8261cd",
+      "target/compiler-source-buffer-pool-20261109/Src/Quality.cs": "16844ed3864d5c16239e7ee71d80c17971fca5d28f970524acc5c7413cef2851",
+      "target/compiler-source-buffer-pool-20261109/Src/ShippedModuleSource.cs": "cf4f6f3c54537874d9d5a3b2b1127572eb699d353a3a139e34c4eb36b8f43b67",
+      "target/compiler-source-buffer-pool-20261109/build_quality.py": "6d6d2fcc99eaac8055b6c123c9eb414446450fff306984d0a3d66f1c591de80a",
+      "target/compiler-source-buffer-pool-20261109/source-freeze-01.json": "6880446b7715b8848f49a27af7246ef5be23a634a81495a1923880d4cae7ff2c"
+    },
+    "all_elapsed_unaccepted": true
+  },
+  "integration_parent_commit": "33f99fe745f9f7fdb13e014af6b12c46a62deb7e"
+}

@@ -63,6 +63,8 @@ pub struct Grid {
     pub ids: Vec<i32>,
     /// Reusable counting-sort scatter positions.
     pub cursor: Vec<i32>,
+    /// Twelve-bit snapshot cell keys for counting, scatter and stable-ID lookup.
+    pub keys: Vec<u16>,
 }
 
 /// Clipped cell coordinates for a position in the benchmark cube.
@@ -82,21 +84,26 @@ impl Grid {
             offsets: vec![0; CELLS + 1],
             ids: vec![0; n],
             cursor: vec![0; CELLS],
+            keys: vec![0; n],
         }
     }
 
     /// Count, prefix sum, then scatter ascending IDs; this work is timed.
     pub fn build(&mut self, positions: &[Vec4]) {
+        assert_eq!(positions.len(), self.ids.len(), "fixed snapshot row count");
         self.offsets.fill(0);
-        for &p in positions {
-            self.offsets[key(cell(p)) + 1] += 1;
+        for (&p, cached) in positions.iter().zip(&mut self.keys) {
+            let cell = key(cell(p));
+            // Every coordinate is clamped to 0..16, so the key fits twelve bits.
+            *cached = cell as u16;
+            self.offsets[cell + 1] += 1;
         }
         for c in 0..CELLS {
             self.offsets[c + 1] += self.offsets[c];
         }
         self.cursor.copy_from_slice(&self.offsets[..CELLS]);
-        for (id, &p) in positions.iter().enumerate() {
-            let c = key(cell(p));
+        for (id, &cached) in self.keys.iter().enumerate() {
+            let c = usize::from(cached);
             self.ids[self.cursor[c] as usize] = id as i32;
             self.cursor[c] += 1;
         }

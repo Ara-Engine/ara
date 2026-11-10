@@ -57,14 +57,18 @@ internal sealed class CompileClient : IDisposable
         _reader.Start();
     }
 
-    /// <summary>Asks the server to compile and watch a module folder (after the modules it references).</summary>
+    /// <summary>Registers loaded publication facts or asks for the first compile, after referenced modules; then watches the folder.</summary>
     internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyCollection<string> references, string profile, bool watch,
-        bool initial = true, uint generation = 0) =>
-        Protocol.Send(_pipe, MessageKind.Watch, new Protocol.Writer()
+        bool initial = true, uint generation = 0, PublishedSnapshot? published = null)
+    {
+        var writer = new Protocol.Writer()
             .U32(slot).Str(name).Str(dir).Bool(hot)
             .Strs([typeof(ScriptRuntime).Assembly.Location])
             .Strs(references).Str(profile).Bool(watch).Bool(initial).U32(generation)
-            .ToArray());
+            .Bool(published is not null);
+        published?.Write(writer);
+        Protocol.Send(_pipe, MessageKind.Watch, writer.ToArray());
+    }
 
     internal void Recover(ulong ticket) =>
         Protocol.Send(_pipe, MessageKind.Recover, new Protocol.Writer().U64(ticket).ToArray());

@@ -13,6 +13,7 @@ use ara_doc::{AssetIndex, Document, ReadResult, Workspace};
 use ara_schema::SchemaDb;
 use serde_json::Value;
 mod files;
+mod load;
 pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files, authored_root};
 
 /// Parses a frozen native document without reading the filesystem. `path` is its
@@ -197,19 +198,21 @@ impl Project {
         for file in &sidecars {
             project.index_sidecar(file);
         }
-        for file in project.docs.clone() {
-            if project.project_files.contains(&file) {
+        for file in &project.docs {
+            if project.project_files.contains(file) {
                 continue;
             }
-            if let Ok(text) = fs::read_to_string(&file)
-                && let Some((kind, id)) = read_header(&text, &project.rel(&file), &project.db)
-                && kind != "project"
-            {
-                project.index.insert(
-                    id.to_string(),
-                    project.reference_path(&project.rel(&file)).to_owned(),
-                    Some(kind),
-                );
+            if let Ok(text) = fs::read_to_string(file) {
+                let relative = project.rel(file);
+                if let Some((kind, id)) = read_header(&text, &relative, &project.db)
+                    && kind != "project"
+                {
+                    project.index.insert(
+                        id.to_string(),
+                        project.reference_path(&relative).to_owned(),
+                        Some(kind),
+                    );
+                }
             }
         }
         Ok(project)
@@ -319,42 +322,10 @@ impl Project {
     }
 
     /// Reads `extra` files plus every project document into a workspace. Returns the
-    /// reader diagnostics per file (by relative path).
+    /// reader diagnostics per file (by relative path). Large batches parse on at
+    /// most four workers; workspace insertion retains the original file order.
     pub fn load(&self, extra: &[PathBuf]) -> (Workspace, BTreeMap<String, Vec<Diagnostic>>) {
-        let mut ws = Workspace::new(self.index.clone());
-        if self.authored_root != self.root {
-            ws.set_reference_root(crate::project_layout::AUTHORING_ROOT);
-        }
-        let mut diags = BTreeMap::new();
-        let mut seen = Vec::new();
-        for file in self.docs.iter().chain(extra) {
-            let rel = self.rel(file);
-            if seen.contains(&rel) {
-                continue;
-            }
-            seen.push(rel.clone());
-            match fs::read_to_string(file) {
-                Ok(text) => {
-                    let result = read(&text, &rel, &self.db, Some(&self.index));
-                    if let Some(doc) = result.doc {
-                        let source = asset_path(&rel, &doc.kind);
-                        if self.project_files.contains(file) {
-                            ws.insert_project_document(rel.clone(), doc);
-                        } else {
-                            ws.insert_with_asset_path(rel.clone(), doc, source);
-                        }
-                    }
-                    diags.insert(rel, result.diags);
-                }
-                Err(e) => {
-                    diags.insert(
-                        rel.clone(),
-                        vec![Diagnostic::error(codes::IO, format!("cannot read: {e}")).file(rel)],
-                    );
-                }
-            }
-        }
-        (ws, diags)
+        load::documents(self, extra)
     }
 
     /// Reads a native document format with project reference repair and diagnostics.

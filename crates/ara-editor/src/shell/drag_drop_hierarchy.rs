@@ -43,7 +43,7 @@ pub(super) fn destination(
 }
 
 /// Use the selection when it contains the pressed row; descendants travel with their selected root.
-pub(super) fn commands(
+pub(crate) fn commands(
     resolved: &Resolved,
     selection: &[String],
     pressed: &str,

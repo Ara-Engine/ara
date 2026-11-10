@@ -1,0 +1,1207 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "scope": "Mac CPU-only current S8 paired correctness gates; timings explicitly unaccepted",
+  "pair_count": 4,
+  "quality_passed": true,
+  "timings_accepted": false,
+  "state_proof": "Unity complete12xf32 dump BLAKE3 equals Ara complete post-loop numeric hash; exact IDs/epochs/component presence independently asserted by both; Ara numeric bytes not exported",
+  "packages": [
+    {
+      "name": "com.unity.burst",
+      "version": "1.8.29",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.collections",
+      "version": "6.4.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.entities",
+      "version": "6.4.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.ext.nunit",
+      "version": "2.0.5",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.mathematics",
+      "version": "1.3.3",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.modules.assetbundle",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.audio",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.hierarchycore",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.imgui",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.jsonserialize",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.physics",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.ui",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.uielements",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.unityanalytics",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.modules.unitywebrequest",
+      "version": "1.0.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.nuget.mono-cecil",
+      "version": "1.11.6",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.profiling.core",
+      "version": "1.0.3",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.scriptablebuildpipeline",
+      "version": "2.6.1",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.serialization",
+      "version": "3.1.5",
+      "source": "Registry"
+    },
+    {
+      "name": "com.unity.test-framework",
+      "version": "1.6.0",
+      "source": "BuiltIn"
+    },
+    {
+      "name": "com.unity.test-framework.performance",
+      "version": "3.4.0",
+      "source": "Registry"
+    }
+  ],
+  "native_build": {
+    "source_sha256": {
+      "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+      "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+      "crates/ara-sim/Cargo.toml": "36ff0d5757cb17258f85b2f463663c7a93cdf24dd32ce8de67f4d83ad7c2f6e2",
+      "crates/ara-sim/benches/ecs.rs": "cc49615344f4893b3ac39146e8bb800c2e0a21c746fcfd9b3233f93502d7d3f7",
+      "crates/ara-sim/benches/support/baseline.rs": "b338d18364a555474be7ad4a8828a09bfb5bfa18daed9def3830137f9e97c3c3",
+      "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+      "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+      "crates/ara-sim/benches/support/queries.rs": "b3e3dc42ddaf17a4dae73940d77a1d3f5f9d59218cf14eef11867a1040e9b0e8",
+      "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+      "crates/ara-sim/benches/support/tuned.rs": "2ddda41c1c04b7eeac37356a8a31413ffd79197affc4ecdd4313a058468649ae"
+    },
+    "root_lock_sha256": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+    "git_head": "fdc447ee09c95385a1ae63c865594d61ed2609b9",
+    "utc": "2026-11-09T08:02:57.127652+00:00",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\n",
+    "command": [
+      "/usr/bin/nice",
+      "-n",
+      "10",
+      "cargo",
+      "bench",
+      "-p",
+      "ara-sim",
+      "--bench",
+      "ecs",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "environment": {
+      "CARGO_BUILD_JOBS": "2",
+      "RUSTFLAGS": "-C target-cpu=native",
+      "CARGO_PROFILE_BENCH_LTO": "thin",
+      "CARGO_PROFILE_BENCH_CODEGEN_UNITS": "1"
+    },
+    "exit_code": 0,
+    "executable": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-win-2026-11-09/ecs-39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+    "executable_sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82"
+  },
+  "prepared_manifests": {
+    "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158": {
+      "marker_path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/.ara-s8-current.json",
+      "marker_sha256": "7ff66758fc2ebe15a0d30d416a418430d48d7d41b068d8582b37bb891a695a0b",
+      "input_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+      "input_manifest": {
+        "fixture": "s8-current-v1",
+        "repository_root": "/Users/islam/.t3/worktrees/ara/t3-6f34c966",
+        "editor": "/Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents/MacOS/Unity",
+        "requested_packages": {
+          "com.unity.entities": "6.4.0",
+          "com.unity.collections": "6.4.0",
+          "com.unity.burst": "1.8.29",
+          "com.unity.mathematics": "1.3.3"
+        },
+        "input_manifest_version": 1,
+        "template_inputs": {
+          "benchmarks/iteration/unity/MacBatch.cs": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+          "benchmarks/iteration/unity/bench.py": "4a83dbdd24b133de9f6a773b1ddadcd6f3dc1bd5fef13f195fe38f0edbffbc3f",
+          "benchmarks/iteration/unity/current/binaries.py": "450f24bd68d396f32c4732ad05e8a72765f6c13c181ff8b6f77fd5866f4ab657",
+          "benchmarks/iteration/unity/current/checks.py": "1a8957cf8205ad598a53c0b488fcfc2d5d7538e92212d020e0f9cb9f77516b9f",
+          "benchmarks/iteration/unity/current/plan.py": "3b070e099d72110f18e05ec3b80f46a5a036ec170fe5da3e08d8883a472bbb45",
+          "benchmarks/iteration/unity/current/run.py": "952614f5d25f905c065f63fb8b66d4a6a636a07dad86bf758d69b8de696b905d",
+          "benchmarks/iteration/unity/current/s8_project.py": "98a151d551f85a091870b7c6b05706177e81c6804c71562900a59f9a2798aca6",
+          "benchmarks/iteration/unity/current/tests/test_current.py": "baf1c94145f1a8612651cb0f3464e5d63dc4b48bb4825b0a358b556f2de3432f",
+          "benchmarks/iteration/unity/dump_hash.rs": "01d15a96a9a78f2c459990b821c0c823a089a2330d1cf99523cb0ad4ffd92825",
+          "benchmarks/iteration/unity/features/editor/PreferenceRecovery.cs": "cb2fb347789b2084cd29b124f01fb6c50a90603a0569a7ce11427cd547b38b83",
+          "benchmarks/iteration/unity/features/inputs.py": "3f47e2e187469a926550b1b2b43795f4469a54ded78ee8ce66376e021ed403ae",
+          "benchmarks/iteration/unity/features/monitor.py": "a0fcb5d0b7812b9c8c82d37c65c5aef0df27c8c754adb3ec631bb9999d4fc0e3",
+          "benchmarks/iteration/unity/features/project.py": "424ef8a99f0ae1f8594e5244df38d00e37b94280634d287cd758a89532e6587c",
+          "benchmarks/iteration/unity/features/recover.py": "10176c3a8982433c92cfe7ef5cc28b283e2453a63ef6fd3704ac8316e46a4959",
+          "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c",
+          "spikes/s8-dots-bench/unity/Assets/BenchSystem.cs": "96532e37f2c4c1a9d6369cc934ca671badde91ff1149a79fb997ca8fd335cb2f",
+          "spikes/s8-dots-bench/unity/Assets/BenchSystem.cs.meta": "ad08bf5e9d0a4fa9c16c73d659ef330eddf243820b4f90a997326a6f59389128",
+          "spikes/s8-dots-bench/unity/Assets/Benchmark.cs": "53fdfce0a78f6de3bd26fd856f7c76924acff5f64e184100d525eddfb7620e18",
+          "spikes/s8-dots-bench/unity/Assets/Benchmark.cs.meta": "418e3265d7ccc291be9338d442b97ffcdc811ce6ace134b1815d4a670e3fc48d",
+          "spikes/s8-dots-bench/unity/Assets/Benchmark.unity": "1e4d3517d23750d2470a70d35343e19f34e3cf209416bc0d169ab73601fc5044",
+          "spikes/s8-dots-bench/unity/Assets/Benchmark.unity.meta": "955963a2cfd6d3e05cebe0cfc3a079aac6ba9c5a4434822cce7396a280890826",
+          "spikes/s8-dots-bench/unity/Assets/Editor/Build.cs": "915be076ac4a4dade1d418ca2255d9e9e4e0296d0c5946e60583bc30fd20a1f8",
+          "spikes/s8-dots-bench/unity/Assets/Editor/Build.cs.meta": "fac5ffb684bc8f0a8a2c4f54369a8be92c5d8624b6d664dfea8b902873710071",
+          "spikes/s8-dots-bench/unity/Assets/Editor/S8.Editor.asmdef": "ea121a7f10e9c8896d6753122b9a0fcc60d593828539a131c105c6d86be394e0",
+          "spikes/s8-dots-bench/unity/Assets/Editor/S8.Editor.asmdef.meta": "8b4f0f241758298a876fe402a54635f5f6c2059a837cd72732feae928d4e64c8",
+          "spikes/s8-dots-bench/unity/Assets/Editor.meta": "0c52a14575cbfc7abf83faa45dabf982adcc387ed319447548716f163466abe2",
+          "spikes/s8-dots-bench/unity/Assets/Kernels.cs": "a6a8cf23b5125704218d435432708c808ed8d42ba6177beecf659ea530a17834",
+          "spikes/s8-dots-bench/unity/Assets/Kernels.cs.meta": "995dc19a6e245a5d62e38c69b03fbeacdb40efc8f193e37e153581035eb440d6",
+          "spikes/s8-dots-bench/unity/Assets/S8.asmdef": "6d373126c9e49d0c55c812bb5d1072fd7207c0700d281d59fe725efbcf8012f4",
+          "spikes/s8-dots-bench/unity/Assets/S8.asmdef.meta": "013c7e49468bac7e1cd2c0eec63dacc15f6c1e6642002df152f0875befec81b4"
+        },
+        "prepared_inputs": {
+          "Assets/BenchSystem.cs": "96532e37f2c4c1a9d6369cc934ca671badde91ff1149a79fb997ca8fd335cb2f",
+          "Assets/BenchSystem.cs.meta": "ad08bf5e9d0a4fa9c16c73d659ef330eddf243820b4f90a997326a6f59389128",
+          "Assets/Benchmark.cs": "6b0cb716ee404b35c022fc2e83e471e6e897881c279b186670867fdcdd08188e",
+          "Assets/Benchmark.cs.meta": "418e3265d7ccc291be9338d442b97ffcdc811ce6ace134b1815d4a670e3fc48d",
+          "Assets/Benchmark.unity": "1e4d3517d23750d2470a70d35343e19f34e3cf209416bc0d169ab73601fc5044",
+          "Assets/Benchmark.unity.meta": "955963a2cfd6d3e05cebe0cfc3a079aac6ba9c5a4434822cce7396a280890826",
+          "Assets/Editor/Build.cs": "915be076ac4a4dade1d418ca2255d9e9e4e0296d0c5946e60583bc30fd20a1f8",
+          "Assets/Editor/Build.cs.meta": "fac5ffb684bc8f0a8a2c4f54369a8be92c5d8624b6d664dfea8b902873710071",
+          "Assets/Editor/MacBatch.cs": "71c170ff9a9319e6e1f735e4446362d42522f497426c89632f6c2830856af288",
+          "Assets/Editor/MacBatch.cs.meta": "6ba75f428679b4e984c0ac2c14963afc28cd8a740483304abd1431c9800e1b35",
+          "Assets/Editor/PreferenceRecovery.cs": "cb2fb347789b2084cd29b124f01fb6c50a90603a0569a7ce11427cd547b38b83",
+          "Assets/Editor/PreferenceRecovery.cs.meta": "70923ef34d06358540fce212042d814bf047b280a0d8aa93d09f3d26ccbe1f72",
+          "Assets/Editor/S8.Editor.asmdef": "a6e0b60b001934f0e362b3d35d8c8d2b5e2ade21309888e6f0b84035c4e88285",
+          "Assets/Editor/S8.Editor.asmdef.meta": "8b4f0f241758298a876fe402a54635f5f6c2059a837cd72732feae928d4e64c8",
+          "Assets/Editor.meta": "0c52a14575cbfc7abf83faa45dabf982adcc387ed319447548716f163466abe2",
+          "Assets/Kernels.cs": "a6a8cf23b5125704218d435432708c808ed8d42ba6177beecf659ea530a17834",
+          "Assets/Kernels.cs.meta": "995dc19a6e245a5d62e38c69b03fbeacdb40efc8f193e37e153581035eb440d6",
+          "Assets/S8.asmdef": "6d373126c9e49d0c55c812bb5d1072fd7207c0700d281d59fe725efbcf8012f4",
+          "Assets/S8.asmdef.meta": "013c7e49468bac7e1cd2c0eec63dacc15f6c1e6642002df152f0875befec81b4",
+          "Packages/manifest.json": "fa91eacabba80a5a635c5d586c69956e0131c17360cf92dde1ae6f7616cb8f68",
+          "Packages/packages-lock.json": "748c106a204dd959a6e655ed75534069aa16f02d28e281d5fbea202334d323a8",
+          "ProjectSettings/AudioManager.asset": "9543c41dbfc7d3951217c4dd9481ed026eb8e529b85ecf4463969a0fea747729",
+          "ProjectSettings/ClusterInputManager.asset": "40e65dd214bf254955d2c8829ca8ce2130fd3510485560ce012e9a1ddd93e623",
+          "ProjectSettings/DynamicsManager.asset": "fb36e677f7de32325bede8462e7e3eaf0be86ca374216d2907886fce7cb1d488",
+          "ProjectSettings/EditorBuildSettings.asset": "1942c088ddfeeef348fdf12390e2a2d6da51056e197458d67969d44e7b2cbbd3",
+          "ProjectSettings/EditorSettings.asset": "89cb14ab05ce8ce1e1413fa559e9d9ccb2633db48685215527d44eba43412aff",
+          "ProjectSettings/GraphicsSettings.asset": "40de98f4d46d02fb08e268ad3a722a00eed7289f4ef6d2e759984b1b4a85d2af",
+          "ProjectSettings/InputManager.asset": "d0f454ddb880912abcae92e3e12957a7446786ba89e24937e019ff3bbc0d4300",
+          "ProjectSettings/MemorySettings.asset": "cb2e41edd7f5a64298d68dd4ab768e8908e33a00f26e5ee53638e4d4251c358e",
+          "ProjectSettings/MultiplayerManager.asset": "ce4075d7a7dd8ac7ffe55de2427692c63f90dae398208bd80cec0f27cbe09f4b",
+          "ProjectSettings/NavMeshAreas.asset": "7ebbf8f53b8033104e1878b95ca07a28d0954092d81c220f14196a42f651e658",
+          "ProjectSettings/Physics2DSettings.asset": "1cfc0c8fbceec604fd7cd2a06c04ff05dddee6335b75c92b0f5715ad80ba9490",
+          "ProjectSettings/PresetManager.asset": "29c125923fe6e29f90190d4fce1c82d660e7051546e2c9d02908d18c9cf2436c",
+          "ProjectSettings/ProjectSettings.asset": "0e61f01bcdaaed30abfa91e8f406b5c3cdfd7266a29d004dc6b069d6878412ad",
+          "ProjectSettings/ProjectVersion.txt": "c88aca53996b7a2c9be5551cb82a59b405b91d5eb9ac511bdb83b16cfb0c4d96",
+          "ProjectSettings/QualitySettings.asset": "f1f893b1be47ad2442f58338dd7c860dc1986bb317e2f5bb31084454ffabbf4c",
+          "ProjectSettings/TagManager.asset": "996628fdc904025b83606bbfbda4fe08c0bbe916475146110e77cdc2f22c2013",
+          "ProjectSettings/TimeManager.asset": "3396f52fdc16d445024e01d7a2d99db6f0a37569d1d73c0302e9ffb857d90287",
+          "ProjectSettings/UnityConnectSettings.asset": "11251dae0356b6f43dd2c67bb511f6b7ecda4e5de425186bba3297e6f3dc1c6f",
+          "ProjectSettings/VFXManager.asset": "2973a6af930e142f62cde00076beda8a3cc3a66d9bfcde7a58ba7d4be2251c26",
+          "ProjectSettings/VersionControlSettings.asset": "e199cdfa6a8f2bf33cfd47e549198f13e3eb2a5099e908fdb4e0f14d939ccc6b"
+        },
+        "numerical_kernels_changed": false,
+        "export_adapter": "exact IDs/components after measured loop"
+      }
+    }
+  },
+  "records": [
+    {
+      "config": {
+        "workload": "w1",
+        "count": 1003,
+        "runners": 15,
+        "warmup": 2,
+        "frames": 3,
+        "batch": 4096,
+        "variant": "simd",
+        "smoke": true
+      },
+      "quality_passed": true,
+      "timings_accepted": false,
+      "numeric_state_blake3": "c1508b8597103ba5f0f0c793686b8ca254cb27c43d7094e6dae8a1e01785e5ce",
+      "numeric_dump_bytes": 48144,
+      "unity_exact_ids_sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+      "initial_preference_checkpoint": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json.environment.json.initial.json",
+        "sha256": "3a564fe344abc3e5cde57fbaf21b5133bdd781cfdedb4f7f8d6f17b4c59a6bb7",
+        "invocation_id": "8ba19016f43a4548a29befebb80a07c5",
+        "initial_state_sha256": "78df3fe3df5ed01dacf06759702fa170dba577886cba405c2152f9fc66790aa1",
+        "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+        "receipt_sha256": "501662d99881688f32e7c855122cd6e8c2fb05f29b3d055316f125d17abf747d",
+        "restored": true
+      },
+      "verification": {
+        "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.validation.json",
+        "sha256": "757d3a56a36a1f261e05a5da8c568f667fbe349ab3cc885e2265c5cf5c5295c2",
+        "bytes": 2923
+      },
+      "verification_sources": {
+        "benchmarks/iteration/unity/current/checks.py": "1a8957cf8205ad598a53c0b488fcfc2d5d7538e92212d020e0f9cb9f77516b9f",
+        "benchmarks/iteration/unity/current/s8_project.py": "98a151d551f85a091870b7c6b05706177e81c6804c71562900a59f9a2798aca6",
+        "benchmarks/iteration/unity/current/run.py": "952614f5d25f905c065f63fb8b66d4a6a636a07dad86bf758d69b8de696b905d",
+        "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c"
+      },
+      "engines": {
+        "ara": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_ara_smoke.json",
+              "sha256": "51fbd1e04e42eeadb3600360a4e79cb9aa2d8423314a5489d96225c8389e4a38",
+              "bytes": 336
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_ara_smoke.launch.json",
+              "sha256": "5af2c3a26ea59e164bd658a0c478abcdd6fc77d12366c0015cd6696c3e3262d4",
+              "bytes": 13375
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_ara_smoke.input.json",
+              "sha256": "79e3e4ad9fec5f6513de818bb450e3a167f82e2e3377d28859c90783cc085d26",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_ara_smoke.launcher.log",
+              "sha256": "a3df0e106335d59e418dd4eeb2c8ee7ec8071e468e633165880292227fa960bf",
+              "bytes": 60
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+              "sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+              "bytes": 1288016
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+              "sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+              "bytes": 2190
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              2.3505859375,
+              2.26806640625,
+              2.3076171875
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              2.3505859375,
+              2.26806640625,
+              2.3076171875
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": {
+            "executable_sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+            "build_provenance_sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+            "source_sha256": {
+              "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+              "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+              "crates/ara-sim/Cargo.toml": "36ff0d5757cb17258f85b2f463663c7a93cdf24dd32ce8de67f4d83ad7c2f6e2",
+              "crates/ara-sim/benches/ecs.rs": "cc49615344f4893b3ac39146e8bb800c2e0a21c746fcfd9b3233f93502d7d3f7",
+              "crates/ara-sim/benches/support/baseline.rs": "b338d18364a555474be7ad4a8828a09bfb5bfa18daed9def3830137f9e97c3c3",
+              "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+              "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+              "crates/ara-sim/benches/support/queries.rs": "b3e3dc42ddaf17a4dae73940d77a1d3f5f9d59218cf14eef11867a1040e9b0e8",
+              "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+              "crates/ara-sim/benches/support/tuned.rs": "2ddda41c1c04b7eeac37356a8a31413ffd79197affc4ecdd4313a058468649ae"
+            }
+          }
+        },
+        "unity": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json",
+              "sha256": "331afd0e7a7c4c53560f87f86ff52816ab21c93da5b3138bbfed021e7964d929",
+              "bytes": 20670
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.launch.json",
+              "sha256": "3ac9412704aaa5eac67c5714e90e95a1d4855a7496222011af78d5756db68b7e",
+              "bytes": 16527
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.input.json",
+              "sha256": "79e3e4ad9fec5f6513de818bb450e3a167f82e2e3377d28859c90783cc085d26",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.launcher.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.log",
+              "sha256": "a99af111904f8153a4ec633e27b1d3904e89c7445d8783b46ab7368b54cdc524",
+              "bytes": 35888
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+              "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+              "bytes": 48144
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin.ids",
+              "sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+              "bytes": 4012
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json.environment.json",
+              "sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509",
+              "bytes": 4302
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json.environment.json.initial.json",
+              "sha256": "3a564fe344abc3e5cde57fbaf21b5133bdd781cfdedb4f7f8d6f17b4c59a6bb7",
+              "bytes": 3363
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+              "sha256": "501662d99881688f32e7c855122cd6e8c2fb05f29b3d055316f125d17abf747d",
+              "bytes": 654
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": false,
+          "before": {
+            "loadavg": [
+              2.3505859375,
+              2.26806640625,
+              2.3076171875
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              2.8896484375,
+              2.3955078125,
+              2.35205078125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [
+            [
+              {
+                "pid": 43157,
+                "pcpu": 12.8,
+                "command": "/Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents/Resources/Scripting/NetCoreRuntime/dotnet exec /Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents/Resources/Scripting/DotNetSdkRoslyn/csc.dll /nostdlib /noconfig /shared @Library/Bee/artifacts/200b0aE.dag/S8.rsp @Library/Bee/artifacts/200b0aE.dag/S8.rsp2"
+              }
+            ]
+          ],
+          "executable": null
+        }
+      }
+    },
+    {
+      "config": {
+        "workload": "w2",
+        "count": 1003,
+        "runners": 15,
+        "warmup": 2,
+        "frames": 3,
+        "batch": 4096,
+        "variant": "simd",
+        "smoke": true
+      },
+      "quality_passed": true,
+      "timings_accepted": false,
+      "numeric_state_blake3": "cf0257a01775b89c4a8256c39895c3df8b276c13fb2974f536e6c0fd3f97a1f0",
+      "numeric_dump_bytes": 48144,
+      "unity_exact_ids_sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+      "initial_preference_checkpoint": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json.environment.json.initial.json",
+        "sha256": "addcbb6545fb569021803bedae68e2e2a01b14d337ec3839f470232b5688a20c",
+        "invocation_id": "3c9fade6623d44e1b6c41ee02722e6a3",
+        "initial_state_sha256": "78df3fe3df5ed01dacf06759702fa170dba577886cba405c2152f9fc66790aa1",
+        "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+        "receipt_sha256": "b00cbb508c4d292011313e7ff7f032a14def32f8a770da4196f2b97ffceba05d",
+        "restored": true
+      },
+      "verification": {
+        "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.validation.json",
+        "sha256": "195f70aaefe4bd9126be9316b91a4c081d4e2dea75d7f11d57446e8c61d91116",
+        "bytes": 2923
+      },
+      "verification_sources": {
+        "benchmarks/iteration/unity/current/checks.py": "1a8957cf8205ad598a53c0b488fcfc2d5d7538e92212d020e0f9cb9f77516b9f",
+        "benchmarks/iteration/unity/current/s8_project.py": "98a151d551f85a091870b7c6b05706177e81c6804c71562900a59f9a2798aca6",
+        "benchmarks/iteration/unity/current/run.py": "952614f5d25f905c065f63fb8b66d4a6a636a07dad86bf758d69b8de696b905d",
+        "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c"
+      },
+      "engines": {
+        "ara": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_ara_smoke.json",
+              "sha256": "13550e7055120885d5d31718d307d6a4ab6a78aef0799a57aee64e57d1a754fb",
+              "bytes": 348
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_ara_smoke.launch.json",
+              "sha256": "f639dccb9e267e64c570cc97345234794200a314231d7c4d9e8a195e8ae0d5e8",
+              "bytes": 13383
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_ara_smoke.input.json",
+              "sha256": "00b5970f8d2cdf229895db0b4ccabc167dc2f123b4c558c7cf51770b1cd9167c",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_ara_smoke.launcher.log",
+              "sha256": "418ebe520025b82de2190b28ebeefee7a838d8dca6ec2ed1b072cb10be1bb9d3",
+              "bytes": 60
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+              "sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+              "bytes": 1288016
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+              "sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+              "bytes": 2190
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              2.8896484375,
+              2.3955078125,
+              2.35205078125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              2.8896484375,
+              2.3955078125,
+              2.35205078125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": {
+            "executable_sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+            "build_provenance_sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+            "source_sha256": {
+              "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+              "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+              "crates/ara-sim/Cargo.toml": "36ff0d5757cb17258f85b2f463663c7a93cdf24dd32ce8de67f4d83ad7c2f6e2",
+              "crates/ara-sim/benches/ecs.rs": "cc49615344f4893b3ac39146e8bb800c2e0a21c746fcfd9b3233f93502d7d3f7",
+              "crates/ara-sim/benches/support/baseline.rs": "b338d18364a555474be7ad4a8828a09bfb5bfa18daed9def3830137f9e97c3c3",
+              "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+              "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+              "crates/ara-sim/benches/support/queries.rs": "b3e3dc42ddaf17a4dae73940d77a1d3f5f9d59218cf14eef11867a1040e9b0e8",
+              "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+              "crates/ara-sim/benches/support/tuned.rs": "2ddda41c1c04b7eeac37356a8a31413ffd79197affc4ecdd4313a058468649ae"
+            }
+          }
+        },
+        "unity": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json",
+              "sha256": "9f6d421f45a71ab3eb931adcd74e2d500bbf45055f9dcfd9e729d693cf288391",
+              "bytes": 16401
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.launch.json",
+              "sha256": "2b4df1332a9e6d8e0a80275e227398e3816f01ebff96d34d66c673de2e4a7036",
+              "bytes": 15755
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.input.json",
+              "sha256": "00b5970f8d2cdf229895db0b4ccabc167dc2f123b4c558c7cf51770b1cd9167c",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.launcher.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.log",
+              "sha256": "d4264dd2dee02577c824da474d99420a149cfc9ade7a2442853d967256501bfb",
+              "bytes": 31613
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.bin",
+              "sha256": "5799e9032bb83d86d3ddc8b6c7e4b717c6c7cde703d9765819c2e7ce5f84db03",
+              "bytes": 48144
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.bin.ids",
+              "sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+              "bytes": 4012
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json.environment.json",
+              "sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509",
+              "bytes": 4302
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json.environment.json.initial.json",
+              "sha256": "addcbb6545fb569021803bedae68e2e2a01b14d337ec3839f470232b5688a20c",
+              "bytes": 3363
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w2/w2_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+              "sha256": "b00cbb508c4d292011313e7ff7f032a14def32f8a770da4196f2b97ffceba05d",
+              "bytes": 654
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              2.8896484375,
+              2.3955078125,
+              2.35205078125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              3.00439453125,
+              2.45068359375,
+              2.37158203125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": null
+        }
+      }
+    },
+    {
+      "config": {
+        "workload": "w3",
+        "count": 1003,
+        "runners": 15,
+        "warmup": 2,
+        "frames": 3,
+        "batch": 8192,
+        "variant": "simd",
+        "smoke": true
+      },
+      "quality_passed": true,
+      "timings_accepted": false,
+      "numeric_state_blake3": "3ae404c02f857e68c4f9622b7405a4aaebdc9a58dcfee6f5c9896653171aed63",
+      "numeric_dump_bytes": 48144,
+      "unity_exact_ids_sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+      "initial_preference_checkpoint": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json.environment.json.initial.json",
+        "sha256": "bf8eb8f5acadb181b0433f29bc6f4a4911487b9d2ef162a43815e0a24e64a05f",
+        "invocation_id": "5bdd5bd34a7c49fbb872af9477d5e67f",
+        "initial_state_sha256": "78df3fe3df5ed01dacf06759702fa170dba577886cba405c2152f9fc66790aa1",
+        "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+        "receipt_sha256": "a108e8642908f2fff724924c0c934d94d396e8d7f52615962d72efe69a2bd7b6",
+        "restored": true
+      },
+      "verification": {
+        "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.validation.json",
+        "sha256": "bc6fc778ba9c0b964353621ec2a4d12ad24cb54060e5a7815f06900644466fb1",
+        "bytes": 2923
+      },
+      "verification_sources": {
+        "benchmarks/iteration/unity/current/checks.py": "1a8957cf8205ad598a53c0b488fcfc2d5d7538e92212d020e0f9cb9f77516b9f",
+        "benchmarks/iteration/unity/current/s8_project.py": "98a151d551f85a091870b7c6b05706177e81c6804c71562900a59f9a2798aca6",
+        "benchmarks/iteration/unity/current/run.py": "952614f5d25f905c065f63fb8b66d4a6a636a07dad86bf758d69b8de696b905d",
+        "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c"
+      },
+      "engines": {
+        "ara": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_ara_smoke.json",
+              "sha256": "3ac371b06972b03089bb44a7d899ab106aadc2d3a13bb2215293028a1e628c4b",
+              "bytes": 324
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_ara_smoke.launch.json",
+              "sha256": "693346e34092d4067fb8260274c53c22f23259ba45f982b40defcb4364b995a2",
+              "bytes": 13387
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_ara_smoke.input.json",
+              "sha256": "8646865132f8a1317183ef38d8d10158bfdaa58e2a1f594775ed312f371e267d",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_ara_smoke.launcher.log",
+              "sha256": "f432828e2f45c5f447478246b30745e6a205bc4aa8bf3d06b2b52c96bd077147",
+              "bytes": 60
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+              "sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+              "bytes": 1288016
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+              "sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+              "bytes": 2190
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              3.00439453125,
+              2.45068359375,
+              2.37158203125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              3.00439453125,
+              2.45068359375,
+              2.37158203125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": {
+            "executable_sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+            "build_provenance_sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+            "source_sha256": {
+              "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+              "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+              "crates/ara-sim/Cargo.toml": "36ff0d5757cb17258f85b2f463663c7a93cdf24dd32ce8de67f4d83ad7c2f6e2",
+              "crates/ara-sim/benches/ecs.rs": "cc49615344f4893b3ac39146e8bb800c2e0a21c746fcfd9b3233f93502d7d3f7",
+              "crates/ara-sim/benches/support/baseline.rs": "b338d18364a555474be7ad4a8828a09bfb5bfa18daed9def3830137f9e97c3c3",
+              "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+              "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+              "crates/ara-sim/benches/support/queries.rs": "b3e3dc42ddaf17a4dae73940d77a1d3f5f9d59218cf14eef11867a1040e9b0e8",
+              "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+              "crates/ara-sim/benches/support/tuned.rs": "2ddda41c1c04b7eeac37356a8a31413ffd79197affc4ecdd4313a058468649ae"
+            }
+          }
+        },
+        "unity": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json",
+              "sha256": "d734ee4ab3babcfef51cd15e086dbd757ba57cc7157e7af9a8702d2a651cacff",
+              "bytes": 16543
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.launch.json",
+              "sha256": "8a54ea8157cb6dfcaa686b605c3ffeec0d80f730ef65f195604544cdc51b97c2",
+              "bytes": 16106
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.input.json",
+              "sha256": "8646865132f8a1317183ef38d8d10158bfdaa58e2a1f594775ed312f371e267d",
+              "bytes": 123
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.launcher.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.log",
+              "sha256": "ed29f1eb6f640863b5d9c5c199e12c014db3cf02fcc736a61d066f30ee92edde",
+              "bytes": 31450
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+              "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+              "bytes": 48144
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin.ids",
+              "sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+              "bytes": 4012
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json.environment.json",
+              "sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509",
+              "bytes": 4302
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json.environment.json.initial.json",
+              "sha256": "bf8eb8f5acadb181b0433f29bc6f4a4911487b9d2ef162a43815e0a24e64a05f",
+              "bytes": 3363
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+              "sha256": "a108e8642908f2fff724924c0c934d94d396e8d7f52615962d72efe69a2bd7b6",
+              "bytes": 654
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 14,
+              "backend": "bevy",
+              "caller_participates": true,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              3.00439453125,
+              2.45068359375,
+              2.37158203125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              3.74462890625,
+              2.64892578125,
+              2.443359375
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": null
+        }
+      }
+    },
+    {
+      "config": {
+        "workload": "w4",
+        "count": 100000,
+        "runners": 15,
+        "warmup": 2,
+        "frames": 3,
+        "batch": 4096,
+        "variant": "simd",
+        "smoke": true
+      },
+      "quality_passed": true,
+      "timings_accepted": false,
+      "numeric_state_blake3": "b1eb4cb577147abbd0889a88dd36afcf5b793ace1523560f4b106259dc35cb9d",
+      "numeric_dump_bytes": 4800000,
+      "unity_exact_ids_sha256": "5f3a083b5212f968cd3a098c772b33dce16e0e5b85ae37851bb75dc49310c784",
+      "initial_preference_checkpoint": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json.environment.json.initial.json",
+        "sha256": "66a2c00971b273e635f214a49462e5ad522c305851360a220a456d2626b4f78b",
+        "invocation_id": "364dff3310fc405ca9a399057c992caf",
+        "initial_state_sha256": "78df3fe3df5ed01dacf06759702fa170dba577886cba405c2152f9fc66790aa1",
+        "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+        "receipt_sha256": "e261f6e099c6dc57331fb6bf52415db40a2d27f15832f4c77f623d0b2c018463",
+        "restored": true
+      },
+      "verification": {
+        "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.validation.json",
+        "sha256": "0d5575db4b9dd63b67c6acd2af7da7226dc037fea435caac14f3782578057dea",
+        "bytes": 2933
+      },
+      "verification_sources": {
+        "benchmarks/iteration/unity/current/checks.py": "1a8957cf8205ad598a53c0b488fcfc2d5d7538e92212d020e0f9cb9f77516b9f",
+        "benchmarks/iteration/unity/current/s8_project.py": "98a151d551f85a091870b7c6b05706177e81c6804c71562900a59f9a2798aca6",
+        "benchmarks/iteration/unity/current/run.py": "952614f5d25f905c065f63fb8b66d4a6a636a07dad86bf758d69b8de696b905d",
+        "benchmarks/iteration/unity/features/recovery.py": "f46fc42ca8c177c284348b414a384393fe4a002efcaa5b37db67f2614b2a980c"
+      },
+      "engines": {
+        "ara": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_ara_smoke.json",
+              "sha256": "daded699ddcf3a3d4fbfdf17f14b95264b8ca59cc9fc43741085dcc0bb828f9a",
+              "bytes": 323
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_ara_smoke.launch.json",
+              "sha256": "856ae8b6cbba9418b8c34ca1a086825aac5fa67fe1ddf3bebf80b676dafb7afd",
+              "bytes": 13393
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_ara_smoke.input.json",
+              "sha256": "722ec2ad8cd6b60168ee4641f33a1f33d766ae4d456cfc80c82c9f9b95b884a0",
+              "bytes": 125
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_ara_smoke.launcher.log",
+              "sha256": "345b70b48905e8679b13e83eb67ff2d3fc0aabd03a0260357619defb92ba8496",
+              "bytes": 62
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+              "sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+              "bytes": 1288016
+            },
+            {
+              "path": "target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+              "sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+              "bytes": 2190
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 15,
+              "backend": "rayon",
+              "caller_participates": false,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              3.74462890625,
+              2.64892578125,
+              2.443359375
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              3.74462890625,
+              2.64892578125,
+              2.443359375
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": {
+            "executable_sha256": "39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82",
+            "snapshot": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ecs",
+            "build_provenance": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/s8-current-binaries/39b51adede901aa9f80dc19398a9accd5d8f5c1b3ae5ca1d7a01315bc9451c82/ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b.build.json",
+            "build_provenance_sha256": "ce87c9bba23d88d4cb1de949bf41432b1fb4282173beef83212d2ee67744ac9b",
+            "source_sha256": {
+              "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+              "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+              "crates/ara-sim/Cargo.toml": "36ff0d5757cb17258f85b2f463663c7a93cdf24dd32ce8de67f4d83ad7c2f6e2",
+              "crates/ara-sim/benches/ecs.rs": "cc49615344f4893b3ac39146e8bb800c2e0a21c746fcfd9b3233f93502d7d3f7",
+              "crates/ara-sim/benches/support/baseline.rs": "b338d18364a555474be7ad4a8828a09bfb5bfa18daed9def3830137f9e97c3c3",
+              "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+              "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+              "crates/ara-sim/benches/support/queries.rs": "b3e3dc42ddaf17a4dae73940d77a1d3f5f9d59218cf14eef11867a1040e9b0e8",
+              "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+              "crates/ara-sim/benches/support/tuned.rs": "2ddda41c1c04b7eeac37356a8a31413ffd79197affc4ecdd4313a058468649ae"
+            }
+          }
+        },
+        "unity": {
+          "files": [
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json",
+              "sha256": "f3fc7f9e4aa4ec8edfc71296e1edf463c35d3cea77fbaedb8b8e7653b8479832",
+              "bytes": 14927
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.launch.json",
+              "sha256": "0d60702d85b4eeb003941da4b25cb35d411c912cefe8b187fad1258666ee3ef4",
+              "bytes": 16097
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.input.json",
+              "sha256": "722ec2ad8cd6b60168ee4641f33a1f33d766ae4d456cfc80c82c9f9b95b884a0",
+              "bytes": 125
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.launcher.log",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.log",
+              "sha256": "d9f982a4b14c5b072b3f82211ca226cf137e80c9a35e0df6bf3b2edae31856fe",
+              "bytes": 31592
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.bin",
+              "sha256": "45bb3b3780dfc95be2c4204b4595e5c8bdf6b6006f922a58b1c7d80306af4b0b",
+              "bytes": 4800000
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.bin.ids",
+              "sha256": "5f3a083b5212f968cd3a098c772b33dce16e0e5b85ae37851bb75dc49310c784",
+              "bytes": 400000
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json.environment.json",
+              "sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509",
+              "bytes": 4302
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json.environment.json.initial.json",
+              "sha256": "66a2c00971b273e635f214a49462e5ad522c305851360a220a456d2626b4f78b",
+              "bytes": 3365
+            },
+            {
+              "path": "target/perf-scale/us8/results/current-smoke-01_w4/w4_100000_r15_unity_smoke.json.environment.json.initial.json.restoration.json",
+              "sha256": "e261f6e099c6dc57331fb6bf52415db40a2d27f15832f4c77f623d0b2c018463",
+              "bytes": 656
+            }
+          ],
+          "worker_ceilings": {
+            "ara": {
+              "argument_threads": 15,
+              "backend": "rayon",
+              "caller_participates": false,
+              "max_kernel_runners": 15
+            },
+            "unity": {
+              "requested_runners": 15,
+              "expected_job_workers": 14,
+              "caller_may_participate": true,
+              "max_kernel_runners": 15
+            }
+          },
+          "prepared_manifest_sha256": "43a521a0f22072c476c2dcef1bb420dcdb7cf0d5d6072af3c09c1bb878773158",
+          "resource_guards_passed": true,
+          "before": {
+            "loadavg": [
+              3.74462890625,
+              2.64892578125,
+              2.443359375
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "after": {
+            "loadavg": [
+              3.8876953125,
+              2.751953125,
+              2.484375
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+          },
+          "observed_busy_tools": [],
+          "executable": null
+        }
+      }
+    }
+  ],
+  "bootstrap": {
+    "accepted": false,
+    "reason": "first import generated meta/package/settings; normal checkpoint/finally restoration proven, reprepare before4 accepted quality pairs",
+    "files": [
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.bin",
+        "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+        "bytes": 48144
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.bin.ids",
+        "sha256": "6c556389ad77fd85ea7fe7c3d023c0010e3d24b126c80014cb78abdacb2bdbb8",
+        "bytes": 4012
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.input.json",
+        "sha256": "6f86ed653d9960f5fcd1c0ef0bdd29af2736cfd3d10eddb5d14b991aa1a54cda",
+        "bytes": 122
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.json",
+        "sha256": "8417b87dac562fe8e20d91af9eadf96c4efe5204821486c84596931a61f7e4ff",
+        "bytes": 20666
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.json.environment.json",
+        "sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c",
+        "bytes": 4300
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.json.environment.json.initial.json",
+        "sha256": "1ca3d36e07fe89aafa1b5b7f47ff996e7eef8d442412c6e4ec867484afcce2b7",
+        "bytes": 3362
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.json.environment.json.initial.json.restoration.json",
+        "sha256": "c3fb87ca4eb09d2206a9b4ce3b9f6b81e8131651bb8cf0bc17bc7401acf8afe9",
+        "bytes": 654
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.launcher.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.log",
+        "sha256": "39f0f35c88f21f0c99ed88eaee152203b140f043a567676ad050b5e8f64c5208",
+        "bytes": 782352
+      },
+      {
+        "path": "target/perf-scale/us8/results/bootstrap-current-01/w1_1003_r1_unity_smoke.unaccepted.json",
+        "sha256": "8c6b3a4b3bcecedc24429013b454e5a9244ea5d9d8ed67a30aefd84ddac0cdb2",
+        "bytes": 12363
+      }
+    ]
+  },
+  "raw_log_policy": "raw Unity logs remain under target; only hashes published, no incidental host/network text",
+  "checks": {
+    "current_python_tests_passed": 11,
+    "feature_python_tests_passed": 38,
+    "actual_csharp_compiled": true,
+    "global_preferences_restored_each_pair": true,
+    "prior50_feature_smokes_unchanged": true
+  }
+}

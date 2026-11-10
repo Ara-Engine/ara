@@ -1,0 +1,308 @@
+{
+  "date": "2026-11-09",
+  "scope": "Actual save-to-visible edits in a running ScriptHost with 20,000 entities. The edited Probe.cs retains 87 filler systems and exceeds 5,000 lines; three sample files remain separate. One complete accepted baseline-then-candidate pair (8 edits per L1/L2/L3), plus an accepted candidate in the reverse order. The reverse baseline was rejected for an unrelated Cargo build. No completed reverse pair or Unity comparison.",
+  "baseline_source_commit": "74b0c33f9",
+  "candidate": "Precise UTF-16 edit ranges, flat owned SourceText and a weak immediate predecessor. Files shorter than 2,048 UTF-16 units and path changes parse afresh. Existing EnC classification and safety flags are unchanged.",
+  "summary": {
+    "1": {
+      "save_visible_baseline": {
+        "n": 8,
+        "p50_ms": 127.560292,
+        "p95_ms": 216.199792
+      },
+      "save_visible_candidate": {
+        "n": 8,
+        "p50_ms": 115.34281250000001,
+        "p95_ms": 207.33637499999998
+      },
+      "parse_classify_baseline": {
+        "n": 8,
+        "p50_ms": 9.1365,
+        "p95_ms": 10.408
+      },
+      "parse_classify_candidate": {
+        "n": 8,
+        "p50_ms": 1.0375,
+        "p95_ms": 3.287
+      },
+      "save_visible_p50_lower_percent": 9.577807724052557
+    },
+    "2": {
+      "save_visible_baseline": {
+        "n": 8,
+        "p50_ms": 141.3094375,
+        "p95_ms": 172.882
+      },
+      "save_visible_candidate": {
+        "n": 8,
+        "p50_ms": 123.562771,
+        "p95_ms": 137.87133400000002
+      },
+      "parse_classify_baseline": {
+        "n": 8,
+        "p50_ms": 10.242,
+        "p95_ms": 13.538
+      },
+      "parse_classify_candidate": {
+        "n": 8,
+        "p50_ms": 1.155,
+        "p95_ms": 5.232
+      },
+      "save_visible_p50_lower_percent": 12.558727013544303
+    },
+    "3": {
+      "save_visible_baseline": {
+        "n": 8,
+        "p50_ms": 222.6794795,
+        "p95_ms": 233.606375
+      },
+      "save_visible_candidate": {
+        "n": 8,
+        "p50_ms": 204.0981255,
+        "p95_ms": 212.75729099999998
+      },
+      "parse_classify_baseline": {
+        "n": 8,
+        "p50_ms": 10.389,
+        "p95_ms": 12.872
+      },
+      "parse_classify_candidate": {
+        "n": 8,
+        "p50_ms": 0.6950000000000001,
+        "p95_ms": 3.085
+      },
+      "save_visible_p50_lower_percent": 8.344439299805352
+    }
+  },
+  "accepted_process_summaries": [
+    {
+      "round": 1,
+      "label": "baseline",
+      "accepted": true,
+      "levels": {
+        "1": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 127.560292,
+            "p95_ms": 216.199792
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 9.1365,
+            "p95_ms": 10.408
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 106.229,
+            "p95_ms": 199.921
+          }
+        },
+        "2": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 141.3094375,
+            "p95_ms": 172.882
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 10.242,
+            "p95_ms": 13.538
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 116.23750000000001,
+            "p95_ms": 140.997
+          }
+        },
+        "3": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 222.6794795,
+            "p95_ms": 233.606375
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 10.389,
+            "p95_ms": 12.872
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 193.029,
+            "p95_ms": 201.719
+          }
+        }
+      }
+    },
+    {
+      "round": 1,
+      "label": "candidate",
+      "accepted": true,
+      "levels": {
+        "1": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 115.34281250000001,
+            "p95_ms": 207.33637499999998
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 1.0375,
+            "p95_ms": 3.287
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 97.218,
+            "p95_ms": 188.53
+          }
+        },
+        "2": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 123.562771,
+            "p95_ms": 137.87133400000002
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 1.155,
+            "p95_ms": 5.232
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 102.15100000000001,
+            "p95_ms": 121.017
+          }
+        },
+        "3": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 204.0981255,
+            "p95_ms": 212.75729099999998
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 0.6950000000000001,
+            "p95_ms": 3.085
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 175.5175,
+            "p95_ms": 186.253
+          }
+        }
+      }
+    },
+    {
+      "round": 2,
+      "label": "candidate",
+      "accepted": true,
+      "levels": {
+        "1": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 124.0772915,
+            "p95_ms": 207.71775
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 1.33,
+            "p95_ms": 5.296
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 100.6705,
+            "p95_ms": 188.248
+          }
+        },
+        "2": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 123.244812,
+            "p95_ms": 158.414583
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 1.123,
+            "p95_ms": 4.865
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 102.23750000000001,
+            "p95_ms": 124.201
+          }
+        },
+        "3": {
+          "save_to_visible_ms": {
+            "n": 8,
+            "p50_ms": 210.42820849999998,
+            "p95_ms": 236.067
+          },
+          "parse_us": {
+            "n": 8,
+            "p50_ms": 0.665,
+            "p95_ms": 1.201
+          },
+          "server_us": {
+            "n": 8,
+            "p50_ms": 179.9355,
+            "p95_ms": 203.413
+          }
+        }
+      }
+    }
+  ],
+  "quality": {
+    "compiler_tests_passed": 168,
+    "real_host_test_suites_passed": [
+      "largefile levels L1/L2/L3",
+      "kernel_module_reload",
+      "direct_kernel_reload"
+    ],
+    "fresh_diagnostics_checksums_generated_pe_pdb_equivalence": true,
+    "unicode_directive_error_recovery_threshold_change_ranges_tested": true,
+    "real_singlefile_smoke_all_levels_and_unload_passed": true,
+    "source_review": "no remaining must-fix",
+    "fmt_packages": 114,
+    "all_target_clippy": "pass after one collapsible-if benchmark style fix"
+  },
+  "memory_scope": "The flat provider keeps no strong predecessor or source-history chain. The 1,000-edit managed-heap traces are correctness evidence only. Total compiler memory is not proven bounded, and no clean process RSS improvement is claimed. Small files retain fresh parsing.",
+  "limitations": [
+    "Eight edits per level per process; p95 is the maximum of eight and is not a stable tail estimate.",
+    "Save-to-visible includes waiting for the 60 Hz boundary and live tick work. It does not measure a full project build, cold startup or Unity.",
+    "The archived baseline apphost lacked executable permission. A new runnable copy restores that permission; all 46 file contents match the untouched archive. The failed initialization is retained and applied no edits.",
+    "Other SDK DLL hashes differ through embedded Git versions and Source Link metadata; source archives and actual DLL hashes are recorded separately.",
+    "Independent parser experiments cover 4, 64, 1,024 and 4,096 methods. Large-file allocations can increase even when latency falls; no general allocation reduction is claimed."
+  ],
+  "raw_receipts": {
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-baseline.launch.json": "9ac781e3212ffca70a456d24bdbc5d8425bfa39f14a32db2724be4de807d7ea8",
+    "target/compiler-incremental-production-20261109/runtime-tests.log": "9bec340b181eb7fefe4b257fb3274e5f4026e737322baa691ac29020aa3c255a",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-candidate.json": "074df3dbb10f267dd25b5242604ae9813b967a69d8f24db4e1b431621a1ee3c6",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-baseline.hosttrace": "b9c8a839b7441665caffa912d460375795d25a0c32633cf97f6bc0273857b460",
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-candidate.json": "dda829d17c27014df577bc93fea736615932b3202105fc4a50ca6732a6905910",
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-baseline.json": "4845770c83eb12c85e178eec4e98d38130e560a4215d4db68522da41c812effb",
+    "target/compiler-incremental-production-20261109/full-tests-generator.log": "cc27e940821a51376b41f35a933637be1796cdae95b0e43f4d882e5af74f48eb",
+    "target/compiler-incremental-production-20261109/baseline-mode-recovery.json": "957feb1f0e6acbe3f5b3ce3786408bb91692ad3efced49b73f5826ca915e9383",
+    "target/compiler-incremental-production-20261109/fmt.log": "b20230a24101f3ed16d342d37a932fb87239bfcd4645daf84280cc740baea12b",
+    "target/compiler-incremental-production-20261109/candidate-sdk-sha256.json": "5e5ed9e8e12cf312a4eae0a5dfb94774c852ea52e5a5cbe5bb59c4d8905fa4b8",
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-candidate.launch.json": "9ef0839ba83dfb6261208ef267996dd0fe62854c767b40e0c9357621719c47af",
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-baseline.hosttrace": "b11c02851259ce38e988725352df5a3a265126c00379ae87688df6b367b4a4d0",
+    "target/compiler-incremental-production-20261109/bench-build.log": "f9a29ed7b900cc481336b4db3d02d68e34966035764d21d3c35a57e89a20815a",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-candidate.hosttrace": "675f37b297371119d1d95bafd77960dff7a9239c89c7ed66ebee8223959b08fb",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-baseline.json": "878d0d48f391ba05e9f00dbb038aaaa003412f5ca6ce21cee440ec879f19cb8a",
+    "target/compiler-incremental-production-20261109/single-file-smoke.json": "33c0071482d18b98fb81a03717e7be4ef0eaf4340456feaa82ee17efe421c048",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-candidate.launch.json": "2b60da72ca36bdd2a3b4b438f8c07cf0561efe3342914d452d50bdb20b923720",
+    "target/compiler-incremental-production-20261109/save-visible-02/r1-candidate.hosttrace": "74f2b337b47b69bc89bad8e32595f156b859a580163a720d5c6a6a3d2ac93cc9",
+    "target/compiler-incremental-production-20261109/save-visible-02/r2-baseline.launch.json": "a9ce8d4cc2c5cacc43baa466d24563dff51975412f4c49f8dbcbbb6bb52b05d9",
+    "target/compiler-incremental-production-20261109/save-visible-02/progress.json": "73f501ed338b4ca5bc5a3075a16bf0e1ae32036a0d84acbadfb246e484efe4f4",
+    "target/compiler-incremental-production-20261109/compare_02.py": "56b68453c730dbe824b838953e0aacc4e2c109835bb55d5424d862a8d7f4b99e",
+    "target/compiler-incremental-production-20261109/clippy-fixed.log": "db5bec02b8f8b4e1ff2bb61e9becf04506f07f8eb4b78c5c298caaf5fbc35929",
+    "target/compiler-incremental-parse-20261109/parse.json": "0503d38be29bcf911a7304def6663e4c8694180eca529eb6b7b9712344c0c013",
+    "target/compiler-incremental-parse-20261109/memory-full.json": "aa5ff0d5137096a2678190a012ca2ea181def91ef4706e75082a7b25d1d9b129",
+    "target/compiler-incremental-parse-20261109/memory-incremental.json": "c8e3235f365ca3cc43443ba1040758f443ca5c70183c9ad20ef75b7dbdaa2fda",
+    "target/compiler-incremental-flat-20261109/parse.json": "48ea921e83c2fdfec6c66ed6f165cd55283ccb59126f820a2c43fef6e9547a45",
+    "target/compiler-incremental-flat-20261109/memory-full.json": "c783e99626d280e5e0489e7c4dde24dcf80f6ffe8aed1b06ccc50773e9493280"
+  },
+  "primary_api_sources": [
+    "https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.syntaxtree.withchangedtext",
+    "https://github.com/dotnet/roslyn/blob/main/src/Compilers/Core/Portable/Text/SourceText.cs"
+  ]
+}

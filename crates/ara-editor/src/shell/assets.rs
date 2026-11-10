@@ -65,7 +65,7 @@ impl Asset {
             stamp: 0,
         }
     }
-    pub(super) fn folder(path: String, authored_path: Option<String>) -> Self {
+    pub(crate) fn folder(path: String, authored_path: Option<String>) -> Self {
         Self {
             authored_path,
             ..Self::unindexed(path, "folder".into())
@@ -98,7 +98,7 @@ struct Snapshot {
 /// A scan already started when an authority save completed cannot acknowledge it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct ScanBarrier(u64);
-pub(super) struct Browser {
+pub(crate) struct Browser {
     pub items: Vec<Asset>,
     /// Last successful semantic index, also used to resolve OS-drop destinations.
     pub files: Vec<AuthoredFile>,
@@ -121,7 +121,7 @@ impl Browser {
     }
     /// Legacy source creation publishes only its already-completed command output.
     /// File reorganization never uses these optimistic rows.
-    pub(super) fn insert_path(&mut self, path: &str, kind: &str) {
+    pub(crate) fn insert_path(&mut self, path: &str, kind: &str) {
         self.remove_path(path);
         let mut asset = Asset::unindexed(path.into(), kind.into());
         // This legacy seam is used only after a typed source-creation command
@@ -148,7 +148,7 @@ impl Browser {
         self.revision += 1;
         self.refresh();
     }
-    pub(super) fn remove_path(&mut self, path: &str) {
+    pub(crate) fn remove_path(&mut self, path: &str) {
         self.items.retain(|asset| asset.path != path);
         self.optimistic.insert(path.into(), None);
         self.revision += 1;
@@ -191,7 +191,7 @@ impl Browser {
         }
     }
     /// Request a fresh semantic projection after a completed authority job.
-    pub(super) fn refresh(&self) {
+    pub(crate) fn refresh(&self) {
         let _ = self.refresh.try_send(());
     }
     /// Request a scan which starts after this call. Call only after the authority
@@ -251,7 +251,7 @@ impl Browser {
     pub(super) fn authored_folder(&self, storage: &str) -> Result<String, String> {
         self.authored_folder_ref(storage).map(str::to_owned)
     }
-    pub(super) fn authored_folder_ref(&self, storage: &str) -> Result<&str, String> {
+    pub(crate) fn authored_folder_ref(&self, storage: &str) -> Result<&str, String> {
         cached_authored_folder(&self.files, &self.reference_root, storage)
     }
 }

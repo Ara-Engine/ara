@@ -230,6 +230,8 @@ fn codec(out: &mut String, db: &SchemaDb, t: &TypeDesc, native: bool) -> Result<
 /// Engine component structs plus their reachable value records and codecs.
 pub fn render(db: &SchemaDb, native: &[&str]) -> Result<String, String> {
     let names = super::component_names(db, native);
+    let accessor_views = crate::EngineBindings::accessor_views();
+    let optional_native = accessor_views.names();
     let mut reachable = BTreeSet::new();
     let mut stack: Vec<_> = names.iter().map(|s| (*s).to_owned()).collect();
     while let Some(n) = stack.pop() {
@@ -310,9 +312,14 @@ pub fn render(db: &SchemaDb, native: &[&str]) -> Result<String, String> {
             out.push_str("    /// <summary>Stable engine component index.</summary>\n");
             let _ = writeln!(out, "    public static uint TypeIndex => {i};");
             if !direct {
+                let (access, index) = if layout.is_some() && optional_native.contains(&n.as_str()) {
+                    ("World.NativeOrCodecAccess", "")
+                } else {
+                    ("EngineAccess.Get", "TypeIndex, ")
+                };
                 let _ = writeln!(
                     out,
-                    "    /// <inheritdoc/>\n    public static ref {n} Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.Read{n}, EngineValueCodecs.Write{n});\n    /// <inheritdoc/>\n    public static void Insert(in Commands commands, Entity entity, in {n} value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.Write{n}));\n    /// <inheritdoc/>\n    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);"
+                    "    /// <inheritdoc/>\n    public static ref {n} Access(Entity entity, bool write) => ref {access}(entity, {index}write, EngineValueCodecs.Read{n}, EngineValueCodecs.Write{n});\n    /// <inheritdoc/>\n    public static void Insert(in Commands commands, Entity entity, in {n} value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.Write{n}));\n    /// <inheritdoc/>\n    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);"
                 );
             }
         }

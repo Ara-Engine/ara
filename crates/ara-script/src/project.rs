@@ -106,7 +106,9 @@ pub struct ToolPaths {
 }
 
 impl ToolPaths {
-    /// Installed tools first, explicit artifact override next, checkout artifacts last.
+    const MISSING: &str = "C# SDK tools are missing; build dotnet/Ara.slnx -c Release, or set ARA_DOTNET_ARTIFACTS to the artifacts/bin directory containing Ara.Host/release/Ara.Host.dll and Ara.CompileServer/release/Ara.CompileServer.dll; repair an installed engine SDK if its tools are missing";
+
+    /// Installed tools first, explicit override next, discovered and build checkouts last.
     pub fn locate(project: &Path) -> Option<Self> {
         let exe = std::env::current_exe().ok();
         let installed = exe
@@ -127,6 +129,13 @@ impl ToolPaths {
             .into_iter()
             .chain(override_path)
             .chain(checkout)
+            // Source builds may place both Cargo outputs and projects outside the checkout.
+            // Packaged engines must never fall back to the machine that built their SDK.
+            .chain(
+                (!packaged).then(|| {
+                    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/artifacts/bin")
+                }),
+            )
             .find_map(|bin| {
                 let bin = std::fs::canonicalize(bin).ok()?;
                 let compile_server = bin.join("Ara.CompileServer/release/Ara.CompileServer.dll");

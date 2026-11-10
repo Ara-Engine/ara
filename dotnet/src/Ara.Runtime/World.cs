@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Ara.Hosting;
 
 namespace Ara;
@@ -94,6 +95,16 @@ public static unsafe class World
         var p = Host.ComponentPtr(entity.Bits, T.TypeIndex, write);
         if (p == null) throw new MissingComponentException(entity, typeof(T).Name);
         return ref Unsafe.AsRef<T>(p);
+    }
+
+    // A host exposes a pointer only after proving the actual Rust field offsets.
+    // Codec fallback keeps generated views usable with older and custom hosts.
+    internal static ref T NativeOrCodecAccess<T>(Entity entity, bool write,
+        Func<JsonElement, T> read, Action<Utf8JsonWriter, T> encode) where T : unmanaged, IComponent<T>
+    {
+        var pointer = Host.ComponentPtr(entity.Bits, T.TypeIndex, write);
+        if (pointer != null) return ref Unsafe.AsRef<T>(pointer);
+        return ref EngineAccess.Get(entity, T.TypeIndex, write, read, encode);
     }
 
     /// <summary>The entity's component, read-only. Throws if it is missing.</summary>

@@ -1,195 +1,49 @@
-//! Actual input injection and GPU readback, without a native window or service.
+//! Interaction captures: real input through the runtime (the project menu, inline rename,
+//! search, the command palette, a dropdown), each checked against the model it drives.
 use super::*;
-use anyhow::Context as _;
-use ara_ui::input::InputEvent;
 
-fn click(app: &mut crate::native::App, hub: &mut Hub, id: &str) -> anyhow::Result<()> {
-    let index = app
-        .ui
-        .find(id)
-        .ok_or_else(|| anyhow::anyhow!("capture control {id} is missing"))?;
-    let rect = app.ui.nodes[index].rect;
-    let at = [rect.x + rect.w / 2., rect.y + rect.h / 2.];
-    for event in [
-        InputEvent::PointerMove(at),
-        InputEvent::PointerDown(at),
-        InputEvent::PointerUp(at),
-    ] {
-        app.dispatch_pointer(hub, event, NOW)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-    }
-    anyhow::ensure!(
-        app.frame().map_err(|e| anyhow::anyhow!("{e}"))?,
-        "{id} did not request presentation"
-    );
-    Ok(())
-}
-
-fn save(
-    host: &mut Offscreen,
-    app: &crate::native::App,
-    folder: &Path,
-    name: &str,
-) -> anyhow::Result<()> {
-    let path = folder.join(format!("{name}.png"));
-    host.capture(app)?.save(&path)?;
-    println!("{}", path.display());
-    Ok(())
-}
-
-pub(super) fn run(
-    host: &mut Offscreen,
-    app: &mut crate::native::App,
-    folder: &Path,
-    light: bool,
-) -> anyhow::Result<()> {
+pub(super) fn run(cap: &mut Capture, folder: &Path, light: bool) -> anyhow::Result<()> {
     let theme = if light { "light" } else { "dark" };
+    let shot = |name: &str| folder.join(format!("{theme}-{name}.png"));
     let mut hub = Hub::new(
         crate::model::Prefs {
             light,
             ..Default::default()
         },
-        "target/hub-captures".into(),
+        "target/hub-flows".into(),
         None,
     );
     seed(&mut hub);
-    settle(host, app, &mut hub)?;
-    click(app, &mut hub, "search")?;
-    let mut composing = false;
-    let mut clipboard = crate::native::OsClipboard;
+    hub.view = View::Projects;
+    cap.click(&mut hub, "more-project-1")?;
     anyhow::ensure!(
-        app.edit(
-            &mut composing,
-            ara_ui_text::EditEvent::Insert("cour".into()),
-            &mut clipboard
-        ),
-        "search input reaches native field"
+        hub.menu.as_deref() == Some("project-1"),
+        "⋯ opens the project's menu"
     );
-    for intent in app.actions() {
-        hub.intent(intent);
-    }
-    settle(host, app, &mut hub)?;
-    click(app, &mut hub, "new-project")?;
+    cap.save(&mut hub, &shot("projects-menu"))?;
+    cap.click(&mut hub, "menu-rename")?;
     anyhow::ensure!(
-        hub.view == View::Create && app.ui.find("nav-projects").is_none(),
-        "New project opens a dedicated full page"
+        hub.menu.is_none() && hub.rename.as_ref().is_some_and(|(id, _)| id == "project-1"),
+        "Rename closes the menu and edits in place"
     );
-    anyhow::ensure!(
-        hub.engines.len() >= 2,
-        "engine choice fixture needs multiple installed versions"
-    );
-    save(host, app, folder, &format!("{theme}-create-fullpage"))?;
-    click(app, &mut hub, "create-engine")?;
-    anyhow::ensure!(
-        app.select("create-engine")
-            .is_some_and(|select| select.is_open()),
-        "engine versions use the shared Select popup"
-    );
-    save(host, app, folder, &format!("{theme}-create-engine-options"))?;
-    for intent in app
-        .key(&hub, 41, true)
-        .map_err(|error| anyhow::anyhow!("{error}"))?
-    {
-        hub.intent(intent);
-    }
-    app.rebuild(&mut hub, NOW)
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-    click(app, &mut hub, "create-back")?;
-    anyhow::ensure!(
-        hub.view == View::Projects && hub.search == "cour",
-        "Back restores the Projects query"
-    );
-    save(host, app, folder, &format!("{theme}-create-back-projects"))?;
-    hub.intent(Intent::Search(String::new()));
-    settle(host, app, &mut hub)?;
-    click(app, &mut hub, "more-project-3")?;
-    anyhow::ensure!(
-        app.ui.find("menu-rename").is_some(),
-        "menu opens on first click"
-    );
-    save(host, app, folder, &format!("{theme}-click-menu"))?;
-    click(app, &mut hub, "menu-rename")?;
-    anyhow::ensure!(hub.rename.is_some(), "first menu-item click starts rename");
-    save(host, app, folder, &format!("{theme}-click-rename"))?;
-    // SDL TEXT_INPUT commits use this same windowless delivery path.
-    let mut composing = false;
-    let mut clipboard = crate::native::OsClipboard;
-    anyhow::ensure!(
-        crate::native::deliver_edit(
-            &mut composing,
-            &mut app.ui,
-            &mut app.input,
-            ara_ui_text::EditEvent::ImeCommit("Preview 3 typing".into()),
-            &mut clipboard,
-        ),
-        "ordinary typing must reach the field without an active composition"
-    );
-    for intent in app.actions() {
-        hub.intent(intent);
-    }
-    app.rebuild(&mut hub, NOW)
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-    anyhow::ensure!(
-        app.frame().map_err(|e| anyhow::anyhow!("{e}"))?,
-        "typed text presents"
-    );
-    let field = ara_ui::source::stable_id("rename-field");
-    anyhow::ensure!(
-        matches!(app.ui.widgets.get(&field),
-        Some(ara_ui::widgets::Widget::Input(input)) if input.value() == "Preview 3 typing"),
-        "typed value survives the model echo"
-    );
-    save(host, app, folder, &format!("{theme}-typed-rename"))?;
+    cap.save(&mut hub, &shot("projects-rename"))?;
     hub.intent(Intent::RenameCancel);
-    hub.event(Event::Reply {
-        call: Call::Remove {
-            project: "project-4".into(),
-        },
-        result: Ok(json!({"removed":"project-4"})),
+    hub.intent(Intent::Search("night".into()));
+    cap.save(&mut hub, &shot("projects-search"))?;
+    hub.intent(Intent::Search("zzz".into()));
+    cap.save(&mut hub, &shot("projects-no-match"))?;
+    hub.intent(Intent::Search(String::new()));
+    cap.window(&mut hub, |s| {
+        s.palette.open();
+        s.palette.query = "o".into();
     });
-    hub.event(Event::Reply {
-        call: Call::Close {
-            project: "project-3".into(),
-        },
-        result: Err(ara_diag::Diagnostic::error(
-            ara_diag::codes::IO,
-            "Capture fixture: the project could not be closed.",
-        )
-        .into()),
-    });
-    hub.event(Event::Offline {
-        message: "Capture fixture: service unavailable".into(),
-        log: "target/hub-captures/hub-start.log".into(),
-    });
-    settle(host, app, &mut hub)?;
-    app.frame().map_err(|e| anyhow::anyhow!("{e}"))?;
-    save(host, app, folder, &format!("{theme}-notifications-before"))?;
-    click(app, &mut hub, "dialog-error-dismiss")?;
-    let ids: Vec<_> = hub.notices.iter().map(|n| n.id).collect();
-    for id in ids {
-        click(app, &mut hub, &format!("dismiss-{id}"))?;
-    }
-    click(app, &mut hub, "dismiss-offline")?;
-    click(app, &mut hub, "dismiss-update")?;
-    anyhow::ensure!(
-        hub.notices.is_empty(),
-        "every toast dismisses on its first click"
-    );
-    anyhow::ensure!(
-        !app.frame().map_err(|e| anyhow::anyhow!("{e}"))?,
-        "idle UI must not redraw"
-    );
-    save(host, app, folder, &format!("{theme}-notifications-after"))?;
-    hub.event(Event::ServiceUpdatePending);
-    settle(host, app, &mut hub)?;
-    save(
-        host,
-        app,
-        folder,
-        &format!("{theme}-service-update-pending"),
-    )?;
-    let id = hub.notices.last().context("service restart notice")?.id;
-    click(app, &mut hub, &format!("dismiss-{id}"))?;
-    anyhow::ensure!(hub.notices.is_empty(), "service restart notice dismisses");
+    cap.save(&mut hub, &shot("palette"))?;
+    cap.window(&mut hub, |s| s.palette.open = false);
+    hub.intent(Intent::Navigate(View::Create));
+    cap.click(&mut hub, "template-outpost")
+        .or_else(|_| cap.click(&mut hub, "template-starter"))?;
+    cap.click(&mut hub, "create-engine")?;
+    cap.save(&mut hub, &shot("create-engine-select"))?;
+    cap.window(&mut hub, |s| s.select = None);
     Ok(())
 }
