@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a",
+  "key": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900",
   "stages": [
     {
-      "dxil": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/sampled_heap/sampleMain.dxil",
-      "dxil_hash": "db3a18a910f29739310881119b9ed62f2d9cab96e18d0f12510e883ecb2a3794",
+      "dxil": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/sampled_heap/sampleMain.dxil",
+      "dxil_hash": "0b379b8ca789f3ac56bda8155ffe9783bcb2e5284712cb72680f9b78b877af6b",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/sampled_heap/sampleMain.metallib",
-        "metallib_hash": "b5e1c2e4e20b9136e2332a4ff11ce050946a5cb0cf8f36343e571fdedc93d70e",
-        "reflection": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/sampled_heap/sampleMain.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "metallib": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/sampled_heap/sampleMain.metallib",
+        "metallib_hash": "721db0951ec799eb1246df202c756570c65632c3402a19592ff7516b4637b39c",
+        "reflection": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/sampled_heap/sampleMain.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "sampleMain",
-      "spirv": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/sampled_heap/sampleMain.spv",
+      "spirv": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/sampled_heap/sampleMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ca4af01163576bc9f550991f15ab214847510ef3d7d0ab3f2582d6d5b1223453",
+      "spirv_hash": "764878f1f8e8a9d906c9b283d9644642aa44c0e70cd3a1e6329251fd73a317c3",
       "stage": "compute"
     }
   ],
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

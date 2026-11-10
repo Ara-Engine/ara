@@ -6,15 +6,15 @@ reachability. This adds prerequisites; it does not migrate Renderlab itself.
 
 ## Feature status
 
-Every Vulkan implementation below is **native-unverified** until run on Windows.
-The Mac runs shared API/pure tests, not a Vulkan device; native Vulkan compilation
+Windows hardware verification and fixes are recorded below. The Mac runs shared
+API/pure tests, not a Vulkan device; native Vulkan compilation
 and execution belong to the PC pass.
 
 | Gap | Implementation and Mac verification |
 |---|---|
 | Buffer fill and large writes | Aligned u32 fill; ordered updates above 64 KiB use completion-gated staging chunks. Metal in-flight/range probes pass. |
 | Formats | All requested formats map on both backends; R32Float already existed. Metal per-mip transfer probes pass. |
-| Samplers | Immutable regular/comparison tables, nearest/linear, all three addresses and up to 16x anisotropy. Native MSL filtering/comparison probes pass; new converter cook remains blocked below. |
+| Samplers | Immutable regular/comparison tables, nearest/linear, all three addresses and up to 16x anisotropy. Native MSL and Vulkan filtering/comparison probes pass; fresh Converter 4.0.3 artifacts are available. |
 | Images | Volumes, arrays, mip/layer views, whole and rectangular transfers. Metal copy and shader-visible view probes pass. |
 | MSAA | Four samples, backed out-of-pass resolves and transient in-pass color resolves. Metal pixel probes pass. |
 | Raster | Depth comparisons/bias, cull/winding, vertex layouts and instance streams, per-target blend. Metal draw/depth/blend pixel probes pass. |
@@ -152,8 +152,9 @@ shaders on the canonical host; never merge generated cooked artifacts.
 depth and resolve output through `RenderAttachment` / `RenderTarget`. Metal native
 clear/draw/resolve tests prove sibling contents remain unchanged and invalid ranges
 are rejected. Load/store analysis tracks mip/layer discard ranges. The new command
-explicitly returns a contract error on Vulkan until its PC owner implements it;
-legacy rendering commands continue to work. See the [migration design](../design/renderlab-on-ara-gpu.md).
+uses cached single-mip/slice views on Vulkan too; its device probe checks draws,
+depth writes, resolves, preserved siblings and invalid ranges. See the
+[migration design](../design/renderlab-on-ara-gpu.md).
 
 Decision override: D36 supersedes S1's dedicated compute-family assumption.
 No other locked decision is overridden.
@@ -165,10 +166,75 @@ TLAS instance ordinals, not custom IDs. The validated Metal test hits primitive 
 instance 1 with padding, nonzero offsets, reordered indices and a mirrored/scaled
 transform, then checks all nine original object-space coordinates exactly. Instance
 and primitive overflow return invalid. The helper also compiles to SPIR-V locally;
-DXIL/cooked-helper and Vulkan runtime execution remain for the PC.
+The PC also cooked the helper through DXIL/Converter 4.0.3 and verified these exact
+coordinates on Vulkan. Its flat probe output uses scalar stores: this PC's Slang
+lowers `Store3` through a std430 uint3 array with 16-byte strides, rather than packed
+12-byte rows. The shared retained-geometry helper itself is unchanged.
 
 The [naga post replay](renderlab-wgsl-replay.md) now proves bloom downsample,
 upsample and post tone on Metal from the exact WGSL shader bodies, with CPU
 references and no Slang/MSC. Generated bindless SPIR-V validates; native Vulkan
 execution is pending. `ara-gpu-replay` is a test-only dependency, not a change to
 the production shader loader.
+
+## Windows verification, 2026-11-10
+
+Device: NVIDIA GeForce RTX 4070 SUPER, driver 617.14; Vulkan SDK 1.4.363.0.
+Debug tests require `VK_LAYER_KHRONOS_validation` and synchronization validation;
+`ARA_NO_GPU_VALIDATION` was unset. All runs were headless in isolated worktrees,
+with two Cargo jobs, a separate D: target and GPU leases of at most 14 minutes.
+
+| Feature | Native Vulkan evidence |
+|---|---|
+| Fill / large staged writes | `gaps::large_updates_keep_both_in_flight_payloads_and_fill_patterns` checks exact bytes and in-flight ordering. |
+| Formats | Ten transfer formats plus odd D16 / half-float mip alignment in `gaps`. |
+| Samplers | `comparison_sampler` exercises binding 6; `device_features` checks nearest/linear, repeat/mirror/clamp and a 16x sampler through shader reads. |
+| Volumes / arrays / mips / regions | Whole and interior 3D transfers in `gaps`; `device_features` reads sampled array subviews and writes storage subviews, preserving siblings. |
+| 4x MSAA / resolve | Backed and transient resolves in `gaps`; raster draws and selected-layer resolves in `raster` / `render_targets`. |
+| Raster / vertex state | Per-vertex and per-instance streams with offsets, first instance, cull/winding, depth comparison/bias and independent MRT blending. |
+| Larger storage-buffer heap | `sampled_heap` reads a slot above 1,024 on the device; selected capacity is logged. |
+| Dynamic acceleration | `dynamic_acceleration` checks 4,096 TLAS instances, rebuild/refit/compaction on graphics and compute; `hit_geometry` checks retained positions from a real hit. |
+| Shared-family fallback | The library test forces the actual graphics family for both classes and checks synchronous work plus deferred compute/graphics dependencies on aliased native queues. This RTX still physically offers a dedicated compute family. |
+| Batched / ranged barriers | Buffer and image range probes check bytes, selected mips/slices and rejected overflow. |
+| Suballocation | `native_private_allocations_share_blocks_without_overlapping`, preparation, disposal and deferred-lifetime tests pass on hardware. |
+
+The run found a storage-descriptor retirement bug: an image's default sampled view
+was used as its storage-heap identity, although storage publication uses a separate
+view. Retirement and full-heap reclamation now use the published storage view.
+Custom storage views also trigger collection when their heap fills; both paths have
+native exhaustion/reuse tests. Rendering-subresource support was implemented in
+Vulkan without changing the portable API.
+
+The original MSAA clear assertion assumed round-to-nearest UNORM conversion.
+Vulkan permits either adjacent integer ([conversion rules](https://docs.vulkan.org/spec/latest/chapters/fundamentals.html#fundamentals-fp-conversion));
+the test now requires a uniform full image, legal adjacent values and exact endpoints.
+The RTX returns `[64,127,191,255]` for `[0.25,0.5,0.75,1]`.
+
+All four requested dependent unit suites passed: `ara-render`, `ara-runtime-render`,
+`ara-editor-gpu`, and the `ara-player` binary unit suite. The updated main includes a
+pinned Renderlab Git dependency; Cargo built that cached revision, never the live
+Renderlab checkout.
+
+The WGSL SPIR-V adapter now normalizes its selected IR entry to `main`, keeping
+Ara's loader ABI and the pinned shader bodies unchanged. Replay filenames include
+the shader stage so the tone vertex and fragment modules cannot overwrite each
+other. Final native replay verification is pending the shared build slot.
+
+Fresh v4 artifacts were cooked with Metal Shader Converter 4.0.3 for 24 cohorts:
+
+- renderer root `shaders` (`ara-render/cooked`);
+- `ara-editor-gpu`, `ara-gpu`, `ara-landscape`, `ara-render-fidelity`,
+  `ara-render-geo`, `ara-render2d`, `ara-runtime-render`, `ara-texture-gpu`,
+  and `ara-texture-stream` shader cohorts;
+- `ara-gpu/tests/shaders` and `ara-gpu/tests/feature_shaders` (including comparison
+  sampling, raster/attachment selection and the retained ray-hit helper);
+- VFX `campfire`, `depth_sparks`, `dust`, `magic_swirl`, `mesh`, `million`,
+  `million_fill`, `muzzle_flash`, `rain`, `ribbon`, `smoke`, and `sparks`.
+
+The artifact audit checked 419 pipelines / 507 stages: every metallib exists,
+matches its SHA-256 and records Converter 4.0.3. No converter cook failed. Generated
+artifacts were re-cooked after source updates, never resolved by hand. The Mac can
+pull them and run the portable `comparison_sampler`, `raster`, `device_features`,
+`render_targets`, `hit_geometry`, `gaps` and dynamic-acceleration probes on Metal.
+The direct DXIL position-return intrinsic remains the compiler limitation described
+above; the verified retained-geometry helper supplies the portable result.

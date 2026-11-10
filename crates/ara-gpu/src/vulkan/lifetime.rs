@@ -160,7 +160,9 @@ impl Device for VulkanDevice {
                     }
                     Retired::Image(i) => {
                         self.retire_views(i.raw.handle);
-                        self.heap.retire_image(i.raw.view, i.heap);
+                        // Storage may use a separate mip-zero or UNORM alias view.
+                        self.heap
+                            .retire_image(i.raw.storage_view.unwrap_or(i.raw.view), i.heap);
                         self.context.detach_image(i.raw);
                         self.disposal
                             .as_mut()

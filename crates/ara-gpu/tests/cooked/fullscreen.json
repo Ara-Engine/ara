@@ -1,0 +1,60 @@
+{
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900",
+  "stages": [
+    {
+      "dxil": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/color.dxil",
+      "dxil_hash": "76299b87625e74f7b7593dbd0c909e92755701813a70dc32d39d464b0fdc12c2",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/color.metallib",
+        "metallib_hash": "e9ff7f8512e35a52614529d76042decd76d94b62e8321291cb548833943cb9fc",
+        "reflection": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/color.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
+      },
+      "source_entry": "color",
+      "spirv": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/color.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "7a8f83f92c6f2679eb1e6bf892be4b5abfc4eb1134ce3aae43c56443979a3fac",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/fullscreen.dxil",
+      "dxil_hash": "4f801d5b91d6430a99ed75355a8ac696029e7e77794e297ab6766e3f9281c4c8",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/fullscreen.metallib",
+        "metallib_hash": "f789edbb1b4df627c192c2e65a0821d07bf7311b5a77a1ab49ca2f4abf4eb95f",
+        "reflection": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/fullscreen.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
+      },
+      "source_entry": "fullscreen",
+      "spirv": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/fullscreen/fullscreen.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "193f4ebc82f0056fe7fd4e45d687fbaa35fb34605b66e91a3f43a30385a11c27",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      37
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
+    "vertex_stride": 0
+  },
+  "version": 1
+}

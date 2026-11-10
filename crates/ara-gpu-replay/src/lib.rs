@@ -53,7 +53,7 @@ pub struct MetalProgram {
 pub struct SpirvStage {
     /// Native shader stage.
     pub stage: ShaderStage,
-    /// Naga's entry point name.
+    /// Native entry point name (`main`, matching Ara's cooked Vulkan ABI).
     pub entry: String,
     /// Little-endian SPIR-V words.
     pub words: Vec<u32>,
@@ -86,6 +86,7 @@ mod tests {
             assert_eq!(stages.len(), if matches!(pass, Pass::Tone) { 2 } else { 1 });
             for stage in stages {
                 assert_eq!(stage.words[0], 0x07230203);
+                assert_eq!(stage.entry, "main");
             }
         }
     }

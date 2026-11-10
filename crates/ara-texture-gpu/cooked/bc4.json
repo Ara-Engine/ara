@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738",
+  "key": "cd55f85f999b1063896c6059ec5a0f776af54a9051a398474e1d7ad5e8a1e1c4",
   "stages": [
     {
-      "dxil": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc4/encodeBc4.dxil",
+      "dxil": "cd55f85f999b1063896c6059ec5a0f776af54a9051a398474e1d7ad5e8a1e1c4/bc4/encodeBc4.dxil",
       "dxil_hash": "dc9af092f46e42b86b5d8bd7c0306a91e437fb75306f9c02f0f0aaead4f5446d",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc4/encodeBc4.metallib",
+        "metallib": "cd55f85f999b1063896c6059ec5a0f776af54a9051a398474e1d7ad5e8a1e1c4/bc4/encodeBc4.metallib",
         "metallib_hash": "0930b0ef72fa49ecf6f5759b349accd9dacd4643790dd32cc6deed0f9d507845",
-        "reflection": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc4/encodeBc4.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "cd55f85f999b1063896c6059ec5a0f776af54a9051a398474e1d7ad5e8a1e1c4/bc4/encodeBc4.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "encodeBc4",
-      "spirv": "a20cb7a7e090bd86b7e6eeb15919ce6c53462ac2793131e97801139717694738/bc4/encodeBc4.spv",
+      "spirv": "cd55f85f999b1063896c6059ec5a0f776af54a9051a398474e1d7ad5e8a1e1c4/bc4/encodeBc4.spv",
       "spirv_entry": "main",
       "spirv_hash": "e98240643cca9d0514e1dcc34c4644c3b9bdfef2c1b25b089b2398b0308ef577",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

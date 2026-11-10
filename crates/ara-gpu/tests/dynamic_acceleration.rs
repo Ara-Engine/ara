@@ -26,6 +26,11 @@ fn edge(resource: Resource, before: Access, after: Access) -> Barrier {
 fn dynamic(queue: Queue) -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut gpu = GpuDevice::new(&[], root.join("../../target/ara-gpu/dynamic-acceleration"))?;
+    eprintln!(
+        "{}: ray tracing enabled = {}",
+        gpu.info().name,
+        gpu.info().ray_tracing
+    );
     if !gpu.info().ray_tracing {
         return Ok(());
     }

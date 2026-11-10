@@ -1,0 +1,60 @@
+{
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900",
+  "stages": [
+    {
+      "dxil": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/color.dxil",
+      "dxil_hash": "76299b87625e74f7b7593dbd0c909e92755701813a70dc32d39d464b0fdc12c2",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/color.metallib",
+        "metallib_hash": "e9ff7f8512e35a52614529d76042decd76d94b62e8321291cb548833943cb9fc",
+        "reflection": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/color.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
+      },
+      "source_entry": "color",
+      "spirv": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/color.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "7a8f83f92c6f2679eb1e6bf892be4b5abfc4eb1134ce3aae43c56443979a3fac",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/streams.dxil",
+      "dxil_hash": "d5d667e858e47340bce34b2f737c81b241d60b1065ecc39e32c364acbb1497b8",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/streams.metallib",
+        "metallib_hash": "8195715ac5da4cf6851b3555d478bec8505508e63e10d7ce7822a60b0603bea4",
+        "reflection": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/streams.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
+      },
+      "source_entry": "streams",
+      "spirv": "c171deb488e3f2eccf4ba3ea974c1b23756dcdc8c2852786e291d8be376b2900/streams/streams.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "69c55ddaa8f57506cffb31ab98d963250d818cefaa36d022f9e02ecca08b510c",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      37
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
+    "vertex_stride": 0
+  },
+  "version": 1
+}
