@@ -266,6 +266,9 @@ pub struct Local {
     pub console_search: String,
     /// The Console merges repeated records (Unity's Collapse).
     pub console_collapse: bool,
+    /// The Console's group of this computer's messages (graphics drivers, overlay layers)
+    /// is open.
+    pub console_machine: bool,
     /// Entities copied with Edit › Copy: each one's name and components.
     pub entity_clipboard: Option<Vec<serde_json::Value>>,
     /// A field value copied from the Inspector's field menu.

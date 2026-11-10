@@ -1529,6 +1529,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             _ => Err("Choose a Scene overlay".into()),
         },
         // Panels' own switches.
+        "console.machine" => {
+            s.local.console_machine = !s.local.console_machine;
+            Ok(())
+        }
         "console.errors" | "console.warnings" | "console.info" => {
             let i = match id {
                 "console.errors" => 0,

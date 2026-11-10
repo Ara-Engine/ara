@@ -675,6 +675,51 @@ fn the_play_menu_sets_mode_clients_network_and_start_paused() {
 }
 
 #[test]
+fn the_computers_own_messages_fold_into_their_own_console_group() {
+    let mut rt = open();
+    let row = |seq: u64, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
+        seq,
+        severity: ara_diag::Severity::Warning,
+        code: "ARA".into(),
+        message: diagnostic.message.clone(),
+        origin: "engine".into(),
+        at: 0,
+        source: None,
+        count: 1,
+        diagnostic: std::sync::Arc::new(diagnostic),
+    };
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.logs = vec![
+            row(
+                1,
+                ara_diag::Diagnostic::warning(
+                    ara_diag::codes::GPU_ENVIRONMENT,
+                    "An overlay layer is old",
+                ),
+            ),
+            row(
+                2,
+                ara_diag::Diagnostic::warning(ara_diag::Code(1), "The project warns"),
+            ),
+        ];
+        s.local.log_seen = 2;
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("console/machine").is_some(),
+        "the computer's group shows"
+    );
+    assert!(rt.find("console/row/1").is_none(), "folded until opened");
+    assert!(
+        rt.find("console/row/2").is_some(),
+        "the project's own message shows"
+    );
+    press(&mut rt, "console/machine");
+    assert!(rt.find("console/row/1").is_some(), "opened");
+}
+
+#[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
     let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
