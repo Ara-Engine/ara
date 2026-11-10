@@ -7,8 +7,8 @@ mod buffer;
 mod image;
 mod upload;
 mod validate;
-pub(super) use buffer::buffer;
-pub(crate) use image::{image, storage_alias};
+pub(super) use buffer::{BufferRequest, pooled_buffer};
+pub(crate) use image::{pooled_image, storage_alias};
 pub(crate) use upload::upload;
 pub(crate) use validate::validate_image;
 
@@ -58,24 +58,31 @@ pub(crate) struct Allocator {
 }
 
 impl Allocator {
-    pub fn buffer(
+    pub fn buffer_pooled(
         &self,
         size: u64,
         usage: vk::BufferUsageFlags,
         host: bool,
+        blocks: &mut super::memory_blocks::MemoryBlocks,
     ) -> crate::Result<BufferAllocation> {
-        Ok(buffer(
+        Ok(pooled_buffer(
             &self.device,
             &self.memory,
             &mut super::buffer_memory::BufferMemory::default(),
-            size,
-            usage,
-            host,
-            vk::MemoryPropertyFlags::empty(),
+            Some(blocks),
+            BufferRequest {
+                size,
+                usage,
+                host,
+                preferred: vk::MemoryPropertyFlags::empty(),
+            },
         )?)
     }
-
-    pub fn image(&self, desc: ImageDesc) -> crate::Result<ImageAllocation> {
+    pub fn image_pooled(
+        &self,
+        desc: ImageDesc,
+        blocks: &mut super::memory_blocks::MemoryBlocks,
+    ) -> crate::Result<ImageAllocation> {
         validate_image(
             &self.instance,
             self.physical,
@@ -83,7 +90,12 @@ impl Allocator {
             self.max_dimension,
             &desc,
         )?;
-        Ok(image(&self.device, &self.memory, desc)?)
+        Ok(pooled_image(
+            &self.device,
+            &self.memory,
+            desc,
+            Some(blocks),
+        )?)
     }
 }
 

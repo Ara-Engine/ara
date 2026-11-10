@@ -163,7 +163,8 @@ pub struct ImageViewDesc {
 impl ImageViewDesc {
     pub(crate) fn validate(self, shape: ImageShape, storage: bool) -> Result<()> {
         let volume = shape.dimension == TextureDimension::D3;
-        if self.mip_count == 0
+        if shape.samples != SampleCount::One
+            || self.mip_count == 0
             || self.layer_count == 0
             || self
                 .base_mip
