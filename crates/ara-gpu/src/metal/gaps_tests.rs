@@ -189,3 +189,32 @@ kernel void probe(constant TopLevel& t [[buffer(2)]]) {
         .is_err()
     );
 }
+
+#[test]
+fn runtime_buffer_heap_addresses_slots_beyond_128_without_an_abi_change() {
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    let mut last = None;
+    for _ in 0..257 {
+        let b = gpu
+            .create_buffer(4, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+            .unwrap();
+        let slot = gpu.storage_buffer(b).unwrap();
+        last = Some((b, slot));
+    }
+    let (buffer, slot) = last.unwrap();
+    assert_eq!(slot.index, 256);
+    let p = gpu.msl_pipeline(
+        &[(cooked::Stage::Compute, "fill")],
+        &cooked::RenderState::default(),
+        Some([1, 1, 1]),
+    );
+    let mut rec = gpu.begin(Queue::Compute);
+    rec.push(Command::Pipeline(p));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, 0x12345678, 1, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    let point = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(point).unwrap();
+    assert_eq!(gpu.read(buffer).unwrap(), 0x12345678u32.to_le_bytes());
+}
