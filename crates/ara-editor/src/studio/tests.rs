@@ -340,6 +340,32 @@ fn a_scene_overlay_floats_as_a_panel_switches_layout_and_docks_back() {
 }
 
 #[test]
+fn a_saved_layout_brings_its_scene_overlays_back() {
+    let mut rt = open();
+    settle(&mut rt);
+    let tools = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    rt.update(|s| {
+        super::scene_overlays::update(s, "tools", |d| {
+            d.float = Some(super::scene_overlays::Float {
+                at: (160.0, 120.0),
+                layout: super::scene_overlays::Layout::Panel,
+            })
+        });
+        s.act("editor.layout.save", json!({"name": "Overlays"}));
+        super::scene_overlays::reset(s);
+    });
+    settle(&mut rt);
+    assert!(tools(&rt).float.is_none(), "reset docks it");
+    rt.update(|s| s.act("editor.layout.apply", json!({"name": "Overlays"})));
+    settle(&mut rt);
+    assert_eq!(
+        tools(&rt).float.map(|f| f.at),
+        Some((160.0, 120.0)),
+        "as saved with the layout"
+    );
+}
+
+#[test]
 fn the_draw_mode_menu_switches_view_modes_and_effects() {
     let mut rt = open();
     settle(&mut rt);

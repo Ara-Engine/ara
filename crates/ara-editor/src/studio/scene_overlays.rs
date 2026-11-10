@@ -8,7 +8,7 @@
 //! and hides each and resets them. Let go away from every edge, an overlay floats where it
 //! lands, laid out as a titled Panel, a Horizontal or a Vertical strip (its menu switches);
 //! dragged back to an edge it docks again. Layouts persist in the `viewport.overlays`
-//! setting.
+//! setting, and a named window layout (Window › Layouts) saves and restores them too.
 use std::collections::BTreeMap;
 
 use ara_kit::icons;
