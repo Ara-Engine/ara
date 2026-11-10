@@ -30,13 +30,16 @@ internal static class ProjectCompiler
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxParallelism, 1);
         compilations ??= new ProjectCompilations();
-        var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot));
+        bool Builds(ProjectModule module) => request.Domain == "editor" || module.Profile == "gameplay";
+        // Selected modules verify their publication cache below against current inputs.
+        // Preserve hydrated schemas for excluded editor modules without reading ours twice.
+        var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot), publicationFilter: module => !Builds(module));
         if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error"))
         {
             // Ownership comes from discovery, never the diagnostic's mapped path.
             // Unowned manifest/I/O failures stay conservative configuration rows.
             var graphRows = inventory.Diagnostics.Where(d => d["data"]?["module"] is null).ToList();
-            foreach (var module in inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay"))
+            foreach (var module in inventory.Modules.Where(Builds))
             {
                 var attempt = Attempt(request, module);
                 var owned = inventory.Diagnostics.Where(d => string.Equals((string?)d["data"]?["module"], module.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -48,7 +51,7 @@ internal static class ProjectCompiler
         }
         var root = ProjectInventory.ProjectPath(request.Project);
         compilations.Retain(inventory.Modules.Select(module => Path.Combine(root, module.AssemblyPath)));
-        var orderedBuilds = inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay")
+        var orderedBuilds = inventory.Modules.Where(Builds)
             .Select(m => new BuildState(m, Attempt(request, m))).ToArray();
         var builds = orderedBuilds.ToDictionary(b => b.Module.Name, StringComparer.OrdinalIgnoreCase);
         var toolHash = HashFile(typeof(ProjectCompiler).Assembly.Location);
