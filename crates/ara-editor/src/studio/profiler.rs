@@ -10,7 +10,7 @@ use ara_kit::ui::*;
 use ara_profile::{Frame, Profile};
 use serde_json::json;
 use stillkit::Rgba;
-use stillkit::el::{Align, Axis, El, Justify, col, el, row, text};
+use stillkit::el::{Align, Axis, El, Justify, col, el, icon, row, text};
 
 use super::Studio;
 
@@ -291,6 +291,14 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .map_or(640.0, |r| r.width());
     col()
         .grow(1.0)
+        // Its menu: Record, Freeze, Set Baseline, Compare.
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Profiler,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
         .child(toolbar)
         .child(strip(s, profile, frame.id))
         .child(
@@ -449,6 +457,177 @@ fn lanes(s: &Studio, profile: &Profile, frame: &Frame, width: f32) -> El<Studio>
 
 /// The frame's scopes merged by name, ranked by self time.
 fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
+    let l = &s.look;
+    let tree = s.local.profiler_tree;
+    let switch = row()
+        .gap(2.0)
+        .align(Align::Center)
+        .child(
+            toggle_button(l, Size::Sm, icons::LIST, "Flat: each scope's totals", !tree)
+                .key("profiler/flat")
+                .on_press(|s: &mut Studio| s.local.profiler_tree = false),
+        )
+        .child(
+            toggle_button(
+                l,
+                Size::Sm,
+                icons::LIST_TREE,
+                "Tree: scopes under their callers",
+                tree,
+            )
+            .key("profiler/tree")
+            .on_press(|s: &mut Studio| s.local.profiler_tree = true),
+        );
+    let table = match tree {
+        true => call_tree(s, profile, frame),
+        false => flat(s, profile, frame),
+    };
+    col().gap(4.0).child(switch).child(table)
+}
+
+/// One node of the Profiler's call tree: a scope name under its caller's path.
+#[derive(Default)]
+struct Node {
+    name: String,
+    depth: usize,
+    calls: u32,
+    total: u64,
+    own: u64,
+    children: Vec<String>,
+}
+
+/// The frame's spans as Unity's Hierarchy view has them: each scope under the scope that
+/// called it (same-named siblings merged), heaviest first, folding by path.
+fn call_tree(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let name = |label: u32| {
+        profile
+            .labels
+            .get(label as usize)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let by_id: std::collections::HashMap<u64, &ara_profile::CpuSpan> =
+        frame.spans.iter().map(|span| (span.id, span)).collect();
+    // Each span's path of names from its root, memoised by id.
+    let mut paths: std::collections::HashMap<u64, String> = Default::default();
+    fn path_of(
+        id: u64,
+        by_id: &std::collections::HashMap<u64, &ara_profile::CpuSpan>,
+        paths: &mut std::collections::HashMap<u64, String>,
+        name: &dyn Fn(u32) -> String,
+        depth: usize,
+    ) -> String {
+        if let Some(path) = paths.get(&id) {
+            return path.clone();
+        }
+        let Some(span) = by_id.get(&id) else {
+            return String::new();
+        };
+        let own = name(span.label);
+        let path = match span.parent {
+            // A parent that is missing (or a cycle past any real depth) starts a root.
+            parent if parent != 0 && by_id.contains_key(&parent) && depth < 64 => {
+                format!("{}/{own}", path_of(parent, by_id, paths, name, depth + 1))
+            }
+            _ => own,
+        };
+        paths.insert(id, path.clone());
+        path
+    }
+    let mut nodes: BTreeMap<String, Node> = BTreeMap::new();
+    let mut roots: Vec<String> = Vec::new();
+    for span in &frame.spans {
+        let path = path_of(span.id, &by_id, &mut paths, &name, 0);
+        let parent = path.rsplit_once('/').map(|(p, _)| p.to_owned());
+        let node = nodes.entry(path.clone()).or_insert_with(|| Node {
+            name: name(span.label),
+            depth: path.matches('/').count(),
+            ..Node::default()
+        });
+        node.calls += 1;
+        node.total += span.duration_ns;
+        node.own += span.self_ns;
+        match parent {
+            Some(parent) => {
+                let up = nodes.entry(parent).or_default();
+                if !up.children.contains(&path) {
+                    up.children.push(path);
+                }
+            }
+            None if !roots.contains(&path) => roots.push(path),
+            None => {}
+        }
+    }
+    let total =
+        |path: &String, nodes: &BTreeMap<String, Node>| nodes.get(path).map_or(0, |n| n.total);
+    roots.sort_by_key(|p| std::cmp::Reverse(total(p, &nodes)));
+    let mut table = col()
+        .key("profiler/calls")
+        .gap(1.0)
+        .child(header(l, &["Scope", "Calls", "Total", "Self"]));
+    // Depth first, children of open rows only.
+    let mut stack: Vec<String> = roots.into_iter().rev().collect();
+    let mut shown = 0;
+    while let Some(path) = stack.pop() {
+        let Some(node) = nodes.get(&path) else {
+            continue;
+        };
+        shown += 1;
+        if shown > 200 {
+            break;
+        }
+        let open = s.local.profiler_open.contains(&path);
+        let parent = !node.children.is_empty();
+        let toggle = path.clone();
+        table = table.child(
+            row()
+                .key(format!("profiler/call/{path}"))
+                .h(22.0)
+                .gap(6.0)
+                .pad_x(6.0)
+                .align(Align::Center)
+                .on_press(move |s: &mut Studio| {
+                    if !s.local.profiler_open.remove(&toggle) {
+                        s.local.profiler_open.insert(toggle.clone());
+                    }
+                })
+                .child(el().w(node.depth as f32 * 12.0))
+                .child(match parent {
+                    true => icon(if open {
+                        icons::CHEVRON_DOWN
+                    } else {
+                        icons::CHEVRON_RIGHT
+                    })
+                    .size(11.0)
+                    .color(c.muted_foreground.0),
+                    false => el().size(11.0),
+                })
+                .child(el().size(8.0).radius(2.0).fill(hue(l, &node.name)))
+                .child(
+                    text(node.name.clone())
+                        .text_size(12.0)
+                        .color(c.foreground.0)
+                        .w(0.0)
+                        .grow(1.0)
+                        .wrap(1),
+                )
+                .child(num(l, node.calls.to_string()))
+                .child(num(l, ms(node.total)))
+                .child(num(l, ms(node.own))),
+        );
+        if open {
+            let mut children = node.children.clone();
+            children.sort_by_key(|p| total(p, &nodes));
+            stack.extend(children);
+        }
+    }
+    table
+}
+
+/// The frame's scopes merged by name, most self time first, against a baseline if set.
+fn flat(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let mut merged: BTreeMap<u32, (u32, u64, u64)> = BTreeMap::new();

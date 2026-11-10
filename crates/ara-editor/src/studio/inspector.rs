@@ -78,8 +78,16 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .gap(3.0)
         .child(header(s))
         .children(prefab_bar(s))
-        .children(super::running::section(s))
-        .child(search_row(s));
+        .children(super::running::section(s));
+    // Debug: the record itself instead of its fields.
+    if let Some(raw) = raw_record(s) {
+        return col()
+            .grow(1.0)
+            .min_h(0.0)
+            .scroll(Axis::Vertical)
+            .child(page.child(raw).child(el().h(12.0)));
+    }
+    page = page.child(search_row(s));
     if order.is_empty() && !query.is_empty() {
         page = page.child(
             row().pad(10.0).child(
@@ -180,7 +188,74 @@ fn header(s: &Studio) -> El<Studio> {
                     .color(c.muted_foreground.0),
             );
     }
-    head.child(lock)
+    let raw = s.local.inspector_raw;
+    let debug = super::scene_overlays::toggle(
+        l,
+        icons::BRACES,
+        if raw {
+            "Back to the fields"
+        } else {
+            "Debug: the record as the scene resolves it"
+        },
+        raw,
+    )
+    .key("inspector/raw")
+    .on_press(|s: &mut Studio| s.local.inspector_raw = !s.local.inspector_raw);
+    head.child(debug).child(lock)
+}
+
+/// Unity's Inspector Debug mode: one entity's resolved record (prefab values included)
+/// as JSON, read-only, with Copy; `None` unless Debug is on for a single entity.
+fn raw_record(s: &Studio) -> Option<El<Studio>> {
+    if !s.local.inspector_raw {
+        return None;
+    }
+    let [id] = s.inspected() else {
+        return None;
+    };
+    let record = &s.resolved.get(id)?.record;
+    let shown = serde_json::to_string_pretty(record).ok()?;
+    let l = &s.look;
+    let c = &l.c;
+    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
+    Some(
+        col()
+            .key("inspector/record")
+            .gap(4.0)
+            .child(
+                row()
+                    .gap(6.0)
+                    .align(Align::Center)
+                    .child(
+                        text("Resolved record, read-only; edits go through the fields")
+                            .text_size(11.0)
+                            .color(c.muted_foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(
+                        icon_button(l, Tone::Ghost, Size::Sm, icons::COPY, "Copy the record")
+                            .key("inspector/record/copy")
+                            .on_press(move |s: &mut Studio| {
+                                s.local.copy = Some(copy.clone());
+                                super::note(s, "Copied the record");
+                            }),
+                    ),
+            )
+            .child(
+                col()
+                    .pad(8.0)
+                    .radius(l.radius.sm)
+                    .fill(c.code_background.0)
+                    // A line each, indents kept (text runs collapse spaces and newlines).
+                    .children(shown.lines().map(|line| {
+                        let indent = line.len() - line.trim_start().len();
+                        text(format!("{}{}", "\u{a0}".repeat(indent), line.trim_start()))
+                            .text_size(11.0)
+                            .family(mono())
+                            .color(c.code_foreground.0)
+                    })),
+            ),
+    )
 }
 
 /// A prefab instance's bar (Unity's Prefab header): where it comes from, Open, and the
