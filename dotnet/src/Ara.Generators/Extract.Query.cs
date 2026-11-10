@@ -42,7 +42,7 @@ public static partial class Extract
                     Bad(p, "batch spans contain components or Entity; resources remain scalar parameters");
                 else if (!element.IsUnmanagedType)
                     Bad(p, $"`{element.Name}` contains managed references and cannot be viewed as a native component span");
-                else if (element is INamedTypeSymbol tag && Schema.Fields(tag).Count == 0)
+                else if (element is INamedTypeSymbol tag && !Schema.HasFields(tag))
                     Bad(p, $"`{element.Name}` has no fields (a tag); filter on it with [With<{element.Name}>] instead");
                 else ps.Add(new("span", element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), writable ? "ref" : "in", component));
             }
@@ -51,7 +51,7 @@ public static partial class Extract
                 ps.Add(new("tick", ty, batch ? refKind : "in", ""));
             else if (Schema.IsAraType(p.Type, "Rng") && refKind == "ref") ps.Add(new("rng", ty, "ref", ""));
             else if (Schema.IsAraType(p.Type, "Commands") && (!batch || p.RefKind != RefKind.Out)) ps.Add(new("commands", ty, refKind, ""));
-            else if (Schema.IsComponent(p.Type, out var c) && p.Type is INamedTypeSymbol tag && Schema.Fields(tag).Count == 0)
+            else if (Schema.IsComponent(p.Type, out var c) && p.Type is INamedTypeSymbol tag && !Schema.HasFields(tag))
                 diags.Add(DiagInfo.At(Descriptors.BadSystemParam, p,
                     $"`{p.Type.Name}` has no fields (a tag), so it has no column to read; filter on it with [With<{p.Type.Name}>] instead"));
             else if (Schema.IsComponent(p.Type, out c)) ps.Add(new("column", ty, refKind, c));
