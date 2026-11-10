@@ -80,6 +80,11 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 | Skinning with more than four influences | The four strongest, renormalized | Eight-influence skinning in Renderlab | No | Renderlab build thread |
 | 2D | Unchanged: `Presenter2d` keeps Ara's 2D renderer | Nothing for 3D work | No | None needed |
 
+Not a Renderlab gap either: Outpost's ground at dusk. Ara's renderer lights the compound
+with direct sun, but the sun stands 4 degrees up behind a 67 m dune 184 m away (20 degrees
+up from the compound), so Renderlab's shadow there is physically right and Ara's
+renderer misses the dune's shadow. A sunlit dusk needs the sun moved in the sample.
+
 Reflection probes are not a gap: Renderlab traces reflections on both paths. Its
 glossy band could leave bright speckles on glossy surfaces before `4652ea3` (a renderer
 defect, since fixed there); `Options::max_reflection_roughness` (`ARA_RENDERLAB_REFLECTION_ROUGHNESS`
