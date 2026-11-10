@@ -240,6 +240,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .gap(8.0)
         .align(Align::Center)
         .child(target_menu(s))
+        .child(baseline_controls(s))
         .child(if recording {
             button(l, Tone::Danger, Size::Sm, Some(icons::CIRCLE_STOP), "Stop")
                 .key("profiler/stop")
@@ -459,9 +460,20 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     }
     let mut ranked: Vec<_> = merged.into_iter().collect();
     ranked.sort_by_key(|(_, (_, _, own))| std::cmp::Reverse(*own));
-    let mut table = col()
-        .gap(1.0)
-        .child(header(l, ["Scope", "Calls", "Total", "Self"]));
+    let mut table = col().gap(1.0).child(header(
+        l,
+        if s.editor.profile_baseline.is_some() {
+            &["Scope", "Calls", "Total", "Self", "vs base"]
+        } else {
+            &["Scope", "Calls", "Total", "Self"]
+        },
+    ));
+    // With a baseline: each scope's mean self time now against the baseline's.
+    let compare = s
+        .editor
+        .profile_baseline
+        .as_ref()
+        .map(|base| (means(profile), means(base)));
     for (label, (calls, total, own)) in ranked.into_iter().take(24) {
         let name = profile
             .labels
@@ -485,7 +497,44 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
                 )
                 .child(num(l, calls.to_string()))
                 .child(num(l, ms(total)))
-                .child(num(l, ms(own))),
+                .child(num(l, ms(own)))
+                .children(compare.as_ref().map(|(now, base)| {
+                    let name = profile
+                        .labels
+                        .get(label as usize)
+                        .cloned()
+                        .unwrap_or_default();
+                    let (a, b) = (
+                        now.get(&name).copied().unwrap_or(0.0),
+                        base.get(&name).copied(),
+                    );
+                    match b {
+                        Some(b) => {
+                            let delta = a - b;
+                            // Slower by more than 5% reads as a warning, faster as success.
+                            let tint = if delta > b * 0.05 && delta > 10_000.0 {
+                                c.destructive_foreground.0
+                            } else if -delta > b * 0.05 && -delta > 10_000.0 {
+                                c.success_foreground.0
+                            } else {
+                                c.muted_foreground.0
+                            };
+                            text(format!(
+                                "{}{:.2}",
+                                if delta >= 0.0 { "+" } else { "−" },
+                                delta.abs() / 1e6
+                            ))
+                            .text_size(11.5)
+                            .family(mono())
+                            .color(tint)
+                            .w(56.0)
+                        }
+                        None => text("new")
+                            .text_size(11.5)
+                            .color(c.info_foreground.0)
+                            .w(56.0),
+                    }
+                })),
         );
     }
     table
@@ -500,7 +549,7 @@ fn gpu(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     let longest = passes.first().map_or(1, |p| p.duration_ns.max(1)) as f32;
     let mut out = col()
         .gap(1.0)
-        .child(header(l, ["GPU pass", "", "", "Time"]));
+        .child(header(l, &["GPU pass", "", "", "Time"]));
     if passes.is_empty() {
         out = out.child(
             row().pad(6.0).child(
@@ -548,7 +597,7 @@ fn gpu(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     out
 }
 
-fn header(l: &ara_kit::look::Look, titles: [&str; 4]) -> El<Studio> {
+fn header(l: &ara_kit::look::Look, titles: &[&str]) -> El<Studio> {
     let c = &l.c;
     let cell = |t: &str| {
         text(t.to_owned())
@@ -564,9 +613,56 @@ fn header(l: &ara_kit::look::Look, titles: [&str; 4]) -> El<Studio> {
         .fill(super::style::tones(l).band)
         .radius(super::style::RADIUS)
         .child(cell(titles[0]).w(0.0).grow(1.0))
-        .child(cell(titles[1]).w(56.0))
-        .child(cell(titles[2]).w(56.0))
-        .child(cell(titles[3]).w(56.0))
+        .children(titles[1..].iter().map(|t| cell(t).w(56.0)))
+}
+
+/// Each scope's mean self time per frame across `profile`'s frames, by scope name (two
+/// captures number their labels apart).
+fn means(profile: &Profile) -> std::collections::HashMap<String, f64> {
+    let mut out = std::collections::HashMap::new();
+    let frames = profile.frames.len().max(1) as f64;
+    for frame in &profile.frames {
+        for span in &frame.spans {
+            let name = profile
+                .labels
+                .get(span.label as usize)
+                .cloned()
+                .unwrap_or_default();
+            *out.entry(name).or_insert(0.0) += span.self_ns as f64 / frames;
+        }
+    }
+    out
+}
+
+/// The baseline in the toolbar: Set Baseline freezes what the Profiler shows to compare
+/// later captures with (Unity's Profile Analyzer); once set, its frame count and Clear.
+fn baseline_controls(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    match &s.editor.profile_baseline {
+        None => enabled(
+            button(l, Tone::Ghost, Size::Sm, Some(icons::FLAG), "Set baseline")
+                .key("profiler/baseline")
+                .tooltip("Compare later captures' scopes with this one")
+                .on_press(|s: &mut Studio| {
+                    s.editor.profile_baseline = Some(s.profile.clone());
+                }),
+            !s.profile.frames.is_empty(),
+        ),
+        Some(base) => row()
+            .gap(4.0)
+            .align(Align::Center)
+            .child(chip(
+                l,
+                Status::Info,
+                &format!("Baseline · {} frames", base.frames.len()),
+                false,
+            ))
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Clear the baseline")
+                    .key("profiler/baseline/clear")
+                    .on_press(|s: &mut Studio| s.editor.profile_baseline = None),
+            ),
+    }
 }
 
 /// A right-aligned number cell.

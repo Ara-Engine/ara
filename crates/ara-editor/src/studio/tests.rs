@@ -1106,6 +1106,13 @@ fn the_profiler_picks_the_editor_or_a_player_and_records_it() {
     press(&mut rt, "profiler/stop");
     assert!(!rt.touch(|s| s.editor.host.profiler().is_recording()));
     rt.update(|s| assert!(!super::profiler::poll(s, true) || s.local.profiler_target.is_none()));
+    // A baseline freezes what shows, to compare later captures' scopes with it.
+    rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+    settle(&mut rt);
+    press(&mut rt, "profiler/baseline");
+    assert!(rt.state().editor.profile_baseline.is_some());
+    press(&mut rt, "profiler/baseline/clear");
+    assert!(rt.state().editor.profile_baseline.is_none());
 }
 
 #[test]
@@ -1610,6 +1617,38 @@ fn captures() {
             .unwrap();
             rt.update(|s| s.local.tab_drag = None);
         }
+        // The Profiler comparing a capture with its baseline.
+        rt.update(|s| {
+            super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+            s.editor.profile_baseline = Some(std::sync::Arc::new(sample_profile()));
+            let mut now = sample_profile();
+            for frame in &mut now.frames {
+                for span in &mut frame.spans {
+                    span.self_ns = if span.label % 2 == 0 {
+                        span.self_ns * 3 / 2
+                    } else {
+                        span.self_ns / 2
+                    };
+                }
+            }
+            s.profile = std::sync::Arc::new(now);
+        });
+        for _ in 0..10 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-profiler-compare.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            s.editor.profile_baseline = None;
+            s.profile = std::sync::Arc::new(sample_profile());
+        });
         // A panel floating in its own window.
         rt.update(|s| {
             s.act("editor.layout.show", json!({"panel": "history"}));
