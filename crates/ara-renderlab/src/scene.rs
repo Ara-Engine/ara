@@ -958,8 +958,9 @@ fn cut_mesh(
     let bounded = (CUT_CELLS / uv_area.max(1e-6)).sqrt().clamp(4., 128.) as u32;
     let mut cells = fine.min(bounded);
     // Dense meshes split along every cell line: coarser cells until the cut holds at
-    // most four times its source triangles (and at least 65,536 are always allowed).
-    let allowed = (indices.len() / 3 * 4).max(65_536);
+    // most four times its source triangles (at least 8,192). Foliage cards repeat by
+    // the thousand, and every triangle costs the non-RT shadow pass.
+    let allowed = (indices.len() / 3 * 4).max(8_192);
     let mut cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
     while cut.indices.len() / 3 > allowed && cells > 4 {
         cells = (cells / 2).max(4);
