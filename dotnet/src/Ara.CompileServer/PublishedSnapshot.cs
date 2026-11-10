@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -21,7 +22,24 @@ internal sealed partial record PublishedSnapshot(string Name, bool Hot, uint Gen
         string Fingerprint, string PeHash, string PdbHash, Input[] Sources, Dictionary<string, string> Dependencies, string? Graph);
 
     internal static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
-    internal static string TextHash(string text) => Hash(Encoding.UTF8.GetBytes(text));
+    /// <summary>Hash captured UTF-8 text without allocating a byte array per source file.</summary>
+    internal static string TextHash(string text)
+    {
+        var length = Encoding.UTF8.GetByteCount(text);
+        byte[]? rented = null;
+        Span<byte> bytes = length <= 1024 ? stackalloc byte[1024] : (rented = ArrayPool<byte>.Shared.Rent(length));
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(text.AsSpan(), bytes);
+            Span<byte> digest = stackalloc byte[32];
+            SHA256.HashData(bytes[..written], digest);
+            return Convert.ToHexStringLower(digest);
+        }
+        finally
+        {
+            if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
 
     /// <summary>Only reuse symbols whose complete bytes were trusted when the publication was emitted.</summary>
     internal static bool CacheMatches(string directory, string fingerprint, byte[] pe, byte[] pdb)
