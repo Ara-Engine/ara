@@ -391,23 +391,80 @@ impl MetalDevice {
                 *destination_offset,
                 *size,
             )?,
+            Command::FillBuffer {
+                destination,
+                offset,
+                size,
+                value,
+            } => {
+                let target = &self.buffers.get(*destination)?.raw;
+                crate::transfers::validate_fill(*offset, *size, target.size)?;
+                if !target.usage.contains(vk::BufferUsageFlags::TRANSFER_DST) {
+                    return Err(GpuError::Contract(
+                        "Fill requires transfer destination usage".into(),
+                    ));
+                }
+                let buffer = target.buffer.clone();
+                let word = value.to_le_bytes();
+                if word.iter().all(|b| *b == word[0]) {
+                    // SAFETY: the aligned range is in bounds and the resident buffer is retained.
+                    unsafe {
+                        rec.compute(self)?.fillBuffer_range_value(
+                            &buffer,
+                            objc2_foundation::NSRange::new(*offset as usize, *size as usize),
+                            word[0],
+                        );
+                    }
+                } else {
+                    let bytes: Vec<u8> = word
+                        .into_iter()
+                        .cycle()
+                        .take((*size).min(256 * 1024) as usize)
+                        .collect();
+                    let (chunk, at) = rec.scratch.write(
+                        &mut self.scratch,
+                        &self.device,
+                        &mut *rec.created,
+                        &bytes,
+                    )?;
+                    let encoder = rec.compute(self)?;
+                    let mut written = 0;
+                    while written < *size {
+                        let count = (*size - written).min(bytes.len() as u64);
+                        // SAFETY: both ranges are in bounds; the scratch chunk remains resident until completion.
+                        unsafe {
+                            encoder.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
+                                &chunk,
+                                at as usize,
+                                &buffer,
+                                (*offset + written) as usize,
+                                count as usize,
+                            );
+                        }
+                        written += count;
+                    }
+                }
+            }
             Command::UpdateBuffer {
                 destination,
                 offset,
                 bytes,
             } => {
-                if bytes.is_empty()
-                    || bytes.len() > 65_536
-                    || !bytes.len().is_multiple_of(4)
-                    || !offset.is_multiple_of(4)
-                {
+                if bytes.is_empty() || !bytes.len().is_multiple_of(4) || !offset.is_multiple_of(4) {
                     return Err(GpuError::Contract("Invalid ordered buffer update".into()));
                 }
                 let (chunk, at) =
                     rec.scratch
                         .write(&mut self.scratch, &self.device, &mut *rec.created, bytes)?;
                 let target = self.buffers.get(*destination)?;
-                if offset + bytes.len() as u64 > target.raw.size {
+                if offset
+                    .checked_add(bytes.len() as u64)
+                    .is_none_or(|end| end > target.raw.size)
+                    || !target
+                        .raw
+                        .usage
+                        .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                {
                     return Err(GpuError::Contract("Update exceeds buffer".into()));
                 }
                 let encoder = rec.compute(self)?;

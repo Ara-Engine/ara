@@ -9,11 +9,12 @@ impl VulkanDevice {
         &self,
         cmd: vk::CommandBuffer,
         queue: Queue,
-        query: vk::QueryPool,
-        timestamp: &mut u32,
+        timing: (vk::QueryPool, &mut u32),
         scopes: &mut std::vec::IntoIter<Vec<crate::attachments::Ops>>,
         command: &Command,
+        staging: Option<vk::Buffer>,
     ) -> Result<()> {
+        let (query, timestamp) = timing;
         let device = &self.context.device;
         // SAFETY: All handles were validated, scopes checked, and command buffer is recording.
         unsafe {
@@ -322,6 +323,20 @@ impl VulkanDevice {
                             .size(*size)],
                     );
                 }
+                Command::FillBuffer {
+                    destination,
+                    offset,
+                    size,
+                    value,
+                } => {
+                    device.cmd_fill_buffer(
+                        cmd,
+                        self.buffers.get(*destination)?.raw.handle,
+                        *offset,
+                        *size,
+                        *value,
+                    );
+                }
                 Command::UpdateBuffer {
                     destination,
                     offset,
@@ -341,14 +356,25 @@ impl VulkanDevice {
                             .src_access_mask(
                                 vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
                             )
-                            .dst_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .dst_stage_mask(vk::PipelineStageFlags2::ALL_TRANSFER)
                             .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)]),
                     );
-                    device.cmd_update_buffer(cmd, buffer, *offset, bytes);
+                    if let Some(source) = staging {
+                        device.cmd_copy_buffer(
+                            cmd,
+                            source,
+                            buffer,
+                            &[vk::BufferCopy::default()
+                                .dst_offset(*offset)
+                                .size(bytes.len() as u64)],
+                        );
+                    } else {
+                        device.cmd_update_buffer(cmd, buffer, *offset, bytes);
+                    }
                     device.cmd_pipeline_barrier2(
                         cmd,
                         &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier
-                            .src_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .src_stage_mask(vk::PipelineStageFlags2::ALL_TRANSFER)
                             .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                             .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                             .dst_access_mask(

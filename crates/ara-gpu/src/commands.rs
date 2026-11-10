@@ -139,7 +139,19 @@ pub enum Command {
         /// Nonzero byte count, divisible by four.
         size: u64,
     },
-    /// An ordered update of at most 64 KiB of four-byte-aligned constants.
+    /// Fill an aligned buffer range with a repeated 32-bit pattern, outside rendering.
+    /// Use zero for a clear. Graph barriers order this transfer against other uses.
+    FillBuffer {
+        /// Transfer destination.
+        destination: Buffer,
+        /// Four-byte-aligned offset.
+        offset: u64,
+        /// Nonzero byte count divisible by four.
+        size: u64,
+        /// Repeated little-endian word.
+        value: u32,
+    },
+    /// An ordered update of four-byte-aligned data, with no 64 KiB limit.
     /// Full buffer dependencies surround the update; it is valid outside rendering.
     UpdateBuffer {
         /// Transfer destination, retained until completion.

@@ -39,6 +39,8 @@ mod encode;
 pub mod external;
 #[cfg(test)]
 mod external_tests;
+#[cfg(test)]
+mod gaps_tests;
 mod info;
 mod native;
 mod native_access;
