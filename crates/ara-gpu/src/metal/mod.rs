@@ -30,6 +30,8 @@
 //! Not yet available: mesh/task stages and HDR output.
 mod abi;
 mod acceleration;
+#[cfg(test)]
+mod barrier_tests;
 mod cache;
 #[cfg(test)]
 mod cache_tests;
