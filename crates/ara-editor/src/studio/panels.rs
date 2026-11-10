@@ -826,6 +826,91 @@ fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
     out
 }
 
+/// Opens `file` at `line`: a script in the IDE, anything else where the system opens it.
+fn open_source(s: &mut Studio, file: &str, line: Option<u32>, column: Option<u32>) {
+    if file.ends_with(".cs") {
+        let at = line.map(|l| (l, column.unwrap_or(1)));
+        super::asset_ops::open_in_ide(s, file, at);
+    } else if let Err(error) = crate::system::open_external(&s.editor.host.root().join(file)) {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+    }
+}
+
+/// Whether a diagnostic carries an exception stack (a C# fault).
+fn has_stack(d: &ara_diag::Diagnostic) -> bool {
+    d.data
+        .as_deref()
+        .is_some_and(|data| data.get("exception").is_some())
+}
+
+/// A C# fault's stack, as Unity's Console shows it: each exception (inner ones as "Caused
+/// by"), its type and message, then its frames, a frame's file and line a link that opens
+/// it. Empty for anything else.
+fn stack(s: &Studio, d: &ara_diag::Diagnostic) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let Some(value) = d.data.as_deref().and_then(|data| data.get("exception")) else {
+        return Vec::new();
+    };
+    let stack = crate::exception_stack::Stack::parse(value);
+    let mut out = Vec::new();
+    for (i, exception) in stack.nodes.iter().enumerate() {
+        let title = match i {
+            0 => format!("{}: {}", exception.kind, exception.message),
+            _ => format!("Caused by {}: {}", exception.kind, exception.message),
+        };
+        let indent = exception.depth as f32 * 10.0;
+        out.push(
+            row().child(el().w(indent)).child(
+                text(title)
+                    .text_size(11.5)
+                    .weight(600)
+                    .wrap(3)
+                    .color(c.foreground.0)
+                    .w(0.0)
+                    .grow(1.0),
+            ),
+        );
+        for frame in &exception.frames {
+            let mut line = row()
+                .gap(8.0)
+                .align(Align::Center)
+                .child(el().w(indent + 10.0))
+                .child(
+                    text(format!("at {}", frame.method))
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(c.muted_foreground.0)
+                        .wrap(1)
+                        .w(0.0)
+                        .grow(1.0),
+                );
+            if let (true, Some(file)) = (frame.link, frame.file) {
+                let shown = match frame.line {
+                    Some(n) => format!("{}:{n}", file.rsplit(['/', '\\']).next().unwrap_or(file)),
+                    None => file.to_owned(),
+                };
+                let (file, at, column) = (file.to_owned(), frame.line, frame.column);
+                line = line.child(
+                    button(l, Tone::Ghost, Size::Sm, None, &shown)
+                        .key(format!("console/detail/frame/{}", frame.index))
+                        .tooltip(format!("Open {file}"))
+                        .on_press(move |s: &mut Studio| open_source(s, &file, at, column)),
+                );
+            }
+            out.push(line);
+        }
+    }
+    if stack.truncated {
+        out.push(
+            text("The stack is longer; the rest was cut.")
+                .text_size(11.0)
+                .color(c.muted_foreground.0),
+        );
+    }
+    out
+}
+
 /// A running import (its message, progress and Cancel), or how the last one ended.
 fn import_strip(s: &Studio) -> Option<El<Studio>> {
     let l = &s.look;
@@ -1777,8 +1862,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
         let file = parts.next().unwrap_or(source).to_owned();
         let line = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
         let column = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
-        let path = s.editor.host.root().join(&file);
-        if path.is_file() {
+        if s.editor.host.root().join(&file).is_file() {
             head = head.child(
                 icon_button(
                     l,
@@ -1788,14 +1872,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     "Open source",
                 )
                 .key("console/detail/open")
-                .on_press(move |s: &mut Studio| {
-                    if file.ends_with(".cs") {
-                        let at = line.map(|l| (l, column.unwrap_or(1)));
-                        super::asset_ops::open_in_ide(s, &file, at);
-                    } else if let Err(error) = crate::system::open_external(&path) {
-                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
-                    }
-                }),
+                .on_press(move |s: &mut Studio| open_source(s, &file, line, column)),
             );
         }
     }
@@ -1804,7 +1881,11 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
             .on_press(|s: &mut Studio| s.local.console_open = None),
     );
     let mut out = col()
-        .max_h(180.0)
+        .max_h(if has_stack(&r.diagnostic) {
+            300.0
+        } else {
+            180.0
+        })
         .pad_x(12.0)
         .pad_y(8.0)
         .gap(6.0)
@@ -1846,6 +1927,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
             );
         }
     }
+    out = out.children(stack(s, &r.diagnostic));
     if !r.diagnostic.fixes.is_empty() {
         let mut fixes = row().gap(4.0);
         for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(3) {
