@@ -987,6 +987,42 @@ fn the_status_bar_shows_the_newest_problem_and_opens_it() {
 }
 
 #[test]
+fn a_settings_slider_previews_while_dragged_and_commits_once() {
+    let mut rt = open();
+    rt.update(|s| {
+        super::commands::run(s, "edit.preferences", &crate::catalog::Target::None);
+        if let Some(v) = s.local.settings.as_mut() {
+            v.query = "camera speed".into();
+        }
+    });
+    settle(&mut rt);
+    let key = "settings/viewport.cameraSpeed/track";
+    let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+    let speed = |rt: &Runtime<Studio>| {
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get("viewport.cameraSpeed")
+            .and_then(Value::as_f64)
+    };
+    let before = speed(&rt);
+    let y = r.center().y;
+    rt.pointer_move(r.left + 2.0, y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.left + 2.0, y);
+    rt.pointer_move(r.left + r.width() * 0.5, y);
+    rt.frame(FRAME);
+    assert!(rt.state().local.setting_drag.is_some(), "previewing");
+    assert_eq!(speed(&rt), before, "nothing committed mid-drag");
+    rt.pointer_up(r.left + r.width() * 0.5, y);
+    settle(&mut rt);
+    assert!(rt.state().local.setting_drag.is_none());
+    let after = speed(&rt).unwrap();
+    assert!(after > 15.0 && after < 35.0, "about halfway: {after}");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
