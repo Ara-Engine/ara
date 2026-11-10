@@ -92,6 +92,17 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 gizmo::end(s, true);
                 return Handled::Yes;
             }
+            // Esc puts a piloted Camera's move under way back.
+            if key == stillkit::el::KeyCode::ESCAPE && s.local.pilot.active() {
+                match s.local.pilot.cancel(&mut s.editor) {
+                    Ok(true) => {
+                        pilot_note(s);
+                        return Handled::Yes;
+                    }
+                    Ok(false) => {}
+                    Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
+                }
+            }
             match commands::for_key(s, key.0, tx.modifiers()) {
                 Some(id) => {
                     commands::run(s, &id, &Target::None);
@@ -243,6 +254,15 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         (PointerPhase::Cancel, _) if s.local.gizmo.is_some() => {
             gizmo::end(s, true);
             return true;
+        }
+        _ => {}
+    }
+    // Pilot Camera commits a move when it ends, so it needs to know one is under way.
+    match (e.phase, e.button) {
+        (PointerPhase::Down, Button::Middle) => s.local.navigating = true,
+        (PointerPhase::Down, Button::Left) if e.mods.alt => s.local.navigating = true,
+        (PointerPhase::Up | PointerPhase::Cancel, Button::Middle | Button::Left) => {
+            s.local.navigating = false
         }
         _ => {}
     }
@@ -492,4 +512,45 @@ fn glass_group(l: &ara_kit::look::Look) -> El<Studio> {
         .align(Align::Center)
         .radius(super::style::RADIUS + 1.0)
         .fill(super::style::tones(l).strip.with_alpha(0.94))
+}
+
+/// The open scene resolved afresh, for Pilot's checks of the Camera and its ancestors.
+fn pilot_lookup(editor: &crate::Editor) -> ara_ui::Result<crate::pilot::Lookup> {
+    crate::world::resolve(editor.host.store(), &editor.state.doc)
+        .map(std::sync::Arc::new)
+        .map_err(|_| "The open scene does not resolve; see Problems".into())
+}
+
+/// Shows what Pilot last said in the status bar.
+fn pilot_note(s: &mut Studio) {
+    if let Some(note) = s.local.pilot.take_note() {
+        super::note(s, note);
+    }
+}
+
+/// Pilot Selected Camera on and off: the Scene view takes the selected Camera's pose.
+pub(super) fn toggle_pilot(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<()> {
+    let result = s
+        .local
+        .pilot
+        .toggle(&mut s.editor, entity, &mut pilot_lookup);
+    pilot_note(s);
+    result
+}
+
+/// After a pass's input: a move under way (`navigating`) stays transient, and one that
+/// ended, or a single step such as a wheel notch (`steered`), commits to the Camera as one
+/// undoable edit; whether it changed the scene.
+pub(super) fn poll_pilot(s: &mut Studio, steered: bool) -> bool {
+    if !s.local.pilot.active() {
+        return false;
+    }
+    let navigating = s.local.navigating || s.local.flying;
+    let result = s
+        .local
+        .pilot
+        .poll(&mut s.editor, navigating, steered, &mut pilot_lookup);
+    pilot_note(s);
+    // A stopped pilot has said why in the status bar.
+    result.unwrap_or_default()
 }

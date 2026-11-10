@@ -223,9 +223,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         let mut pass = trace::Pass::begin();
         pass.phase("studio.events");
+        let before_events = rt.state().editor.state.camera;
         if pump(&mut rt, &mut surface, started, Some(&mut game))? {
             break;
         }
+        // Whether the person's own input moved the view this pass (Pilot Camera).
+        let mut steered = rt.state().editor.state.camera != before_events;
         pass.mark("events+ui");
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
@@ -488,6 +491,25 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
+        // Drop to Surface (End): the presented geometry answers its rays.
+        if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
+            let channels = compositor.channels(&renderer, &view, revision);
+            rt.update(|s| {
+                let planned =
+                    crate::surface_drop::plan(&s.editor, &scene_view, |id| channels.target_of(id));
+                let result = planned.and_then(|plan| match plan {
+                    Some((commands, base)) => s
+                        .editor
+                        .apply(commands, "Drop selection to surface", Some(base))
+                        .map(drop)
+                        .map_err(Into::into),
+                    None => Ok(()),
+                });
+                if let Err(error) = result {
+                    s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                }
+            });
+        }
         // Mesh Paint: the Scene view's presses and drags as world rays on the selection's
         // meshes; a press on none of them selects as a click would.
         let input = rt.touch(|s| std::mem::take(&mut s.local.paint_input));
@@ -691,9 +713,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if flying {
             let dt = last_fly.elapsed().as_secs_f32().min(0.1);
             let shift = modifiers().shift;
+            let before_fly = rt.state().editor.state.camera;
             rt.touch(|s| fly(s, dt, shift));
+            steered |= rt.state().editor.state.camera != before_fly;
         }
         last_fly = Instant::now();
+        // A piloted Camera follows the view; a finished move commits.
+        if rt.state().local.pilot.active() {
+            rt.update(|s| {
+                scene::poll_pilot(s, steered);
+            });
+        }
         pass.end();
         if profiling {
             rt.touch(|s| {

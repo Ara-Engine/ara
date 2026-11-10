@@ -355,6 +355,8 @@ pub struct Local {
     pub note: Option<(String, std::time::Instant)>,
     /// A one-field question open (Save Layout As): what it asks, and the text typed.
     pub prompt: Option<Prompt>,
+    /// Drop to Surface asked for: the host drops the selection at its next pass.
+    pub drop_to_surface: bool,
     /// The diagnostic service's last answer (Tools › Why?): the question and its lines.
     pub why: Option<(String, Vec<String>)>,
     /// The Agents panel shows how to connect one even while agents are connected.
@@ -412,6 +414,10 @@ pub struct Local {
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.
     pub flying: bool,
+    /// A middle-button pan or an Alt+left orbit is under way.
+    pub navigating: bool,
+    /// Pilot Selected Camera: the Camera the Scene view moves, and its committed steps.
+    pub(crate) pilot: crate::pilot::Pilot,
     /// Fly keys held down (W A S D Q E, as virtual keys).
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
