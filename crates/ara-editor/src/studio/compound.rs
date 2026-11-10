@@ -48,9 +48,7 @@ fn element_default(db: &SchemaDb, ty: &ValueType) -> Value {
 /// Edits `path` at `pointer` on every selected entity as one undo step.
 fn nested(s: &mut Studio, path: &str, pointer: &str, operation: &str, value: Value, why: &str) {
     let commands = s
-        .editor
-        .state
-        .selection
+        .inspected()
         .iter()
         .map(|entity| {
             json!({"cmd": "editor.property.nested.edit", "args": {
@@ -67,8 +65,7 @@ pub(super) fn commit_target(s: &mut Studio, target: &str, value: Value, why: &st
     match target.split_once('#') {
         Some((path, pointer)) => nested(s, path, pointer, "set", value, why),
         None => {
-            let commands =
-                crate::inspector::edit_commands(&s.editor.state.selection, target, &value);
+            let commands = crate::inspector::edit_commands(s.inspected(), target, &value);
             s.apply(commands, why);
         }
     }
@@ -235,7 +232,7 @@ fn value_rows(
                         &at,
                         &field.ty,
                         &item,
-                        &crate::shell::inspector_panel::sentence(&field.name),
+                        &crate::names::sentence(&field.name),
                         Vec::new(),
                         depth,
                         out,
@@ -365,7 +362,7 @@ fn leaf(s: &Studio, f: &Field, pointer: &str, ty: &ValueType, value: &Value) -> 
     let target = format!("{}#{pointer}", f.path);
     let key = format!("compound/{target}/value");
     if f.read_only {
-        return text(crate::shell::vfx_panel::short(value))
+        return text(crate::vfx_edit::short(value))
             .text_size(12.0)
             .color(c.muted_foreground.0);
     }
@@ -432,7 +429,7 @@ fn leaf(s: &Studio, f: &Field, pointer: &str, ty: &ValueType, value: &Value) -> 
                 }
                 trigger
             }
-            _ => text(crate::shell::vfx_panel::short(value))
+            _ => text(crate::vfx_edit::short(value))
                 .text_size(12.0)
                 .color(c.muted_foreground.0),
         },

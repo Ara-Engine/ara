@@ -1,8 +1,6 @@
 //! Native entry points for existing diagnostic and asset-reference tools.
 use super::*;
 use ara_ui::dialogs::{DialogFuture, DialogOptions};
-mod validation;
-pub(crate) use validation::ValidationService;
 
 struct Why {
     doc: String,

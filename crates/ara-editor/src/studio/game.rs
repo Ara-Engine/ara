@@ -3,8 +3,6 @@
 //! camera on the Scene's renderer); during Play, the embedded player's newest frame (D19).
 //! A click in it while playing sends the keyboard and mouse to the game; Esc, or a click
 //! outside it, gives them back.
-use std::ffi::c_void;
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -32,10 +30,27 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
     let l = &s.look;
     let status = &s.local.game;
     let playing = s.editor.state.playing.is_some();
+    let aspect = setting_str(s, "game.aspect", "free");
+    let ratio = match aspect {
+        "16x9" => Some(16.0 / 9.0),
+        "16x10" => Some(16.0 / 10.0),
+        "21x9" => Some(21.0 / 9.0),
+        "4x3" => Some(4.0 / 3.0),
+        "9x16" => Some(9.0 / 16.0),
+        _ => None,
+    };
+    // A fixed aspect letterboxes the player inside the area (Unity's Game view).
+    let fitted = ratio.and_then(|ratio| {
+        let area = s.local.rects.get("game/area")?;
+        let (w, h) = (area.width(), area.height());
+        Some(if w / h > ratio {
+            (h * ratio, h)
+        } else {
+            (w, w / ratio)
+        })
+    });
     let mut view = native(GAME_LAYER)
         .key("game/view")
-        .grow(1.0)
-        .w_full()
         .focusable()
         .label("Game view")
         .on_pointer(|s: &mut super::Studio, e, _| {
@@ -45,11 +60,18 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
             }
             false
         });
+    view = match fitted {
+        Some((w, h)) => view.w(w).h(h),
+        None => view.grow(1.0).w_full(),
+    };
+    // With nothing live to show, a notice sits on the panel's own surface, so it reads
+    // whatever the view's hole would show.
     let notice = |glyph, title: &str, detail: &str| {
         col()
             .absolute(0.0, 0.0)
             .w_full()
             .h_full()
+            .fill(super::style::tones(l).well)
             .justify(Justify::Center)
             .align(Align::Center)
             .child(empty(l, glyph, title, detail, None))
@@ -110,7 +132,187 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
                 .child(stillkit::el::el().h(12.0)),
         );
     }
-    view
+    // A host and its clients side by side: each tile named, the controlled one marked;
+    // a click on a tile gives it the keyboard and mouse.
+    for &(player, [x, y, w, h], live) in &status.players {
+        let on = player == s.play.client;
+        let name = match player {
+            0 => "Host".to_owned(),
+            n => format!("Client {n}"),
+        };
+        view = view.child(
+            stillkit::el::el()
+                .key(format!("game/tile/{player}"))
+                .absolute(x as f32, y as f32)
+                .w(w as f32)
+                .h(h as f32)
+                .label(format!("{name}: click to control"))
+                .on_pointer(move |s: &mut super::Studio, e, _| {
+                    if e.phase == PointerPhase::Down {
+                        s.play.client = player;
+                        s.local.game_captured = true;
+                        return true;
+                    }
+                    false
+                })
+                .child(
+                    row()
+                        .absolute(6.0, 6.0)
+                        .h(20.0)
+                        .pad_x(8.0)
+                        .gap(6.0)
+                        .align(Align::Center)
+                        .radius(super::style::RADIUS)
+                        .fill(if on {
+                            l.c.primary.0.with_alpha(0.9)
+                        } else {
+                            super::style::tones(l).strip.with_alpha(0.9)
+                        })
+                        .child(
+                            text(if live {
+                                name
+                            } else {
+                                format!("{name} · starting…")
+                            })
+                            .text_size(11.0)
+                            .weight(600)
+                            .color(if on {
+                                l.c.primary_foreground.0
+                            } else {
+                                l.c.muted_foreground.0
+                            }),
+                        ),
+                ),
+        );
+    }
+    if setting_bool(s, "game.stats") {
+        let text_line = match status.fps {
+            Some(fps) => format!(
+                "{fps} fps · {} × {}",
+                s.editor.game_size[0], s.editor.game_size[1]
+            ),
+            None => format!("{} × {}", s.editor.game_size[0], s.editor.game_size[1]),
+        };
+        view = view.child(
+            row()
+                .absolute(8.0, 8.0)
+                .h(22.0)
+                .pad_x(8.0)
+                .align(Align::Center)
+                .radius(super::style::RADIUS)
+                .fill(super::style::tones(l).strip.with_alpha(0.9))
+                .child(
+                    text(text_line)
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(l.c.muted_foreground.0),
+                ),
+        );
+    }
+    let area = col()
+        .key("game/area")
+        .grow(1.0)
+        .min_h(0.0)
+        .align(Align::Center)
+        .justify(Justify::Center)
+        .fill(stillkit::Rgba::new(0.0, 0.0, 0.0, 1.0))
+        .child(view);
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .child(toolbar(s, aspect))
+        .child(area)
+}
+
+fn setting_str<'a>(s: &'a super::Studio, key: &str, default: &'a str) -> &'a str {
+    s.editor
+        .state
+        .settings
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(default)
+}
+
+fn setting_bool(s: &super::Studio, key: &str) -> bool {
+    s.editor
+        .state
+        .settings
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// The Game view's toolbar (Unity's): aspect, Maximize on Play, statistics.
+fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
+    use ara_kit::{icons, ui::*};
+    use stillkit::el::{Align, row};
+    let l = &s.look;
+    const KEY: &str = "game/aspect";
+    const ASPECTS: [(&str, &str); 6] = [
+        ("free", "Free aspect"),
+        ("16x9", "16:9"),
+        ("16x10", "16:10"),
+        ("21x9", "21:9"),
+        ("4x3", "4:3"),
+        ("9x16", "9:16 portrait"),
+    ];
+    let title = ASPECTS
+        .iter()
+        .find(|(k, _)| *k == aspect)
+        .map_or("Free aspect", |(_, t)| t);
+    let open = s.local.select.as_deref() == Some(KEY);
+    let mut trigger = select(l, Size::Sm, KEY, title)
+        .w(140.0)
+        .expanded(open)
+        .on_press(|s: &mut super::Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if open {
+        let items = ASPECTS
+            .iter()
+            .map(|(key, name)| {
+                menu_check(l, &format!("{KEY}/{key}"), name, *key == aspect).on_press(
+                    move |s: &mut super::Studio| {
+                        s.local.select = None;
+                        super::commands::run(
+                            s,
+                            &format!("game.aspect.{key}"),
+                            &crate::catalog::Target::None,
+                        );
+                    },
+                )
+            })
+            .collect();
+        trigger = trigger.overlay(
+            stillkit::el::menu(menu_panel(l, items))
+                .match_width()
+                .on_dismiss(|s: &mut super::Studio| s.local.select = None),
+        );
+    }
+    let flag = |id: &'static str, key: &str, glyph, label: &str| {
+        super::scene_overlays::toggle(l, glyph, label, setting_bool(s, key))
+            .key(format!("game/{id}"))
+            .on_press(move |s: &mut super::Studio| {
+                super::commands::run(s, id, &crate::catalog::Target::None)
+            })
+    };
+    row()
+        .h(super::style::TOOLBAR)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .child(trigger)
+        .child(stillkit::el::el().grow(1.0))
+        .child(flag(
+            "game.maximize_on_play",
+            "game.maximizeOnPlay",
+            icons::MAXIMIZE_2,
+            "Maximize on Play",
+        ))
+        .child(flag("game.stats", "game.stats", icons::GAUGE, "Statistics"))
 }
 
 /// What the Game view shows, for its panel's notices.
@@ -126,6 +328,32 @@ pub struct Status {
     pub phase: Option<String>,
     /// Why Play failed to start or stopped, when it did.
     pub fault: Option<String>,
+    /// Frames presented in the last second while a player runs (the Stats readout).
+    pub fps: Option<u32>,
+    /// With several players (a host and its clients), each one's tile: the player, its
+    /// rect in the view (design px: x, y, width, height), and whether its frame shows.
+    pub players: Vec<(usize, [i32; 4], bool)>,
+}
+
+/// `count` tiles filling `size` in a grid (columns first), `gap` apart: Unreal's
+/// side-by-side clients.
+pub(super) fn tiles(count: usize, size: [f32; 2], gap: f32) -> Vec<[f32; 4]> {
+    let count = count.max(1);
+    let columns = (count as f64).sqrt().ceil() as usize;
+    let rows = count.div_ceil(columns);
+    let w = (size[0] - gap * (columns - 1) as f32) / columns as f32;
+    let h = (size[1] - gap * (rows - 1) as f32) / rows as f32;
+    (0..count)
+        .map(|i| {
+            let (c, r) = (i % columns, i / columns);
+            [
+                c as f32 * (w + gap),
+                r as f32 * (h + gap),
+                w.max(1.0),
+                h.max(1.0),
+            ]
+        })
+        .collect()
 }
 
 /// The studio's answer to the Game preview: the Game view's size and the scene's camera.
@@ -168,8 +396,11 @@ impl GameHost for Host {
 pub(super) struct Game {
     layer: super::layer::Layer,
     preview: Preview,
-    /// The player shown (the authority, or the local player), and its world.
-    player: Option<(String, usize, PlayerView)>,
+    /// The players shown (a host and its clients side by side, or the only one), by
+    /// player number, with their world.
+    players: Vec<(String, usize, PlayerView)>,
+    /// The player the keyboard and mouse go to (`PlayControls::client`).
+    pub client: usize,
     host: Host,
     /// The image last presented and at what size: an unchanged one is not drawn again.
     shown: Option<(u32, [u32; 2])>,
@@ -180,6 +411,8 @@ pub(super) struct Game {
     /// Play's start phase and fault, read from `play.status` on a cadence.
     play: (Option<String>, Option<String>),
     checked: Option<std::time::Instant>,
+    /// Live frames presented since `.0`, and the last full second's count.
+    presents: (std::time::Instant, u32, u32),
 }
 
 impl Game {
@@ -192,12 +425,14 @@ impl Game {
             // SAFETY: forwarded caller contract.
             layer: unsafe { super::layer::Layer::new(renderer, images)? },
             preview: Preview::default(),
-            player: None,
+            players: Vec::new(),
+            client: 0,
             host: Host::default(),
             shown: None,
             held: Default::default(),
             pointer: None,
             play: (None, None),
+            presents: (std::time::Instant::now(), 0, 0),
             checked: None,
         })
     }
@@ -220,7 +455,7 @@ impl Game {
     /// present whichever is on screen into `layer` at `extent` physical pixels. `layer` is
     /// None while the Game view is not laid out. `resolved` is the scene at `revision`.
     /// # Safety
-    /// `layer` is the live `CAMetalLayer` of the Game view.
+    /// `layer` is the Game view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
@@ -230,7 +465,7 @@ impl Game {
         view: &DocumentView,
         resolved: &Arc<Resolved>,
         revision: u64,
-        layer: Option<(NonNull<c_void>, [u32; 2])>,
+        layer: Option<(super::present::Target, [u32; 2])>,
         scale: f32,
     ) -> Result<Status> {
         self.host.frame = layer.map(|(_, extent)| extent);
@@ -242,40 +477,62 @@ impl Game {
         let ready = self.layer.ready()?;
         let gpu = ui_device(renderer.gpu());
         self.host.live = false;
-        let mut image = None;
+        // What to draw: each live player's frame in its tile, else the preview.
+        let mut images: Vec<(u32, [f32; 4])> = Vec::new();
+        let mut players_shown = Vec::new();
         self.check_play(editor);
         // New surfaces and frames arrive through the shared mailbox.
         if let Some(surfaces) = editor.play_surfaces.as_mut() {
             surfaces.poll();
         }
         if ready {
-            if let Some((world, player)) = self.playing(editor) {
+            if let Some((world, players)) = self.playing(editor) {
                 let surfaces = editor
                     .play_surfaces
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("Play has no embedded surfaces"))?;
-                if self
-                    .player
-                    .as_ref()
-                    .is_none_or(|(w, p, _)| *w != world || *p != player)
-                {
-                    self.close_player(Some(&*surfaces))?;
-                    self.player = Some((world.clone(), player, PlayerView::default()));
+                // Players gone (or of another world) close; new ones open.
+                let mut kept = Vec::new();
+                for (w, p, mut view) in std::mem::take(&mut self.players) {
+                    if w == world && players.contains(&p) {
+                        kept.push((w, p, view));
+                    } else {
+                        view.close(Some(&w), p, Some(&*surfaces), &mut self.layer.ui)
+                            .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    }
                 }
-                if let (Some((_, _, view)), Some(extent)) = (&mut self.player, self.host.frame) {
-                    view.update(
-                        &world,
-                        player,
-                        extent,
-                        scale,
-                        surfaces,
-                        &mut self.layer.ui,
-                        gpu,
-                    )
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                    self.host.live = view.info().live;
-                    if self.host.live {
-                        image = Some(player_texture(player));
+                for p in &players {
+                    if !kept.iter().any(|(_, q, _)| q == p) {
+                        kept.push((world.clone(), *p, PlayerView::default()));
+                    }
+                }
+                kept.sort_by_key(|(_, p, _)| *p);
+                self.players = kept;
+                if let Some(extent) = self.host.frame {
+                    let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
+                    let gap = if self.players.len() > 1 { 4.0 } else { 0.0 };
+                    let rects = tiles(self.players.len(), logical, gap);
+                    for ((_, player, view), r) in self.players.iter_mut().zip(rects) {
+                        let px = [
+                            ((r[2] * scale) as u32).max(1),
+                            ((r[3] * scale) as u32).max(1),
+                        ];
+                        view.update(
+                            &world,
+                            *player,
+                            px,
+                            scale,
+                            surfaces,
+                            &mut self.layer.ui,
+                            gpu,
+                        )
+                        .map_err(|e| anyhow::anyhow!("{e}"))?;
+                        let live = view.info().live;
+                        self.host.live |= live;
+                        if live {
+                            images.push((player_texture(*player), r));
+                        }
+                        players_shown.push((*player, r.map(|v| v.round() as i32), live));
                     }
                 }
             } else {
@@ -291,8 +548,12 @@ impl Game {
                     &mut self.layer.ui,
                 )
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
-            if image.is_none() && self.host.preview.is_some() {
-                image = Some(game_preview::texture());
+            if images.is_empty()
+                && self.host.preview.is_some()
+                && let Some(extent) = self.host.frame
+            {
+                let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
+                images.push((game_preview::texture(), [0.0, 0.0, logical[0], logical[1]]));
             }
         }
         let status = Status {
@@ -301,28 +562,37 @@ impl Game {
             camera: self.host.gameplay_camera(editor).is_some(),
             phase: self.play.0.clone(),
             fault: self.play.1.clone(),
+            fps: self.host.live.then_some(self.presents.2),
+            players: if players_shown.len() > 1 {
+                players_shown
+            } else {
+                Vec::new()
+            },
         };
-        let (Some((layer, extent)), Some(image), true) = (layer, image, ready) else {
+        let (Some((layer, extent)), Some(&(image, _)), true) = (layer, images.first(), ready)
+        else {
             return Ok(status);
         };
         // A player's frame changes every pass; a preview only when it re-attaches.
         if self.shown == Some((image, extent)) && !self.host.live && !self.preview_changed() {
             return Ok(status);
         }
-        let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
-        let rect = Box2 {
-            x: 0.0,
-            y: 0.0,
-            w: logical[0],
-            h: logical[1],
-        };
         let list = DisplayList {
-            commands: vec![Draw::Image {
-                node: 1,
-                rect,
-                image,
-                tint: Color(255, 255, 255, 255),
-            }],
+            commands: images
+                .iter()
+                .enumerate()
+                .map(|(i, (image, r))| Draw::Image {
+                    node: 1 + i as u64,
+                    rect: Box2 {
+                        x: r[0],
+                        y: r[1],
+                        w: r[2],
+                        h: r[3],
+                    },
+                    image: *image,
+                    tint: Color(255, 255, 255, 255),
+                })
+                .collect(),
             glyphs: Vec::new(),
         };
         // SAFETY: forwarded caller contract.
@@ -331,6 +601,13 @@ impl Game {
                 .draw(renderer, layer, extent, scale, &list, &[])?
         };
         self.shown = Some((image, extent));
+        if self.host.live {
+            let (since, count, _) = &mut self.presents;
+            *count += 1;
+            if since.elapsed() >= std::time::Duration::from_secs(1) {
+                self.presents = (std::time::Instant::now(), 0, *count);
+            }
+        }
         Ok(status)
     }
 
@@ -397,17 +674,29 @@ impl Game {
         self.host.preview.is_some()
     }
 
-    /// The world and player Play shows in the Game view, while it plays there.
-    fn playing(&self, editor: &Editor) -> Option<(String, usize)> {
+    /// The world and players Play shows in the Game view, while it plays there.
+    fn playing(&self, editor: &Editor) -> Option<(String, Vec<usize>)> {
         editor.state.playing.as_ref()?;
         let world = editor.play_world.clone()?;
         let surfaces = editor.play_surfaces.as_ref()?;
-        let player = surfaces.surfaces(&world).first()?.player;
+        let mut players: Vec<usize> = surfaces.surfaces(&world).iter().map(|s| s.player).collect();
+        players.sort_unstable();
+        players.dedup();
+        (!players.is_empty()).then_some((world, players))
+    }
+
+    /// The player input goes to: the controlled client when it shows, else the first.
+    fn target(&self, editor: &Editor) -> Option<(String, usize)> {
+        let (world, players) = self.playing(editor)?;
+        let player = match players.contains(&self.client) {
+            true => self.client,
+            false => players[0],
+        };
         Some((world, player))
     }
 
     fn close_player(&mut self, surfaces: Option<&ara_play_host::embed::Surfaces>) -> Result<()> {
-        if let Some((world, player, mut view)) = self.player.take() {
+        for (world, player, mut view) in std::mem::take(&mut self.players) {
             view.close(Some(&world), player, surfaces, &mut self.layer.ui)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
@@ -418,7 +707,7 @@ impl Game {
     /// whether it was the game's (the editor must not also handle it).
     pub fn input(&mut self, editor: &Editor, event: &stillkit::Event) -> bool {
         use stillkit::Event;
-        let Some((world, player)) = self.playing(editor) else {
+        let Some((world, player)) = self.target(editor) else {
             return false;
         };
         let events = match *event {
@@ -465,7 +754,7 @@ impl Game {
         self.held.clear();
         self.pointer = None;
         if let (Some((world, player)), Some(surfaces)) =
-            (self.playing(editor), &editor.play_surfaces)
+            (self.target(editor), &editor.play_surfaces)
         {
             surfaces.device(&world, player, vec![DeviceEvent::FocusLost]);
         }

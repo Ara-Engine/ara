@@ -1,10 +1,11 @@
 //! Compatible selected importers share controls; their documents remain independent.
-mod commands;
 mod defaults;
 #[cfg(test)]
 mod tests;
 mod view;
 use super::*;
+use crate::import_edit as commands;
+use crate::import_edit::settings;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Source {
@@ -27,25 +28,7 @@ pub(crate) struct State {
     default_type: String,
 }
 
-/// One edited override; lowering merges with each latest independent sidecar.
-pub(crate) enum Change {
-    Setting {
-        doc: String,
-        field: String,
-        value: Value,
-    },
-    Preset {
-        doc: String,
-        preset: Option<ara_asset::CookPreset>,
-    },
-    ProjectField {
-        importer: String,
-        field: String,
-        value: Value,
-    },
-    ProjectPreset(ara_asset::CookPreset),
-    Reset(String),
-}
+pub(crate) use crate::import_edit::Change;
 
 impl Shell {
     /// Native bool/numeric/Select actions commit once; text retains an explicit draft.
@@ -57,7 +40,7 @@ impl Shell {
         value: Value,
     ) -> ara_ui::Result<()> {
         let changes = self.import_batch_changes(group, key, value)?;
-        commands::apply(editor, changes, "Edit selected importer settings")?;
+        commands::apply_changes(editor, changes, "Edit selected importer settings")?;
         Ok(())
     }
     pub(super) fn import_batch_changes(
@@ -164,38 +147,8 @@ impl Shell {
     }
 }
 
-pub(crate) fn apply_changes(
-    editor: &mut Editor,
-    changes: Vec<Change>,
-    why: &str,
-) -> ara_ui::Result<bool> {
-    commands::apply(editor, changes, why)
-}
-pub(crate) fn inherited_defaults(
-    editor: &Editor,
-    importer: &str,
-    mut builtin: Value,
-) -> ara_ui::Result<Value> {
-    let inherited = commands::policy(editor)?.effective_settings(importer, &json!({}))?;
-    if let Some(fields) = inherited.as_object() {
-        for (key, value) in fields {
-            builtin[key] = value.clone();
-        }
-    }
-    Ok(builtin)
-}
-pub(crate) fn enum_values(options: Vec<String>, nullable: bool) -> Vec<(Value, String)> {
-    let mut values = Vec::new();
-    if nullable {
-        values.push((Value::Null, "Use source/global quality".into()));
-    }
-    values.extend(
-        options
-            .into_iter()
-            .map(|option| (json!(option), super::inspector_panel::sentence(&option))),
-    );
-    values
-}
+pub(crate) use crate::import_edit::{apply_changes, enum_values, inherited_defaults};
+
 pub(super) fn numeric_bounds(
     db: &ara_schema::SchemaDb,
     field: Option<&ara_schema::FieldDesc>,
@@ -214,22 +167,4 @@ pub(super) fn numeric_bounds(
     } else {
         String::new()
     }
-}
-
-fn settings(importer: &str) -> ara_ui::Result<(Value, &'static str)> {
-    Ok(match importer {
-        "ara.texture" => (
-            ara_json::to_value(&ara_importers::TextureSettings::default())?,
-            "TextureSettings",
-        ),
-        "ara.audio" => (
-            ara_json::to_value(&ara_importers::audio::Settings::default())?,
-            "AudioImportSettings",
-        ),
-        "ara.gltf" | "ara.fbx" => (
-            ara_json::to_value(&ara_importers::MeshSettings::default())?,
-            "MeshSettings",
-        ),
-        _ => return Err(format!("Importer {importer} has no editable shared schema").into()),
-    })
 }

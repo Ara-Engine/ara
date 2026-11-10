@@ -145,6 +145,16 @@ impl Previews {
         }
     }
 
+    /// Renders every picture again (Rebuild Thumbnails): the cache goes, and what Assets
+    /// shows is asked for anew.
+    pub fn rebuild(&mut self) {
+        if let Some(queue) = self.queue.as_mut() {
+            queue.invalidate_all();
+        }
+        self.asked.clear();
+        self.images.clear();
+    }
+
     /// Takes finished pictures; whether any landed.
     pub fn poll(&mut self) -> bool {
         let Some(queue) = self.queue.as_mut() else {
@@ -197,6 +207,8 @@ impl std::fmt::Debug for Previews {
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
+    /// The keyboard bindings in force (`commands::refresh_keys`).
+    pub(crate) bindings: super::commands::Bindings,
     /// The open title-bar menu, by its name.
     pub menu: Option<&'static str>,
     /// The command palette: open, query, highlighted result.
@@ -229,6 +241,50 @@ pub struct Local {
     /// The open colour picker: its field path and the colour it holds (kept as HSV, so a
     /// grey keeps its hue while dragging).
     pub picker: Option<(String, stillkit_kit::Hsva)>,
+    /// A Scene overlay's grip held down: which overlay, and where in it (overlay px).
+    pub overlay_grab: Option<(&'static str, (f32, f32))>,
+    /// A Scene overlay being dragged to a new dock.
+    pub overlay_drag: Option<super::scene_overlays::Drag>,
+    /// A Scene overlay's right-click menu: which, and where (window px).
+    pub overlay_menu: Option<(&'static str, (f32, f32))>,
+    /// A collapsed Scene overlay opened as a popup.
+    pub overlay_popup: Option<&'static str>,
+    /// A Scene overlay's settings panel, open.
+    pub overlay_settings: Option<&'static str>,
+    /// A box being dragged in the Scene view to select what it covers: where it started
+    /// and where the pointer is (view px), and whether it adds to the selection.
+    pub marquee: Option<([f32; 2], [f32; 2], bool)>,
+    /// The Inspector locked on these entities (Unity's padlock): selecting others leaves
+    /// it showing them.
+    pub inspector_lock: Option<Vec<String>>,
+    /// Properties the Inspector shows: those whose name or component matches.
+    pub inspector_search: String,
+    /// A component's values copied from the Inspector: its type and its fields.
+    pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// The last bus record read into the Console (Clear keeps it, so cleared records stay
+    /// gone).
+    pub log_seen: u64,
+    /// The Console's search: records whose message, code, origin or source match.
+    pub console_search: String,
+    /// The Console merges repeated records (Unity's Collapse).
+    pub console_collapse: bool,
+    /// The importer type whose project defaults the Import panel shows (`ara.texture`…).
+    pub import_defaults: &'static str,
+    /// The Console's group of this computer's messages (graphics drivers, overlay layers)
+    /// is open.
+    pub console_machine: bool,
+    /// Entities copied with Edit › Copy: each one's name and components.
+    pub entity_clipboard: Option<Vec<serde_json::Value>>,
+    /// A field value copied from the Inspector's field menu.
+    pub field_clipboard: Option<serde_json::Value>,
+    /// The Build window's package format (an index into `build::package_formats`).
+    pub package_format: usize,
+    /// File › Exit asked to close the editor (documents are saved as it closes).
+    pub quit: bool,
+    /// What Isolate Selection hid, to show again when it is run a second time.
+    pub isolated: Option<Vec<String>>,
+    /// The Scene tab's Overlays menu, open.
+    pub overlays_menu: bool,
     /// The open reference picker (an asset or entity field): its path and the search typed.
     pub reference: Option<(String, String)>,
     /// What the Game view shows (the host loop reports it).
@@ -239,8 +295,8 @@ pub struct Local {
     pub select: Option<String>,
     /// The open context menu: its layout, what it acts on, and where (window design px).
     pub(crate) context: Option<(
-        crate::shell::commands::menus::Context,
-        crate::shell::commands::Target,
+        crate::catalog::menus::Context,
+        crate::catalog::Target,
         (f32, f32),
     )>,
     /// An element to focus once the view shows it (a command that opened a field).
@@ -275,10 +331,79 @@ pub struct Local {
     pub profiling: bool,
     /// The Profiler's picked frame (its id), or None for the newest.
     pub profile_frame: Option<u64>,
+    /// What the Profiler records: a running Play player, or (None) the editor itself.
+    pub(crate) profiler_target: Option<crate::play_profiling::Scope>,
+    /// The player request in flight and what it asked.
+    pub(crate) profiler_ticket:
+        Option<(crate::play_profiling::Ticket, crate::play_profiling::Action)>,
+    /// When the players to profile were last listed, and the player's frames last read.
+    pub profiler_polled: Option<(std::time::Instant, std::time::Instant)>,
+    /// The picked player records (its last status said so).
+    pub profiler_player_recording: bool,
     /// The Lighting panel's filter.
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").
     pub lighting_menu: Option<&'static str>,
+    /// The light whose colour-temperature menu is open in the Lighting list.
+    pub lighting_color: Option<String>,
+    /// The Play options menu (mode, clients, network, Simulate, Eject, Keep), open.
+    pub play_menu: bool,
+    /// File operations still running on host jobs: each job and what it does.
+    pub asset_jobs: Vec<(String, String)>,
+    /// Entities a script being named attaches to once it compiles (New Script from the
+    /// Inspector).
+    pub script_attach: Vec<String>,
+    /// What the last request did, shown in the status bar for a few seconds.
+    pub note: Option<(String, std::time::Instant)>,
+    /// A one-field question open (Save Layout As): what it asks, and the text typed.
+    pub prompt: Option<Prompt>,
+    /// Drop to Surface asked for: the host drops the selection at its next pass.
+    pub drop_to_surface: bool,
+    /// The diagnostic service's last answer (Tools › Why?): the question and its lines.
+    pub why: Option<(String, Vec<String>)>,
+    /// The Agents panel shows how to connect one even while agents are connected.
+    pub agents_connect: bool,
+    /// Each agent client's detection and setup (the Agents panel's Connect rows).
+    pub(crate) agent_setups: crate::agent_setup::AgentSetups,
+    /// Each agent client's mark, by client and whether for the light scheme.
+    pub(crate) agent_logos:
+        std::collections::BTreeMap<(ara_agents::Client, bool), std::sync::Arc<stillkit::Image>>,
+    /// The Profiler hides the baseline comparison (Profiler › Compare off).
+    pub profiler_hide_compare: bool,
+    /// Opened in the background (`--background`): fields are not given keyboard focus (on
+    /// Windows that would bring the window forward) until a person activates the window.
+    pub background: bool,
+    /// The renderer's device report (`DeviceInfo` as JSON), once it runs.
+    pub device: String,
+    /// About Ara or System Info, open.
+    pub(crate) about: Option<super::about::Page>,
+    /// Mesh Paint input from the Scene view for the host to run (it holds the renderer's
+    /// scene): presses, drags and releases, at places across the view (0..1).
+    pub paint_input: Vec<PaintInput>,
+    /// A Mesh Paint stroke is under way (the host reports it).
+    pub painting: bool,
+    /// Where the pointer rests in Mesh Paint mode (0..1 across the view), for the host to
+    /// place the brush ring.
+    pub paint_hover: Option<(f32, f32)>,
+    /// The brush ring: its centre and radius in view px, over the mesh under the pointer.
+    pub paint_ring: Option<(f32, f32, f32)>,
+    /// The History transaction opened to its changes.
+    pub history_open: Option<String>,
+    /// The History search: transactions whose description or author match.
+    pub history_search: String,
+    /// Which page of the History list shows, newest first (History › Older and Newer).
+    pub history_page: usize,
+    /// The last Assets search cleared this session (Restore Removed Assets Search).
+    pub assets_cleared_query: Option<String>,
+    /// The renderer's latest reflection probe report (Lighting › Refresh Probe Status).
+    pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
+    /// A floating window being moved or resized.
+    pub float_drag: Option<FloatDrag>,
+    /// A dock tab being dragged: its panel and where the pointer is (window design px).
+    pub tab_drag: Option<(String, (f32, f32))>,
+    /// Each Scene overlay's length along its edge when last shown expanded (design px), so
+    /// one squeezed to its icon knows when it fits again.
+    pub overlay_lengths: std::collections::BTreeMap<&'static str, f32>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
@@ -296,10 +421,91 @@ pub struct Local {
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.
     pub flying: bool,
+    /// A Settings number dragged on its slider: the key and the value shown until the
+    /// release commits it as one settings edit.
+    pub setting_drag: Option<(&'static str, f64)>,
+    /// The Hierarchy row under the pointer: its eye and lock show (Unity's).
+    pub hierarchy_hover: Option<String>,
+    /// The command Settings › Keyboard shortcuts is recording a chord for.
+    pub recording_shortcut: Option<&'static str>,
+    /// A middle-button pan or an Alt+left orbit is under way.
+    pub navigating: bool,
+    /// Pilot Selected Camera: the Camera the Scene view moves, and its committed steps.
+    pub(crate) pilot: crate::pilot::Pilot,
     /// Fly keys held down (W A S D Q E, as virtual keys).
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
-    pub gizmo_hover: Option<crate::shell::overlay::Handle>,
+    pub gizmo_hover: Option<crate::overlay::Handle>,
+    /// A change to the OS window the host makes on its next pass.
+    pub window: Option<WindowRequest>,
+    /// Problems shown: errors, warnings.
+    pub problems: [bool; 2],
+    /// The Problems search: rows whose message, code or file match.
+    pub problems_search: String,
+    /// Problems rows opened to their explanation (Why?), by bus sequence number.
+    pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A floating window being moved (its title bar) or resized (its corner).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FloatDrag {
+    /// The window's id.
+    pub id: String,
+    /// Resized, else moved.
+    pub resize: bool,
+    /// Its rect when the gesture began (design px).
+    pub start: [f32; 4],
+    /// The pointer's travel since (design px).
+    pub travel: (f32, f32),
+}
+
+impl FloatDrag {
+    /// The rect the gesture gives now.
+    pub fn rect(&self) -> [f32; 4] {
+        let [x, y, w, h] = self.start;
+        let (dx, dy) = self.travel;
+        match self.resize {
+            true => [x, y, w + dx, h + dy],
+            false => [x + dx, y + dy, w, h],
+        }
+    }
+}
+
+/// A Mesh Paint pointer event from the Scene view, at a place across it (0..1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PaintInput {
+    /// The left button went down: paint, fill, flood or pick there.
+    Down(f32, f32),
+    /// The stroke moved there.
+    Move(f32, f32),
+    /// Released: the stroke commits.
+    Up,
+    /// Escape or focus loss: the stroke is dropped.
+    Cancel,
+}
+
+/// A one-field question: its title, the text typed, and what Enter does with it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Prompt {
+    /// What it asks.
+    pub title: &'static str,
+    /// The text typed so far.
+    pub text: String,
+    /// What the field shows while empty.
+    pub hint: &'static str,
+    /// The button that runs it.
+    pub ok: &'static str,
+    /// The command Enter runs, with the text as its target.
+    pub then: &'static str,
+}
+
+/// A change to the OS window (Window › Minimize, Maximize or Restore).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowRequest {
+    /// Minimize the window.
+    Minimize,
+    /// Maximize it, or restore it when it is.
+    Maximize,
 }
 
 /// The studio's runtime state.
@@ -317,7 +523,7 @@ pub struct Studio {
     /// The window's size in design px.
     pub size: (f32, f32),
     /// The project's files, scanned in the background (Assets).
-    pub(crate) assets: Option<crate::shell::assets::Browser>,
+    pub(crate) assets: Option<crate::assets::Browser>,
     /// Asset thumbnails rendered off-thread (models, materials, textures), by storage path.
     pub(crate) previews: Previews,
     /// The diagnostics bus so far (Console, Problems), oldest first.
@@ -329,6 +535,16 @@ pub struct Studio {
     pub graph: super::graph::Page,
     /// The VFX page's preview (`studio::vfx`).
     pub vfx: super::vfx::Page,
+    /// Builds: the running export, the last build and its packages (`studio::build_page`).
+    pub(crate) builder: crate::build::Builder,
+    /// Play's runtime controls: Inspect, runtime edits, Keep, Eject and Possess, Simulate.
+    pub(crate) play: crate::play_controls::PlayControls,
+    /// File imports: their checks, a conflict choice, the running imports.
+    pub(crate) importer: crate::asset_import::Importer,
+    /// C# requests in flight: a reload in Play, module discovery for the IDE.
+    pub(crate) scripts: super::scripts::Scripts,
+    /// Mesh Paint's stroke under way (run by the host on the Scene's meshes).
+    pub(crate) painter: crate::painter::Painter,
 }
 
 impl Studio {
@@ -342,6 +558,8 @@ impl Studio {
             frame: Frame::default(),
             local: Local {
                 console: [true; 3],
+                problems: [true; 2],
+                import_defaults: "ara.texture",
                 ..Local::default()
             },
             size,
@@ -351,8 +569,14 @@ impl Studio {
             profile: Arc::default(),
             graph: Default::default(),
             vfx: Default::default(),
+            builder: Default::default(),
+            play: Default::default(),
+            importer: Default::default(),
+            scripts: Default::default(),
+            painter: Default::default(),
         };
         studio.resolve();
+        super::commands::refresh_keys(&mut studio);
         studio
     }
 
@@ -403,9 +627,11 @@ impl Studio {
         true
     }
 
-    /// Reads new bus records into [`Self::logs`] (bounded to the last 2000); whether any came.
+    /// Reads new bus records into [`Self::logs`] (bounded to the last 2000), pausing Play
+    /// on an error with Error Pause on; whether any came.
     pub fn poll_logs(&mut self) -> bool {
-        let since = self.logs.last().map_or(0, |r| r.seq);
+        // Read on from the last record seen, so Clear stays clear.
+        let since = self.local.log_seen;
         let Ok(logs) = self.editor.action(
             "logs",
             json!({"group": false, "limit": 500, "since": since}),
@@ -421,9 +647,33 @@ impl Studio {
                 .filter_map(LogRow::from_entry)
                 .filter(|r| r.seq > since),
         );
+        self.local.log_seen = self.logs.last().map_or(since, |r| r.seq.max(since));
+        // Error Pause: an error during Play pauses it.
+        let error = self.logs[before..]
+            .iter()
+            .any(|r| r.severity == ara_diag::Severity::Error);
+        let pause = self
+            .editor
+            .state
+            .settings
+            .get("console.errorPause")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if error && pause && self.editor.state.playing == Some(true) {
+            super::commands::run(self, "play.pause", &crate::catalog::Target::None);
+        }
         let excess = self.logs.len().saturating_sub(2000);
         self.logs.drain(..excess);
         self.logs.len() != before || excess > 0
+    }
+
+    /// The entities the Inspector shows and edits: the locked ones while it is locked
+    /// (and one of them still exists), else the selection.
+    pub fn inspected(&self) -> &[String] {
+        match &self.local.inspector_lock {
+            Some(ids) if ids.iter().any(|id| self.resolved.contains_key(id)) => ids,
+            _ => &self.editor.state.selection,
+        }
     }
 
     /// An entity's display name.
