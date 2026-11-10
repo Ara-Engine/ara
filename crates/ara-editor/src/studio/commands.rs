@@ -1825,6 +1825,17 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         "assets.import.cancel" => s.importer.cancel(e),
+        // Import Defaults: the Import panel on the project's importer defaults.
+        "assets.import_defaults" => {
+            e.state.asset_path = None;
+            s.local.inspect_asset = false;
+            act(
+                &mut s.editor,
+                "editor.layout.show",
+                json!({"panel": "import"}),
+            )
+            .and_then(|()| act(&mut s.editor, "editor.focus", json!({"panel": "import"})))
+        }
         "assets.show_all" => {
             s.local.assets_view.show_all = !s.local.assets_view.show_all;
             Ok(())

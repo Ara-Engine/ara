@@ -2869,4 +2869,11 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Show or hide messages from this computer's graphics drivers and overlay layers.",
     },
+    Command {
+        id: "assets.import_defaults",
+        title: "Import Defaults…",
+        icon: "settings-2",
+        keys: "",
+        summary: "Edit project-wide texture quality and typed per-importer defaults.",
+    },
 ];

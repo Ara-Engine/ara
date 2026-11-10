@@ -266,6 +266,8 @@ pub struct Local {
     pub console_search: String,
     /// The Console merges repeated records (Unity's Collapse).
     pub console_collapse: bool,
+    /// The importer type whose project defaults the Import panel shows (`ara.texture`…).
+    pub import_defaults: &'static str,
     /// The Console's group of this computer's messages (graphics drivers, overlay layers)
     /// is open.
     pub console_machine: bool,
@@ -519,6 +521,7 @@ impl Studio {
             local: Local {
                 console: [true; 3],
                 problems: [true; 2],
+                import_defaults: "ara.texture",
                 ..Local::default()
             },
             size,
