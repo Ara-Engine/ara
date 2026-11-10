@@ -705,6 +705,33 @@ fn the_lighting_list_mixes_lights_in_place() {
 }
 
 #[test]
+fn brush_sliders_set_by_press_and_drag() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.mesh-paint", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let press_at = |rt: &mut Runtime<Studio>, key: &str, along: f32| {
+        let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+        let (x, y) = (r.left + r.width() * along, r.center().y);
+        rt.pointer_move(x, y);
+        rt.frame(FRAME);
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        settle(rt);
+    };
+    let paint = |rt: &Runtime<Studio>| rt.state().editor.state.paint.unwrap_or_default();
+    press_at(&mut rt, "paint/strength/track", 0.75);
+    assert!(
+        (paint(&rt).strength - 0.75).abs() < 0.05,
+        "{}",
+        paint(&rt).strength
+    );
+    // Radius runs by magnitude: halfway is the range's geometric middle, not 50 m.
+    press_at(&mut rt, "paint/radius/track", 0.5);
+    let radius = paint(&rt).radius;
+    assert!(radius > 0.3 && radius < 1.5, "{radius}");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2130,6 +2157,8 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.palette = None);
+        // The Inspector in front of Mesh Paint, as a person picking a component has it.
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "inspector"})));
         rt.update(|s| s.local.add_component = Some(Default::default()));
         settle(&mut rt);
         for _ in 0..30 {

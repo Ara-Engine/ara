@@ -74,3 +74,63 @@ pub fn tones(l: &Look) -> Tones {
         }
     }
 }
+
+/// A drag track for a number in `range` beside its field, as Unreal's sliders: a press
+/// or drag sets the value at the pointer through `set`. `log` spreads a wide range (a
+/// brush radius from millimetres to metres) evenly by magnitude.
+pub fn slider<S: 'static>(
+    l: &Look,
+    key: String,
+    value: f32,
+    (min, max): (f32, f32),
+    log: bool,
+    set: impl Fn(&mut S, f32) + 'static,
+) -> El<S> {
+    let log = log && min > 0.0 && max > min;
+    let along = match log {
+        true => (value.max(min) / min).ln() / (max / min).ln(),
+        false => (value - min) / (max - min).max(f32::EPSILON),
+    }
+    .clamp(0.0, 1.0);
+    let at = move |t: f32| match log {
+        true => min * (max / min).powf(t),
+        false => min + (max - min) * t,
+    };
+    let c = &l.c;
+    stillkit::el::row()
+        .key(key)
+        .h(18.0)
+        .align(stillkit::el::Align::Center)
+        .cursor(stillkit::Cursor::ResizeHorizontal)
+        .on_pointer(move |s: &mut S, e: &stillkit::el::PointerEvent, _| {
+            use stillkit::el::PointerPhase;
+            if !matches!(e.phase, PointerPhase::Down | PointerPhase::Move) || e.size.0 <= 0.0 {
+                return false;
+            }
+            if e.phase == PointerPhase::Move && e.button != stillkit::Button::Left {
+                return false;
+            }
+            set(s, at((e.local.x / e.size.0).clamp(0.0, 1.0)));
+            true
+        })
+        .child(
+            stillkit::el::el()
+                .grow(along.max(0.001))
+                .h(4.0)
+                .radius(2.0)
+                .fill(c.primary.0),
+        )
+        .child(
+            stillkit::el::el()
+                .size(10.0)
+                .radius(5.0)
+                .fill(c.foreground.0),
+        )
+        .child(
+            stillkit::el::el()
+                .grow((1.0 - along).max(0.001))
+                .h(4.0)
+                .radius(2.0)
+                .fill(c.muted.0),
+        )
+}
