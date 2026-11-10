@@ -30,6 +30,7 @@ mod reload;
 pub use reload::ShaderStatus;
 mod queue_gate;
 pub use queue_gate::QueueGate;
+mod barriers;
 mod staging;
 mod submission;
 mod surface;
