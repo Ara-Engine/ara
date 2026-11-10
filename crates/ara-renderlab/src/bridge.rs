@@ -299,7 +299,7 @@ impl Bridge {
         } else {
             let read = self.engine.capture()?;
             if metered {
-                self.metering.observe(stops, &read.rgba8);
+                self.metering.observe(view.look, stops, &read.rgba8);
             }
             upload(gpu, target, &read.rgba8)?
         };
@@ -310,7 +310,7 @@ impl Bridge {
         if metered && target.shared.is_some() {
             if self.meter_wait == 0 {
                 let read = self.engine.capture()?;
-                let moved = self.metering.observe(stops, &read.rgba8);
+                let moved = self.metering.observe(view.look, stops, &read.rgba8);
                 self.meter_wait = if moved { 0 } else { 15 };
             } else {
                 self.meter_wait -= 1;
