@@ -21,7 +21,8 @@ impl Device for VulkanDevice {
     fn queues(&self) -> [descriptors::QueueInfo; 2] {
         [Queue::Graphics, Queue::Compute].map(|id| descriptors::QueueInfo {
             id,
-            dedicated: id == Queue::Compute,
+            dedicated: id == Queue::Compute
+                && self.context.info.compute_family != self.context.info.graphics_family,
             timestamps: descriptors::TimestampCaps {
                 valid_bits: self.context.info.timestamp_valid_bits[id.index()],
                 period_ns: self.context.info.timestamp_period_ns,

@@ -7,6 +7,7 @@ mod diagnostics_tests;
 mod environment;
 mod presentation;
 mod priority;
+mod queues;
 mod resources;
 pub use resources::image_barrier;
 pub(crate) use resources::{BufferAllocation, ImageAllocation};
