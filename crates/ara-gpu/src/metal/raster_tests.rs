@@ -294,3 +294,58 @@ fn face_winding_culling_and_additive_blend_change_pixels() {
     assert_eq!(visible[1], visible[2]);
     assert!(visible[3]);
 }
+
+#[test]
+fn vertex_only_pipeline_writes_depth_without_a_fragment_stage() {
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    let state = RenderState {
+        depth_format: Some(Format::Depth32Float.vk().as_raw()),
+        depth_test: true,
+        depth_write: true,
+        raster: RasterState {
+            depth_compare: crate::sampler::CompareOp::Less,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let pipeline = gpu.msl_pipeline_from(SHADER, &[(Stage::Vertex, "fullscreen")], &state, None);
+    let target = image(&mut gpu, Format::Depth32Float, SampleCount::One, true);
+    let output = gpu.create_readback_buffer(8 * 8 * 4).unwrap();
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([transition(target, Access::Undefined, Access::Depth)]);
+    rec.push(Command::BeginRendering {
+        colors: vec![],
+        depth: Some(Attachment {
+            image: target,
+            clear: Some([1.; 4]),
+        }),
+        size: [8, 8],
+    });
+    rec.push(Command::Pipeline(pipeline));
+    for depth in [0.75f32, 0.25, 0.5] {
+        rec.push(Command::Constants(RootConstants {
+            words: [depth.to_bits(), 0, 0, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Fullscreen);
+    }
+    rec.push(Command::EndRendering);
+    rec.barriers([transition(target, Access::Depth, Access::CopySource)]);
+    rec.push(Command::ReadImage {
+        source: target,
+        destination: output,
+    });
+    rec.barriers([Barrier {
+        resource: Resource::Buffer(output),
+        before: Access::CopyDestination,
+        after: Access::HostRead,
+        handoff: None,
+    }]);
+    let point = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(point).unwrap();
+    assert_eq!(gpu.read(output).unwrap(), 0.25f32.to_le_bytes().repeat(64));
+    gpu.retire(Resource::Image(target)).unwrap();
+    gpu.retire(Resource::Buffer(output)).unwrap();
+    gpu.retire_pipeline(pipeline).unwrap();
+    gpu.collect().unwrap();
+    gpu.assert_clean().unwrap();
+}

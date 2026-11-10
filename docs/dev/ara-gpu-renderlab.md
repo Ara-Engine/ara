@@ -332,3 +332,28 @@ Khronos and synchronization validation enabled:
 cargo test -p ara-gpu --lib shared_family_submits_both_queue_classes_on_hardware -- --nocapture
 cargo test -p ara-gpu --lib forced_compute_only_depth_copies_fail_before_native_submission -- --nocapture
 ```
+
+## Vertex-only depth pipelines found during migration
+
+Renderlab's transparency sun-shadow pass has only `tp_shadow_vs`, with no fragment
+stage. The portable cooked stage list already represents that shape, but Metal's
+loader previously admitted only compute or vertex/fragment pairs. It now admits
+one vertex stage when the render state has depth and no color formats. The shared
+render builder receives an optional fragment descriptor; no dummy fragment shader,
+heap ABI change, or cooked-artifact merge is involved. Vulkan code is unchanged.
+
+A native regression failed before the fix at pipeline admission. After the fix it
+renders depths0.75,0.25,0.5 with Less over clear1, then reads every8×8 depth texel
+as exactly0.25. `ara-gpu` plus replay pass **109**, with **31** ignored, in each
+Metal API+shader-validation and API-only run. All-targets clippy `-D warnings`
+and the117-package formatter pass. This addition overrides no Ara decision;
+native Vulkan execution of the eventual vertex-only WGSL replay remains pending.
+
+The latest CPU timing on the Vulkan-review-fix head0b4308e18 completed200 alternating
+pairs after20 warmups. Individual/batched256-barrier total p50 is
+**131.416/15.208µs**, p95 **165.667/35.125µs**; record p50 **3.208/0.500µs** and
+submit p50 **128.333/14.708µs**. The unchanged guard accepted it: foreign CPU
+mean5.82%, peak11.33% without a sustained breach; GPU peak0.64%. This is an isolated
+CPU microbenchmark, not a frame-speed claim. Evidence:
+`target/ara-gpu/barrier-timing-review.{json,log}` and
+`target/ara-dev/gpu-load/90104-1794339026238.json`.

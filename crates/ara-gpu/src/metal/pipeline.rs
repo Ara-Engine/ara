@@ -1,8 +1,5 @@
-//! Metal 4 pipeline states. Engine pipelines come only from cooked, hashed
-//! Metal Shader Converter metallibs (`CookedStage::metal`); the backend never compiles
-//! shader source. The raster state mirrors the Vulkan backend: 48-byte vertex ABI,
-//! no culling, counter-clockwise front faces, reversed-Z `>=` depth, premultiplied
-//! alpha on attachment zero.
+//! Metal4 pipeline states from cooked, hashed metallibs. Native compute,
+//! vertex/fragment and vertex-only depth pipelines share the portable raster state.
 use super::abi::{STAGE_IN_ATTRIBUTE_START, VERTEX_BUFFER_BIND_POINT};
 use super::cache::Compiler;
 use super::native::{nil, ns_error, raw_format};
@@ -202,12 +199,23 @@ pub(super) fn build(
             device,
             compiler,
             &function(vertex, vertex_name),
-            &function(fragment, fragment_name),
+            Some(&function(fragment, fragment_name)),
             state,
         ),
+        [(Stage::Vertex, vertex, vertex_name)]
+            if state.color_formats.is_empty() && state.depth_format.is_some() =>
+        {
+            render(
+                device,
+                compiler,
+                &function(vertex, vertex_name),
+                None,
+                state,
+            )
+        }
         _ => Err(GpuError::Contract(
-            "Metal backend supports compute and vertex/fragment pipelines; mesh/task \
-             stages need the mesh tier"
+            "Metal backend supports compute, vertex/fragment and vertex-only depth pipelines; \
+             mesh/task stages need the mesh tier"
                 .into(),
         )),
     }
@@ -217,12 +225,12 @@ fn render(
     device: &ProtocolObject<dyn MTLDevice>,
     compiler: &Compiler,
     vertex: &MTL4LibraryFunctionDescriptor,
-    fragment: &MTL4LibraryFunctionDescriptor,
+    fragment: Option<&MTL4LibraryFunctionDescriptor>,
     state: &RenderState,
 ) -> Result<NativePipeline> {
     let descriptor = MTL4RenderPipelineDescriptor::new();
     descriptor.setVertexFunctionDescriptor(Some(vertex));
-    descriptor.setFragmentFunctionDescriptor(Some(fragment));
+    descriptor.setFragmentFunctionDescriptor(fragment.map(|f| &**f));
     // SAFETY: the portable sample enum permits only native counts one and four.
     unsafe { descriptor.setRasterSampleCount(state.raster.samples.count() as usize) };
     descriptor.setInputPrimitiveTopology(MTLPrimitiveTopologyClass::Triangle);
