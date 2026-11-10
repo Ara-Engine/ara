@@ -768,10 +768,11 @@ fn sample_logs(s: &mut Studio) {
                origin: &str,
                source: Option<&str>,
                count: u64| {
+        let number = ara_diag::Code::parse(code).expect("sample diagnostic code is valid");
         let diagnostic = match severity {
-            Severity::Error => ara_diag::Diagnostic::error(ara_diag::Code(seq as u16), message),
-            Severity::Warning => ara_diag::Diagnostic::warning(ara_diag::Code(seq as u16), message),
-            _ => ara_diag::Diagnostic::info(ara_diag::Code(seq as u16), message),
+            Severity::Error => ara_diag::Diagnostic::error(number, message),
+            Severity::Warning => ara_diag::Diagnostic::warning(number, message),
+            _ => ara_diag::Diagnostic::info(number, message),
         };
         super::state::LogRow {
             seq,
@@ -789,7 +790,7 @@ fn sample_logs(s: &mut Studio) {
         row(
             1,
             Severity::Info,
-            "ARA0001",
+            "ARA4508",
             "Project opened: 4 entities in levels/main.scene",
             "engine",
             None,
@@ -1238,13 +1239,16 @@ fn the_console_searches_collapses_and_clear_stays_clear() {
     let row = |seq: u64, message: &str| super::state::LogRow {
         seq,
         severity: ara_diag::Severity::Warning,
-        code: "ARA0001".into(),
+        code: crate::codes::DIAGNOSTIC_SAMPLE.to_string(),
         message: message.into(),
         origin: "engine".into(),
         at: 0,
         source: None,
         count: 1,
-        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(ara_diag::Code(1), message)),
+        diagnostic: std::sync::Arc::new(ara_diag::Diagnostic::warning(
+            crate::codes::DIAGNOSTIC_SAMPLE,
+            message,
+        )),
     };
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "console"}));
@@ -1389,7 +1393,7 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
             ),
             row(
                 2,
-                ara_diag::Diagnostic::warning(ara_diag::Code(1), "The project warns"),
+                ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "The project warns"),
             ),
         ];
         s.local.log_seen = 2;
@@ -1411,12 +1415,13 @@ fn the_computers_own_messages_fold_into_their_own_console_group() {
 #[test]
 fn problems_filter_explain_and_go_to_what_they_name() {
     let mut rt = open();
-    let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(1), "Lamp is broken");
+    let mut diagnostic =
+        ara_diag::Diagnostic::error(crate::codes::DIAGNOSTIC_SAMPLE, "Lamp is broken");
     diagnostic.location.record = Some("e_lamp".into());
     let row = |seq: u64, severity, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
         seq,
         severity,
-        code: "ARA0001".into(),
+        code: diagnostic.code.to_string(),
         message: diagnostic.message.clone(),
         origin: "engine".into(),
         at: 0,
@@ -1424,7 +1429,7 @@ fn problems_filter_explain_and_go_to_what_they_name() {
         count: 1,
         diagnostic: std::sync::Arc::new(diagnostic),
     };
-    let warning = ara_diag::Diagnostic::warning(ara_diag::Code(1), "Box is odd");
+    let warning = ara_diag::Diagnostic::warning(crate::codes::DIAGNOSTIC_SAMPLE, "Box is odd");
     rt.update(|s| {
         s.act("editor.layout.show", json!({"panel": "problems"}));
         s.logs = vec![
