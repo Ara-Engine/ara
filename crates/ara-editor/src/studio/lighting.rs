@@ -148,7 +148,20 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(search)
         .child(add)
         .child(presets)
-        .child(capture);
+        .child(capture)
+        .child(
+            icon_button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                icons::ACTIVITY,
+                "Refresh probe status",
+            )
+            .key("lighting/probe/refresh")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "lighting.probe.refresh", &crate::catalog::Target::None)
+            }),
+        );
     let body = if rows.is_empty() {
         col().grow(1.0).justify(Justify::Center).child(empty(
             l,
@@ -205,6 +218,12 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                                     .wrap(1),
                             ),
                     )
+                    .children(probe_state(s, &r.id).map(|state| {
+                        text(state)
+                            .text_size(11.0)
+                            .color(c.muted_foreground.0)
+                            .tooltip("The renderer's capture of this probe")
+                    }))
                     .children(r.priority.map(|p| {
                         text(format!("{p:.0}"))
                             .text_size(11.0)
@@ -315,6 +334,74 @@ pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<
             n => format!("Recapturing {n} reflection probes"),
         },
     );
+    Ok(())
+}
+
+/// Asks the renderer where each of the scene's reflection probes stands (captured, stale,
+/// capturing, failed) for the Lighting list.
+pub(super) fn refresh_probes(s: &mut Studio) -> ara_ui::Result<()> {
+    let doc = s.editor.state.doc.clone();
+    let answer = s.editor.action(
+        "render.probes.query",
+        serde_json::json!({"doc": doc, "since": null}),
+    )?;
+    let snapshot: ara_runtime_render::probes::ProbeSnapshot = serde_json::from_value(answer)
+        .map_err(|e| format!("The renderer's probe report could not be read: {e}"))?;
+    if snapshot.probes.iter().any(|row| row.doc != doc) {
+        return Err("The probe report was for another scene".into());
+    }
+    s.local.probe_status = Some(snapshot);
+    Ok(())
+}
+
+/// What the renderer last said of `entity`'s probe capture, in a few words.
+fn probe_state(s: &Studio, entity: &str) -> Option<String> {
+    use ara_runtime_render::probes::ProbeState;
+    let row = s
+        .local
+        .probe_status
+        .as_ref()?
+        .probes
+        .iter()
+        .find(|r| r.entity == entity)?;
+    let state = match row.state {
+        ProbeState::Idle if row.generation == 0 => "Not captured".to_owned(),
+        ProbeState::Idle | ProbeState::Done => "Captured".to_owned(),
+        ProbeState::Queued => "Queued".to_owned(),
+        ProbeState::Capturing | ProbeState::Progress => match row.progress {
+            Some(p) => format!("Capturing {:.0}%", p * 100.0),
+            None => "Capturing".to_owned(),
+        },
+        ProbeState::Cancelled => "Cancelled".to_owned(),
+        ProbeState::Failed => "Failed".to_owned(),
+    };
+    Some(if row.stale {
+        format!("{state} · stale")
+    } else {
+        state
+    })
+}
+
+/// The renderer's report on one probe as JSON, for the clipboard (bug reports, agents).
+pub(super) fn copy_probe(s: &mut Studio, entity: &str) -> ara_ui::Result<()> {
+    let snapshot = s
+        .local
+        .probe_status
+        .as_ref()
+        .ok_or("Refresh the probe status first")?;
+    let row = snapshot
+        .probes
+        .iter()
+        .find(|r| r.entity == entity)
+        .ok_or("The renderer has not reported that reflection probe yet")?;
+    let report = serde_json::json!({
+        "doc": s.editor.state.doc,
+        "entity": entity,
+        "version": snapshot.version,
+        "capabilities": snapshot.capabilities,
+        "probe": row,
+    });
+    s.local.copy = Some(ara_json::to_canonical_string(&report));
     Ok(())
 }
 

@@ -237,7 +237,20 @@ fn assets(s: &Studio) -> El<Studio> {
         &query,
         None,
         |f| f.on_input(|s: &mut Studio, t| s.act("editor.workspace", json!({"assetQuery": t}))),
-        |s: &mut Studio| s.act("editor.workspace", json!({"assetQuery": ""})),
+        |s: &mut Studio| {
+            // Kept for Restore Removed Assets Search.
+            let query = s
+                .editor
+                .state
+                .searches
+                .get("assets")
+                .cloned()
+                .unwrap_or_default();
+            if !query.trim().is_empty() {
+                s.local.assets_cleared_query = Some(query);
+            }
+            s.act("editor.workspace", json!({"assetQuery": ""}))
+        },
     )
     .h(22.0)
     .w(200.0);
