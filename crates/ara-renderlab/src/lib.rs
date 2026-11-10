@@ -14,6 +14,8 @@
 #![warn(missing_docs)]
 
 #[cfg(not(target_vendor = "apple"))]
+mod batch;
+#[cfg(not(target_vendor = "apple"))]
 mod decals;
 #[cfg(not(target_vendor = "apple"))]
 mod environment;
