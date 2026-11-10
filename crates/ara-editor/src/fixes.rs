@@ -1,4 +1,5 @@
 //! Mechanical diagnostic fixes use ordinary typed commands and reversible component ops.
+use crate::Editor;
 use ara_cmd::{Command, EditCtx, Registry};
 use ara_diag::Diagnostic;
 use ara_schema::{EntityRef, FieldPath, Schema, SchemaDb, Segment};
@@ -108,4 +109,76 @@ impl Command for Rename {
 }
 pub(crate) fn register(registry: &mut Registry, db: &mut SchemaDb) {
     registry.command::<Reset>(db).command::<Rename>(db);
+}
+
+/// Applies `diagnostic`'s fix `index` to its document as one undo step.
+pub(crate) fn apply_fix(
+    editor: &mut Editor,
+    diagnostic: &ara_diag::Diagnostic,
+    index: usize,
+) -> ara_ui::Result<()> {
+    use ara_diag::FixAction;
+    let fix = diagnostic.fixes.get(index).ok_or("fix disappeared")?;
+    let entity = diagnostic
+        .location
+        .record
+        .as_deref()
+        .or_else(|| editor.state.selection.first().map(String::as_str));
+    let workspace = editor.host.store().workspace();
+    let doc = diagnostic
+        .location
+        .doc
+        .clone()
+        .or_else(|| {
+            diagnostic
+                .location
+                .file
+                .as_deref()
+                .and_then(|file| workspace.find(file).map(ToString::to_string))
+        })
+        .unwrap_or_else(|| editor.state.doc.clone());
+    match &fix.action {
+        FixAction::Remove { record, path } => {
+            let entity = record
+                .as_deref()
+                .or(entity)
+                .ok_or("fix needs a target entity")?;
+            editor.apply_to(
+                &doc,
+                vec![json!({"cmd":"editor.property.reset","args":{"entity":entity,"path":path}})],
+                &fix.title,
+            )?;
+        }
+        FixAction::Rename { record, path, to } => {
+            let entity = record
+                .as_deref()
+                .or(entity)
+                .ok_or("fix needs a target entity")?;
+            editor.apply_to(&doc, vec![json!({"cmd":"editor.property.rename","args":{"entity":entity,"path":path,"to":to}})],&fix.title)?;
+        }
+        FixAction::Command { command, params } => {
+            editor.apply_to(&doc, vec![json!({"cmd":command,"args":params})], &fix.title)?;
+        }
+        FixAction::Call { method, params } => {
+            editor.action(method, params.clone())?;
+        }
+        FixAction::Set {
+            record,
+            path,
+            value,
+        } => {
+            let entity = record
+                .as_deref()
+                .or(entity)
+                .ok_or("fix needs a target record")?;
+            editor.apply_to(&doc, vec![json!({"cmd":"property.set","args":{"entity":entity,"path":path,"value":value}})],&fix.title)?;
+        }
+        _ => {
+            return Err(
+                "This fix requires the file/schema tool; its diagnostic includes the exact action"
+                    .into(),
+            );
+        }
+    }
+    Ok(())
 }

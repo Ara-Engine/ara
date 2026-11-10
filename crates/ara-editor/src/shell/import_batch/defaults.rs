@@ -33,7 +33,7 @@ impl Shell {
         let importer = format!("ara.{}", commands::type_key(importer)?);
         let prefix = format!("@import-batch|@default:{importer}|");
         self.drafts.retain(|key, _| !key.starts_with(&prefix));
-        commands::apply(
+        commands::apply_changes(
             editor,
             vec![Change::Reset(importer)],
             "Reset importer type defaults",

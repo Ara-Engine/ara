@@ -4,7 +4,6 @@ use super::commands::{Target, menus::Context};
 use super::*;
 use crate::inspector::Widget;
 
-/// `innerAngle` → `Inner angle`.
 /// The icon a component shows in Inspector headings and Add Component, by its kind.
 pub(super) fn component_icon(name: &str) -> &'static str {
     let has = |part: &str| name.contains(part);
@@ -27,22 +26,7 @@ pub(super) fn component_icon(name: &str) -> &'static str {
         _ => "box",
     }
 }
-pub(crate) fn sentence(label: &str) -> String {
-    let mut out = String::new();
-    for (i, c) in label.chars().enumerate() {
-        if i == 0 {
-            out.extend(c.to_uppercase());
-        } else if c.is_uppercase() {
-            out.push(' ');
-            out.extend(c.to_lowercase());
-        } else if c == '_' {
-            out.push(' ');
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
+pub(crate) use crate::names::sentence;
 impl Shell {
     /// Label column width in logical pixels for an inspector of `width`.
     pub(super) fn label_px(&self, width: f32) -> f32 {

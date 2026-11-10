@@ -84,7 +84,7 @@ fn independent_mixed_sources_commit_one_transaction_and_one_undo_redo() {
     let mut editor = project.open();
     let before = records(&editor);
     let revision = editor.host.store().revision();
-    commands::apply(
+    commands::apply_changes(
         &mut editor,
         vec![
             setting("as_batcha", "flipNormalY", json!(true)),
@@ -112,7 +112,7 @@ fn latest_other_field_change_is_preserved_and_invalid_member_rolls_back_every_so
     let mut editor = project.open();
     editor.apply(vec![json!({"cmd":"import.configure","args":{"source":"b.png","settings":{"maxDimension":4096,"mipmaps":false}}})],
         "Concurrent independent import setting",None).unwrap();
-    commands::apply(
+    commands::apply_changes(
         &mut editor,
         vec![
             setting("as_batcha", "flipNormalY", json!(true)),
@@ -128,7 +128,7 @@ fn latest_other_field_change_is_preserved_and_invalid_member_rolls_back_every_so
     let before = records(&editor);
     let revision = editor.host.store().revision();
     assert!(
-        commands::apply(
+        commands::apply_changes(
             &mut editor,
             vec![
                 setting("as_batcha", "mipmaps", json!(false)),
@@ -147,7 +147,7 @@ fn deleted_sidecar_rejects_batch_and_preset_inheritance_is_one_atomic_edit() {
     let project = Project::new();
     let mut editor = project.open();
     let before = records(&editor);
-    commands::apply(
+    commands::apply_changes(
         &mut editor,
         vec![
             Change::Preset {
@@ -166,7 +166,7 @@ fn deleted_sidecar_rejects_batch_and_preset_inheritance_is_one_atomic_edit() {
     assert_eq!(records(&editor), before);
     let revision = editor.host.store().revision();
     assert!(
-        commands::apply(
+        commands::apply_changes(
             &mut editor,
             vec![
                 setting("as_batcha", "mipmaps", json!(false)),

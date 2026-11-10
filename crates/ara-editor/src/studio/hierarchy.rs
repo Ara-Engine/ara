@@ -682,7 +682,7 @@ fn drop_rows(s: &mut Studio, source: &str, target: &str, place: ara_ui::drag_dro
     if source == target {
         return;
     }
-    let plan = crate::shell::drag::content::hierarchy::commands(
+    let plan = crate::hierarchy_actions::reparent::commands(
         &s.resolved,
         &s.editor.state.selection,
         source,

@@ -4,8 +4,10 @@
 pub(crate) mod about;
 mod actions;
 pub mod activity;
+pub(crate) mod animation_edit;
 pub(crate) mod app;
 pub(crate) mod asset_import;
+pub(crate) mod asset_links;
 pub(crate) mod asset_plan;
 mod asset_service;
 pub(crate) mod asset_tools;
@@ -21,8 +23,10 @@ mod editor;
 mod extensions;
 mod fixes;
 pub mod graph;
+pub(crate) mod hierarchy_actions;
 pub(crate) mod hub_launch;
 pub(crate) mod ide;
+pub(crate) mod import_edit;
 mod interaction;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;
@@ -45,8 +49,12 @@ pub mod shell;
 pub mod state;
 pub mod studio;
 pub(crate) mod system;
+pub(crate) mod text;
 mod transaction_label;
 mod transport;
+pub(crate) mod turns;
+pub(crate) mod validation_service;
+pub(crate) mod vfx_edit;
 mod view_camera;
 pub mod world;
 

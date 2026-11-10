@@ -1,7 +1,16 @@
-//! One guarded typed batch; a failed sidecar validates before any document changes.
-use super::*;
+//! Import-settings edits as one guarded typed batch, shared by the editors: a failed
+//! sidecar validates before any document changes. Covers per-source overrides and the
+//! project's importer defaults.
+use crate::Editor;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
-pub(super) fn apply(editor: &mut Editor, changes: Vec<Change>, why: &str) -> ara_ui::Result<bool> {
+/// Applies `changes` as one undo step; `false` when they lower to no command.
+pub(crate) fn apply_changes(
+    editor: &mut Editor,
+    changes: Vec<Change>,
+    why: &str,
+) -> ara_ui::Result<bool> {
     let revision = editor.host.store().revision();
     let commands = lower(editor, changes)?;
     if commands.is_empty() {
@@ -11,7 +20,7 @@ pub(super) fn apply(editor: &mut Editor, changes: Vec<Change>, why: &str) -> ara
     Ok(true)
 }
 
-pub(super) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec<Value>> {
+pub(crate) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec<Value>> {
     let workspace = editor.host.store().workspace();
     let mut patches =
         BTreeMap::<String, (String, Value, Option<Option<ara_asset::CookPreset>>)>::new();
@@ -112,7 +121,7 @@ pub(super) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec
     Ok(commands)
 }
 
-pub(super) fn policy(editor: &Editor) -> ara_ui::Result<ara_asset::ProjectImportSettings> {
+pub(crate) fn policy(editor: &Editor) -> ara_ui::Result<ara_asset::ProjectImportSettings> {
     let workspace = editor.host.store().workspace();
     let doc = workspace
         .docs()
@@ -135,7 +144,7 @@ pub(super) fn policy(editor: &Editor) -> ara_ui::Result<ara_asset::ProjectImport
     }
 }
 
-pub(super) fn type_key(importer: &str) -> ara_ui::Result<&'static str> {
+pub(crate) fn type_key(importer: &str) -> ara_ui::Result<&'static str> {
     match importer {
         "ara.texture" | "texture" => Ok("texture"),
         "ara.gltf" | "gltf" => Ok("gltf"),
@@ -143,4 +152,68 @@ pub(super) fn type_key(importer: &str) -> ara_ui::Result<&'static str> {
         "ara.audio" | "audio" => Ok("audio"),
         _ => Err("Choose an installed importer type".into()),
     }
+}
+
+/// One edited override; lowering merges with each latest independent sidecar.
+pub(crate) enum Change {
+    Setting {
+        doc: String,
+        field: String,
+        value: Value,
+    },
+    Preset {
+        doc: String,
+        preset: Option<ara_asset::CookPreset>,
+    },
+    ProjectField {
+        importer: String,
+        field: String,
+        value: Value,
+    },
+    ProjectPreset(ara_asset::CookPreset),
+    Reset(String),
+}
+
+pub(crate) fn inherited_defaults(
+    editor: &Editor,
+    importer: &str,
+    mut builtin: Value,
+) -> ara_ui::Result<Value> {
+    let inherited = policy(editor)?.effective_settings(importer, &json!({}))?;
+    if let Some(fields) = inherited.as_object() {
+        for (key, value) in fields {
+            builtin[key] = value.clone();
+        }
+    }
+    Ok(builtin)
+}
+pub(crate) fn enum_values(options: Vec<String>, nullable: bool) -> Vec<(Value, String)> {
+    let mut values = Vec::new();
+    if nullable {
+        values.push((Value::Null, "Use source/global quality".into()));
+    }
+    values.extend(
+        options
+            .into_iter()
+            .map(|option| (json!(option), crate::names::sentence(&option))),
+    );
+    values
+}
+
+pub(crate) fn settings(importer: &str) -> ara_ui::Result<(Value, &'static str)> {
+    Ok(match importer {
+        "ara.texture" => (
+            ara_json::to_value(&ara_importers::TextureSettings::default())?,
+            "TextureSettings",
+        ),
+        "ara.audio" => (
+            ara_json::to_value(&ara_importers::audio::Settings::default())?,
+            "AudioImportSettings",
+        ),
+        "ara.gltf" | "ara.fbx" => (
+            ara_json::to_value(&ara_importers::MeshSettings::default())?,
+            "MeshSettings",
+        ),
+        _ => return Err(format!("Importer {importer} has no editable shared schema").into()),
+    })
 }

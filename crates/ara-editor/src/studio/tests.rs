@@ -2125,7 +2125,7 @@ fn the_animation_page_shows_states_added_to_its_controller() {
         let doc = result["doc"].as_str().unwrap().to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
         for _ in 0..2 {
-            crate::shell::animation_panel::edit(&mut s.editor, &doc, "state").unwrap();
+            crate::animation_edit::edit(&mut s.editor, &doc, "state").unwrap();
         }
         doc
     });
@@ -2169,7 +2169,7 @@ fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
         for kind in ["state", "state", "transition"] {
-            crate::shell::animation_panel::edit(&mut s.editor, &doc, kind).unwrap();
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
         }
         doc
     });

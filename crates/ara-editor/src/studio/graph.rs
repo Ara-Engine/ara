@@ -172,7 +172,7 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
         }
     };
     if s.graph.text.is_none() {
-        match crate::shell::text_system() {
+        match crate::text::text_system() {
             Ok(text) => s.graph.text = Some(text),
             Err(error) => {
                 s.editor.report_failure(&*error);
@@ -410,9 +410,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 button(l, Tone::Ghost, Size::Sm, Some(glyph), label)
                     .key(format!("animation/add/{kind}"))
                     .on_press(move |s: &mut Studio| {
-                        if let Err(error) =
-                            crate::shell::animation_panel::edit(&mut s.editor, &doc, kind)
-                        {
+                        if let Err(error) = crate::animation_edit::edit(&mut s.editor, &doc, kind) {
                             s.editor.report_failure(&*error);
                         }
                     })
@@ -1218,7 +1216,7 @@ fn submit_animation(s: &mut Studio, doc: &str, edits: Vec<Edit>) {
                 Ok(())
             }
             Edit::Connect(from, to) => {
-                crate::shell::animation_panel::connect(&mut s.editor, doc, &graph, from, to)
+                crate::animation_edit::connect(&mut s.editor, doc, &graph, from, to)
             }
         };
         if let Err(error) = result {
