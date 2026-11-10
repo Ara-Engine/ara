@@ -2471,6 +2471,19 @@ fn a_native_floating_window_shows_its_region_and_its_tab_docks_back_or_tears_out
         super::dock::area_holding(rt.state(), "console"),
         Some(scene.clone())
     );
+    // Its title bar's Dock button puts it back where the default layout keeps it.
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let id = floating(&rt)[0].id.clone();
+    let region = super::dock::region(rt.state(), 0, &id, floating(&rt)[0].rect);
+    rt.set_portals(&[region]);
+    settle(&mut rt);
+    press(&mut rt, &format!("float/{id}/dock"));
+    assert!(floating(&rt).is_empty(), "docked back");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console").as_deref(),
+        Some("bottom")
+    );
     // Dragged out past the main window's edge, the tab tears out where the pointer is on
     // the desktop (a second monitor's, say).
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
