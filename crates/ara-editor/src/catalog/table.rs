@@ -2617,4 +2617,18 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Open a panel as a tab beside another (target: panel@beside).",
     },
+    Command {
+        id: "history.inspect",
+        title: "Inspect Transaction",
+        icon: "search",
+        keys: "",
+        summary: "Inspect the selected transaction without changing authored content.",
+    },
+    Command {
+        id: "history.undo_to",
+        title: "Undo Back to Here",
+        icon: "rotate-ccw",
+        keys: "",
+        summary: "Undo your steps after this one, and this one (target: the transaction).",
+    },
 ];

@@ -1089,6 +1089,49 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn history_searches_opens_changes_and_undoes_back_to_a_step() {
+    let mut rt = open();
+    let mut ids = Vec::new();
+    for (x, why) in [(1, "Move east"), (2, "Move further"), (3, "Move again")] {
+        rt.update(|s| s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_box","path":"Transform.position","value":[x,0,0]}})], why));
+        ids.push(
+            rt.state()
+                .editor
+                .host
+                .store()
+                .history()
+                .last()
+                .unwrap()
+                .id
+                .0
+                .clone(),
+        );
+    }
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "history"})));
+    settle(&mut rt);
+    rt.update(|s| s.local.history_search = "further".into());
+    settle(&mut rt);
+    assert!(rt.find(&format!("history/{}", ids[1])).is_some());
+    assert!(
+        rt.find(&format!("history/{}", ids[0])).is_none(),
+        "searched out"
+    );
+    rt.update(|s| s.local.history_search.clear());
+    settle(&mut rt);
+    press(&mut rt, &format!("history/{}", ids[1]));
+    assert!(
+        rt.find(&format!("history/{}/copy", ids[1])).is_some(),
+        "its changes open"
+    );
+    press(&mut rt, &format!("history/{}/undo-to", ids[0]));
+    assert_eq!(
+        position(&rt, "e_box"),
+        json!([0, 0, 0]),
+        "back before the first move"
+    );
+}
+
+#[test]
 fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
