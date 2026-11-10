@@ -13,7 +13,7 @@ use anyhow::{Context, Result, anyhow};
 use ara_gpu::{
     Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
 };
-use ara_runtime_render::{ExternalFrame, ExternalView};
+use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::engine::{
     Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, RenderPath, Sky, Sun,
     headless_adapter,
@@ -59,6 +59,8 @@ pub(crate) struct Bridge {
     /// Frames until the shared route next reads a frame back for the meter.
     meter_wait: u32,
     gpu_ms: Option<f64>,
+    /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
+    passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
 }
 
@@ -126,6 +128,7 @@ impl Bridge {
             cpu_copy: options.cpu_copy_handoff,
             meter_wait: 0,
             gpu_ms: None,
+            passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
         })
     }
@@ -189,7 +192,18 @@ impl Bridge {
         loop {
             let events = self.engine.poll()?;
             if let Some(sample) = events.gpu.last() {
-                self.gpu_ms = Some(sample.render_span.as_secs_f64() * 1000.);
+                let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
+                self.gpu_ms = ms(Some(sample.render_span));
+                // Renderlab's own split of that span; what is left over is its GI cache.
+                self.passes = [
+                    ("Shading", Some(sample.mesh_pass)),
+                    ("Receivers", sample.receiver_pass),
+                    ("Visibility", sample.visibility_compute),
+                    ("Shadows", sample.shadow_generation),
+                    ("Reconstruction", sample.reconstruction_pass),
+                    ("Present", sample.present_pass),
+                ]
+                .map(|(name, pass)| ms(pass).map_or(("", 0.), |ms| (name, ms)));
             }
             let done = events.completed.iter().any(|c| c.frame == Some(rendered));
             if done || waited.elapsed() > FRAME_WAIT {
@@ -228,6 +242,7 @@ impl Bridge {
         Ok(ExternalFrame {
             image,
             gpu_ms: self.gpu_ms,
+            passes: self.passes,
             handoff_ms,
         })
     }

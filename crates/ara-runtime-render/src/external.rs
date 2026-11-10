@@ -43,7 +43,15 @@ pub struct ExternalFrame {
     pub gpu_ms: Option<f64>,
     /// Wall milliseconds spent moving the image onto the presenter's device.
     pub handoff_ms: f64,
+    /// GPU milliseconds of the renderer's own named passes for the frame `gpu_ms`
+    /// measured, where it reports them; entries with an empty name are unused.
+    /// Captures list them as `External.Pass.<name>`, so the span minus their sum is
+    /// what the renderer spent outside them.
+    pub passes: [(&'static str, f64); EXTERNAL_PASSES],
 }
+
+/// Named passes an external renderer can report per frame (`ExternalFrame::passes`).
+pub const EXTERNAL_PASSES: usize = 6;
 
 /// A renderer that draws extracted frames in place of `ara-render`.
 pub trait ExternalRenderer: Send {
@@ -131,6 +139,7 @@ impl Presenter {
         self.stats.gpu_ms = costs.accounted_ms();
         self.stats.gpu = Some(costs);
         self.stats.external_handoff_ms = Some(rendered.handoff_ms);
+        self.external_passes = rendered.passes;
         self.stats.render = started.elapsed();
         self.published_quality = None;
         Ok(())
@@ -185,7 +194,7 @@ impl Presenter {
             end_ms: milliseconds,
         };
         let costs = self.stats.gpu.unwrap_or_default();
-        let timings = [
+        let mut timings = vec![
             timing("External.Frame.Gpu", costs.raster_ms),
             timing("External.Publish.Gpu", costs.publication_ms),
             timing(
@@ -197,6 +206,11 @@ impl Presenter {
                 walls.get(walls.len() / 2).copied().unwrap_or(0.),
             ),
         ];
+        for (name, milliseconds) in self.external_passes {
+            if !name.is_empty() {
+                timings.push(timing(&format!("External.Pass.{name}"), milliseconds));
+            }
+        }
         let image = self
             .published
             .as_ref()
