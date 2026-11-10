@@ -8,11 +8,13 @@
 //! `editor.*` actions and content through `cmd.apply`, exactly what agents call over MCP, so
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
+mod about;
 mod agents;
 mod animator;
 mod asset_create;
 mod asset_inspector;
 mod asset_ops;
+mod build_page;
 mod chrome;
 mod commands;
 mod components;
@@ -28,11 +30,17 @@ mod inspector;
 mod layer;
 mod lighting;
 mod material_stats;
+mod mesh_paint;
 mod panels;
 mod preferences;
+mod present;
 mod profiler;
 mod references;
+mod running;
 mod scene;
+mod scene_overlays;
+mod scripts;
+mod shortcuts;
 pub mod state;
 mod style;
 #[cfg(test)]
@@ -42,7 +50,6 @@ mod vfx;
 
 use std::time::{Duration, Instant};
 
-use anyhow::Context as _;
 use stillkit::el::{Runtime, SystemClipboard};
 use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
 use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
@@ -104,7 +111,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     rt.frame(Duration::ZERO);
     rt.present(&mut surface, (0, 0))?;
     chrome_parts(&surface, &rt);
-    surface.show_active(false);
+    // In the background (automated captures, tests beside a person's work) the window
+    // shows without activating or taking focus; otherwise it comes forward, active.
+    if options.background {
+        rt.touch(|s| s.local.background = true);
+        surface.show();
+    } else {
+        surface.show_active(false);
+    }
 
     // The renderer starts on a worker; the window keeps drawing and taking input meanwhile.
     let scene_rect = rt
@@ -149,12 +163,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let Some(mut renderer) = renderer else {
         return Ok(());
     };
+    let device = serde_json::to_string(renderer.gpu().info()).unwrap_or_default();
     rt.update(|s| {
         s.local.scene = state::SceneStatus {
             ready: true,
             message: String::new(),
             fps: None,
         };
+        s.local.device = device;
     });
     let mut view = rt.touch(|s| s.editor.view())?;
     let mut scene_view = SceneView::default();
@@ -190,11 +206,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
     if let Some(panel) = &options.panel {
         let id = format!("window.{panel}");
-        rt.update(|s| commands::run(s, &id, &crate::shell::commands::Target::None));
+        rt.update(|s| commands::run(s, &id, &crate::catalog::Target::None));
     }
     rt.update(|s| {
         let store = s.editor.host.store();
-        s.assets = Some(crate::shell::assets::Browser::new(
+        s.assets = Some(crate::assets::Browser::new(
             s.editor.host.root(),
             store.schema(),
             store.workspace().reference_root(),
@@ -208,9 +224,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         let mut pass = trace::Pass::begin();
         pass.phase("studio.events");
+        let before_events = rt.state().editor.state.camera;
         if pump(&mut rt, &mut surface, started, Some(&mut game))? {
             break;
         }
+        hierarchy::unhover(&mut rt);
+        // Whether the person's own input moved the view this pass (Pilot Camera).
+        let mut steered = rt.state().editor.state.camera != before_events;
         pass.mark("events+ui");
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
@@ -228,6 +248,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
         // pass boundary through the same handlers as the menus.
+        // A preset or rebind changed in Settings: menus and the palette show it.
+        if rt.touch(commands::refresh_keys) {
+            rt.update(|_| {});
+        }
         let queued = rt.touch(|s| std::mem::take(&mut s.editor.queued_commands));
         if !queued.is_empty() {
             rt.update(|s| {
@@ -239,11 +263,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.mark("authority");
         pass.phase("studio.assets");
         // Assets and the diagnostics bus.
-        if rt.touch(|s| {
-            s.assets
-                .as_mut()
-                .is_some_and(crate::shell::assets::Browser::poll)
-        }) {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::assets::Browser::poll)) {
             rt.update(|_| {});
         }
         // Tile pictures for the open folder, rendered off-thread.
@@ -377,7 +397,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
             if composite && renderer.presentation_ready() {
-                let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
+                let layer = present::target(surface.native_layer(SCENE_LAYER)?)?;
                 let scale = rt.scale();
                 let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
@@ -456,7 +476,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 };
                 rt.update(|s| {
-                    use crate::shell::commands::{Target, menus::Context};
+                    use crate::catalog::{Target, menus::Context};
                     match (&entity, pick.context) {
                         // A right click keeps a selection it lands in.
                         (Some(e), Some(_)) if s.editor.state.selection.contains(e) => {}
@@ -472,6 +492,95 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 });
             }
+        }
+        // Drop to Surface (End): the presented geometry answers its rays.
+        if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
+            let channels = compositor.channels(&renderer, &view, revision);
+            rt.update(|s| {
+                let planned =
+                    crate::surface_drop::plan(&s.editor, &scene_view, |id| channels.target_of(id));
+                let result = planned.and_then(|plan| match plan {
+                    Some((commands, base)) => s
+                        .editor
+                        .apply(commands, "Drop selection to surface", Some(base))
+                        .map(drop)
+                        .map_err(Into::into),
+                    None => Ok(()),
+                });
+                if let Err(error) = result {
+                    s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                }
+            });
+        }
+        // Mesh Paint: the Scene view's presses and drags as world rays on the selection's
+        // meshes; a press on none of them selects as a click would.
+        let input = rt.touch(|s| std::mem::take(&mut s.local.paint_input));
+        // The ring follows the pointer only when it moved (a hit test seeds every mesh).
+        let hover = rt
+            .touch(|s| s.local.paint_hover.take())
+            .filter(|_| rt.state().editor.state.paint.is_some());
+        if (!input.is_empty() || hover.is_some()) && rt.state().local.scene.ready {
+            let size = renderer.size();
+            let ray = |s: &Studio, (u, v): (f32, f32)| {
+                s.editor
+                    .state
+                    .camera
+                    .ray(size, [u * 2.0 - 1.0, 1.0 - v * 2.0])
+            };
+            rt.update(|s| {
+                for event in input {
+                    use state::PaintInput;
+                    let result = match event {
+                        PaintInput::Down(u, v) => match ray(s, (u, v)) {
+                            Some(r) => {
+                                s.painter
+                                    .begin(&mut s.editor, &view, &scene_view, r)
+                                    .map(|hit| {
+                                        if !hit {
+                                            s.local.pick = Some(scene::Pick {
+                                                u,
+                                                v,
+                                                additive: false,
+                                                context: None,
+                                            });
+                                        }
+                                    })
+                            }
+                            None => Ok(()),
+                        },
+                        PaintInput::Move(u, v) => match ray(s, (u, v)) {
+                            Some(r) => s.painter.drive(&mut s.editor, r).map(drop),
+                            None => Ok(()),
+                        },
+                        PaintInput::Up => s.painter.finish(&mut s.editor, true),
+                        PaintInput::Cancel => s.painter.finish(&mut s.editor, false),
+                    };
+                    if let Err(error) = result {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                }
+                s.local.painting = s.painter.active();
+                // The brush ring: the radius at the hit's distance, in view px.
+                if let Some((u, v)) = hover {
+                    s.local.paint_ring = (|| {
+                        let settings = s.editor.state.paint?;
+                        let ray = ray(s, (u, v))?;
+                        let point =
+                            crate::painter::Painter::hit(&s.editor, &view, &scene_view, ray)?;
+                        let camera = s.editor.state.camera;
+                        let distance = (point - camera.position()).length().max(1e-3);
+                        let rect = s.local.rects.get("scene/view")?;
+                        let half = (camera.fov_y_degrees.to_radians() * 0.5).tan();
+                        let px = settings.radius / (distance * half) * rect.height() * 0.5;
+                        Some((u * rect.width(), v * rect.height(), px))
+                    })();
+                }
+            });
+            scene_dirty = true;
+        }
+        // Mesh Paint off: no ring.
+        if rt.state().editor.state.paint.is_none() && rt.state().local.paint_ring.is_some() {
+            rt.update(|s| s.local.paint_ring = None);
         }
         // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
         let game_rect = rt
@@ -495,7 +604,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let game_layer =
             match game_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
                 Some(r) => Some((
-                    metal_layer(surface.native_layer(game::GAME_LAYER)?)?,
+                    present::target(surface.native_layer(game::GAME_LAYER)?)?,
                     [r.width() as u32, r.height() as u32],
                 )),
                 None => None,
@@ -503,6 +612,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
         {
             let scale = rt.scale();
+            // Input goes to the client Play's controls act on.
+            game.client = rt.state().play.client;
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
@@ -545,7 +656,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
             if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
-                let layer = metal_layer(surface.native_layer(name)?)?;
+                let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.
                 let drawn = rt.touch(|s| unsafe {
@@ -558,6 +669,47 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
         }
         // The VFX page's live preview: frames while it is on screen, paused otherwise.
+        // A running export: its stage, cooking progress and result.
+        if rt.touch(|s| s.builder.poll_build(&mut s.editor)) {
+            rt.update(|_| {});
+        }
+        // Play's runtime controls: their running job, and Simulate once the player is live.
+        let ready = rt.state().local.game.live;
+        if rt.touch(|s| s.play.poll(&mut s.editor, ready)) {
+            rt.update(|_| {});
+        }
+        if rt.touch(|s| std::mem::take(&mut s.play.release)) {
+            rt.update(|s| s.local.game_captured = false);
+        }
+        // The Profiler's player: its targets, its frames while it records.
+        let profiler_shown =
+            rt.find("profiler/record").is_some() || rt.find("profiler/stop").is_some();
+        if rt.touch(|s| profiler::poll(s, profiler_shown)) {
+            rt.update(|_| {});
+        }
+        // C#: a reload in Play, module discovery for the IDE.
+        if rt.touch(scripts::poll) {
+            rt.update(|_| {});
+        }
+        // File operations (move, rename, duplicate, delete) on their jobs.
+        if !rt.state().local.asset_jobs.is_empty() && rt.touch(asset_ops::poll_jobs) {
+            rt.update(|_| {});
+        }
+        // File imports: a finished one shows its files in Assets at once.
+        if rt.touch(|s| s.importer.poll(&mut s.editor)) {
+            rt.update(|s| {
+                if let Some(b) = s.assets.as_ref() {
+                    b.refresh();
+                }
+            });
+        }
+        // Agents: the clients are looked for once the Connect rows show; answers redraw.
+        if rt.find("agents/connect").is_some() && !rt.state().local.agent_setups.probed {
+            rt.update(agents::probe_clients);
+        }
+        if rt.touch(|s| s.local.agent_setups.poll()) {
+            rt.update(|_| {});
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});
@@ -570,9 +722,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if flying {
             let dt = last_fly.elapsed().as_secs_f32().min(0.1);
             let shift = modifiers().shift;
+            let before_fly = rt.state().editor.state.camera;
             rt.touch(|s| fly(s, dt, shift));
+            steered |= rt.state().editor.state.camera != before_fly;
         }
         last_fly = Instant::now();
+        // A piloted Camera follows the view; a finished move commits.
+        if rt.state().local.pilot.active() {
+            rt.update(|s| {
+                scene::poll_pilot(s, steered);
+            });
+        }
         pass.end();
         if profiling {
             rt.touch(|s| {
@@ -645,21 +805,6 @@ fn present_extensions() -> Vec<std::ffi::CString> {
         .collect()
 }
 
-/// The Scene view's `CAMetalLayer`.
-fn metal_layer(
-    handle: stillkit::NativeHandle,
-) -> anyhow::Result<std::ptr::NonNull<std::ffi::c_void>> {
-    match handle {
-        stillkit::NativeHandle::Metal(layer) => {
-            std::ptr::NonNull::new(layer).context("the Scene layer is null")
-        }
-        #[allow(unreachable_patterns)]
-        _ => anyhow::bail!(
-            "the studio's Scene view presents on macOS today; Windows and Linux use --legacy-ui until the Vulkan layer path lands"
-        ),
-    }
-}
-
 /// W, A, S, D, Q and E as virtual keys: the fly keys while the right button is held.
 pub(crate) const FLY_KEYS: [u16; 6] = [0x57, 0x41, 0x53, 0x44, 0x51, 0x45];
 
@@ -690,13 +835,13 @@ fn fly(s: &mut Studio, dt: f32, fast: bool) {
 }
 
 /// The gizmo handles to light: the one under the pointer and the one dragged.
-fn gizmo_state(s: &Studio) -> crate::shell::overlay::GizmoState {
+fn gizmo_state(s: &Studio) -> crate::overlay::GizmoState {
     // While dragging, the gizmo draws at the previewed pose, not the committed one.
     let offset = match (&s.local.gizmo, &s.editor.gesture) {
         (Some(_), Some(g)) => g.world_delta(s.editor.state.selection.first().map(String::as_str)),
         _ => glam::Mat4::IDENTITY,
     };
-    crate::shell::overlay::GizmoState {
+    crate::overlay::GizmoState {
         hover: s.local.gizmo_hover,
         active: s.local.gizmo.as_ref().map(|d| d.handle),
         offset,
@@ -723,12 +868,29 @@ fn overlays_key(s: &Studio) -> u64 {
     h.finish()
 }
 
+/// Shows `message` in the status bar for a few seconds (what a request did).
+pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
+    s.local.note = Some((message.into(), Instant::now()));
+}
+
+/// Whether the window is maximized (the drawn Restore button). Linux's stillkit surface
+/// does not report it yet, so there it reads as not maximized.
+fn maximized(surface: &Surface) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = surface;
+        false
+    }
+    #[cfg(not(target_os = "linux"))]
+    surface.is_maximized()
+}
+
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface) -> state::Frame {
     let s = surface.scale();
     state::Frame {
         inset: surface.system_controls().map_or(0.0, |r| r.right / s),
-        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
+        controls: (!cfg!(target_os = "macos")).then(|| maximized(surface)),
     }
 }
 
@@ -760,6 +922,15 @@ fn pump(
     started: Instant,
     mut game: Option<&mut game::Game>,
 ) -> anyhow::Result<bool> {
+    // File › Exit closes as the window's close button does.
+    if rt.state().local.quit {
+        return Ok(true);
+    }
+    match rt.touch(|s| s.local.window.take()) {
+        Some(state::WindowRequest::Minimize) => surface.minimize(),
+        Some(state::WindowRequest::Maximize) => surface.toggle_maximize(),
+        None => {}
+    }
     while let Some((id, event)) = next_event() {
         if id != surface.id() {
             continue;
@@ -812,6 +983,15 @@ fn pump(
                 });
             }
             Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+            // A person activated a window opened in the background: it behaves as usual.
+            Event::Activated => rt.touch(|s| s.local.background = false),
+            // Files from another app import into the folder Assets shows.
+            Event::FilesDropped(_) => {
+                let files = stillkit::take_dropped_files();
+                if !files.is_empty() {
+                    rt.update(|s| asset_ops::import(s, files, None));
+                }
+            }
             Event::Key(vk) => {
                 if FLY_KEYS.contains(&vk) && rt.state().local.flying {
                     rt.touch(|s| s.local.held.insert(vk));
@@ -857,7 +1037,9 @@ fn pump(
     let painted = trace::time("ui frame", Duration::from_millis(3), || {
         rt.frame(started.elapsed().saturating_sub(rt.now()))
     });
-    if let Some(key) = rt.touch(|s| s.local.focus.take()) {
+    if let Some(key) = rt.touch(|s| s.local.focus.take())
+        && !rt.state().local.background
+    {
         rt.focus(key);
     }
     if let Some(text) = rt.touch(|s| s.local.copy.take()) {
@@ -885,7 +1067,21 @@ fn pump(
         keys.push("profiler/track".into());
         keys.push("graph/view".into());
         keys.push("vfx/preview".into());
+        keys.push("game/area".into());
         keys.push("vfx/stacks".into());
+        keys.extend(
+            scene_overlays::OVERLAYS
+                .iter()
+                .map(|d| format!("scene/overlay/{}", d.id)),
+        );
+        // While a tab is dragged: every area and tab, to drop it among.
+        if rt.state().local.tab_drag.is_some() {
+            keys.extend(dock::all_drag_keys(rt.state()));
+        }
+        // While an asset is dragged: the folders it can drop on.
+        if rt.state().local.asset_drag.is_some() {
+            keys.extend(panels::drop_keys(rt.state()));
+        }
         let s = rt.scale();
         let rects = keys
             .into_iter()
@@ -898,7 +1094,10 @@ fn pump(
                 })
             })
             .collect();
-        rt.touch(|s| s.local.rects = rects);
+        rt.touch(|s| {
+            s.local.rects = rects;
+            scene_overlays::measure(s);
+        });
     }
     rt.sync_text_input(surface);
     surface.set_cursor(rt.cursor());

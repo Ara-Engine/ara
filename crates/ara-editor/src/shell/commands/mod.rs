@@ -5,63 +5,18 @@
 //! an availability check that explains why it is disabled, and how it runs.
 //! Menu paths are derived from [`menus::MENUS`], so they never drift.
 mod extensions;
-pub(crate) mod keys;
-pub(crate) mod menus;
+pub(crate) use crate::catalog::menus;
+pub(crate) use crate::keys;
 pub(crate) mod table;
 use super::Shell;
 use crate::{Editor, state::EditorState};
 pub(crate) use extensions::{bar_titles, entries, lookup, registered_menu_path};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// What a command acts on: the right-clicked row, field, tab or nothing.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Target {
-    /// The current selection or focused panel.
-    #[default]
-    None,
-    /// A scene entity address.
-    Entity(String),
-    /// A project-relative asset path.
-    Asset(String),
-    /// A project-relative folder.
-    Folder(String),
-    /// An inspector field path (`Transform.position`).
-    Field(String),
-    /// An inspector component name.
-    Component(String),
-    /// A dock panel id.
-    Panel(String),
-    /// A graph node id in the active resource.
-    Node(String),
-    /// A scene document id (Open Recent).
-    Doc(String),
-    /// A floating window id.
-    Window(String),
-    /// Plain text (console rows, profiler spans).
-    Text(String),
-}
-impl Target {
-    /// The entity this command applies to: the target, else the primary selection.
-    pub fn entity<'a>(&'a self, state: &'a EditorState) -> Option<&'a str> {
-        match self {
-            Self::Entity(e) => Some(e),
-            _ => state.selection.first().map(String::as_str),
-        }
-    }
-    /// Entities this command applies to: the target if it is outside the selection.
-    pub fn entities(&self, state: &EditorState) -> Vec<String> {
-        match self {
-            Self::Entity(e) if !state.selection.contains(e) => vec![e.clone()],
-            _ => state.selection.clone(),
-        }
-    }
-}
+pub use crate::catalog::Target;
 /// Inputs to availability checks; built from navigation state and the op store.
 pub(crate) struct Ctx<'a> {
     pub state: &'a EditorState,
-    pub extensions: &'a crate::extensions::Catalog,
     pub store: &'a ara_ops::Store,
     pub target: &'a Target,
     /// The shell holds copied entities (Paste is available).
@@ -193,26 +148,6 @@ pub(crate) fn menu_path(id: &str) -> String {
     }
     String::new()
 }
-/// The registry as agents see it: ids, titles, menu paths, bindings and availability.
-pub(crate) fn export(cx: &Ctx, keymap: &keys::Keymap) -> Value {
-    json!(
-        entries(cx.extensions)
-            .map(|c| {
-                let avail = c.avail(cx);
-                json!({
-                    "id": c.id,
-                    "title": c.title(cx),
-                    "menu": registered_menu_path(cx.extensions, c.id),
-                    "summary": c.summary,
-                    "shortcuts": keymap.chords(c.id).iter().map(|k| k.text()).collect::<Vec<_>>(),
-                    "enabled": avail.ready(),
-                    "checked": match avail { Avail::Checked(v) => Some(v), _ => None },
-                    "disabledReason": match &avail { Avail::Blocked(r) => Some(r.clone()), _ => None },
-                })
-            })
-            .collect::<Vec<_>>()
-    )
-}
 /// The keymap for the current preferences.
 pub(crate) fn keymap(state: &EditorState, extensions: &crate::extensions::Catalog) -> keys::Keymap {
     let preset = keys::Preset::parse(
@@ -243,7 +178,6 @@ impl Shell {
     pub(crate) fn ctx<'a>(&'a self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
         Ctx {
             state: &editor.state,
-            extensions: &editor.extensions,
             store: editor.host.store(),
             target,
             clipboard_entities: self.entity_clipboard.is_some(),
@@ -268,8 +202,8 @@ impl Shell {
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {
-                running: self.build.is_some() || self.run.is_some(),
-                built: self.last_build.is_some(),
+                running: self.builder.job.is_some() || self.builder.run.is_some(),
+                built: self.builder.last_build.is_some(),
                 profile: self.browser.items.iter().any(|a| {
                     (a.path.starts_with("settings/builds/") || a.path.starts_with("presets/"))
                         && a.path.ends_with(".export.json")

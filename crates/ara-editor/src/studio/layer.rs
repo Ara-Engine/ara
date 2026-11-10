@@ -1,9 +1,6 @@
 //! A studio native layer drawn by its own GPU UI adapter on the renderer's device: the
 //! Game view and the graph canvases paint `ara_ui` display lists into one each. Submissions
 //! never wait (`ready` skips a pass while the last frame is still on the GPU).
-use std::ffi::c_void;
-use std::ptr::NonNull;
-
 use anyhow::Result;
 use ara_ui::paint::DisplayList;
 use ara_ui_render::atlas::TextMode;
@@ -53,11 +50,11 @@ impl Layer {
 
     /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels.
     /// # Safety
-    /// `layer` is the live `CAMetalLayer` this layer presents into.
+    /// `layer` is the live native layer this presents into (`present::Target`).
     pub unsafe fn draw(
         &mut self,
         renderer: &ara_render::Renderer,
-        layer: NonNull<c_void>,
+        layer: super::present::Target,
         extent: [u32; 2],
         scale: f32,
         list: &DisplayList,
@@ -71,7 +68,7 @@ impl Layer {
                 .render(&mut self.ui, list, fonts, size, TextMode::Raster)
         })
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let target = layer.as_ptr() as usize;
+        let target = layer.id();
         // Another layer (a different graph page) gets its own presentation.
         if let Some((mut old, _, _)) = self.present.take_if(|(_, _, at)| *at != target) {
             let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
@@ -81,12 +78,12 @@ impl Layer {
         let present = match self.present.take() {
             Some((mut present, was, _)) => {
                 if was != extent {
-                    super::compositor::resize(&mut present, extent)?;
+                    super::present::resize(&mut present, extent)?;
                 }
                 present
             }
             // SAFETY: forwarded caller contract.
-            None => unsafe { super::compositor::layer_present(&self.ui, renderer, layer, extent)? },
+            None => unsafe { super::present::create(&self.ui, renderer, layer, extent)? },
         };
         let (present, _, _) = self.present.insert((present, extent, target));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.

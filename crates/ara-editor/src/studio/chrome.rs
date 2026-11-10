@@ -9,8 +9,8 @@ use stillkit::el::{
 };
 
 use super::{Studio, commands, dock};
-use crate::shell::commands::Target;
-use crate::shell::commands::menus::{Item, MENUS};
+use crate::catalog::Target;
+use crate::catalog::menus::{Item, MENUS};
 
 /// The whole window.
 pub fn view(s: &Studio) -> El<Studio> {
@@ -23,7 +23,9 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
+        .children(dock::floating(s))
         .children(drag_chip(s))
+        .children(dock::drag_preview(s))
         // Menus at a point hang from an element of no size: an overlay never closes on a
         // press over the element it hangs from, and the root covers every press.
         .child(
@@ -36,8 +38,100 @@ pub fn view(s: &Studio) -> El<Studio> {
                     super::create::Anchor::Point(0.0, 0.0),
                 )),
         )
-        .overlay(super::preferences::overlay(s));
+        .overlay(super::preferences::overlay(s))
+        .overlay(prompt(s))
+        .overlay(why(s))
+        .overlay(super::about::overlay(s));
     palette(s, root)
+}
+
+/// The open one-field question (Save Layout As): Enter runs its command with the text.
+fn prompt(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let p = s.local.prompt.as_ref()?;
+    let l = &s.look;
+    let then = p.then;
+    let submit = move |s: &mut Studio, text: &str| {
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            return;
+        }
+        s.local.prompt = None;
+        commands::run(s, then, &Target::Text(text));
+    };
+    let close = |s: &mut Studio| s.local.prompt = None;
+    let typed = p.text.clone();
+    let panel = dialog_panel(
+        l,
+        None,
+        p.title,
+        field(
+            l,
+            Size::Md,
+            "prompt/field",
+            None,
+            p.hint,
+            &p.text,
+            move |f| {
+                f.on_input(|s: &mut Studio, t| {
+                    if let Some(p) = s.local.prompt.as_mut() {
+                        p.text = t.to_owned();
+                    }
+                })
+                .on_submit(submit)
+            },
+        ),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("prompt/cancel")
+                .on_press(close),
+            enabled(
+                button(l, Tone::Primary, Size::Md, None, p.ok)
+                    .key("prompt/ok")
+                    .on_press(move |s: &mut Studio| submit(s, &typed)),
+                !p.text.trim().is_empty(),
+            ),
+        ],
+        close,
+    )
+    .w(380.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(close))
+}
+
+/// The diagnostic service's answer (Tools › Why?), line by line, with Ask Again.
+fn why(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let (question, lines) = s.local.why.as_ref()?;
+    let l = &s.look;
+    let close = |s: &mut Studio| s.local.why = None;
+    let body = col().gap(4.0).children(lines.iter().map(|line| {
+        text(line.clone())
+            .text_size(12.0)
+            .wrap(52)
+            .color(l.c.foreground.0)
+    }));
+    let again = question.clone();
+    let panel = dialog_panel(
+        l,
+        None,
+        &format!("Why? · {question}"),
+        body,
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Ask again")
+                .key("why/again")
+                .on_press(move |s: &mut Studio| {
+                    s.local.why = None;
+                    commands::run(s, "tools.why", &Target::Text(String::new()));
+                    if let Some(p) = s.local.prompt.as_mut() {
+                        p.text = again.clone();
+                    }
+                }),
+            button(l, Tone::Primary, Size::Md, None, "Close")
+                .key("why/close")
+                .on_press(close),
+        ],
+        close,
+    )
+    .w(520.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(close))
 }
 
 /// What an asset drag carries, beside the pointer.
@@ -62,8 +156,8 @@ fn drag_chip(s: &Studio) -> Option<El<Studio>> {
 /// commands run on that target.
 fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
     let (kind, target, (x, y)) = s.local.context.clone()?;
-    let items = crate::shell::commands::menus::context(kind);
-    let panel = menu_panel(&s.look, entries(s, items, true, &target))
+    let items = crate::catalog::menus::context(kind);
+    let panel = menu_panel(&s.look, entries(s, items, &target))
         .max_h(560.0)
         .scroll(Axis::Vertical);
     Some(
@@ -76,9 +170,9 @@ fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
 /// Window-wide shortcuts: the registry's chords for the commands the studio runs. Keys a
 /// focused field takes (typing, its own Enter) never reach here.
 fn keys(s: &mut Studio, key: KeyCode, tx: &mut stillkit::el::Tx) -> Handled {
-    match commands::for_key(key.0, tx.modifiers()) {
+    match commands::for_key(s, key.0, tx.modifiers()) {
         Some(id) => {
-            commands::run(s, id, &Target::None);
+            commands::run(s, &id, &Target::None);
             if id == "edit.palette" {
                 tx.focus("palette/query");
             }
@@ -234,7 +328,7 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
         });
     if open {
         b = b.fill(l.c.raised.0).color(l.c.foreground.0);
-        let panel = menu_panel(l, entries(s, items, false, &Target::None))
+        let panel = menu_panel(l, entries(s, items, &Target::None))
             .max_h(560.0)
             .scroll(Axis::Vertical);
         b = b.overlay(menu(panel).on_dismiss(|s: &mut Studio| s.local.menu = None));
@@ -243,44 +337,186 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
 }
 
 /// One line of a flattened menu.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Line {
     Separator,
     Heading(&'static str),
     Command(&'static str),
+    /// A generated entry (a scene, a layout, a profile): its title, the command it runs
+    /// with its target, and whether it is the current one.
+    Entry(String, &'static str, Target, Option<bool>),
 }
 
-/// Flattens registry items: a submenu becomes a separator and a heading over its entries.
-/// `hide` drops commands the studio doesn't run yet (context menus stay short).
-fn lines(items: &'static [Item], depth: usize, hide: bool, out: &mut Vec<Line>) {
+/// Flattens registry items: a submenu becomes a separator and a heading over its entries;
+/// dynamic items become an entry each (`target` is what the menu acts on).
+fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out: &mut Vec<Line>) {
     for item in items {
         match item {
             Item::Separator => out.push(Line::Separator),
-            Item::Command(id) if !(hide && commands::missing(id).is_some()) => {
+            // Only what the editor runs; a context menu, only what applies to what was
+            // clicked (the menu bar keeps every entry).
+            Item::Command(id)
+                if crate::catalog::get(id).is_some()
+                    && (*target == Target::None || commands::applies(s, id, target)) =>
+            {
                 out.push(Line::Command(id))
             }
             Item::Sub(title, sub) if depth < 2 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));
-                lines(sub, depth + 1, hide, out);
+                lines(s, sub, depth + 1, target, out);
             }
-            Item::Command(_) | Item::Sub(..) | Item::Dynamic(_) => {}
+            Item::Dynamic(kind) => out.extend(dynamic(s, *kind, target)),
+            Item::Command(_) | Item::Sub(..) => {}
+        }
+    }
+}
+
+/// The entries a dynamic item stands for, now.
+fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) -> Vec<Line> {
+    use crate::catalog::menus::Dynamic;
+    let e = &s.editor;
+    let command = kind.command();
+    let entry = |title: String, target: Target, checked: Option<bool>| {
+        Line::Entry(title, command, target, checked)
+    };
+    match kind {
+        Dynamic::RecentScenes => {
+            let workspace = e.host.store().workspace();
+            let mut scenes: Vec<String> = workspace
+                .docs()
+                .filter(|(_, d)| d.kind == "scene")
+                .map(|(_, d)| d.id.to_string())
+                .collect();
+            // Recently opened first, then the rest by path.
+            scenes.sort_by_key(|id| {
+                (
+                    e.state
+                        .recent_scenes
+                        .iter()
+                        .position(|r| r == id)
+                        .unwrap_or(usize::MAX),
+                    workspace.path_of(id).unwrap_or("").to_owned(),
+                )
+            });
+            scenes
+                .into_iter()
+                .take(12)
+                .map(|id| {
+                    let path = workspace.path_of(&id).unwrap_or(&id);
+                    let path = workspace.reference_path(path).to_owned();
+                    let open = id == e.state.doc;
+                    entry(path, Target::Doc(id), Some(open))
+                })
+                .collect()
+        }
+        Dynamic::SavedLayouts => crate::state::saved_layouts(e.host.root())
+            .into_iter()
+            .map(|name| entry(name.clone(), Target::Text(name), None))
+            .collect(),
+        Dynamic::BuildProfiles => {
+            let names = s
+                .assets
+                .as_ref()
+                .map(|b| crate::build::profiles(&b.files))
+                .unwrap_or_default();
+            let setting = e
+                .state
+                .settings
+                .get(crate::build::PROFILE_SETTING)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            let chosen = crate::build::selected_profile(&names, setting)
+                .ok()
+                .map(str::to_owned);
+            names
+                .into_iter()
+                .map(|name| {
+                    let on = chosen.as_deref() == Some(name.as_str());
+                    entry(name.clone(), Target::Text(name), Some(on))
+                })
+                .collect()
+        }
+        Dynamic::PrefabSources => {
+            let Some(entity) = target.entity(&e.state) else {
+                return Vec::new();
+            };
+            let path = match target {
+                Target::Field(path) => Some(path.as_str()),
+                _ => None,
+            };
+            crate::prefab::source_choices(e.host.store(), &e.state.doc, entity)
+                .into_iter()
+                .map(|source| {
+                    let logical = e.host.store().workspace().reference_path(&source.path).to_owned();
+                    let choice = serde_json::json!({"entity": entity, "path": path, "destination": format!("@{logical}#{}", source.doc)});
+                    entry(logical, Target::Text(choice.to_string()), None)
+                })
+                .collect()
+        }
+        Dynamic::GizmoTypes => {
+            let settings = crate::overlay::gizmos::Settings::read(&e.state);
+            crate::overlay::gizmos::TYPES
+                .iter()
+                .map(|g| {
+                    entry(
+                        g.label.to_owned(),
+                        Target::Component(g.key.to_owned()),
+                        Some(settings.shows(g.key)),
+                    )
+                })
+                .collect()
+        }
+        // Floating windows, by the panels they hold; the front one is checked.
+        Dynamic::Windows => {
+            let front = e.state.floating.last().map(|f| f.id.clone());
+            e.state
+                .floating
+                .iter()
+                .map(|f| {
+                    let title = super::dock::window_title(&f.root);
+                    entry(
+                        title,
+                        Target::Window(f.id.clone()),
+                        Some(front.as_ref() == Some(&f.id)),
+                    )
+                })
+                .collect()
+        }
+        // Panels not open yet, to open as a tab beside the clicked one.
+        Dynamic::AddTab => {
+            let Target::Panel(beside) = target else {
+                return Vec::new();
+            };
+            super::dock::PANELS
+                .iter()
+                .filter(|p| !crate::state::panel_visible(&e.state, p))
+                .map(|p| {
+                    let (title, _) = super::dock::panel_title(p);
+                    entry(
+                        title.to_owned(),
+                        Target::Text(format!("{p}@{beside}")),
+                        None,
+                    )
+                })
+                .collect()
         }
     }
 }
 
 /// Menu entries for registry items, with no empty headings and no leading, trailing or
 /// doubled separators; commands act on `target`.
-fn entries(s: &Studio, items: &'static [Item], hide: bool, target: &Target) -> Vec<El<Studio>> {
+fn entries(s: &Studio, items: &'static [Item], target: &Target) -> Vec<El<Studio>> {
     let l = &s.look;
     let mut all = Vec::new();
-    lines(items, 0, hide, &mut all);
+    lines(s, items, 0, target, &mut all);
+    let entry = |line: Option<&Line>| matches!(line, Some(Line::Command(_) | Line::Entry(..)));
     let mut clean: Vec<Line> = Vec::new();
     for (i, line) in all.iter().enumerate() {
         match line {
-            Line::Heading(_) if !matches!(all.get(i + 1), Some(Line::Command(_))) => {}
-            Line::Separator if !matches!(clean.last(), Some(Line::Command(_))) => {}
-            _ => clean.push(*line),
+            Line::Heading(_) if !entry(all.get(i + 1)) => {}
+            Line::Separator if !entry(clean.last()) => {}
+            _ => clean.push(line.clone()),
         }
     }
     while matches!(clean.last(), Some(Line::Separator | Line::Heading(_))) {
@@ -292,23 +528,46 @@ fn entries(s: &Studio, items: &'static [Item], hide: bool, target: &Target) -> V
             Line::Separator => Some(menu_separator(l)),
             Line::Heading(title) => Some(menu_heading(l, title)),
             Line::Command(id) => command_item(s, id, target),
+            Line::Entry(title, id, target, checked) => {
+                let key = format!("cmd/{id}/{title}");
+                let item = match checked {
+                    Some(on) => menu_check(l, &key, &title, on),
+                    None => menu_item(l, &key, None, &title, None, false),
+                };
+                Some(item.on_press(move |s: &mut Studio| {
+                    s.local.menu = None;
+                    s.local.context = None;
+                    commands::run(s, id, &target);
+                }))
+            }
         })
         .collect()
 }
 
-/// One registry command as a menu item: its icon, title and shortcut; unavailable with
-/// its reason when the studio doesn't run it yet.
+/// One command as a menu item: its icon, title, shortcut and summary.
 fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Studio>> {
     let target = target.clone();
     let l = &s.look;
     let spec = commands::spec(id)?;
     let glyph = icons::named(spec.icon);
-    let keys = commands::shortcut(spec.keys);
+    let keys = commands::keys_of(s, id);
     // The OS file manager by its own name.
     let title = match id {
         "assets.reveal" if cfg!(target_os = "macos") => "Show in Finder",
         _ => spec.title,
     };
+    // Not built yet: dimmed, its reason on hover, and a press says it in the status bar.
+    if let Some(reason) = crate::catalog::later(id) {
+        let item = menu_item(l, &format!("cmd/{id}"), glyph, title, None, false)
+            .color(l.c.muted_foreground.0)
+            .tooltip(reason)
+            .on_press(move |s: &mut Studio| {
+                s.local.menu = None;
+                s.local.context = None;
+                commands::run(s, id, &Target::None);
+            });
+        return Some(item.description(reason));
+    }
     let item = menu_item(
         l,
         &format!("cmd/{id}"),
@@ -322,10 +581,7 @@ fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Stud
         s.local.context = None;
         commands::run(s, id, &target);
     });
-    Some(match commands::missing(id) {
-        Some(reason) => enabled(item.description(reason), false),
-        None => item.description(spec.summary),
-    })
+    Some(item.description(spec.summary))
 }
 
 /// Play, Pause/Resume, Step and Stop, centred in the title bar.
@@ -386,6 +642,7 @@ fn play_controls(s: &Studio) -> El<Studio> {
                 .on_press(run("play.stop")),
             playing.is_some(),
         ));
+    group = group.child(play_menu(s));
     if playing.is_some() {
         group = group.child(chip(
             l,
@@ -399,6 +656,243 @@ fn play_controls(s: &Studio) -> El<Studio> {
         ));
     }
     group
+}
+
+/// Play's options beside Stop (Unreal's Play dropdown): the mode, clients and their network
+/// conditions, Start Paused, and Simulate; while Play runs, Eject or Possess, reading the
+/// selection's running values, and keeping runtime changes.
+fn play_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let open = s.local.play_menu;
+    let mut trigger = icon_button(
+        l,
+        Tone::Ghost,
+        Size::Sm,
+        icons::CHEVRON_DOWN,
+        "Play options",
+    )
+    .key("play/options")
+    .expanded(open)
+    .on_press(|s: &mut Studio| s.local.play_menu = !s.local.play_menu);
+    if !open {
+        return trigger;
+    }
+    let run = |id: &'static str| {
+        move |s: &mut Studio| {
+            s.local.play_menu = false;
+            commands::run(s, id, &Target::None);
+        }
+    };
+    // Settings stay open on change, so several can be set in one visit.
+    let set = |id: &'static str| move |s: &mut Studio| commands::run(s, id, &Target::None);
+    let settings = &s.editor.state.settings;
+    let mode = settings
+        .get("play.mode")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("local");
+    let clients = settings
+        .get("play.clients")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(1.0) as usize;
+    let paused = settings
+        .get("play.startPaused")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let playing = s.editor.state.playing.is_some();
+    let mut items = vec![menu_heading(l, "Play as")];
+    for (value, title, id) in [
+        ("local", "Local", "play.mode.local"),
+        ("host", "Host and clients", "play.mode.host"),
+        (
+            "dedicated",
+            "Dedicated server and clients",
+            "play.mode.dedicated",
+        ),
+    ] {
+        items.push(enabled(
+            menu_check(l, &format!("play/mode/{value}"), title, mode == value).on_press(set(id)),
+            !playing,
+        ));
+    }
+    if mode != "local" {
+        items.push(
+            row()
+                .key("play/clients")
+                .h(28.0)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .child(
+                    text("Clients")
+                        .text_size(12.5)
+                        .color(c.foreground.0)
+                        .grow(1.0),
+                )
+                .child(enabled(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::MINUS, "Fewer clients")
+                        .key("play/clients/fewer")
+                        .on_press(set("play.clients.fewer")),
+                    !playing && clients > 1,
+                ))
+                .child(
+                    text(clients.to_string())
+                        .text_size(12.5)
+                        .family(mono())
+                        .color(c.foreground.0),
+                )
+                .child(enabled(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "More clients")
+                        .key("play/clients/more")
+                        .on_press(set("play.clients.more")),
+                    !playing && clients < 16,
+                )),
+        );
+        // Each client's network conditions: a press moves to the next profile.
+        for player in 1..=clients.min(16) {
+            let current = crate::play_controls::network_profile(&s.editor, player);
+            let at = crate::play_controls::PROFILES
+                .iter()
+                .position(|(name, _)| *name == current)
+                .unwrap_or(0);
+            let (_, label) = crate::play_controls::PROFILES[at];
+            let (next, _) =
+                crate::play_controls::PROFILES[(at + 1) % crate::play_controls::PROFILES.len()];
+            items.push(enabled(
+                row()
+                    .key(format!("play/network/{player}"))
+                    .h(26.0)
+                    .pad_x(8.0)
+                    .gap(8.0)
+                    .align(Align::Center)
+                    .radius(l.radius.sm)
+                    .hovered({
+                        let hover = c.hover_surface.0;
+                        move |e| e.fill(hover)
+                    })
+                    .label(format!("Client {player} network: {label}"))
+                    .tooltip("Network conditions for the next Play: press for the next")
+                    .on_press(move |s: &mut Studio| {
+                        if let Err(error) =
+                            crate::play_controls::set_network_profile(&mut s.editor, player, next)
+                        {
+                            s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                        }
+                    })
+                    .child(icon(icons::WIFI).size(13.0).color(c.muted_foreground.0))
+                    .child(
+                        text(format!("Client {player}"))
+                            .text_size(12.0)
+                            .color(c.foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(text(label).text_size(11.5).color(c.muted_foreground.0)),
+                !playing,
+            ));
+        }
+    }
+    items.push(enabled(
+        menu_check(l, "play/paused", "Start paused", paused).on_press(set("play.start_paused")),
+        !playing,
+    ));
+    items.push(menu_separator(l));
+    let busy = s.play.busy();
+    if playing {
+        let ejected = s.play.ejected();
+        items.push(enabled(
+            menu_item(
+                l,
+                "play/eject",
+                Some(icons::VIDEO),
+                if ejected {
+                    "Ejected: possess the selection to return"
+                } else {
+                    "Eject"
+                },
+                Some("F8"),
+                false,
+            )
+            .on_press(run("play.eject")),
+            !busy && !ejected,
+        ));
+        items.push(enabled(
+            menu_item(
+                l,
+                "play/possess",
+                Some(icons::USER),
+                "Possess Selected",
+                None,
+                false,
+            )
+            .on_press(run("play.possess")),
+            !busy && !s.editor.state.selection.is_empty(),
+        ));
+        items.push(menu_separator(l));
+        for (key, glyph, title, id) in [
+            (
+                "play/inspect",
+                icons::SCAN_EYE,
+                "Read Running Values",
+                "play.inspect",
+            ),
+            (
+                "play/keep",
+                icons::SAVE,
+                "Keep Runtime Changes…",
+                "play.keep",
+            ),
+            (
+                "play/keep-driven",
+                icons::SAVE,
+                "Keep Including Driven Values…",
+                "play.keep_driven",
+            ),
+        ] {
+            items.push(enabled(
+                menu_item(l, key, Some(glyph), title, None, false).on_press(run(id)),
+                !busy && !s.editor.state.selection.is_empty(),
+            ));
+        }
+    } else {
+        items.push(
+            menu_item(
+                l,
+                "play/simulate",
+                Some(icons::PLAY),
+                "Simulate",
+                Some("Alt+F5"),
+                false,
+            )
+            .tooltip("Run the scene through a spectator camera, with no player actor")
+            .on_press(run("play.simulate")),
+        );
+    }
+    items.push(
+        menu_item(
+            l,
+            "play/settings",
+            Some(icons::SETTINGS),
+            "Play Settings…",
+            None,
+            false,
+        )
+        .on_press(run("play.settings")),
+    );
+    if let Some(message) = &s.play.message {
+        items.push(
+            row().pad_x(8.0).pad_y(6.0).max_w(300.0).child(
+                text(message.clone())
+                    .text_size(11.5)
+                    .wrap(4)
+                    .color(c.muted_foreground.0),
+            ),
+        );
+    }
+    trigger = trigger.overlay(
+        stillkit::el::menu(menu_panel(l, items).min_w(280.0))
+            .on_dismiss(|s: &mut Studio| s.local.play_menu = false),
+    );
+    trigger
 }
 
 fn status_bar(s: &Studio) -> El<Studio> {
@@ -426,10 +920,74 @@ fn status_bar(s: &Studio) -> El<Studio> {
         1 => "Authority ready · 1 agent connected".to_owned(),
         n => format!("Authority ready · {n} agents connected"),
     };
-    let hint = text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
-        .text_size(11.0)
-        .color(c.muted_foreground.0.with_alpha(0.8));
-    row()
+    // What the last request did, for a few seconds; else the newest warning or error
+    // (Unity's status bar: a press opens it in the Console); else the keys worth knowing.
+    let latest = s.logs.iter().rev().find(|r| {
+        matches!(
+            r.severity,
+            ara_diag::Severity::Error | ara_diag::Severity::Warning
+        )
+    });
+    let hint = match (&s.local.note, latest) {
+        (Some((note, at)), _) if at.elapsed() < std::time::Duration::from_secs(8) => {
+            text(note.clone())
+                .key("status/note")
+                .text_size(11.0)
+                .color(c.foreground.0)
+        }
+        (_, Some(r)) => {
+            let error = r.severity == ara_diag::Severity::Error;
+            let seq = r.seq;
+            let hover = super::style::tones(l).hover;
+            row()
+                .key("status/log")
+                .min_w(0.0)
+                .max_w(520.0)
+                .gap(6.0)
+                .pad_x(6.0)
+                .h(18.0)
+                .radius(super::style::RADIUS)
+                .align(Align::Center)
+                .label(format!(
+                    "{}: {}",
+                    if error { "Error" } else { "Warning" },
+                    r.message
+                ))
+                .tooltip("Show it in the Console")
+                .hovered(move |e| e.fill(hover))
+                .on_press(move |s: &mut Studio| {
+                    s.local.console_open = Some(seq);
+                    s.act(
+                        "editor.layout.show",
+                        serde_json::json!({"panel": "console"}),
+                    );
+                })
+                .child(
+                    icon(if error {
+                        icons::CIRCLE_X
+                    } else {
+                        icons::TRIANGLE_ALERT
+                    })
+                    .size(12.0)
+                    .color(if error {
+                        c.destructive_foreground.0
+                    } else {
+                        c.warning_foreground.0
+                    }),
+                )
+                .child(
+                    text(r.message.clone())
+                        .text_size(11.0)
+                        .wrap(1)
+                        .color(c.foreground.0)
+                        .min_w(0.0),
+                )
+        }
+        _ => text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
+            .text_size(11.0)
+            .color(c.muted_foreground.0.with_alpha(0.8)),
+    };
+    let bar = row()
         .key("status")
         .h(22.0)
         .pad_x(10.0)
@@ -452,7 +1010,11 @@ fn status_bar(s: &Studio) -> El<Studio> {
         )
         .child(el().grow(1.0))
         .child(hint)
-        .child(right)
+        .child(right);
+    match super::scripts::chooser(s) {
+        Some(chooser) => bar.overlay(chooser),
+        None => bar,
+    }
 }
 
 /// One palette result.
@@ -461,13 +1023,16 @@ struct Entry {
     icon: Option<stillkit::icons::Icon>,
     title: String,
     detail: String,
-    keys: &'static str,
+    /// The binding in force, as this platform writes it.
+    keys: Option<String>,
     run: Run,
 }
 
 enum Run {
     Command(&'static str),
     Select(String),
+    /// Open this scene document.
+    Scene(String),
 }
 
 /// A fuzzy match of `query` in `title`: letters in order, rewarding runs and word starts.
@@ -491,13 +1056,13 @@ pub(super) fn score(query: &str, title: &str) -> Option<i32> {
 fn results(s: &Studio, query: &str) -> Vec<Entry> {
     let entry = |group: &'static str, id: &'static str| {
         commands::spec(id)
-            .filter(|_| commands::ported(id))
+            .filter(|_| commands::ported(id) && crate::catalog::later(id).is_none())
             .map(|spec| Entry {
                 group,
                 icon: icons::named(spec.icon),
                 title: spec.title.to_owned(),
                 detail: spec.summary.to_owned(),
-                keys: spec.keys,
+                keys: commands::keys_of(s, spec.id),
                 run: Run::Command(spec.id),
             })
     };
@@ -532,10 +1097,10 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         return recent.chain(rest).take(14).collect();
     }
     let mut all: Vec<(i32, Entry)> = Vec::new();
-    for spec in crate::shell::commands::all()
-        .iter()
-        .filter(|spec| commands::ported(spec.id))
-    {
+    for spec in crate::catalog::all() {
+        if crate::catalog::later(spec.id).is_some() {
+            continue;
+        }
         if let Some(sc) = score(query, spec.title) {
             // Recency only breaks ties between similar matches.
             let recent = if s.local.recent_commands.contains(&spec.id) {
@@ -550,11 +1115,45 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
                     icon: icons::named(spec.icon),
                     title: spec.title.to_owned(),
                     detail: spec.summary.to_owned(),
-                    keys: spec.keys,
+                    keys: commands::keys_of(s, spec.id),
                     run: Run::Command(spec.id),
                 },
             ));
         }
+    }
+    // Scenes in the project; `#` lists only them (File › Open Scene).
+    let (scene_query, scenes_only) = match query.strip_prefix('#') {
+        Some(rest) => (rest.trim(), true),
+        None => (query, false),
+    };
+    let workspace = s.editor.host.store().workspace();
+    for (doc, document) in workspace.docs() {
+        if document.kind != "scene" {
+            continue;
+        }
+        let path = workspace.path_of(doc).unwrap_or_default();
+        let name = path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".scene");
+        if let Some(sc) = score(scene_query, name) {
+            all.push((
+                sc + if scenes_only { 20 } else { 1 },
+                Entry {
+                    group: "Scenes",
+                    icon: Some(icons::CLAPPERBOARD),
+                    title: name.to_owned(),
+                    detail: path.to_owned(),
+                    keys: None,
+                    run: Run::Scene(doc.to_string()),
+                },
+            ));
+        }
+    }
+    if scenes_only {
+        all.sort_by_key(|e| std::cmp::Reverse(e.0));
+        return all.into_iter().take(14).map(|(_, e)| e).collect();
     }
     for (id, entity) in s.resolved.iter() {
         let name = entity
@@ -570,7 +1169,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
                     icon: Some(icons::BOX),
                     title: name.to_owned(),
                     detail: id.clone(),
-                    keys: "",
+                    keys: None,
                     run: Run::Select(id.clone()),
                 },
             ));
@@ -598,6 +1197,11 @@ fn run(s: &mut Studio) {
             Run::Select(id) => {
                 s.select(vec![id], false);
                 s.act("editor.frame", serde_json::json!({}));
+            }
+            Run::Scene(doc) => {
+                s.act("editor.scene.open", serde_json::json!({"scene": doc}));
+                s.resolve();
+                s.act("editor.focus", serde_json::json!({"panel": "scene"}));
             }
         }
     }
@@ -699,8 +1303,8 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
                     })
                     .grow(1.0),
             );
-        if let Some(k) = commands::shortcut(e.keys) {
-            item = item.child(kbd(l, &k));
+        if let Some(k) = &e.keys {
+            item = item.child(kbd(l, k));
         }
         list = list.child(item);
     }
