@@ -1,0 +1,1158 @@
+{
+  "phase": "scene",
+  "scope": "Ara CPU preparation/host feature experiment; no Unity, shipping frame or universal superiority claim.",
+  "date_utc": "2026-11-08T21:09:13.366248+00:00",
+  "git_head": "cd9164a457fe4a1ca1296090d472ab0c7121c218",
+  "dirty_sources": true,
+  "script_sha256": "7a8d1529f478226300095efbd7a121b6bf749d95b49dbf98b9b2eb76fa1d2b7e",
+  "source_sha256": {
+    "crates/ara-script/src/ecs/system.rs": "e7d681d64df597cfc9320573af836ad21f35dc1563487a595d4d9fb64411e261",
+    "crates/ara-script/src/host/bindings.rs": "50ecaedfa87d094dd515c508de717406b6cc9c36ba90743ef9ccf4f2395a4165",
+    "crates/ara-script/src/host/ctx.rs": "43347ce85f871f1ad6c31126388210408bbcd04049e9ad9ef9bd5f65826aa81e",
+    "crates/ara-script/src/ecs/cmdbuf.rs": "a4748b7393b7e976d27eef2ad92beac1a42e65ed165ad4d168ec18c8745efdc9",
+    "crates/ara-play/src/lib.rs": "132eb80cf03b0ff34fefdb2f827d881aa41a32db00fc4bc9fa4e7bbb0a5f7ec5",
+    "crates/ara-player/src/world.rs": "31e123ffe52759e812152604b3e1e9651baeb188f8a2a344228d4c46185b6ab3",
+    "dotnet/src/Ara.Generators/Docs.cs": "e22fd2cd4b3316d4f8c7453b6f6982228eb230615cffd8ab9021952b938e6d60",
+    "dotnet/src/Ara.Generators/ModuleGenerator.cs": "a541c8db5f7e892cff4e443f5eb4ac3e2aa35319b52cfbe13aa4c6a4972b691f",
+    "dotnet/src/Ara.Generators/Polyfills.cs": "46d1d486ed083c11e036591c4dfa0ba0d0d7a189b4a9b537d38633f41f5f4312",
+    "dotnet/src/Ara.Generators/Emit.Query.cs": "79af604889da4f65cb520be5bed0cc390658f2527a2ab3ed15d8c73848621b64",
+    "dotnet/src/Ara.Generators/Extract.Query.cs": "62d358f6ca2afcdd281511e19766aaddae8a2bc8cdf21936b172a15df095bc95",
+    "dotnet/src/Ara.Generators/Models.cs": "ad8bc6f162123d098a0b892cdc238d6a22bdf33b49a9990561939a1d5251d18b",
+    "dotnet/src/Ara.Generators/Emit.cs": "a4b4bbddd7b4a15405c6b4a7f0ac1bd7d9b3f8e9a7398905d48fdf246921c23e",
+    "dotnet/src/Ara.Generators/Json.cs": "f75826b6d7f12702450ce5b168b650fe2459c7beefd20f4f9af26aa0e0f75d68",
+    "dotnet/src/Ara.Generators/Extract.cs": "db87e252f2b146affddc9d176975fa7be179a8633af976990dc04433a80f0142",
+    "dotnet/src/Ara.Generators/Schema.cs": "ce181448d594714a7a39159b4495e009d019f37403d7d45bcc49161eb150e260",
+    "dotnet/src/Ara.Generators/Descriptors.cs": "8d58346e4a0bb02304a9e9e1c0f5c21374fd8acca4816b8759cf2205bd99fd2a",
+    "crates/ara-script/examples/batch_query_bench.rs": "ca3f433deab8d5fd731d425f110d77b417e16cef8df438077aeec139132d78e1",
+    "crates/ara-script/examples/query_tick_bench.rs": "06173f79b247f94cd810d1f77db8d2c19624a26c4f57c03e234f485c43cdede0",
+    "crates/ara-script/examples/sparse_query_bench.rs": "7b8b7fb6a66f77be334a88ecc2362e0b3e70224998f69f676a68c2b4b44cce3b",
+    "crates/ara-play/examples/scene_prepare_bench.rs": "343666dd91a9d7077aa2bd15c347e9edb8739a56214ce78826f86f42af50a268"
+  },
+  "method": "Two fresh-process rounds with reversed order, nice10. Kernel samples exclude setup/verification; separate untimed Rust allocation counts. Resource guards before/after cannot prove continuous absence of interference. Worker arguments are pool workers plus a participating caller, not total hardware cores.",
+  "results": [
+    {
+      "name": "r0-10000-borrowed",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "borrowed"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:09:13.391939+00:00",
+        "load": [
+          6.47119140625,
+          6.1953125,
+          5.134765625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 137.8,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 53.2,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.5,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 14919,
+            "cpu_percent": 5.7,
+            "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:09:16.069753+00:00",
+        "load": [
+          6.47119140625,
+          6.1953125,
+          5.134765625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 131.1,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 54.6,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.2,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "borrowed",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.994208,
+        "encode_ms": 2.012375,
+        "cbor_bytes": 1702009,
+        "p50_ms": 129.18312500000002,
+        "p95_ms": 137.209834,
+        "phases": [
+          {
+            "decode_ms": 15.352209,
+            "workspace_ms": 5.076167000000001,
+            "projection_ms": 114.978583,
+            "decoded_scene_drop_ms": 1.802542,
+            "total_ms": 137.209834
+          },
+          {
+            "decode_ms": 14.471291,
+            "workspace_ms": 4.282,
+            "projection_ms": 108.63487500000001,
+            "decoded_scene_drop_ms": 1.794708,
+            "total_ms": 129.18312500000002
+          },
+          {
+            "decode_ms": 13.74525,
+            "workspace_ms": 3.774917,
+            "projection_ms": 108.260458,
+            "decoded_scene_drop_ms": 2.1848330000000002,
+            "total_ms": 127.965834
+          }
+        ],
+        "rust_allocations_per_preparation": 3988262,
+        "rust_allocated_bytes_per_preparation": 260533933,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 31.162417,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "6eb02ee4d045cbe5492503449ebd766320df29c19655a9f63750f269522d7dea",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-10000-owned",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:09:16.100253+00:00",
+        "load": [
+          6.47119140625,
+          6.1953125,
+          5.134765625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 131.1,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 54.6,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.2,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:09:17.622548+00:00",
+        "load": [
+          6.47119140625,
+          6.1953125,
+          5.134765625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 165.4,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 52.8,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.6,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.966166,
+        "encode_ms": 1.963125,
+        "cbor_bytes": 1702009,
+        "p50_ms": 127.49475,
+        "p95_ms": 128.807708,
+        "phases": [
+          {
+            "decode_ms": 15.188584,
+            "workspace_ms": 0.992917,
+            "projection_ms": 109.76537499999999,
+            "decoded_scene_drop_ms": 0.0022500000000000003,
+            "total_ms": 125.94949999999999
+          },
+          {
+            "decode_ms": 15.364542,
+            "workspace_ms": 0.997333,
+            "projection_ms": 112.444125,
+            "decoded_scene_drop_ms": 0.0015,
+            "total_ms": 128.807708
+          },
+          {
+            "decode_ms": 14.805208,
+            "workspace_ms": 0.986083,
+            "projection_ms": 111.701542,
+            "decoded_scene_drop_ms": 0.001667,
+            "total_ms": 127.49475
+          }
+        ],
+        "rust_allocations_per_preparation": 3775723,
+        "rust_allocated_bytes_per_preparation": 234133781,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 32.015791,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "eda9fb7587374f23b8bcae69334bfc55583ce980360a6d22748e41bddc85802e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-100000-borrowed",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "borrowed"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:09:17.648660+00:00",
+        "load": [
+          6.47119140625,
+          6.1953125,
+          5.134765625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 165.4,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 52.8,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.6,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:09:34.454032+00:00",
+        "load": [
+          6.4794921875,
+          6.21435546875,
+          5.166015625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 148.2,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 61.1,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 10.4,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "borrowed",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 53.752874999999996,
+        "encode_ms": 27.239625,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1331.853041,
+        "p95_ms": 1408.571167,
+        "phases": [
+          {
+            "decode_ms": 161.67858299999997,
+            "workspace_ms": 58.871667,
+            "projection_ms": 1171.519125,
+            "decoded_scene_drop_ms": 16.5015,
+            "total_ms": 1408.571167
+          },
+          {
+            "decode_ms": 160.764958,
+            "workspace_ms": 42.084165999999996,
+            "projection_ms": 1112.506958,
+            "decoded_scene_drop_ms": 16.496709,
+            "total_ms": 1331.853041
+          },
+          {
+            "decode_ms": 145.503916,
+            "workspace_ms": 40.22725,
+            "projection_ms": 1114.975167,
+            "decoded_scene_drop_ms": 17.2635,
+            "total_ms": 1317.970292
+          }
+        ],
+        "rust_allocations_per_preparation": 39828431,
+        "rust_allocated_bytes_per_preparation": 2609222238,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 340.18925,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "a8c62e9cd453befa4b7f5473e4181b4f1a38ecbd2deee5f09d92cad0378ad59a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r0-100000-owned",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:09:34.482302+00:00",
+        "load": [
+          6.4794921875,
+          6.21435546875,
+          5.166015625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 148.2,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 61.1,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 10.4,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:09:50.588615+00:00",
+        "load": [
+          5.79443359375,
+          6.0732421875,
+          5.1337890625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 139.3,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 49.7,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.9,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 43.137541,
+        "encode_ms": 15.473832999999999,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1321.151084,
+        "p95_ms": 1323.2672910000001,
+        "phases": [
+          {
+            "decode_ms": 162.308709,
+            "workspace_ms": 13.272709,
+            "projection_ms": 1147.683416,
+            "decoded_scene_drop_ms": 0.002167,
+            "total_ms": 1323.2672910000001
+          },
+          {
+            "decode_ms": 156.985209,
+            "workspace_ms": 11.515334000000001,
+            "projection_ms": 1139.92275,
+            "decoded_scene_drop_ms": 0.002042,
+            "total_ms": 1308.425584
+          },
+          {
+            "decode_ms": 149.770334,
+            "workspace_ms": 11.422500000000001,
+            "projection_ms": 1159.955958,
+            "decoded_scene_drop_ms": 0.002042,
+            "total_ms": 1321.151084
+          }
+        ],
+        "rust_allocations_per_preparation": 37703392,
+        "rust_allocated_bytes_per_preparation": 2345064586,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 376.009125,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "de31ab72802d184a4b6bfd636293d9bd95794c22c57743ffe9ecd469f1b6cddc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-100000-owned",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:09:50.615126+00:00",
+        "load": [
+          5.79443359375,
+          6.0732421875,
+          5.1337890625
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t31%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 139.3,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 49.7,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.9,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:10:06.960839+00:00",
+        "load": [
+          5.5380859375,
+          6.00341796875,
+          5.125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 139.0,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 60.4,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.7,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 45.175791,
+        "encode_ms": 16.249958,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1328.4364580000001,
+        "p95_ms": 1340.995792,
+        "phases": [
+          {
+            "decode_ms": 157.491166,
+            "workspace_ms": 11.954542,
+            "projection_ms": 1158.988167,
+            "decoded_scene_drop_ms": 0.0024159999999999997,
+            "total_ms": 1328.4364580000001
+          },
+          {
+            "decode_ms": 160.744875,
+            "workspace_ms": 11.922749999999999,
+            "projection_ms": 1168.3259580000001,
+            "decoded_scene_drop_ms": 0.002,
+            "total_ms": 1340.995792
+          },
+          {
+            "decode_ms": 148.401167,
+            "workspace_ms": 11.635207999999999,
+            "projection_ms": 1147.03325,
+            "decoded_scene_drop_ms": 0.002209,
+            "total_ms": 1307.0720840000001
+          }
+        ],
+        "rust_allocations_per_preparation": 37703392,
+        "rust_allocated_bytes_per_preparation": 2345064586,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 344.67095800000004,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "493193d91eaa22832fc874fbce9f90190cfc8d9648ac51f48d24ac81d2f2a1f6",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-100000-borrowed",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "100000",
+        "--samples",
+        "3",
+        "--mode",
+        "borrowed"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:10:06.986289+00:00",
+        "load": [
+          5.5380859375,
+          6.00341796875,
+          5.125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 139.0,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 60.4,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.7,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:10:24.027547+00:00",
+        "load": [
+          5.50390625,
+          5.96826171875,
+          5.1328125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 138.5,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 61.5,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.6,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          },
+          {
+            "pid": 75851,
+            "cpu_percent": 7.8,
+            "command": "claude"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "borrowed",
+        "rows": 100000,
+        "projected_entities": 106249,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 44.527499999999996,
+        "encode_ms": 16.319375,
+        "cbor_bytes": 17271213,
+        "p50_ms": 1412.600917,
+        "p95_ms": 1424.890917,
+        "phases": [
+          {
+            "decode_ms": 170.871125,
+            "workspace_ms": 61.30025,
+            "projection_ms": 1173.106291,
+            "decoded_scene_drop_ms": 19.613125,
+            "total_ms": 1424.890917
+          },
+          {
+            "decode_ms": 149.46320799999998,
+            "workspace_ms": 42.871542,
+            "projection_ms": 1190.027291,
+            "decoded_scene_drop_ms": 19.195542,
+            "total_ms": 1401.557792
+          },
+          {
+            "decode_ms": 156.554917,
+            "workspace_ms": 42.542833,
+            "projection_ms": 1191.4198330000002,
+            "decoded_scene_drop_ms": 22.083292,
+            "total_ms": 1412.600917
+          }
+        ],
+        "rust_allocations_per_preparation": 39828431,
+        "rust_allocated_bytes_per_preparation": 2609222238,
+        "initial_state_hash": "9a6d699526c9926f5a114453e5325c303e3e7d8e40096fbab7e3710e636a0fde",
+        "changed_state_hash": "a944a8510d670f7c04783e7af9fab09f73e7b87308529104b35f49ff3087562b",
+        "portable_snapshot_hash": "8fbc17d20a7168414b3b6bcfddc0b0363836009f4fb039467d61505631d863f8",
+        "changed_portable_snapshot_hash": "de3428c3890025b7b49d601f605b303f97c8eb099d499996d6f702834374afc0",
+        "portable_bytes": 41941326,
+        "one_change_ms": 364.205375,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "62ca29030e4afc24e55cccf9fd9702ddf6146f3f09331578294a4d958c35dfc5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-10000-owned",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "owned"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:10:24.054124+00:00",
+        "load": [
+          5.50390625,
+          5.96826171875,
+          5.1328125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 132.1,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 62.2,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.5,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.3,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:10:25.611277+00:00",
+        "load": [
+          5.50390625,
+          5.96826171875,
+          5.1328125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 137.0,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 67.9,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.3,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 35789,
+            "cpu_percent": 34.5,
+            "command": "/Applications/T3 Code (Nightly).app/Contents/Frameworks/T3 Code (Nightly) Helper (Renderer).app/Contents/MacOS/T3 Code (Nightly) Helper (Renderer)"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "owned",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.866375,
+        "encode_ms": 1.840541,
+        "cbor_bytes": 1702009,
+        "p50_ms": 131.882416,
+        "p95_ms": 133.73679199999998,
+        "phases": [
+          {
+            "decode_ms": 15.516583,
+            "workspace_ms": 1.0556249999999998,
+            "projection_ms": 115.308041,
+            "decoded_scene_drop_ms": 0.001834,
+            "total_ms": 131.882416
+          },
+          {
+            "decode_ms": 16.465917,
+            "workspace_ms": 1.0099580000000001,
+            "projection_ms": 116.259291,
+            "decoded_scene_drop_ms": 0.0014169999999999999,
+            "total_ms": 133.73679199999998
+          },
+          {
+            "decode_ms": 15.861332999999998,
+            "workspace_ms": 0.9927079999999999,
+            "projection_ms": 112.685625,
+            "decoded_scene_drop_ms": 0.001583,
+            "total_ms": 129.541584
+          }
+        ],
+        "rust_allocations_per_preparation": 3775723,
+        "rust_allocated_bytes_per_preparation": 234133781,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 32.411666,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "b197dbc5903409fbbbc18cf983583ae4551682bc496ecffec8c5ffa00b755fc5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "r1-10000-borrowed",
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/scene_prepare_bench-87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+        "--rows",
+        "10000",
+        "--samples",
+        "3",
+        "--mode",
+        "borrowed"
+      ],
+      "binary_sha256": "87edcce833a9fcec7a0f55df05e08342aad3251d96c7a1070dad4ba39b09ccd1",
+      "returncode": 0,
+      "before": {
+        "utc": "2026-11-08T21:10:25.636726+00:00",
+        "load": [
+          5.50390625,
+          5.96826171875,
+          5.1328125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 781,
+            "cpu_percent": 137.0,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 67.9,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 9.3,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 35789,
+            "cpu_percent": 34.5,
+            "command": "/Applications/T3 Code (Nightly).app/Contents/Frameworks/T3 Code (Nightly) Helper (Renderer).app/Contents/MacOS/T3 Code (Nightly) Helper (Renderer)"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 99.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "after": {
+        "utc": "2026-11-08T21:10:27.246847+00:00",
+        "load": [
+          5.50390625,
+          5.96826171875,
+          5.1328125
+        ],
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t32%; charging; (no estimate) present: true",
+        "active_processes": [
+          {
+            "pid": 524,
+            "cpu_percent": 5.7,
+            "command": "/usr/libexec/airportd"
+          },
+          {
+            "pid": 781,
+            "cpu_percent": 137.9,
+            "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+          },
+          {
+            "pid": 9480,
+            "cpu_percent": 50.3,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService"
+          },
+          {
+            "pid": 9486,
+            "cpu_percent": 10.0,
+            "command": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService"
+          },
+          {
+            "pid": 71451,
+            "cpu_percent": 100.0,
+            "command": "target/debug/ara-editor"
+          }
+        ],
+        "active_compilers": []
+      },
+      "resource_guard_passed": true,
+      "result": {
+        "mode": "borrowed",
+        "rows": 10000,
+        "projected_entities": 10624,
+        "samples": 3,
+        "warmup": 1,
+        "capture_ms": 4.4825,
+        "encode_ms": 1.636708,
+        "cbor_bytes": 1702009,
+        "p50_ms": 136.6835,
+        "p95_ms": 140.937375,
+        "phases": [
+          {
+            "decode_ms": 15.889625,
+            "workspace_ms": 5.461042,
+            "projection_ms": 117.90012499999999,
+            "decoded_scene_drop_ms": 1.686334,
+            "total_ms": 140.937375
+          },
+          {
+            "decode_ms": 14.030666,
+            "workspace_ms": 3.99025,
+            "projection_ms": 116.931917,
+            "decoded_scene_drop_ms": 1.700208,
+            "total_ms": 136.65370800000002
+          },
+          {
+            "decode_ms": 14.930916,
+            "workspace_ms": 4.029999999999999,
+            "projection_ms": 116.024042,
+            "decoded_scene_drop_ms": 1.6980840000000001,
+            "total_ms": 136.6835
+          }
+        ],
+        "rust_allocations_per_preparation": 3988262,
+        "rust_allocated_bytes_per_preparation": 260533933,
+        "initial_state_hash": "c4d91c6e58a9522d3033c4e8ba1b24659fd3d03ac02c6e7e1526cbd9a340d0d6",
+        "changed_state_hash": "2631d79046bee7bcc16e0ee1054e7f816332724936f0730000e80cddef2c96d0",
+        "portable_snapshot_hash": "32f1d3aba2ed1a68ec85e3fdc3495427449f24fecd96428b13709d99c1b0ae91",
+        "changed_portable_snapshot_hash": "d17b2b158f4e586b4e34e3b267a87c7d3c171904a8753c76b6573a2f49e00e01",
+        "portable_bytes": 4142915,
+        "one_change_ms": 31.414499999999997,
+        "all_live_entity_handles_retained": true,
+        "canonical_source_mirror_equal": true,
+        "portable_snapshot_restore_equal": true
+      },
+      "stdout_sha256": "cdc93bf26327a08901914ea8a35584e0a4d0fc49806ba21d515842df65602bcf",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "complete": true,
+  "quality_audit": "Borrowed/owned initial, changed, portable and changed-portable hashes agree in all four fresh processes at each size; canonical mirrors, live handle reuse and portable restore assertions passed.",
+  "limitations": "CPU-only decoded scene/workspace/projection fixture with variable values and prefabs; not first-correct-tick, assets-ready or whole Play latency. Background editor, OS security and media tasks are captured. Workspace phase improves strongly; total phase improvement is smaller and varies between rounds. Rust allocator counts cover preparation, not managed/native allocations elsewhere.",
+  "host_profile": "Apple M5 Pro, macOS27, AC charging; separate from earlier battery Unity measurements.",
+  "build": "cargo build -p ara-play --profile perf --example scene_prepare_bench (jobs2); perf opt3, LTOoff, codegen256, line-tables-only.",
+  "summary": {
+    "10000": {
+      "borrowed": {
+        "process_p50_ms": [
+          129.18312500000002,
+          136.6835
+        ],
+        "workspace_phase_mean_ms": [
+          4.377694666666667,
+          4.493764
+        ],
+        "rust_allocations": 3988262,
+        "rust_allocated_bytes": 260533933
+      },
+      "owned": {
+        "process_p50_ms": [
+          127.49475,
+          131.882416
+        ],
+        "workspace_phase_mean_ms": [
+          0.9921110000000001,
+          1.0194303333333332
+        ],
+        "rust_allocations": 3775723,
+        "rust_allocated_bytes": 234133781
+      }
+    },
+    "100000": {
+      "borrowed": {
+        "process_p50_ms": [
+          1331.853041,
+          1412.600917
+        ],
+        "workspace_phase_mean_ms": [
+          47.06102766666667,
+          48.904875
+        ],
+        "rust_allocations": 39828431,
+        "rust_allocated_bytes": 2609222238
+      },
+      "owned": {
+        "process_p50_ms": [
+          1321.151084,
+          1328.4364580000001
+        ],
+        "workspace_phase_mean_ms": [
+          12.070181000000002,
+          11.837499999999999
+        ],
+        "rust_allocations": 37703392,
+        "rust_allocated_bytes": 2345064586
+      }
+    }
+  }
+}

@@ -1,0 +1,917 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "scope": "Internal native SmallVec fixed4 prototype comparison only. No Unity/Unreal, public C# buffer API, shipping frame or market superiority claim.",
+  "status": "All12 planned fresh native processes complete and accepted; no retries.",
+  "started_utc": "2026-11-09T10:51:24.573883+00:00",
+  "finished_utc": "2026-11-09T10:51:26.848358+00:00",
+  "workload": "buffer_fixed",
+  "count": 100000,
+  "warmup": 120,
+  "samples_per_process": 300,
+  "total_steps": 420,
+  "config": {
+    "percent": 10,
+    "distribution": "spread",
+    "length": 4,
+    "trim": false,
+    "fork_join": false
+  },
+  "method": "12 fresh processes, two rounds reverse worker/variant order, nice10, no builds/source changes or retries. Resource snapshots before/during/after exclude controller descendants; 0.2s wait between snapshots. Snapshots cover process lifetime, not an exhaustive kernel/OS trace, and add observable monitoring overhead recorded per snapshot.",
+  "order": [
+    {
+      "round": 1,
+      "workers": 0,
+      "variant": "baseline"
+    },
+    {
+      "round": 1,
+      "workers": 0,
+      "variant": "contiguous"
+    },
+    {
+      "round": 1,
+      "workers": 0,
+      "variant": "simd"
+    },
+    {
+      "round": 1,
+      "workers": 14,
+      "variant": "baseline"
+    },
+    {
+      "round": 1,
+      "workers": 14,
+      "variant": "contiguous"
+    },
+    {
+      "round": 1,
+      "workers": 14,
+      "variant": "simd"
+    },
+    {
+      "round": 2,
+      "workers": 14,
+      "variant": "simd"
+    },
+    {
+      "round": 2,
+      "workers": 14,
+      "variant": "contiguous"
+    },
+    {
+      "round": 2,
+      "workers": 14,
+      "variant": "baseline"
+    },
+    {
+      "round": 2,
+      "workers": 0,
+      "variant": "simd"
+    },
+    {
+      "round": 2,
+      "workers": 0,
+      "variant": "contiguous"
+    },
+    {
+      "round": 2,
+      "workers": 0,
+      "variant": "baseline"
+    }
+  ],
+  "raw_timing_report": {
+    "path": "target/feature-buffer-candidate/proof/fixed4-run01/report.json",
+    "sha256": "16f4afc1085aba348548b3a9df6b10ca0a17a825cf5ceb691392b2125fc518e4"
+  },
+  "controller": {
+    "path": "target/feature-buffer-candidate/proof/fixed4_timing.py",
+    "sha256": "9459609a9290ae584715b419770d76234fa4880137b215806478f4c757e3bf61"
+  },
+  "build": {
+    "environment_overrides": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_TARGET_DIR": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-rust",
+      "RUSTFLAGS": "-C target-cpu=native",
+      "CARGO_PROFILE_RELEASE_LTO": "thin",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1",
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "false",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\n",
+    "source_sha256": {
+      "crates/ara-json/Cargo.toml": "9c7f7a595fc0374b68ce3172f80f30c95181d4a935dfa8558d7780ff034e7ed8",
+      "crates/ara-json/src/lib.rs": "0eb4a2c56726c44407bd0fa9e33b0c5aff4822423931099ad00dc4b12767a20d",
+      "target/feature-buffer-candidate/Cargo.lock": "1c47c56fbbdef5b1cc4810666b5fd5a29c6e84d6a85841e07d95275fa40b5dc8",
+      "target/feature-buffer-candidate/Cargo.toml": "3904a3e439378cbda3b41b118ef23a42ee0f61d7a3c436a5adab254c57354fcd",
+      "target/feature-buffer-candidate/src/extended/buffer_words.rs": "e42bfbed0f8581e723f2d8f3844ba4f62b35cf9aef4a2d71b1fcc63474063b82",
+      "target/feature-buffer-candidate/src/extended/buffers.rs": "8b58813d35022e7353b714f2af3129e50f2853bc6400aa6c75c01f1ad05f2f1b",
+      "target/feature-buffer-candidate/src/extended/buffers_baseline.rs": "19cdaf70494d2a3cdad3fac70b2117b4cc90a0b019de052e8761c2c3d23e6934",
+      "target/feature-buffer-candidate/src/extended/buffers_contiguous.rs": "ea34becfc5ac56cfaa761d7500171199dfb8b1a13c388603e5ca13994a7b09ad",
+      "target/feature-buffer-candidate/src/extended/churn.rs": "bff88d5c26221dfc081ce97aa4c426d1dc9538fed18343dcf399d80e1cc77ae0",
+      "target/feature-buffer-candidate/src/extended/dag.rs": "6f3c00c8dce49dec6c4ea12da525a001e6c7fbaacfa41a1d10e3bdf8cef80397",
+      "target/feature-buffer-candidate/src/extended/dirty.rs": "d1794e8eb2326a9f0ea8d696cd01165ec793bc92ddd57df112e9bc3725adfdc8",
+      "target/feature-buffer-candidate/src/extended/export.rs": "7b8f93cd51be5e0fc0aa73edc9794dd05dc4f67380b74eaf85b953d648bf22e5",
+      "target/feature-buffer-candidate/src/extended/main.rs": "60908419f87a58818f2737902cbb2a14c1ba14d87a0a7f730696e2c5361a260e",
+      "target/feature-buffer-candidate/src/extended/model.rs": "17659098a802a59f26f0d3976cd4affd3d962b39b4153e8f1e26f229beadb99d",
+      "target/feature-buffer-candidate/src/extended/probe.rs": "00082358caf13ab29e05af08477770b444e86beec26308ade9ca343299889215",
+      "target/feature-buffer-candidate/src/main.rs": "6cd0bbfecdee31cc5fcf3e8ee58a2e450eb0758cd241d2ceb6495d7552c5e471",
+      "target/feature-buffer-candidate/src/protocol.rs": "d4d49abf92bec95e6695588444ffc4d3e7961f4140f9d69c031eafeacf53d917",
+      "target/feature-buffer-candidate/src/world.rs": "2ed6f0ba1a12c1115367db65cc19338e96d25ed3d90958a169d51484c1bd3fe0"
+    },
+    "source_snapshot": "target/feature-buffer-candidate/proof/quality-1794220955626363000/sources",
+    "executables": {
+      "baseline": {
+        "snapshot": "target/feature-buffer-candidate/bin/b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc/ara-ecs-buffer-candidate",
+        "sha256": "b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc"
+      },
+      "contiguous": {
+        "snapshot": "target/feature-buffer-candidate/bin/ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27/ara-ecs-buffer-candidate",
+        "sha256": "ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27"
+      },
+      "simd": {
+        "snapshot": "target/feature-buffer-candidate/bin/588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5/ara-ecs-buffer-candidate",
+        "sha256": "588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5"
+      }
+    }
+  },
+  "quality": {
+    "report": {
+      "path": "target/feature-buffer-candidate/proof/quality-1794220955626363000/report.json",
+      "sha256": "47a065396ea3832bfaa9adf8f7223b6211840b79ff7f00e51da994e4d45ccdb6"
+    },
+    "summary": {
+      "path": "target/feature-buffer-candidate/proof/SUMMARY.json",
+      "sha256": "d5d48b6dacd159b8a126c2a1fc5848a544c55167834e043020bc24090300f63f"
+    },
+    "smoke_report": {
+      "path": "target/feature-buffer-candidate/proof/smoke-1794221006540980000/report.json",
+      "sha256": "42049480a0c2f738384861407aee259299f5d41a05d0ee48b5d598e7b6bb35b9"
+    },
+    "compile_test_clippy_passed_variants": [
+      "baseline",
+      "contiguous",
+      "simd"
+    ],
+    "unit_tests_passed": {
+      "baseline": 0,
+      "contiguous": 2,
+      "simd": 2
+    },
+    "smoke_shape_worker_cases": 14,
+    "smoke_native_processes": 56,
+    "smoke_oracle_processes": 7,
+    "smoke_all_full_bytes_equal": true,
+    "smoke_capacity_spill_layout_equal": true,
+    "timed_full_dump_ids_updates_values_words_match_independent_reference": true,
+    "timed_capacity_spill_layout_match_historical_and_internal_baselines": true,
+    "change_ticks": {
+      "timed_dump_exports_ticks": false,
+      "actual_prior_quality": "Six serial steps compare every Added/Changed cell to baseline alongside values/capacity/spill; both contiguous and NEON tests passed. No claim of 420-step timed tick-cell dump equality."
+    }
+  },
+  "reference": {
+    "cache": {
+      "path": "target/perf-scale/feature-timed-current/oracles/8f7ca6685c6b1b06862d87dc8420294d80a43abdf6a2025533f3496b362be36e.bin",
+      "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+    },
+    "bytes": 5200024,
+    "magic": "ARAECSF1",
+    "header_fields": [
+      1,
+      5,
+      100000,
+      420
+    ],
+    "identity": {
+      "case": "buffer_fixed",
+      "archetypes": "8",
+      "percent": "10",
+      "distribution": "spread",
+      "length": "4",
+      "count": "100000",
+      "steps": "420",
+      "reference_source_sha256": "dd9fee9034aabedb0ee93348c0d92bea4d8d5989a6978865c0a6dbb6e7f1031c"
+    },
+    "reference_source": {
+      "path": "benchmarks/iteration/unity/features/reference.py",
+      "sha256": "dd9fee9034aabedb0ee93348c0d92bea4d8d5989a6978865c0a6dbb6e7f1031c"
+    },
+    "historical_phase_a": {
+      "path": "benchmarks/iteration/unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "sha256": "c7f83e2d9292d9c7af6a8475ef40043e141a57b1d69b5f9af0dfec4b4b1b1d2f"
+    },
+    "reuse_rule": "Controller verified exact source/config/count/420 steps, full cached oracle bytes, both historical native dumps and native layout metadata before reuse. Historical timings are not reused in this internal comparison."
+  },
+  "baseline_preservation": {
+    "frozen_executable": {
+      "path": "target/perf-scale/feature-binaries/eb9ca9be4e2af8fbebc91c2c179b16c37ae84e1f260e8601c3742e88e14e078d/ara-ecs-extended-fixture",
+      "sha256": "eb9ca9be4e2af8fbebc91c2c179b16c37ae84e1f260e8601c3742e88e14e078d"
+    },
+    "frozen_build": {
+      "path": "target/perf-scale/feature-binaries/eb9ca9be4e2af8fbebc91c2c179b16c37ae84e1f260e8601c3742e88e14e078d/3796a6e62ec3aa9e9aaeb7ba768a80836a0472e1d068b943136763b13258f94b.build.json",
+      "sha256": "3796a6e62ec3aa9e9aaeb7ba768a80836a0472e1d068b943136763b13258f94b"
+    },
+    "copied_baseline_loop_sha256": "19cdaf70494d2a3cdad3fac70b2117b4cc90a0b019de052e8761c2c3d23e6934",
+    "copied_baseline_loop_identical_to_frozen_source": true,
+    "lock_sha256": "1c47c56fbbdef5b1cc4810666b5fd5a29c6e84d6a85841e07d95275fa40b5dc8",
+    "lock_matches_tracked_fixture": true,
+    "protected_executables_unchanged_after_quality_and_smoke": true,
+    "timing_protection_scope": "Full protected/source/executable/lock/reference binding checked before every timed process; no builds or source/flag changes occurred between windows."
+  },
+  "target_feature_compile_failure": {
+    "quality_report": {
+      "path": "target/feature-buffer-candidate/proof/quality-1794220796972829000/report.json"
+    },
+    "failed_source_snapshot": "target/feature-buffer-candidate/proof/quality-1794220796972829000/failed-source",
+    "gate": {
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/Cargo.toml",
+        "--bin",
+        "ara-ecs-buffer-candidate",
+        "--no-default-features",
+        "--features",
+        "buffer_simd"
+      ],
+      "exit": 101,
+      "log": {
+        "path": "target/feature-buffer-candidate/proof/quality-1794220796972829000/simd-build.log",
+        "sha256": "f2138e0f99b73e2a49171184f8c86cb3be645e76077acf55459e03f6348fdde2"
+      }
+    },
+    "original_source_sha256": {
+      "crates/ara-json/Cargo.toml": "9c7f7a595fc0374b68ce3172f80f30c95181d4a935dfa8558d7780ff034e7ed8",
+      "crates/ara-json/src/lib.rs": "0eb4a2c56726c44407bd0fa9e33b0c5aff4822423931099ad00dc4b12767a20d",
+      "target/feature-buffer-candidate/Cargo.lock": "1c47c56fbbdef5b1cc4810666b5fd5a29c6e84d6a85841e07d95275fa40b5dc8",
+      "target/feature-buffer-candidate/Cargo.toml": "3904a3e439378cbda3b41b118ef23a42ee0f61d7a3c436a5adab254c57354fcd",
+      "target/feature-buffer-candidate/src/extended/buffer_words.rs": "3f462ce9a5de499b51c97085571028ba9171da2a826c803a061f8e1c2234c5a0",
+      "target/feature-buffer-candidate/src/extended/buffers.rs": "8b58813d35022e7353b714f2af3129e50f2853bc6400aa6c75c01f1ad05f2f1b",
+      "target/feature-buffer-candidate/src/extended/buffers_baseline.rs": "19cdaf70494d2a3cdad3fac70b2117b4cc90a0b019de052e8761c2c3d23e6934",
+      "target/feature-buffer-candidate/src/extended/buffers_contiguous.rs": "ea34becfc5ac56cfaa761d7500171199dfb8b1a13c388603e5ca13994a7b09ad",
+      "target/feature-buffer-candidate/src/extended/churn.rs": "bff88d5c26221dfc081ce97aa4c426d1dc9538fed18343dcf399d80e1cc77ae0",
+      "target/feature-buffer-candidate/src/extended/dag.rs": "6f3c00c8dce49dec6c4ea12da525a001e6c7fbaacfa41a1d10e3bdf8cef80397",
+      "target/feature-buffer-candidate/src/extended/dirty.rs": "d1794e8eb2326a9f0ea8d696cd01165ec793bc92ddd57df112e9bc3725adfdc8",
+      "target/feature-buffer-candidate/src/extended/export.rs": "7b8f93cd51be5e0fc0aa73edc9794dd05dc4f67380b74eaf85b953d648bf22e5",
+      "target/feature-buffer-candidate/src/extended/main.rs": "60908419f87a58818f2737902cbb2a14c1ba14d87a0a7f730696e2c5361a260e",
+      "target/feature-buffer-candidate/src/extended/model.rs": "17659098a802a59f26f0d3976cd4affd3d962b39b4153e8f1e26f229beadb99d",
+      "target/feature-buffer-candidate/src/extended/probe.rs": "00082358caf13ab29e05af08477770b444e86beec26308ade9ca343299889215",
+      "target/feature-buffer-candidate/src/main.rs": "6cd0bbfecdee31cc5fcf3e8ee58a2e450eb0758cd241d2ceb6495d7552c5e471",
+      "target/feature-buffer-candidate/src/protocol.rs": "d4d49abf92bec95e6695588444ffc4d3e7961f4140f9d69c031eafeacf53d917",
+      "target/feature-buffer-candidate/src/world.rs": "2ed6f0ba1a12c1115367db65cc19338e96d25ed3d90958a169d51484c1bd3fe0"
+    },
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "environment_overrides": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_TARGET_DIR": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-rust",
+      "RUSTFLAGS": "-C target-cpu=native",
+      "CARGO_PROFILE_RELEASE_LTO": "thin",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1",
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "false",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "resolution": "cfg-guarded single unsafe feature-contract call plus target_feature(neon) kernel/helper annotations; bounded loads/stores unchanged.",
+    "arithmetic_or_storage_semantics_changed_by_fix": false
+  },
+  "guards": {
+    "before_snapshots": 12,
+    "during_snapshots": 14,
+    "after_snapshots": 12,
+    "all_known_cpu_tool_checks_passed": true,
+    "all_power_sources_stable": true,
+    "observed_power_sources": [
+      "Now drawing from 'AC Power'"
+    ],
+    "cpu_threshold_percent": 1,
+    "own_controller_and_descendant_pids_excluded": true,
+    "wait_between_resource_snapshots_seconds": 0.2,
+    "largest_resource_snapshot_wall_ms": 29.692374999285676,
+    "limits": "Process-lifetime snapshots retain other OS/background activity in the raw report. They are not an exhaustive OS/kernel trace; monitoring overhead is present."
+  },
+  "records": [
+    {
+      "round": 1,
+      "variant": "baseline",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.5027919999999999,
+      "p95_ms": 0.52775,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "baseline-row-mut-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.json",
+        "sha256": "864156bf76367b84efdc5250067b06b5200d560ea1bbe16098132151faa7314a"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.stdout",
+        "sha256": "653f89e187375c2f024e8a1a75a8febc8f0732f5b0c71c3c545e14aa7b6876b4"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 2,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/01-r1-w0-baseline.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "contiguous",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.164375,
+      "p95_ms": 0.173458,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.json",
+        "sha256": "6be6e543ef87dcf5533caf7f7662b263227a43ef7a32b53f7626f69535d7fece"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.stdout",
+        "sha256": "5c7694c6229e60d4c42d2c911bd946e2ced6693b3faab84dce82ec0002529ecf"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/02-r1-w0-contiguous.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "simd",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.1405,
+      "p95_ms": 0.14754199999999998,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-neon4",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.json",
+        "sha256": "beda110a5aa62856e66706cd4d59f2fa2d1b7d89f778836923d296c68de8ac1e"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.stdout",
+        "sha256": "d9d0dcc4c9f692301bafe30242bf093c5e35a3fea0c6d6ed67e8c6db8bf66a67"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/03-r1-w0-simd.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.123125,
+      "p95_ms": 0.134167,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "baseline-row-mut-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.json",
+        "sha256": "2dacc0629896fcec487f03fee908545b1428d74fe72e3237b04c9062f01da479"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.stdout",
+        "sha256": "df1c0e4d7d9260ae4c56b51e6d991886e6936ddb4769b904ae5cd1f0794cc806"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/04-r1-w14-baseline.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "contiguous",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.066875,
+      "p95_ms": 0.076125,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.json",
+        "sha256": "5a9f8dc6be25fcf2ca868d5a047e4611ade187b4fdb54323556a8ed20593d092"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.stdout",
+        "sha256": "d9a03251989ec7d2943a8342732ca1b10d0c02aa885bd35f25e8e08dd959cd8a"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/05-r1-w14-contiguous.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "simd",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.059916,
+      "p95_ms": 0.068416,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-neon4",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.json",
+        "sha256": "b623bdb67ada574fdb2ebe3e8b60c34f0314dd77137df92475596fd45f45b6c0"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.stdout",
+        "sha256": "32dd7b76e6ffc0682fe6379329c78dba60eb09f991df115dbb1b91a6f9e17d6b"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/06-r1-w14-simd.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "simd",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.061166000000000005,
+      "p95_ms": 0.070584,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-neon4",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.json",
+        "sha256": "049b6d1933fb3dcd6fb813ef90cad926b10c88f489a29834dd9ff900ff6121cb"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.stdout",
+        "sha256": "dde5c12105f33eb09714e018d54100fce77c304ed5ff3985597d42c0030204b1"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/07-r2-w14-simd.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "contiguous",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.067333,
+      "p95_ms": 0.077875,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.json",
+        "sha256": "8c2e28f0b1b6546f07bf5569315071dc1b93d6be9bb5faa2e4f69411a395d7c2"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.stdout",
+        "sha256": "415830cbccbeeb964ed13ea84d8742ce8b80864a85efacbacf85e0ab835f69f2"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/08-r2-w14-contiguous.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "configured_pool_workers": 14,
+      "runner_ceiling": 15,
+      "p50_ms": 0.12316700000000001,
+      "p95_ms": 0.13699999999999998,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "baseline-row-mut-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.json",
+        "sha256": "73925bab9206195dc51f502711fcb87a257ce9de9581dd6c8df1edf6a5cacb4c"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.stdout",
+        "sha256": "5506628ee1b5fcfc3a65183dd9210f7a4cc29d55c7d065278e7e221df0db8e95"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "14",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/09-r2-w14-baseline.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "simd",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.140625,
+      "p95_ms": 0.14725,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-neon4",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.json",
+        "sha256": "5e46a989adb9cc09c5123f6ee337270dbe70fbcb694ce3243f0cb2e6502bde32"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.stdout",
+        "sha256": "6088f74d2ac58a42075903f3a826acb3375255e5ebb00691dc4ccfe7710c048f"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/588d138721933218cf9e39db5767e645d0b35241724358ef9b188eb858ae79f5/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/10-r2-w0-simd.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "contiguous",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.167083,
+      "p95_ms": 0.17300000000000001,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "contiguous-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.json",
+        "sha256": "ef524434735043dfde8ca0af759ffeea2613d0824316f8dc4c6ffa0a212479e8"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.stdout",
+        "sha256": "123d08ed3674bc8dc2287e6410bf2efefe566dc435a2f50554b29cbf77cdbaea"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 1,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/ffb2bf7a6431fb5babfec47e676be4f229487d038eee43fe786856627f7a2c27/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/11-r2-w0-contiguous.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "configured_pool_workers": 0,
+      "runner_ceiling": 1,
+      "p50_ms": 0.518417,
+      "p95_ms": 0.551959,
+      "sample_count": 300,
+      "timings_accepted": true,
+      "kernel": "baseline-row-mut-scalar",
+      "full_state_sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03",
+      "header": {
+        "magic": "ARAECSF1",
+        "version": 1,
+        "case": 5,
+        "count": 100000,
+        "steps": 420
+      },
+      "result": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.json",
+        "sha256": "13ac4fc536370a8e80189c094a4d7e6c62ff9e8eb684617b51be1b00cc8b89a2"
+      },
+      "dump": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.bin",
+        "sha256": "8a9fb4153f2ded91e8e143fbc4af08a99ab633557f03c8864c85f5f3de6d7a03"
+      },
+      "stdout": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.stdout",
+        "sha256": "bbea1fdf977192520f57e4e57f8b4a600f3f7c7b60d79b499eed0ed5e7efb50c"
+      },
+      "stderr": {
+        "path": "target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "resource_observations_during_run": 2,
+      "command": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/bin/b62aef8959fd1b5db9626df2008e0abd4f27ccaffe950550bf683d950d380bdc/ara-ecs-buffer-candidate",
+        "buffer_fixed",
+        "100000",
+        "0",
+        "120",
+        "300",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.json",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/12-r2-w0-baseline.bin",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/feature-buffer-candidate/proof/fixed4-run01/config.json",
+        "4096"
+      ]
+    }
+  ]
+}

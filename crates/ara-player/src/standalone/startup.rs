@@ -30,7 +30,7 @@ pub(super) struct Loaded {
 /// separate queue (serialized on single-queue adapters), then takes over the same
 /// swapchain. Closing detaches workers without waiting on import/compilation.
 pub(super) fn load(
-    scene: Arc<ara_play::PlayScene>,
+    scene: ara_play::PlayScene,
     source: Arc<dyn ara_runtime::assets::AssetSource>,
     settings: Settings<'_>,
     began: Instant,
@@ -39,7 +39,7 @@ pub(super) fn load(
     let mut world_job = Some(
         thread::Builder::new()
             .name("ara-player-startup".into())
-            .spawn(move || content::prepare(&scene, source))?,
+            .spawn(move || content::prepare(scene, source))?,
     );
     let (mut window, extensions, size) = device::Windowed::open_unprepared_with_mode(
         settings.name,

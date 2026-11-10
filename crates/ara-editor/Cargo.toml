@@ -16,6 +16,9 @@ tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
 embed-resource.workspace = true
 
 [dependencies]
+ara-kit = { path = "../ara-kit" }
+stillkit.workspace = true
+stillkit-kit.workspace = true
 ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }

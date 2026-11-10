@@ -1,0 +1,736 @@
+{
+  "date": "2026-11-09",
+  "source_base_commit": "992107d88",
+  "baseline_reader_source_commit": "edf98bae5cec911131181824487bbb4fdaa04be8",
+  "baseline_source_identical_at_integration_base": true,
+  "scope": "Exact streaming source reads for saved-input capture and final source validation. Every file is still read and decoded. Reuse the committed string only after exact decoded EOF equality; changed text owns a new string, new files retain ReadToEnd.",
+  "fixture": "Synthetic valid ASCII C# sources with comment filler: 1000x256bytes,1000x4096bytes,100x262144bytes. Each selected source changes ONE literal near its beginning on every pass. 100% means all files edited, not full-content replacement. UTF/BOM/malformed decoding are quality fixtures, not allocation profiles.",
+  "configuration": {
+    "fresh_processes": 18,
+    "profiles": [
+      "small",
+      "4k",
+      "large"
+    ],
+    "edit_percentages": [
+      0,
+      1,
+      100
+    ],
+    "warmups_per_process": 2,
+    "measured_passes_per_process": 5,
+    "runtime": "10.0.14",
+    "process_arm_order": "Alternates across nine configurations; one process per arm/configuration, no reversed pair for each configuration.",
+    "explicit_gc_before_each_pass": true,
+    "allocation_scope": "GC.GetTotalAllocatedBytes(precise:true), process wide. Corpus creation/edits/GC/validation/output excluded; all decoded units validated outside each window."
+  },
+  "timings_accepted": false,
+  "results": [
+    {
+      "profile": "small",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 8865120,
+      "candidate_median_allocated_bytes": 7672896,
+      "fraction_fewer_allocated_bytes": 0.13448481238832644,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "small",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 8865120,
+      "candidate_median_allocated_bytes": 7684096,
+      "fraction_fewer_allocated_bytes": 0.133221434114823,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "small",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 8865120,
+      "candidate_median_allocated_bytes": 8793120,
+      "fraction_fewer_allocated_bytes": 0.00812171747252155,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 24369344,
+      "candidate_median_allocated_bytes": 7672896,
+      "fraction_fewer_allocated_bytes": 0.6851414629790609,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 24369344,
+      "candidate_median_allocated_bytes": 7837696,
+      "fraction_fewer_allocated_bytes": 0.6783788681385925,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 24369344,
+      "candidate_median_allocated_bytes": 24153344,
+      "fraction_fewer_allocated_bytes": 0.008863595179254724,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 0,
+      "baseline_median_allocated_bytes": 106306112,
+      "candidate_median_allocated_bytes": 768096,
+      "fraction_fewer_allocated_bytes": 0.9927746769630705,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 1,
+      "baseline_median_allocated_bytes": 106306112,
+      "candidate_median_allocated_bytes": 1823240,
+      "fraction_fewer_allocated_bytes": 0.982849151702585,
+      "all_sources_equal_and_checksums_match": true
+    },
+    {
+      "profile": "large",
+      "edit_percent": 100,
+      "baseline_median_allocated_bytes": 106306112,
+      "candidate_median_allocated_bytes": 106284512,
+      "fraction_fewer_allocated_bytes": 0.0002031868120621061,
+      "all_sources_equal_and_checksums_match": true
+    }
+  ],
+  "raw_allocations": [
+    {
+      "profile": "small",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "allocated_bytes": [
+        8865120,
+        8865120,
+        8865120,
+        8865120,
+        8865120
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "small",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "allocated_bytes": [
+        7672896,
+        7672896,
+        7672896,
+        7672896,
+        7672896
+      ],
+      "reference_reuse": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "small",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "allocated_bytes": [
+        7684096,
+        7684096,
+        7684096,
+        7684096,
+        7684096
+      ],
+      "reference_reuse": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "small",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "allocated_bytes": [
+        8865120,
+        8865120,
+        8865120,
+        8865120,
+        8865120
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "small",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "allocated_bytes": [
+        8865120,
+        8865120,
+        8865120,
+        8865120,
+        8865120
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "small",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "allocated_bytes": [
+        8793120,
+        8793120,
+        8793120,
+        8793120,
+        8793120
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        378000,
+        378000,
+        378000,
+        378000,
+        378000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "allocated_bytes": [
+        7672896,
+        7672896,
+        7672896,
+        7672896,
+        7672896
+      ],
+      "reference_reuse": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "allocated_bytes": [
+        24369344,
+        24369344,
+        24369344,
+        24369344,
+        24369344
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "allocated_bytes": [
+        24369344,
+        24369344,
+        24369344,
+        24369344,
+        24369344
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "allocated_bytes": [
+        7837696,
+        7837696,
+        7837696,
+        7837696,
+        7837696
+      ],
+      "reference_reuse": [
+        990,
+        990,
+        990,
+        990,
+        990
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "allocated_bytes": [
+        24153344,
+        24153344,
+        24153344,
+        24153344,
+        24153344
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "4k",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "allocated_bytes": [
+        24369344,
+        24369344,
+        24369344,
+        24369344,
+        24369344
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        4218000,
+        4218000,
+        4218000,
+        4218000,
+        4218000
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 0,
+      "arm": "baseline",
+      "allocated_bytes": [
+        106305440,
+        106306112,
+        106306112,
+        106306112,
+        106306112
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 0,
+      "arm": "candidate",
+      "allocated_bytes": [
+        768096,
+        768096,
+        768096,
+        768096,
+        768096
+      ],
+      "reference_reuse": [
+        100,
+        100,
+        100,
+        100,
+        100
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 1,
+      "arm": "candidate",
+      "allocated_bytes": [
+        1823240,
+        1823240,
+        1823240,
+        1823240,
+        1823240
+      ],
+      "reference_reuse": [
+        99,
+        99,
+        99,
+        99,
+        99
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 1,
+      "arm": "baseline",
+      "allocated_bytes": [
+        106305440,
+        106306112,
+        106306112,
+        106306112,
+        106306112
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 100,
+      "arm": "baseline",
+      "allocated_bytes": [
+        106305440,
+        106306112,
+        106306112,
+        106306112,
+        106306112
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    },
+    {
+      "profile": "large",
+      "edit_percent": 100,
+      "arm": "candidate",
+      "allocated_bytes": [
+        106283840,
+        106284512,
+        106284512,
+        106284512,
+        106284512
+      ],
+      "reference_reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "checksums": [
+        26226600,
+        26226600,
+        26226600,
+        26226600,
+        26226600
+      ]
+    }
+  ],
+  "quality": {
+    "differential_reads": 87,
+    "all_decoded_text_equal": true,
+    "equal_text_reference_reuse": true,
+    "eof_fully_observed_for_unchanged": true,
+    "source_snapshot_semantics_preserved": true,
+    "observations": [
+      {
+        "pool_rents": 2,
+        "pool_returns": 2,
+        "file_replacement_open_handle_preserved": true,
+        "shared_editor_read": true,
+        "io_retry_release": true
+      }
+    ],
+    "production_compiler_assembly_emit_proofs": [
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "61e659198d895a60d6acd60444b20828ca8b0b0d7e09ac13809b92487707838c",
+        "pdb_sha256": "a9b10e36f2d6a336190bb32e6b420440a6f76d6cfda2da8f5d910bf230f39073",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10424,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      },
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "06e54caa6cda5e1339f05c15923ae29c713deacee000f8ed64c35434b3b30a5d",
+        "pdb_sha256": "6046dfa89cbac373d32a43813835b8b74eae67f6a961816f5b416cca75f1148f",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10436,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      },
+      {
+        "success": true,
+        "diagnostics": [],
+        "pe_sha256": "8fc81565ba589e741d644155f7c8243690059e866287f1a7ef04b8761de06e49",
+        "pdb_sha256": "fd2e59f962f1bd5e5caed3623809284b862880afe87587a2861285dffe581477",
+        "pe_bytes": 2560,
+        "pdb_bytes": 10436,
+        "compiler": "Microsoft.CodeAnalysis.CSharp, Version=5.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+        "source_and_emit_equal": true
+      }
+    ],
+    "runtime": "10.0.14",
+    "process_architecture": "Arm64",
+    "product_compiler_integration_not_executed": true,
+    "timings_accepted": false
+  },
+  "production_binding": {
+    "algorithm_text_identical_after_namespace_doc_only_normalization": true,
+    "measured_core_sha256": "8fa12a5902bec9e7a8862c15f7be5177b1a69f65b78deb4e8b6196b05bef8a84",
+    "checked_product_sha256": {
+      "dotnet/src/Ara.CompileServer/ModuleSource.cs": "8422bc92ea8fca585bd60b5d0ec3c88b2d2756f3095ad29b861699b9e29a766b",
+      "dotnet/src/Ara.CompileServer/ModuleSession.cs": "528ce3893be393505bea0957e8c7cc29ff8800165abc348dbc90c0f965aff75b",
+      "dotnet/tests/Ara.CompileServer.Tests/SourceReadTests.cs": "4e52020694d00e1ecc7e3b0c9f7676bfdf2a55ee3ad47c56fbef2cf5f5104536"
+    },
+    "production_roslyn_copies": {
+      "scope": "Read-only copies of current production compile-server Roslyn assemblies; no SDK compiler substituted. Actual assembly version will be reported by the future emit proof.",
+      "assemblies": [
+        {
+          "source": "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.dll",
+          "copy": "target/compiler-source-read-reuse-20261109/Original/assemblies/Microsoft.CodeAnalysis.dll",
+          "sha256": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+          "bytes": 3066128,
+          "copy_readonly": true
+        },
+        {
+          "source": "dotnet/artifacts/bin/Ara.CompileServer/release/Microsoft.CodeAnalysis.CSharp.dll",
+          "copy": "target/compiler-source-read-reuse-20261109/Original/assemblies/Microsoft.CodeAnalysis.CSharp.dll",
+          "sha256": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+          "bytes": 6895408,
+          "copy_readonly": true
+        }
+      ]
+    },
+    "actual_loaded_roslyn": "5.3.0.0; CompileServer VersionOverride supersedes central analyzer/generator4.14 references. No SDK compiler substitution."
+  },
+  "checks": {
+    "solution": "zero warnings/errors",
+    "compiler_tests_passed": 201,
+    "real_clr_tests_passed": 9,
+    "real_clr_suites": [
+      "compile_lifecycle",
+      "levels",
+      "modules",
+      "prebuilt_watch",
+      "project_lifecycle"
+    ],
+    "all_target_clippy": "ara-script -D warnings passed",
+    "formatting": "114packages passed",
+    "independent_review": "no must-fix",
+    "integration_regressions": "Six BOM/encoding variants, chunk boundaries, malformed UTF8 fallback, missed watcher notice with restoredmtime, repair and encoding-only no-op."
+  },
+  "retained_attempts": [
+    "First target-only packaging build failed NETSDK1199 before compilation; moved ArtifactsPath into local Directory.Build.props, preserved source/logs, matching rebuilt quality run passes. No other failed/retried allocation cell."
+  ],
+  "limits": [
+    "Allocation evidence is not a latency, peak/retained heap, startup, save-to-visible, frame-time or Unity/Unreal comparison. Foreign Unity activity was present, all elapsed data explicitly unaccepted.",
+    "One early literal edit in each selected fixed-size file. Other edit locations/content-size patterns are covered for correctness, not a blanket memory or throughput guarantee.",
+    "The 256KiB corpus models unusually large sources; the 4KiB/256B profiles remain separate.",
+    "The prior string is a comparison input only; no timestamp shortcut, skipped file read or strong predecessor-history chain."
+  ],
+  "raw_proof_sha256": {
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/01-small-p0-baseline.log": "62dec8b004b8a4c93f2775c098d76dd83253f1383b91f4c10c915c911bf1b6ee",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/02-small-p0-candidate.log": "ddc70aa4a7f321ad8b0c25e44d1fc206e843a4d091673b19dce5245497d1085f",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/03-small-p1-candidate.log": "7cba4723d62b63ac925449a51f9e23a15acc92b9febdb67cd51919ce068302fb",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/04-small-p1-baseline.log": "557a8f37281e5c6157104a9efd126633b6279767a37e32add8726190f9ce5fff",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/05-small-p100-baseline.log": "6d89c960511ecf92d249df16e195ae5577a8e43b1de955a1d0d4a6f6a40214ec",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/06-small-p100-candidate.log": "87cea355ce33e9bfa35384e23f9b71cd7762fd4579599f5de45cf6ae2e98efe3",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/07-4k-p0-candidate.log": "8c9a7e3e2ab8e74e62244b5d95e78cab5e29acd23c70a13e6a475c626987dd09",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/08-4k-p0-baseline.log": "308d42c489a0d6062eb9db54c25e34ff08340c0e43696dd0f1d58ff49bfebece",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/09-4k-p1-baseline.log": "bcfed8f86dff115acf1e0be2f1059197fbdd55a03d1aa36b93d987dc77eb1d9d",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/10-4k-p1-candidate.log": "2a53b1b45da379cb5f909aeef9150d5dff592cf93017e96e4fc92409dd1b9231",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/11-4k-p100-candidate.log": "b5ff51894f5834b777e22d7ecab41abf8a22a939b758f10d199a8b0a91107ef1",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/12-4k-p100-baseline.log": "7badeb74567e93b898cca2f236c02a595663d1d0c8b15e4e46cf43cc5a31a11e",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/13-large-p0-baseline.log": "4bcbae29f45eca0c9aa537c3516a428603ede3191e95a9602eced21496e0bcda",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/14-large-p0-candidate.log": "af460a49d35f0ff2e98f9961021a36e0c34945b2930f7313b5042d470dfefa28",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/15-large-p1-candidate.log": "065434b8df19acc260d2d0db2c7ca6c340eccade926b669ab82b3d5829c7beb0",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/16-large-p1-baseline.log": "1b8425e9b9c405f4a75e7849ae2fa8fb933de3d6d1498f73688aa94cf73c0d2b",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/17-large-p100-baseline.log": "a8d3072c464278db8fda7e1ce6a787377969856fdac87ac6ded3f8d5f47c4abd",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/18-large-p100-candidate.log": "4b8b58c3f01f78d39b8e664d018b386b139d2562a3660bdda642ce4e9846894c",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150540-6303840-59421/result.json": "37c4f838c468b9f9d1ea62eaae2dc7a58060fe9a5fc41514f5089e59b3b7fcb9",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150541-0589610-59433/result.json": "6bf37f312d994cf2c2a3757ce1c79a5746c1867afa65926dd4f56a0f32023bfc",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150541-6075110-59434/result.json": "daa1659e1eaf1c3db6ccc64d1b8cd1277dd7a19b744c0486f14d31fd688c56a6",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150542-0590080-59435/result.json": "37edfe6b73a0f4b04825cc27f78d39737e8caa08a24785cabff8fd9211182273",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150542-5294320-59437/result.json": "f0fe875b3049e51deb7a7efd1e26a655acb19274ec5c28c15a2ee74f89a811d8",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150543-5305090-59440/result.json": "d4b24b75eac171f67aa63ad0f1fb078e107d0711e1076f701c48a94cf1375484",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150544-5058300-59442/result.json": "e1748546fa658d49cc3f45a91033c92b853d7f9f99350d83d94cab537b51e610",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150544-9588100-59443/result.json": "d27477699460de71b8a711d8fb80707886fbce83e39db6cdc59060f647f180b7",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150545-4317470-59444/result.json": "530b90288de29d7b0c1d161eb8e5b9aeb090af1567c6f70691ae0ffa43530f34",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150545-9145950-59447/result.json": "bf05950b831200801bf4fecc768dc647bc4fff82da410ec2c82d22d92d4940a3",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150546-3836780-59451/result.json": "3a60d8ac76ad2d1a55a80a5aae070bbed66fa0a046f83654628ae30c719d85e4",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150547-5818590-59454/result.json": "cf942b31420178684ecb7b2f012112dda1a273be96bcd4f795993ef08e549199",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150548-7842790-59455/result.json": "77f303b1280331685301b9fca2e10b01410d1e70b0485bea536450f93d794f26",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150549-1914870-59456/result.json": "77c251c54360be2d58a571fc9b8f013353ac6914dcd1d22a1ce815b591a88ebf",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150549-4911840-59457/result.json": "a0eeee6b2886b48a8f7202338dfe0de4e4e0f5189ae4f40db9bece365b2d8fef",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150549-8924090-59463/result.json": "20d5673a7e9a84bbcfe2ed6d24d626482284fc6190e1dfe88719aba72a957aad",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150550-2561590-59467/result.json": "5561407ca317e45ae946a5f672351eec545b0adb01b8b161e7b9b10f587ba7a8",
+    "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-source-read-reuse-20261109/runs/20261109-150551-0165620-59582/result.json": "d61739b6464f7374eca456f55cdf81f58c9b48706b8053d3ae3e4690f2678eff",
+    "target/compiler-source-read-production-20261109/build.log": "c3d97b2b5a61c6077af8c3686d7eec68e430802e19412c021dc421c1340db657",
+    "target/compiler-source-read-production-20261109/clippy.log": "307f3f1c1e019cda2f97b5a307602575c2a63ed0de924da49b5fc180a06f0269",
+    "target/compiler-source-read-production-20261109/fmt.log": "eda6288df0313c1521fa2bd742637329aaa11138e9a0c81f1c59cfc43bf999d2",
+    "target/compiler-source-read-production-20261109/full-tests.log": "409076345a105af2589942e3e2f7841fa98ef53bd91aeab64bc66abbf27e32c7",
+    "target/compiler-source-read-production-20261109/runtime-tests.log": "8c2e1558cac3f65f355692e600989946970acba3917168c4837f244ae4755c2b",
+    "target/compiler-source-read-reuse-20261109/Directory.Build.props": "f36aed04cdc5f62d9863740b674337fc31a060e1f453accc6a0c57e69ee414ac",
+    "target/compiler-source-read-reuse-20261109/Original/assemblies.json": "a4f14def7b33b2e6f55958352cf30ab302665fe678af2658c96585be6cd71061",
+    "target/compiler-source-read-reuse-20261109/PLAN.md": "f6e53302c1b0a348fc9f63ab2e352e2416cf6c96d82e010f58a9a7d6f8b3b8c1",
+    "target/compiler-source-read-reuse-20261109/PROVENANCE.json": "fb470ca6ca92522bf55d61bb7c6ec53ae502a3c5b4ed395383e5f8a6f03476c7",
+    "target/compiler-source-read-reuse-20261109/SourceReadReuse.csproj": "b02aa45991bb4bfcd372d5df2cc5609833fda7eb6b7b6aa139ab810420cfd0b1",
+    "target/compiler-source-read-reuse-20261109/Src/AllocationProbe.cs": "a18ea9793edef0cfcab93cb7540f0af97f3b7e2ce4155fba0be5a101a151918c",
+    "target/compiler-source-read-reuse-20261109/Src/EmitProbe.cs": "9eacf8509c36c02c35b49ea9f1acd5f86acc24cbc66553acd05ef5ff143f718f",
+    "target/compiler-source-read-reuse-20261109/Src/ModuleSource.cs": "8fa12a5902bec9e7a8862c15f7be5177b1a69f65b78deb4e8b6196b05bef8a84",
+    "target/compiler-source-read-reuse-20261109/Src/OriginalSource.cs": "3d48bf4777d702e40c3327b06a019570f52485811585e9753e558209bcd9977c",
+    "target/compiler-source-read-reuse-20261109/Src/Program.cs": "012b714ffeda2216803626a666cca1aea25132c8d45c876a9c9cc4a9cc8261cd",
+    "target/compiler-source-read-reuse-20261109/Src/Quality.cs": "c44cc2742f3156e06760c6e884b477d30ab780db8048721c26eb5e8c41d2c42c",
+    "target/compiler-source-read-reuse-20261109/proof/allocations-1794236740385626000/report.json": "c7e09fec20a422247e31d85d7a7845eff49e91eb0e2f917c40dab0d6a0a7634e",
+    "target/compiler-source-read-reuse-20261109/proof/quality-1794236316619717000/report.json": "dee2774ffd5cf8ac8370473a773ab5567fab70802b191402ff26b8d991ed7ab6",
+    "target/compiler-source-read-reuse-20261109/proof/quality-1794236378385748000/report.json": "e8bd2ff2fac26c20870d7cb3af06964f4de1008a0a29075eb5ef0e435c9e5ea7",
+    "target/compiler-source-read-reuse-20261109/runs/20261109-145941-2629040-52909/result.json": "13867706cd9a82ee947c1eaafec60a4a06f653f9c70db9db24b312a9d7ebc63e"
+  }
+}

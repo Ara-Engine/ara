@@ -13,10 +13,10 @@ mod diagnostics_verify;
 mod drags;
 mod eyedropper;
 mod file_picker;
-mod game;
+pub(crate) mod game;
 #[cfg(test)]
 mod game_input_tests;
-mod game_preview;
+pub(crate) mod game_preview;
 mod game_view_verify;
 mod hierarchy_verify;
 mod history_verify;
@@ -42,14 +42,14 @@ mod qa;
 mod reachability_verify;
 mod responsiveness;
 mod scene_quality;
-mod scene_sync;
+pub(crate) mod scene_sync;
 mod script_verify;
 mod selection_verify;
-mod setup;
+pub(crate) mod setup;
 mod snap_verify;
 mod ux_verify;
 mod verify;
-mod viewport;
+pub(crate) mod viewport;
 mod window_chrome;
 mod windows;
 use crate::{
@@ -2927,7 +2927,7 @@ fn verification_scene_ready(
         && scene.snap_ready(&editor.state.doc)
         && !scene.needs_frame(editor.state.quality)
 }
-fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
+pub(crate) fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
     [
         (rect.w * dpi).round().max(1.) as u32,
         (rect.h * dpi).round().max(1.) as u32,

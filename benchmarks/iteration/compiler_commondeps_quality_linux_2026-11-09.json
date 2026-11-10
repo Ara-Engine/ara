@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-09",
+  "host": "m6u",
+  "scope": "Compiler-only correctness comparison: both source revisions rebuilt against the same immutable dependency closure. No timing experiment.",
+  "baseline_source_commit": "1e04fe5dd9d04ede28592597dace9c0c06a15f9a",
+  "candidate_source_commit": "5de87659e36a07518ffddf1c04f80f948829fad5",
+  "common_dependencies": "15 DLLs from candidate15bf7 Linux bundle, including Runtime, Editor, generator, analyzers and Roslyn5.3; both compilers rebuilt, no postbuild dependency swapping.",
+  "quality": {
+    "responses": 20,
+    "complete_response_pairs": 10,
+    "complete_response_pairs_equal": 10,
+    "module_pairs": 134,
+    "exact_pe_equal": 134,
+    "exact_pdb_equal": 134,
+    "canonical_schema_equal": 134,
+    "identity_normalization": false,
+    "verified_methods_per_arm": {
+      "baseline": 16388,
+      "candidate": 16388
+    },
+    "all_il_methods_per_arm": {
+      "baseline": 41354,
+      "candidate": 41354
+    },
+    "copied_artifact_hashes_checked": 930,
+    "copied_artifact_hash_mismatches": 0,
+    "three_builds_zero_warnings_errors": true,
+    "source_unchanged": true,
+    "build_inputs_unchanged": true,
+    "proofs_unchanged": true
+  },
+  "unit_suites": {
+    "baseline": {
+      "total": 76,
+      "executed": 76,
+      "passed": 76,
+      "failed": 0,
+      "notExecuted": 0,
+      "timeout": 0,
+      "aborted": 0
+    },
+    "current": {
+      "total": 216,
+      "executed": 216,
+      "passed": 216,
+      "failed": 0,
+      "notExecuted": 0,
+      "timeout": 0,
+      "aborted": 0
+    }
+  },
+  "unit_environment": {
+    "xunit_max_parallel_threads": 2,
+    "individual_test_deadlines_unchanged": true,
+    "no_filters_or_skips": true,
+    "dotnet_processor_count_unset_during_tests": true,
+    "installed_layout_restored_absent": true,
+    "package_archives_verified_per_arm": 13,
+    "package_content_hash": "NuGet .nupkg.metadata.contentHash, distinct from raw signed archive SHA512"
+  },
+  "timings_accepted": false,
+  "limitations": [
+    "Compiler-only comparison does not isolate every optimization or compare original complete SDKs.",
+    "Original complete-SDK exact PE/PDB parity failure remains preserved in compiler_output_quality_linux_2026-11-09.json.",
+    "This packet does not measure the later request-local source-hashing experiment, time to play, FPS, Unity ECS or Unreal.",
+    "Quiet-admission failed during quality. No performance values accepted.",
+    "Original first unit attempt stopped after baseline build at an incorrect archive/content-hash proof assertion; no suites ran then. Corrected proof ran each unused complete suite once."
+  ],
+  "proof_root": "/home/islam/projects/ara-csharp-perf-20261109/target/compiler-commondeps-20261109",
+  "proof_sha256": {
+    "result.json": "a2680b05ddbc4e0f60718e6f663adc2960898369380d22a41d5dca50ac1dd524",
+    "execution-quality-01/summary.json": "2c2aaf3e8ded7918b2d0094e271ba64e9f409605fe5674e89fee96394f01c03a",
+    "execution-quality-01/copied-artifact-hashes.json": "add764a7203c2609e96302ba2276d964ca9c1792112c042b52141d7653bc9328",
+    "UNIT-SOURCE-01/execution-unit-02/result.json": "0a4fa3b879c1ae90374d380c4517bb4e2485612d8bec4a22f5684d840ee37d49",
+    "UNIT-SOURCE-01/execution-unit-02/before.json": "74018706170a208970d101b72c69d1d9eb6d43a398894b535071e839b220786c",
+    "UNIT-SOURCE-01/execution-unit-02/after.json": "74018706170a208970d101b72c69d1d9eb6d43a398894b535071e839b220786c",
+    "UNIT-SOURCE-01/execution-unit-02/ROOT-CONTENT-HASH-FIX.json": "f3b60133ff72b7e8d7be1226ba044acc88801dd3fe057f4e65cf523760ce5590",
+    "UNIT-SOURCE-01/execution-unit-02/baseline/results/complete.trx": "303a8fc3e0afc783472c7a574cac0a7234292b5cffbb9934bf425bde95e58add",
+    "UNIT-SOURCE-01/execution-unit-02/current/results/complete.trx": "31f9e737b75dd054d7739d95645f4053cca95380bf908af865d620eeeaae58a3"
+  }
+}

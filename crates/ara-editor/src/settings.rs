@@ -67,7 +67,8 @@ pub enum Lit {
     None,
 }
 impl Lit {
-    fn value(self) -> Value {
+    /// The literal as JSON.
+    pub fn value(self) -> Value {
         match self {
             Self::B(v) => json!(v),
             Self::S(v) => json!(v),

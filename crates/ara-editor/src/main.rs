@@ -27,9 +27,13 @@ fn main() -> ara_ui::Result<()> {
         return Ok(());
     }
     let mut options = ara_editor::Options::default();
+    // The studio (D31) is the interactive editor on macOS; the legacy window keeps the
+    // verify routes, headless captures and the platforms whose Scene layer is not yet in.
+    let mut legacy = !cfg!(target_os = "macos");
     let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--legacy-ui" => legacy = true,
             "--headless" => options.headless = true,
             "--version" | "-V" => {
                 println!("ara-editor {}", env!("CARGO_PKG_VERSION"));
@@ -127,7 +131,7 @@ fn main() -> ara_ui::Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--scene levels/x.scene] [--sample] [--headless] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings.
+                    "ara-editor <project> [--scene levels/x.scene] [--sample] [--headless] [--frames N] [--legacy-ui] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative editor + project Engine Protocol authority.\n--legacy-ui opens the previous editor window instead of the studio.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings.
 --verify-first-hour replays a new user's first hour on a fresh project (imports, Assets, Inspector, the tool pages, Play, Build), capturing each step.
 --verify-assets proves right-click Create, C# inline rename, real compilation and entity attachment, with offscreen captures.
 --verify-loading runs the loading window offscreen on the project and captures its milestones and every state.
@@ -161,5 +165,8 @@ fn main() -> ara_ui::Result<()> {
             None
         }
     };
-    ara_editor::run(options)
+    if legacy || options.offscreen() || options.frames.is_some() {
+        return ara_editor::run(options);
+    }
+    ara_editor::studio::run(options).map_err(|e| format!("{e:#}").into())
 }

@@ -1,6 +1,5 @@
 //! Migration consent evidence uses service-shaped replies and real pointer input.
 use super::*;
-use ara_ui::input::InputEvent;
 
 /// Prepare an old project's read-only move preview without touching any project.
 pub(super) fn seed_dialog(hub: &mut Hub) {
@@ -61,26 +60,7 @@ fn reply(hub: &mut Hub, value: Value) {
     }
 }
 
-fn click(app: &mut crate::native::App, hub: &mut Hub, id: &str) -> anyhow::Result<()> {
-    let index = app
-        .ui
-        .find(id)
-        .ok_or_else(|| anyhow::anyhow!("missing migration control {id}"))?;
-    let rect = app.ui.nodes[index].rect;
-    let at = [rect.x + rect.w / 2., rect.y + rect.h / 2.];
-    for event in [InputEvent::PointerDown(at), InputEvent::PointerUp(at)] {
-        app.dispatch_pointer(hub, event, NOW)
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-    }
-    Ok(())
-}
-
-pub(super) fn run(
-    host: &mut Offscreen,
-    app: &mut crate::native::App,
-    folder: &Path,
-    light: bool,
-) -> anyhow::Result<()> {
+pub(super) fn run(cap: &mut Capture, folder: &Path, light: bool) -> anyhow::Result<()> {
     let theme = if light { "light" } else { "dark" };
     let mut hub = Hub::new(
         crate::model::Prefs {
@@ -92,10 +72,11 @@ pub(super) fn run(
     );
     seed(&mut hub);
     seed_dialog(&mut hub);
-    settle(host, app, &mut hub)?;
-    host.capture(app)?
-        .save(folder.join(format!("{theme}-migration-modal.png")))?;
-    click(app, &mut hub, "migration-cancel")?;
+    cap.save(
+        &mut hub,
+        &folder.join(format!("{theme}-migration-modal.png")),
+    )?;
+    cap.click(&mut hub, "migration-cancel")?;
     anyhow::ensure!(
         hub.migration.is_none()
             && !hub
@@ -104,11 +85,13 @@ pub(super) fn run(
                 .any(|call| call.method() == "hub.open"),
         "Cancel keeps the old project closed"
     );
-    host.capture(app)?
-        .save(folder.join(format!("{theme}-migration-cancelled.png")))?;
+    cap.save(
+        &mut hub,
+        &folder.join(format!("{theme}-migration-cancelled.png")),
+    )?;
     seed_dialog(&mut hub);
-    settle(host, app, &mut hub)?;
-    click(app, &mut hub, "migration-submit")?;
+    cap.settle(&mut hub);
+    cap.click(&mut hub, "migration-submit")?;
     reply(
         &mut hub,
         job(
@@ -120,9 +103,10 @@ pub(super) fn run(
             0.35,
         ),
     );
-    settle(host, app, &mut hub)?;
-    host.capture(app)?
-        .save(folder.join(format!("{theme}-migration-progress.png")))?;
+    cap.save(
+        &mut hub,
+        &folder.join(format!("{theme}-migration-progress.png")),
+    )?;
     reply(
         &mut hub,
         job(
@@ -134,8 +118,9 @@ pub(super) fn run(
             0.9,
         ),
     );
-    settle(host, app, &mut hub)?;
-    host.capture(app)?
-        .save(folder.join(format!("{theme}-migration-committing.png")))?;
+    cap.save(
+        &mut hub,
+        &folder.join(format!("{theme}-migration-committing.png")),
+    )?;
     Ok(())
 }

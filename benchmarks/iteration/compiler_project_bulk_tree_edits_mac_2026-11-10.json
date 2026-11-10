@@ -1,0 +1,1955 @@
+{
+  "date": "2026-11-10",
+  "scope": "Actual ProjectCompilations.Generate allocations when every source body and component schema doc changes. No accepted clocks.",
+  "baseline_compiler_source_commit": "24b78830c4dd50369b0ec083ba88fbb538a0e8fc",
+  "candidate": "Bulk all-source syntax-tree replacement retaining compilation references, options and the final global-usings tree. Single-file, unchanged and partial edits keep the original path.",
+  "status": "PROMOTED_AFTER_QUALITY_AND_PRODUCTION_GATES",
+  "common_dependency_dlls": 15,
+  "matrix": {
+    "sources": [
+      32,
+      128
+    ],
+    "order_per_size": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "cold_requests_per_process": 1,
+    "warm_requests_per_process": 3,
+    "measured_requests_per_process": 5,
+    "hot": false,
+    "allocation_window": "Generate only; sources created before measurement; fresh generator/compiler/analyzer/emit oracle after measurement.",
+    "gc_policy": "Natural GC. Raw generation collection deltas retained; no universal GC or RSS claim."
+  },
+  "bulk_replacement": {
+    "summary": [
+      {
+        "sources": 32,
+        "thread_bytes": {
+          "medians": {
+            "baseline": 3006508.0,
+            "candidate": 2900044.0
+          },
+          "reduction_fraction": 0.035411181343937836
+        },
+        "process_bytes": {
+          "medians": {
+            "baseline": 3006508.0,
+            "candidate": 2900044.0
+          },
+          "reduction_fraction": 0.035411181343937836
+        }
+      },
+      {
+        "sources": 128,
+        "thread_bytes": {
+          "medians": {
+            "baseline": 12155020.0,
+            "candidate": 11337304.0
+          },
+          "reduction_fraction": 0.06727393291002404
+        },
+        "process_bytes": {
+          "medians": {
+            "baseline": 12155020.0,
+            "candidate": 11337304.0
+          },
+          "reduction_fraction": 0.06727393291002404
+        }
+      }
+    ],
+    "fresh_processes": 8,
+    "measured_edits": 40,
+    "inputs_and_runtime_before_after_equal": true,
+    "processes": [
+      {
+        "label": "32-0-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 32,
+        "compiler_sha256": "a2fb5a51f94915e3962845d6fff8c7af53f299fb3d1e692b0539047add88b97a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15043544,
+            "process_bytes": 15044856,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3015464,
+            "process_bytes": 3015464,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3032120,
+            "process_bytes": 3102256,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3035080,
+            "process_bytes": 3035080,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 3037608,
+            "process_bytes": 3037608,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3014232,
+            "process_bytes": 3014232,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3007968,
+            "process_bytes": 3007968,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3010064,
+            "process_bytes": 3010064,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3003976,
+            "process_bytes": 3003976,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-1-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 32,
+        "compiler_sha256": "a58ce5aa4d74c23cf638023b7ad21f7c7261a0ca0834c6d8e69c9640b8f5993a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15033336,
+            "process_bytes": 15034648,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 2889360,
+            "process_bytes": 2889360,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 2880944,
+            "process_bytes": 2880944,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 2881880,
+            "process_bytes": 2881880,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 2885624,
+            "process_bytes": 2885624,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 2904456,
+            "process_bytes": 2904456,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 2880656,
+            "process_bytes": 2880656,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 2914912,
+            "process_bytes": 2970776,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 2909992,
+            "process_bytes": 3083088,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-2-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 32,
+        "compiler_sha256": "a58ce5aa4d74c23cf638023b7ad21f7c7261a0ca0834c6d8e69c9640b8f5993a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15032776,
+            "process_bytes": 15034088,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 2884296,
+            "process_bytes": 2884296,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 2885296,
+            "process_bytes": 2885296,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 2880984,
+            "process_bytes": 2880984,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 2895632,
+            "process_bytes": 2895632,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 2880696,
+            "process_bytes": 2880696,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 2920152,
+            "process_bytes": 2968688,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 2911328,
+            "process_bytes": 2964488,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 2880952,
+            "process_bytes": 2880952,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-3-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 32,
+        "compiler_sha256": "a2fb5a51f94915e3962845d6fff8c7af53f299fb3d1e692b0539047add88b97a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15034400,
+            "process_bytes": 15035712,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3012656,
+            "process_bytes": 3012656,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3030688,
+            "process_bytes": 3118648,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3034352,
+            "process_bytes": 3034352,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 2998984,
+            "process_bytes": 2998984,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3004968,
+            "process_bytes": 3004968,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3034056,
+            "process_bytes": 3133496,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3005048,
+            "process_bytes": 3005048,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3003776,
+            "process_bytes": 3003776,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "128-0-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 128,
+        "compiler_sha256": "a2fb5a51f94915e3962845d6fff8c7af53f299fb3d1e692b0539047add88b97a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24285616,
+            "process_bytes": 24286928,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 12176368,
+            "process_bytes": 12176368,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 12205632,
+            "process_bytes": 12205632,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 12127024,
+            "process_bytes": 12127024,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 12225928,
+            "process_bytes": 12225928,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 12107304,
+            "process_bytes": 12107304,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 12168120,
+            "process_bytes": 12168120,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 12165360,
+            "process_bytes": 12165360,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 12107456,
+            "process_bytes": 12107456,
+            "gc": [
+              3,
+              1,
+              1
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-1-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 128,
+        "compiler_sha256": "a58ce5aa4d74c23cf638023b7ad21f7c7261a0ca0834c6d8e69c9640b8f5993a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24286248,
+            "process_bytes": 24287560,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 11310968,
+            "process_bytes": 11310968,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 11429976,
+            "process_bytes": 11429976,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 11389384,
+            "process_bytes": 11389384,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 11402288,
+            "process_bytes": 11402288,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 11315888,
+            "process_bytes": 11315888,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 11402424,
+            "process_bytes": 11402424,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 11316920,
+            "process_bytes": 11316920,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 11401520,
+            "process_bytes": 11401520,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-2-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 128,
+        "compiler_sha256": "a58ce5aa4d74c23cf638023b7ad21f7c7261a0ca0834c6d8e69c9640b8f5993a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24285336,
+            "process_bytes": 24286648,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 11402976,
+            "process_bytes": 11402976,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 11325600,
+            "process_bytes": 11325600,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 11341816,
+            "process_bytes": 11341816,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 11429160,
+            "process_bytes": 11429160,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 11357688,
+            "process_bytes": 11357688,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 11305328,
+            "process_bytes": 11305328,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 11295448,
+            "process_bytes": 11295448,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 11308568,
+            "process_bytes": 11308568,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-3-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 128,
+        "compiler_sha256": "a2fb5a51f94915e3962845d6fff8c7af53f299fb3d1e692b0539047add88b97a",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24286808,
+            "process_bytes": 24288120,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 12239992,
+            "process_bytes": 12239992,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 12124736,
+            "process_bytes": 12124736,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 12177464,
+            "process_bytes": 12177464,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 12144680,
+            "process_bytes": 12144680,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 12240840,
+            "process_bytes": 12240840,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 12130848,
+            "process_bytes": 12130848,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 12218760,
+            "process_bytes": 12218760,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 12122024,
+            "process_bytes": 12122024,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      }
+    ]
+  },
+  "not_promoted_constructor_rebuild": {
+    "reason": "Fresh-constructor approach increased allocation at32 files; source, applications and proofs retained.",
+    "summary": [
+      {
+        "sources": 32,
+        "thread_bytes": {
+          "medians": {
+            "baseline": 3006220.0,
+            "candidate": 3027440.0
+          },
+          "reduction_fraction": -0.0070586982988603
+        },
+        "process_bytes": {
+          "medians": {
+            "baseline": 3007392.0,
+            "candidate": 3027440.0
+          },
+          "reduction_fraction": -0.006666241048722599
+        }
+      },
+      {
+        "sources": 128,
+        "thread_bytes": {
+          "medians": {
+            "baseline": 12199392.0,
+            "candidate": 11491376.0
+          },
+          "reduction_fraction": 0.05803699069592971
+        },
+        "process_bytes": {
+          "medians": {
+            "baseline": 12199392.0,
+            "candidate": 11491376.0
+          },
+          "reduction_fraction": 0.05803699069592971
+        }
+      }
+    ],
+    "fresh_processes": 8,
+    "measured_edits": 40,
+    "inputs_and_runtime_before_after_equal": true,
+    "processes": [
+      {
+        "label": "32-0-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 32,
+        "compiler_sha256": "dc6d1ffe6c19e94cfbe52e2ada7784e1fb01da9b8d2818b44124925b043c7d70",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15035224,
+            "process_bytes": 15036536,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3009192,
+            "process_bytes": 3009192,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3003664,
+            "process_bytes": 3003664,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3006320,
+            "process_bytes": 3006320,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 3004432,
+            "process_bytes": 3004432,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3006336,
+            "process_bytes": 3006336,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3008448,
+            "process_bytes": 3008448,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3032928,
+            "process_bytes": 3032928,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3037680,
+            "process_bytes": 3037680,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-1-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 32,
+        "compiler_sha256": "ad029eddc8128f6461ca21d76922d7966814471c118a9a99088b1bbdbcea286b",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15035168,
+            "process_bytes": 15036480,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3033968,
+            "process_bytes": 3033968,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3035824,
+            "process_bytes": 3035824,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3055208,
+            "process_bytes": 3055208,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 3053400,
+            "process_bytes": 3053400,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3027840,
+            "process_bytes": 3027840,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3026152,
+            "process_bytes": 3026152,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3030112,
+            "process_bytes": 3030112,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3025136,
+            "process_bytes": 3025136,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-2-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 32,
+        "compiler_sha256": "ad029eddc8128f6461ca21d76922d7966814471c118a9a99088b1bbdbcea286b",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15044720,
+            "process_bytes": 15046032,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3030568,
+            "process_bytes": 3030568,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3026136,
+            "process_bytes": 3026136,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3026288,
+            "process_bytes": 3026288,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 3046688,
+            "process_bytes": 3046688,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3062160,
+            "process_bytes": 3117264,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3026168,
+            "process_bytes": 3026168,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3027040,
+            "process_bytes": 3027040,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3026016,
+            "process_bytes": 3026016,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "32-3-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 32,
+        "compiler_sha256": "dc6d1ffe6c19e94cfbe52e2ada7784e1fb01da9b8d2818b44124925b043c7d70",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 15032968,
+            "process_bytes": 15034280,
+            "gc": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 3012176,
+            "process_bytes": 3012176,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 3034872,
+            "process_bytes": 3034872,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 3013808,
+            "process_bytes": 3013808,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 3001424,
+            "process_bytes": 3001424,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 3001200,
+            "process_bytes": 3001200,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 3006104,
+            "process_bytes": 3035520,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 3021224,
+            "process_bytes": 3062752,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 3004080,
+            "process_bytes": 3004080,
+            "gc": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "e98f1d824bf4fc4232c831c21bdca909c7240600176e95f404101b186e8023f6"
+      },
+      {
+        "label": "128-0-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 128,
+        "compiler_sha256": "dc6d1ffe6c19e94cfbe52e2ada7784e1fb01da9b8d2818b44124925b043c7d70",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24294280,
+            "process_bytes": 24295592,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 12234784,
+            "process_bytes": 12234784,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 12112680,
+            "process_bytes": 12112680,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 12177240,
+            "process_bytes": 12177240,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 12135552,
+            "process_bytes": 12135552,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 12207680,
+            "process_bytes": 12207680,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 12120896,
+            "process_bytes": 12120896,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 12216320,
+            "process_bytes": 12216320,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 12191104,
+            "process_bytes": 12191104,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-1-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 128,
+        "compiler_sha256": "ad029eddc8128f6461ca21d76922d7966814471c118a9a99088b1bbdbcea286b",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24285656,
+            "process_bytes": 24286968,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 11521488,
+            "process_bytes": 11521488,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 11471632,
+            "process_bytes": 11471632,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 11545184,
+            "process_bytes": 11545184,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 11504232,
+            "process_bytes": 11504232,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 11479560,
+            "process_bytes": 11479536,
+            "gc": [
+              3,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 11488280,
+            "process_bytes": 11488280,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 11443536,
+            "process_bytes": 11443536,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 11521560,
+            "process_bytes": 11521560,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-2-candidate",
+        "exit": 0,
+        "arm": "candidate",
+        "sources": 128,
+        "compiler_sha256": "ad029eddc8128f6461ca21d76922d7966814471c118a9a99088b1bbdbcea286b",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24294240,
+            "process_bytes": 24295552,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 11462928,
+            "process_bytes": 11462928,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 11575048,
+            "process_bytes": 11575048,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 11575960,
+            "process_bytes": 11575960,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 11453184,
+            "process_bytes": 11453184,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 11547864,
+            "process_bytes": 11547864,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 11440560,
+            "process_bytes": 11440560,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 11536064,
+            "process_bytes": 11536064,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 11494472,
+            "process_bytes": 11494472,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      },
+      {
+        "label": "128-3-baseline",
+        "exit": 0,
+        "arm": "baseline",
+        "sources": 128,
+        "compiler_sha256": "dc6d1ffe6c19e94cfbe52e2ada7784e1fb01da9b8d2818b44124925b043c7d70",
+        "runtime": "10.0.14",
+        "rows": [
+          {
+            "wave": 10,
+            "measured": false,
+            "thread_bytes": 24294616,
+            "process_bytes": 24295928,
+            "gc": [
+              2,
+              1,
+              1
+            ]
+          },
+          {
+            "wave": 11,
+            "measured": false,
+            "thread_bytes": 12217680,
+            "process_bytes": 12217680,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 12,
+            "measured": false,
+            "thread_bytes": 12172912,
+            "process_bytes": 12172912,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 13,
+            "measured": false,
+            "thread_bytes": 12119344,
+            "process_bytes": 12119344,
+            "gc": [
+              2,
+              1,
+              0
+            ]
+          },
+          {
+            "wave": 14,
+            "measured": true,
+            "thread_bytes": 12175872,
+            "process_bytes": 12175872,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 15,
+            "measured": true,
+            "thread_bytes": 12216584,
+            "process_bytes": 12216584,
+            "gc": [
+              2,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 16,
+            "measured": true,
+            "thread_bytes": 12181072,
+            "process_bytes": 12181072,
+            "gc": [
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "wave": 17,
+            "measured": true,
+            "thread_bytes": 12242888,
+            "process_bytes": 12245864,
+            "gc": [
+              3,
+              2,
+              1
+            ]
+          },
+          {
+            "wave": 18,
+            "measured": true,
+            "thread_bytes": 12224264,
+            "process_bytes": 12224264,
+            "gc": [
+              1,
+              1,
+              0
+            ]
+          }
+        ],
+        "output_proof_vector_sha256": "3c0eafb5f3cd0c9023925442e79ecd2dddff99f2bde65f420daf8b86cb3384d0"
+      }
+    ]
+  },
+  "quality": {
+    "actual_variant_processes": 4,
+    "waves_per_process": 8,
+    "actual_generate_requests": 32,
+    "fresh_generate_oracles": 32,
+    "hot_modes": [
+      false,
+      true
+    ],
+    "cases": [
+      "cold",
+      "all-source body/schema-doc edits",
+      "invalid source",
+      "repair",
+      "unchanged",
+      "partial edit",
+      "reversed source order"
+    ],
+    "exact_PE_PDB_generated_schema_parity": true,
+    "complete_diagnostic_multiset_parity": true,
+    "dependency_quality_processes": 2,
+    "dependency_steps_per_process": 6,
+    "dependency_cases": [
+      "constant values",
+      "three compiler errors",
+      "repair",
+      "reference type change and three binding errors",
+      "reference repair",
+      "all-source edit with unchanged reference configuration"
+    ],
+    "serial_emission_order_parity": true,
+    "parallel_diagnostic_order": "Not guaranteed: original baseline and fresh compilation emitted the same three CS0029 errors in different order. All diagnostic content compared exactly as multisets, raw order retained; production ordering policy unchanged.",
+    "failed_order_attempts_preserved": [
+      "proof-03",
+      "proof-04"
+    ],
+    "successful_followup": "proof-05"
+  },
+  "proof_roots": {
+    "bulk": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-all-edit-bulk-20261109",
+    "not_promoted_constructor": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-all-edit-20261109"
+  },
+  "proof_sha256": {
+    "target/compiler-project-all-edit-bulk-20261109/proof-01/report.json": "09b53791e0975195e3c5780cca21825d462e1b2e12f88d8e4636606a56d6e71b",
+    "target/compiler-project-all-edit-bulk-20261109/proof-02/report.json": "b1eb647516654e7c421a71b8fd42686015ade306cb4567462dca946981a51dbf",
+    "target/compiler-project-all-edit-20261109/proof-01/report.json": "ec1d31d45a7c9f627bf5ec89b79eba26750f8532cb98b47edd1db8864c750bfc",
+    "target/compiler-project-all-edit-20261109/proof-02/report.json": "7a6c93a0c2d56104750f8ee9351bc550b5798af6799baf86cc0c97fe1f0ef57d",
+    "target/compiler-project-all-edit-bulk-20261109/production-gates/report.json": "ab3cf6df68a9626bb38c73ffc1e9fa7431d2d1e61ad7f8ec65b78ce092918a17",
+    "target/compiler-project-all-edit-bulk-20261109/production-gates/timeout.json": "6240381c1b9fd0af2f35ab91bd226e506cae74f02d627215e3ca19a4a48b2e6f",
+    "target/compiler-project-all-edit-bulk-20261109/production-gates-02/report.json": "129b7483b145492803752d96de81cca76b9bf9209c161424c94d21b0af94e2c0"
+  },
+  "additional_quality_proof_sha256": {
+    "target/compiler-project-all-edit-bulk-20261109/proof-03/report.json": "bb785599e461217fb7359a64833a8e83bce82f63447e5a383b15a66caa0a6010",
+    "target/compiler-project-all-edit-bulk-20261109/proof-04/report.json": "e23559de7b155d3bfc702c11a067bd02b3fc81673e658bb102fcc61ca5670e7e",
+    "target/compiler-project-all-edit-bulk-20261109/proof-05/report.json": "753fb04ec87cdc93eed14b69b976695090ed3978a3235bdf73c8b19104023cce"
+  },
+  "timings_accepted": false,
+  "limitations": [
+    "Controlled compiler-source experiment against common dependency DLLs; not whole-SDK evolution.",
+    "Allocation during preparation only, not full compile allocation, elapsed compile time, startup, time to play or peak memory.",
+    "Measured matrix changes body literals and schema docs in every source; not a claim about every large-edit pattern.",
+    "No Unity/ECS/Unreal or frame-rate performance result.",
+    "Mac foreign load prevents accepted latency measurements."
+  ],
+  "production_gates": {
+    "release_solution_build": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "compiler_tests": {
+      "passed": 218,
+      "failed": 0,
+      "skipped": 0
+    },
+    "rust_project_lifecycle": {
+      "passed": 1,
+      "failed": 0
+    },
+    "ara_script_all_target_clippy_warnings_denied": "PASS",
+    "workspace_format_check": "PASS",
+    "initial_rust_attempt": "180s wrapper timeout after2m53s native dependency build and before lifecycle result. Failure retained; subsequent focused invocation used compiled dependencies and passed. C# build/tests not repeated."
+  }
+}

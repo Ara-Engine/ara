@@ -19,7 +19,7 @@ pub(super) fn run<T: DeserializeOwned>(
 ) -> Result<T, Diagnostic> {
     let failure = |message| Diagnostic::error(crate::codes::COMPILE_SERVER, message);
     let request = serde_json::to_vec(&request).map_err(io)?;
-    let tools = ToolPaths::locate(root).ok_or_else(|| failure("the installed C# compile tools are missing; build dotnet/Ara.slnx or repair the engine SDK".into()))?;
+    let tools = ToolPaths::locate(root).ok_or_else(|| failure(ToolPaths::MISSING.into()))?;
     let mut command = Command::new("dotnet");
     command
         .arg("exec")

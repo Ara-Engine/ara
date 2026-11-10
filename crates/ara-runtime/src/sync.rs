@@ -14,10 +14,13 @@ use ara_components::Transform;
 use ara_nav::NavAgent;
 use ara_physics::{CharacterController, MotionType, PhysicsPose, RigidBody};
 use ara_sim::{SimError, StateProvider};
-use bevy_ecs::prelude::*;
+use bevy_ecs::{entity::EntityHashMap, prelude::*};
 use glam::{Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::{any::TypeId, collections::BTreeMap};
+
+#[cfg(test)]
+mod tests;
 
 /// World pose resolved at the end of the latest tick.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -76,16 +79,102 @@ pub fn remember_poses(mut query: Query<(&WorldPose, &mut PreviousPose)>) {
     }
 }
 
-/// End of tick: resolves world poses (inserting pose components for new entities).
-pub fn resolve_poses(world: &mut World) {
-    for (entity, matrix) in world_matrices(world) {
-        let pose = WorldPose(Pose::from_matrix(matrix));
-        let mut entity = world.entity_mut(entity);
-        if entity.contains::<WorldPose>() {
-            entity.insert(pose);
-        } else {
-            entity.insert((pose, PreviousPose(pose.0)));
+/// Scratch storage for parent-first pose resolution. Retained by the scheduled
+/// system; contains only derived data and is rebuilt from ECS at every boundary.
+pub struct PoseResolver {
+    query: QueryState<(Entity, &'static Transform, Option<&'static ChildOf>)>,
+    indices: EntityHashMap<usize>,
+    rows: Vec<PoseRow>,
+    path: Vec<usize>,
+}
+
+struct PoseRow {
+    entity: Entity,
+    parent: Option<Entity>,
+    matrix: Mat4,
+    visiting: bool,
+    resolved: bool,
+}
+
+impl FromWorld for PoseResolver {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            query: world.query(),
+            indices: EntityHashMap::new(),
+            rows: Vec::new(),
+            path: Vec::new(),
         }
+    }
+}
+
+impl PoseResolver {
+    fn update(&mut self, world: &mut World) {
+        self.indices.clear();
+        self.rows.clear();
+        for (entity, transform, parent) in self.query.iter(world) {
+            self.indices.insert(entity, self.rows.len());
+            self.rows.push(PoseRow {
+                entity,
+                parent: parent.map(ChildOf::parent),
+                matrix: Pose::from_transform(transform).matrix(),
+                visiting: false,
+                resolved: false,
+            });
+        }
+        for start in 0..self.rows.len() {
+            let mut at = Some(start);
+            while let Some(index) = at {
+                let row = &mut self.rows[index];
+                if row.resolved {
+                    break;
+                }
+                assert!(!row.visiting, "scene hierarchy must be acyclic");
+                row.visiting = true;
+                self.path.push(index);
+                // A parent without a Transform terminates the chain, matching
+                // world_matrices; its ancestors do not affect this entity.
+                at = row
+                    .parent
+                    .and_then(|parent| self.indices.get(&parent).copied());
+            }
+            while let Some(index) = self.path.pop() {
+                let parent = self.rows[index]
+                    .parent
+                    .and_then(|parent| self.indices.get(&parent).copied());
+                if let Some(parent) = parent {
+                    self.rows[index].matrix = self.rows[parent].matrix * self.rows[index].matrix;
+                }
+                self.rows[index].resolved = true;
+            }
+        }
+    }
+}
+
+/// End of tick: resolves world poses with reusable buffers and a cached ECS query.
+pub fn resolve_poses_cached(world: &mut World, mut resolver: Local<PoseResolver>) {
+    resolver.update(world);
+    for row in &resolver.rows {
+        write_pose(world, row.entity, row.matrix);
+    }
+}
+
+/// Resolves poses once at setup boundaries. Tick schedules use [`resolve_poses_cached`].
+pub fn resolve_poses(world: &mut World) {
+    let mut resolver = PoseResolver::from_world(world);
+    resolver.update(world);
+    for row in &resolver.rows {
+        write_pose(world, row.entity, row.matrix);
+    }
+}
+
+fn write_pose(world: &mut World, entity: Entity, matrix: Mat4) {
+    let pose = WorldPose(Pose::from_matrix(matrix));
+    if let Some(mut current) = world.get_mut::<WorldPose>(entity) {
+        *current = pose;
+    } else {
+        world
+            .entity_mut(entity)
+            .insert((pose, PreviousPose(pose.0)));
     }
 }
 

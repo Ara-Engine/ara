@@ -56,7 +56,12 @@ public static partial class Probing
 #[test]
 fn every_level_applies_and_the_game_follows_the_new_code() {
     let _clr = support::clr_lock();
-    let mut s = Live::start("levels", &[("Levels", LEVELS, &[])]);
+    // Keep every reload above the incremental parser's small-file cutoff.
+    let source = format!(
+        "// large-file reload coverage {}\n{LEVELS}",
+        "x".repeat(4096)
+    );
+    let mut s = Live::start("levels", &[("Levels", &source, &[])]);
     let probe = s.spawn(&[("Probe", json!({}))]);
     let ticker = s.spawn(&[("Ticker", json!({}))]);
     s.until("the initial code", |s| s.int(probe, "Probe", "value") == 1);

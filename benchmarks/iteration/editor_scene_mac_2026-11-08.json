@@ -1,0 +1,305 @@
+{
+  "date": "2026-11-08",
+  "machine": "Apple M5 Pro, macOS arm64",
+  "dotnet": "10.0.203",
+  "profile": "Release compile server, project editor-session IPC",
+  "entities": 5001,
+  "method": "Four fresh processes: before/after, then after/before with reversed callback order. Two warmups and seven measured invocations per case. Summary uses the median of the two process p50s.",
+  "scope": "End-to-end editor command invocations, including JSON request parsing, immutable scene snapshot construction and command result serialization. Compilation/catalog registration are outside timing. This is not UI FPS or a competitor comparison.",
+  "workloads": {
+    "snapshot": "Read Entities.Count only; derived name/hierarchy/path indices remain unused.",
+    "hierarchy": "Read Children.Count and Siblings.Count for every entity; checksum n*n for 5000 children.",
+    "names": "Find the last 100 ordered entities by exact name and check their stable identity.",
+    "paths": "Find the last 100 ordered entities by root-relative name path and check their stable identity."
+  },
+  "commands": [
+    "python benchmarks/iteration/editor_scene.py --server <reference-server>/Ara.CompileServer.dll --output <before.json>",
+    "python benchmarks/iteration/editor_scene.py --server <optimized-server>/Ara.CompileServer.dll --output <after.json>",
+    "python benchmarks/iteration/editor_scene.py --server <optimized-server>/Ara.CompileServer.dll --reverse --output <after-reverse.json>",
+    "python benchmarks/iteration/editor_scene.py --server <reference-server>/Ara.CompileServer.dll --reverse --output <before-reverse.json>"
+  ],
+  "binaries": {
+    "before": {
+      "Ara.CompileServer.dll": "75d2a9dadde9847af445abca7538c5a3b89524237a1b0bcd28ae22d0220dbae2",
+      "Ara.Editor.dll": "bca5c700286ed36858e44ff0af9a9c528ca06d0e0db7a260445d2a7e68129716"
+    },
+    "after": {
+      "Ara.CompileServer.dll": "4146d9cc51709d5b5d0c0c8ceaa915161194cc196e287f7faa1c301f49d6c4ed",
+      "Ara.Editor.dll": "2d1f423441a4f219fb48c7022307744b2d3b519af64b9884d27bbbf2feba2455"
+    }
+  },
+  "summary": {
+    "snapshot": {
+      "before_p50_ms": 5.766604000000286,
+      "after_p50_ms": 5.667083500000003,
+      "speedup": 1.0175611493990309
+    },
+    "hierarchy": {
+      "before_p50_ms": 298.20625000000024,
+      "after_p50_ms": 6.84054150000013,
+      "speedup": 43.59395378275164
+    },
+    "names": {
+      "before_p50_ms": 8.94058299999978,
+      "after_p50_ms": 5.768104499999982,
+      "speedup": 1.5500036450448857
+    },
+    "paths": {
+      "before_p50_ms": 69.55570849999958,
+      "after_p50_ms": 7.023104000000058,
+      "speedup": 9.903841449592518
+    }
+  },
+  "runs": {
+    "before_forward": {
+      "entities": 5001,
+      "reversed_cases": false,
+      "cases": [
+        {
+          "case": "snapshot",
+          "p50_ms": 6.032458000000185,
+          "p95_ms": 15.392541999999843,
+          "samples_ms": [
+            8.146500000000056,
+            5.667333000000108,
+            7.7585000000000015,
+            5.670375000000005,
+            6.032458000000185,
+            15.392541999999843,
+            5.736415999999966
+          ]
+        },
+        {
+          "case": "hierarchy",
+          "p50_ms": 298.6464170000005,
+          "p95_ms": 302.98458299999976,
+          "samples_ms": [
+            299.1300409999997,
+            302.98458299999976,
+            300.2310000000001,
+            294.26945800000004,
+            297.7656250000002,
+            298.6464170000005,
+            294.2674589999994
+          ]
+        },
+        {
+          "case": "names",
+          "p50_ms": 8.34070799999953,
+          "p95_ms": 17.655374999999474,
+          "samples_ms": [
+            10.129959000000355,
+            8.099458000000226,
+            9.054250000000152,
+            8.34070799999953,
+            8.267082999999786,
+            17.655374999999474,
+            8.101041999999836
+          ]
+        },
+        {
+          "case": "paths",
+          "p50_ms": 70.48654199999937,
+          "p95_ms": 71.67987500000007,
+          "samples_ms": [
+            70.15533399999984,
+            71.67987500000007,
+            71.03162499999982,
+            70.74775000000066,
+            70.34908299999998,
+            70.48654199999937,
+            69.61620800000023
+          ]
+        }
+      ]
+    },
+    "after_forward": {
+      "entities": 5001,
+      "reversed_cases": false,
+      "cases": [
+        {
+          "case": "snapshot",
+          "p50_ms": 5.793916999999871,
+          "p95_ms": 11.744374999999918,
+          "samples_ms": [
+            5.693665999999986,
+            9.43929099999985,
+            5.570540999999984,
+            5.528124999999884,
+            7.262957999999875,
+            11.744374999999918,
+            5.793916999999871
+          ]
+        },
+        {
+          "case": "hierarchy",
+          "p50_ms": 7.316332999999897,
+          "p95_ms": 12.372916000000123,
+          "samples_ms": [
+            7.316332999999897,
+            5.7167919999998595,
+            5.645624999999876,
+            8.41483300000001,
+            12.372916000000123,
+            7.3267500000000485,
+            5.761166000000095
+          ]
+        },
+        {
+          "case": "names",
+          "p50_ms": 5.717624999999948,
+          "p95_ms": 13.666415999999959,
+          "samples_ms": [
+            5.786166000000037,
+            13.666415999999959,
+            5.392290999999938,
+            5.528957999999973,
+            7.059667000000047,
+            5.422166000000006,
+            5.717624999999948
+          ]
+        },
+        {
+          "case": "paths",
+          "p50_ms": 6.157791999999995,
+          "p95_ms": 13.890375000000121,
+          "samples_ms": [
+            13.890375000000121,
+            5.99341600000014,
+            6.157791999999995,
+            8.542166999999878,
+            12.066249999999723,
+            6.078416999999892,
+            6.117291999999885
+          ]
+        }
+      ]
+    },
+    "after_reverse": {
+      "entities": 5001,
+      "reversed_cases": true,
+      "cases": [
+        {
+          "case": "paths",
+          "p50_ms": 7.88841600000012,
+          "p95_ms": 12.40587500000001,
+          "samples_ms": [
+            6.160834000000115,
+            10.582416000000094,
+            12.40587500000001,
+            10.285250000000135,
+            5.9912499999998925,
+            5.934541000000015,
+            7.88841600000012
+          ]
+        },
+        {
+          "case": "names",
+          "p50_ms": 5.8185840000000155,
+          "p95_ms": 11.648667000000001,
+          "samples_ms": [
+            5.370375000000038,
+            5.484083999999889,
+            9.577125000000075,
+            11.648667000000001,
+            5.8185840000000155,
+            7.402292000000088,
+            5.516458000000002
+          ]
+        },
+        {
+          "case": "hierarchy",
+          "p50_ms": 6.364750000000363,
+          "p95_ms": 13.56312500000012,
+          "samples_ms": [
+            5.768875000000007,
+            7.451417000000182,
+            6.036584000000067,
+            8.019833000000087,
+            5.884041000000284,
+            6.364750000000363,
+            13.56312500000012
+          ]
+        },
+        {
+          "case": "snapshot",
+          "p50_ms": 5.540250000000135,
+          "p95_ms": 10.77962500000007,
+          "samples_ms": [
+            5.4656250000002515,
+            5.383624999999892,
+            6.518291999999981,
+            5.540250000000135,
+            5.497583000000361,
+            10.77962500000007,
+            8.731207999999935
+          ]
+        }
+      ]
+    },
+    "before_reverse": {
+      "entities": 5001,
+      "reversed_cases": true,
+      "cases": [
+        {
+          "case": "paths",
+          "p50_ms": 68.6248749999998,
+          "p95_ms": 76.319625,
+          "samples_ms": [
+            68.77554200000003,
+            67.92245900000005,
+            68.43224999999987,
+            69.4009999999996,
+            68.6248749999998,
+            67.81658299999992,
+            76.319625
+          ]
+        },
+        {
+          "case": "names",
+          "p50_ms": 9.54045800000003,
+          "p95_ms": 14.115499999999948,
+          "samples_ms": [
+            10.145375000000012,
+            8.569749999999932,
+            9.54045800000003,
+            11.355208000000339,
+            8.815666999999916,
+            8.453207999999712,
+            14.115499999999948
+          ]
+        },
+        {
+          "case": "hierarchy",
+          "p50_ms": 297.766083,
+          "p95_ms": 299.16516699999994,
+          "samples_ms": [
+            297.42854099999994,
+            297.766083,
+            299.0958340000001,
+            296.8305000000004,
+            299.16516699999994,
+            296.5503329999999,
+            298.0523330000002
+          ]
+        },
+        {
+          "case": "snapshot",
+          "p50_ms": 5.500750000000387,
+          "p95_ms": 17.733541999999325,
+          "samples_ms": [
+            6.942624999999758,
+            5.500750000000387,
+            5.395959000000339,
+            7.271249999999618,
+            5.477416999999818,
+            5.473583999999754,
+            17.733541999999325
+          ]
+        }
+      ]
+    }
+  },
+  "validation": "Every measured invocation completed successfully and returned its expected query checksum. Unit tests and aggregate repository checks are owned by the parent integration pass.",
+  "limitations": "Machine load and GC were not controlled. Small snapshot-only differences are within observed variation. Indices are scoped to one immutable command snapshot; transport still sends the full snapshot."
+}

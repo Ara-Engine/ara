@@ -34,9 +34,13 @@ public static partial class Gravity
     }
 }
 
-/// <summary>Moves transforms by their velocity.</summary>
+/// <summary>Moves each contiguous transform batch by its matching velocity.</summary>
 public static partial class Movement
 {
     [Query(Order = 10)]
-    static void Run(ref Transform tr, in SampleVelocity v, in Tick t) => tr.Position += v.Linear * t.Dt;
+    static void Run(Span<Transform> transforms, ReadOnlySpan<SampleVelocity> velocities, in Tick tick)
+    {
+        for (var i = 0; i < transforms.Length; i++)
+            transforms[i].Position += velocities[i].Linear * tick.Dt;
+    }
 }

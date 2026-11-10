@@ -1,0 +1,2314 @@
+{
+  "date": "2026-11-10",
+  "measured_code_head": "9c747f22af0dedec70ee073cc3669ed86cca6ebd",
+  "default_base": "1e04fe5dd9d04ede28592597dace9c0c06a15f9a",
+  "method": "Presentation-only aggregation of checked-in packets; no new benchmarks. Two-process summaries average process percentiles, never pool samples. Ratios are per-experiment, not cumulative. Original source sample counts and limitations remain authoritative.",
+  "rows": [
+    {
+      "group": "Compiler latency",
+      "label": "129 files / 6,144 methods",
+      "before": 695.6313540000001,
+      "after": 353.58666600000004,
+      "before_p95": 722.3386250000008,
+      "after_p95": 387.1314160000008,
+      "unit": "ms",
+      "source": "mac-cpu-2026-11-08.json",
+      "note": "Historical warm full emits; 5 warmups +12 requests; .NET10.0.7. Not latest-head timing.",
+      "reduction_percent": 49.17039550232809
+    },
+    {
+      "group": "Compiler latency",
+      "label": "1,024 scripts / retained state",
+      "before": 1481.4645624999994,
+      "after": 1348.5329687500011,
+      "before_p95": 1519.3886250000005,
+      "after_p95": 1563.5805420000004,
+      "unit": "ms",
+      "source": "compiler_scale_mac_2026-11-08.json",
+      "note": "Historical paired process summaries; one edited file per module, full emit. Different optimization stages, do not compound.",
+      "reduction_percent": 8.972985052418236
+    },
+    {
+      "group": "Compiler latency",
+      "label": "1,024 scripts / 2 module workers",
+      "before": 1336.7091872499998,
+      "after": 1169.740624999999,
+      "before_p95": 1356.7415835000006,
+      "after_p95": 1202.2937494999992,
+      "unit": "ms",
+      "source": "compiler_parallel_mac_2026-11-08.json",
+      "note": "Historical paired process summaries; one edited file per module, full emit. Different optimization stages, do not compound.",
+      "reduction_percent": 12.49101628406578
+    },
+    {
+      "group": "Compiler latency",
+      "label": "Shared edit / 2,048 consumers",
+      "before": 5021.959500008961,
+      "after": 3569.093312500627,
+      "before_p95": 5376.520249992609,
+      "after_p95": 4401.3962500030175,
+      "unit": "ms",
+      "source": "compiler_dependency_reuse_mac_2026-11-09.json",
+      "note": "One order only, 4 measured requests/arm; reverse incomplete.",
+      "reduction_percent": 28.93026491961438
+    },
+    {
+      "group": "Compiler latency",
+      "label": "Live save-to-visible L1",
+      "before": 127.560292,
+      "after": 115.34281250000001,
+      "before_p95": 216.199792,
+      "after_p95": 207.33637499999998,
+      "unit": "ms",
+      "source": "compiler_incremental_parse_mac_2026-11-09.json",
+      "note": "One completed baseline\u2192candidate pair, 8 edits/level; reverse pair incomplete. Includes 60Hz tick boundary.",
+      "reduction_percent": 9.577807724052557
+    },
+    {
+      "group": "Compiler latency",
+      "label": "Live save-to-visible L2",
+      "before": 141.3094375,
+      "after": 123.562771,
+      "before_p95": 172.882,
+      "after_p95": 137.87133400000002,
+      "unit": "ms",
+      "source": "compiler_incremental_parse_mac_2026-11-09.json",
+      "note": "One completed baseline\u2192candidate pair, 8 edits/level; reverse pair incomplete. Includes 60Hz tick boundary.",
+      "reduction_percent": 12.558727013544303
+    },
+    {
+      "group": "Compiler latency",
+      "label": "Live save-to-visible L3",
+      "before": 222.6794795,
+      "after": 204.0981255,
+      "before_p95": 233.606375,
+      "after_p95": 212.75729099999998,
+      "unit": "ms",
+      "source": "compiler_incremental_parse_mac_2026-11-09.json",
+      "note": "One completed baseline\u2192candidate pair, 8 edits/level; reverse pair incomplete. Includes 60Hz tick boundary.",
+      "reduction_percent": 8.344439299805352
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "small / 0% edited",
+      "before": 8865120.0,
+      "after": 7672896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 13.448481238832644
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "small / 1% edited",
+      "before": 8865120.0,
+      "after": 7684096.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 13.322143411482301
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "small / 100% edited",
+      "before": 8865120.0,
+      "after": 8793120.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 0.812171747252155
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "4k / 0% edited",
+      "before": 24369344.0,
+      "after": 7672896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 68.51414629790608
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "4k / 1% edited",
+      "before": 24369344.0,
+      "after": 7837696.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 67.83788681385926
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "4k / 100% edited",
+      "before": 24369344.0,
+      "after": 24153344.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 0.8863595179254724
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "large / 0% edited",
+      "before": 106306112.0,
+      "after": 768096.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 99.27746769630706
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "large / 1% edited",
+      "before": 106306112.0,
+      "after": 1823240.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 98.2849151702585
+    },
+    {
+      "group": "Exact source reuse",
+      "label": "large / 100% edited",
+      "before": 106306112.0,
+      "after": 106284512.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_read_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 0.02031868120621061
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "small / 0% edited",
+      "before": 7672896.0,
+      "after": 3544896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 53.79976478242374
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "small / 1% edited",
+      "before": 7684096.0,
+      "after": 3556096.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 53.7213486140725
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "small / 100% edited",
+      "before": 8793120.0,
+      "after": 4664896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 46.948341430572995
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "4k / 0% edited",
+      "before": 7672896.0,
+      "after": 3544896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 53.79976478242374
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "4k / 1% edited",
+      "before": 7837696.0,
+      "after": 3709696.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 52.6685393258427
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "4k / 100% edited",
+      "before": 24153344.0,
+      "after": 20025344.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 17.090801174363268
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "large / 0% edited",
+      "before": 768096.0,
+      "after": 355296.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 53.74328208973878
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "large / 1% edited",
+      "before": 1823240.0,
+      "after": 1410440.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 22.6410127026612
+    },
+    {
+      "group": "Pooled source read-ahead",
+      "label": "large / 100% edited",
+      "before": 106284512.0,
+      "after": 105871712.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_source_buffer_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 0.38839149019190833
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "small / 0% edited",
+      "before": 11023184.0,
+      "after": 10199040.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 7.47646052175125
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "small / 1% edited",
+      "before": 11023184.0,
+      "after": 10199040.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 7.47646052175125
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "small / 100% edited",
+      "before": 11041184.0,
+      "after": 10209040.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 7.536727945118926
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "4k / 0% edited",
+      "before": 34204408.0,
+      "after": 29540488.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 13.635435526321638
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "4k / 1% edited",
+      "before": 34204408.0,
+      "after": 29541496.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 13.632488537734666
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "4k / 100% edited",
+      "before": 34206408.0,
+      "after": 29542488.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 13.634638281809652
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "large / 0% edited",
+      "before": 158904600.0,
+      "after": 132632056.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 16.533532698235298
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "large / 1% edited",
+      "before": 158903400.0,
+      "after": 132632056.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 16.532902379684767
+    },
+    {
+      "group": "Request-local hashes",
+      "label": "large / 100% edited",
+      "before": 158905200.0,
+      "after": 132633056.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_request_hashes_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 16.533218547914096
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "small / publication none",
+      "before": 916736.0,
+      "after": 663176.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 27.65899888299358
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "small / publication one",
+      "before": 1534432.0,
+      "after": 1280872.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 16.52468144564243
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "small / publication all",
+      "before": 2151792.0,
+      "after": 1897336.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 11.825306535204149
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "wide / publication none",
+      "before": 996416.0,
+      "after": 715976.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 28.14487121844691
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "wide / publication one",
+      "before": 1051192.0,
+      "after": 770752.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 26.6782852228708
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "wide / publication all",
+      "before": 2738832.0,
+      "after": 2192536.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 19.94631288081927
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "large / publication none",
+      "before": 4864832.0,
+      "after": 4605896.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 5.3226092905161
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "large / publication one",
+      "before": 5515864.0,
+      "after": 5256928.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 4.694386953702989
+    },
+    {
+      "group": "Fingerprint / manifest serialization",
+      "label": "large / publication all",
+      "before": 10070736.0,
+      "after": 9794776.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_serialization_mac_2026-11-09.json",
+      "note": "Allocation window only; clocks unaccepted. See source for synthetic fixture and counter scope.",
+      "reduction_percent": 2.740216802426354
+    },
+    {
+      "group": "Analysis / bulk allocation",
+      "label": "Body analysis / order 1",
+      "before": 52889296.0,
+      "after": 9133508.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_body_analysis_mac_2026-11-09.json",
+      "note": "4,096 methods; globally clean built-in analyzer provenance; one body edit; complete diagnostic equivalence.",
+      "reduction_percent": 82.73089511344602
+    },
+    {
+      "group": "Analysis / bulk allocation",
+      "label": "Body analysis / order 2",
+      "before": 52094596.0,
+      "after": 9125980.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_body_analysis_mac_2026-11-09.json",
+      "note": "4,096 methods; globally clean built-in analyzer provenance; one body edit; complete diagnostic equivalence.",
+      "reduction_percent": 82.48190656858151
+    },
+    {
+      "group": "Analysis / bulk allocation",
+      "label": "All-edit / 32 files",
+      "before": 3006508.0,
+      "after": 2900044.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_bulk_tree_edits_mac_2026-11-10.json",
+      "note": "Actual Generate; all bodies and schema docs change; ABBA per size, 5 measured/process. Exact outputs checked outside allocation window.",
+      "reduction_percent": 3.5411181343937836
+    },
+    {
+      "group": "Analysis / bulk allocation",
+      "label": "All-edit / 128 files",
+      "before": 12155020.0,
+      "after": 11337304.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "compiler_project_bulk_tree_edits_mac_2026-11-10.json",
+      "note": "Actual Generate; all bodies and schema docs change; ABBA per size, 5 measured/process. Exact outputs checked outside allocation window.",
+      "reduction_percent": 6.727393291002404
+    },
+    {
+      "group": "Document headers",
+      "label": "32 records",
+      "before": 0.076896,
+      "after": 0.0175205,
+      "before_p95": 0.0884375,
+      "after_p95": 0.0188965,
+      "unit": "ms",
+      "source": "data_loading_mac_2026-11-08.json",
+      "note": "Strict header extraction, 8 warmups+40 measurements/order; warm cache; not full JSON/game loading.",
+      "reduction_percent": 77.21532979608823
+    },
+    {
+      "group": "Document headers",
+      "label": "10,000 records",
+      "before": 14.330271,
+      "after": 3.3052705,
+      "before_p95": 14.909707999999998,
+      "after_p95": 3.3538965,
+      "unit": "ms",
+      "source": "data_loading_mac_2026-11-08.json",
+      "note": "Strict header extraction, 8 warmups+40 measurements/order; warm cache; not full JSON/game loading.",
+      "reduction_percent": 76.93504540144426
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "small",
+      "before": 0.56965625,
+      "after": 0.42654174999999994,
+      "before_p95": 0.7554375,
+      "after_p95": 0.49802100000000005,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 25.12295792418674
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "many tiny",
+      "before": 2.4484062499999997,
+      "after": 1.72084375,
+      "before_p95": 2.9436869999999997,
+      "after_p95": 1.820729,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 29.715758975864393
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "ui heavy",
+      "before": 18.525677,
+      "after": 10.94301075,
+      "before_p95": 19.3585,
+      "after_p95": 11.19675,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 40.930575708515285
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "ui pinned",
+      "before": 13.59226,
+      "after": 10.980156000000001,
+      "before_p95": 13.859938,
+      "after_p95": 11.3395415,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 19.217584125082944
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "medium",
+      "before": 4.74862525,
+      "after": 3.7697917500000004,
+      "before_p95": 4.894083500000001,
+      "after_p95": 3.8736249999999997,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 20.6129868849937
+    },
+    {
+      "group": "Project open / indexing",
+      "label": "large",
+      "before": 17.4221565,
+      "after": 14.33027075,
+      "before_p95": 17.9130415,
+      "after_p95": 14.962958,
+      "unit": "ms",
+      "source": "data_loading_index_mac_2026-11-08.json",
+      "note": "4 fresh processes ABBA, 3 warmups+12 opens; warm OS cache; not imports/C#/Play.",
+      "reduction_percent": 17.746860154769006
+    },
+    {
+      "group": "Project load / validate",
+      "label": "small",
+      "before": 0.525573,
+      "after": 0.517302,
+      "before_p95": 0.5973330000000001,
+      "after_p95": 0.5255624999999999,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 1.5737109783036662
+    },
+    {
+      "group": "Project open + load",
+      "label": "small",
+      "before": 0.88846875,
+      "after": 0.9218232500000001,
+      "before_p95": 1.019729,
+      "after_p95": 1.0827915,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": -3.7541556751433447
+    },
+    {
+      "group": "Project load / validate",
+      "label": "many tiny",
+      "before": 1.7169167499999998,
+      "after": 1.6226875,
+      "before_p95": 2.1443335,
+      "after_p95": 1.7123335,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 5.488282993336735
+    },
+    {
+      "group": "Project open + load",
+      "label": "many tiny",
+      "before": 3.8808022500000003,
+      "after": 3.8406145,
+      "before_p95": 4.8252285,
+      "after_p95": 3.939417,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 1.0355526360561251
+    },
+    {
+      "group": "Project load / validate",
+      "label": "medium",
+      "before": 22.56384375,
+      "after": 9.420594,
+      "before_p95": 22.762833,
+      "after_p95": 9.729146,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 58.24916133803666
+    },
+    {
+      "group": "Project open + load",
+      "label": "medium",
+      "before": 27.39634375,
+      "after": 14.00361475,
+      "before_p95": 28.1423335,
+      "after_p95": 16.0612085,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 48.88509620923413
+    },
+    {
+      "group": "Project load / validate",
+      "label": "large",
+      "before": 89.96003150000001,
+      "after": 32.6255835,
+      "before_p95": 91.6675835,
+      "after_p95": 34.156916499999994,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 63.73324580260958
+    },
+    {
+      "group": "Project open + load",
+      "label": "large",
+      "before": 111.290229,
+      "after": 51.510020749999995,
+      "before_p95": 119.133729,
+      "after_p95": 57.879479,
+      "unit": "ms",
+      "source": "data_loading_project_mac_2026-11-08.json",
+      "note": "2 fresh reversed-order processes; 3 warmups+12 measurements; warm cache; source contains small-case regressions.",
+      "reduction_percent": 53.71559460983768
+    },
+    {
+      "group": "Runtime preparation",
+      "label": "Flat poses / 10k",
+      "before": 2.309146,
+      "after": 0.381667,
+      "before_p95": 2.4770205,
+      "after_p95": 0.464875,
+      "unit": "ms",
+      "source": "mac-cpu-2026-11-08.json",
+      "note": "Developer profile, 2 reversed processes, 40 measurements; CPU stage only.",
+      "reduction_percent": 83.47150851440315
+    },
+    {
+      "group": "Runtime preparation",
+      "label": "Hierarchical poses / 10k",
+      "before": 2.7484585,
+      "after": 0.424979,
+      "before_p95": 2.8945625,
+      "after_p95": 0.446813,
+      "unit": "ms",
+      "source": "mac-cpu-2026-11-08.json",
+      "note": "Developer profile, 2 reversed processes, 40 measurements; CPU stage only.",
+      "reduction_percent": 84.53755077618963
+    },
+    {
+      "group": "Runtime preparation",
+      "label": "Scene resolve / 8k",
+      "before": 11.898187499999999,
+      "after": 6.131625,
+      "before_p95": 12.454396000000001,
+      "after_p95": 6.6573545,
+      "unit": "ms",
+      "source": "mac-cpu-2026-11-08.json",
+      "note": "Developer profile, 2 reversed processes, 40 measurements; CPU stage only.",
+      "reduction_percent": 48.46589028791149
+    },
+    {
+      "group": "Runtime preparation",
+      "label": "CPU scene prepare / 10,000",
+      "before": 119.535146,
+      "after": 97.635875,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "pipeline_allocations_mac_2026-11-09.json",
+      "note": "CPU decoded-scene/workspace/projection stage; 2 reversed rounds. Not complete Play/first tick.",
+      "reduction_percent": 18.32036161147116
+    },
+    {
+      "group": "Scene preparation allocation",
+      "label": "10,000 entities",
+      "before": 234133781.0,
+      "after": 185292907.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "pipeline_allocations_mac_2026-11-09.json",
+      "note": "Separate untimed Rust cumulative allocation requests, not live/peak RAM.",
+      "reduction_percent": 20.86024229028275
+    },
+    {
+      "group": "Runtime preparation",
+      "label": "CPU scene prepare / 100,000",
+      "before": 1226.5639375,
+      "after": 992.0101035,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "pipeline_allocations_mac_2026-11-09.json",
+      "note": "CPU decoded-scene/workspace/projection stage; 2 reversed rounds. Not complete Play/first tick.",
+      "reduction_percent": 19.122837940113502
+    },
+    {
+      "group": "Scene preparation allocation",
+      "label": "100,000 entities",
+      "before": 2345064586.0,
+      "after": 1856286837.0,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "bytes",
+      "source": "pipeline_allocations_mac_2026-11-09.json",
+      "note": "Separate untimed Rust cumulative allocation requests, not live/peak RAM.",
+      "reduction_percent": 20.842826757011114
+    },
+    {
+      "group": "Dependency plan",
+      "label": "128 systems",
+      "before": 0.030708,
+      "after": 0.008875000000000001,
+      "before_p95": 0.041958,
+      "after_p95": 0.011583000000000001,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 71.09873648560635
+    },
+    {
+      "group": "Dependency plan",
+      "label": "512 systems",
+      "before": 0.321458,
+      "after": 0.031459,
+      "before_p95": 0.33825,
+      "after_p95": 0.0385,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 90.21365155012474
+    },
+    {
+      "group": "Dependency plan",
+      "label": "2,048 systems",
+      "before": 4.020042,
+      "after": 0.125709,
+      "before_p95": 4.345792,
+      "after_p95": 0.13549999999999998,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 96.87294311850472
+    },
+    {
+      "group": "Schedule initialization",
+      "label": "64 systems",
+      "before": 1.039458,
+      "after": 0.29233299999999995,
+      "before_p95": 1.0759999999999998,
+      "after_p95": 0.32045799999999997,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 71.87640097050578
+    },
+    {
+      "group": "Schedule initialization",
+      "label": "256 systems",
+      "before": 16.915584000000003,
+      "after": 2.975875,
+      "before_p95": 17.230333,
+      "after_p95": 3.079334,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 82.40749476932041
+    },
+    {
+      "group": "Schedule initialization",
+      "label": "512 systems",
+      "before": 79.637875,
+      "after": 11.075042,
+      "before_p95": 83.91562499999999,
+      "after_p95": 11.365709,
+      "unit": "ms",
+      "source": "script_dependency_graph_mac_2026-11-09.json",
+      "note": "One developer-profile process, writer chains;20 plan/6 schedule samples. Not CLR/compiler/full Play latency.",
+      "reduction_percent": 86.09324771661726
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "one",
+      "before": 220.2785415,
+      "after": 0.8718539999999999,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": 99.60420384388644
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "pct1",
+      "before": 225.972333,
+      "after": 7.622312,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": 96.62688263699964
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "pct10",
+      "before": 273.604979,
+      "after": 75.8443335,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": 72.27962233099566
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "all",
+      "before": 770.221063,
+      "after": 839.04575,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": -8.935705644289825
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "prefab-name",
+      "before": 154.5357085,
+      "after": 147.04308300000002,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": 4.848475198856694
+    },
+    {
+      "group": "Scene Set / projection",
+      "label": "prefab-override",
+      "before": 154.020771,
+      "after": 146.95189599999998,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "projection_local_mac_2026-11-09.json",
+      "note": "100k entities; 2 reversed rounds,3 apply_ops samples/process. Original full-wave after931ms retained; follow-up +0.7/+1.4% also retained.",
+      "reduction_percent": 4.5895595471340815
+    },
+    {
+      "group": "Editor command API",
+      "label": "snapshot",
+      "before": 5.766604000000286,
+      "after": 5.667083500000003,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "editor_scene_mac_2026-11-08.json",
+      "note": "Whole command call including snapshot/JSON transport; 4 fresh processes,7 samples/case. Machine load/GC uncontrolled; small deltas are not meaningful.",
+      "reduction_percent": 1.725807771788701
+    },
+    {
+      "group": "Editor command API",
+      "label": "hierarchy",
+      "before": 298.20625000000024,
+      "after": 6.84054150000013,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "editor_scene_mac_2026-11-08.json",
+      "note": "Whole command call including snapshot/JSON transport; 4 fresh processes,7 samples/case. Machine load/GC uncontrolled; small deltas are not meaningful.",
+      "reduction_percent": 97.70610391297964
+    },
+    {
+      "group": "Editor command API",
+      "label": "names",
+      "before": 8.94058299999978,
+      "after": 5.768104499999982,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "editor_scene_mac_2026-11-08.json",
+      "note": "Whole command call including snapshot/JSON transport; 4 fresh processes,7 samples/case. Machine load/GC uncontrolled; small deltas are not meaningful.",
+      "reduction_percent": 35.484022686214935
+    },
+    {
+      "group": "Editor command API",
+      "label": "paths",
+      "before": 69.55570849999958,
+      "after": 7.023104000000058,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "editor_scene_mac_2026-11-08.json",
+      "note": "Whole command call including snapshot/JSON transport; 4 fresh processes,7 samples/case. Machine load/GC uncontrolled; small deltas are not meaningful.",
+      "reduction_percent": 89.90290782531515
+    },
+    {
+      "group": "Managed component bridge",
+      "label": "64 entities",
+      "before": 0.1199,
+      "after": 0.1056,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "bridge_mac_2026-11-08.json",
+      "note": "Codec-backed callback fixture, valid JSON; no Rust serialization/full ticks/native columns included.",
+      "reduction_percent": 11.926605504587162
+    },
+    {
+      "group": "Managed component bridge",
+      "label": "1,024 entities",
+      "before": 3.7904,
+      "after": 1.62745,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "bridge_mac_2026-11-08.json",
+      "note": "Codec-backed callback fixture, valid JSON; no Rust serialization/full ticks/native columns included.",
+      "reduction_percent": 57.06389826931195
+    },
+    {
+      "group": "Managed component bridge",
+      "label": "8,192 entities",
+      "before": 137.776,
+      "after": 13.2375,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "bridge_mac_2026-11-08.json",
+      "note": "Codec-backed callback fixture, valid JSON; no Rust serialization/full ticks/native columns included.",
+      "reduction_percent": 90.39201312274997
+    },
+    {
+      "group": "Codec writes",
+      "label": "light / 8 parameters",
+      "before": 12.853458,
+      "after": 11.4467295,
+      "before_p95": 13.063125,
+      "after_p95": 13.173125500000001,
+      "unit": "ms",
+      "source": "codec_writes_mac_2026-11-08.json",
+      "note": "2 reversed orders,2048 rows,32 samples; actual CLR\u2192Rust callback writes, not whole game frame.",
+      "reduction_percent": 10.944358319761104
+    },
+    {
+      "group": "Codec writes",
+      "label": "audio / 8 parameters",
+      "before": 35.0216875,
+      "after": 29.127312500000002,
+      "before_p95": 35.705270999999996,
+      "after_p95": 30.3110835,
+      "unit": "ms",
+      "source": "codec_writes_mac_2026-11-08.json",
+      "note": "2 reversed orders,2048 rows,32 samples; actual CLR\u2192Rust callback writes, not whole game frame.",
+      "reduction_percent": 16.830642441201604
+    },
+    {
+      "group": "Codec writes",
+      "label": "graph / 8 parameters",
+      "before": 24.537021,
+      "after": 19.3282915,
+      "before_p95": 25.533229,
+      "after_p95": 20.108521000000003,
+      "unit": "ms",
+      "source": "codec_writes_mac_2026-11-08.json",
+      "note": "2 reversed orders,2048 rows,32 samples; actual CLR\u2192Rust callback writes, not whole game frame.",
+      "reduction_percent": 21.228043534706188
+    },
+    {
+      "group": "Codec writes",
+      "label": "graph / 64 parameters",
+      "before": 130.766063,
+      "after": 112.1508125,
+      "before_p95": 133.57658300000003,
+      "after_p95": 115.0322505,
+      "unit": "ms",
+      "source": "codec_writes_mac_2026-11-08.json",
+      "note": "2 reversed orders,2048 rows,32 samples; actual CLR\u2192Rust callback writes, not whole game frame.",
+      "reduction_percent": 14.235536402132109
+    },
+    {
+      "group": "Sparse query streaming",
+      "label": "aligned",
+      "before": 0.4479165,
+      "after": 0.127354,
+      "before_p95": 0.4798335,
+      "after_p95": 0.13995849999999999,
+      "unit": "ms",
+      "source": "sparse_streaming_mac_2026-11-09.json",
+      "note": "50k selected rows, 2 reversed processes; fragmented source100k; dense-tail increases remain in source.",
+      "reduction_percent": 71.56746849022085
+    },
+    {
+      "group": "Sparse query streaming",
+      "label": "interleaved",
+      "before": 0.859917,
+      "after": 0.36914600000000003,
+      "before_p95": 0.927896,
+      "after_p95": 0.4160625,
+      "unit": "ms",
+      "source": "sparse_streaming_mac_2026-11-09.json",
+      "note": "50k selected rows, 2 reversed processes; fragmented source100k; dense-tail increases remain in source.",
+      "reduction_percent": 57.07190345114703
+    },
+    {
+      "group": "Public SIMD batch query",
+      "label": "workers1-cold",
+      "before": 0.5521039999999999,
+      "after": 0.1761875,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "batch_queries_mac_2026-11-09.json",
+      "note": "Internal row-vs-SIMD example,2 process rounds; workers are pool count plus eligible caller. No Unity comparison here.",
+      "reduction_percent": 68.08798704591888
+    },
+    {
+      "group": "Public SIMD batch query",
+      "label": "workers1-hot",
+      "before": 6.831396,
+      "after": 4.146729499999999,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "batch_queries_mac_2026-11-09.json",
+      "note": "Internal row-vs-SIMD example,2 process rounds; workers are pool count plus eligible caller. No Unity comparison here.",
+      "reduction_percent": 39.298944168951714
+    },
+    {
+      "group": "Public SIMD batch query",
+      "label": "workers14-cold",
+      "before": 0.14668750000000003,
+      "after": 0.100354,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "batch_queries_mac_2026-11-09.json",
+      "note": "Internal row-vs-SIMD example,2 process rounds; workers are pool count plus eligible caller. No Unity comparison here.",
+      "reduction_percent": 31.586536003408618
+    },
+    {
+      "group": "Public SIMD batch query",
+      "label": "workers14-hot",
+      "before": 0.702833,
+      "after": 0.46399999999999997,
+      "before_p95": null,
+      "after_p95": null,
+      "unit": "ms",
+      "source": "batch_queries_mac_2026-11-09.json",
+      "note": "Internal row-vs-SIMD example,2 process rounds; workers are pool count plus eligible caller. No Unity comparison here.",
+      "reduction_percent": 33.98147212780277
+    },
+    {
+      "group": "Public C# vs Unity",
+      "label": "W1 / 1 runners",
+      "before": 3.7354000000000003,
+      "after": 1.3650625,
+      "before_p95": 4.240500000000001,
+      "after_p95": 1.388125,
+      "unit": "ms",
+      "source": "csharp_unity_mac_2026-11-09.json",
+      "note": "Optimized Release public Span/Vector128 example vs frozen Unity Editor Burst kernels; two reversed rounds,300 measured ticks; exact48MB state. Not engine-wide superiority.",
+      "reduction_percent": 63.456055576377366
+    },
+    {
+      "group": "Public C# vs Unity",
+      "label": "W1 / 15 runners",
+      "before": 0.4727,
+      "after": 0.3255625,
+      "before_p95": 0.5718,
+      "after_p95": 0.36033350000000003,
+      "unit": "ms",
+      "source": "csharp_unity_mac_2026-11-09.json",
+      "note": "Optimized Release public Span/Vector128 example vs frozen Unity Editor Burst kernels; two reversed rounds,300 measured ticks; exact48MB state. Not engine-wide superiority.",
+      "reduction_percent": 31.12703617516396
+    },
+    {
+      "group": "Public C# vs Unity",
+      "label": "W3 / 1 runners",
+      "before": 4.5293,
+      "after": 0.868188,
+      "before_p95": 4.781000000000001,
+      "after_p95": 0.886063,
+      "unit": "ms",
+      "source": "csharp_unity_mac_2026-11-09.json",
+      "note": "Optimized Release public Span/Vector128 example vs frozen Unity Editor Burst kernels; two reversed rounds,300 measured ticks; exact48MB state. Not engine-wide superiority.",
+      "reduction_percent": 80.83174000397413
+    },
+    {
+      "group": "Public C# vs Unity",
+      "label": "W3 / 15 runners",
+      "before": 0.5501499999999999,
+      "after": 0.23862499999999998,
+      "before_p95": 1.291,
+      "after_p95": 0.2508335,
+      "unit": "ms",
+      "source": "csharp_unity_mac_2026-11-09.json",
+      "note": "Optimized Release public Span/Vector128 example vs frozen Unity Editor Burst kernels; two reversed rounds,300 measured ticks; exact48MB state. Not engine-wide superiority.",
+      "reduction_percent": 56.625465782059436
+    },
+    {
+      "group": "Native fixture vs Unity",
+      "label": "W1 / 1 runners",
+      "before": 4.407500000000001,
+      "after": 1.329417,
+      "before_p95": 5.009399999999999,
+      "after_p95": 1.409437,
+      "unit": "ms",
+      "source": "unity/current/neon_timed_mac_2026-11-09.json",
+      "note": "Benchmark-only ARM64 math changes; two reversed rounds,300 ticks. Not production engine subsystem improvement.",
+      "reduction_percent": 69.83739081111742
+    },
+    {
+      "group": "Native fixture vs Unity",
+      "label": "W1 / 15 runners",
+      "before": 0.50555,
+      "after": 0.3627295,
+      "before_p95": 0.5710999999999999,
+      "after_p95": 0.402292,
+      "unit": "ms",
+      "source": "unity/current/neon_timed_mac_2026-11-09.json",
+      "note": "Benchmark-only ARM64 math changes; two reversed rounds,300 ticks. Not production engine subsystem improvement.",
+      "reduction_percent": 28.250519236475135
+    },
+    {
+      "group": "Native fixture vs Unity",
+      "label": "W3 / 1 runners",
+      "before": 4.5811,
+      "after": 1.1399585,
+      "before_p95": 4.9807500000000005,
+      "after_p95": 1.328354,
+      "unit": "ms",
+      "source": "unity/current/neon_timed_mac_2026-11-09.json",
+      "note": "Benchmark-only ARM64 math changes; two reversed rounds,300 ticks. Not production engine subsystem improvement.",
+      "reduction_percent": 75.11605291305581
+    },
+    {
+      "group": "Native fixture vs Unity",
+      "label": "W3 / 15 runners",
+      "before": 0.42365,
+      "after": 0.29904200000000003,
+      "before_p95": 0.5356000000000001,
+      "after_p95": 0.32354150000000004,
+      "unit": "ms",
+      "source": "unity/current/neon_timed_mac_2026-11-09.json",
+      "note": "Benchmark-only ARM64 math changes; two reversed rounds,300 ticks. Not production engine subsystem improvement.",
+      "reduction_percent": 29.41295881033872
+    },
+    {
+      "group": "Hot / EnC intrinsics",
+      "label": "W1 / 1 runners",
+      "before": 38.132396,
+      "after": 21.1460205,
+      "before_p95": 38.773146,
+      "after_p95": 21.761813,
+      "unit": "ms",
+      "source": "csharp_hot_intrinsics_mac_2026-11-09.json",
+      "note": "Internal generic-vs-target-native SIMD;16 fresh processes,24samples. Still slower than optimized Release; no Unity win; indirect calls remain.",
+      "reduction_percent": 44.545785950612704
+    },
+    {
+      "group": "Hot / EnC intrinsics",
+      "label": "W1 / 15 runners",
+      "before": 3.671729,
+      "after": 2.0182499999999997,
+      "before_p95": 3.8630415000000005,
+      "after_p95": 2.046229,
+      "unit": "ms",
+      "source": "csharp_hot_intrinsics_mac_2026-11-09.json",
+      "note": "Internal generic-vs-target-native SIMD;16 fresh processes,24samples. Still slower than optimized Release; no Unity win; indirect calls remain.",
+      "reduction_percent": 45.032708023930965
+    },
+    {
+      "group": "Hot / EnC intrinsics",
+      "label": "W3 / 1 runners",
+      "before": 29.369521,
+      "after": 14.938958500000002,
+      "before_p95": 29.769104499999997,
+      "after_p95": 15.063438,
+      "unit": "ms",
+      "source": "csharp_hot_intrinsics_mac_2026-11-09.json",
+      "note": "Internal generic-vs-target-native SIMD;16 fresh processes,24samples. Still slower than optimized Release; no Unity win; indirect calls remain.",
+      "reduction_percent": 49.134483671013896
+    },
+    {
+      "group": "Hot / EnC intrinsics",
+      "label": "W3 / 15 runners",
+      "before": 2.6868125000000003,
+      "after": 1.3964585,
+      "before_p95": 2.910854,
+      "after_p95": 1.4342920000000001,
+      "unit": "ms",
+      "source": "csharp_hot_intrinsics_mac_2026-11-09.json",
+      "note": "Internal generic-vs-target-native SIMD;16 fresh processes,24samples. Still slower than optimized Release; no Unity win; indirect calls remain.",
+      "reduction_percent": 48.02545767521924
+    },
+    {
+      "group": "Actual ScriptHost dispatch",
+      "label": "W1",
+      "before": 0.3359795,
+      "after": 0.3263125,
+      "before_p95": 0.3621455,
+      "after_p95": 0.36137449999999993,
+      "unit": "ms",
+      "source": "csharp_executor_mac_2026-11-09.json",
+      "note": "Internal caller-dispatch change; tiny gains and variable tails; not a20% engine win.",
+      "reduction_percent": 2.8772588803781085
+    },
+    {
+      "group": "Actual ScriptHost dispatch",
+      "label": "W3",
+      "before": 0.2502085,
+      "after": 0.2467915,
+      "before_p95": 0.26358349999999997,
+      "after_p95": 0.259104,
+      "unit": "ms",
+      "source": "csharp_executor_mac_2026-11-09.json",
+      "note": "Internal caller-dispatch change; tiny gains and variable tails; not a20% engine win.",
+      "reduction_percent": 1.365661038693733
+    },
+    {
+      "group": "Unresolved boids vs Unity",
+      "label": "20,000 / 1 runners",
+      "before": 7.79035,
+      "after": 7.103625,
+      "before_p95": 8.0456,
+      "after_p95": 7.1793955,
+      "unit": "ms",
+      "source": "unity/current/current_timed_mac_2026-11-09.json",
+      "note": "Historical batch4096 matrix misses20% target; later internal boid changes not yet rematched. At20k/15runners Ara slower.",
+      "reduction_percent": 8.815072493533672
+    },
+    {
+      "group": "Unresolved boids vs Unity",
+      "label": "20,000 / 15 runners",
+      "before": 0.74455,
+      "after": 1.6913335,
+      "before_p95": 0.82785,
+      "after_p95": 1.7222285,
+      "unit": "ms",
+      "source": "unity/current/current_timed_mac_2026-11-09.json",
+      "note": "Historical batch4096 matrix misses20% target; later internal boid changes not yet rematched. At20k/15runners Ara slower.",
+      "reduction_percent": -127.16184272379287
+    },
+    {
+      "group": "Unresolved boids vs Unity",
+      "label": "50,000 / 1 runners",
+      "before": 36.674850000000006,
+      "after": 31.087792,
+      "before_p95": 38.189499999999995,
+      "after_p95": 31.7461245,
+      "unit": "ms",
+      "source": "unity/current/current_timed_mac_2026-11-09.json",
+      "note": "Historical batch4096 matrix misses20% target; later internal boid changes not yet rematched. At20k/15runners Ara slower.",
+      "reduction_percent": 15.234030950365185
+    },
+    {
+      "group": "Unresolved boids vs Unity",
+      "label": "50,000 / 15 runners",
+      "before": 3.0219,
+      "after": 3.1643124999999994,
+      "before_p95": 3.25775,
+      "after_p95": 3.2650829999999997,
+      "unit": "ms",
+      "source": "unity/current/current_timed_mac_2026-11-09.json",
+      "note": "Historical batch4096 matrix misses20% target; later internal boid changes not yet rematched. At20k/15runners Ara slower.",
+      "reduction_percent": -4.712680763757882
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "query_filter a8 / 1r",
+      "before": 0.0087,
+      "after": 0.00625,
+      "before_p95": 0.01,
+      "after_p95": 0.006458,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 28.160919540229877,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "query_filter a8 / 15r",
+      "before": 0.018,
+      "after": 0.011333,
+      "before_p95": 0.0332,
+      "after_p95": 0.017915999999999998,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 37.03888888888889,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "query_filter a64 / 1r",
+      "before": 0.0082,
+      "after": 0.006625,
+      "before_p95": 0.0097,
+      "after_p95": 0.006666,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 19.20731707317074,
+      "target_met": false
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "query_filter a64 / 15r",
+      "before": 0.0201,
+      "after": 0.011333,
+      "before_p95": 0.03,
+      "after_p95": 0.016249999999999997,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 43.61691542288557,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "dirty_epoch p1_spread / 1r",
+      "before": 0.1165,
+      "after": 0.036209,
+      "before_p95": 0.1207,
+      "after_p95": 0.044958,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 68.91931330472103,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "dirty_epoch p1_spread / 15r",
+      "before": 0.054,
+      "after": 0.068083,
+      "before_p95": 0.0699,
+      "after_p95": 0.076542,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": -26.079629629629643,
+      "target_met": false
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "archetype_churn p10 / 1r",
+      "before": 5.1572,
+      "after": 0.272375,
+      "before_p95": 5.9232,
+      "after_p95": 0.304583,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 94.71854882494377,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "archetype_churn p10 / 15r",
+      "before": 5.8661,
+      "after": 0.28375,
+      "before_p95": 6.012,
+      "after_p95": 0.308458,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 95.16288505139701,
+      "target_met": true
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "dependency_dag fork-join / 1r",
+      "before": 0.0927,
+      "after": 0.090041,
+      "before_p95": 0.0979,
+      "after_p95": 0.10137499999999999,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": 2.8683926645091784,
+      "target_met": false
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "dependency_dag fork-join / 15r",
+      "before": 0.0918,
+      "after": 0.111209,
+      "before_p95": 0.1075,
+      "after_p95": 0.132333,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": -21.142701525054463,
+      "target_met": false
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "buffer_fixed length4 / 1r",
+      "before": 0.4598,
+      "after": 0.514583,
+      "before_p95": 0.4725,
+      "after_p95": 0.538625,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": -11.914528055676389,
+      "target_met": false
+    },
+    {
+      "group": "ECS feature matrix",
+      "label": "buffer_fixed length4 / 15r",
+      "before": 0.0896,
+      "after": 0.122333,
+      "before_p95": 0.1159,
+      "after_p95": 0.132333,
+      "unit": "ms",
+      "source": "unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "note": "Only phaseA:12/36pairs,6target passes,24pending; no full reversed matrix. Chunk vs entity dirty semantics and scheduler differences documented.",
+      "reduction_percent": -36.53236607142858,
+      "target_met": false
+    }
+  ],
+  "scale_observations": [
+    {
+      "label": "5,120 files /64edits /10.0.7",
+      "p50": 6239.077958499999,
+      "p95": 6367.9839999999995,
+      "cold": 7453.597375,
+      "rss": 998981632,
+      "source": "compiler_5120_mac_2026-11-08.json"
+    },
+    {
+      "label": "5,120 files /alledit /10.0.7",
+      "p50": 6625.6843125,
+      "p95": 6796.083582999998,
+      "cold": 7231.125333999999,
+      "rss": 1063862272,
+      "source": "compiler_5120_mac_2026-11-08.json"
+    },
+    {
+      "label": "10,240 files /alledit /10.0.14",
+      "p50": 14280.225709007937,
+      "p95": 14468.157625000458,
+      "cold": 13744.724750009482,
+      "rss": 1934458880,
+      "source": "compiler_10240_mac_2026-11-09.json"
+    }
+  ],
+  "catalog": [
+    {
+      "path": "benchmarks/iteration/batch_queries_mac_2026-11-09.json",
+      "sha256": "39b134af49f3dc039e10ccd47696677900a6c3501073d03a97f845a866404840",
+      "scope": "Actual CoreCLR C# query API: identical four-pass scalar row/span arithmetic, plus explicit Vector<float> SIMD over the same fields; every output row and readonly input checked, including tails.1,000,003rows. No Unity math comparison, NativeAOT execution or whole-frame claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/boids_bounds_mac_2026-11-09.json",
+      "sha256": "a0143f6f2756415af3d823674d7d2b7e9cb7cbea30542f4f0e115567bbf5c40b",
+      "scope": "Native benchmark-only cached counting-sort keys and conservative y/z slab bounds; internal before/after, not Unity comparison",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Only about2% additional parallel gain. Fresh matched W2 still required; no20%Unity margin claim.",
+        "No production crowd/physics change or universal hardware claim.",
+        "Adversarial diagonal y/z radius combinations can be expanded; current full-state reference comparisons cover generated workloads."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/boids_cells_mac_2026-11-09.json",
+      "sha256": "dba96af9b56adf5e7401248e6afd8840c06c277910d10ab27e596fe673e04e03",
+      "scope": "Native benchmark-only cached cell lookup, not a production subsystem or fresh Unity comparison",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Onlyabout1.5%20kparallelgain;50kroughlyneutral, noprecisefasterclaimthere.",
+        "FreshmatchedUnityW2andfullserialholdoutsstillpending.",
+        "Cached9spanprototypeadds288KB,20kneutral/50k~2%; rejectedforcomplexity/memorytradeoff; retainedrawsource/binary/reversedtimings."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/boids_ranges_mac_2026-11-09.json",
+      "sha256": "5ab5506b1bdde22dcec8bff12c1a459f9d6b993ee4a96ee935cf4b28bd27dc83",
+      "scope": "Native benchmark-only deterministic neighbour traversal; merge adjacent x-cell ranges without changing z/y/x/stable-ID accumulation order",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/bridge_mac_2026-11-08.json",
+      "sha256": "a0e22b358f2e5f4cc2630450f8fb7bd4c27bcdedc33ecc866bc90c0b08e630c5",
+      "scope": "Generated codec-backed access and ordered flush; native callback fixture supplies valid JSON. Does not measure Rust serialization, full gameplay ticks or native supplementary views.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/codec_writes_mac_2026-11-08.json",
+      "sha256": "5210830df5a11855ab1fc13126948b942719c0b02c5b7d0be9f72a126172d972",
+      "scope": "Real Rust-host/C# nonnative engine accessor update/flush: one behaviour callback queries 2,048 distinct ECS entities, reads and modifies one component on each, then flushes all copies through the host validated codec. Scene systems/rendering and compilation/startup are excluded. All modules are cold (hot=false); callbacks warm up before timing. Graph64 also exercises the >1024-byte read buffer retry. No native supplement or cross-engine comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/compiler_10240_mac_2026-11-09.json",
+      "sha256": "03c36ba9e7f1c638e88643c3ddd4e807193a4d9b03e11ccc2fe9af474f3ac08f",
+      "scope": "Scaling observation only: 16 independent modules, 640 generated component/query scripts each, all10240 authored files edited before each full project compile request. Source writes outside timing; inventory/read/parse/generation/analysis/emit/output/protocol inside. First three of six requests excluded; three warm samples, not a robust tail distribution.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Single fresh compile-server process, no matched baseline or Unity process. Resource context captured after launch and after completion; no strict initial timing guard or continuous interference proof. AC observed with no agent power action. Current .NET10.0.14 differs from earlier historical 5120 fixtures: do not pool or infer a scaling ratio. Peak RSS belongs to server only. Full emit, no live delta."
+    },
+    {
+      "path": "benchmarks/iteration/compiler_5120_mac_2026-11-08.json",
+      "sha256": "bd259fd21e331dd95feceec60a971ab81012100cefc41088ab304c34cb6ee222",
+      "scope": "Full project compilation, 64 independent modules with 80 generated component/query scripts each. One source edited in every module before each request. Nine requests: the first three (including the initial cold compile) are excluded; six warm samples are timed. Authored source creation is outside timing; inventory, source reading, parsing/generation/analysis/emission, output writing and protocol response are inside. No live delta, Play startup or cross-engine comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Scaling observation on the two-worker compiler, not a baseline comparison or commercial-project latency guarantee. Generated fixture has small uniform scripts."
+    },
+    {
+      "path": "benchmarks/iteration/compiler_body_analysis_mac_2026-11-09.json",
+      "sha256": "776fb27ba866edf8c5da7471038838f46dd914afc0af95e35f2ae965ee548e9b",
+      "scope": "precise managed allocation deltas, actual production AnalyzerSet calls, 4096 ordinary methods across2partialfiles; one changed method; 3warm+12measured; no end-to-end or Unity claim",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Managed allocation deltas are not retained heap, peak RSS or total compiler memory.",
+        "No accepted elapsed-time, save-to-visible, initial compilation, play startup or Unity/Unreal comparison for this slice. Other machine load was present.",
+        "One unchanged ordinary query method edit in a large two-file module; other edit shapes deliberately retain broader validation.",
+        "Source/reference/provider mutations must revoke or re-prove the in-memory marker. It is never persisted in PE manifests."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_commondeps_quality_linux_2026-11-09.json",
+      "sha256": "758e6dd7a085a418cfb2d3a41793a0473b566002dd0f108f2df82430f1ad6868",
+      "scope": "Compiler-only correctness comparison: both source revisions rebuilt against the same immutable dependency closure. No timing experiment.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Compiler-only comparison does not isolate every optimization or compare original complete SDKs.",
+        "Original complete-SDK exact PE/PDB parity failure remains preserved in compiler_output_quality_linux_2026-11-09.json.",
+        "This packet does not measure the later request-local source-hashing experiment, time to play, FPS, Unity ECS or Unreal.",
+        "Quiet-admission failed during quality. No performance values accepted.",
+        "Original first unit attempt stopped after baseline build at an incorrect archive/content-hash proof assertion; no suites ran then. Corrected proof ran each unused complete suite once."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_current_quality_linux_2026-11-09.json",
+      "sha256": "4525d2c45b8b702e373f2e84d450c717475604c6757713fb4a0043183de7129c",
+      "scope": "Latest compiler-only correctness comparison against baseline using identical immutable Runtime/generator/analyzer/editor/Roslyn dependency DLLs. No accepted timing.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Controlled compiler-source comparison uses fixed dependencies, rather than each historical complete SDK.",
+        "Current Linux source remains24b; experimental SDK stream hashing is not included or promoted.",
+        "No Unity/Unreal/ECS, frame-rate, L1 hot-reload or time-to-play comparison.",
+        "Quality-only observation noise did not pass timing admission. The separately prepared finite timing campaign has no accepted result yet.",
+        "New harness tool repairs do not relabel earlier failed source/verification attempts."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_current_timing_rejected_linux_2026-11-09.json",
+      "sha256": "6a6b188b67dcfb37ccd3ca8d7459c60ae67ab7d63872db9f7b3754d1ad77d13c",
+      "scope": "Incomplete compiler-only timing campaign; all clocks rejected. Retained for audit, never a speed claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/compiler_dependency_reuse_mac_2026-11-09.json",
+      "sha256": "4eec9e1e93e87e681ba4d79eb6fb920ed154232d4c21b4bca287b8ca824c02c1",
+      "scope": "Internal full project compilation: one shared constant edit rebuilds eight unchanged 256-script consumers (2048 component/query scripts plus Core), three discarded requests and four measured requests per process. One accepted baseline-then-candidate pair only; no reversed-order or Unity/Play/startup/delta claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Four measured requests per process; p95 is the maximum of four, not a stable tail estimate.",
+        "One accepted engine order; reverse order remains unfinished.",
+        "PE/PDB include per-fixture source paths; exact fresh-byte equivalence is tested on identical paths, not asserted between these distinct fixture roots.",
+        "CPU guards sample process activity every 100ms, not continuously."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_incremental_parse_mac_2026-11-09.json",
+      "sha256": "e1b7fd094dcb54578e323bacb6da4bb8fdc80f11f33e5d3cd565ad61933a1860",
+      "scope": "Actual save-to-visible edits in a running ScriptHost with 20,000 entities. The edited Probe.cs retains 87 filler systems and exceeds 5,000 lines; three sample files remain separate. One complete accepted baseline-then-candidate pair (8 edits per L1/L2/L3), plus an accepted candidate in the reverse order. The reverse baseline was rejected for an unrelated Cargo build. No completed reverse pair or Unity comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Eight edits per level per process; p95 is the maximum of eight and is not a stable tail estimate.",
+        "Save-to-visible includes waiting for the 60 Hz boundary and live tick work. It does not measure a full project build, cold startup or Unity.",
+        "The archived baseline apphost lacked executable permission. A new runnable copy restores that permission; all 46 file contents match the untouched archive. The failed initialization is retained and applied no edits.",
+        "Other SDK DLL hashes differ through embedded Git versions and Source Link metadata; source archives and actual DLL hashes are recorded separately.",
+        "Independent parser experiments cover 4, 64, 1,024 and 4,096 methods. Large-file allocations can increase even when latency falls; no general allocation reduction is claimed."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_output_quality_linux_2026-11-09.json",
+      "sha256": "fef4e9593ff38f63983da37ea318fd7e16cef463b8dd0a095baa5f876d0dcb40",
+      "scope": "Original complete-SDK compiler output quality comparison; not a timing experiment. Exact PE/PDB parity failed and is not waived.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Full PE/PDB bytes were not archived before the original shared PROJECT path was reused. Retained decoded metadata, IL, source checksums and hashes do not establish full binary equivalence.",
+        "All IL and verified bodies match, but the verifier does not export every type/field/layout metadata row. No full metadata-layout or runtime execution equivalence claim.",
+        "Original test/build/readiness and all failed harness attempts are retained separately. No Unity, Unreal, frame-time, peak-RSS or compile-latency win follows.",
+        "The changing PDB reference timestamp/MVID is proven against each actual Ara.Runtime.dll. Self MVID/PDB identity propagation is consistent with this difference but is not a byte-normalization acceptance policy.",
+        "A separate planned compiler-only experiment will rebuild both source revisions against one immutable dependency set and retain complete output artifacts; its outcomes remain unmeasured."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_ownership_scan_mac_2026-11-09.json",
+      "sha256": "fb92b8bc89ac85bb5797c41f9a692fc8a3d1e0161679d32041c4f6399e5fc288",
+      "scope": "Internal ownership scan only, actual1024-script/16-module publication; full default scan versus ownership-only call in same SDK/process, both sequential orders. Not total Play/load or cross-engine timing.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Scan cost only, not total startup, first tick, compilation or a Unity comparison.",
+        "One warmed process,30samples per block and both sequential orders; filesystem cache is warm.",
+        "Allocated bytes are current managed-thread allocations during the synchronous scan, not peak RSS.",
+        "Original fixture preparation used invalid reflected names with underscores; errors/source retained before correcting names, no timings accepted from preparation."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_parallel_mac_2026-11-08.json",
+      "sha256": "cce3d8b8422ec10dd7198969e7f738bf6f584f7d7ac2e997e0d1456f7652806d",
+      "scope": "Full project compilation: 32 independent modules with 32 generated component/query scripts each; one edited source per module per request; three warmups and six samples; fresh processes in each run order. Both sides use CoreCLR 10.0.7. Excludes live delta/reload/Play timing and cross-engine comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/compiler_project_bulk_tree_edits_mac_2026-11-10.json",
+      "sha256": "a19916aa7211c262aaeb4979311e59961a1a5fd4df170620b6b7504ced896084",
+      "scope": "Actual ProjectCompilations.Generate allocations when every source body and component schema doc changes. No accepted clocks.",
+      "status": "PROMOTED_AFTER_QUALITY_AND_PRODUCTION_GATES",
+      "timings_accepted": false,
+      "limits": [
+        "Controlled compiler-source experiment against common dependency DLLs; not whole-SDK evolution.",
+        "Allocation during preparation only, not full compile allocation, elapsed compile time, startup, time to play or peak memory.",
+        "Measured matrix changes body literals and schema docs in every source; not a claim about every large-edit pattern.",
+        "No Unity/ECS/Unreal or frame-rate performance result.",
+        "Mac foreign load prevents accepted latency measurements."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_project_request_hashes_mac_2026-11-09.json",
+      "sha256": "f6d17b994b8a5884ab878293bcd3caeaaf512fa863bf012c60aee369b2888c33",
+      "scope": "Project source read/hash/fingerprint/manifest preparation allocation projection; actual request-only factory and manifest serializer from quality-proven candidate DLL.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "No full compiler allocation, compile latency, time-to-play, peak RSS, gameplay/FPS or Unity/Unreal comparison.",
+        "No result for cached validation-only/no-write requests, which do not serialize a manifest.",
+        "Both arms use identical tool/runtime/generator hashes. Synthetic PE/PDB arrays are only manifest serializer inputs; symbol trust is checked in the separate actual-project quality run.",
+        "Forced pre-pass GC, single fresh process per arm/configuration and foreign Mac CPU load limit GC conclusions. Retain raw collection counts without a universal GC claim.",
+        "The earlier retained-text cache is a separate unpromoted experiment; none of its allocation samples are used here."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_project_serialization_mac_2026-11-09.json",
+      "sha256": "6340d0ce16a25bde0b729e7aa615f14fe03247d63c8488f571606e6ceed43cda",
+      "scope": "Standalone managed-allocation projection of ProjectCompiler configuration/fingerprint JSON serialization and per-request graph reuse. Two direct UTF8 serializer calls replace UTF16 JSON strings plus UTF8 re-encoding; one thread-safe lazy graph replaces per-snapshot graph serialization.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "All elapsed values are permanently unaccepted; the driver records no elapsed fields.",
+        "No source reading, source capture, source-file sharing/retry/decoder validation, IO or cache-validation behavior is measured by this projection.",
+        "No Roslyn parse/analyze/emit, production publication trust, full-project compilation, time-to-play, peak RSS or Unity/Unreal comparison claim.",
+        "The copied candidate ProjectCompiler.cs was NOT compiled during this microproof. Production Graph and ManifestBytes were invoked from a copied existing production DLL.",
+        "Manifest PE/PDB inputs are synthetic bytes and are not valid image/symbol proof.",
+        "The common driver Request wrapper exists in both arms; the production compiler closure layout is not reproduced. Result byte arrays stay live until validation outside counters in both arms.",
+        "48 labeled quality cells include duplicate disabled/no-snapshot count-zero cells; they are not 48 distinct behaviors.",
+        "Each fresh process compares complete payload/manifest bytes against its own pre-counter baseline oracle. The frozen app does not export cross-process payload hash vectors."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_project_source_capture_experiment_mac_2026-11-09.json",
+      "sha256": "f5748a502bd92ce71635974377a24c1cbf65cf9d7bb618e9c4680262e3b38483",
+      "scope": "Actual file reads plus source capture, standard decoded-text UTF8 hashes, fingerprint and complete manifest preparation. Candidate retains exact decoded texts and their hashes across requests, reusing only after full decoded EOF equality; the old baseline rereads/constructs strings and hashes independently for fingerprint and manifest.",
+      "status": "NOT_PROMOTED",
+      "timings_accepted": false,
+      "limits": [
+        "All clocks permanently unaccepted. No compile-time, time-to-play, source IO latency, peak RSS or Unity/Unreal claim.",
+        "This projection always generates a manifest. It does not establish a win for cached validation-only/no-write paths or full compiler allocation totals.",
+        "No Roslyn parsing, analyzer task, emit or ProjectCompiler.Compile runs occur inside allocation counters. Synthetic PE/PDB bytes are only manifest inputs; publication trust is a separate quality gate.",
+        "The common Work wrapper/indexed hash-observation plumbing is projection overhead. Full outputs remain live until validation, equally in both arms.",
+        "Previous observer references are weak. Candidate owner alone retains the real current text/hash set; the baseline has no manufactured strong source cache. This does not model all existing Roslyn working-state lifetimes.",
+        "One fresh process per arm/configuration, arm order alternates across nine configurations; no within-configuration reversed-pair confirmation or repeated independent process pairs.",
+        "No universal GC or performance guarantee follows from allocation reductions or the additional observed collections."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_project_text_ownership_mac_2026-11-09.json",
+      "sha256": "75dc6fc519a8387907931030305121374d2779f7400a5c191fa4913ffe6f0215",
+      "scope": "Actual ProjectCompilations.Generate string ownership, synthetic newly supplied source strings, same dependencies and fresh-compilation full-output parity. No source I/O, allocation, peak RSS, latency or gameplay measurement.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Weak-reference counts establish object ownership in these fixtures, not total heap or resident bytes.",
+        "Fresh source strings are synthesized; actual file reading is outside this experiment.",
+        "No analyzer-policy change. Only Generate/emit is exercised here; production compiler tests and Rust publication lifecycle are separate gates.",
+        "No universal speed, GC pause, peak RSS or Unity/Unreal claim.",
+        "One fresh process per arm/profile; forced-GC observations are not natural application memory-pressure traces."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_scale_mac_2026-11-08.json",
+      "sha256": "1a36cad28e00cceb6b37d2c46974be52a3d76060bf5421a3fac859cc6c30f874",
+      "scope": "Full project compilation on Mac, 32 independent modules x32 generated components, one edited source per module per request;3warmup+6samples/process;all modules emit, generator/analyzer included; no Play/reload/player timing or cross-engine comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Warm p50 improves about9%; measured p95 does not improve. Peak RSS rises about30% with retained state. Sequential module compile remains dominant and bounded graph concurrency is the next experiment."
+    },
+    {
+      "path": "benchmarks/iteration/compiler_scheduling_mac_2026-11-09.json",
+      "sha256": "a4b11d80bf3dd5e229f084e8b0ff1832333b66cf92119fd652785ec35d9a576f",
+      "scope": "Compiler scheduling/cancellation correctness and reversible Mac process-priority proof. No accepted latency, frame-time or Unity/Unreal performance comparison.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "This is functional preemption and process-policy evidence, not a measured compile latency reduction. Recorded wall times are unaccepted.",
+        "PendingAnalysis drains Ara-owned tasks. Roslyn5.3 internal callback workers may outlive a canceled public request; source audit supports that caveat, no runtime escape was reproduced.",
+        "Legacy custom providers remain cooperative at call boundaries. Source inventory/IO and one-shot ProjectCompiler scheduling are outside this cancellation slice.",
+        "Darwin policy success/reversal is demonstrated on this Mac only. Other platforms retain best-effort .NET priority classes; Unix nice restoration elsewhere can remain permission-limited.",
+        "Normal numerical code, concurrency flags, EnC capabilities, source/ref diagnostics, ABI and publication guards are unchanged."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_sdk_hash_stream_experiment_mac_2026-11-09.json",
+      "sha256": "52cc9ccc0661de4b86566e639781540848fe5abef7be60b881190fda2f725570",
+      "scope": "Isolated standard-BCL helper projection for four SDK identity file hashes. No full compiler allocation, compilation latency, source text reading, gameplay or market comparison.",
+      "status": "NOT_PROMOTED",
+      "timings_accepted": false,
+      "limits": [
+        "The helper body is copied exactly from the source-only candidate; the complete candidate compiler SDK has not been built or validated.",
+        "No inference that lower allocations mean lower compile latency. Stream hashing can use more IO calls.",
+        "Current schema-file and already-captured image hashing are untouched.",
+        "File sharing, error type/HResult and handle release verified on this Mac; no Windows-specific validation.",
+        "All raw GC counts retained. One ABBA campaign per profile, no universal pause or resident-memory claim."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_shutdown_mac_2026-11-09.json",
+      "sha256": "f5c5c5f77a2412e29f069b3ca78e1e61d943df415e441d32d461187f2f4e0bf8",
+      "scope": "Fix shutdown-only writes to the locally disposed compiler pipe. Keep original remote IOException host-gone exit behavior; ObjectDisposedException returns so main retains its own exit status. No compiler/analyzer exception filters or cancellation/drain/timeout changes.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Before and after bundles both include the same uncommitted pooled source-reader slice; only Program.cs differs between these controlled compiler bundles.",
+        "The friend-console probe is a target-only quality harness using the actual production sink and Coordinator, not the production --pipe entry. Existing actual-entry and CLR-backed reload checks also passed.",
+        "First broad ObjectDisposedException\u2192Environment.Exit(0) candidate was built but never accepted; final implementation returns to preserve main status. Sentinel23 rejects forced exit0.",
+        "This is correctness evidence, not a latency/throughput claim."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/compiler_source_buffer_mac_2026-11-09.json",
+      "sha256": "d085b0db57a97cd94ef771bc1d31e672c7e6cb87ab9ce4e8490442785cd1035c",
+      "scope": "Pool the private 4096-byte read-ahead block while retaining exact file reads, unchanged StreamReader UTF/BOM/decoder behavior and shipped decoded-text equality/reference reuse. This packet measures standalone managed allocation and GC counts, not compilation latency.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/compiler_source_read_mac_2026-11-09.json",
+      "sha256": "266f16f55b1de593a21e92dd4db9d5c61055b41a015de2f6fa31b2d012e95a59",
+      "scope": "Exact streaming source reads for saved-input capture and final source validation. Every file is still read and decoded. Reuse the committed string only after exact decoded EOF equality; changed text owns a new string, new files retain ReadToEnd.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": [
+        "Allocation evidence is not a latency, peak/retained heap, startup, save-to-visible, frame-time or Unity/Unreal comparison. Foreign Unity activity was present, all elapsed data explicitly unaccepted.",
+        "One early literal edit in each selected fixed-size file. Other edit locations/content-size patterns are covered for correctness, not a blanket memory or throughput guarantee.",
+        "The 256KiB corpus models unusually large sources; the 4KiB/256B profiles remain separate.",
+        "The prior string is a comparison input only; no timestamp shortcut, skipped file read or strong predecessor-history chain."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/csharp_executor_mac_2026-11-09.json",
+      "sha256": "07241d6e3ce8fe6ec93e4ee8cfa7bff008c6e3b3b043508c5f304eefe4456d05",
+      "scope": "Production ScriptHost outer executor before/after; actual CoreCLR C# Vector128 W1/W3 over authoritative module ECS columns. Not a Unity comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Median gains small/mixed (~1-5%) and tails vary; not a20% engine-speedup claim. New actual C# cross-engine comparisons are a separate profile. Windows/NativeAOT execution not covered. Two zero-worker paths both complete; prior deadlock concern corrected."
+    },
+    {
+      "path": "benchmarks/iteration/csharp_hot_intrinsics_mac_2026-11-09.json",
+      "sha256": "893459ee681ceabf7fe7e71710afc0efff7bf8430270bbf343d2497480733d4d",
+      "scope": "Actual Hot/EnC C# public Span/Vector128 example, target-native direct intrinsics versus original generic SIMD, Mac only; internal before/after",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "OnlyaninternalHotcomparison; noUnity/Unreal/Windows/shippingclaim.",
+        "Hotresultsstillwellabovetheoptimizedpath; performancegoalremainsopen.",
+        "Hotquadloopsretain24/32indirectcallsites(W1/W3), targetaddressesunresolved. Removingcastsreducedcodebutdidnotremovethesecalls.",
+        "Onlytwoprocesses/configurationand24samples; descriptivepercentiles, nocertaintyinterval.",
+        "Directcold/hardware-disabledcorrectnesschecked; x64/SSE executionnotverifiedonthisMac."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/csharp_unity_mac_2026-11-09.json",
+      "sha256": "0658d6ee30eeb689482916cd5ef6e5216dac491f79b0dddd35ee1db177452de5",
+      "scope": "Actual public Ara C# Span/Vector128 gameplay versus Unity Editor ECS/Burst: W1 and W3, Mac, optimized Release modules only",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Only these two dense arithmetic workloads; not total frame/startup, boids, structural, buffer or dependency coverage.",
+        "Hot Debug after edit was checked for correctness but not timed here.",
+        "Two process samples per case; means of process percentiles are descriptive, not confidence intervals.",
+        "Explicit SIMD math differs from the original slower native fixture implementation; this is a usable public C# API example, not a production engine-wide speedup.",
+        "OS scheduling and unrelated work below sampled guards remain uncontrolled.",
+        "Shipping NativeAOT and Windows performance not measured in this packet."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/data_loading_index_mac_2026-11-08.json",
+      "sha256": "27f471a29d3b93a0bfb84c13c3d2dfd2ca61a1e36113b281e5e72bed9d0f7c3e",
+      "scope": "Project::open indexing/schema setup only; excludes C# publication, Project::load, imports, Play and GPU. Warm OS file cache; no cold-disk or quiet-machine claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/data_loading_mac_2026-11-08.json",
+      "sha256": "ef827050f3ef1330c09a96e6bdc548f4a0f39ddebac4b33d3daef77d837e5ada",
+      "scope": "Strict document header indexing only; not full project open, validation, Play startup, or JSON parser market comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/data_loading_project_mac_2026-11-08.json",
+      "sha256": "368882eda8e89c7272ecb911d0e0bea8f8e0db71b64bc8d3d375a186232e4b69",
+      "scope": "Project::open (index/schema setup), Project::load (fresh file reads, normalization and validation), and both together. Not C# project publication, asset imports, Play, GPU or editor frame time.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/ecs_fixture_cache_mac_2026-11-09.json",
+      "sha256": "912e4ab9f67c4c87ad1e14fa5c6716ae0ebf66cf25a82452145faa0448547668",
+      "scope": "Benchmark-model correction and configuration study, not a production-runtime speedup or new Unity comparison. Optimized fixtures retain query plans, matching normal Ara scheduled systems and Unity retained queries; reference scalar fixture remains independent.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/editor_scene_mac_2026-11-08.json",
+      "sha256": "278b8291f330d7cce354b61c03f28892cb9c4ecacc91e50d98ee2a8c199ca74a",
+      "scope": "End-to-end editor command invocations, including JSON request parsing, immutable scene snapshot construction and command result serialization. Compilation/catalog registration are outside timing. This is not UI FPS or a competitor comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Machine load and GC were not controlled. Small snapshot-only differences are within observed variation. Indices are scoped to one immutable command snapshot; transport still sends the full snapshot."
+    },
+    {
+      "path": "benchmarks/iteration/mac-cpu-2026-11-08.json",
+      "sha256": "efc5a83035575e6929b86b2ca3f3f9cea6e466c0a44342aa20f33517649cc2f0",
+      "scope": "Synthetic CPU phase probes; no GPU, full Play startup, shipping frame time or cross-engine comparison was measured. Windows was not used.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/native_access_mac_2026-11-08.json",
+      "sha256": "8615f337667d0bf3b7b55887bf0ca5f25d3d49bfd7d96bb04d10c14345236987",
+      "scope": "Same-process generated Velocity accessor microbenchmark using a mock native callback: codec and native batches with 8,192 accesses, writes and flush, 12 warmups and 32 samples. Native callback returns a pinned C# array. Excludes Rust callback lookup/serialization, scheduling, full tick/rendering and any cross-engine comparison. A separate Rust real-host semantic test covers actual ECS storage.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/native_neon_mac_2026-11-09.json",
+      "sha256": "ead6e35db7c0a9a5e4e0c6e34a9071e74fa963f07b29f1227ce54b71d399ad24",
+      "scope": "Benchmark-kernel-only exact ARM64 NEON transpose and sqrt specialization; no production frame or cross-engine claim",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "This fixture optimization is not yet used in production engine math.",
+        "Only Mac AArch64 tested. Other architectures retain original math.",
+        "Two process samples per case; descriptive results, not confidence intervals."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/pipeline_allocations_mac_2026-11-09.json",
+      "sha256": "49ac103836d47a82d82c37c1436305a616bd1c3c4f2f4ce2e8b53ef8882b9ad6",
+      "scope": "CPU decoded scene preparation with owned transfer, nested variable values and prefabs. Compare clone-once materialization, reusable validation paths and owned IDs as one allocation-reduction bundle. Excludes full Play/asset/GPU readiness; no competitor claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/play_hex_mac_2026-11-08.json",
+      "sha256": "b9000b5fb28eb8552b4f7ac3ca2c454252c70336f1fea82ffc63495e339462e0",
+      "scope": "Hex conversion used by portable play.snapshot results and asset digest strings; excludes simulation/CBOR/RPC/full Play startup. No cross-engine claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/projection_local_mac_2026-11-09.json",
+      "sha256": "b42b55bddcaaf39af658a0f813ef6ae54969f267e6816fdbb535502795eca12e",
+      "scope": "Verified local scene Set optimization; broad and large-instance work remain visible.",
+      "status": "Verified local scene Set optimization; broad and large-instance work remain visible.",
+      "timings_accepted": null,
+      "limits": "One plain edit p50 215/226ms -> .844/.900ms; 1% and 10% edits also benefit. A 100k-row prefab contribution is still resolved entirely: name/override ~146-148ms, only small gains. Original full-wave after 931ms vs before 766ms (+21.5%) is retained; reverse 747/774ms, fresh repeats after 774/776 vs before 769/766 (+0.7%/+1.4%). Full-wave overhead/variability is not established as zero. Public API CPU apply_ops only, not complete editor latency, Play startup, compile time or Unity superiority. Three samples do not establish tail latency."
+    },
+    {
+      "path": "benchmarks/iteration/query_tick_mac_2026-11-08.json",
+      "sha256": "33900581c396be3353f220a268344a7d7a6a6f83d3244559fd3f9d145741ab7f",
+      "scope": "See packet for fixture and measurement contract.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/query_tick_uninstrumented_mac_2026-11-08.json",
+      "sha256": "45afc8253b299dfafb495882def30cc952a789f32526233b603781c82b108a74",
+      "scope": "See packet for fixture and measurement contract.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/scene_prepare_mac_2026-11-09.json",
+      "sha256": "1810d7ecc60a211d21fab5a06c4bee400663e8c8d06d8a43604970585a80231c",
+      "scope": "Ara CPU preparation/host feature experiment; no Unity, shipping frame or universal superiority claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "CPU-only decoded scene/workspace/projection fixture with variable values and prefabs; not first-correct-tick, assets-ready or whole Play latency. Background editor, OS security and media tasks are captured. Workspace phase improves strongly; total phase improvement is smaller and varies between rounds. Rust allocator counts cover preparation, not managed/native allocations elsewhere."
+    },
+    {
+      "path": "benchmarks/iteration/script_dependency_graph_mac_2026-11-09.json",
+      "sha256": "850a62d6df315927d1cd37bd3b42ef41eb2219986efa590fe8428490330e24f4",
+      "scope": "Production C# host dependency planning and developer-profile Bevy schedule initialization; not Roslyn compile time or complete play latency",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Only ordered writer chains were timed; mixedgraphs/forks checked semantically but not benchmarked here.",
+        "Six schedule samples in one process; nearest-rank descriptive percentiles, not confidence intervals.",
+        "Plan-only legacy timings materialize an adjacencylist for inspection. RealSchedule timings use original lazy loop, avoiding that extra legacy allocation.",
+        "No matched Unity/Unreal comparison or complete save-to-firstcorrecttick improvement claimed.",
+        "Old/new schedule graph setup and executorpolicy both included in realSchedule initialization."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/sparse_native_mac_2026-11-09.json",
+      "sha256": "330ab7dc9eb52ce94bade8d424bbbc1d9169c2b559ece97b3be45db1df4fdbd1",
+      "scope": "Sparse native capability verified; dense timing holdouts have visible tail variability, not a claim of universally equal or improved performance.",
+      "status": "Sparse native capability verified; dense timing holdouts have visible tail variability, not a claim of universally equal or improved performance.",
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/sparse_streaming_mac_2026-11-09.json",
+      "sha256": "7f7a2a735dbdc6411e730afe2544c229c2c87c2d1222a034e022cca568370f7d",
+      "scope": "Verified streaming sparse-query optimization; representative CPU fixtures, no universal performance claim.",
+      "status": "Verified streaming sparse-query optimization; representative CPU fixtures, no universal performance claim.",
+      "timings_accepted": null,
+      "limits": "Aligned p50~71%less; fragmented p50~52\u201362%less. Fragmented retainedmetadata8832B at4workers is not total/peakRSS, and alignedIDcapacity mayincrease. Dense p50 largely unchanged; reversehotp95+3.2%(.689\u2192.711ms), forwardhotp95 improves. Allocationcounts73/tick unchanged. Historicalcold-tail increase remains in earlierartifact; do notclaimalltailsimproved."
+    },
+    {
+      "path": "benchmarks/iteration/unity/broad_mac_2026-11-08.json",
+      "sha256": "4a32382181a0d9af933fda7b79e31c8dae0e99432f6dce026dcb9ecf7c5f7343",
+      "scope": "Unchanged S8 W2 boids (20k/50k) and W4 structural (100k), Rust-native optimized simd variant versus Unity Editor + Burst. This is a legacy fixture workflow comparison, not shipping, frame or production-engine performance.",
+      "status": "Partial: one completed forward round (6pairs/12engine processes). The original executable was replaced by a later Cargo build before the reverse round; no completed two-round matrix is claimed.",
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/current/clr_state_smoke_mac_2026-11-09.json",
+      "sha256": "b6d96a500eca829ea9c783b7dd22d549417e9eca5fc905ddb59ad9fc124073e7",
+      "scope": "State-only actual Ara ScriptHost/CoreCLR versus UnityEditorBurst, W1/W3 eachspan/SIMD Release/hot and1/15ceiling,1003rows5ticks. NoCLRtimingcomparison.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/current/current_smoke_mac_2026-11-09.json",
+      "sha256": "cd050915a0e30d1f6cb8c38cb4cfa48990221df1e75ae70757ece56322cce04c",
+      "scope": "Mac CPU-only current S8 paired correctness gates; timings explicitly unaccepted",
+      "status": null,
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/current/current_timed_mac_2026-11-09.json",
+      "sha256": "56b0bdf7c26ff7a2748ab499c9eb3308e3644e22c10a7d065b1865cb6b4184be",
+      "scope": "Mac CPU-only current S8 nativeRust versus UnityEditorBurst, not shipping-player/Windows/GPU/Unreal comparison",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "W2 uses explicit4096 batch configuration here, not previously measuredbest128; preserve losses as configuration evidence; fresh128 pairs required separately.",
+        "W3 uses previously measuredbest8192 batch.",
+        "W4 includes Unity100k slot reconstruction versus Ara directslot updates; equal logical finalstate/IDs does not imply identical bookkeeping operations.",
+        "Serial UnitySchedule+Complete and directAra loops have different dispatch costs included.",
+        "Resource monitoring samples before/after and every2s; it is not an exhaustive OS scheduling trace.",
+        "No publicAraC#buffer/jobs API parity claim follows from nativefixture timings."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/unity/current/neon_timed_mac_2026-11-09.json",
+      "sha256": "d46d3e52ba1c6d1b6a1c86ad4a47526e6b9facd617c858536f55a523977c90ed",
+      "scope": "Mac CPU-only W1/W3 exactNEON nativeRust versus unchanged UnityEditorBurst; only these8pairs, not W2/W4/player/Windows/GPU/Unreal comparison",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "Only W1/W3 rerun in this packet; prior20matrix and W1/W2configuration losses preserved separately.",
+        "W3 uses previously measuredbest8192 batch.",
+        "Serial UnitySchedule+Complete and directAra loops have different dispatch costs included.",
+        "Resource monitoring samples before/after and every2s; it is not an exhaustive OS scheduling trace.",
+        "No publicAraC#buffer/jobs API parity claim follows from nativefixture timings."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/buffer_fixed4_internal_mac_2026-11-09.json",
+      "sha256": "979c90ae680715ef7a3213df584ec9d29f838256d54cf91d23177fa3df2dcb48",
+      "scope": "Internal native SmallVec fixed4 prototype comparison only. No Unity/Unreal, public C# buffer API, shipping frame or market superiority claim.",
+      "status": "All12 planned fresh native processes complete and accepted; no retries.",
+      "timings_accepted": null,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/buffer_fresh_smokes_mac_2026-11-09.json",
+      "sha256": "589c35497239d7c871b465bb22f7525ee103d45e9de0aa3e878f39e8514b5e02",
+      "scope": "Fresh serial fixed-buffer correctness pairs at lengths 64 and 4 in the private Unity project ufi. Each uses 1,003 entities, two warmup and three measured steps. Both engine dumps match the independent original scalar oracle. No throughput timings are accepted; no 100,000-entity retry or crash-cause claim follows.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/buffer_integrated_quality_mac_2026-11-09.json",
+      "sha256": "6064cfd9388b3a33d85fd098da6fdb5fec3d01da443d682e8a8b5a830941d0bb",
+      "scope": "Actual integrated standalone native buffer quality only. No accepted performance measurements, Unity launch, public C# API or market comparison.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Prototype timing evidence remains a separate prior-source artifact. These integrated builds are quality-verified; no newly integrated performance result is inferred. Six-step actual tick equality is checked separately; normal exported state still omits tick cells."
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/extended_smoke_mac_2026-11-09.json",
+      "sha256": "ab7c728a70ca5a35e3282d93e116f39f0a8e009db5c4638fdda7b0c6ecae5bc6",
+      "scope": "native Bevy/Unity feature correctness only; no shipping-player or Ara C# API availability claim",
+      "status": "complete",
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+      "sha256": "c7f83e2d9292d9c7af6a8475ef40043e141a57b1d69b5f9af0dfec4b4b1b1d2f",
+      "scope": "First12of36 nativeBevy/Ara-side fixture versus UnityEditorBurst representativefeature timedpairs onMacCPU. These5casefamiliesonly, firstengineorder only; remaining24/resizing/64wordbuffer/reverseconfirmation pending. No publicAraC#buffer/JobHandle API or shipping/Windows/Unreal claim.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": [
+        "SerialUnitySchedule+Complete versus directBevyquery/loop overhead remains timed.",
+        "RetainedSend-onlySchedule paralleldirty/DAG configures15Bevyworkers without callerparticipation; directcases14workers+eligiblecaller; Unity14workers+completingcaller. Separate1003entity probes do not prove timedcase concurrentoccupancy.",
+        "Dirty diagnostic candidates are RETURNEDconsumer-candidates, not total rows scanned; Unity chunk-level versus Bevy entity-level filters differ.",
+        "Buffercomponent ownership is realSmallVec inline4 versus DynamicBuffer internalcapacity4; actualsize/alignment/capacityfacts retained, not an allocator trace.",
+        "No benchmark kernel or scheduling policy was tuned between these pairs.",
+        "Competingtools/power checked before/after andevery2seconds; not an exhaustive OS trace.",
+        "Alllosses remain open; no reversedround/all6case victory inferred."
+      ]
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/feature_timed_phase_b_recovery_mac_2026-11-09.json",
+      "sha256": "7610deec2ce999db686748b2478becfb79df883cc8f1b107a49bfc13c7092e17",
+      "scope": "PhaseBremaining24featurepairs stopped atfirstUnitynativeBurstcompilercrash; exactknowncheckpoint recovery succeeded. NoPhaseBtimingcomparison accepted; no automaticbenchmarkretry.",
+      "status": null,
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity/features/query_filter_smoke_mac_2026-11-09.json",
+      "sha256": "bb18e46c1360376f080a5a6e8a76a8ffb23f2ffb42e4e5931471bb8b11379359",
+      "scope": "Real query_filter fixture: retained Unity EntityQuery with Burst IJobEntity Schedule+Complete versus retained Bevy QueryState with contiguous iteration/dispatch. This does not measure full Ara runtime, C# bridge, shipping-player or frame performance.",
+      "status": "Verified correctness smoke only. No feature performance measurements accepted.",
+      "timings_accepted": false,
+      "limits": null
+    },
+    {
+      "path": "benchmarks/iteration/unity_mac_2026-11-08.json",
+      "sha256": "3b91786f1aff7f512c89a72c77d3a3c6fe5edcb98535dac7f99846b1af3a4c12",
+      "scope": "Matched S8 W1 transform/quaternion and W3 particle kernels only: Ara Rust-native optimized SIMD/Bevy ECS versus Unity Editor+Burst. Not C# gameplay, shipping-player, full-frame, renderer, script compilation, Play startup or whole-engine comparison. Unreal and Windows/RTX remain unmeasured.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "In both controlled rounds, Ara led p50 for serial W1, parallel W1 and serial W3; Unity led parallel W3 p50. Median-process speed ratios were 1.15x, 1.08x and 1.57x for Ara, and 1.09x for Unity parallel W3; Ara had lower parallel W3 p95. Two rounds support only these kernel/lane observations, not general engine superiority. Shipping players, C# gameplay, full frames, Unreal and Windows/RTX remain unmeasured."
+    },
+    {
+      "path": "benchmarks/iteration/unity_mac_2026-11-08_exploratory.json",
+      "sha256": "c62105c372850bf85c6b00f89f8fe54fd6959b52948a7a4b7874138c95e417b8",
+      "scope": "Matched S8 W1 transform/quaternion and W3 particle kernels only: Ara Rust-native optimized SIMD/Bevy ECS versus Unity Editor+Burst. Not C# gameplay, shipping-player, full-frame, renderer, script compilation, Play startup or whole-engine comparison. Unreal and Windows/RTX remain unmeasured.",
+      "status": null,
+      "timings_accepted": null,
+      "limits": "Exploratory: Ara consistently wins serial W3 in these samples. Unity leads serial W1 and parallel W3; parallel W1 changes winner between rounds. Missing force-safety/debug provenance prevents a fully matched unchecked comparison. No general ECS or whole-engine superiority claim follows."
+    }
+  ],
+  "media_receipts": [
+    {
+      "slug": "01-compiler-latency",
+      "title": "C# compilation and live edits",
+      "alt": "Compiler latency and live edits",
+      "markdown": "![Compiler latency and live edits](https://media.snist.dev/Rot3jMl37ueKYouZs0jX-Q/01-compiler-latency.png)",
+      "url": "https://media.snist.dev/Rot3jMl37ueKYouZs0jX-Q/01-compiler-latency.png",
+      "png_sha256": "e61b8b5567f984b2bf23f7011f4f46f7e66c52f085e312ef29279eb2d6460374"
+    },
+    {
+      "slug": "02-allocation",
+      "title": "Allocation reductions \u00b7 measured stages only",
+      "alt": "Compiler and preparation allocation reductions",
+      "markdown": "![Compiler and preparation allocation reductions](https://media.snist.dev/7_7Gf76D0blYAN4KdSEIBg/02-allocation.png)",
+      "url": "https://media.snist.dev/7_7Gf76D0blYAN4KdSEIBg/02-allocation.png",
+      "png_sha256": "585030399a577316f9083cd170f6d3c3191ea57fdc39ede6a941a762ab7d002f"
+    },
+    {
+      "slug": "03-data-loading",
+      "title": "JSON document and project data pipelines",
+      "alt": "JSON and project data loading",
+      "markdown": "![JSON and project data loading](https://media.snist.dev/XsIoJzcu4PvK2futUU94MQ/03-data-loading.png)",
+      "url": "https://media.snist.dev/XsIoJzcu4PvK2futUU94MQ/03-data-loading.png",
+      "png_sha256": "356accb9de95c57f330357f263ec9b86f6fce423b1ed27e05df5f83aced01056"
+    },
+    {
+      "slug": "04-runtime-stages",
+      "title": "Runtime preparation, dependency graphs and scene edits",
+      "alt": "Runtime preparation and dependency graphs",
+      "markdown": "![Runtime preparation and dependency graphs](https://media.snist.dev/d5_g3jfIN2J0ARyAvVLZDQ/04-runtime-stages.png)",
+      "url": "https://media.snist.dev/d5_g3jfIN2J0ARyAvVLZDQ/04-runtime-stages.png",
+      "png_sha256": "5d90d0f5bec78916393c754aae0f2e1e0b68f6cd16b933e212cb4b688830a689"
+    },
+    {
+      "slug": "05-api-access",
+      "title": "Editor and gameplay data access",
+      "alt": "Editor and gameplay API access",
+      "markdown": "![Editor and gameplay API access](https://media.snist.dev/tBQCN-KNv4eXDvjeevtBzA/05-api-access.png)",
+      "url": "https://media.snist.dev/tBQCN-KNv4eXDvjeevtBzA/05-api-access.png",
+      "png_sha256": "1e653f0ea6605da78309a8f4ee843f01528e9e9feda7cd1e4f7c8bea7c6b4d83"
+    },
+    {
+      "slug": "06-matched-dense",
+      "title": "Matched dense kernels vs Unity Editor ECS/Burst",
+      "alt": "Matched dense kernels versus Unity",
+      "markdown": "![Matched dense kernels versus Unity](https://media.snist.dev/gKShL9f7SpGfPzQKUK0vLQ/06-matched-dense.png)",
+      "url": "https://media.snist.dev/gKShL9f7SpGfPzQKUK0vLQ/06-matched-dense.png",
+      "png_sha256": "8d862a7556bd8d804cb8daa7e90fa38aff3b6a49e3f4ebdf86c096021a02ec58"
+    },
+    {
+      "slug": "07-hot-csharp",
+      "title": "Editable C# remains a separate performance tier",
+      "alt": "Hot editable C# intrinsic comparison",
+      "markdown": "![Hot editable C# intrinsic comparison](https://media.snist.dev/YpoW1cd4o_NT1yD3VHv5Ag/07-hot-csharp.png)",
+      "url": "https://media.snist.dev/YpoW1cd4o_NT1yD3VHv5Ag/07-hot-csharp.png",
+      "png_sha256": "dc81f573e492eb1537e60c6700a9bcf681b72e0e0bc1920e89952818d88e5542"
+    },
+    {
+      "slug": "08-ecs-gaps",
+      "title": "Losses and unfinished comparisons stay visible",
+      "alt": "ECS losses and unfinished comparisons",
+      "markdown": "![ECS losses and unfinished comparisons](https://media.snist.dev/31BxSaHTf2T6MfXTJyNArw/08-ecs-gaps.png)",
+      "url": "https://media.snist.dev/31BxSaHTf2T6MfXTJyNArw/08-ecs-gaps.png",
+      "png_sha256": "ea68c2c2522308383d218f8f5e8d3249756e55b04a6f5c8ccc4692db04edc256"
+    },
+    {
+      "slug": "09-validation-limits",
+      "title": "Correctness gates and limits of the performance evidence",
+      "alt": "Correctness gates and rejected timings",
+      "markdown": "![Correctness gates and rejected timings](https://media.snist.dev/Y4SJzonBZf2B3gi8EynvKg/09-validation-limits.png)",
+      "url": "https://media.snist.dev/Y4SJzonBZf2B3gi8EynvKg/09-validation-limits.png",
+      "png_sha256": "524c4297edfd463d54fac405f5388108352987466fc88e4f4cd4a41d3ff5a0dd"
+    }
+  ]
+}

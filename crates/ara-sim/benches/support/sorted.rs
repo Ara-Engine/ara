@@ -26,7 +26,7 @@ impl SortedGrid {
             self.v[row] = v[id as usize];
         }
     }
-    /// Computes one boid with the same arithmetic and neighbour order as S8.
+    /// Uses one row from the same snapshot supplied to build, retaining S8 order/math.
     pub fn boid(&self, id: usize, positions: &[Vec4], velocities: &[Vec4]) -> (Vec4, Vec4) {
         let p = positions[id];
         let mut v = velocities[id];
@@ -34,21 +34,39 @@ impl SortedGrid {
         let mut alignment = Vec4::ZERO;
         let mut cohesion = Vec4::ZERO;
         let mut count = 0;
-        let c = model::cell(p);
+        let key = usize::from(self.grid.keys[id]);
+        let c = [
+            (key & 15) as i32,
+            ((key >> 4) & 15) as i32,
+            (key >> 8) as i32,
+        ];
+        // Conservative y/z distance bounds reject whole x spans. Widen each
+        // plane because cell() rounds p+32 before flooring; never widen radius.
+        let gaps = [1, 2].map(|axis| {
+            let lower = c[axis] as f32 * 4.0 - 32.0;
+            let padding = 4.0 * f32::EPSILON * 64.0;
+            let left = (p[axis] - lower - padding).max(0.0);
+            let right = (lower + 4.0 - p[axis] - padding).max(0.0);
+            [left * left, 0.0, right * right]
+        });
         for z in (c[2] - 1).max(0)..=(c[2] + 1).min(15) {
             for y in (c[1] - 1).max(0)..=(c[1] + 1).min(15) {
-                for x in (c[0] - 1).max(0)..=(c[0] + 1).min(15) {
-                    let k = model::key([x, y, z]);
-                    let range = self.grid.offsets[k] as usize..self.grid.offsets[k + 1] as usize;
-                    for (&other_p, &other_v) in self.p[range.clone()].iter().zip(&self.v[range]) {
-                        let d = p - other_p;
-                        let d2 = (d.x * d.x + d.y * d.y) + d.z * d.z;
-                        if d2 < 16.0 && d2 > 0.0 {
-                            separation += d / d2.max(0.01);
-                            alignment += other_v;
-                            cohesion += other_p;
-                            count += 1;
-                        }
+                if gaps[0][(y - c[1] + 1) as usize] + gaps[1][(z - c[2] + 1) as usize] >= 16.0 {
+                    continue;
+                }
+                // Adjacent x cells are consecutive in the stable counting sort.
+                // One span preserves the exact z/y/x/ID accumulation order.
+                let first = model::key([(c[0] - 1).max(0), y, z]);
+                let last = model::key([(c[0] + 1).min(15), y, z]) + 1;
+                let range = self.grid.offsets[first] as usize..self.grid.offsets[last] as usize;
+                for (&other_p, &other_v) in self.p[range.clone()].iter().zip(&self.v[range]) {
+                    let d = p - other_p;
+                    let d2 = (d.x * d.x + d.y * d.y) + d.z * d.z;
+                    if d2 < 16.0 && d2 > 0.0 {
+                        separation += d / d2.max(0.01);
+                        alignment += other_v;
+                        cohesion += other_p;
+                        count += 1;
                     }
                 }
             }
@@ -73,5 +91,62 @@ impl SortedGrid {
             }
         }
         (next, v)
+    }
+}
+
+/// Adversarial cell/radius planes and clamped edges must retain reference bits.
+pub fn validate_pruning() {
+    let mut positions = Vec::new();
+    for plane in [-36.0f32, -32.0, -28.0, -4.0, 0.0, 4.0, 28.0, 32.0, 36.0] {
+        for value in [
+            plane.next_down(),
+            plane,
+            plane.next_up(),
+            plane - 0.000001,
+            plane + 0.000001,
+        ] {
+            for axis in 0..3 {
+                let mut point = Vec4::W;
+                point[axis] = value;
+                positions.push(point);
+            }
+        }
+    }
+    // Diagonal y/z distances just around radius four, with cell-plane rounding
+    // on both axes. Their accepted reductions must keep every scalar bit.
+    for plane in [-4.0f32, 0.0, 4.0] {
+        for dy in [1.0f32, 2.0, 3.0, 8.0f32.sqrt()] {
+            let dz = (16.0 - dy * dy).sqrt();
+            for y in [dy.next_down(), dy, dy.next_up()] {
+                for z in [dz.next_down(), dz, dz.next_up()] {
+                    positions.push(Vec4::new(0.0, plane + y, plane + z, 1.0));
+                    positions.push(Vec4::new(0.0, plane.next_down(), plane.next_down(), 1.0));
+                }
+            }
+        }
+    }
+    let velocities: Vec<_> = (0..positions.len())
+        .map(|id| model::initial(id as u32).1)
+        .collect();
+    for n in [1, 2, 3, 4, 5, 7, 31, positions.len()] {
+        let p = &positions[..n];
+        let v = &velocities[..n];
+        let mut reference = Grid::new(n);
+        reference.build(p);
+        let mut candidate = SortedGrid::new(n);
+        candidate.build(p, v);
+        for id in 0..n {
+            let (a, b) = (reference.boid(id, p, v), candidate.boid(id, p, v));
+            assert_eq!(
+                a.0.to_array().map(f32::to_bits),
+                b.0.to_array().map(f32::to_bits),
+                "position n={n} id={id}"
+            );
+            assert_eq!(
+                a.1.to_array().map(f32::to_bits),
+                b.1.to_array().map(f32::to_bits),
+                "velocity n={n} id={id}"
+            );
+        }
     }
 }

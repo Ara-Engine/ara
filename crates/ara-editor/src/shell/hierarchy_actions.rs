@@ -46,7 +46,12 @@ impl Shell {
     }
 }
 
-fn group(editor: &mut Editor, resolved: &Resolved, selected: &[String]) -> ara_ui::Result<String> {
+/// Groups `selected` under a new parent in one transaction; the parent's id.
+pub(crate) fn group(
+    editor: &mut Editor,
+    resolved: &Resolved,
+    selected: &[String],
+) -> ara_ui::Result<String> {
     let revision = editor.host.store().revision();
     let commands = model::group_commands(resolved, selected, &editor.state.locked)?;
     let result = editor.apply(commands, "Group selection", Some(revision))?;
