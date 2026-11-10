@@ -43,7 +43,8 @@
   sample count and explicit vertex layouts. `DrawVertexBuffers` binds up to eight
   streams, including per-instance records. `ResolveImage` resolves backed 4x color
   targets outside rendering; `BeginRenderingResolved` supports in-pass resolves and
-  `ImageShape::transient` MSAA attachments. Resolve targets need attachment usage.
+  `ImageShape::transient` MSAA attachments. `BeginRenderingSubresources` selects
+  color/depth/resolve mip and layer; Vulkan recording is pending its PC owner.
 - `AccelerationDesc` selects BLAS geometry or TLAS instances. `AccelerationOptions`
   enables rebuild/refit/compaction and reserves TLAS capacity. `update_instances`
   uploads on the owning queue; rebuild permits count changes, refit preserves count.
@@ -142,8 +143,7 @@ Adopt ready pipeline handles on the owner and retire normally. Keep the last pre
 Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
 Vulkan GPU tests run on the PC; all Mac-written Vulkan changes remain unverified.
-Metal gaps tests use native transfers and MSL
-probes; fresh converter artifacts are cooked on Windows (docs/dev/macos.md).
+Metal gaps tests use native transfers and MSL probes; fresh converter artifacts are cooked on Windows (docs/dev/macos.md).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI (`abi.rs`) keeps the MSC 4.0.3 prefix and appends comparison samplers; one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
 Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): BLAS/TLAS built/refit on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.

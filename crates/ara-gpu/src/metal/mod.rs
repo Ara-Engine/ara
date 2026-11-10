@@ -1113,3 +1113,6 @@ impl Drop for MetalDevice {
         });
     }
 }
+
+#[cfg(test)]
+mod attachment_tests;

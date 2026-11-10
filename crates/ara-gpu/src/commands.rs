@@ -67,6 +67,17 @@ pub enum Command {
         /// Render extent.
         size: [u32; 2],
     },
+    /// Render into selected 2D mips/array slices, with optional in-pass color resolves.
+    BeginRenderingSubresources {
+        /// Selected color outputs.
+        colors: Vec<crate::rendering::RenderAttachment>,
+        /// Selected depth output.
+        depth: Option<crate::rendering::RenderAttachment>,
+        /// Empty for no resolves, otherwise one optional target per color output.
+        resolves: Vec<Option<crate::rendering::RenderTarget>>,
+        /// Nonzero raster extent, bounded by each selected mip.
+        size: [u32; 2],
+    },
     /// Dynamic viewport and scissor; used for atlas quadrants.
     Viewport {
         /// Top-left pixel.
