@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Predicted capsule movement: slopes, stairs, moving platforms, crouching and pushing.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[repr(C)]
 #[ara(component, module = "physics")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct CharacterController {

@@ -1,0 +1,5 @@
+{
+  "name": "AraFeatureFixture",
+  "references": ["Unity.Entities", "Unity.Burst", "Unity.Collections", "Unity.Mathematics"],
+  "allowUnsafeCode": true
+}

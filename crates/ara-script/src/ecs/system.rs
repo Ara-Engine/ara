@@ -1,14 +1,15 @@
 //! C# systems as bevy systems. [`ScriptQuery`] is a custom `SystemParam` built from a
 //! system's declared columns and resources at runtime: it registers that access with
-//! the scheduler (so non-conflicting systems run in parallel), walks the matched tables
-//! for column base pointers, splits them into chunks and runs one C# call per chunk on
-//! the compute task pool. Structural ops land in per-chunk buffers, applied at bevy
-//! sync points in chunk order.
+//! the scheduler (so non-conflicting systems run in parallel), walks dense tables or
+//! matched sparse archetypes, then runs one C# call per contiguous row chunk on
+//! the compute task pool. Structural ops land in owned buffers, applied at bevy
+//! sync points in traversal order.
 
 use core::ffi::c_void;
+use std::cell::UnsafeCell;
 
 use bevy_ecs::change_detection::Tick as BevyTick;
-use bevy_ecs::component::{ComponentId, IS_RESOURCE};
+use bevy_ecs::component::{ComponentId, IS_RESOURCE, StorageType};
 use bevy_ecs::query::{FilteredAccess, QueryBuilder, QueryState};
 use bevy_ecs::storage::TableRow;
 use bevy_ecs::system::{
@@ -21,6 +22,9 @@ use nonmax::NonMaxU32;
 
 use crate::abi::{ScriptApi, SystemCall, Tick};
 use crate::ecs::cmdbuf::{self, CmdBuf, ScriptCatalog, ScriptEvents};
+
+mod sparse;
+use sparse::SparseScratch;
 
 /// Rows below this run on the calling thread (no task-pool dispatch).
 const PARALLEL_MIN_ROWS: usize = 4096;
@@ -55,11 +59,13 @@ pub(crate) struct SystemPlan {
 struct Scratch {
     /// Column base pointers, `columns.len()` per chunk.
     cols: Vec<*mut u8>,
+    /// Changed-tick bases parallel to `cols`; null for read-only columns.
+    changed: Vec<*const UnsafeCell<BevyTick>>,
     /// Resource pointers.
     res: Vec<*mut u8>,
     /// One call per chunk.
-    calls: Vec<SystemCall>,
-    /// `(entities, len, first base index in cols)` per table.
+    calls: Vec<ChunkCall>,
+    /// `(entities, len, first base index in cols)` per dense table.
     tables: Vec<(*const u64, usize, usize)>,
     /// `calls` as task-pool handles.
     sends: Vec<SendPtr>,
@@ -76,12 +82,15 @@ unsafe impl Sync for Scratch {}
 pub(crate) struct ScriptQueryState {
     plan: SystemPlan,
     query: QueryState<FilteredEntityMut<'static, 'static>>,
+    /// Whole tables are valid only when every required/default filter is dense.
+    dense: bool,
     scratch: Scratch,
+    sparse: SparseScratch,
     buffers: Vec<CmdBuf>,
     used: usize,
 }
 
-/// The system param that runs one C# system over its matched tables.
+/// The system param that runs one C# system over its matched rows.
 pub(crate) struct ScriptQuery<'w, 's> {
     world: UnsafeWorldCell<'w>,
     state: &'s mut ScriptQueryState,
@@ -109,10 +118,23 @@ unsafe impl<'w, 's> SystemParamBuilder<ScriptQuery<'w, 's>> for ScriptQueryBuild
         for id in &self.0.without {
             b.without_id(*id);
         }
+        let query = b.build();
+        let dense = query
+            .component_access()
+            .with_filters()
+            .chain(query.component_access().without_filters())
+            .all(|id| {
+                world
+                    .components()
+                    .get_info(id)
+                    .is_some_and(|info| info.storage_type() == StorageType::Table)
+            });
         ScriptQueryState {
-            query: b.build(),
+            query,
+            dense,
             plan: self.0,
             scratch: Scratch::default(),
+            sparse: SparseScratch::default(),
             buffers: Vec::new(),
             used: 0,
         }
@@ -188,26 +210,70 @@ unsafe impl SystemParam for ScriptQuery<'_, '_> {
 
 /// A raw pointer that may cross into a task-pool task.
 #[derive(Clone, Copy)]
-struct SendPtr(*const SystemCall);
+struct SendPtr(*const ChunkCall);
 
 // SAFETY: each pointer is handed to exactly one task, points into the system's scratch
 // (alive for the whole scope) and the call it describes covers rows no other task sees.
 unsafe impl Send for SendPtr {}
 
 impl SendPtr {
-    fn get(self) -> *const SystemCall {
+    fn get(self) -> *const ChunkCall {
         self.0
     }
 }
 
+/// Internal metadata leaves the C# ABI and the task's single-pointer capture unchanged.
+struct ChunkCall {
+    call: SystemCall,
+    changed: *const [*const UnsafeCell<BevyTick>],
+    this_run: BevyTick,
+}
+
+impl ChunkCall {
+    /// # Safety
+    /// The call and pointer grid are live and frozen for the task scope; this chunk
+    /// exclusively owns its data and changed-tick rows under the declared access.
+    unsafe fn run(
+        &self,
+        host: usize,
+        run: unsafe extern "C" fn(*mut c_void, *const SystemCall) -> i32,
+    ) {
+        // SAFETY: the caller guarantees a live grid and disjoint column row ranges.
+        unsafe { stamp_changed(&*self.changed, self.call.len as usize, self.this_run) };
+        // SAFETY: the same access/lifetime contract covers the unchanged ABI call.
+        unsafe { run(host as *mut c_void, &self.call) };
+    }
+}
+
+/// # Safety
+/// Every non-null pointer covers `len` live changed-tick cells, exclusively owned
+/// by this chunk. No other worker or Rust reference accesses these same cells.
+unsafe fn stamp_changed(changed: &[*const UnsafeCell<BevyTick>], len: usize, tick: BevyTick) {
+    for &column in changed {
+        if column.is_null() {
+            continue;
+        }
+        // SAFETY: the caller supplies the actual live row range for this column.
+        for cell in unsafe { std::slice::from_raw_parts(column, len) } {
+            // SAFETY: these disjoint cells are writable under the declared access.
+            unsafe { *cell.get() = tick };
+        }
+    }
+}
+
 impl ScriptQuery<'_, '_> {
-    /// Runs the C# system over every matched table, one call per chunk.
+    /// Runs the C# system over matched contiguous row runs, one call per chunk.
     pub fn run(&mut self, tick: &Tick) {
+        if !self.state.dense {
+            self.run_sparse(tick);
+            return;
+        }
         let st = &mut *self.state;
         st.used = 0;
         let ncols = st.plan.columns.len();
         let scratch = &mut st.scratch;
         scratch.cols.clear();
+        scratch.changed.clear();
         scratch.res.clear();
         scratch.calls.clear();
         scratch.tables.clear();
@@ -226,7 +292,13 @@ impl ScriptQuery<'_, '_> {
             let first = scratch.cols.len();
             for (id, write, _) in &st.plan.columns {
                 let Some(col) = table.get_column(*id) else {
+                    // Dense eligibility requires every column to exist in its
+                    // matched table. Preserve partial stamps if that invariant fails.
+                    // SAFETY: workers have not started, and these are the preceding
+                    // writable columns' complete row ranges for this table.
+                    unsafe { stamp_changed(&scratch.changed[first..], len, self.this_run) };
                     scratch.cols.truncate(first);
+                    scratch.changed.truncate(first);
                     continue 'tables;
                 };
                 // SAFETY: `len > 0`, so row 0 exists. Column data lives in interior-mutable
@@ -234,17 +306,18 @@ impl ScriptQuery<'_, '_> {
                 let base = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }
                     .as_ptr()
                     .cast_mut();
-                if *write {
-                    // SAFETY: the system has write access to this column and `len` is its row count.
-                    for t in unsafe { col.get_changed_ticks_slice(len) } {
-                        // SAFETY: no one else reads or writes these ticks while we hold write access.
-                        unsafe { *t.get() = self.this_run };
-                    }
+                let changed = if *write {
                     if let Some(summary) = col.get_summary_tick() {
                         summary.set(self.this_run);
                     }
-                }
+                    // SAFETY: `len` is this column's actual row count. Row stamping
+                    // is deferred to the worker that exclusively owns each chunk.
+                    unsafe { col.get_changed_ticks_slice(len) }.as_ptr()
+                } else {
+                    std::ptr::null()
+                };
                 scratch.cols.push(base);
+                scratch.changed.push(changed);
             }
             scratch
                 .tables
@@ -266,7 +339,22 @@ impl ScriptQuery<'_, '_> {
             };
             match ptr {
                 Some(p) => scratch.res.push(p),
-                None => return, // resource missing: the host reports it at registration
+                None => {
+                    // Preserve the previous stamp side effect even when a resource
+                    // disappears after registration and no C# callback can run.
+                    for &(_, len, first) in &scratch.tables {
+                        // SAFETY: no workers have started; these are complete table
+                        // ranges within this system's declared column write access.
+                        unsafe {
+                            stamp_changed(
+                                &scratch.changed[first..first + ncols],
+                                len,
+                                self.this_run,
+                            )
+                        };
+                    }
+                    return;
+                }
             }
         }
         if total == 0 {
@@ -285,12 +373,14 @@ impl ScriptQuery<'_, '_> {
             .map(|(_, len, _)| len.div_ceil(batch.min(*len)))
             .sum();
         scratch.cols.reserve(chunk_count * ncols);
+        scratch.changed.reserve(chunk_count * ncols);
         scratch.calls.reserve(chunk_count);
-        if st.buffers.len() < chunk_count {
-            st.buffers.resize_with(chunk_count, CmdBuf::default);
+        let buffer_count = chunk_count;
+        if st.buffers.len() < buffer_count {
+            st.buffers.resize_with(buffer_count, CmdBuf::default);
         }
         let allocator = self.world.entity_allocator();
-        for buf in &mut st.buffers[..chunk_count] {
+        for buf in &mut st.buffers[..buffer_count] {
             buf.reset(allocator);
         }
         let mut chunk = 0;
@@ -304,30 +394,46 @@ impl ScriptQuery<'_, '_> {
                     scratch
                         .cols
                         .push(unsafe { scratch.cols[first + c].add(start * size) });
+                    let changed = scratch.changed[first + c];
+                    scratch.changed.push(if changed.is_null() {
+                        changed
+                    } else {
+                        // SAFETY: the base covers `len` tick cells and `start < len`.
+                        unsafe { changed.add(start) }
+                    });
                 }
-                scratch.calls.push(SystemCall {
-                    system: st.plan.id,
-                    len: u32::try_from(n).unwrap_or(u32::MAX),
-                    // SAFETY: `start < len` rows of the table's entity slice.
-                    entities: unsafe { entities.add(start) },
-                    // SAFETY: `col_at + ncols <= cols.len()`, and `cols` does not reallocate (reserved above).
-                    columns: unsafe { scratch.cols.as_ptr().add(col_at) },
-                    resources: scratch.res.as_ptr(),
-                    tick,
-                    commands: std::ptr::from_mut(&mut st.buffers[chunk]).cast::<c_void>(),
+                scratch.calls.push(ChunkCall {
+                    call: SystemCall {
+                        system: st.plan.id,
+                        len: u32::try_from(n).unwrap_or(u32::MAX),
+                        // SAFETY: `start < len` rows of the table's entity slice.
+                        entities: unsafe { entities.add(start) },
+                        // SAFETY: `col_at + ncols <= cols.len()`, and `cols` does not reallocate (reserved above).
+                        columns: unsafe { scratch.cols.as_ptr().add(col_at) },
+                        resources: scratch.res.as_ptr(),
+                        tick,
+                        commands: std::ptr::from_mut(&mut st.buffers[chunk]).cast::<c_void>(),
+                    },
+                    // SAFETY: the parallel grid has the same reserved length and
+                    // column indices as `cols`; neither grid moves during dispatch.
+                    changed: std::ptr::slice_from_raw_parts(
+                        unsafe { scratch.changed.as_ptr().add(col_at) },
+                        ncols,
+                    ),
+                    this_run: self.this_run,
                 });
                 chunk += 1;
                 start += n;
             }
         }
-        st.used = chunk;
+        st.used = buffer_count;
         let run = st.plan.api.run_system;
         let host = st.plan.host;
         if scratch.calls.len() == 1 || st.plan.serial {
             for call in &scratch.calls {
                 // SAFETY: the call describes live columns within this system's access;
                 // calls run one at a time, in chunk order.
-                unsafe { run(host as *mut c_void, call) };
+                unsafe { call.run(host, run) };
             }
             return;
         }
@@ -341,9 +447,13 @@ impl ScriptQuery<'_, '_> {
                     // SAFETY: each call covers rows no other task touches, within the
                     // system's declared access; its buffer is its own; resources are
                     // read-only here (writers run serially, above).
-                    unsafe { run(host as *mut c_void, call.get()) };
+                    unsafe { (*call.get()).run(host, run) };
                 });
             }
         });
     }
 }
+
+#[cfg(test)]
+#[path = "system_tests.rs"]
+mod tests;

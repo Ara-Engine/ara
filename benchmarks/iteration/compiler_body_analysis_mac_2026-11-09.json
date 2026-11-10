@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-09",
+  "scope": "precise managed allocation deltas, actual production AnalyzerSet calls, 4096 ordinary methods across2partialfiles; one changed method; 3warm+12measured; no end-to-end or Unity claim",
+  "source_base_commit": "870d5b895",
+  "candidate": "Production semantic analyzer requests limited to exact ordinary method declarations only from a globally analyzer-clean committed snapshot. Full changed-tree analysis for unknown/custom providers; full-module analysis for declarations, generated output, accessors, directives and changed references. Warnings and request-level analyzer failures revoke trust.",
+  "latency_accepted": false,
+  "runtime_reported": "10.0.14",
+  "fixture": {
+    "module_query_methods": 4096,
+    "partial_files": 2,
+    "query_methods_in_changed_file": 2048,
+    "changed_methods": 1,
+    "profile": "gameplay",
+    "warm_calls_per_process": 3,
+    "measured_calls_per_process": 12,
+    "process_order": [
+      "full",
+      "scoped",
+      "scoped",
+      "full"
+    ],
+    "analyzers": "The same production six analyzers/options/profile, not copied rules",
+    "baseline_precondition": "Full module raw analyzer result is empty",
+    "comparison_scope": "Actual AnalyzerSet.Analyze versus AnalyzeBodies, including driver creation/model acquisition. Fresh equivalent compilation preparation, compiler validation and exact diagnostic comparison excluded from allocation delta."
+  },
+  "results": {
+    "rows": [
+      {
+        "label": "r1-full",
+        "arm": "full",
+        "median_allocated_bytes": 52889296.0,
+        "raw": [
+          51306856,
+          53555512,
+          52299088,
+          52846808,
+          51211048,
+          52524968,
+          52664544,
+          53269968,
+          52931784,
+          53093208,
+          53136080,
+          53249496
+        ]
+      },
+      {
+        "label": "r1-scoped",
+        "arm": "scoped",
+        "median_allocated_bytes": 9133508.0,
+        "raw": [
+          9134128,
+          9134352,
+          9129696,
+          9135080,
+          9133968,
+          9134088,
+          9133048,
+          9128176,
+          9128120,
+          9123648,
+          9132624,
+          9139080
+        ]
+      },
+      {
+        "label": "r2-scoped",
+        "arm": "scoped",
+        "median_allocated_bytes": 9125980.0,
+        "raw": [
+          9129976,
+          9134112,
+          9136112,
+          9132312,
+          9124568,
+          9127392,
+          9125680,
+          9126280,
+          9121424,
+          9125392,
+          9121160,
+          9123536
+        ]
+      },
+      {
+        "label": "r2-full",
+        "arm": "full",
+        "median_allocated_bytes": 52094596.0,
+        "raw": [
+          48840464,
+          50969392,
+          48231752,
+          52190160,
+          52198744,
+          52163904,
+          52674864,
+          52545712,
+          52615648,
+          50642144,
+          52025288,
+          50265040
+        ]
+      }
+    ],
+    "allocation_median_lower_percent_by_order": [
+      82.73089511344602,
+      82.48190656858151
+    ],
+    "precise_counter": "GC.GetTotalAllocatedBytes(precise:true), process-wide including analyzer worker threads",
+    "exact_diagnostics_every_call": true
+  },
+  "artifact_binding": {
+    "measured_compiler_sha256": "6e34027d41a89659cbe8b4dc6370b25a3db8941a949f9e87152d7c013aef5292",
+    "final_checked_compiler_sha256": "8679ecc4350449f59c3b3000c3e41561b2d9d9d497dac1fecb0f895fad868115",
+    "measured_sdk_manifest": "target/compiler-body-analysis-production-20261109/allocation/sdk-manifest.json",
+    "frozen_actual_benchmark_inputs": "target/compiler-body-analysis-production-20261109/allocation/execution-01/freeze.json",
+    "final_method_audit": [
+      {
+        "file": "Ara.CompileServer.dll",
+        "changedMethods": [
+          "Commit",
+          "Compile"
+        ]
+      }
+    ],
+    "limit": "Measured SDK was copied before the no-op ModuleSession identity correction. Method-body/signature/locals/EH audit finds only ModuleSession.Commit/Compile differ from the checked final SDK; all AnalyzerSet methods are identical. Informational versions alone are not source identity."
+  },
+  "checks": {
+    "solution_build": "passed, zero warnings/errors",
+    "compiler_tests": 186,
+    "real_clr_tests": 15,
+    "runtime_suites": [
+      "batch_queries",
+      "direct_kernel_reload",
+      "kernel_module_reload",
+      "levels",
+      "modules",
+      "nondisruption",
+      "prebuilt_watch"
+    ],
+    "clippy": "ara-script all-targets, -D warnings passed",
+    "formatting": "114 packages passed",
+    "independent_source_review": "no remaining must-fix after callback and identity fixes",
+    "target_quality": "nine full-versus-scoped diagnostic cases, including edits in two partial files, plus accessor and unedited-warning counterexamples",
+    "throwing_analyzer": "Actual Roslyn request exception callback tested; AD0001 retained in raw result"
+  },
+  "retained_failures": [
+    "Initial local variable name collision corrected; failed build retained.",
+    "Test-only analyzer discovery/release rules corrected with direct injection and a local RS1001 exemption; no shipped analyzer policy changed.",
+    "A test attempt against prior binaries after a failed build is not accepted.",
+    "First complete run found an actual no-op state identity regression; corrected without changing the test.",
+    "Next complete run had existing editor allocation assertion 0 versus656bytes; same binary passed isolated and subsequent full186 run. No test tolerance or production editor path changed.",
+    "Original analyzer timing matrix first rejected an active foreign editor, then rejected a disappearing foreign process while reading ps; zero timed cells accepted. Foreign Unity/editor jobs remain untouched."
+  ],
+  "limits": [
+    "Managed allocation deltas are not retained heap, peak RSS or total compiler memory.",
+    "No accepted elapsed-time, save-to-visible, initial compilation, play startup or Unity/Unreal comparison for this slice. Other machine load was present.",
+    "One unchanged ordinary query method edit in a large two-file module; other edit shapes deliberately retain broader validation.",
+    "Source/reference/provider mutations must revoke or re-prove the in-memory marker. It is never persisted in PE manifests."
+  ],
+  "production_source_sha256": {
+    "dotnet/src/Ara.CompileServer/AnalyzerSet.cs": "4b94a3ec50565fc0480c7f743c2460ff574b39d5b082376ca7e9903ff9da6637",
+    "dotnet/src/Ara.CompileServer/ModuleSession.cs": "460197472f9e34c4bfcb442803a34d3420e05b75ba465eef8bac3ee22358050d",
+    "dotnet/src/Ara.CompileServer/Outcome.cs": "a4e6298975341282f27dea0f41ba838cec159e2222d462644ae521350724f7df"
+  },
+  "raw_proof_sha256": {
+    "target/compiler-body-analysis-production-20261109/allocation/Analysis.cs": "db79edfde327392adf924e2a8bee60a05ac11160daceb7025270ebc54c591958",
+    "target/compiler-body-analysis-production-20261109/allocation/BodyAnalysis.csproj": "6ae041f61068e5a42d3928ec01b6c4189838e15c48984dd0d21288c36f2db5a6",
+    "target/compiler-body-analysis-production-20261109/allocation/Fixtures.cs": "0541285f11bfb403f09024c823dfe968728d12928e434d07a508df192a0bf3d5",
+    "target/compiler-body-analysis-production-20261109/allocation/ProductionAllocation.cs": "0ee41967b536e0caecde9ea0d8faba03409784c68b82e59d11ed946342253b22",
+    "target/compiler-body-analysis-production-20261109/allocation/Program.cs": "4e53d073c303d55cde10c7830ec89c60185ae174589195056e3ebafed7779eee",
+    "target/compiler-body-analysis-production-20261109/allocation/Timing.cs": "0b74e334e34121309db833599e24391ebd3600727d914cbab68f5d473df849c1",
+    "target/compiler-body-analysis-production-20261109/allocation/actual-final-il-audit.json": "f359c0f530aea6c64cdb3f3c8298e75cc962668c5e6308054c54bdac81401a10",
+    "target/compiler-body-analysis-production-20261109/allocation/build.log": "8479747b3b0ed5bf8c642026c793a2f9e766cdc29390e97c74950fe45f570490",
+    "target/compiler-body-analysis-production-20261109/allocation/controller.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/environment.json": "cee42854f8c2912f6d1254062d64194a41306b1a3d874f43aac7657aa821ba16",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/freeze.json": "4ce834b96b39a5f25496b3ed048c1653a9a3731d261bbe597ab5014d8bda5ddc",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-full.command.json": "6b154206382a1c7d96d236f40319dff630bd2fcbb71f3e93b5e5555df51b043d",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-full.json": "b4fe5c08537224e3d13b53c71c22ac0eb870d7b53fa95ad532dcab9c62c86365",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-full.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-scoped.command.json": "00082cd9e3f9bd5042f21a9577583f1bec6333dce5fff17c62993442cc2ecf79",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-scoped.json": "12e25437d14053c41f898e7743069718694c06c96e14d7529f2c8baa618fbad2",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r1-scoped.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-full.command.json": "78b93e232f54b94b98cd87ef4029a1bb46cff62def381d85d43cad8731eb8a80",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-full.json": "cd74795c8c50f4d30b43de963bd0b8f66942c82d07a511c5aecb71f47b759f5b",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-full.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-scoped.command.json": "b3a74ad83e06d8d2c8440911baccf830e9f962f1a0272480145ed2c677335764",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-scoped.json": "8174b4e8802757e1e2f3b39b9efdd24bf3c3fdb4876df6149ce7414a62ddf37f",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/r2-scoped.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target/compiler-body-analysis-production-20261109/allocation/execution-01/summary.json": "3b228b3b90c23efa04b7754f43f6695b32d3fdc876896f0cecccb749345bc33e",
+    "target/compiler-body-analysis-production-20261109/allocation/run.py": "d0463e582c24045bbbed60e3e67aeb2391f62ef609b6bc94eca4581eba963889",
+    "target/compiler-body-analysis-production-20261109/allocation/sdk-manifest.json": "7db5220da3d26fb9b53962623b08b765e358d477f596fc2584c6ffe6224775e0",
+    "target/compiler-body-analysis-production-20261109/baseline.json": "38d0c5e670b698b64f926ba9e6fab37b1c06ff640f0cb18cb9deb8aaf6622836",
+    "target/compiler-body-analysis-production-20261109/build-failure-callback.log": "752240d455b08e17d15198913f1f7efa0d28fa3c616cefe919adecfdb0025269",
+    "target/compiler-body-analysis-production-20261109/build-first.log": "1dbe969327976458a51c8ceccfbb582048e8419710261adbe3e00143a382e433",
+    "target/compiler-body-analysis-production-20261109/build-identity.log": "a3ba7102f8501ba6048b4db5862823eeb0a1b037a927d149293cbd49f7184934",
+    "target/compiler-body-analysis-production-20261109/build-owned.log": "e8d4c88b166d434b9f7f14310c17a6984ddc74a6284a3a15da04a441cb7a5c24",
+    "target/compiler-body-analysis-production-20261109/build-test-analyzer.log": "981890976be73b9ffc1af13d0e80494761032e4f491eb881808aea5d6bdf0909",
+    "target/compiler-body-analysis-production-20261109/build-test-injection.log": "87b6d16deccc711ffd0e86e73ef6a0aefce07074b7697283158f148155bc2ccb",
+    "target/compiler-body-analysis-production-20261109/build-tests.log": "38f5561a0db2a2d26f8462f36e114ced057c189effcd6e87dc5a62a42c06d52e",
+    "target/compiler-body-analysis-production-20261109/clippy.log": "09b36d57c38c237fbe1848b28975061df89ebdfeeb05163dcc601743901d4664",
+    "target/compiler-body-analysis-production-20261109/editor-allocation-isolated.log": "f3a25d8d25e05b773a29fbe5f88c53ff60f92e7cf8a76982dc3f27f26ff1fb1a",
+    "target/compiler-body-analysis-production-20261109/fmt.log": "480097c635d9b3a99bf6b7bcd3b15de170808fa265c7a51aa9437fd13b72b9c4",
+    "target/compiler-body-analysis-production-20261109/focused.log": "f0808859143ba34964d3c18b7dbeb37885228ab3b55fa089c2b99fbacaa81f8a",
+    "target/compiler-body-analysis-production-20261109/full-tests-final.log": "db19dd25f1d359b5f3c6a235a412c946487675237c79a0f092bc16a879b1afcc",
+    "target/compiler-body-analysis-production-20261109/full-tests-identity.log": "b78a44cd6ddec358e0b5495d5c0c11ba1b41513985e784a4621d1e6f6107d5c9",
+    "target/compiler-body-analysis-production-20261109/full-tests.log": "c364f597112fa325bebe5e5c1ab0f4ebfd1c15c2893325066d39a0fba946dd3a",
+    "target/compiler-body-analysis-production-20261109/runtime-tests.log": "8cc837e256f2f29133cfec2871e2d7d308bb337302176cb09698c33f2007536a",
+    "target/compiler-body-analysis-prototype-20261109/timing-01/summary.json": "6b7409e734f349a1181c3880f32a0dc50a96116309911d5ac166a8b191e160b1",
+    "target/compiler-body-analysis-prototype-20261109/timing-02/summary.json": "37de7d70d6d0fe87599f12663b059e5a0c8a1c76c066bacf6d78c96eb95b8e9f",
+    "target/compiler-body-analysis-prototype-20261109/timing-final-freeze.json": "e837d19532cad56e03cee526d8309d33fb8984c0eb62eddcfdc58df2692ec9a7",
+    "target/compiler-body-analysis-provenance-20261109/DESIGN.md": "0469a0124369d7edf7c8527ed7099b11887af4adf50e5f0ef389dd6ab59c0934",
+    "target/compiler-body-analysis-provenance-20261109/provenance.json": "79f57d971dc3a5ca657183b69a876d8997776645a67b99f859b01038549c42bc",
+    "target/compiler-body-analysis-quality-extended-20261109/Analysis.cs": "db79edfde327392adf924e2a8bee60a05ac11160daceb7025270ebc54c591958",
+    "target/compiler-body-analysis-quality-extended-20261109/BodyAnalysis.csproj": "abc8c92a222e6426690fcf5829dea88d9f243b18b98d34cd8a218ae0bfeda61b",
+    "target/compiler-body-analysis-quality-extended-20261109/Fixtures.cs": "0541285f11bfb403f09024c823dfe968728d12928e434d07a508df192a0bf3d5",
+    "target/compiler-body-analysis-quality-extended-20261109/Program.cs": "8ad7089cb392b54c6a9d29dfd4dfbabfa936f9bb0ee7ce70fce120de200eb19e",
+    "target/compiler-body-analysis-quality-extended-20261109/Timing.cs": "0b74e334e34121309db833599e24391ebd3600727d914cbab68f5d473df849c1",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r1-full.json": "ae2d245c5bce57aecca5c2290b18a1b28640cff8791e6670279788e994983c11",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r1-full.log": "1e8b8dde2d433307f45ee470a847c20905932e4a812080f170f0b449054441f5",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r1-scoped.json": "fb0af318f0ee17c394c30c32b9b501d20c9648c846a40754c5fb5a55bb67b027",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r1-scoped.log": "774b39bc8fc129cf6a103b93429f2f2cf567eef07992fbb8b7e295990de43504",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r2-full.json": "5b945e19b2fa71f87360c95dde3077139a2fded5e510de6fd27088f735dd1bf0",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r2-full.log": "1e8b8dde2d433307f45ee470a847c20905932e4a812080f170f0b449054441f5",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r2-scoped.json": "415fcea31207b68f498461b3363ab0a7a535004f863abfd2286088f77d87cc38",
+    "target/compiler-body-analysis-quality-extended-20261109/alloc-r2-scoped.log": "774b39bc8fc129cf6a103b93429f2f2cf567eef07992fbb8b7e295990de43504",
+    "target/compiler-body-analysis-quality-extended-20261109/allocation-summary.json": "823323ed7ef34a87f083eaba762b09338cce8449e634fc067d8138de80090a27",
+    "target/compiler-body-analysis-quality-extended-20261109/build-alloc.log": "ea9e75e6b7e6aea9acd65105fb92f4a189c46da4d9387cafc6c750f3ae6e09b2",
+    "target/compiler-body-analysis-quality-extended-20261109/build.log": "03564131d3af47ca22d5a2f3233e7b6dcd278f8170c0e2f81c3588cda52dde22",
+    "target/compiler-body-analysis-quality-extended-20261109/quality.json": "9876ad5b9dca9fd6f3d078e0673f7b32f574dd34aefb5f2c0383e504f59e8316",
+    "target/compiler-body-analysis-quality-extended-20261109/quality.log": "2159611dcbd523a07b247475b9372e1ad6c1527dd751c6c64a6535fdb9a9f599",
+    "target/compiler-body-analysis-quality-extended-20261109/source-derivation.json": "f04f70f92a42ecfa5915d9fdce00dd226d1b7f868dc16af7121eafb295a2b94e"
+  }
+}

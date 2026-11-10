@@ -27,7 +27,7 @@ pub(super) fn component_icon(name: &str) -> &'static str {
         _ => "box",
     }
 }
-pub(super) fn sentence(label: &str) -> String {
+pub(crate) fn sentence(label: &str) -> String {
     let mut out = String::new();
     for (i, c) in label.chars().enumerate() {
         if i == 0 {

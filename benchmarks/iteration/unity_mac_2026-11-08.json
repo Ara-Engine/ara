@@ -1,0 +1,1206 @@
+{
+  "date": "2026-11-08",
+  "scope": "Matched S8 W1 transform/quaternion and W3 particle kernels only: Ara Rust-native optimized SIMD/Bevy ECS versus Unity Editor+Burst. Not C# gameplay, shipping-player, full-frame, renderer, script compilation, Play startup or whole-engine comparison. Unreal and Windows/RTX remain unmeasured.",
+  "method": "Two fresh-process rounds; reverse engine and case order in round2; 1M entities; W1 120 warmups/W3 3000; 300 timed steps per case; both engines nice10. State extraction/hash, initialization, launch, compilation, imports, dumps, result output and metadata are outside kernel timing. Full 48MB stable-ID-ordered 12-f32 little-endian state compared using BLAKE3 for every pair.",
+  "summary_definition": "Median of two process p50 values; p95 summaries are medians of two process p95 values. The ratio is Unity time divided by Ara time (>1 means Ara faster). Two rounds do not establish statistical confidence.",
+  "host": {
+    "cpu": "Apple M5 Pro",
+    "logical_cpus": 15,
+    "architecture": "arm64",
+    "os": "macOS-27.0-arm64-arm-64bit",
+    "power": "Battery power throughout; exact before/after state recorded for every process.",
+    "thermal_frequency": "Not instrumented; not an AC/max-power performance claim.",
+    "background_load": "Compiler/Unity overlap guard before and after each engine process; continuous absence of interference was not instrumented. Ordinary desktop/background processes remained; per-case load averages captured. This is not a dedicated idle lab machine.",
+    "loadavg_start": [
+      3.17236328125,
+      4.20654296875,
+      3.94970703125
+    ],
+    "loadavg_finish": [
+      4.75732421875,
+      4.1640625,
+      3.95263671875
+    ],
+    "power_start": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t40%; discharging; (no estimate) present: true",
+    "power_finish": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true"
+  },
+  "ara": {
+    "lane": "rust-native-optimized-simd",
+    "build_revision": "fb57c98131c33a007b0ea3f66b725d224e02d878",
+    "executable_sha256": "a1f12bedc363e8a889d4df5e28cb0711901982781bb11b43f4986bc6eca1e91e",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "build_command": [
+      "cargo",
+      "bench",
+      "-p",
+      "ara-sim",
+      "--bench",
+      "ecs",
+      "--no-run"
+    ],
+    "build_environment": {
+      "CARGO_BUILD_JOBS": "2",
+      "RUSTFLAGS": "-C target-cpu=native",
+      "CARGO_PROFILE_BENCH_LTO": "thin",
+      "CARGO_PROFILE_BENCH_CODEGEN_UNITS": "1"
+    },
+    "variant": "simd",
+    "batch": 4096,
+    "worker_semantics": "Argument 1 selects the serial path. Parallel argument 14 creates 14 Bevy workers; the scope caller also executes tasks, allowing 15 kernel runners. Both Bevy and Rayon pools are configured, but only Bevy is used in these W1/W3 paths."
+  },
+  "unity": {
+    "lane": "unity-editor-burst",
+    "editor_version": "6000.4.5f1",
+    "packages": [
+      {
+        "name": "com.unity.burst",
+        "version": "1.8.29",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.collections",
+        "version": "6.4.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.entities",
+        "version": "6.4.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.ext.nunit",
+        "version": "2.0.5",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.mathematics",
+        "version": "1.3.3",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.modules.assetbundle",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.audio",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.hierarchycore",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.imgui",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.jsonserialize",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.physics",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.ui",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.uielements",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.unityanalytics",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.unitywebrequest",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.nuget.mono-cecil",
+        "version": "1.11.6",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.profiling.core",
+        "version": "1.0.3",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.scriptablebuildpipeline",
+        "version": "2.6.1",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.serialization",
+        "version": "3.1.5",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.test-framework",
+        "version": "1.6.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.test-framework.performance",
+        "version": "3.4.0",
+        "source": "Registry"
+      }
+    ],
+    "burst_enabled": true,
+    "burst_safety_checks": false,
+    "development": true,
+    "worker_semantics": "Request 1 sets 0 job workers and the caller performs work. Request 15 sets 14 job workers; the caller joins. JobWorkerMaximumCount was 14 in every process.",
+    "fixture_numeric_changes": false,
+    "float_mode": "Burst FloatMode.Strict, FloatPrecision.Standard; synchronous compilation on jobs; unchanged S8 numerical kernels.",
+    "force_safety_checks": false,
+    "burst_debug": false
+  },
+  "source_sha256": {
+    "crates/ara-sim/benches/ecs.rs": "37224ed755679b6a257b1f1c35c5d78c3099169ad920927a4f2320c7b8ddccdd",
+    "crates/ara-sim/benches/support/baseline.rs": "34ef9c10e806ee1c9e71e506a0a3cbdf4d59e9b0b44527eef17f18c6a01d6b69",
+    "crates/ara-sim/benches/support/sorted.rs": "10ffd29c8f5dad54871f3412faade7a25a02a1ee8acf5914ac6bcfcb7dbb5902",
+    "crates/ara-sim/benches/support/kernels.rs": "d60f5f9ecfb8b711fbf5db171b780134653061b5db47271e859081a73f822469",
+    "crates/ara-sim/benches/support/model.rs": "926fc5eb4cf5b883d80192cc7db69d7de1d47b3111b10e0a00377f947d27a1d5",
+    "crates/ara-sim/benches/support/tuned.rs": "f3d0ad53f73aeee9af585fd01cd17a100bec3388101dc130586f6b06c5af0526",
+    "benchmarks/iteration/unity/dump_hash.rs": "01d15a96a9a78f2c459990b821c0c823a089a2330d1cf99523cb0ad4ffd92825",
+    "benchmarks/iteration/unity/bench.py": "ad37f76629e4f399f1bc68f5fb4dde55c1fab8193d4d2319174e100b525556d5",
+    "benchmarks/iteration/unity/README.md": "57b88c7aed46a9515aaf45ecaa68f812ed7bc82f48918e9c659bf8c7bb275674",
+    "benchmarks/iteration/unity/MacBatch.cs": "044c48250e0a2b7aa7b0d64cb310a0afc43384ea583867d3d1278c6109e41c30",
+    "Cargo.lock": "24be29f17d7b6ce5d0e954e5a370d0c018e22f2e5fa2f438556511bfc333d0a5",
+    "spikes/s8-dots-bench/unity/Assets/Benchmark.cs": "53fdfce0a78f6de3bd26fd856f7c76924acff5f64e184100d525eddfb7620e18",
+    "spikes/s8-dots-bench/unity/Assets/BenchSystem.cs": "96532e37f2c4c1a9d6369cc934ca671badde91ff1149a79fb997ca8fd335cb2f",
+    "spikes/s8-dots-bench/unity/Assets/Kernels.cs": "a6a8cf23b5125704218d435432708c808ed8d42ba6177beecf659ea530a17834"
+  },
+  "summary": [
+    {
+      "workload": "w1",
+      "max_kernel_runners": 1,
+      "ara_median_process_p50_ms": 3.8161245,
+      "unity_median_process_p50_ms": 4.39055,
+      "unity_ms_divided_by_ara_ms": 1.150525880379427,
+      "ara_median_process_p95_ms": 3.9281455000000003,
+      "unity_median_process_p95_ms": 4.8809000000000005
+    },
+    {
+      "workload": "w1",
+      "max_kernel_runners": 15,
+      "ara_median_process_p50_ms": 0.4363545,
+      "unity_median_process_p50_ms": 0.46950000000000003,
+      "unity_ms_divided_by_ara_ms": 1.0759600279130845,
+      "ara_median_process_p95_ms": 0.550521,
+      "unity_median_process_p95_ms": 0.5459499999999999
+    },
+    {
+      "workload": "w3",
+      "max_kernel_runners": 1,
+      "ara_median_process_p50_ms": 2.8790829999999996,
+      "unity_median_process_p50_ms": 4.52525,
+      "unity_ms_divided_by_ara_ms": 1.5717678163498587,
+      "ara_median_process_p95_ms": 2.9400415,
+      "unity_median_process_p95_ms": 4.74995
+    },
+    {
+      "workload": "w3",
+      "max_kernel_runners": 15,
+      "ara_median_process_p50_ms": 0.4348335,
+      "unity_median_process_p50_ms": 0.39959999999999996,
+      "unity_ms_divided_by_ara_ms": 0.9189724342765678,
+      "ara_median_process_p95_ms": 0.4691665,
+      "unity_median_process_p95_ms": 0.55685
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "workload": "w1",
+      "entities": 1000000,
+      "max_kernel_runners": 1,
+      "warmup_steps": 120,
+      "measured_steps": 300,
+      "state_blake3": "7e258bb72a8002827cb3e1f8d6deeda3d140bb24e7aaae1d0abb2ccc4efa5acb",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "ara",
+        "unity"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 3.7282080000000004,
+          "p95_ms": 3.8960000000000004,
+          "p99_ms": 4.028042,
+          "min_ms": 3.641,
+          "max_ms": 4.568084,
+          "mean_ms": 3.74378693,
+          "sample_stddev_ms": 0.08984902393220714,
+          "samples": 300
+        },
+        "configured_pool_workers": 1,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r1_w1_1000000_t1_ara.json",
+        "raw_result_sha256": "09d143c87de861959a2374be2e6159d49e67c26ef2501ad7e2a2a330da9f3073",
+        "loadavg_before": [
+          3.17236328125,
+          4.20654296875,
+          3.94970703125
+        ],
+        "loadavg_after": [
+          3.17236328125,
+          4.20654296875,
+          3.94970703125
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t40%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t40%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 1.750248291
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 4.3623,
+          "p95_ms": 4.8652,
+          "p99_ms": 5.2276,
+          "min_ms": 3.7046,
+          "max_ms": 7.7881,
+          "mean_ms": 4.396988333333334,
+          "sample_stddev_ms": 0.3939303818990941,
+          "samples": 300
+        },
+        "configured_pool_workers": 0,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r1/w1_1000000_t1.json",
+        "raw_result_sha256": "22cb8ad814045aaecef67bb4cb961b19649539908cd83de96736b6e86eac0e0b",
+        "loadavg_before": [
+          3.17236328125,
+          4.20654296875,
+          3.94970703125
+        ],
+        "loadavg_after": [
+          3.37451171875,
+          4.171875,
+          3.94384765625
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t40%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t39%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 20.107938458,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 1,
+      "workload": "w1",
+      "entities": 1000000,
+      "max_kernel_runners": 15,
+      "warmup_steps": 120,
+      "measured_steps": 300,
+      "state_blake3": "7e258bb72a8002827cb3e1f8d6deeda3d140bb24e7aaae1d0abb2ccc4efa5acb",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "ara",
+        "unity"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 0.436042,
+          "p95_ms": 0.5500839999999999,
+          "p99_ms": 0.560375,
+          "min_ms": 0.395083,
+          "max_ms": 0.565458,
+          "mean_ms": 0.46858152666666664,
+          "sample_stddev_ms": 0.05576185483756533,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r1_w1_1000000_t15_retry1_ara.json",
+        "raw_result_sha256": "51b6db3fafc6c6ff42f1b6065b85f7009da4fddd0467a3537a24ff63060f8a9d",
+        "loadavg_before": [
+          2.3544921875,
+          3.60595703125,
+          3.7529296875
+        ],
+        "loadavg_after": [
+          2.3544921875,
+          3.60595703125,
+          3.7529296875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 0.383541333
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 0.4548,
+          "p95_ms": 0.5301,
+          "p99_ms": 0.5701,
+          "min_ms": 0.3931,
+          "max_ms": 0.8387,
+          "mean_ms": 0.46202966666666667,
+          "sample_stddev_ms": 0.042318132058159916,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r1-retry1/w1_1000000_t15.json",
+        "raw_result_sha256": "8e0aabdb0e609313c76afa8545618c73f5bc9fa7af07faf2313549fc418c261c",
+        "loadavg_before": [
+          2.3544921875,
+          3.60595703125,
+          3.7529296875
+        ],
+        "loadavg_after": [
+          3.2744140625,
+          3.72900390625,
+          3.79248046875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 19.122921916,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 1,
+      "workload": "w3",
+      "entities": 1000000,
+      "max_kernel_runners": 1,
+      "warmup_steps": 3000,
+      "measured_steps": 300,
+      "state_blake3": "10d7725000c7e8d69aff0ef284dec0fa3f5434306bae8dca7111bb7be33da056",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "ara",
+        "unity"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 2.868333,
+          "p95_ms": 2.917208,
+          "p99_ms": 2.954167,
+          "min_ms": 2.700291,
+          "max_ms": 3.067666,
+          "mean_ms": 2.8622315633333333,
+          "sample_stddev_ms": 0.04595159601807121,
+          "samples": 300
+        },
+        "configured_pool_workers": 1,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r1_w3_1000000_t1_ara.json",
+        "raw_result_sha256": "7a465c8dd1e990290f842f5375c3403e4f1e7f1fa4d75822b5ba62dac01e8600",
+        "loadavg_before": [
+          3.2744140625,
+          3.72900390625,
+          3.79248046875
+        ],
+        "loadavg_after": [
+          3.7666015625,
+          3.81982421875,
+          3.82373046875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 9.620254665999997
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 4.5308,
+          "p95_ms": 4.7344,
+          "p99_ms": 4.7997,
+          "min_ms": 4.3514,
+          "max_ms": 4.8894,
+          "mean_ms": 4.544978333333333,
+          "sample_stddev_ms": 0.1030945993668806,
+          "samples": 300
+        },
+        "configured_pool_workers": 0,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r1/w3_1000000_t1.json",
+        "raw_result_sha256": "a33da74df018d21850e3bc078658f2cf05305cd51c2b265f3dec5d359944e5c4",
+        "loadavg_before": [
+          3.7666015625,
+          3.81982421875,
+          3.82373046875
+        ],
+        "loadavg_after": [
+          3.48291015625,
+          3.7578125,
+          3.80126953125
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t38%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 37.382145667,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 1,
+      "workload": "w3",
+      "entities": 1000000,
+      "max_kernel_runners": 15,
+      "warmup_steps": 3000,
+      "measured_steps": 300,
+      "state_blake3": "10d7725000c7e8d69aff0ef284dec0fa3f5434306bae8dca7111bb7be33da056",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "ara",
+        "unity"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 0.434167,
+          "p95_ms": 0.46758299999999997,
+          "p99_ms": 0.482334,
+          "min_ms": 0.319125,
+          "max_ms": 0.676875,
+          "mean_ms": 0.43101195999999997,
+          "sample_stddev_ms": 0.03055643112136378,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r1_w3_1000000_t15_ara.json",
+        "raw_result_sha256": "0a4a8e020491dd5bde7cdbc39b7a8d0e1d732944689ae125766028e4209df0ff",
+        "loadavg_before": [
+          3.48291015625,
+          3.7578125,
+          3.80126953125
+        ],
+        "loadavg_after": [
+          3.48291015625,
+          3.7578125,
+          3.80126953125
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 1.5793965830000047
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 0.4043,
+          "p95_ms": 0.585,
+          "p99_ms": 0.667,
+          "min_ms": 0.3459,
+          "max_ms": 0.8618,
+          "mean_ms": 0.426859,
+          "sample_stddev_ms": 0.07374755334527862,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r1/w3_1000000_t15.json",
+        "raw_result_sha256": "8375f5d33ee735a2d31120597b2637a0ab36e52b58506cc7829d6ec9554cdbbc",
+        "loadavg_before": [
+          3.48291015625,
+          3.7578125,
+          3.80126953125
+        ],
+        "loadavg_after": [
+          4.4619140625,
+          3.94873046875,
+          3.86767578125
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 10.226713042,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 2,
+      "workload": "w1",
+      "entities": 1000000,
+      "max_kernel_runners": 1,
+      "warmup_steps": 120,
+      "measured_steps": 300,
+      "state_blake3": "7e258bb72a8002827cb3e1f8d6deeda3d140bb24e7aaae1d0abb2ccc4efa5acb",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "unity",
+        "ara"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 3.904041,
+          "p95_ms": 3.9602910000000002,
+          "p99_ms": 3.985417,
+          "min_ms": 3.838334,
+          "max_ms": 4.014708,
+          "mean_ms": 3.9075866599999998,
+          "sample_stddev_ms": 0.027544403208239233,
+          "samples": 300
+        },
+        "configured_pool_workers": 1,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r2_w1_1000000_t1_ara.json",
+        "raw_result_sha256": "3e49bcd91ff6eb4362e5b88155a6d8820e68bcb7c362caf6a068fa5b7627b51c",
+        "loadavg_before": [
+          5.08447265625,
+          4.2177734375,
+          3.97021484375
+        ],
+        "loadavg_after": [
+          5.08447265625,
+          4.2177734375,
+          3.97021484375
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 1.8253851249999968
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 4.4188,
+          "p95_ms": 4.8966,
+          "p99_ms": 5.0413,
+          "min_ms": 3.812,
+          "max_ms": 39.4465,
+          "mean_ms": 4.600294666666667,
+          "sample_stddev_ms": 2.048577508189954,
+          "samples": 300
+        },
+        "configured_pool_workers": 0,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r2/w1_1000000_t1.json",
+        "raw_result_sha256": "6f96c3f6fcdd195a640d59ec57e59eb756694f644e1c377004405d11623120af",
+        "loadavg_before": [
+          5.265625,
+          4.18359375,
+          3.95263671875
+        ],
+        "loadavg_after": [
+          5.08447265625,
+          4.2177734375,
+          3.97021484375
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 19.687659124999982,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 2,
+      "workload": "w1",
+      "entities": 1000000,
+      "max_kernel_runners": 15,
+      "warmup_steps": 120,
+      "measured_steps": 300,
+      "state_blake3": "7e258bb72a8002827cb3e1f8d6deeda3d140bb24e7aaae1d0abb2ccc4efa5acb",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "unity",
+        "ara"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 0.436667,
+          "p95_ms": 0.5509580000000001,
+          "p99_ms": 0.5658329999999999,
+          "min_ms": 0.386625,
+          "max_ms": 0.587042,
+          "mean_ms": 0.46818955333333334,
+          "sample_stddev_ms": 0.0565405871467286,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r2_w1_1000000_t15_ara.json",
+        "raw_result_sha256": "34e5e2d747ebdcb3f8608f8d5ff9ea6b49494af95a2eac378a274ef02d1cff84",
+        "loadavg_before": [
+          5.265625,
+          4.18359375,
+          3.95263671875
+        ],
+        "loadavg_after": [
+          5.265625,
+          4.18359375,
+          3.95263671875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 0.37958333299999936
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 0.4842,
+          "p95_ms": 0.5618,
+          "p99_ms": 0.5868,
+          "min_ms": 0.403,
+          "max_ms": 0.5984,
+          "mean_ms": 0.49027133333333334,
+          "sample_stddev_ms": 0.038703160426234166,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r2/w1_1000000_t15.json",
+        "raw_result_sha256": "f3cc4bf8b8f9599827b0183cc92701c74b4f179b423f04aaa34d566bf65ae87c",
+        "loadavg_before": [
+          3.869140625,
+          3.8544921875,
+          3.833984375
+        ],
+        "loadavg_after": [
+          5.265625,
+          4.18359375,
+          3.95263671875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 19.45393070899999,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 2,
+      "workload": "w3",
+      "entities": 1000000,
+      "max_kernel_runners": 1,
+      "warmup_steps": 3000,
+      "measured_steps": 300,
+      "state_blake3": "10d7725000c7e8d69aff0ef284dec0fa3f5434306bae8dca7111bb7be33da056",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "unity",
+        "ara"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 2.889833,
+          "p95_ms": 2.962875,
+          "p99_ms": 3.008375,
+          "min_ms": 2.823917,
+          "max_ms": 3.027291,
+          "mean_ms": 2.8936920366666667,
+          "sample_stddev_ms": 0.034624153490085574,
+          "samples": 300
+        },
+        "configured_pool_workers": 1,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r2_w3_1000000_t1_ara.json",
+        "raw_result_sha256": "044241409b8cffc5604b5b18c66298f98c2283a4feda1354d725230a5679c6fa",
+        "loadavg_before": [
+          3.9326171875,
+          3.86669921875,
+          3.83837890625
+        ],
+        "loadavg_after": [
+          3.869140625,
+          3.8544921875,
+          3.833984375
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 9.717531292000018
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 4.5197,
+          "p95_ms": 4.7655,
+          "p99_ms": 4.9631,
+          "min_ms": 4.313,
+          "max_ms": 5.3719,
+          "mean_ms": 4.540622333333333,
+          "sample_stddev_ms": 0.13426884402623976,
+          "samples": 300
+        },
+        "configured_pool_workers": 0,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r2/w3_1000000_t1.json",
+        "raw_result_sha256": "3f1704750a8266893427faf331eb292ebba86d0969e895988d798742f16c4b8f",
+        "loadavg_before": [
+          4.00927734375,
+          3.86767578125,
+          3.83935546875
+        ],
+        "loadavg_after": [
+          3.9326171875,
+          3.86669921875,
+          3.83837890625
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t36%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 38.479771291000006,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    },
+    {
+      "round": 2,
+      "workload": "w3",
+      "entities": 1000000,
+      "max_kernel_runners": 15,
+      "warmup_steps": 3000,
+      "measured_steps": 300,
+      "state_blake3": "10d7725000c7e8d69aff0ef284dec0fa3f5434306bae8dca7111bb7be33da056",
+      "full_state_bit_identical": true,
+      "state_bytes": 48000000,
+      "engine_order": [
+        "unity",
+        "ara"
+      ],
+      "ara": {
+        "stats": {
+          "p50_ms": 0.4355,
+          "p95_ms": 0.47075,
+          "p99_ms": 0.49633399999999994,
+          "min_ms": 0.352416,
+          "max_ms": 0.525125,
+          "mean_ms": 0.4359882333333333,
+          "sample_stddev_ms": 0.023624105699459177,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-ara-controlled-2026-11-08/r2_w3_1000000_t15_ara.json",
+        "raw_result_sha256": "ba096611b9a8730f3be1dd3c8e335376cb9c1750eb9e907e7add997076e2573b",
+        "loadavg_before": [
+          4.00927734375,
+          3.86767578125,
+          3.83935546875
+        ],
+        "loadavg_after": [
+          4.00927734375,
+          3.86767578125,
+          3.83935546875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 1.6150684170000034
+      },
+      "unity": {
+        "stats": {
+          "p50_ms": 0.3949,
+          "p95_ms": 0.5287,
+          "p99_ms": 0.5944,
+          "min_ms": 0.3449,
+          "max_ms": 0.6225,
+          "mean_ms": 0.41059633333333334,
+          "sample_stddev_ms": 0.054210390529492496,
+          "samples": 300
+        },
+        "configured_pool_workers": 14,
+        "raw_result": "target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r2/w3_1000000_t15.json",
+        "raw_result_sha256": "45fe240cc40bc01bd0f711899921d5ad741708b119ad19cdd9be6c060d858e5d",
+        "loadavg_before": [
+          4.4619140625,
+          3.94873046875,
+          3.86767578125
+        ],
+        "loadavg_after": [
+          4.00927734375,
+          3.86767578125,
+          3.83935546875
+        ],
+        "power_before": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "power_after": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23920739)\t37%; discharging; (no estimate) present: true",
+        "compiler_overlap_guard_before_after": "passed",
+        "wall_seconds_including_setup": 8.012647583999993,
+        "burst_enabled": true,
+        "burst_safety_checks": false,
+        "burst_force_safety_checks": false,
+        "burst_debug": false,
+        "measurement_completed": true,
+        "option_values_restored": true,
+        "editor_preferences_restored": true,
+        "finally_restored": true,
+        "initial_burst_compilation": true,
+        "initial_burst_safety_checks": true,
+        "initial_burst_force_safety_checks": false,
+        "initial_burst_debug": false,
+        "initial_burst_compile_synchronously": false,
+        "initial_editor_preferences": [
+          {
+            "key": "BurstCompilation",
+            "existed": true,
+            "value": true
+          },
+          {
+            "key": "BurstCompileSynchronously",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstShowTimings",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstDebug",
+            "existed": true,
+            "value": false
+          },
+          {
+            "key": "BurstForceSafetyChecks",
+            "existed": true,
+            "value": false
+          }
+        ],
+        "job_worker_maximum": 14,
+        "development": true,
+        "environment_sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509"
+      },
+      "verification": {
+        "hash_library_sha256": "5d12ec93d76e98c7996cc307e1ea0c3a08b3840149432ca3ea3103e6a03271e4",
+        "hash_helper_link_flags": []
+      }
+    }
+  ],
+  "reproduce": "benchmarks/iteration/unity/README.md; raw outputs and provenance under target/perf-scale/unity-ara-controlled-2026-11-08 and target/perf-scale/unity-s8/results/controlled-mac-2026-11-08-r1 and -r2 (parallel W1 round1 uses -r1-retry1).",
+  "interpretation": "In both controlled rounds, Ara led p50 for serial W1, parallel W1 and serial W3; Unity led parallel W3 p50. Median-process speed ratios were 1.15x, 1.08x and 1.57x for Ara, and 1.09x for Unity parallel W3; Ara had lower parallel W3 p95. Two rounds support only these kernel/lane observations, not general engine superiority. Shipping players, C# gameplay, full frames, Unreal and Windows/RTX remain unmeasured.",
+  "classification": "Controlled CPU-kernel matrix: effective Burst compilation enabled, safety checks/force-safety/debug disabled before timing; all option values and five preference-key values/presence restored and checked after each Unity process.",
+  "preference_isolation": "The current wrapper captures compilation/safety/force-safety/debug before changing them; captures all five known Burst EditorPrefs keys including presence; restores all known initial values in nested finally, then checks option values and preference keys. Every recorded Unity process reports finally_restored=true. Historical runs did not record initial values and were not retroactively modified.",
+  "verification_harness_sha256": "be80a4446ba7891a05b1572a08dcfdfb30cd90b0bf5265098098f36f55c9bb1c",
+  "interrupted_attempts": [
+    {
+      "round": 1,
+      "case": "w1_1000000_t15",
+      "reason": "post-Unity active rustc guard hit; executable exited before detailed snapshot; entire pair discarded"
+    }
+  ],
+  "verification_setup": "The first completed pair needed a hash-helper link adaptation for a newer cached non-bitcode BLAKE3 artifact. Its exact same result/dump was then verified; timings were retained. A later post-process guard caught cargo-fmt's brief rustc probe; the entire affected parallel W1 pair was discarded and rerun under fresh paths. No flags/restoration checks were weakened.",
+  "historical_exploratory_evidence": "benchmarks/iteration/unity_mac_2026-11-08_exploratory.json",
+  "post_measurement_harness_change": {
+    "file": "benchmarks/iteration/unity/MacBatch.cs",
+    "sha256": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+    "change": "Move the non-batch invocation guard before the exit/restore block so manually calling the benchmark cannot close an interactive Editor. The measured batch path, numeric kernels, options and timing window are unchanged. source_sha256 retains the exact measured wrapper hash."
+  }
+}

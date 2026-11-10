@@ -6,6 +6,10 @@ Ara's editor and Hub ship two themes in the **satin graphite** look (D31):
 iterated in the `ara-UI` web mock (its `/kit` page, section 9 "Satin tactile"); that
 mock's theme files are the token source and are copied here verbatim.
 
+> **Studio and Hub (D34):** the stillkit editor and Hub use these tokens in one flat look.
+> The Materials below keep their fills, but drop the inset light, rims and lifts; selection
+> is the raised tone and only popups cast a shadow (`ara_kit::ui::Material`).
+
 ## The look
 
 - **Graphite surfaces.** `chrome` is the window, `card` the docks, `background` the

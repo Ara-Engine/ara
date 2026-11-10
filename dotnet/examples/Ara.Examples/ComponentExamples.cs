@@ -169,6 +169,16 @@ public static class ComponentExamples
     }
     #endregion
 
+    #region types/Decal
+    /// <summary>Fade an authored decal between 25 and 40 metres from the camera.</summary>
+    public static void UseDecal(Entity entity, in Tick tick)
+    {
+        ref var component = ref World.Get<Decal>(entity);
+        component.FadeStartDistance = 25f;
+        component.FadeEndDistance = 40f;
+    }
+    #endregion
+
     #region types/Environment
     /// <summary>Brighten a scene during a daylight transition.</summary>
     public static void UseEnvironment(Entity entity, in Tick tick)
@@ -229,6 +239,16 @@ public static class ComponentExamples
     {
         ref var component = ref World.Get<Light2d>(entity);
         component.Radius = 8f;
+    }
+    #endregion
+
+    #region types/LocalFogVolume
+    /// <summary>Fill a room with a light local mist.</summary>
+    public static void UseLocalFogVolume(Entity entity, in Tick tick)
+    {
+        ref var component = ref World.Get<LocalFogVolume>(entity);
+        component.Size = new Vector3(8, 3, 8);
+        component.Density = 0.05f;
     }
     #endregion
 
@@ -536,6 +556,16 @@ public static class ComponentExamples
     }
     #endregion
 
+    #region types/VertexPaint
+    /// <summary>Apply baked red paint to a three-vertex first primitive.</summary>
+    public static void UseVertexPaint(Entity entity, in Tick tick)
+    {
+        ref var component = ref World.Get<VertexPaint>(entity);
+        // Three opaque red RGBA8 vertices, zlib-compressed then base64-encoded.
+        component.Primitives = [new() { Primitive = 0, Vertices = 3, Colors = "eJz7z8Dw/z8UAwAm5QX7" }];
+    }
+    #endregion
+
     #region types/VisualEffect
     /// <summary>Reduce a running particle effect intensity.</summary>
     public static void UseVisualEffect(Entity entity, in Tick tick)
@@ -575,6 +605,7 @@ public static class ComponentExamples
         UseCharacterMotion2d(entity, in tick);
         UseCollider(entity, in tick);
         UseCollider2d(entity, in tick);
+        UseDecal(entity, in tick);
         UseEnvironment(entity, in tick);
         UseFlipbook(entity, in tick);
         UseFollowCamera(entity, in tick);
@@ -582,6 +613,7 @@ public static class ComponentExamples
         UseJoint(entity, in tick);
         UseLight(entity, in tick);
         UseLight2d(entity, in tick);
+        UseLocalFogVolume(entity, in tick);
         UseMeshRenderer(entity, in tick);
         UseMusicSource(entity, in tick);
         UseNavAgent(entity, in tick);
@@ -614,6 +646,7 @@ public static class ComponentExamples
         UseVehicleTelemetry(entity, in tick);
         UseVelocity(entity, in tick);
         UseVelocity2d(entity, in tick);
+        UseVertexPaint(entity, in tick);
         UseVisualEffect(entity, in tick);
         UseWanderer(entity, in tick);
     }

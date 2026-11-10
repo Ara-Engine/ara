@@ -1,0 +1,18 @@
+[package]
+name = "ara-kit"
+description = "Ara's design system on stillkit: theme tokens, icons and shared components for the editor and Hub."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+stillkit.workspace = true
+image = { workspace = true, features = ["png"] }
+resvg.workspace = true

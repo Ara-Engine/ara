@@ -19,3 +19,6 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Test output some crates write next to their manifest
+/crates/*/target/

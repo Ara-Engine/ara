@@ -1,6 +1,6 @@
 //! Pure projection of browser gestures to one atomic typed command batch.
 use super::*;
-pub(super) struct Plan {
+pub(crate) struct Plan {
     pub title: String,
     pub calls: Vec<Value>,
     pub labels: Vec<String>,
@@ -42,7 +42,7 @@ pub(super) fn name(name: &str) -> ara_ui::Result<()> {
     }
     Ok(())
 }
-pub(super) fn source(asset: &assets::Asset) -> ara_ui::Result<&str> {
+pub(crate) fn source(asset: &assets::Asset) -> ara_ui::Result<&str> {
     let path = asset
         .authored_path
         .as_deref()
@@ -62,7 +62,7 @@ pub(super) fn join(parent: &str, name: &str) -> String {
         format!("{parent}/{name}")
     }
 }
-pub(super) fn delete(sources: Vec<assets::Asset>) -> ara_ui::Result<Plan> {
+pub(crate) fn delete(sources: Vec<assets::Asset>) -> ara_ui::Result<Plan> {
     let mut calls = Vec::new();
     let mut labels = Vec::new();
     let mut changes = Vec::new();
@@ -109,7 +109,7 @@ pub(super) fn move_to(sources: Vec<assets::Asset>, folder: &str) -> ara_ui::Resu
         false,
     ))
 }
-pub(super) fn duplicate(
+pub(crate) fn duplicate(
     sources: Vec<assets::Asset>,
     inventory: &[assets::Asset],
 ) -> ara_ui::Result<Plan> {

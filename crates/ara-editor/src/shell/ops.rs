@@ -2,7 +2,7 @@
 //! navigation, asset targets and OS hand-offs (file manager, terminal, docs).
 use super::commands::Target;
 use super::*;
-pub(super) mod authored;
+pub(crate) mod authored;
 
 /// Work only the window owner can do; the app loop drains it each frame.
 #[derive(Clone, Debug, PartialEq)]

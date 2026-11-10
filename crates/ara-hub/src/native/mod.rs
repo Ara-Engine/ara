@@ -1,41 +1,28 @@
-//! The native Hub window: SDL3 through ara-platform, the editor's Vulkan UI
-//! adapter (`ara-editor-gpu`) on a plain device (no scene renderer), and one
-//! retained `Ui` reconciled from the view-model whenever it changes.
-
-mod app;
-mod frame;
-mod images;
-mod input;
-#[cfg(debug_assertions)]
-mod live_styles;
+//! The native Hub window (D31): one stillkit app surface, CPU-drawn and redrawn only where
+//! something changed, hosting a runtime over [`HubApp`]. The service connection, pictures,
+//! snippets and preference writes run on workers and wake the loop through stillkit's
+//! [`Waker`](stillkit::Waker); with nothing to do the loop sleeps with no timer but the next
+//! relative-time label, toast expiry or update check.
 pub(crate) mod os;
 mod prefs;
 #[cfg(feature = "rehearsal")]
 mod rehearsal;
-mod selects;
 mod startup;
 mod updates;
-mod wake;
 
 use crate::{
-    capture,
-    connection::Connection,
-    model::{AgentClient, Effect, Hub, Prefs, engines},
+    capture::{self, Capture},
+    model::{Effect, Hub, Intent, Pick, Prefs, View, engines},
+    ui::{self, HubApp},
 };
 use anyhow::Context as _;
-pub use app::App;
-use ara_editor_gpu::NativeUi;
-use ara_editor_gpu::UiDevice as Gpu;
-use ara_platform::{Event, Present, Window};
-use ara_ui::input::InputEvent;
-use ara_ui_render::{atlas::TextMode, gpu::Renderer};
-use ara_ui_text::Clipboard;
-use input::NativeInput;
-pub(crate) use input::{OsClipboard, deliver_edit};
 use std::{
     path::{Path, PathBuf},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use stillkit::el::{Clipboard as _, Runtime, SystemClipboard};
+use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
+use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
 
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
@@ -80,146 +67,6 @@ impl Default for Options {
     }
 }
 
-/// Window, GPU device, UI adapter and swapchain, destroyed in a safe order.
-struct Host {
-    input: NativeInput,
-    ui_gpu: NativeUi,
-    present: Present,
-    gpu: Gpu,
-    window: Window,
-    renderer: Renderer,
-    builtins: images::Builtins,
-    dpi: f32,
-    fixed_dpi: Option<f32>,
-    physical: [u32; 2],
-    /// The swapchain is oversized for a live resize (`track`).
-    live: bool,
-}
-impl Host {
-    fn new(options: &Options, light: bool) -> anyhow::Result<Self> {
-        let window = Window::new("Ara Hub", options.size)?;
-        // Native icons are cosmetic; Wayland may not support them.
-        let _ = window.set_icon_png(include_bytes!(
-            "../../../../assets/brand/icons/hub/ara-hub-64.png"
-        ));
-        frame::style(window.raw(), light);
-        let input = NativeInput::attach(window.raw())?;
-        let gpu = ara_editor_gpu::open_presentation(&window.extensions()?)?;
-        // SAFETY: `gpu` is declared after `ui_gpu` and `present` in Host, so it outlives
-        // both; all queue access stays on this thread.
-        let ui_gpu = unsafe { NativeUi::new(&gpu)? };
-        // SAFETY: Host::drop waits for the device and destroys this before the window/device.
-        let present = unsafe { ui_gpu.create_present(&gpu, &window)? };
-        let dpi = options.dpi.unwrap_or_else(|| input.dpi());
-        let mut host = Self {
-            input,
-            ui_gpu,
-            present,
-            gpu,
-            physical: window.size()?,
-            window,
-            renderer: Renderer::default(),
-            builtins: images::Builtins::new(dpi),
-            dpi,
-            fixed_dpi: options.dpi,
-            live: false,
-        };
-        host.ui_gpu.set_dpi(dpi)?;
-        Ok(host)
-    }
-    /// Logical size at the current scale.
-    fn logical(&self) -> [f32; 2] {
-        self.physical.map(|v| v as f32 / self.dpi)
-    }
-    /// Follow window resizes and monitor scale changes; true when the UI must relayout.
-    /// During a `live` resize (the OS modal sizing loop) the swapchain is sized once
-    /// for the largest display and presented 1:1 (creating one per step costs the
-    /// driver ~8 ms); the first regular frame after it sizes it exactly.
-    fn track(&mut self, live: bool) -> anyhow::Result<bool> {
-        let physical = self.window.size()?;
-        let dpi = self.fixed_dpi.unwrap_or_else(|| self.input.dpi());
-        if physical.contains(&0) {
-            return Ok(false);
-        }
-        if physical == self.physical && dpi == self.dpi {
-            if self.live && !live {
-                self.resize(None)?;
-            }
-            return Ok(false);
-        }
-        let density = self.window.pixel_density();
-        let reach = live.then(|| {
-            Window::displays().iter().fold(physical, |reach, d| {
-                [0, 1].map(|i| reach[i].max((d[i + 2].max(0) as f32 * density) as u32))
-            })
-        });
-        self.resize(reach)?;
-        if dpi != self.dpi {
-            self.builtins = images::Builtins::new(dpi);
-        }
-        self.physical = physical;
-        self.dpi = dpi;
-        self.ui_gpu.set_dpi(dpi)?;
-        Ok(true)
-    }
-    fn render(&mut self, app: &App) -> anyhow::Result<()> {
-        // Exactly the drawable: a one-pixel miss rescales the whole UI.
-        self.ui_gpu.pin_target_size(self.physical);
-        draw(
-            &mut self.renderer,
-            &mut self.ui_gpu,
-            &mut self.builtins,
-            app,
-        )?;
-        // SAFETY: The UI submission completed; the image is CopySource; owners are live.
-        match unsafe { self.ui_gpu.present(&self.gpu, &mut self.present) } {
-            // A resize raced this frame: rebuild the swapchain; the next frame presents.
-            Err(error) if ara_platform::out_of_date(&error) => self.resize(None),
-            result => result,
-        }
-    }
-    fn resize(&mut self, reach: Option<[u32; 2]>) -> anyhow::Result<()> {
-        // SAFETY: The presentation belongs to this window and device; this thread owns
-        // its queue.
-        unsafe {
-            self.ui_gpu
-                .resize_present(&self.gpu, &mut self.present, &self.window, reach)?;
-        }
-        self.live = reach.is_some();
-        Ok(())
-    }
-}
-impl Drop for Host {
-    fn drop(&mut self) {
-        // SAFETY: Complete all submissions before destroying the swapchain; the UI adapter
-        // and device then drop in field order (adapter first).
-        unsafe {
-            let _ = self.ui_gpu.wait_idle(&self.gpu);
-            self.ui_gpu.retire_present(&self.gpu, &mut self.present);
-        }
-    }
-}
-
-/// Render the app's display list into the adapter's current target.
-fn draw(
-    renderer: &mut Renderer,
-    ui_gpu: &mut NativeUi,
-    builtins: &mut images::Builtins,
-    app: &App,
-) -> anyhow::Result<()> {
-    builtins.prepare(renderer, &app.ui.display)?;
-    ui_gpu.select_target(0);
-    renderer
-        .render(
-            ui_gpu,
-            &app.ui.display,
-            &app.text.assets,
-            app.ui.size.map(|v| v.round() as u32),
-            TextMode::Raster,
-        )
-        .map_err(|e| anyhow::anyhow!("{e}"))
-}
-
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -249,6 +96,7 @@ fn load_prefs(config: &Path) -> Prefs {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .unwrap_or_default()
 }
+
 /// Open the Hub window and run until it closes (or until captures are written).
 pub fn run(options: Options) -> anyhow::Result<()> {
     let exe_dir = exe_dir();
@@ -291,412 +139,312 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         load_prefs(&config)
     };
     let mut hub = Hub::new(prefs, home(), engines::installed(&exe_dir));
-    initial_view(&mut hub, &options);
+    if options.new_project {
+        hub.intent(Intent::Navigate(View::Create));
+    }
     if let Some(directory) = options.capture.clone() {
-        let mut offscreen = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
-        let mut app = App::new(offscreen.logical()).map_err(err)?;
-        return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
+        let mut cap = Capture::new(options.size, options.dpi.unwrap_or(1.0))?;
+        return capture::run(&mut cap, &mut hub, &directory);
     }
-    let connection = updates::connect(
-        exe_dir.clone(),
-        config.clone(),
-        options.ara.clone(),
-        wake::wake,
-    );
-    let phase = std::time::Instant::now();
-    let mut host = Host::new(&options, hub.prefs.light)?;
-    ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     hub.releases.can_self_update = exe_dir.join("hub.json").is_file();
-    let mut app = App::new(host.logical()).map_err(err)?;
-    interactive(
-        &mut host,
-        &mut app,
-        &mut hub,
-        &config,
-        connection,
-        options.update_health.as_deref(),
-    )
+    window(&options, hub, &config, &exe_dir)
 }
 
-/// Captures without a window: a headless device, the same `NativeUi` adapter and
-/// the same render path, read back from its target. Nothing appears on screen.
-pub struct Offscreen {
-    ui_gpu: NativeUi,
-    renderer: Renderer,
-    builtins: images::Builtins,
-    // Declared last so the adapter above drops first.
-    _gpu: Gpu,
-    physical: [u32; 2],
-    dpi: f32,
+/// The window's own controls: the system's on macOS, drawn ones elsewhere.
+fn frame(surface: &Surface) -> ui::Frame {
+    let s = surface.scale();
+    ui::Frame {
+        inset: surface.system_controls().map_or(0.0, |r| r.right / s),
+        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
+    }
 }
-impl Offscreen {
-    fn new(physical: [u32; 2], dpi: f32) -> anyhow::Result<Self> {
-        let gpu = ara_editor_gpu::open_presentation(&[])?;
-        // SAFETY: `_gpu` is a later field, so it outlives the adapter; single-threaded use.
-        let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
-        ui_gpu.set_dpi(dpi)?;
-        let renderer = Renderer::default();
-        Ok(Self {
-            ui_gpu,
-            renderer,
-            builtins: images::Builtins::new(dpi),
-            _gpu: gpu,
-            physical,
-            dpi,
-        })
+
+/// Marks the title bar's free space as the caption (it drags the window) and the drawn
+/// controls as the platform's, after each layout.
+fn chrome(surface: &Surface, rt: &Runtime<HubApp>) {
+    let mut parts = Vec::new();
+    if let Some(bar) = rt.find(ara_kit::ui::TITLE_BAR) {
+        parts.push((bar, Chrome::Caption));
     }
-    /// Logical size.
-    pub fn logical(&self) -> [f32; 2] {
-        self.physical.map(|v| v as f32 / self.dpi)
+    for (key, part) in [
+        (ara_kit::ui::MINIMIZE, Chrome::Minimize),
+        (ara_kit::ui::MAXIMIZE, Chrome::Maximize),
+        (ara_kit::ui::CLOSE, Chrome::Close),
+    ] {
+        if let Some(rect) = rt.find(key) {
+            parts.push((rect, part));
+        }
     }
-    /// Physical extent.
-    pub fn physical(&self) -> [u32; 2] {
-        self.physical
-    }
-    /// Upload finished previews; true when any arrived.
-    pub fn upload(&mut self, app: &mut App) -> bool {
-        app.thumbnails.upload(&mut self.renderer)
-    }
-    /// Render and read back the actual GPU target.
-    pub fn capture(&mut self, app: &App) -> anyhow::Result<image::RgbaImage> {
-        self.render(app)?;
-        self.ui_gpu.pixels()
-    }
-    fn render(&mut self, app: &App) -> anyhow::Result<()> {
-        draw(
-            &mut self.renderer,
-            &mut self.ui_gpu,
-            &mut self.builtins,
-            app,
+    surface.set_chrome(&parts);
+}
+
+fn window(options: &Options, hub: Hub, config: &Path, exe_dir: &Path) -> anyhow::Result<()> {
+    // Window classes and the Wayland app_id read "ara-hub".
+    let _ = stillkit::set_identity(stillkit::Identity {
+        prefix: "ara-hub",
+        desktop_classes: &[],
+    });
+    let mut surface = Surface::new(Kind::App { min: (960, 600) }, "Ara Hub", Role::Window)?;
+    surface.set_caption(Caption::Compact);
+    let scale = options.dpi.unwrap_or_else(|| surface.scale());
+    // 1280 x 820 design px unless --size asked for device px; never larger than the screen.
+    let design = if options.size == Options::default().size {
+        (1280.0, 820.0)
+    } else {
+        (
+            options.size[0] as f32 / scale,
+            options.size[1] as f32 / scale,
         )
-    }
-}
-
-fn interactive(
-    host: &mut Host,
-    app: &mut App,
-    hub: &mut Hub,
-    config: &Path,
-    connection: Connection,
-    mut health: Option<&Path>,
-) -> anyhow::Result<()> {
+    };
+    let (sw, sh) = stillkit::platform::current::host::screen_size();
+    let w = ((design.0 * scale) as i32).min(sw - 40);
+    let h = ((design.1 * scale) as i32).min(sh - 80);
+    surface.place(((sw - w) / 2, (sh - h) / 2, w, h));
+    let waker = stillkit::waker();
+    let wake = {
+        let waker = waker.clone();
+        move || waker.wake()
+    };
+    let connection = updates::connect(
+        exe_dir.to_owned(),
+        config.to_owned(),
+        options.ara.clone(),
+        wake.clone(),
+    );
+    let size = surface.client_size();
+    let mut app = HubApp::new(hub, size.0 as f32 / scale);
+    app.now_ms = now_ms();
+    app.frame = frame(&surface);
+    let theme = app.look.theme.clone();
+    let background = app.look.c.background.0;
+    let mut rt = Runtime::new(app, ui::view, theme, size, scale)?;
+    rt.set_background(Some(background));
+    rt.set_clipboard(SystemClipboard);
+    rt.set_reduced_motion(reduced_motion());
+    surface.set_background(background);
+    rt.update(|s| s.intent(Intent::CheckUpdates));
+    rt.frame(Duration::ZERO);
+    rt.present(&mut surface, (0, 0))?;
+    chrome(&surface, &rt);
+    surface.show_active(false);
     let prefs = prefs::Writer::new(config.to_owned())?;
-    let picks = os::picks();
-    let (send_setup, setups) = std::sync::mpsc::channel();
-    let mut ara = None;
-    let mut snippets_requested = false;
-    let mut saved = hub.prefs.clone();
-    let mut dirty = false;
-    let mut last_minute = 0;
-    let mut last_check = std::time::Instant::now();
-    #[cfg(debug_assertions)]
-    let live = live_styles::LiveStyles::start()?;
-    hub.intent(crate::model::Intent::CheckUpdates);
-    app.rebuild(hub, now_ms()).map_err(err)?;
+    let mut saved = rt.state().hub.prefs.clone();
+    let started = Instant::now();
+    let mut last_check = Instant::now();
+    let mut minute = now_ms() / 60_000;
+    let mut health = options.update_health.clone();
+    // Agent clients: which are installed and already have Ara, and one-click setups. Each
+    // probe waits on child processes, so it runs on its own thread and wakes the loop.
+    let (send_setup, setups) =
+        std::sync::mpsc::channel::<(crate::model::AgentClient, crate::model::AgentSetup)>();
+    let mut probed = false;
+    let mut ara: Option<PathBuf> = None;
+    let mut cursor = stillkit::Cursor::Arrow;
+    let mut frames: Option<stillkit::AnimationFrames> = None;
     loop {
-        dirty |= hub.tick(std::time::Instant::now());
-        if last_check.elapsed() >= Duration::from_secs(4 * 3600) {
-            hub.intent(crate::model::Intent::CheckUpdates);
-            last_check = std::time::Instant::now();
-        }
-        let mut intents = Vec::new();
-        let scale = host.input.points_per_logical(host.dpi);
-        // The Windows modal resize loop blocks inside the pump; repaint from there.
-        let events = ara_platform::with_live_repaint(
-            &mut || repaint_live(host, app, hub),
-            Window::poll_tagged,
-        )?;
-        for event in events.into_iter().map(|(_, event)| event) {
+        wait();
+        while let Some((id, event)) = next_event() {
+            if id != surface.id() {
+                continue;
+            }
             match event {
-                Event::Quit => return Ok(()),
-                Event::Resize(_) => dirty = true,
-                Event::FocusLost => {
-                    app.input.cancel_interaction(&mut app.ui);
-                    for scancode in [225, 229, 224, 228, 226, 230] {
-                        let _ = input::recover(app.key(hub, scancode, false));
-                    }
-                    dirty = true;
+                Event::Close => return Ok(()),
+                Event::Resized(w, h) => {
+                    rt.resize((w, h));
+                    let (width, frame) = (w as f32 / rt.scale(), frame(&surface));
+                    rt.update(|s| {
+                        s.width = width;
+                        s.frame = frame;
+                    });
                 }
-                // NativeInput's SDL watch delivers text/IME and folder drops once.
-                Event::TextInput { .. }
-                | Event::TextEditing { .. }
-                | Event::FileDropBegin
-                | Event::FileDropPosition { .. }
-                | Event::FileDropComplete
-                | Event::FileDrop { .. } => {}
-                Event::Key {
-                    scancode, pressed, ..
-                } => {
-                    if let Some(actions) = input::recover(app.key(hub, scancode, pressed)) {
-                        intents.extend(actions);
-                    }
+                Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+                Event::Key(vk) => rt.key_with(vk, modifiers()),
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
+                Event::Char(c) => rt.type_text(c.encode_utf8(&mut [0; 4])),
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
+                Event::Preedit => {
+                    let (text, at) = stillkit::platform::current::ime::preedit();
+                    rt.preedit(&text, at);
                 }
-                Event::MouseMotion { position, .. } => {
-                    let _ = input::recover(app.dispatch_pointer(
-                        hub,
-                        InputEvent::PointerMove(position.map(|v| v * scale)),
-                        now_ms(),
-                    ));
-                }
-                Event::MouseButton { button: 1, pressed } => {
-                    let at = app.pointer;
-                    let event = if pressed {
-                        InputEvent::PointerDown(at)
-                    } else {
-                        InputEvent::PointerUp(at)
-                    };
-                    let _ = input::recover(app.dispatch_pointer(hub, event, now_ms()));
-                    // Clicking away from an inline rename saves it, as in Explorer.
-                    if pressed
-                        && hub.rename.is_some()
-                        && hub.focus.is_none()
-                        && app.focused() != Some("rename-field")
-                    {
-                        intents.push(crate::model::Intent::RenameCommit);
+                Event::SettingChanged => rt.set_reduced_motion(reduced_motion()),
+                #[cfg(any(windows, target_os = "macos"))]
+                Event::VisibilityChanged => rt.set_visible(surface.is_visible()),
+                Event::Invoke(hit) => match surface.take_accessibility_action(hit) {
+                    Some(action) => {
+                        rt.accessibility_action(hit, &action);
                     }
-                }
-                Event::MouseButton {
-                    button: 4,
-                    pressed: true,
-                } => {
-                    if let Some(actions) = input::recover(app.back(hub)) {
-                        intents.extend(actions);
-                    }
-                }
-                Event::MouseButton { .. } => {}
-                Event::Wheel(delta) => {
-                    if hub.menu.is_some() {
-                        intents.push(crate::model::Intent::Menu(None));
-                    }
-                    let event = InputEvent::Wheel {
-                        position: app.pointer,
-                        delta: [-delta[0] * 48., -delta[1] * 48.],
-                    };
-                    let _ = input::recover(app.dispatch_pointer(hub, event, now_ms()));
+                    None => rt.handle(&event),
+                },
+                event => {
+                    rt.set_modifiers(modifiers());
+                    rt.handle(&event);
                 }
             }
-            intents.extend(app.actions());
-            if !intents.is_empty() || app.view_dirty() {
-                for intent in intents.drain(..) {
-                    hub.intent(intent);
+        }
+        // Service events, worker results and the clock.
+        let events = connection.poll();
+        let mut changed = !events.is_empty();
+        if !events.is_empty() {
+            rt.update(|s| {
+                for event in events {
+                    if let crate::connection::Event::Prepared { executable } = &event {
+                        ara = Some(executable.clone());
+                    }
+                    s.hub.event(event);
                 }
-                app.rebuild(hub, now_ms()).map_err(err)?;
+            });
+        }
+        let found: Vec<_> = setups.try_iter().collect();
+        if !found.is_empty() {
+            rt.update(|s| s.hub.agent_setup.extend(found));
+        }
+        let now = now_ms();
+        let ticked = rt.touch(|s| s.hub.tick(Instant::now()));
+        if ticked || now / 60_000 != minute {
+            minute = now / 60_000;
+            rt.update(|s| s.now_ms = now);
+        }
+        if last_check.elapsed() >= Duration::from_secs(4 * 3600) {
+            last_check = Instant::now();
+            rt.update(|s| s.intent(Intent::CheckUpdates));
+        }
+        if rt.touch(|s| s.images.receive()) {
+            rt.update(|_| {});
+        }
+        // Frame, then what the frame's handlers asked of the world.
+        rt.sync_text_input(&surface);
+        if rt.frame(started.elapsed().saturating_sub(rt.now())) {
+            rt.present(&mut surface, (0, 0))?;
+            chrome(&surface, &rt);
+            if let Some(marker) = health.take() {
+                std::fs::write(marker, b"ready")?;
             }
         }
-        let _ = input::recover(host.input.pump(app));
-        intents.extend(
-            host.input
-                .take_drops()
-                .into_iter()
-                .map(crate::model::Intent::Register),
-        );
-        intents.extend(app.actions());
-        dirty |= app.view_dirty();
-        for (pick, path) in picks.try_iter() {
-            intents.push(crate::model::Intent::Picked(pick, path));
-        }
-        for (client, state) in setups.try_iter() {
-            hub.agent_setup.insert(client, state);
-            dirty = true;
-        }
-        #[cfg(debug_assertions)]
-        match live.poll() {
-            Some(Ok(styles)) => app.apply_styles(styles).map_err(err)?,
-            Some(Err(error)) => eprintln!("ara-hub live styles: {error}"),
-            None => {}
-        }
-        for event in connection.poll() {
-            if let crate::connection::Event::Prepared { executable } = &event {
-                ara = Some(executable.clone());
-            }
-            hub.event(event);
-            dirty = true;
-        }
-        for intent in intents {
-            hub.intent(intent);
-            dirty = true;
-        }
-        connection.send(hub.take_calls());
-        if !snippets_requested && let Some(snippet_ara) = ara.clone() {
-            snippets_requested = true;
-            // Which agent clients are installed and already have Ara (the
-            // sidebar hides its setup card once one is), after bootstrap; one
-            // thread each, since every probe waits on child processes.
-            for client in AgentClient::ALL {
-                hub.install
-                    .insert(client, ara_agents::snippet(&snippet_ara, client));
-                let send_setup = send_setup.clone();
-                std::thread::spawn(move || {
-                    let _ = send_setup.send((client, ara_agents::detect(client)));
-                    wake::wake();
-                });
-            }
-            dirty = true;
-        }
-        for effect in hub.take_effects() {
+        rt.sync_text_input(&surface);
+        let (calls, effects) = rt.touch(|s| (s.hub.take_calls(), s.hub.take_effects()));
+        connection.send(calls);
+        for effect in effects {
+            changed = true;
             match effect {
                 Effect::ApplyUpdate {
                     archive,
                     manifest,
                     signature,
-                } => match ara
-                    .as_deref()
-                    .context("The Hub service is still connecting; retry once connected")
-                    .and_then(|ara| updates::launch(config, ara, archive, manifest, signature))
-                {
-                    Ok(()) => return Ok(()),
-                    Err(error) => {
-                        hub.update_error(error.to_string());
-                        dirty = true;
+                } => {
+                    match ara
+                        .as_deref()
+                        .context("The Hub service is still connecting; retry once connected")
+                        .and_then(|ara| updates::launch(config, ara, archive, manifest, signature))
+                    {
+                        Ok(()) => return Ok(()),
+                        Err(error) => rt.update(|s| s.hub.update_error(error.to_string())),
                     }
-                },
+                }
                 Effect::Pick(pick) => {
-                    let start = match pick {
-                        crate::model::Pick::Destination => {
-                            Some(PathBuf::from(hub.create.destination.trim()))
-                        }
-                        _ => None,
-                    };
-                    os::pick_folder(host.window.raw(), pick, start.as_deref());
+                    let start = (pick == Pick::Destination)
+                        .then(|| PathBuf::from(rt.state().hub.create.destination.trim()));
+                    if let Some(path) = os::pick_folder(pick, start.as_deref()) {
+                        rt.update(|s| s.intent(Intent::Picked(pick, path)));
+                    }
                 }
                 Effect::Reveal(path) => os::reveal(&path),
                 Effect::Open(path) => os::open(&path),
+                Effect::Copy(text) => SystemClipboard.set(&text),
                 Effect::OpenUrl(url) => os::open_url(&url),
-                Effect::Copy(text) => {
-                    let _ = input::recover(OsClipboard.write(&text));
-                }
                 Effect::SetupAgent(client) => match ara.clone() {
                     Some(ara) => {
-                        let send_setup = send_setup.clone();
+                        let (send, wake) = (send_setup.clone(), wake.clone());
                         std::thread::spawn(move || {
-                            let _ = send_setup.send((client, ara_agents::setup(client, &ara)));
-                            wake::wake();
+                            let _ = send.send((client, ara_agents::setup(client, &ara)));
+                            wake();
                         });
                     }
-                    None => {
-                        hub.agent_setup.insert(
+                    None => rt.update(|s| {
+                        s.hub.agent_setup.insert(
                             client,
                             crate::model::AgentSetup::Failed(
                                 "The Hub service is still connecting; retry in a moment".into(),
                             ),
                         );
-                        dirty = true;
-                    }
+                    }),
                 },
             }
         }
-        if hub.prefs != saved {
-            if hub.prefs.light != saved.light {
-                frame::style(host.window.raw(), hub.prefs.light);
-            }
-            prefs.save(hub.prefs.clone());
-            saved = hub.prefs.clone();
-        }
-        dirty |= app.thumbnails.upload(&mut host.renderer);
-        if host.physical.contains(&0) || host.window.size()?.contains(&0) {
-            // SAFETY: Main-thread SDL pump; input and worker events wake a minimized Hub.
-            unsafe {
-                sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), 1000);
-            }
-            host.physical = host.window.size()?;
-            continue;
-        }
-        if host.track(false)? {
-            app.size = host.logical();
-            dirty = true;
-        }
-        let now = now_ms();
-        if now / 60_000 != last_minute {
-            last_minute = now / 60_000;
-            dirty = true;
-        }
-        if dirty {
-            app.rebuild(hub, now).map_err(err)?;
-            dirty = false;
-        }
-        if app.frame().map_err(err)? {
-            host.input.sync_text_input(&app.ui, &app.input, host.dpi)?;
-            host.render(app)?;
-            if let Some(marker) = health.take() {
-                std::fs::write(marker, b"ready")?;
+        // Once the CLI is known: each client's config entry, and whether it is installed
+        // and already has Ara (the sidebar drops its setup card once one does).
+        if !probed && let Some(cli) = ara.clone() {
+            probed = true;
+            rt.update(|s| {
+                for client in crate::model::AgentClient::ALL {
+                    s.hub
+                        .install
+                        .insert(client, ara_agents::snippet(&cli, client));
+                }
+            });
+            for client in crate::model::AgentClient::ALL {
+                let (send, wake) = (send_setup.clone(), wake.clone());
+                std::thread::spawn(move || {
+                    let _ = send.send((client, ara_agents::detect(client)));
+                    wake();
+                });
             }
         }
-        // Worker results push an SDL wake event. The only idle deadline is the
-        // next relative-time label or informational toast expiration.
-        let mut wait_ms = 60_000 - now_ms() % 60_000;
-        if let Some(deadline) = hub.notice_deadline() {
-            wait_ms = wait_ms.min(
-                deadline
-                    .saturating_duration_since(std::time::Instant::now())
-                    .as_millis() as u64,
-            );
+        // Preferences and the theme.
+        let current = rt.state().hub.prefs.clone();
+        if current != saved {
+            prefs.save(current.clone());
+            saved = current;
+            if rt.touch(|s| {
+                let switched = s.sync_look();
+                if switched {
+                    s.images.keep_scheme(s.look.dark);
+                }
+                switched
+            }) {
+                let (theme, background) = (
+                    rt.state().look.theme.clone(),
+                    rt.state().look.c.background.0,
+                );
+                rt.set_theme(theme);
+                rt.set_background(Some(background));
+                surface.set_background(background);
+                rt.update(|_| {});
+            }
         }
-        wait_ms = wait_ms.min(
-            (Duration::from_secs(4 * 3600).saturating_sub(last_check.elapsed())).as_millis() as u64,
-        );
-        // SAFETY: Main-thread SDL pump; a null event leaves input queued for poll().
-        ara_platform::with_live_repaint(&mut || repaint_live(host, app, hub), || unsafe {
-            sdl3_sys::events::SDL_WaitEventTimeout(std::ptr::null_mut(), wait_ms.max(1) as i32)
+        if changed {
+            rt.update(|_| {});
+        }
+        // Pictures the views asked for.
+        rt.touch(|s| {
+            let look = s.look.clone();
+            s.images.start(&look, wake.clone());
         });
-    }
-}
-
-/// One frame at the window's current size, from inside a live resize. Errors are
-/// left to the next regular frame.
-fn repaint_live(host: &mut Host, app: &mut App, hub: &mut Hub) {
-    if host.track(true).unwrap_or(false) {
-        app.size = host.logical();
-    }
-    if app.rebuild(hub, now_ms()).is_ok() && app.frame().unwrap_or(false) {
-        let _ = host.render(app);
-    }
-}
-
-fn err(error: Box<dyn std::error::Error>) -> anyhow::Error {
-    anyhow::anyhow!("{error}")
-}
-
-fn initial_view(hub: &mut Hub, options: &Options) {
-    if options.new_project {
-        hub.intent(crate::model::Intent::Navigate(crate::model::View::Create));
+        let shape = rt.cursor();
+        if shape != cursor {
+            surface.set_cursor(shape);
+            cursor = shape;
+        }
+        // Display-rate frames only while something moves; none once it settles.
+        if rt.animating() {
+            frames.get_or_insert_with(|| surface.animation_frames(Duration::from_secs(1)));
+        } else {
+            frames = None;
+        }
+        // The next deadline: the runtime's timers, a toast's expiry, the next minute's
+        // relative times, the next update check.
+        let mut next = Instant::now() + Duration::from_millis(60_000 - now_ms() % 60_000);
+        if let Some(at) = rt.wake_at().map(|at| started + at) {
+            next = next.min(at);
+        }
+        if let Some(deadline) = rt.state().hub.notice_deadline() {
+            next = next.min(deadline);
+        }
+        next = next.min(last_check + Duration::from_secs(4 * 3600));
+        wake_at(Some(next));
     }
 }
 
 /// Show a fatal startup error to someone who launched the Hub from the Start menu.
 pub fn fatal(message: &str) {
-    let text = std::ffi::CString::new(message.replace('\0', " ")).unwrap_or_default();
-    // SAFETY: SDL copies both strings; a null parent window is allowed.
-    unsafe {
-        sdl3_sys::messagebox::SDL_ShowSimpleMessageBox(
-            sdl3_sys::messagebox::SDL_MESSAGEBOX_ERROR,
-            c"Ara Hub".as_ptr(),
-            text.as_ptr(),
-            std::ptr::null_mut(),
-        );
-    }
-}
-
-#[cfg(test)]
-mod project_route_tests {
-    use super::*;
-
-    #[test]
-    fn new_project_reuses_create_navigation_and_open_keeps_projects() {
-        let mut hub = Hub::new(Prefs::default(), PathBuf::from("projects"), None);
-        initial_view(&mut hub, &Options::default());
-        assert_eq!(hub.view, crate::model::View::Projects);
-        initial_view(
-            &mut hub,
-            &Options {
-                new_project: true,
-                ..Options::default()
-            },
-        );
-        assert_eq!(hub.view, crate::model::View::Create);
-        assert!(hub.projects.is_empty());
-        assert!(hub.take_calls().iter().all(|call| !matches!(
-            call,
-            crate::model::Call::Open { .. } | crate::model::Call::Create { dry_run: false, .. }
-        )));
-    }
+    stillkit::dialog::alert("Ara Hub could not start", message);
 }

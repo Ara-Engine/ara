@@ -357,11 +357,28 @@ pub fn moved_handles(
     rect: Box2,
     offset: glam::Mat4,
 ) -> Option<Handles> {
+    moved_handles_in(view.entities(), state, rect, offset)
+}
+/// [`handles`] over resolved scene entities (the studio keeps those, not a view).
+pub fn handles_in(
+    entities: &ara_doc::prefab::Resolved,
+    state: &EditorState,
+    rect: Box2,
+) -> Option<Handles> {
+    moved_handles_in(entities, state, rect, glam::Mat4::IDENTITY)
+}
+/// [`moved_handles`] over resolved scene entities.
+pub fn moved_handles_in(
+    entities: &ara_doc::prefab::Resolved,
+    state: &EditorState,
+    rect: Box2,
+    offset: glam::Mat4,
+) -> Option<Handles> {
     if state.hide_gizmos || state.game_view {
         return None;
     }
     // Only the selection's transforms: composing the whole scene cost ~0.5 ms a frame.
-    let world = |id: &str| crate::world::world_transform(view.entities(), id).map(|m| offset * m);
+    let world = |id: &str| crate::world::world_transform(entities, id).map(|m| offset * m);
     let matrix = world(state.selection.first()?)?;
     let pivot = if state.centre {
         state

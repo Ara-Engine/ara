@@ -7,8 +7,11 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 - `[Component]`/`[Resource]`/`[Cue]` structs: `IComponent<T>` (etc.) with a script index set
   at registration in the active host's map (also safe for shared NativeAOT types),
   and `__AraLayout()` (measured field offsets).
-- `[Query]` methods: `__AraRun_<Method>(SystemCall*)`, one loop over a chunk with
-  `Unsafe.Add` over column base pointers (no bounds checks, no per-entity host calls).
+- `[Query]` methods: `__AraRun_<Method>(SystemCall*)`; scalar component parameters use
+  an `Unsafe.Add` row loop, while `Span<T>`/`ReadOnlySpan<T>` parameters receive one
+  native run per invocation. Batch queries use spans for all components, optional
+  `ReadOnlySpan<Entity>`, and explicit per-entity `Rng.For`; resources and commands
+  keep their existing access and ordering contracts.
 - `Behaviour` subclasses: a nested `Data` component (one field per `[Property]`) and the
   partial property bodies (`AraData<Data>()`).
 - `[Command]` classes: a `Params` struct and `__AraInvoke(CommandCall*)`.

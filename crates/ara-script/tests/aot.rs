@@ -117,11 +117,23 @@ fn native_aot_sample_runs_against_the_host() {
     );
 
     // Gravity + Movement (systems), Door (behaviour).
-    let body = world.spawn(EcsTransform::default()).id();
-    host.insert_component(&mut world, body, "SampleVelocity", &json!({}))
-        .expect("velocity");
-    host.insert_component(&mut world, body, "Mass", &json!({ "value": 1 }))
-        .expect("mass");
+    // A partial batch exercises every native span row, not only the first element.
+    let bodies: Vec<_> = (0..1003)
+        .map(|index| {
+            let body = world.spawn(EcsTransform::default()).id();
+            host.insert_component(
+                &mut world,
+                body,
+                "SampleVelocity",
+                &json!({"linear": [index as f32 * 0.25, 0, 0]}),
+            )
+            .expect("velocity");
+            host.insert_component(&mut world, body, "Mass", &json!({ "value": 1 }))
+                .expect("mass");
+            body
+        })
+        .collect();
+    let body = bodies[0];
     let door = world.spawn(EcsTransform::default()).id();
     host.insert_component(
         &mut world,
@@ -149,6 +161,18 @@ fn native_aot_sample_runs_against_the_host() {
         (v["linear"][1].as_f64().unwrap_or(0.0) + 4.905).abs() < 1e-4,
         "{v}"
     );
+    for (index, body) in bodies.iter().enumerate() {
+        let position = world
+            .get::<EcsTransform>(*body)
+            .expect("body transform")
+            .position;
+        assert!(
+            (position[0] - index as f32 * 0.125).abs() < 1e-4
+                && (position[1] + 1.4715).abs() < 1e-4
+                && position[2] == 0.0,
+            "AOT span row {index}: {position:?}"
+        );
+    }
     assert_eq!(
         world.get::<EcsTransform>(door).expect("transform").rotation[1],
         45.0

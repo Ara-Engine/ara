@@ -32,43 +32,81 @@ public sealed class SceneEntity
 public sealed class EditorScene
 {
     readonly Dictionary<EntityId, SceneEntity> _entities;
-    /// <summary>Builds a read-only query view over an authority snapshot.</summary>
+    readonly Lazy<Dictionary<string, SceneEntity?>> _names;
+    readonly Lazy<HierarchyIndex> _hierarchy;
+    readonly Lazy<ScenePathIndex> _paths;
+
+    /// <summary>Builds the immutable snapshot; derived query indices are created only when used.</summary>
     public EditorScene(IEnumerable<SceneEntity> entities)
     {
         var ordered = entities.OrderBy(e => e.Order, StringComparer.Ordinal).ThenBy(e => e.Id.Value, StringComparer.Ordinal).ToArray();
         Entities = Array.AsReadOnly(ordered);
         _entities = ordered.ToDictionary(e => e.Id);
+        _names = new(() => Names(ordered));
+        _hierarchy = new(() => new HierarchyIndex(ordered));
+        _paths = new(() => new ScenePathIndex(ordered, _entities));
     }
+
     /// <summary>Every entity, ordered by sibling key and address.</summary>
     public IReadOnlyList<SceneEntity> Entities { get; }
+
     /// <summary>Find by stable address, exact name or root-relative name path; ambiguous names fail.</summary>
     public SceneEntity? Find(string selector)
     {
         selector = selector.StartsWith("name:", StringComparison.Ordinal) ? selector[5..] : selector;
         selector = selector.Trim('/');
         if (_entities.TryGetValue(new(selector), out var identified)) return identified;
-        var found = Entities.Where(e => selector.Contains('/') ? Path(e) == selector : e.Name == selector).Take(2).ToArray();
-        return found.Length > 1 ? throw new InvalidOperationException($"ambiguous entity `{selector}`; use its path or id") : found.SingleOrDefault();
+        if (selector.Contains('/')) return _paths.Value.Find(selector);
+        if (!_names.Value.TryGetValue(selector, out var named)) return null;
+        return named ?? throw Ambiguous(selector);
     }
+
     /// <summary>Parent row, or null for a root or missing address.</summary>
-    public SceneEntity? Parent(EntityId entity) => _entities.TryGetValue(entity, out var row) && row.Parent is { } parent ? _entities.GetValueOrDefault(parent) : null;
-    /// <summary>Direct children, in deterministic sibling order.</summary>
-    public IReadOnlyList<SceneEntity> Children(EntityId entity) => Array.AsReadOnly(Entities.Where(e => e.Parent == entity).ToArray());
-    /// <summary>Siblings excluding the entity, in deterministic sibling order.</summary>
-    public IReadOnlyList<SceneEntity> Siblings(EntityId entity) => _entities.TryGetValue(entity, out var row)
-        ? Array.AsReadOnly(Entities.Where(e => e.Id != entity && e.Parent == row.Parent).ToArray()) : Array.Empty<SceneEntity>();
-    string Path(SceneEntity row)
+    public SceneEntity? Parent(EntityId entity) => _entities.TryGetValue(entity, out var row)
+        && row.Parent is { } parent ? _entities.GetValueOrDefault(parent) : null;
+
+    /// <summary>Direct children in deterministic sibling order, backed by the immutable snapshot.</summary>
+    public IReadOnlyList<SceneEntity> Children(EntityId entity) => _hierarchy.Value.Children.GetValueOrDefault(entity) ?? Array.Empty<SceneEntity>();
+
+    /// <summary>Siblings excluding the entity, in deterministic sibling order, without copying the sibling group.</summary>
+    public IReadOnlyList<SceneEntity> Siblings(EntityId entity) => _hierarchy.Value.Siblings.GetValueOrDefault(entity) ?? Array.Empty<SceneEntity>();
+
+    internal static InvalidOperationException Ambiguous(string selector) => new($"ambiguous entity `{selector}`; use its path or id");
+
+    static Dictionary<string, SceneEntity?> Names(SceneEntity[] entities)
     {
-        var names = new List<string>();
-        var seen = new HashSet<EntityId>();
-        while (true)
+        var names = new Dictionary<string, SceneEntity?>(entities.Length, StringComparer.Ordinal);
+        foreach (var entity in entities)
+            if (!names.TryAdd(entity.Name, entity)) names[entity.Name] = null;
+        return names;
+    }
+
+    sealed class HierarchyIndex
+    {
+        internal readonly Dictionary<EntityId, IReadOnlyList<SceneEntity>> Children = [];
+        internal readonly Dictionary<EntityId, IReadOnlyList<SceneEntity>> Siblings;
+        internal HierarchyIndex(SceneEntity[] entities)
         {
-            if (!seen.Add(row.Id)) throw new InvalidOperationException("scene snapshot contains a hierarchy cycle");
-            names.Add(row.Name);
-            if (Parent(row.Id) is not { } parent) break;
-            row = parent;
+            Siblings = new(entities.Length);
+            foreach (var group in entities.GroupBy(e => e.Parent))
+            {
+                var rows = group.ToArray();
+                if (group.Key is { } parent) Children.Add(parent, Array.AsReadOnly(rows));
+                if (rows.Length < 2) continue;
+                for (var i = 0; i < rows.Length; i++) Siblings.Add(rows[i].Id, new SiblingView(rows, i));
+            }
         }
-        names.Reverse();
-        return string.Join('/', names);
+    }
+
+    sealed class SiblingView(SceneEntity[] rows, int omitted) : IReadOnlyList<SceneEntity>
+    {
+        public int Count => rows.Length - 1;
+        public SceneEntity this[int index] => (uint)index < (uint)Count
+            ? rows[index < omitted ? index : index + 1] : throw new ArgumentOutOfRangeException(nameof(index));
+        public IEnumerator<SceneEntity> GetEnumerator()
+        {
+            for (var i = 0; i < rows.Length; i++) if (i != omitted) yield return rows[i];
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

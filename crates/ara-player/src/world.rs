@@ -190,7 +190,7 @@ impl World {
     /// server (authorities) or connect a mirror (clients). Headless worlds settle world
     /// streaming (reproducible arrivals); `windowed` ones stream live.
     pub fn build(
-        scene: &PlayScene,
+        scene: PlayScene,
         role: ara_play::Role,
         net: Option<&ara_play::NetStart>,
         windowed: bool,
@@ -201,7 +201,7 @@ impl World {
 
     /// Builds the same local runtime over immutable shipped generations.
     pub fn build_packed(
-        scene: &PlayScene,
+        scene: PlayScene,
         source: Arc<dyn ara_runtime::assets::AssetSource>,
         windowed: bool,
     ) -> Result<(Self, f64)> {
@@ -216,7 +216,7 @@ impl World {
     }
 
     fn build_with_source(
-        scene: &PlayScene,
+        scene: PlayScene,
         role: ara_play::Role,
         net: Option<&ara_play::NetStart>,
         windowed: bool,
@@ -232,7 +232,7 @@ impl World {
     /// Prepare a shipping runtime on a worker; attach its local Play role on the
     /// main thread. Network/SDL owners never cross the preparation boundary.
     pub(crate) fn prepare_packed(
-        scene: &PlayScene,
+        scene: PlayScene,
         source: Arc<dyn ara_runtime::assets::AssetSource>,
     ) -> Result<(World<Runtime>, f64)> {
         Self::prepare_with_source(scene, None, true, None, Some(source))
@@ -240,7 +240,7 @@ impl World {
 
     /// Prepares a source or exported game away from the UI; network owners attach on the main thread.
     pub(crate) fn prepare_game(
-        scene: &PlayScene,
+        scene: PlayScene,
         net: Option<&ara_play::NetStart>,
         source: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
     ) -> Result<(World<Runtime>, f64)> {
@@ -248,7 +248,7 @@ impl World {
     }
 
     fn prepare_with_source(
-        scene: &PlayScene,
+        mut scene: PlayScene,
         net: Option<&ara_play::NetStart>,
         windowed: bool,
         prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
@@ -262,7 +262,7 @@ impl World {
         };
         let (mut workspace, id) = {
             ara_gpu::cpu_scope!("Player.scene_workspace");
-            scene.workspace().map_err(|e| anyhow!(e))?
+            scene.take_workspace().map_err(|e| anyhow!(e))?
         };
         if let Some(net) = net {
             ara_runtime_net::avatars(&mut workspace, id.as_str(), net.players)
@@ -369,7 +369,7 @@ impl World {
         Ok((
             World {
                 graphics_revision: 0,
-                ui: scene.ui.clone(),
+                ui: scene.ui,
                 runtime,
                 fault: None,
                 scene: id,
