@@ -363,6 +363,11 @@ pub struct Local {
     pub why: Option<(String, Vec<String>)>,
     /// The Agents panel shows how to connect one even while agents are connected.
     pub agents_connect: bool,
+    /// Each agent client's detection and setup (the Agents panel's Connect rows).
+    pub(crate) agent_setups: crate::agent_setup::AgentSetups,
+    /// Each agent client's mark, by client and whether for the light scheme.
+    pub(crate) agent_logos:
+        std::collections::BTreeMap<(ara_agents::Client, bool), std::sync::Arc<stillkit::Image>>,
     /// The Profiler hides the baseline comparison (Profiler › Compare off).
     pub profiler_hide_compare: bool,
     /// Opened in the background (`--background`): fields are not given keyboard focus (on

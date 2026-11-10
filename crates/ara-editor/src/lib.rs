@@ -4,6 +4,7 @@
 pub(crate) mod about;
 mod actions;
 pub mod activity;
+pub(crate) mod agent_setup;
 pub(crate) mod animation_edit;
 pub(crate) mod app;
 pub(crate) mod asset_import;
