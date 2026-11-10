@@ -1300,7 +1300,23 @@ fn number(
 /// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.
 /// The inspected entities' field `path`, as the Inspector shows it.
 pub(super) fn field_of(s: &Studio, path: &str) -> Option<Field> {
-    let doc = s.editor.host.store().workspace().doc(&s.editor.state.doc)?;
+    shown_fields(s).into_iter().find(|f| f.path == path)
+}
+
+/// The inspected entities' editable asset fields (drop targets for a dragged asset).
+pub(super) fn asset_fields(s: &Studio) -> Vec<String> {
+    shown_fields(s)
+        .into_iter()
+        .filter(|f| matches!(f.widget, Widget::Asset { .. }) && !f.read_only)
+        .map(|f| f.path)
+        .collect()
+}
+
+/// Every field the Inspector shows for the inspected entities.
+fn shown_fields(s: &Studio) -> Vec<Field> {
+    let Some(doc) = s.editor.host.store().workspace().doc(&s.editor.state.doc) else {
+        return Vec::new();
+    };
     let changes = s.editor.agent_fields();
     crate::inspector::fields(
         s.editor.host.store().schema(),
@@ -1309,8 +1325,6 @@ pub(super) fn field_of(s: &Studio, path: &str) -> Option<Field> {
         s.inspected(),
         &changes,
     )
-    .into_iter()
-    .find(|f| f.path == path)
 }
 
 /// Why field `f` has its value: authored here, the schema's default, its prefab's, an

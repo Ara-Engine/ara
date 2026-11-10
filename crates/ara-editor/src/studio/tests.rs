@@ -4449,6 +4449,108 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
 }
 
 #[test]
+fn a_prefab_dragged_onto_a_hierarchy_row_lands_under_that_entity() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    scan(&mut rt);
+    rt.update(|s| {
+        s.select(vec!["e_box".into()], false);
+        super::commands::run(
+            s,
+            "create.prefab",
+            &crate::catalog::Target::Entity("e_box".into()),
+        );
+    });
+    // The new prefab shows in Assets once the browser rescans.
+    let mut prefab = None;
+    for _ in 0..400 {
+        rt.touch(|s| {
+            s.editor.tick();
+            if let Some(b) = s.assets.as_mut() {
+                b.refresh();
+                b.poll();
+            }
+        });
+        prefab = rt.touch(|s| {
+            s.assets.as_ref().and_then(|b| {
+                b.items
+                    .iter()
+                    .find(|a| a.kind == "prefab")
+                    .map(|a| a.path.clone())
+            })
+        });
+        if prefab.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let prefab = prefab.expect("the prefab shows in Assets");
+    let folder = prefab.rsplit_once('/').map_or("", |(d, _)| d).to_owned();
+    rt.update(|s| s.act("editor.workspace", json!({"folder": folder})));
+    settle(&mut rt);
+    let tile = rt.find(&format!("asset/{prefab}")).expect("its tile");
+    let row = rt.find("row/e_lamp").expect("the Lamp's row");
+    rt.pointer_move(tile.center().x, tile.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tile.center().x, tile.center().y);
+    rt.pointer_move(tile.center().x + 20.0, tile.center().y - 20.0);
+    rt.frame(FRAME);
+    assert!(rt.state().local.asset_drag.is_some(), "dragging the prefab");
+    // The host reports where things can drop while an asset is dragged.
+    let keys = super::panels::drop_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    rt.pointer_move(row.center().x, row.center().y);
+    rt.frame(FRAME);
+    rt.pointer_up(row.center().x, row.center().y);
+    settle(&mut rt);
+    let placed = rt
+        .state()
+        .resolved
+        .iter()
+        .filter(|(id, _)| !["e_box", "e_lamp", "e_sun", "e_post"].contains(&id.as_str()))
+        .find(|(_, e)| e.parent.as_deref() == Some("e_lamp"));
+    assert!(placed.is_some(), "an instance under the Lamp");
+    // Onto an Inspector field that doesn't take a prefab (the Box's Model): it says so and
+    // changes nothing.
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    settle(&mut rt);
+    let field = rt
+        .find("field/MeshRenderer.model")
+        .expect("the Model field");
+    let before = rt.state().resolved["e_box"].record.clone();
+    rt.pointer_move(tile.center().x, tile.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tile.center().x, tile.center().y);
+    rt.pointer_move(tile.center().x + 20.0, tile.center().y - 20.0);
+    rt.frame(FRAME);
+    let keys = super::panels::drop_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    rt.pointer_move(field.center().x, field.center().y);
+    rt.frame(FRAME);
+    rt.pointer_up(field.center().x, field.center().y);
+    settle(&mut rt);
+    assert_eq!(
+        rt.state().resolved["e_box"].record,
+        before,
+        "nothing assigned"
+    );
+    let said = rt
+        .state()
+        .local
+        .note
+        .as_ref()
+        .map(|(n, _)| n.clone())
+        .unwrap_or_default();
+    assert!(said.contains("doesn't take"), "it says why: {said}");
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
