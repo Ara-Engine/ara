@@ -173,6 +173,9 @@ pub struct Presenter {
     external_draws: Option<usize>,
     /// Foliage geometry by rule asset from the content the external path last resolved.
     external_foliage: std::collections::BTreeMap<String, Vec<ara_runtime::extract::Draw>>,
+    /// Terrain layer materials by reference from that same content.
+    external_terrain_materials:
+        std::collections::BTreeMap<String, Arc<ara_runtime::material::MaterialAsset>>,
     /// The external renderer's own pass timings for its last frame (`ExternalFrame::passes`).
     external_passes: [(&'static str, f64); EXTERNAL_PASSES],
 }
@@ -284,6 +287,7 @@ impl Presenter {
             external: None,
             external_draws: None,
             external_foliage: Default::default(),
+            external_terrain_materials: Default::default(),
             external_passes: [("", 0.); EXTERNAL_PASSES],
         }
     }

@@ -22,7 +22,7 @@ ara-runtime-render = { path = "../ara-runtime-render" }
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
 # Renderlab main after v0.1.2: `Engine::queue()`, which the shared-image handoff submits
 # its copy on, the skinned-caster GI fix and the glossy-speck and non-RT GI fixes.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "b79eefbe1a497226323adea7ea76c78175aef2d7" }
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "4652ea39e5ea3fe1f964349b52db742a3b636523" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
