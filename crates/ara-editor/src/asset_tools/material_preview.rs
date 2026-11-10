@@ -204,7 +204,7 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
                 Ok(bytes) => format!("{:x}", sha2::Sha256::digest(bytes)),
                 Err(_) => String::new(),
             };
-            let mut cooked = CookedStage {
+            let cooked = CookedStage {
                 source_entry: entry.into(),
                 spirv_entry: "main".into(),
                 stage,
@@ -217,15 +217,19 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
                 dxil_hash,
                 metal: None,
             };
+            // macOS also runs it on Metal: the DXIL through the converter.
             #[cfg(target_os = "macos")]
-            {
+            let cooked = {
                 let converter = ara_shader_cook::metal::Converter::discover()?.ok_or_else(|| {
                     anyhow::anyhow!(
                         "Material previews on macOS need Metal Shader Converter: set ARA_METAL_SHADERCONVERTER to its metal-shaderconverter (docs/dev/macos.md)"
                     )
                 })?;
-                cooked.metal = Some(converter.convert(folder, &cooked)?);
-            }
+                CookedStage {
+                    metal: Some(converter.convert(folder, &cooked)?),
+                    ..cooked
+                }
+            };
             Ok(cooked)
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
