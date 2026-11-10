@@ -879,6 +879,19 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             };
             view(e, json!({"maximized": next}))
         }
+        // Dock: a floating panel back where the default layout keeps it.
+        "window.dock" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            let slot = crate::state::home_slot(&panel);
+            act(
+                &mut s.editor,
+                "editor.layout.move",
+                json!({"panel": panel, "slot": slot}),
+            )
+        }
         // Move to New Window: the panel floats over the main window, near its middle.
         "window.float" => {
             let panel = match target {
@@ -2158,6 +2171,18 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
                 .is_some_and(|f| f.provenance == crate::inspector::Provenance::Override),
             _ => false,
         },
+        // Docking back is for a floating panel; floating, for a docked one.
+        "window.dock" | "window.float" => {
+            let floating = match target {
+                Target::Panel(p) => e
+                    .state
+                    .floating
+                    .iter()
+                    .any(|f| super::dock::tabs_of(&f.root).contains(p)),
+                _ => false,
+            };
+            (id == "window.dock") == floating
+        }
         "edit.paste" => s.local.entity_clipboard.is_some(),
         "field.paste" => s.local.field_clipboard.is_some(),
         "component.paste" => match target {

@@ -2865,6 +2865,13 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Tear the panel off into its own OS window.",
     },
     Command {
+        id: "window.dock",
+        title: "Dock Panel in Main Window",
+        icon: "panel-bottom",
+        keys: "",
+        summary: "Put a floating panel back where the default layout keeps it.",
+    },
+    Command {
         id: "window.gather",
         title: "Gather Floating Windows",
         icon: "minimize",
