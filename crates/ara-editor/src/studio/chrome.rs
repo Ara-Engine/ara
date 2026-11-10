@@ -920,12 +920,69 @@ fn status_bar(s: &Studio) -> El<Studio> {
         1 => "Authority ready · 1 agent connected".to_owned(),
         n => format!("Authority ready · {n} agents connected"),
     };
-    // What the last request did, for a few seconds; else the keys worth knowing.
-    let hint = match &s.local.note {
-        Some((note, at)) if at.elapsed() < std::time::Duration::from_secs(8) => text(note.clone())
-            .key("status/note")
-            .text_size(11.0)
-            .color(c.foreground.0),
+    // What the last request did, for a few seconds; else the newest warning or error
+    // (Unity's status bar: a press opens it in the Console); else the keys worth knowing.
+    let latest = s.logs.iter().rev().find(|r| {
+        matches!(
+            r.severity,
+            ara_diag::Severity::Error | ara_diag::Severity::Warning
+        )
+    });
+    let hint = match (&s.local.note, latest) {
+        (Some((note, at)), _) if at.elapsed() < std::time::Duration::from_secs(8) => {
+            text(note.clone())
+                .key("status/note")
+                .text_size(11.0)
+                .color(c.foreground.0)
+        }
+        (_, Some(r)) => {
+            let error = r.severity == ara_diag::Severity::Error;
+            let seq = r.seq;
+            let hover = super::style::tones(l).hover;
+            row()
+                .key("status/log")
+                .min_w(0.0)
+                .max_w(520.0)
+                .gap(6.0)
+                .pad_x(6.0)
+                .h(18.0)
+                .radius(super::style::RADIUS)
+                .align(Align::Center)
+                .label(format!(
+                    "{}: {}",
+                    if error { "Error" } else { "Warning" },
+                    r.message
+                ))
+                .tooltip("Show it in the Console")
+                .hovered(move |e| e.fill(hover))
+                .on_press(move |s: &mut Studio| {
+                    s.local.console_open = Some(seq);
+                    s.act(
+                        "editor.layout.show",
+                        serde_json::json!({"panel": "console"}),
+                    );
+                })
+                .child(
+                    icon(if error {
+                        icons::CIRCLE_X
+                    } else {
+                        icons::TRIANGLE_ALERT
+                    })
+                    .size(12.0)
+                    .color(if error {
+                        c.destructive_foreground.0
+                    } else {
+                        c.warning_foreground.0
+                    }),
+                )
+                .child(
+                    text(r.message.clone())
+                        .text_size(11.0)
+                        .wrap(1)
+                        .color(c.foreground.0)
+                        .min_w(0.0),
+                )
+        }
         _ => text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
             .text_size(11.0)
             .color(c.muted_foreground.0.with_alpha(0.8)),

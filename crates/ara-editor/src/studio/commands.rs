@@ -169,6 +169,27 @@ pub(super) fn ported(id: &str) -> bool {
     crate::catalog::get(id).is_some()
 }
 
+/// Opens resource document `doc` (a material, effect or controller) in its tool page,
+/// docked beside the Scene the first time as Window › that page docks it, and selects
+/// `asset` in Assets (empty: none).
+pub(super) fn open_resource(s: &mut Studio, doc: &str, asset: &str) {
+    let workspace = s.editor.host.store().workspace();
+    let page = workspace.doc(doc).map(|d| match d.kind.as_str() {
+        "animation" => "animation".to_owned(),
+        _ => d
+            .record("g_meta")
+            .and_then(|r| r.get("domain"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("material")
+            .to_owned(),
+    });
+    // The page first, so opening the resource finds it shown and leaves it where it is.
+    if let Some(page) = page {
+        run(s, &format!("window.{page}"), &Target::None);
+    }
+    s.act("editor.workspace", json!({"resource": doc, "asset": asset}));
+}
+
 /// Runs registry command `id` on `target`; failures are reported like any editor failure.
 pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
     // Not built yet: say why where the person is looking, without a failure.
@@ -1868,6 +1889,24 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Ok(())
             }
         },
+        // The startup scene: a scene asset, or the scene open now.
+        "assets.set_main" | "build.main_scene" => {
+            let doc = match (id, target) {
+                ("assets.set_main", Target::Asset(path)) => {
+                    let workspace = s.editor.host.store().workspace();
+                    workspace
+                        .docs()
+                        .find(|(storage, doc)| storage == path && doc.kind == "scene")
+                        .map(|(_, doc)| doc.id.to_string())
+                }
+                ("assets.set_main", _) => None,
+                _ => Some(s.editor.state.doc.clone()),
+            };
+            match doc {
+                Some(doc) => super::build_page::set_main(s, &doc),
+                None => Err("Choose a scene".into()),
+            }
+        }
         "view.camera.pilot" => {
             let entity = target.entity(&s.editor.state).map(str::to_owned);
             super::scene::toggle_pilot(s, entity.as_deref())
@@ -2094,6 +2133,7 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
             record("ReflectionProbe")
         }
         "view.camera.pilot" => record("Camera"),
+        "assets.set_main" => matches!(target, Target::Asset(path) if path.ends_with(".scene")),
         "lighting.probe.cancel" => super::lighting::capturing(s),
         "lighting.inspect" => [
             "Light",

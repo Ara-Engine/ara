@@ -754,6 +754,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.reveal"),
             C("assets.copy_reference"),
             C("assets.references"),
+            C("assets.set_main"),
             S,
             C("assets.reimport"),
             C("assets.rename"),

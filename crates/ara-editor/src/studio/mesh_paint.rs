@@ -69,7 +69,7 @@ fn number(
                 value,
                 range,
                 log,
-                move |s: &mut Studio, v| {
+                move |s: &mut Studio, v, _| {
                     edit(s, |p| set(p, v));
                 },
             )
