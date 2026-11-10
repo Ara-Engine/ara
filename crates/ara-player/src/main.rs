@@ -20,6 +20,7 @@ mod net;
 mod packed;
 mod pending_models;
 mod profiling;
+mod renderer;
 mod standalone;
 mod world;
 
@@ -69,6 +70,9 @@ struct Args {
     /// Hardware ray tracing opt-in; omit to use saved user/project preferences.
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     ray_tracing: Option<bool>,
+    /// Renderer for the 3D scene: ara (default), renderlab, renderlab-rt or renderlab-nonrt.
+    #[arg(long, env = "ARA_RENDERER", value_enum, default_value_t)]
+    renderer: renderer::RendererChoice,
     /// Internal warm-up policy, distinct from a user's persistent graphics preference.
     #[arg(long, hide = true, default_value_t = false, action = clap::ArgAction::Set)]
     prewarm_ray_tracing: bool,
@@ -131,6 +135,7 @@ fn main() {
     let args = Args::parse_from(native_args);
     #[cfg(not(feature = "hotpatch"))]
     let args = Args::parse();
+    renderer::configure(args.renderer);
     if let Err(error) = run(args, launched) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
@@ -1057,6 +1062,7 @@ impl Player {
                 if params.path.is_some() && self.presenter.is_none() {
                     // Headless players create a GPU device on their first image.
                     let mut presenter = Presenter::new(self.size, Vec::new(), &self.args.gpu_cache);
+                    renderer::install(&mut presenter, &self.args.gpu_cache);
                     presenter.set_quality(self.quality);
                     presenter.set_render_options(self.render_options);
                     self.presenter = Some(presenter);
