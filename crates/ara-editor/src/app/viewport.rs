@@ -1098,7 +1098,6 @@ impl SceneView {
     }
 }
 
-/// Viewport View Mode names (the `editor.view` protocol) to renderer debug views.
 /// Every Scene view mode: its `editor.view` name, its title, the group menus list it
 /// under, and what the renderer draws. `editor.view` accepts exactly these names.
 pub(crate) const VIEW_MODES: [(&str, &str, &str, ViewMode); 19] = [
