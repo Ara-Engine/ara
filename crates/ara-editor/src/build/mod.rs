@@ -15,7 +15,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use super::*;
+use crate::Editor;
+use ara_export::preset::PackageFormat;
+use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
 /// The profile Build Current Profile creates when the project has none.
 pub(crate) const DEFAULT_PROFILE: &str = "windows";
@@ -415,10 +419,99 @@ fn publish_build(staged: &Path, parent: &Path, build_id: &str) -> anyhow::Result
     Ok(destination)
 }
 
-impl Shell {
+/// Typed preference shared by Settings, the Build window and the build commands: the
+/// profile Build uses.
+pub(crate) const PROFILE_SETTING: &str = "build.profile";
+
+/// Profile names accepted by the build API, resolved from cached project entries.
+/// Canonical settings/builds entries take precedence over indexed legacy presets.
+pub(crate) fn profiles(files: &[AuthoredFile]) -> Vec<String> {
+    let mut names = BTreeMap::new();
+    for file in files {
+        if !matches!(&file.scope, AuthoredScope::Project)
+            || !matches!(&file.role, AuthoredRole::BuildPreset)
+        {
+            continue;
+        }
+        let Some((name, canonical)) = profile_name(&file.storage_path) else {
+            continue;
+        };
+        names
+            .entry(name.to_owned())
+            .and_modify(|existing: &mut bool| *existing |= canonical)
+            .or_insert(canonical);
+    }
+    names.into_keys().collect()
+}
+
+pub(crate) fn profile_name(storage: &str) -> Option<(&str, bool)> {
+    let (name, canonical) = storage
+        .strip_prefix("settings/builds/")
+        .map(|name| (name, true))
+        .or_else(|| storage.strip_prefix("presets/").map(|name| (name, false)))?;
+    let name = name.strip_suffix(".export.json")?;
+    (!name.is_empty() && !name.contains(['/', '\\']) && !name.chars().any(char::is_control))
+        .then_some((name, canonical))
+}
+
+/// The package formats the Package action offers, with their titles.
+pub(crate) fn package_formats() -> [(PackageFormat, &'static str); 6] {
+    [
+        (PackageFormat::Folder, "Plain folder"),
+        (PackageFormat::WindowsPortable, "Windows portable ZIP"),
+        (PackageFormat::WindowsInstaller, "Windows installer + ZIP"),
+        (PackageFormat::LinuxAppimage, "Linux AppImage"),
+        (PackageFormat::LinuxTar, "Linux tar.gz"),
+        (PackageFormat::AndroidPlay, "Android APK + AAB"),
+    ]
+}
+
+/// The profile Build uses among `names`: the chosen one (never a stand-in when it is
+/// gone), else the portable default, else the first.
+pub(crate) fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&'a str> {
+    if !selected.is_empty() {
+        return names
+            .iter()
+            .find(|name| name.as_str() == selected)
+            .map(String::as_str)
+            .ok_or_else(|| {
+                format!("Build profile '{selected}' is unavailable. Choose an indexed profile.")
+                    .into()
+            });
+    }
+    names
+        .iter()
+        .find(|name| name.as_str() == DEFAULT_PROFILE)
+        .or_else(|| names.first())
+        .map(String::as_str)
+        .ok_or_else(|| {
+            "Create a build profile first, then wait for the project index to refresh".into()
+        })
+}
+
+/// The editor's builds: the running export or profile creation, the last finished build
+/// and its packages, and a headless Run Build. A window owns one, polls it each pass
+/// ([`Builder::poll_build`]) and shows its [`Builder::note`]. Hidden windows (captures,
+/// verification) pass `offscreen`: Run Build stays headless and nothing opens.
+#[derive(Default)]
+pub(crate) struct Builder {
+    /// The running export (Build > Build Current Profile).
+    pub job: Option<BuildJob>,
+    /// The last finished build's game folder (Run Build, Open Build Folder).
+    pub last_build: Option<PathBuf>,
+    pub(crate) last_packages: Vec<PackageArtifact>,
+    /// A running headless Run Build (offscreen runs).
+    pub run: Option<Receiver<RunResult>>,
+    /// The capture the last headless Run Build wrote.
+    pub last_run: Option<PathBuf>,
+    /// What the window's status bar says about the build, taken as it is shown.
+    pub note: Option<String>,
+}
+
+impl Builder {
     /// Create the default profile through one undoable command and asynchronous file job.
     pub(crate) fn create_build_profile(&mut self, editor: &mut Editor) -> ara_ui::Result<String> {
-        if self.build.is_some() {
+        if self.job.is_some() {
             return Err("a build or profile creation is already running".into());
         }
         let text = default_profile(editor.host.root())
@@ -436,7 +529,7 @@ impl Shell {
                 .ok_or("profile preparation returned no job")?
                 .to_owned();
             let (_, events) = channel();
-            self.build = Some(BuildJob {
+            self.job = Some(BuildJob {
                 events,
                 saving: None,
                 profile_creation: Some(ProfileCreation {
@@ -448,7 +541,7 @@ impl Shell {
                 stage: "creating profile".into(),
                 cooking: None,
             });
-            self.status_note = Some("Creating the build profile…".into());
+            self.note = Some("Creating the build profile…".into());
         }
         Ok(DEFAULT_PROFILE.into())
     }
@@ -456,7 +549,7 @@ impl Shell {
     /// Start exporting with the first profile, creating the default one when the
     /// project has none (Build > Build Current Profile).
     pub(crate) fn build_current(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        if self.build.is_some() {
+        if self.job.is_some() {
             return Err("an export is already running".into());
         }
         let root = dunce::simplified(editor.host.root());
@@ -464,7 +557,7 @@ impl Shell {
             Some(preset) => preset,
             None => {
                 let preset = self.create_build_profile(editor)?;
-                if let Some(job) = &mut self.build
+                if let Some(job) = &mut self.job
                     && let Some(creation) = &mut job.profile_creation
                 {
                     creation.build_after = true;
@@ -508,7 +601,7 @@ impl Shell {
         destination: Option<PathBuf>,
         package: Option<ara_export::preset::PackageFormat>,
     ) -> ara_ui::Result<()> {
-        if let Some(job) = &mut self.build {
+        if let Some(job) = &mut self.job {
             if job.preset == profile
                 && package.is_none()
                 && let Some(creation) = &mut job.profile_creation
@@ -571,7 +664,7 @@ impl Shell {
                 });
             let _ = send.send(BuildEvent::Finished(result));
         });
-        self.build = Some(BuildJob {
+        self.job = Some(BuildJob {
             events,
             profile_creation: None,
             saving: Some((receipt, saved)),
@@ -579,13 +672,13 @@ impl Shell {
             stage: "saving project".into(),
             cooking: None,
         });
-        self.status_note = Some(format!("Building {preset}…"));
+        self.note = Some(format!("Building {preset}…"));
         Ok(())
     }
 
     /// Build > Run Build: launch the last build. Offscreen (verification) runs step
     /// it headless for one tick and capture `report/run.png` outside the shipped folder.
-    pub(crate) fn run_build(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+    pub(crate) fn run_build(&mut self, editor: &mut Editor, offscreen: bool) -> ara_ui::Result<()> {
         let game = self
             .last_build
             .clone()
@@ -597,7 +690,7 @@ impl Shell {
             .current_dir(&launch.report)
             .arg("--root")
             .arg(&launch.data);
-        if self.offscreen {
+        if offscreen {
             let capture = launch.report.join("run.png");
             command
                 .args(["--headless", "--ticks", "1", "--capture"])
@@ -634,12 +727,12 @@ impl Shell {
                 let _ = send.send(result);
             });
             self.run = Some(results);
-            self.status_note = Some("Running the build headless for one frame…".into());
+            self.note = Some("Running the build headless for one frame…".into());
         } else {
             command
                 .spawn()
                 .map_err(|e| format!("{} did not start: {e}", player.display()))?;
-            self.status_note = Some(format!("Started {}", player.display()));
+            self.note = Some(format!("Started {}", player.display()));
         }
         let _ = editor;
         Ok(())
@@ -649,15 +742,12 @@ impl Shell {
     pub(crate) fn poll_build(&mut self, editor: &mut Editor) -> bool {
         let mut changed = false;
         let save_result = self
-            .build
+            .job
             .as_ref()
             .and_then(|job| job.saving.as_ref())
             .and_then(|(receipt, _)| editor.host.poll_flush(*receipt));
         if let Some(result) = save_result {
-            let job = self
-                .build
-                .as_mut()
-                .expect("save receipt belongs to a build");
+            let job = self.job.as_mut().expect("save receipt belongs to a build");
             let (_, saved) = job.saving.take().expect("pending save receipt");
             match result {
                 Ok(()) => {
@@ -688,7 +778,7 @@ impl Shell {
                             |_| capture.clone(),
                             |p| p.to_string_lossy().replace('\\', "/"),
                         );
-                    self.status_note = Some(format!("The build ran one frame: {shown}"));
+                    self.note = Some(format!("The build ran one frame: {shown}"));
                     log(
                         editor,
                         ara_diag::Diagnostic::info(
@@ -698,7 +788,7 @@ impl Shell {
                     );
                 }
                 Err(error) => {
-                    self.status_note = Some("The build did not run: see Problems".into());
+                    self.note = Some("The build did not run: see Problems".into());
                     log(
                         editor,
                         ara_diag::Diagnostic::error(
@@ -710,7 +800,7 @@ impl Shell {
             }
         }
         let profile_status = self
-            .build
+            .job
             .as_ref()
             .and_then(|job| job.profile_creation.as_ref())
             .map(|creation| editor.action("jobs.status", json!({"job":creation.job})));
@@ -720,7 +810,7 @@ impl Shell {
                     if let Some(message) = status["message"]
                         .as_str()
                         .filter(|message| !message.is_empty())
-                        && let Some(job) = &mut self.build
+                        && let Some(job) = &mut self.job
                         && job.stage != message
                     {
                         job.stage = message.to_owned();
@@ -729,13 +819,13 @@ impl Shell {
                 }
                 Ok(status) if status["status"] == "done" => {
                     let job = self
-                        .build
+                        .job
                         .take()
                         .expect("profile completion has a pending build job");
                     let creation = job
                         .profile_creation
                         .expect("profile completion owns its job");
-                    self.status_note = Some(format!("Created the {} build profile", job.preset));
+                    self.note = Some(format!("Created the {} build profile", job.preset));
                     if creation.build_after
                         && let Err(error) =
                             self.build_profile(editor, &job.preset, creation.destination)
@@ -744,7 +834,7 @@ impl Shell {
                             editor,
                             ara_diag::Diagnostic::error(crate::codes::BUILD, error.to_string()),
                         );
-                        self.status_note = Some("The build did not start: see Problems".into());
+                        self.note = Some("The build did not start: see Problems".into());
                     }
                     return true;
                 }
@@ -763,8 +853,8 @@ impl Shell {
                             .filter(|message| !message.is_empty())
                             .unwrap_or_else(|| "Profile creation was cancelled".into()),
                     };
-                    self.build = None;
-                    self.status_note = Some("The profile was not created: see Problems".into());
+                    self.job = None;
+                    self.note = Some("The profile was not created: see Problems".into());
                     log(
                         editor,
                         ara_diag::Diagnostic::error(crate::codes::BUILD, message),
@@ -774,7 +864,7 @@ impl Shell {
             }
             return changed;
         }
-        let Some(job) = &mut self.build else {
+        let Some(job) = &mut self.job else {
             return changed;
         };
         let mut finished = None;
@@ -797,7 +887,7 @@ impl Shell {
         }
         if let Some(result) = finished {
             let preset = job.preset.clone();
-            self.build = None;
+            self.job = None;
             match result {
                 Ok(built) => {
                     let ran = if built.executed {
@@ -818,7 +908,7 @@ impl Shell {
                                 .join(", ")
                         )
                     };
-                    self.status_note = Some(format!(
+                    self.note = Some(format!(
                         "Built {preset} in {:.0} s{ran}: {}{packages}",
                         built.seconds,
                         built.game.display()
@@ -839,7 +929,7 @@ impl Shell {
                     self.last_build = Some(built.game);
                 }
                 Err(error) => {
-                    self.status_note = Some("The build failed: see Problems".into());
+                    self.note = Some("The build failed: see Problems".into());
                     log(
                         editor,
                         ara_diag::Diagnostic::error(
@@ -859,8 +949,12 @@ impl Shell {
     }
 
     /// Reveal only a path present in the last actual package receipt.
-    pub(crate) fn reveal_package(&mut self, target: &commands::Target) -> ara_ui::Result<()> {
-        let commands::Target::Text(path) = target else {
+    pub(crate) fn reveal_package(
+        &mut self,
+        target: &crate::catalog::Target,
+        offscreen: bool,
+    ) -> ara_ui::Result<()> {
+        let crate::catalog::Target::Text(path) = target else {
             return Err("Choose a completed package file".into());
         };
         let artifact = self
@@ -872,10 +966,10 @@ impl Shell {
             .path
             .parent()
             .ok_or("The package has no output folder")?;
-        if !self.offscreen {
-            open_external(directory)?;
+        if !offscreen {
+            crate::shell::ops::open_external(directory)?;
         }
-        self.status_note = Some(format!("Package: {}", artifact.path.display()));
+        self.note = Some(format!("Package: {}", artifact.path.display()));
         Ok(())
     }
 }
@@ -1073,9 +1167,7 @@ mod tests {
         let mut editor =
             Editor::open_with(&scratch.0, Some(scratch.0.join(".ara/test-settings.json")))
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let mut shell =
-            Shell::new(&mut editor, [900., 650.]).map_err(|error| anyhow::anyhow!("{error}"))?;
-        shell.offscreen = true;
+        let mut shell = Builder::default();
         let revision = editor.host.store().revision();
         let package = PackageArtifact {
             path: scratch.0.join("Custom result.zip"),
@@ -1084,7 +1176,7 @@ mod tests {
             executable: false,
         };
         let (send, events) = channel();
-        shell.build = Some(BuildJob {
+        shell.job = Some(BuildJob {
             events,
             profile_creation: None,
             saving: None,
@@ -1099,27 +1191,30 @@ mod tests {
             packages: vec![package.clone()],
         })))?;
         assert!(shell.poll_build(&mut editor));
-        assert!(shell.build.is_none());
+        assert!(shell.job.is_none());
         assert_eq!(shell.package_result()["packages"], json!([package]));
         assert_eq!(editor.host.store().revision(), revision);
         assert!(
             shell
-                .status_note
+                .note
                 .as_deref()
                 .is_some_and(|note| note.contains("Custom result.zip"))
         );
         shell
-            .reveal_package(&commands::Target::Text(
-                package
-                    .path
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
-                    .into(),
-            ))
+            .reveal_package(
+                &crate::catalog::Target::Text(
+                    package
+                        .path
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
+                        .into(),
+                ),
+                true,
+            )
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert!(
             shell
-                .reveal_package(&commands::Target::Text("unrelated.zip".into()))
+                .reveal_package(&crate::catalog::Target::Text("unrelated.zip".into()), true)
                 .is_err()
         );
         Ok(())

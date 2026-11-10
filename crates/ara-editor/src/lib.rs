@@ -7,6 +7,7 @@ pub(crate) mod app;
 mod asset_service;
 pub(crate) mod asset_tools;
 mod authoring;
+pub(crate) mod build;
 mod capture;
 pub(crate) mod catalog;
 pub mod codes;

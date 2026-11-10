@@ -508,6 +508,26 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             None => Err("Select a prefab instance".into()),
         },
+        "build.current" => {
+            super::build_page::build(s);
+            Ok(())
+        }
+        "build.run" => {
+            super::build_page::run(s);
+            Ok(())
+        }
+        "build.open_folder" => {
+            super::build_page::open_folder(s);
+            Ok(())
+        }
+        "build.profile.create" => {
+            super::build_page::create_profile(s);
+            Ok(())
+        }
+        "build.profiles" | "build.package" => {
+            run(s, "window.build", &Target::None);
+            Ok(())
+        }
         "play.mode.local" | "play.mode.host" | "play.mode.dedicated" => {
             let mode = id.trim_start_matches("play.mode.");
             set(e, "play.mode", json!(mode))
@@ -643,6 +663,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x5A) => "edit.undo",
         (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
         (true, false, 0x53) => "file.save",
+        (true, true, 0x42) => "build.current",
         (true, false, 0x4E) => "file.new_scene",
         (true, false, 0x4F) => "file.open",
         (true, false, 0x57) => "file.close_document",

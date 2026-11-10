@@ -467,6 +467,23 @@ fn file_play_and_assets_commands_run_in_the_studio() {
 }
 
 #[test]
+fn the_build_window_offers_a_profile_and_starts_creating_one() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "build.profiles", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert!(rt.find("build/build").is_some(), "the Build window docks");
+    assert!(
+        rt.find("build/create").is_some(),
+        "a project without profiles offers one"
+    );
+    assert!(rt.find("build/package").is_some() && rt.find("build/format").is_some());
+    press(&mut rt, "build/create");
+    let started = rt.state().builder.job.is_some()
+        || !crate::build::presets(rt.state().editor.host.root()).is_empty();
+    assert!(started, "creating the default profile started");
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

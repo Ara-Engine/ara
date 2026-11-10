@@ -181,6 +181,7 @@ pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
         "animation" => ("Animation", icons::PERSON_STANDING),
         "profiler" => ("Profiler", icons::ACTIVITY),
         "lighting" => ("Lighting", icons::LIGHTBULB),
+        "build" => ("Build", icons::HAMMER),
         "import" => ("Import", icons::DOWNLOAD),
         "settings" => ("Settings", icons::SETTINGS),
         _ => ("Panel", icons::SQUARE),

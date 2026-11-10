@@ -652,22 +652,22 @@ fn build() -> Vec<Spec> {
             let Target::Text(profile) = t else { return Err("Choose an indexed build profile".into()) };
             s.select_build_profile(e, profile)
         }),
-        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Create settings/builds/windows.export.json through one undoable background transaction.", |s, e, _| s.create_build_profile(e).map(drop))
+        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Create settings/builds/windows.export.json through one undoable background transaction.", |s, e, _| s.builder.create_build_profile(e).map(drop))
             .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in settings/builds or legacy presets".into()) } else { Avail::Ready }),
         cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Build the selected settings/builds profile into a fresh builds/ envelope; progress appears in the status bar.", |s, e, _| s.build_selected(e)).when(|c| match &c.build {
             BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
             _ => Avail::Ready,
         }),
-        cmd("build.run", "Run Build", "play", "", "Launch the last build: the exported game, outside the editor.", |s, e, _| s.run_build(e)).when(|c| match &c.build {
+        cmd("build.run", "Run Build", "play", "", "Launch the last build: the exported game, outside the editor.", |s, e, _| s.builder.run_build(e, s.offscreen)).when(|c| match &c.build {
             BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
             BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
             _ => Avail::Ready,
         }),
         cmd("build.package", "Package…", "package", "", "Choose an export profile, package format and output envelope.", |s,e,_|s.open_package_options(e)),
         cmd("build.package.confirm", "Create Package", "package", "", "Save the authored project, then export the selected package format.", |s,e,_|s.package_selected(e)).when(|c|if c.build.running {Avail::Blocked("A build is running".into())} else {Avail::Ready}),
-        cmd("build.package.reveal", "Reveal Package", "folder", "", "Reveal an actual artifact from the completed export manifest.", |s,_,t|s.reveal_package(t)),
+        cmd("build.package.reveal", "Reveal Package", "folder", "", "Reveal an actual artifact from the completed export manifest.", |s,_,t|s.builder.reveal_package(t, s.offscreen)),
         cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
-            let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
+            let folder = s.builder.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
             std::fs::create_dir_all(&folder)?;
             super::super::open_external(&folder)
         }),

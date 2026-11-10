@@ -9,7 +9,7 @@ pub(crate) mod asset_ops;
 pub(crate) mod assets;
 mod assets_favourites;
 mod axis;
-pub(crate) mod build;
+pub(crate) use crate::build;
 mod build_options;
 mod choices;
 mod chrome;
@@ -236,15 +236,8 @@ pub struct Shell {
     nested_swatches: Vec<(String, Value)>,
     /// Create > C# Behaviour opens the IDE (verification routes turn it off).
     pub(crate) open_ide: bool,
-    /// The running export (Build > Build Current Profile).
-    pub(crate) build: Option<build::BuildJob>,
-    /// The last finished build's game folder (Build > Run Build, Open Build Folder).
-    pub(crate) last_build: Option<std::path::PathBuf>,
-    last_packages: Vec<build::PackageArtifact>,
-    /// A running headless Run Build (offscreen runs).
-    pub(crate) run: Option<std::sync::mpsc::Receiver<build::RunResult>>,
-    /// The capture the last headless Run Build wrote.
-    pub(crate) last_run: Option<std::path::PathBuf>,
+    /// Builds: the running export, the last build and its packages, Run Build.
+    pub(crate) builder: crate::build::Builder,
     /// The window is hidden (captures, verification): Run Build stays headless and
     /// nothing opens on the desktop.
     pub(crate) offscreen: bool,
@@ -595,11 +588,7 @@ impl Shell {
             pending_reports: Vec::new(),
             log_view: LogView::default(),
             assets_show_all: false,
-            build: None,
-            last_build: None,
-            last_packages: Vec::new(),
-            run: None,
-            last_run: None,
+            builder: Default::default(),
             offscreen: false,
             open_ide: true,
             game_players: Vec::new(),
@@ -800,6 +789,10 @@ impl Shell {
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
     /// Inside [`Self::coalesce_rebuilds`] it only notes that a rebuild is due.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        // The build's latest message shows in the status bar.
+        if let Some(note) = self.builder.note.take() {
+            self.status_note = Some(note);
+        }
         if self.hold_rebuilds {
             self.held_rebuild = true;
             return Ok(());
@@ -1765,7 +1758,7 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"packageResult":self.package_result(),"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"packageResult":self.builder.package_result(),"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
     }
     /// Cached authoring prefix; empty identifies a still-readable legacy project.
     pub(crate) fn asset_reference_root(&self) -> &str {

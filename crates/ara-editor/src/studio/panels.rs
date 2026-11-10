@@ -20,6 +20,7 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "history" => super::agents::history(s),
         "lighting" => super::lighting::view(s),
         "profiler" => super::profiler::view(s),
+        "build" => super::build_page::view(s),
         "material" => super::graph::view(s, "material"),
         "animation" => super::graph::view(s, "animation"),
         "vfx" => super::vfx::view(s),

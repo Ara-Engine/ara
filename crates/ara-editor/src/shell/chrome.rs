@@ -75,7 +75,7 @@ impl Shell {
         self.import_chip(editor, out);
         self.bind_command("status-jobs", "window.assets", Target::None);
         // A running build leads (its stage, or cooking counts), then other jobs.
-        let build = self.build.as_ref().map(|job| match job.cooking {
+        let build = self.builder.job.as_ref().map(|job| match job.cooking {
             Some((done, total)) if total > 0 => (
                 format!("Build {} · cooking {done}/{total}", job.preset),
                 done as f64 / total as f64,
