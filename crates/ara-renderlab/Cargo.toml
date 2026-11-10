@@ -15,15 +15,19 @@ ara-gpu = { path = "../ara-gpu" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-render = { path = "../ara-runtime-render" }
+# The effect library and its module types, for the particle mapping.
+ara-material = { path = "../ara-material" }
+ara-vfx = { path = "../ara-vfx" }
 
 # Renderlab is Vulkan-only today; Apple targets keep Ara's renderer (`ARA_RENDERLAB_UNAVAILABLE`).
 # Pinned: the engine builds against a frozen renderer while it is improved
 # behind `renderlab::engine`. Nothing outside this crate names a Renderlab type.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
-# Renderlab main after v0.1.2 (`Engine::queue()`, which the shared-image handoff submits
-# its copy on, the skinned-caster GI fix and the glossy-speck and non-RT GI fixes) plus
-# Ara-Engine/renderlab#2: 256 mesh-material groups per frame instead of 64.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "7f732f86ca41ae636968a1abc59ce4964f61b621" }
+# Renderlab v0.1.3 (ebfc21b) merged with Ara-Engine/renderlab#2 (256 mesh-material
+# groups per frame instead of 64) and #6 (emitter prewarm, bursts, spawn shapes, forces,
+# a bounce plane, curves, flipbooks and aligned sprites); pinned to that branch until
+# both land on Renderlab's main.
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "b44e9388baf2edbc3681b8b1682f5402e2e498c7" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }

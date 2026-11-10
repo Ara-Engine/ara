@@ -1927,10 +1927,12 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-material",
  "ara-render",
  "ara-render-fidelity",
  "ara-runtime",
  "ara-runtime-render",
+ "ara-vfx",
  "ash 0.38.0+1.3.281",
  "glam 0.34.1",
  "image",
@@ -11331,8 +11333,8 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "renderlab"
-version = "0.1.2"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=7f732f86ca41ae636968a1abc59ce4964f61b621#7f732f86ca41ae636968a1abc59ce4964f61b621"
+version = "0.1.3"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=b44e9388baf2edbc3681b8b1682f5402e2e498c7#b44e9388baf2edbc3681b8b1682f5402e2e498c7"
 dependencies = [
  "ash 0.38.0+1.3.281",
  "glam 0.30.10",
@@ -11346,8 +11348,8 @@ dependencies = [
 
 [[package]]
 name = "renderlab-asset"
-version = "0.1.2"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=7f732f86ca41ae636968a1abc59ce4964f61b621#7f732f86ca41ae636968a1abc59ce4964f61b621"
+version = "0.1.3"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=b44e9388baf2edbc3681b8b1682f5402e2e498c7#b44e9388baf2edbc3681b8b1682f5402e2e498c7"
 
 [[package]]
 name = "reqwest"
