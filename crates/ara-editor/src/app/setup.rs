@@ -6,6 +6,9 @@ use std::path::PathBuf;
 pub struct Options {
     /// Render a scene capture without creating a native window, then exit.
     pub headless: bool,
+    /// Open the window without activating it or taking focus (automated captures and tests
+    /// beside a person's work): `--background`, or `ARA_EDITOR_BACKGROUND=1`.
+    pub background: bool,
     /// Project directory containing ara.project.json.
     pub project: PathBuf,
     /// Stop after this many event-loop frames; None keeps the editor open.
@@ -142,6 +145,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             headless: false,
+            background: false,
             project: ".".into(),
             frames: None,
             verify: false,

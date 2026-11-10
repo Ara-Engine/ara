@@ -70,13 +70,11 @@ captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 drag and graph create/connect/undo, then captures every panel in both themes and
 measures 1,000 warm input-to-present samples with 500 nodes open.
 
-UX v2 (D28). `shell/commands` is the one command registry: `table.rs` specs (id,
-title, icon, keys, availability, label, run), `menus.rs` the six menus and every
-context menu, `keys.rs` chords and the Ara/Unreal/Unity/Blender presets. Menus,
-palette, context menus, shortcuts, toolbar buttons and `editor.commands` (MCP) all
-read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one is
-`Run::Later(reason)`. New buttons bind `Binding::Command`; `tests/ux.rs` rejects
-uncommanded buttons. Context-menu sources are `Shell::context_at`.
+Commands: `catalog/` is what the studio offers (`table.rs` id, title, icon, keys,
+summary; `menus.rs` the menus and context menus; `UNBUILT`/`UNPORTED` show dimmed with
+their reason). `keys.rs` holds chords and the Ara/Unreal/Unity/Blender presets;
+`catalog::keymap` layers them with `input.shortcuts`, and `catalog::export` is
+`editor.commands` (MCP). The legacy `shell/commands` registry still drives `--legacy-ui`.
 `settings.rs` holds the settings table; edits are ops on a private store (undoable,
 `editor.settings.*`), user scope persists to `editor-settings.json` in
 `settings::config_dir()` (`ARA_CONFIG_DIR`, else `%APPDATA%\Ara`) and project policy

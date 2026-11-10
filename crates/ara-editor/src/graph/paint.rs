@@ -965,6 +965,53 @@ fn head(list: &mut DisplayList, node: u64, tip: [f32; 2], d: [f32; 2], color: Co
         line(list, node, at, tip, 1.5, color);
     }
 }
+/// The points along the wire curve from `a` to `b` (screen px), as [`curve`] draws it.
+fn curve_points(a: [f32; 2], b: [f32; 2]) -> impl Iterator<Item = [f32; 2]> {
+    let bend = ((b[0] - a[0]).abs() * 0.45).max(48.);
+    let p = [a, [a[0] + bend, a[1]], [b[0] - bend, b[1]], b];
+    (0..=20).map(move |step| {
+        let t = step as f32 / 20.;
+        let u = 1. - t;
+        [
+            u * u * u * p[0][0]
+                + 3. * u * u * t * p[1][0]
+                + 3. * u * t * t * p[2][0]
+                + t * t * t * p[3][0],
+            u * u * u * p[0][1]
+                + 3. * u * u * t * p[1][1]
+                + 3. * u * t * t * p[2][1]
+                + t * t * t * p[3][1],
+        ]
+    })
+}
+
+impl Canvas {
+    /// The wire under screen point `p` (within 6 px of it), and which of its segments
+    /// (0 before its first reroute point): where a new reroute point goes.
+    pub fn wire_at(&self, p: [f32; 2], rect: Box2) -> Option<(String, usize)> {
+        let near = |a: [f32; 2], b: [f32; 2]| {
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy).max(1e-6))
+                .clamp(0., 1.);
+            (a[0] + dx * t - p[0]).hypot(a[1] + dy * t - p[1]) < 6.
+        };
+        self.wires.iter().find_map(|wire| {
+            let a = self.port_position(&wire.from, rect)?;
+            let b = self.port_position(&wire.to, rect)?;
+            let mut stops = vec![a];
+            stops.extend(wire.points.iter().map(|q| self.screen(*q, rect)));
+            stops.push(b);
+            stops.windows(2).enumerate().find_map(|(segment, ends)| {
+                let points: Vec<[f32; 2]> = curve_points(ends[0], ends[1]).collect();
+                points
+                    .windows(2)
+                    .any(|w| near(w[0], w[1]))
+                    .then(|| (wire.id.clone(), segment))
+            })
+        })
+    }
+}
+
 fn curve(list: &mut DisplayList, node: u64, a: [f32; 2], b: [f32; 2], width: f32, color: Color) {
     let bend = ((b[0] - a[0]).abs() * 0.45).max(48.);
     bezier(

@@ -739,15 +739,16 @@ impl Journey {
                     } else {
                         self.note = "Build > Build Current Profile again: the project now has a C# module, which the export publishes NativeAOT".into();
                     }
-                    self.previous_build = shell.last_build.clone();
+                    self.previous_build = shell.builder.last_build.clone();
                     shell.run_command(editor, "build.current", &Target::None)?;
                     editor.action("editor.focus", json!({"panel": "console"}))?;
                     return Ok(false);
                 }
-                if shell.build.is_some() {
+                if shell.builder.job.is_some() {
                     return Ok(false);
                 }
                 let game = shell
+                    .builder
                     .last_build
                     .clone()
                     .filter(|game| Some(game) != self.previous_build.as_ref())
@@ -775,10 +776,11 @@ impl Journey {
                     self.note = "Build > Run Build (offscreen: the game runs headless for one frame and captures it)".into();
                     return Ok(false);
                 }
-                if shell.run.is_some() {
+                if shell.builder.run.is_some() {
                     return Ok(false);
                 }
                 let capture = shell
+                    .builder
                     .last_run
                     .clone()
                     .ok_or("the build did not run; see Problems")?;

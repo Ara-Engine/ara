@@ -21,12 +21,214 @@ const DEPTH: f32 = 15.0;
 /// Scopes shorter than this share of the frame are left out of the lanes.
 const MIN_SHARE: f64 = 0.002;
 
+/// Asks the player being profiled for `action` (start, stop, a snapshot of its frames).
+fn request(s: &mut Studio, action: crate::play_profiling::Action) -> ara_ui::Result<()> {
+    let target = s
+        .local
+        .profiler_target
+        .clone()
+        .ok_or("Pick a Play player to profile")?;
+    let session = s.editor.session.clone();
+    let backend = s
+        .editor
+        .play_profiling
+        .as_mut()
+        .ok_or("Player profiling is not available in this editor")?;
+    let ticket = backend
+        .request(crate::play_profiling::Request {
+            session,
+            target,
+            action,
+            why: Some("Editor Profiler".into()),
+        })
+        .map_err(|d| {
+            d.first()
+                .map_or("The player refused".to_owned(), |d| d.message.clone())
+        })?;
+    s.local.profiler_ticket = Some((ticket, action));
+    Ok(())
+}
+
+/// Starts or stops recording what the Profiler profiles: the editor (`profile.start`), or
+/// the picked player.
+pub(super) fn toggle_record(s: &mut Studio) {
+    use crate::play_profiling::Action;
+    let result = match (&s.local.profiler_target, s.local.profiler_player_recording) {
+        (None, _) if s.local.profiling => s
+            .editor
+            .action("profile.stop", json!({}))
+            .map(drop)
+            .map_err(Into::into),
+        (None, _) => {
+            s.local.profile_frame = None;
+            s.editor
+                .action("profile.start", json!({}))
+                .map(drop)
+                .map_err(Into::into)
+        }
+        (Some(_), true) => request(s, Action::Stop),
+        (Some(_), false) => {
+            s.local.profile_frame = None;
+            request(s, Action::Start)
+        }
+    };
+    if let Err(error) = result {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+    }
+}
+
+/// Follows player profiling while the Profiler shows (`visible`): lists the players once a
+/// second, reads a recording player's frames four times a second, and takes each answer;
+/// whether the panel changed.
+pub(super) fn poll(s: &mut Studio, visible: bool) -> bool {
+    use std::time::{Duration, Instant};
+    let mut changed = false;
+    if let Some((ticket, _)) = s.local.profiler_ticket
+        && let Some(status) = s
+            .editor
+            .play_profiling
+            .as_mut()
+            .and_then(|b| b.poll(ticket))
+        && status.finished
+    {
+        s.local.profiler_ticket = None;
+        s.local.profiler_player_recording = status.recording;
+        if let Some(profile) = status.profile {
+            s.profile = std::sync::Arc::new(profile);
+        }
+        if let Some(d) = status.diagnostics.first().filter(|_| {
+            matches!(
+                status.outcome,
+                Some(
+                    crate::play_profiling::Outcome::Failed
+                        | crate::play_profiling::Outcome::Refused
+                )
+            )
+        }) {
+            s.editor.report_failure(&*anyhow::anyhow!("{}", d.message));
+        }
+        changed = true;
+    }
+    if !visible && !s.local.profiler_player_recording {
+        return changed;
+    }
+    let now = Instant::now();
+    let (listed, read) = s
+        .local
+        .profiler_polled
+        .unwrap_or((now - Duration::from_secs(2), now));
+    let mut polled = (listed, read);
+    if now.duration_since(listed) >= Duration::from_secs(1)
+        && let Some(backend) = s.editor.play_profiling.as_mut()
+    {
+        let before = backend.targets().len();
+        let _ = backend.refresh_targets();
+        changed |= backend.targets().len() != before;
+        polled.0 = now;
+        // A player that left (Play stopped) is no longer the target.
+        if let Some(target) = &s.local.profiler_target
+            && !backend.targets().iter().any(|r| &r.target == target)
+        {
+            s.local.profiler_target = None;
+            s.local.profiler_player_recording = false;
+            changed = true;
+        }
+    }
+    if s.local.profiler_player_recording
+        && s.local.profiler_ticket.is_none()
+        && now.duration_since(read) >= Duration::from_millis(250)
+    {
+        let _ = request(s, crate::play_profiling::Action::Snapshot);
+        polled.1 = now;
+    }
+    s.local.profiler_polled = Some(polled);
+    changed
+}
+
+/// What the Profiler records, to pick from: the editor, or a running player.
+fn target_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    const KEY: &str = "profiler/target";
+    let open = s.local.select.as_deref() == Some(KEY);
+    let rows: Vec<crate::play_profiling::Row> = s
+        .editor
+        .play_profiling
+        .as_ref()
+        .map(|b| b.targets().to_vec())
+        .unwrap_or_default();
+    let title = match &s.local.profiler_target {
+        None => "Editor".to_owned(),
+        Some(target) => rows
+            .iter()
+            .find(|r| &r.target == target)
+            .map_or_else(|| format!("Player {}", target.player), |r| r.name.clone()),
+    };
+    let mut trigger = select(l, Size::Sm, KEY, &title)
+        .w(190.0)
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if open {
+        let mut items = vec![
+            menu_check(
+                l,
+                &format!("{KEY}/editor"),
+                "Editor",
+                s.local.profiler_target.is_none(),
+            )
+            .on_press(|s: &mut Studio| {
+                s.local.select = None;
+                s.local.profiler_target = None;
+                s.local.profile_frame = None;
+                s.profile = std::sync::Arc::new(s.editor.host.profiler().profile().clone());
+            }),
+        ];
+        if rows.is_empty() {
+            items.push(
+                row().pad_x(8.0).h(26.0).align(Align::Center).child(
+                    text("Start Play to profile the game")
+                        .text_size(11.5)
+                        .color(l.c.muted_foreground.0),
+                ),
+            );
+        }
+        for r in rows {
+            let on = s.local.profiler_target.as_ref() == Some(&r.target);
+            let target = r.target.clone();
+            items.push(enabled(
+                menu_check(l, &format!("{KEY}/{}", r.target.player), &r.name, on)
+                    .tooltip(r.reason.clone().unwrap_or_else(|| r.target.label()))
+                    .on_press(move |s: &mut Studio| {
+                        s.local.select = None;
+                        s.local.profiler_target = Some(target.clone());
+                        s.local.profiler_player_recording = false;
+                        s.local.profile_frame = None;
+                    }),
+                r.available,
+            ));
+        }
+        trigger = trigger.overlay(
+            stillkit::el::menu(menu_panel(l, items).min_w(220.0))
+                .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    trigger
+}
+
 /// The panel.
 pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let profile = &*s.profile;
-    let recording = s.local.profiling;
+    // Recording: the editor's own capture, or the picked player's.
+    let recording = match s.local.profiler_target {
+        None => s.local.profiling,
+        Some(_) => s.local.profiler_player_recording,
+    };
     let frame = s
         .local
         .profile_frame
@@ -37,10 +239,12 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .pad_x(6.0)
         .gap(8.0)
         .align(Align::Center)
+        .child(target_menu(s))
+        .child(baseline_controls(s))
         .child(if recording {
             button(l, Tone::Danger, Size::Sm, Some(icons::CIRCLE_STOP), "Stop")
                 .key("profiler/stop")
-                .on_press(|s: &mut Studio| s.act("profile.stop", json!({})))
+                .on_press(toggle_record)
         } else {
             button(
                 l,
@@ -50,10 +254,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 "Record",
             )
             .key("profiler/record")
-            .on_press(|s: &mut Studio| {
-                s.local.profile_frame = None;
-                s.act("profile.start", json!({}))
-            })
+            .on_press(toggle_record)
         })
         .child(
             text(format!(
@@ -220,10 +421,12 @@ fn lanes(s: &Studio, profile: &Profile, frame: &Frame, width: f32) -> El<Studio>
                         ms(span.self_ns)
                     ))
                     .children((w > 48.0).then(|| {
+                        // Within its bar: a long name ends early rather than running on.
                         text(label.clone())
                             .text_size(10.0)
                             .color(Rgba::new(0.0, 0.0, 0.0, 0.85))
                             .pad_x(4.0)
+                            .w(w)
                             .wrap(1)
                     })),
             );
@@ -257,9 +460,21 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     }
     let mut ranked: Vec<_> = merged.into_iter().collect();
     ranked.sort_by_key(|(_, (_, _, own))| std::cmp::Reverse(*own));
-    let mut table = col()
-        .gap(1.0)
-        .child(header(l, ["Scope", "Calls", "Total", "Self"]));
+    let mut table = col().gap(1.0).child(header(
+        l,
+        if s.editor.profile_baseline.is_some() && !s.local.profiler_hide_compare {
+            &["Scope", "Calls", "Total", "Self", "vs base"]
+        } else {
+            &["Scope", "Calls", "Total", "Self"]
+        },
+    ));
+    // With a baseline: each scope's mean self time now against the baseline's.
+    let compare = s
+        .editor
+        .profile_baseline
+        .as_ref()
+        .filter(|_| !s.local.profiler_hide_compare)
+        .map(|base| (means(profile), means(base)));
     for (label, (calls, total, own)) in ranked.into_iter().take(24) {
         let name = profile
             .labels
@@ -283,7 +498,44 @@ fn scopes(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
                 )
                 .child(num(l, calls.to_string()))
                 .child(num(l, ms(total)))
-                .child(num(l, ms(own))),
+                .child(num(l, ms(own)))
+                .children(compare.as_ref().map(|(now, base)| {
+                    let name = profile
+                        .labels
+                        .get(label as usize)
+                        .cloned()
+                        .unwrap_or_default();
+                    let (a, b) = (
+                        now.get(&name).copied().unwrap_or(0.0),
+                        base.get(&name).copied(),
+                    );
+                    match b {
+                        Some(b) => {
+                            let delta = a - b;
+                            // Slower by more than 5% reads as a warning, faster as success.
+                            let tint = if delta > b * 0.05 && delta > 10_000.0 {
+                                c.destructive_foreground.0
+                            } else if -delta > b * 0.05 && -delta > 10_000.0 {
+                                c.success_foreground.0
+                            } else {
+                                c.muted_foreground.0
+                            };
+                            text(format!(
+                                "{}{:.2}",
+                                if delta >= 0.0 { "+" } else { "−" },
+                                delta.abs() / 1e6
+                            ))
+                            .text_size(11.5)
+                            .family(mono())
+                            .color(tint)
+                            .w(56.0)
+                        }
+                        None => text("new")
+                            .text_size(11.5)
+                            .color(c.info_foreground.0)
+                            .w(56.0),
+                    }
+                })),
         );
     }
     table
@@ -298,7 +550,7 @@ fn gpu(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     let longest = passes.first().map_or(1, |p| p.duration_ns.max(1)) as f32;
     let mut out = col()
         .gap(1.0)
-        .child(header(l, ["GPU pass", "", "", "Time"]));
+        .child(header(l, &["GPU pass", "", "", "Time"]));
     if passes.is_empty() {
         out = out.child(
             row().pad(6.0).child(
@@ -346,7 +598,7 @@ fn gpu(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     out
 }
 
-fn header(l: &ara_kit::look::Look, titles: [&str; 4]) -> El<Studio> {
+fn header(l: &ara_kit::look::Look, titles: &[&str]) -> El<Studio> {
     let c = &l.c;
     let cell = |t: &str| {
         text(t.to_owned())
@@ -362,9 +614,56 @@ fn header(l: &ara_kit::look::Look, titles: [&str; 4]) -> El<Studio> {
         .fill(super::style::tones(l).band)
         .radius(super::style::RADIUS)
         .child(cell(titles[0]).w(0.0).grow(1.0))
-        .child(cell(titles[1]).w(56.0))
-        .child(cell(titles[2]).w(56.0))
-        .child(cell(titles[3]).w(56.0))
+        .children(titles[1..].iter().map(|t| cell(t).w(56.0)))
+}
+
+/// Each scope's mean self time per frame across `profile`'s frames, by scope name (two
+/// captures number their labels apart).
+fn means(profile: &Profile) -> std::collections::HashMap<String, f64> {
+    let mut out = std::collections::HashMap::new();
+    let frames = profile.frames.len().max(1) as f64;
+    for frame in &profile.frames {
+        for span in &frame.spans {
+            let name = profile
+                .labels
+                .get(span.label as usize)
+                .cloned()
+                .unwrap_or_default();
+            *out.entry(name).or_insert(0.0) += span.self_ns as f64 / frames;
+        }
+    }
+    out
+}
+
+/// The baseline in the toolbar: Set Baseline freezes what the Profiler shows to compare
+/// later captures with (Unity's Profile Analyzer); once set, its frame count and Clear.
+fn baseline_controls(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    match &s.editor.profile_baseline {
+        None => enabled(
+            button(l, Tone::Ghost, Size::Sm, Some(icons::FLAG), "Set baseline")
+                .key("profiler/baseline")
+                .tooltip("Compare later captures' scopes with this one")
+                .on_press(|s: &mut Studio| {
+                    s.editor.profile_baseline = Some(s.profile.clone());
+                }),
+            !s.profile.frames.is_empty(),
+        ),
+        Some(base) => row()
+            .gap(4.0)
+            .align(Align::Center)
+            .child(chip(
+                l,
+                Status::Info,
+                &format!("Baseline · {} frames", base.frames.len()),
+                false,
+            ))
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Clear the baseline")
+                    .key("profiler/baseline/clear")
+                    .on_press(|s: &mut Studio| s.editor.profile_baseline = None),
+            ),
+    }
 }
 
 /// A right-aligned number cell.
