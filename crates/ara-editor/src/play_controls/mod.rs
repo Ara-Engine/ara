@@ -432,7 +432,7 @@ impl PlayControls {
         if editor.state.playing.is_some() {
             return self.control(editor, None, false);
         }
-        let mut params = crate::shell::commands::table::play_params(editor);
+        let mut params = start_params(editor);
         let resume = params["startPaused"] != true;
         params["startPaused"] = json!(true);
         params["scene"] = json!(editor.state.doc);
@@ -685,4 +685,58 @@ pub(crate) fn network_profile(editor: &Editor, player: usize) -> &str {
         .and_then(|map| map.get(player.to_string()))
         .and_then(Value::as_str)
         .unwrap_or("clean")
+}
+
+/// The `play.start` parameters the Play settings ask for: mode, processes, tick, Start
+/// Paused, seed, hot reload, clients with their network conditions, render debug.
+pub(crate) fn start_params(e: &Editor) -> Value {
+    let s = &e.state.settings;
+    let text = |k: &str| s.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
+    let mode = text("play.mode");
+    let mut params = json!({
+        "window": true,
+        "mode": mode,
+        "processMode": text("play.processMode"),
+        "tickHz": text("play.tickHz").parse::<u32>().unwrap_or(60),
+        "startPaused": s.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false),
+        "seed": s.get("play.seed").and_then(Value::as_f64).unwrap_or(0.) as u64,
+        "hotReload": s.get("play.hotReload").and_then(Value::as_bool).unwrap_or(true),
+    });
+    if mode != "local" {
+        let clients = s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32;
+        params["clients"] = json!(clients);
+        params["conditions"] = json!(conditions(s, clients));
+    }
+    // View > Rendering Debug: only sent when something is turned off.
+    let debug = e.state.render_debug;
+    if debug != ara_render::RenderDebug::default() {
+        params["renderDebug"] = json!(debug);
+    }
+    params
+}
+
+/// A network profile's conditions (latency, jitter, basis-point loss), none for `clean`.
+fn condition(name: &str) -> Value {
+    let (latency, jitter, loss) = match name {
+        "lan" => (5, 0, 0),
+        "internet" => (50, 10, 0),
+        "mobile" => (100, 30, 100),
+        "stress" => (200, 50, 200),
+        _ => return Value::Null,
+    };
+    json!({"latencyMs":latency,"jitterMs":jitter,"loss":loss,"duplication":0,"reordering":0,"bandwidth":0})
+}
+/// Client-order shaping for the existing play.start contract (basis-point loss).
+pub(crate) fn conditions(settings: &BTreeMap<String, Value>, clients: u32) -> Vec<Value> {
+    (1..=clients.min(16))
+        .map(|player| {
+            condition(
+                settings
+                    .get("play.networkProfiles")
+                    .and_then(|map| map.get(player.to_string()))
+                    .and_then(Value::as_str)
+                    .unwrap_or("clean"),
+            )
+        })
+        .collect()
 }

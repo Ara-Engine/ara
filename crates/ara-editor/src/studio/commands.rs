@@ -7,7 +7,7 @@ use serde_json::json;
 use super::Studio;
 use crate::Editor;
 use crate::catalog::Target;
-use crate::shell::commands::table::play_params;
+use crate::play_controls::start_params as play_params;
 use serde_json::Value;
 
 /// What running a command gives back: done, or why not.
