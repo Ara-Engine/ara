@@ -5,7 +5,10 @@
 //! the nearest edge, against the corner when within [`SNAP`] px. Click the grip to
 //! collapse it to its icon (the icon opens it as a popup); right-click for its menu
 //! (collapse, dock to an edge, hide). The Scene tab's Overlays menu, or the ` key, shows
-//! and hides each and resets them. Layouts persist in the `viewport.overlays` setting.
+//! and hides each and resets them. Let go away from every edge, an overlay floats where it
+//! lands, laid out as a titled Panel, a Horizontal or a Vertical strip (its menu switches);
+//! dragged back to an edge it docks again. Layouts persist in the `viewport.overlays`
+//! setting.
 use std::collections::BTreeMap;
 
 use ara_kit::icons;
@@ -22,6 +25,34 @@ use crate::state::Tool;
 const INSET: f32 = 8.0;
 /// Corner snap distance on release, design px.
 const SNAP: f32 = 24.0;
+/// How far from every edge a release floats an overlay instead of docking it, design px.
+const FLOAT: f32 = 48.0;
+
+/// How a floating overlay lays out, as Unity's floating overlays can.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Layout {
+    /// Its title above its tools.
+    Panel,
+    /// Its tools in a row.
+    Horizontal,
+    /// Its tools in a column.
+    Vertical,
+}
+
+impl Layout {
+    const ALL: [(Layout, &'static str, &'static str); 3] = [
+        (Layout::Panel, "panel", "Panel"),
+        (Layout::Horizontal, "horizontal", "Horizontal"),
+        (Layout::Vertical, "vertical", "Vertical"),
+    ];
+}
+
+/// A floating overlay: where its top-left is in the view (design px), and its layout.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Float {
+    pub at: (f32, f32),
+    pub layout: Layout,
+}
 
 /// A Scene view edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +65,7 @@ pub(super) enum Edge {
 
 /// Where an overlay docks: its edge, which corner its offset counts from (`end`: right or
 /// bottom), how far from that corner, whether only its icon shows, and whether it shows.
+/// A floating one (`float`) sits where it was let go instead, keeping its last edge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Dock {
     pub edge: Edge,
@@ -41,6 +73,7 @@ pub(super) struct Dock {
     pub offset: f32,
     pub collapsed: bool,
     pub hidden: bool,
+    pub float: Option<Float>,
 }
 
 impl Dock {
@@ -51,13 +84,41 @@ impl Dock {
             offset: 0.0,
             collapsed: false,
             hidden: false,
+            float: None,
         }
     }
 
-    /// Parses `edge:start|end:offset[:collapsed][:hidden]`.
+    /// Parses `edge:start|end:offset[:collapsed][:hidden]`, or a floating overlay's
+    /// `float:x:y:panel|horizontal|vertical[:collapsed][:hidden]`.
     pub fn parse(text: &str) -> Option<Self> {
         let mut parts = text.split(':');
-        let edge = match parts.next()? {
+        let head = parts.next()?;
+        if head == "float" {
+            let mut number = || {
+                parts
+                    .next()?
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|v| v.is_finite())
+                    .map(|v| v.clamp(0.0, 10_000.0))
+            };
+            let at = (number()?, number()?);
+            let layout = parts.next()?;
+            let layout = Layout::ALL.iter().find(|(_, t, _)| *t == layout)?.0;
+            let mut dock = Self {
+                float: Some(Float { at, layout }),
+                ..Self::at(Edge::Top, false)
+            };
+            for flag in parts {
+                match flag {
+                    "collapsed" => dock.collapsed = true,
+                    "hidden" => dock.hidden = true,
+                    _ => return None,
+                }
+            }
+            return Some(dock);
+        }
+        let edge = match head {
             "top" => Edge::Top,
             "bottom" => Edge::Bottom,
             "left" => Edge::Left,
@@ -90,6 +151,22 @@ impl Dock {
 
     /// The canonical `viewport.overlays` value.
     pub fn text(&self) -> String {
+        let flags = format!(
+            "{}{}",
+            if self.collapsed { ":collapsed" } else { "" },
+            if self.hidden { ":hidden" } else { "" }
+        );
+        if let Some(f) = self.float {
+            let layout = Layout::ALL
+                .iter()
+                .find(|(l, ..)| *l == f.layout)
+                .map_or("panel", |(_, t, _)| *t);
+            return format!(
+                "float:{}:{}:{layout}{flags}",
+                f.at.0.round(),
+                f.at.1.round()
+            );
+        }
         let edge = match self.edge {
             Edge::Top => "top",
             Edge::Bottom => "bottom",
@@ -97,26 +174,37 @@ impl Dock {
             Edge::Right => "right",
         };
         format!(
-            "{edge}:{}:{}{}{}",
+            "{edge}:{}:{}{flags}",
             if self.end { "end" } else { "start" },
             self.offset.round(),
-            if self.collapsed { ":collapsed" } else { "" },
-            if self.hidden { ":hidden" } else { "" }
         )
     }
 
-    /// Side docks lay their overlays out vertically.
+    /// Side docks lay their overlays out vertically; a floating one as its layout says
+    /// (a Panel's tools run in a row under its title).
     pub fn vertical(&self) -> bool {
-        matches!(self.edge, Edge::Left | Edge::Right)
+        match self.float {
+            Some(f) => f.layout == Layout::Vertical,
+            None => matches!(self.edge, Edge::Left | Edge::Right),
+        }
     }
 
     /// The dock a release at overlay box (`x`, `y`, `w`, `h`) inside a `view` of `size`
-    /// lands in: the edge nearest the box's centre (the box kept inside the view), its
-    /// nearer corner, the distance from it (zero within [`SNAP`]); flags carry over.
+    /// lands in: floating where it is when it is [`FLOAT`] from every edge (as it was laid
+    /// out, a Panel at first), else the edge nearest the box's centre (the box kept inside
+    /// the view), its nearer corner, the distance from it (zero within [`SNAP`]); flags
+    /// carry over.
     pub fn drop_at(self, (x, y, w, h): (f32, f32, f32, f32), size: (f32, f32)) -> Self {
         // Kept inside the view first, so an overlay pushed past an edge counts from it.
         let x = x.clamp(0.0, (size.0 - w).max(0.0));
         let y = y.clamp(0.0, (size.1 - h).max(0.0));
+        if x.min(y).min(size.0 - (x + w)).min(size.1 - (y + h)) > FLOAT {
+            let layout = self.float.map_or(Layout::Panel, |f| f.layout);
+            return Self {
+                float: Some(Float { at: (x, y), layout }),
+                ..self
+            };
+        }
         let (cx, cy) = (x + w * 0.5, y + h * 0.5);
         let edge = [
             (cy, Edge::Top),
@@ -146,6 +234,7 @@ impl Dock {
             edge,
             end,
             offset,
+            float: None,
             ..self
         }
     }
@@ -381,7 +470,7 @@ fn squeezed(s: &Studio) -> std::collections::BTreeSet<&'static str> {
             .iter()
             .filter_map(|d| {
                 let at = dock(s, d.id);
-                (at.edge == edge && !at.hidden).then(|| {
+                (at.edge == edge && !at.hidden && at.float.is_none()).then(|| {
                     let length = match at.collapsed {
                         true => COLLAPSED,
                         false => s
@@ -443,9 +532,14 @@ pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
     }
     let dragging = s.local.overlay_drag;
     let mut stacks: BTreeMap<(u8, bool), Vec<(f32, &'static Def)>> = BTreeMap::new();
+    let mut floating = Vec::new();
     for d in &OVERLAYS {
         let at = dock(s, d.id);
         if at.hidden {
+            continue;
+        }
+        if let Some(f) = at.float {
+            floating.push((f, d));
             continue;
         }
         stacks
@@ -459,6 +553,22 @@ pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
         items.sort_by(|a, b| a.0.total_cmp(&b.0));
         let edge = [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right][edge as usize];
         out.push(stack(s, edge, end, &items, &squeezed));
+    }
+    // Floating overlays where they were let go, kept inside the view as it resizes.
+    let view = s.local.rects.get("scene/view").copied();
+    for (f, d) in floating {
+        let size = s
+            .local
+            .rects
+            .get(&format!("scene/overlay/{}", d.id))
+            .map_or((0.0, 0.0), |r| (r.width(), r.height()));
+        let (x, y) = view.map_or(f.at, |v| {
+            (
+                f.at.0.min((v.width() - size.0).max(0.0)),
+                f.at.1.min((v.height() - size.1).max(0.0)),
+            )
+        });
+        out.push(overlay(s, d, f.layout == Layout::Vertical, false).absolute(x, y));
     }
     if let Some(drag) = dragging {
         out.extend(ghost(s, drag));
@@ -545,6 +655,7 @@ fn ghost(s: &Studio, drag: Drag) -> Vec<El<Studio>> {
     let c = &s.look.c;
     let band = c.primary.0.with_alpha(0.35);
     let hint = match target.edge {
+        _ if target.float.is_some() => el(),
         Edge::Top => el().absolute(0.0, 0.0).w_full().h(3.0),
         Edge::Bottom => el().absolute(0.0, view.height() - 3.0).w_full().h(3.0),
         Edge::Left => el().absolute(0.0, 0.0).w(3.0).h_full(),
@@ -597,7 +708,15 @@ fn overlay(s: &Studio, d: &'static Def, vertical: bool, squeezed: bool) -> El<St
     let moving = s.local.overlay_drag.is_some_and(|g| g.id == id);
     // The axis gizmo sizes itself and floats over the image, as Unity's does; toolbars
     // are a 26 px band.
-    let base = if id == "orientation" && !at.collapsed {
+    let panel = at.float.is_some_and(|f| f.layout == Layout::Panel) && !at.collapsed;
+    let base = if panel {
+        // A Panel: its grip and title in a header, its tools in a row beneath.
+        col()
+            .pad(3.0)
+            .gap(2.0)
+            .radius(super::style::RADIUS + 1.0)
+            .fill(super::style::tones(l).strip.with_alpha(0.94))
+    } else if id == "orientation" && !at.collapsed {
         if vertical { col() } else { row() }
             .gap(2.0)
             .align(Align::Start)
@@ -605,13 +724,28 @@ fn overlay(s: &Studio, d: &'static Def, vertical: bool, squeezed: bool) -> El<St
     } else {
         group(l, vertical)
     };
-    let mut out = base
+    let base = base
         .key(format!("scene/overlay/{id}"))
         .opacity(if moving { 0.4 } else { 1.0 })
         .label(d.title)
-        .on_context_menu(move |s: &mut Studio, x, y| s.local.overlay_menu = Some((id, (x, y))))
-        .child(grip(s, id, vertical))
-        .child(body);
+        .on_context_menu(move |s: &mut Studio, x, y| s.local.overlay_menu = Some((id, (x, y))));
+    let mut out = if panel {
+        base.child(
+            row()
+                .gap(4.0)
+                .align(Align::Center)
+                .child(grip(s, id, false))
+                .child(
+                    text(d.title)
+                        .text_size(11.0)
+                        .weight(600)
+                        .color(l.c.muted_foreground.0),
+                ),
+        )
+        .child(body)
+    } else {
+        base.child(grip(s, id, vertical)).child(body)
+    };
     if let Some((_, (x, y))) = s.local.overlay_menu.filter(|(m, _)| *m == id) {
         out = out.overlay(
             menu(context_menu(s, d, at))
@@ -759,7 +893,7 @@ fn context_menu(s: &Studio, d: &'static Def, at: Dock) -> El<Studio> {
         ("Dock left", Edge::Left, false),
         ("Dock right", Edge::Right, false),
     ] {
-        let here = at.edge == edge && at.end == end;
+        let here = at.float.is_none() && at.edge == edge && at.end == end;
         items.push(
             menu_check(l, &format!("scene/overlay/{id}/{label}"), label, here).on_press(
                 move |s: &mut Studio| {
@@ -770,8 +904,28 @@ fn context_menu(s: &Studio, d: &'static Def, at: Dock) -> El<Studio> {
                             edge,
                             end,
                             offset: 10_000.0,
+                            float: None,
                             ..*d
                         };
+                    });
+                },
+            ),
+        );
+    }
+    items.push(menu_separator(l));
+    // Floating layouts: a docked overlay floats where it is when given one.
+    for (layout, slug, label) in Layout::ALL {
+        let here = at.float.is_some_and(|f| f.layout == layout);
+        items.push(
+            menu_check(l, &format!("scene/overlay/{id}/{slug}"), label, here).on_press(
+                move |s: &mut Studio| {
+                    s.local.overlay_menu = None;
+                    let place = floating_at(s, id);
+                    update(s, id, |d| {
+                        d.float = Some(Float {
+                            at: d.float.map_or(place, |f| f.at),
+                            layout,
+                        });
                     });
                 },
             ),
@@ -793,6 +947,18 @@ fn context_menu(s: &Studio, d: &'static Def, at: Dock) -> El<Studio> {
         }),
     );
     menu_panel(l, items)
+}
+
+/// Where overlay `id` is in the Scene view now (design px from its top-left), for floating
+/// it there.
+fn floating_at(s: &Studio, id: &str) -> (f32, f32) {
+    match (
+        s.local.rects.get("scene/view"),
+        s.local.rects.get(&format!("scene/overlay/{id}")),
+    ) {
+        (Some(v), Some(r)) => ((r.left - v.left).max(0.0), (r.top - v.top).max(0.0)),
+        _ => (FLOAT + INSET, FLOAT + INSET),
+    }
 }
 
 /// The Overlays menu (the Scene tab's button, or `): each overlay's visibility, and

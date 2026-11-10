@@ -284,6 +284,62 @@ fn scene_overlays_move_to_another_edge_collapse_and_hide() {
 }
 
 #[test]
+fn a_scene_overlay_floats_as_a_panel_switches_layout_and_docks_back() {
+    use super::scene_overlays::{Edge, Layout};
+    let mut rt = open();
+    settle(&mut rt);
+    let dock = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    let drag_grip = |rt: &mut Runtime<Studio>, to: (f32, f32)| {
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        let grip = rt.find("scene/overlay/tools/grip").expect("its grip");
+        rt.pointer_move(grip.center().x, grip.center().y);
+        rt.frame(FRAME);
+        rt.pointer_down(grip.center().x, grip.center().y);
+        for step in 1..=8 {
+            let t = step as f32 / 8.0;
+            rt.pointer_move(
+                grip.center().x + (to.0 - grip.center().x) * t,
+                grip.center().y + (to.1 - grip.center().y) * t,
+            );
+            rt.frame(FRAME);
+        }
+        rt.pointer_up(to.0, to.1);
+        settle(rt);
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        settle(rt);
+    };
+    let view = rt.find("scene/view").expect("the Scene view");
+    // Let go in the middle of the view: it floats there, as a titled panel.
+    drag_grip(&mut rt, (view.center().x, view.center().y));
+    let f = dock(&rt).float.expect("floating");
+    assert_eq!(f.layout, Layout::Panel);
+    let shown = rt.find("scene/overlay/tools").expect("shown");
+    assert!(
+        shown.left > view.left + 40.0 && shown.top > view.top + 40.0,
+        "where it was let go: {shown:?} in {view:?}"
+    );
+    // Its menu lays it out vertically, in place.
+    rt.update(|s| s.local.overlay_menu = Some(("tools", (shown.left + 4.0, shown.top + 4.0))));
+    settle(&mut rt);
+    press(&mut rt, "scene/overlay/tools/vertical");
+    let g = dock(&rt).float.expect("still floating");
+    assert_eq!((g.layout, g.at), (Layout::Vertical, f.at));
+    let tall = rt.find("scene/overlay/tools").expect("shown");
+    assert!(tall.height() > tall.width(), "a column: {tall:?}");
+    // The saved form reads back the same.
+    let text = dock(&rt).text();
+    assert_eq!(
+        super::scene_overlays::Dock::parse(&text),
+        Some(dock(&rt)),
+        "{text}"
+    );
+    // Dragged to the right edge, it docks there again.
+    drag_grip(&mut rt, (view.right - 14.0, view.center().y));
+    let d = dock(&rt);
+    assert_eq!((d.float, d.edge), (None, Edge::Right), "{d:?}");
+}
+
+#[test]
 fn the_draw_mode_menu_switches_view_modes_and_effects() {
     let mut rt = open();
     settle(&mut rt);
@@ -2659,7 +2715,16 @@ fn captures() {
     });
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
-    for light in [false, true] {
+    // Every shot in both themes, at 1x and at 2x (`@2x` in the name).
+    let design = rt.state().size;
+    for (light, scale) in [(false, 1.0), (true, 1.0), (false, 2.0), (true, 2.0)] {
+        rt.set_scale(scale);
+        rt.resize(((design.0 * scale) as u32, (design.1 * scale) as u32));
+        let theme = format!(
+            "{}{}",
+            if light { "light" } else { "dark" },
+            if scale > 1.0 { "@2x" } else { "" }
+        );
         rt.update(|s| s.editor.state.light = light);
         if rt.touch(Studio::sync_look) {
             let theme = rt.state().look.theme.clone();
@@ -2693,7 +2758,7 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-{panel}.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-{panel}.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2701,7 +2766,7 @@ fn captures() {
             .unwrap();
         }
         // The Size over Life curve in the VFX Selection, a key picked (its handles shown).
-        if !light {
+        if !light && scale == 1.0 {
             rt.touch(|s| {
                 let doc = s
                     .editor
@@ -2742,7 +2807,7 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-vfx-curve.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-vfx-curve.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2750,16 +2815,34 @@ fn captures() {
             .unwrap();
             rt.update(|s| s.local.curve_drag = None);
         }
+        // Scene overlays floating: Tools as a titled panel, Snapping as a column.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "scene"}));
+            s.act(
+                "editor.settings.set",
+                json!({"key": "viewport.overlays", "value": {
+                    "tools": "float:120:140:panel",
+                    "snapping": "float:420:120:vertical",
+                }}),
+            );
+        });
+        host_feedback(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-overlays-float.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(super::scene_overlays::reset);
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-hover.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-hover.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2771,11 +2854,7 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!(
-                "{}-menu-{}.png",
-                if light { "light" } else { "dark" },
-                menu.to_lowercase()
-            );
+            let name = format!("{theme}-menu-{}.png", menu.to_lowercase());
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2790,7 +2869,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-menu-cascade.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-menu-cascade.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2805,10 +2884,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2824,7 +2900,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-profiler-tree.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-profiler-tree.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2839,10 +2915,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-inspector-debug.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-inspector-debug.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2855,7 +2928,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-scene-menu.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-scene-menu.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2868,7 +2941,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-context.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-context.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2885,7 +2958,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-play.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-play.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2904,7 +2977,7 @@ fn captures() {
             for _ in 0..10 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-tabdrag.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-tabdrag.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2931,10 +3004,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-profiler-compare.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-profiler-compare.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2956,7 +3026,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-floating.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2977,7 +3047,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-create.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-create.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2989,7 +3059,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-settings.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-settings.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3001,7 +3071,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-palette.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3012,10 +3082,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-palette-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-palette-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3029,7 +3096,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-add-component.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-add-component.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3052,10 +3119,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-asset-inspector.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-asset-inspector.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
