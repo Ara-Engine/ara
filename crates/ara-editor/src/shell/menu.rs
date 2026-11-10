@@ -233,6 +233,8 @@ impl Shell {
     }
     fn dynamic(&self, editor: &Editor, kind: Dynamic, out: &mut Vec<Row>) {
         match kind {
+            // The shell adds tabs through its own Window menu.
+            Dynamic::AddTab => {}
             Dynamic::GizmoTypes => {
                 let settings = super::overlay::gizmos::Settings::read(&editor.state);
                 for gizmo in super::overlay::gizmos::TYPES {

@@ -1,5 +1,4 @@
 //! File imports are typed background commands; this module owns presentation only.
-mod backend;
 mod jobs;
 mod preparation;
 mod view;
@@ -32,21 +31,8 @@ pub(crate) fn preparation_cancellable(status: &Value) -> bool {
     backend::Status::read(status.clone()).can_cancel()
 }
 
-/// The import's final inventory, preserving the ordinary cmd.apply batch wrapper.
-pub(crate) fn completed_output(status: &Value) -> &Value {
-    let result = &status["result"];
-    if ["created", "replaced", "skipped", "renamed"]
-        .iter()
-        .any(|key| result.get(*key).is_some())
-    {
-        result
-    } else {
-        result["outputs"]
-            .as_array()
-            .and_then(|outputs| outputs.first())
-            .unwrap_or(result)
-    }
-}
+use crate::asset_import::backend;
+pub(crate) use crate::asset_import::backend::completed_output;
 
 struct Prepared {
     request: Request,

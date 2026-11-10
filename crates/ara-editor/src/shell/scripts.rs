@@ -6,10 +6,9 @@ use super::*;
 
 #[path = "scripts/modules.rs"]
 mod module_discovery;
+use crate::ide;
+pub(crate) use crate::ide::IdeRequest;
 pub(super) use module_discovery::ModuleList;
-#[path = "scripts/ide.rs"]
-mod ide;
-pub(crate) use ide::IdeRequest;
 #[cfg(test)]
 #[path = "scripts/focus_tests.rs"]
 mod focus_tests;
@@ -243,5 +242,39 @@ impl Shell {
         });
         self.script_job = None;
         Ok(true)
+    }
+}
+
+impl Shell {
+    /// Inspect the exact last request without launching a process or changing its outcome.
+    pub(crate) fn script_ide_request(&self) -> Value {
+        self.ide_request
+            .as_ref()
+            .map_or(Value::Null, |request| json!(request))
+    }
+
+    /// Store complete argv first; hidden verification never reaches process creation.
+    fn request_script_ide(
+        &mut self,
+        editor: &Editor,
+        root: &Path,
+        file: &Path,
+        location: Option<(u32, u32)>,
+    ) -> ara_ui::Result<()> {
+        let configured = editor
+            .state
+            .settings
+            .get("scripts.ide")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let request = ide::IdeRequest::build(root, file, location, configured)?;
+        let request = self.ide_request.insert(request);
+        let policy = ide::LaunchPolicy::new(
+            self.offscreen,
+            self.open_ide,
+            std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1"),
+        );
+        request.execute(policy, &mut ide::spawn)?;
+        Ok(())
     }
 }
