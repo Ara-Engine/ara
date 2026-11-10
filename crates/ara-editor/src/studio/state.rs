@@ -257,6 +257,8 @@ pub struct Local {
     /// The Inspector locked on these entities (Unity's padlock): selecting others leaves
     /// it showing them.
     pub inspector_lock: Option<Vec<String>>,
+    /// The Inspector shows the entity's record as stored (Unity's Debug mode).
+    pub inspector_raw: bool,
     /// Properties the Inspector shows: those whose name or component matches.
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
