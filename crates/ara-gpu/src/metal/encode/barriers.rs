@@ -44,14 +44,27 @@ impl MetalDevice {
             }
         }
         if dependency {
-            if let Active::Compute(encoder) = &rec.active {
-                encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
-                    COMPUTE_STAGES,
-                    COMPUTE_STAGES,
-                    MTL4VisibilityOptions::Device,
-                );
-            }
             rec.wait = (rec.wait.0 | wait.0, rec.wait.1 | wait.1);
+            if matches!(rec.active, Active::Compute(_)) {
+                // A dependency discovered after this encoder opened may name a
+                // producer in an earlier encoder. Local stage barriers cannot
+                // order that producer; consume its queue wait here as well.
+                let queue_wait = rec.take_wait(COMPUTE_STAGES);
+                if let Active::Compute(encoder) = &rec.active {
+                    if let Some((after, before)) = queue_wait {
+                        encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
+                            after,
+                            before,
+                            MTL4VisibilityOptions::Device,
+                        );
+                    }
+                    encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
+                        COMPUTE_STAGES,
+                        COMPUTE_STAGES,
+                        MTL4VisibilityOptions::Device,
+                    );
+                }
+            }
         }
         Ok(())
     }

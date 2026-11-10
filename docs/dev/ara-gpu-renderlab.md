@@ -172,3 +172,21 @@ upsample and post tone on Metal from the exact WGSL shader bodies, with CPU
 references and no Slang/MSC. Generated bindless SPIR-V validates; native Vulkan
 execution is pending. `ara-gpu-replay` is a test-only dependency, not a change to
 the production shader loader.
+
+
+## Metal barrier hardening from the Renderlab port
+
+The two-phase cluster-cull replay exposed a late dependency after a timestamp split:
+an unrelated readback opens a compute encoder, then a subsequent copy reads a shader
+result from an earlier encoder. An encoder-stage barrier orders only work inside
+its own encoder. The lowering now also applies pending queue-stage waits immediately
+when a dependency is discovered in an already open encoder. Remaining render-stage
+waits stay pending for the matching encoder.
+
+A focused native MSL regression reproduces the original stale-zero read, then checks
+eight distinct producer/readback snapshots after the fix. The Metal suite passes
+45 tests with API/shader validation (7 timing/manual tests ignored); the full library
+passes 79 tests with API validation and shader validation disabled (18 ignored).
+`cargo clippy -p ara-gpu --all-targets -- -D warnings` and the 117-package formatting
+checkpoint pass. This fix changes Metal lowering; the Vulkan implementation remains
+with the PC verifier. It changes no locked decision or shader ABI.
