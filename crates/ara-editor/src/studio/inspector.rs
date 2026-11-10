@@ -214,10 +214,11 @@ fn raw_record(s: &Studio) -> Option<El<Studio>> {
         return None;
     };
     let record = &s.resolved.get(id)?.record;
-    let shown = serde_json::to_string_pretty(record).ok()?;
+    // The canonical writer's text, as files and agents read it (short arrays inline).
+    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
+    let shown = copy.trim_end().to_owned();
     let l = &s.look;
     let c = &l.c;
-    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
     Some(
         col()
             .key("inspector/record")
