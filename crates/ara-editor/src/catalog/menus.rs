@@ -27,6 +27,8 @@ pub(crate) enum Dynamic {
     BuildProfiles,
     /// Scene gizmo types (`overlay::gizmos::TYPES`), toggled with `view.gizmos.type`.
     GizmoTypes,
+    /// Panels to open as a tab beside the clicked one, run with `window.add_tab`.
+    AddTab,
 }
 impl Dynamic {
     /// The registry command dynamic entries run.
@@ -38,6 +40,7 @@ impl Dynamic {
             Self::PrefabSources => "prefab.apply_to",
             Self::BuildProfiles => "build.profile.select",
             Self::GizmoTypes => "view.gizmos.type",
+            Self::AddTab => "window.add_tab",
         }
     }
 }
@@ -808,6 +811,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("component.add"),
         ],
         Context::Tab => &[
+            Sub("Add Tab", &[Item::Dynamic(Dynamic::AddTab)]),
+            S,
             C("window.float"),
             Sub(
                 "Move To",
