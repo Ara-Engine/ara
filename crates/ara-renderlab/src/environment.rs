@@ -1,13 +1,14 @@
 //! Ara's equirectangular skies (an authored HDRI, or the gradient sky) prepared for
 //! Renderlab's `Sky::Map`: a cosine-convolved irradiance cube and a GGX-prefiltered
-//! radiance chain in Renderlab's `PreparedEnvironment` layout. Renderlab's cook does
+//! radiance field (one cube per roughness knot) in Renderlab's `PreparedEnvironment` layout. Renderlab's cook does
 //! this offline; the bridge does it once per sky, on the CPU, when the sky changes.
 //!
 //! Ara and Renderlab share the equirectangular convention (+Y up,
 //! `u = atan2(z, x) / 2pi + 0.5`, `v = acos(y) / pi`), so no rotation is applied.
 use anyhow::{Context, Result};
 use renderlab::asset::environment::{
-    CubeFace, CubeLevel, Limits, Metadata, PreparedEnvironment, RadianceUnits,
+    CubeFace, CubeLevel, FieldGenerator, Limits, Metadata, PreparedEnvironment, RadianceUnits,
+    roughness_knots,
 };
 use std::f64::consts::{PI, TAU};
 
@@ -15,10 +16,11 @@ use std::f64::consts::{PI, TAU};
 const DIFFUSE_SIZE: u32 = 16;
 /// Directions the irradiance convolution integrates over.
 const DIFFUSE_SAMPLES: u32 = 2048;
-/// GGX directions per prefiltered texel; filtered sampling keeps this few noise-free.
+/// GGX directions per texel of the roughest level; smoother levels use fewer.
 const SPECULAR_SAMPLES: u32 = 64;
-/// Largest face of the radiance chain. Its first level is the visible background.
-const MAX_FACE: u32 = 512;
+/// Largest face of the radiance field (Renderlab's own production size). Its first
+/// level is the visible background; the field holds 65 levels of this size.
+const MAX_FACE: u32 = 128;
 
 /// Texels a content key reads at most: every texel of the gradient sky, an even
 /// spread of a large map (the key is computed every frame).
@@ -204,58 +206,89 @@ fn irradiance(source: &Source) -> Result<CubeLevel> {
     })
 }
 
-/// The radiance chain: level 0 is the map itself, level `i` of `count` is GGX-filtered
-/// at perceptual roughness `i / (count - 1)` with the normal, view and reflection
+/// One level of the radiance field: the map itself at roughness 0, otherwise
+/// GGX-filtered at perceptual `roughness` with the normal, view and reflection
 /// directions equal (Renderlab's convention).
-fn radiance(source: &Source, face: u32) -> Result<Vec<CubeLevel>> {
-    let count = face.ilog2() + 1;
+fn level(source: &Source, face: u32, roughness: f64) -> Result<CubeLevel> {
     let texel_angle = source.texel_solid_angle();
-    (0..count)
-        .map(|level| {
-            let size = face >> level;
-            if level == 0 {
-                // One cube texel may cover several source texels: read the level that matches.
-                let cube_angle = 4. * PI / (6. * f64::from(size * size));
-                let lod = 0.5 * (cube_angle / texel_angle).max(1.).log2();
-                return cube(size, |n| source.sample(n, lod));
-            }
-            let roughness = f64::from(level) / f64::from(count - 1);
-            let alpha2 = (roughness * roughness).max(1e-4).powi(2);
-            // GGX half-vectors around +Z with each reflected direction's density.
-            let samples: Vec<([f64; 3], f64)> = (0..SPECULAR_SAMPLES)
-                .filter_map(|i| {
-                    let phi = TAU * (f64::from(i) + 0.5) / f64::from(SPECULAR_SAMPLES);
-                    let u = f64::from(i.reverse_bits()) / 4_294_967_296.;
-                    let cos_h = ((1. - u) / (1. + (alpha2 - 1.) * u)).sqrt();
-                    let sin_h = (1. - cos_h * cos_h).max(0.).sqrt();
-                    // Reflecting the view (+Z) about the half-vector.
-                    let l = [
-                        2. * cos_h * sin_h * phi.cos(),
-                        2. * cos_h * sin_h * phi.sin(),
-                        2. * cos_h * cos_h - 1.,
-                    ];
-                    let d = alpha2 / (PI * (cos_h * cos_h * (alpha2 - 1.) + 1.).powi(2));
-                    // Each sample stands for the solid angle 1 / (N pdf): read the level
-                    // whose texels are that large (filtered importance sampling).
-                    let angle = 1. / (f64::from(SPECULAR_SAMPLES) * (d / 4.).max(1e-9));
-                    let lod = 0.5 * (angle / texel_angle).max(1.).log2() + 1.;
-                    (l[2] > 0.).then_some((l, lod))
-                })
-                .collect();
-            cube(size, |n| {
-                let (t, b) = basis(n);
-                let (mut sum, mut weight) = ([0f64; 3], 0f64);
-                for (l, lod) in &samples {
-                    let world = std::array::from_fn(|i| t[i] * l[0] + b[i] * l[1] + n[i] * l[2]);
-                    let value = source.sample(world, *lod);
-                    for (s, v) in sum.iter_mut().zip(value) {
-                        *s += v * l[2];
-                    }
-                    weight += l[2];
-                }
-                sum.map(|s| s / weight)
-            })
+    if roughness <= 0. {
+        // One cube texel may cover several source texels: read the level that matches.
+        let cube_angle = 4. * PI / (6. * f64::from(face * face));
+        let lod = 0.5 * (cube_angle / texel_angle).max(1.).log2();
+        return cube(face, |n| source.sample(n, lod));
+    }
+    let alpha2 = (roughness * roughness).max(1e-4).powi(2);
+    // Narrow lobes need few directions; filtered sampling keeps them noise-free.
+    let count = SPECULAR_SAMPLES / 4 + (f64::from(SPECULAR_SAMPLES) * 0.75 * roughness) as u32;
+    // GGX half-vectors around +Z, each with the source level to read.
+    let samples: Vec<([f64; 3], f64)> = (0..count)
+        .filter_map(|i| {
+            let phi = TAU * (f64::from(i) + 0.5) / f64::from(count);
+            let u = f64::from(i.reverse_bits()) / 4_294_967_296.;
+            let cos_h = ((1. - u) / (1. + (alpha2 - 1.) * u)).sqrt();
+            let sin_h = (1. - cos_h * cos_h).max(0.).sqrt();
+            // Reflecting the view (+Z) about the half-vector.
+            let l = [
+                2. * cos_h * sin_h * phi.cos(),
+                2. * cos_h * sin_h * phi.sin(),
+                2. * cos_h * cos_h - 1.,
+            ];
+            let d = alpha2 / (PI * (cos_h * cos_h * (alpha2 - 1.) + 1.).powi(2));
+            // Each sample stands for the solid angle 1 / (N pdf): read the level whose
+            // texels are that large (filtered importance sampling).
+            let angle = 1. / (f64::from(count) * (d / 4.).max(1e-9));
+            let lod = 0.5 * (angle / texel_angle).max(1.).log2() + 1.;
+            (l[2] > 0.).then_some((l, lod.round()))
         })
+        .collect();
+    cube(face, |n| {
+        let (t, b) = basis(n);
+        let (mut sum, mut weight) = ([0f64; 3], 0f64);
+        for (l, lod) in &samples {
+            let world = std::array::from_fn(|i| t[i] * l[0] + b[i] * l[1] + n[i] * l[2]);
+            let value = source.sample(world, *lod);
+            for (s, v) in sum.iter_mut().zip(value) {
+                *s += v * l[2];
+            }
+            weight += l[2];
+        }
+        sum.map(|s| s / weight)
+    })
+}
+
+/// The radiance field: one cube of `face` texels per roughness knot, in Renderlab's
+/// independent-roughness layout. Every level keeps the full face size, so Renderlab's
+/// lookups stay inside a face. Its mip-chain layout sends glossy lookups to faces of a
+/// few texels, where nearly every tap crosses a face edge and takes a slow path (about
+/// 30 ms a frame on Showcase). The levels are filtered on every core.
+fn radiance(source: &Source, face: u32) -> Result<Vec<CubeLevel>> {
+    let knots = roughness_knots();
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let mut levels: Vec<Option<CubeLevel>> = (0..knots.len()).map(|_| None).collect();
+    std::thread::scope(|scope| -> Result<()> {
+        let workers: Vec<_> = (0..threads)
+            .map(|worker| {
+                scope.spawn(move || {
+                    (worker..knots.len())
+                        .step_by(threads)
+                        .map(|index| Ok((index, level(source, face, f64::from(knots[index]))?)))
+                        .collect::<Result<Vec<_>>>()
+                })
+            })
+            .collect();
+        for worker in workers {
+            let filtered = worker
+                .join()
+                .map_err(|_| anyhow::anyhow!("an environment filter thread panicked"))??;
+            for (index, level) in filtered {
+                levels[index] = Some(level);
+            }
+        }
+        Ok(())
+    })?;
+    levels
+        .into_iter()
+        .map(|level| level.context("environment level left unfiltered"))
         .collect()
 }
 
@@ -274,7 +307,7 @@ pub(crate) fn prepare(size: [u32; 2], pixels: &[[f32; 4]]) -> Result<PreparedEnv
     for (chunk, salt) in generator_hash.as_chunks_mut::<8>().0.iter_mut().zip(0u64..) {
         chunk.copy_from_slice(&key(size, pixels).wrapping_add(salt).to_le_bytes());
     }
-    PreparedEnvironment::new(
+    PreparedEnvironment::new_independent(
         Metadata {
             units: RadianceUnits::CandelasPerSquareMetre,
             rotation_y_radians: 0.,
@@ -283,6 +316,8 @@ pub(crate) fn prepare(size: [u32; 2], pixels: &[[f32; 4]]) -> Result<PreparedEnv
         },
         irradiance(&source)?,
         radiance(&source, face)?,
+        roughness_knots(),
+        FieldGenerator::F64HostF32GpuV1,
         Limits::unbounded(),
     )
     .context("prepared environment")
@@ -336,7 +371,8 @@ mod tests {
         assert!(down < 1.5, "{down}");
         // The roughest level blurs the horizon: sideways sees about half the sky.
         let rough = prepared.specular_radiance().last().unwrap();
-        let side = texel(rough, CubeFace::PositiveX, 0, 0)[0];
+        let mid = rough.size() / 2;
+        let side = texel(rough, CubeFace::PositiveX, mid, mid)[0];
         assert!((2. ..8.).contains(&side), "{side}");
     }
 
