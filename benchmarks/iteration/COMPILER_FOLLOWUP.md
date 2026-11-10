@@ -1,5 +1,24 @@
 # Compiler follow-up (Mac, 2026-11-10)
 
+## Large-edit correctness, independent of timing admission
+
+The current compiler at production source `04270033f` passes a warm-session versus fresh-one-shot matrix with **2,048 generated component/query sources plus a shared dependency**, across nine modules. Each consumer source exceeds the incremental text implementation's 2 KiB boundary and includes non-ASCII UTF-16. Cases cover initial compilation, a shared constant edit with unchanged consumers, edits to every consumer, renames/removal/addition, Release-to-Debug IL, compiler rejection/repair, and analyzer-policy rejection/repair.
+
+All **18 responses**, **81 module pairs** and **71 newly emitted PE/PDB pairs** match exactly, with no diagnostic, fingerprint, MVID or PDB normalization. Caller-owned compile identity is the same in both arms. Schema checks independently require the exact component names and field types; lifecycle and error identities are checked. Failed modules keep their previous good PE/PDB bytes and return no schema/fingerprint. Every successful consumer also executes a controlled scalar constant-reading witness: **32,256 calls** return the exact expected float bits, including dependency changes and both repairs. A deliberately incorrect expected float bit pattern is rejected by the verifier.
+
+The audited Release solution build and verifier build have zero warnings/errors. The SDK, runtime, reference packs and harness hashes remain unchanged. The first small smoke stopped at my harness's incorrect diagnostic expectation (`CS0103` is exposed as `ARA0900` with a `CS0103:` message); the corrected smoke and full matrix pass. Original failed evidence remains retained.
+
+This is correctness evidence on CoreCLR **10.0.7**, not a speed comparison. No request clocks are measured. Only scalar witnesses execute in this matrix; query bodies are compared byte for byte against fresh emission, not run in a native gameplay world. It adds no unload, frame-rate, time-to-Play or retained-state p95 claim. [Case results, image/schema hashes, diagnostics, provenance and raw-evidence bindings](compiler_project_quality_mac_2026-11-10.json).
+
+Reproduce using an immutable copy of the complete compiler output closure and a fresh output directory:
+
+```sh
+dotnet build benchmarks/iteration/project_quality/Verifier.csproj -c Release -m:2 --disable-build-servers
+python3 benchmarks/iteration/project_quality.py --server /absolute/frozen-sdk/Ara.CompileServer.dll --verifier target/iteration-perf/project-quality/bin/Verifier/release/Verifier.dll --dotnet-host /absolute/dotnet --modules 8 --files 256 --output /absolute/new-quality-results
+```
+
+The controller retains every raw response, source manifest, successful assembly/PDB and witness request/output under its output directory. The committed packet binds those originals without checking generated binaries into Git. This probe is optional developer tooling, not an engine build prerequisite.
+
 `compiler_incremental_parse_mac_2026-11-10.json` completes a fresh ABBA comparison of the archived incremental-parse optimization: four real ScriptHosts, 60 edits each, 20 per reload level. All 240 edits produced the intended level and visible output, with zero leaked generations. Full raw edit rows, SDK/executable hashes and runtime-image hashes are retained. CoreCLR is 10.0.14 in both arms. This is a historical optimization comparison, not current-main or Unity performance.
 
 | Reload | Baseline p50 / p95 (ms) | Candidate p50 / p95 (ms) |
