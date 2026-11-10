@@ -2,6 +2,9 @@
 use anyhow::{Context, Result};
 use ash::vk;
 #[cfg(test)]
+#[path = "queue_tests/images.rs"]
+mod image_handoff;
+#[cfg(test)]
 thread_local! {
     static SHARED_FAMILY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -126,6 +129,10 @@ mod tests {
             gpu.read(output).unwrap(),
             0x87654321u32.to_le_bytes().repeat(4)
         );
+        // Cover the scene/compute native alias and separate graphics/compute
+        // native queues in the same family when the device offers two queues.
+        super::image_handoff::run(&mut gpu, true).unwrap();
+        super::image_handoff::run(&mut gpu, false).unwrap();
         gpu.assert_clean().unwrap();
     }
     #[test]

@@ -237,7 +237,9 @@ impl Access {
     }
 }
 
-/// Explicit queue ownership edge. Release/acquire carry identical ranges/layouts.
+/// Explicit logical queue edge. Release/acquire carry identical accesses/ranges;
+/// backends omit ownership transfers and eliminate duplicate layout transitions
+/// when both queues share a family.
 #[derive(Debug, Clone, Copy)]
 pub struct Handoff {
     /// Previous owner.
