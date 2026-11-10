@@ -318,8 +318,8 @@ impl Bridge {
         let frame = view.frame;
         if frame.terrain.is_some() {
             self.gaps.unsupported(
-                "terrain levels of detail, layered terrain materials and foliage wind",
-                "resident tiles draw at full resolution in splat-tinted colour; foliage stands still at its nearest level of detail",
+                "terrain and foliage levels of detail and foliage wind",
+                "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
             );
         }
         if !frame.effects.is_empty() {

@@ -1,8 +1,10 @@
 //! Terrain and foliage on the Renderlab path, first pass: ordinary meshes.
 //!
 //! Each resident terrain tile is the world-space mesh Ara's presenter already builds
-//! for presented frames (`ara_runtime_render::terrain_mesh`): full resolution, with a
-//! base-colour texture tinted by the tile's splat weights. Each foliage instance of
+//! (`ara_runtime_render::terrain_mesh`), at full resolution. Its colour is the base
+//! colour factor of each of the terrain's splat-layer materials, blended by the tile's
+//! splat weights into one texture; a terrain without layer materials has Ara's default
+//! white surface. Each foliage instance of
 //! a resident tile draws the parts of its rule's model. What that leaves out against
 //! `ara-landscape`: distance levels of detail, the layered terrain materials and their
 //! virtual texture, and wind. Tiles and foliage follow tile residency, so streaming
@@ -41,7 +43,7 @@ struct Tile {
     object: ObjectId,
     mesh: MeshId,
     material: MaterialId,
-    texture: TextureId,
+    texture: Option<TextureId>,
 }
 
 /// The terrain tiles placed in Renderlab and the frame's foliage as draws.
@@ -74,9 +76,13 @@ impl Terrain {
         let mut coords = terrain.tiles.clone();
         coords.sort();
         coords.dedup();
+        let layers = Layers::resolve(view, gaps);
         let wanted: Vec<_> = coords
             .iter()
-            .filter_map(|coord| self.meshes.tile(&terrain.data, *coord))
+            .filter_map(|coord| {
+                let mesh = self.meshes.tile(&terrain.data, *coord)?;
+                Some((mesh.key ^ layers.key, mesh, terrain.data.tiles.get(coord)?))
+            })
             .collect();
         if wanted.len() > budget {
             gaps.limit(
@@ -88,7 +94,7 @@ impl Terrain {
                 ),
             );
         }
-        let keep: HashSet<u64> = wanted.iter().take(budget).map(|tile| tile.key).collect();
+        let keep: HashSet<u64> = wanted.iter().take(budget).map(|tile| tile.0).collect();
         let gone: Vec<u64> = self
             .tiles
             .keys()
@@ -100,9 +106,9 @@ impl Terrain {
                 release(engine, tile)?;
             }
         }
-        for tile in wanted.iter().take(budget) {
-            if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(tile.key) {
-                slot.insert(place(engine, tile)?);
+        for (key, mesh, tile) in wanted.iter().take(budget) {
+            if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(*key) {
+                slot.insert(place(engine, mesh, &tile.weights, &layers)?);
             }
         }
 
@@ -207,27 +213,98 @@ impl Terrain {
     }
 }
 
-/// Uploads one tile: its mesh, its splat-tinted colour texture and a rough material.
-fn place(engine: &mut Engine, tile: &TileMesh) -> Result<Tile> {
+/// The terrain's splat layers as the bridge draws them.
+struct Layers {
+    /// Linear base colour factor per splat channel; `None` without layer materials.
+    colours: Option<[[f32; 3]; 4]>,
+    roughness: f32,
+    /// Changes when the colours do, so tiles are placed again.
+    key: u64,
+}
+
+impl Layers {
+    fn resolve(view: &ExternalView<'_>, gaps: &mut Gaps) -> Self {
+        let references = view
+            .frame
+            .terrain
+            .as_ref()
+            .map_or(&[][..], |terrain| &terrain.data.header.materials[..]);
+        if references.is_empty() {
+            // As Ara's default surface: white, half rough.
+            return Self {
+                colours: None,
+                roughness: 0.5,
+                key: 0,
+            };
+        }
+        gaps.unsupported(
+            "terrain layer maps",
+            "each layer shows its base colour factor, blended by the splat weights",
+        );
+        let mut colours = [[1.; 3]; 4];
+        let (mut roughness, mut key) = (0., FNV);
+        for (colour, reference) in colours.iter_mut().zip(references) {
+            let material = view.terrain_materials.get(&reference.0).map(|m| &m.material);
+            if let Some(material) = material {
+                colour.copy_from_slice(&material.base_color[..3]);
+            }
+            roughness += material.map_or(0.5, |m| m.roughness) / references.len().min(4) as f32;
+            for channel in colour {
+                key = fnv(key, &channel.to_bits().to_le_bytes());
+            }
+        }
+        Self {
+            colours: Some(colours),
+            roughness: roughness.clamp(0.045, 1.),
+            key,
+        }
+    }
+}
+
+/// Uploads one tile: its mesh and a material coloured by its splat layers.
+fn place(
+    engine: &mut Engine,
+    tile: &TileMesh,
+    weights: &[[u8; 4]],
+    layers: &Layers,
+) -> Result<Tile> {
     let vertices: Vec<Vertex> = tile.source.vertices.iter().map(scene::vertex).collect();
     let mesh = engine.create_mesh(&MeshData {
         vertices: &vertices,
         indices: &tile.source.indices,
     })?;
-    let texture = engine.create_texture(texture::chain(
-        tile.texture.size,
-        tile.texture.rgba.clone(),
-        TextureRole::BaseColorSrgb,
-    ))?;
+    // One texel per height sample, as the tile mesh's coordinates address them.
+    let texture = match layers.colours {
+        Some(colours) if weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1] => {
+            let mut rgba = Vec::with_capacity(weights.len() * 4);
+            for sample in weights {
+                let total = sample.iter().map(|w| f32::from(*w)).sum::<f32>().max(1.);
+                for channel in 0..3 {
+                    let linear: f32 = colours
+                        .iter()
+                        .zip(sample)
+                        .map(|(colour, weight)| colour[channel] * f32::from(*weight) / total)
+                        .sum();
+                    rgba.push(texture::linear_to_srgb(linear));
+                }
+                rgba.push(255);
+            }
+            Some(engine.create_texture(texture::chain(
+                tile.texture.size,
+                rgba,
+                TextureRole::BaseColorSrgb,
+            ))?)
+        }
+        _ => None,
+    };
     let material = engine.create_material(&MaterialDesc {
         base_color: [1.; 4],
         metallic: 0.,
-        // As Ara's presenter draws its tile meshes.
-        roughness: 0.95,
+        roughness: layers.roughness,
         double_sided: true,
-        base_color_texture: Some(TextureRef {
+        base_color_texture: texture.map(|texture| TextureRef {
             texture,
-            // One texel per height sample across the tile: no wrap onto the far edge.
+            // No wrap onto the tile's far edge.
             sampler: Sampler {
                 wrap_u: Wrap::Clamp,
                 wrap_v: Wrap::Clamp,
@@ -249,6 +326,8 @@ fn release(engine: &mut Engine, tile: Tile) -> Result<()> {
     engine.despawn(tile.object)?;
     engine.remove_material(tile.material)?;
     engine.remove_mesh(tile.mesh)?;
-    engine.remove_texture(tile.texture)?;
+    if let Some(texture) = tile.texture {
+        engine.remove_texture(texture)?;
+    }
     Ok(())
 }
