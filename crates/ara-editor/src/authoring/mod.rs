@@ -1,6 +1,7 @@
 //! Typed resource creation and shared command registration for authoring panels.
 pub(crate) mod animation;
 mod commands;
+mod material_duplicate;
 mod material_fields;
 use ara_host::{Cx, Method, Service, parse};
 use ara_schema::{Schema, SchemaDb};

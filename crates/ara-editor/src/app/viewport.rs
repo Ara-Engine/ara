@@ -18,7 +18,7 @@ mod scene_switch;
 pub(super) mod selection;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
-pub(super) use startup::prepare_renderer;
+pub(crate) use startup::prepare_renderer;
 
 #[derive(Clone, Copy)]
 enum RasterWork {
@@ -31,7 +31,7 @@ enum RasterWork {
 /// overlays draw with the frame on screen, so gizmos never drift from the image while
 /// Scene frames lag the camera.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct FrameView {
+pub(crate) struct FrameView {
     pub camera: crate::state::Camera,
     /// The gizmo drag offset of that frame (`GizmoState::offset`).
     pub offset: glam::Mat4,
@@ -40,11 +40,11 @@ pub(super) struct FrameView {
     pub revision: u64,
 }
 #[derive(Default)]
-pub(super) struct SceneView {
+pub(crate) struct SceneView {
     /// Recent submitted frames by tag (`Renderer::set_frame_tag`), oldest first.
     frames: std::collections::VecDeque<(u64, FrameView)>,
     /// The live gizmo drag offset for the next frames, set by the main loop.
-    pub(super) gizmo_offset: glam::Mat4,
+    pub(crate) gizmo_offset: glam::Mat4,
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,

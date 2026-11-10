@@ -177,7 +177,7 @@ impl Default for Options {
         }
     }
 }
-pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
+pub(crate) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
     if let Some(scene) = &options.scene {
         editor.action("editor.scene.open", json!({"scene": scene}))?;
     }
