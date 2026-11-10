@@ -232,7 +232,7 @@ fn nearest_vertex(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::shell::overlay;
+    use crate::overlay;
     use glam::Mat4;
     #[test]
     fn vertex_query_uses_host_local_orthographic_geometry_and_excludes_the_selected_source() {

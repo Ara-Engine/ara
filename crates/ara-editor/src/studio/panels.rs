@@ -9,7 +9,7 @@ use stillkit::el::{Align, Axis, El, Justify, col, el, icon, row, text, virtual_l
 
 use super::Studio;
 use super::state::LogRow;
-use crate::shell::assets::Asset;
+use crate::assets::Asset;
 
 pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
     match panel {
@@ -642,7 +642,7 @@ fn view_menu(s: &Studio) -> El<Studio> {
 }
 
 /// Every folder Assets knows (listed, or holding a listed file), without a trailing `/`.
-fn folders(browser: &crate::shell::assets::Browser) -> std::collections::BTreeSet<String> {
+fn folders(browser: &crate::assets::Browser) -> std::collections::BTreeSet<String> {
     let mut out = std::collections::BTreeSet::new();
     for a in &browser.items {
         let path = a.path.trim_end_matches('/');
@@ -898,7 +898,7 @@ fn conflicts_dialog(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
 /// Move to Folder: the project's folders to pick from, searched as you type.
 fn move_dialog(
     s: &Studio,
-    browser: &crate::shell::assets::Browser,
+    browser: &crate::assets::Browser,
 ) -> Option<stillkit::el::Overlay<Studio>> {
     let l = &s.look;
     let c = &l.c;
@@ -990,7 +990,7 @@ fn move_dialog(
 }
 
 /// How many visible entries (files and subfolders) each folder holds directly.
-fn contents(browser: &crate::shell::assets::Browser) -> std::collections::HashMap<String, usize> {
+fn contents(browser: &crate::assets::Browser) -> std::collections::HashMap<String, usize> {
     let mut seen = std::collections::HashSet::new();
     let mut counts = std::collections::HashMap::new();
     for a in &browser.items {
@@ -1025,7 +1025,7 @@ fn folder_tint(l: &ara_kit::look::Look, empty: bool) -> stillkit::Rgba {
 
 /// Every folder in the project, as a tree: the open ones and the current one's ancestors
 /// show their children. A click opens the folder in the grid.
-fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
+fn folder_tree(s: &Studio, browser: &crate::assets::Browser, current: &str) -> El<Studio> {
     let l = &s.look;
     let counts = contents(browser);
     let mut dirs = std::collections::BTreeSet::new();
@@ -1671,7 +1671,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     if file.ends_with(".cs") {
                         let at = line.map(|l| (l, column.unwrap_or(1)));
                         super::asset_ops::open_in_ide(s, &file, at);
-                    } else if let Err(error) = crate::shell::ops::open_external(&path) {
+                    } else if let Err(error) = crate::system::open_external(&path) {
                         s.editor.report_failure(&*anyhow::anyhow!("{error}"));
                     }
                 }),
@@ -2095,7 +2095,7 @@ fn place(s: &mut Studio, path: &str, at: (f32, f32)) {
         w: view.width(),
         h: view.height(),
     };
-    let ground = crate::shell::overlay::ground_point(
+    let ground = crate::overlay::ground_point(
         &s.editor.state.camera,
         rect,
         [at.0 - view.left, at.1 - view.top],

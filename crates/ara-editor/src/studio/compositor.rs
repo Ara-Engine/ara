@@ -1,7 +1,7 @@
 //! The Scene view's GPU compositor: the renderer's image with the editor's scene overlays
 //! (grid, selection and agent outlines by entity, the transform gizmo) drawn over it on the
 //! GPU UI adapter, then presented into the studio's native layer. The overlays are the same
-//! `shell::overlay` geometry and shaders the legacy window used; only the host changed.
+//! `crate::overlay` geometry and shaders the legacy window used; only the host changed.
 
 use anyhow::Result;
 use ara_ui::paint::{Box2, DisplayList, Draw};
@@ -10,7 +10,7 @@ use ara_ui_render::atlas::TextMode;
 use ara_ui_render::gpu::Renderer as UiRenderer;
 
 use crate::gpu::{NativeUi, ui_device};
-use crate::shell::overlay::{self, GizmoState, Outlines};
+use crate::overlay::{self, GizmoState, Outlines};
 use crate::state::EditorState;
 use crate::world::DocumentView;
 

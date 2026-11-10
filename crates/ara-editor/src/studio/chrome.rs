@@ -416,8 +416,8 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
                 .collect()
         }
         Dynamic::GizmoTypes => {
-            let settings = crate::shell::overlay::gizmos::Settings::read(&e.state);
-            crate::shell::overlay::gizmos::TYPES
+            let settings = crate::overlay::gizmos::Settings::read(&e.state);
+            crate::overlay::gizmos::TYPES
                 .iter()
                 .map(|g| {
                     entry(

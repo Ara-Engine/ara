@@ -157,9 +157,7 @@ fn picker(
         .scroll(Axis::Vertical);
     if found.len() == 1 {
         let what = match &f.widget {
-            Widget::Asset { kind } => {
-                crate::shell::assets::field_accepts(kind.as_deref(), &f.path).1
-            }
+            Widget::Asset { kind } => crate::assets::field_accepts(kind.as_deref(), &f.path).1,
             _ => "an entity",
         };
         list = list.child(

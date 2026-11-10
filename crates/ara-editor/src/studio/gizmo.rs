@@ -1,12 +1,12 @@
 //! Transform gizmo input in the Scene view: hover lights the handle under the pointer, a
 //! press on one starts an editor gesture (`begin_gesture_tool`), moves drive it, release
 //! commits it as one undo step and Escape or a lost capture cancels. Geometry and hit tests
-//! are `shell::overlay`'s, the same the compositor draws; this file only maps pointer
+//! are `crate::overlay`'s, the same the compositor draws; this file only maps pointer
 //! movement to the gesture's delta (along an axis, across a plane, around a ring).
 use glam::{Vec2, Vec3};
 
 use super::Studio;
-use crate::shell::overlay::{self, Handle, Handles};
+use crate::overlay::{self, Handle, Handles};
 use crate::state::Tool;
 use ara_ui::paint::Box2;
 

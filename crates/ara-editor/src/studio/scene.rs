@@ -68,8 +68,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                             w: size.0,
                             h: size.1,
                         };
-                        let ground =
-                            crate::shell::overlay::ground_point(&s.editor.state.camera, rect, at);
+                        let ground = crate::overlay::ground_point(&s.editor.state.camera, rect, at);
                         (
                             super::create::Anchor::Point(window.0, window.1),
                             ground.map(|p| [p.x, p.y, p.z]),
@@ -317,7 +316,7 @@ fn marquee_hits(s: &Studio, a: [f32; 2], b: [f32; 2], size: (f32, f32)) -> Vec<S
         .filter(|(id, _)| !state.hidden.contains(id) && !state.locked.contains(id))
         .filter_map(|(id, m)| {
             let origin = m.w_axis.truncate();
-            let [x, y] = crate::shell::overlay::project(&camera, rect, origin)?;
+            let [x, y] = crate::overlay::project(&camera, rect, origin)?;
             ((x0..=x1).contains(&x) && (y0..=y1).contains(&y))
                 .then(|| ((origin - eye).length(), id))
         })

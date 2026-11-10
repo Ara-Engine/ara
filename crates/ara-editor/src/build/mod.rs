@@ -967,7 +967,7 @@ impl Builder {
             .parent()
             .ok_or("The package has no output folder")?;
         if !offscreen {
-            crate::shell::ops::open_external(directory)?;
+            crate::system::open_external(directory)?;
         }
         self.note = Some(format!("Package: {}", artifact.path.display()));
         Ok(())

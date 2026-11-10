@@ -1121,8 +1121,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         // Help.
-        "help.docs" => crate::shell::ops::open_docs(e),
-        "help.logs" => crate::shell::ops::open_external(&e.host.root().join(".ara")),
+        "help.docs" => crate::system::open_docs(e),
+        "help.logs" => crate::system::open_external(&e.host.root().join(".ara")),
         "console.clear" => {
             s.logs.clear();
             s.local.console_open = None;
@@ -1823,7 +1823,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose a saved search or favourite".into()),
         },
-        "tools.terminal" => crate::shell::ops::open_terminal(e.host.root()),
+        "tools.terminal" => crate::system::open_terminal(e.host.root()),
         "tools.references" => match asset_of(e, target) {
             Some(path) => {
                 s.local.inspect_asset = true;

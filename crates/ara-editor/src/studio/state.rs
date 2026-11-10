@@ -394,7 +394,7 @@ pub struct Local {
     /// Fly keys held down (W A S D Q E, as virtual keys).
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
-    pub gizmo_hover: Option<crate::shell::overlay::Handle>,
+    pub gizmo_hover: Option<crate::overlay::Handle>,
     /// A change to the OS window the host makes on its next pass.
     pub window: Option<WindowRequest>,
     /// Problems shown: errors, warnings.
@@ -453,7 +453,7 @@ pub struct Studio {
     /// The window's size in design px.
     pub size: (f32, f32),
     /// The project's files, scanned in the background (Assets).
-    pub(crate) assets: Option<crate::shell::assets::Browser>,
+    pub(crate) assets: Option<crate::assets::Browser>,
     /// Asset thumbnails rendered off-thread (models, materials, textures), by storage path.
     pub(crate) previews: Previews,
     /// The diagnostics bus so far (Console, Problems), oldest first.

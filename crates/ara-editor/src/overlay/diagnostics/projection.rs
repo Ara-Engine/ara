@@ -60,7 +60,7 @@ pub(super) fn project(
     }
 }
 /// Clip a homogeneous segment to the view frustum (shared with Scene gizmos).
-pub(in crate::shell::overlay) fn clip(from: Vec4, to: Vec4) -> Option<[Vec4; 2]> {
+pub(in crate::overlay) fn clip(from: Vec4, to: Vec4) -> Option<[Vec4; 2]> {
     if !from.is_finite() || !to.is_finite() {
         return None;
     }
