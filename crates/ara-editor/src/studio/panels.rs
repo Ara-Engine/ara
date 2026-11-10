@@ -2026,6 +2026,19 @@ fn problems(s: &Studio) -> El<Studio> {
         )
     } else {
         let mut out = col().pad(8.0).gap(8.0);
+        // Files with errors first, then the most problems, then by name.
+        let mut groups: Vec<_> = groups.into_iter().collect();
+        groups.sort_by_key(|(file, rows)| {
+            let errors = rows
+                .iter()
+                .filter(|r| r.severity == ara_diag::Severity::Error)
+                .count();
+            (
+                std::cmp::Reverse(errors),
+                std::cmp::Reverse(rows.len()),
+                *file,
+            )
+        });
         for (file, rows) in groups {
             let mut card = col()
                 .radius(super::style::RADIUS)
