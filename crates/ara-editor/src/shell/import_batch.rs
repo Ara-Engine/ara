@@ -168,4 +168,3 @@ pub(super) fn numeric_bounds(
         String::new()
     }
 }
-

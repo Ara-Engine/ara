@@ -410,9 +410,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 button(l, Tone::Ghost, Size::Sm, Some(glyph), label)
                     .key(format!("animation/add/{kind}"))
                     .on_press(move |s: &mut Studio| {
-                        if let Err(error) =
-                            crate::animation_edit::edit(&mut s.editor, &doc, kind)
-                        {
+                        if let Err(error) = crate::animation_edit::edit(&mut s.editor, &doc, kind) {
                             s.editor.report_failure(&*error);
                         }
                     })

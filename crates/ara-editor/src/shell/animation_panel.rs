@@ -5,9 +5,7 @@
 //! During Play the page follows a running animator ([`AnimationLive`]): the playing
 //! state lights up on the canvas and parameters show their live values.
 use super::*;
-use ara_anim::graph::{
-    ControllerData, Node, NodeKind, ParameterKind, Transition,
-};
+use ara_anim::graph::{ControllerData, Node, NodeKind, ParameterKind, Transition};
 
 /// Width of the parameters + transitions column, in logical pixels.
 const SIDE: f32 = 240.;
