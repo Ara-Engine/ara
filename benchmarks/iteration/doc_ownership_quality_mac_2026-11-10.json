@@ -663,5 +663,21 @@
       ]
     }
   ],
-  "final_solution_matches_measured_closure": true
+  "before_main_merge_final_solution_matches_measured_closure": true,
+  "integration": {
+    "tested_head": "12df5b97997af3e4314a21542bb7cdb0d6d0a5cc",
+    "main": "2f72e2de564a8264decd60eb79ed2e8f50a36227",
+    "dotnet_passed": 340,
+    "native_passed": 10,
+    "formatted_packages": 116,
+    "build_warnings": 0,
+    "build_errors": 0,
+    "source_blobs_unchanged": true,
+    "proof_sha256": {
+      "target/script-overnight-20261110/doc-ownership/main-merge/build.log": "66e962d60edcf2cbd75f778b047497ff0c378ef31779bc02e1344936206e04ad",
+      "target/script-overnight-20261110/doc-ownership/main-merge/tests.log": "bee39f056f38cc45784b8953c3f1cc9e525aa0fcdb5684566fe6d943899b1ab9",
+      "target/script-overnight-20261110/doc-ownership/main-merge/native.log": "24f0dbfa9f8009960c84c0f308f5e4586d4dec2563fc514b0a5f0dff5b8ac6f5",
+      "target/script-overnight-20261110/doc-ownership/main-merge/fmt.log": "982395cb5383a770945b48918e0d3aacfda16251bcf13a130f43ded1b2cb4250"
+    }
+  }
 }
