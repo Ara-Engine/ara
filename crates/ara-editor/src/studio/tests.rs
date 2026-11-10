@@ -2111,17 +2111,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     });
     settle(&mut rt);
     press(&mut rt, &format!("assets/move/{art}"));
-    for _ in 0..3000 {
-        if rt.touch(|s| {
-            s.editor.tick();
-            super::asset_ops::poll_jobs(s);
-            s.local.asset_jobs.is_empty()
-        }) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    assert!(content.join("art/notes.md").is_file(), "moved on disk");
+    finish_file_jobs(&mut rt, &content.join("art/notes.md"));
     assert!(!content.join("levels/notes.md").exists());
     // Import a file from outside, then again: the second asks before overwriting.
     let outside = root.join("outside");
@@ -2789,16 +2779,7 @@ fn new_script_is_named_in_place_then_compiles_and_attaches() {
     rt.update(|s| super::asset_ops::rename(s, &path, "Mover"));
     let root = rt.state().editor.host.root().to_owned();
     let moved = path.replace("NewBehaviour", "Mover");
-    for _ in 0..3000 {
-        if rt.touch(|s| {
-            s.editor.tick();
-            super::asset_ops::poll_jobs(s);
-            s.local.asset_jobs.is_empty()
-        }) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    finish_file_jobs(&mut rt, &root.join(&moved));
     let source = std::fs::read_to_string(root.join(&moved)).expect("renamed on disk");
     assert!(source.contains("class Mover"), "the class follows the file");
     // Where the engine's C# tools are built it compiles and attaches; elsewhere the
@@ -3613,6 +3594,47 @@ fn track(rt: &mut Runtime<Studio>, keys: &[&str]) {
     rt.touch(|s| s.local.rects.extend(rects));
 }
 
+/// Waits for the file jobs an operation just queued to end and for `file` to exist: their
+/// own completion, never an empty job list (which an operation that queued nothing also
+/// shows). Fails at once when nothing was queued, and after a minute otherwise.
+fn finish_file_jobs(rt: &mut Runtime<Studio>, file: &std::path::Path) {
+    let jobs: Vec<String> = rt
+        .state()
+        .local
+        .asset_jobs
+        .iter()
+        .map(|(job, _)| job.clone())
+        .collect();
+    assert!(
+        !jobs.is_empty(),
+        "the operation queued no file job for {}",
+        file.display()
+    );
+    let started = std::time::Instant::now();
+    while started.elapsed() < Duration::from_secs(60) {
+        rt.touch(|s| {
+            s.editor.tick();
+            super::asset_ops::poll_jobs(s);
+        });
+        let running = |rt: &Runtime<Studio>| {
+            rt.state()
+                .local
+                .asset_jobs
+                .iter()
+                .any(|(job, _)| jobs.contains(job))
+        };
+        if !running(rt) && file.is_file() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!(
+        "{} after a minute; jobs {jobs:?} running: {:?}",
+        file.display(),
+        rt.state().local.asset_jobs
+    );
+}
+
 /// Presses the element keyed `key` (hovered first, as a pointer would).
 fn press(rt: &mut Runtime<Studio>, key: &str) {
     let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
@@ -4414,6 +4436,9 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
     {
         rt.touch(|s| super::graph::sync(s, "material"));
         rt.touch(super::graph::previews);
+        if let Some(error) = rt.state().graph.preview_error() {
+            panic!("the previews can't render here: {error}");
+        }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
     assert!(

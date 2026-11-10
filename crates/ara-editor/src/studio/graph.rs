@@ -94,6 +94,11 @@ impl Page {
     pub(super) fn previewed(&self) -> usize {
         self.shown.as_ref().map_or(0, |g| g.canvas.previews.len())
     }
+    /// Why the in-node previews couldn't render, once the worker said (tests).
+    #[cfg(test)]
+    pub(super) fn preview_error(&self) -> Option<&str> {
+        self.previews.reported.as_deref()
+    }
     /// Picks `id` alone on the canvas (a transition from the Details' list).
     pub(super) fn pick(&mut self, id: String) {
         if let Some(shown) = self.shown.as_mut() {
