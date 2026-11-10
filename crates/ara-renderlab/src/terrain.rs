@@ -32,9 +32,10 @@ const MAX_FOLIAGE_DRAWS: usize = 60_000;
 /// Triangles a draw's mesh holds (shapes: a few hundred at most).
 fn triangles(draw: &Draw) -> usize {
     match &draw.geometry {
-        ara_runtime::extract::Geometry::Model { model, primitive } => {
-            model.primitives.get(*primitive).map_or(0, |p| p.indices.len() / 3)
-        }
+        ara_runtime::extract::Geometry::Model { model, primitive } => model
+            .primitives
+            .get(*primitive)
+            .map_or(0, |p| p.indices.len() / 3),
         ara_runtime::extract::Geometry::Shape { .. } => 1024,
     }
 }
@@ -167,7 +168,12 @@ impl Terrain {
         key = fnv(key, &cap.to_le_bytes());
         if key != self.foliage_key {
             self.foliage_key = key;
-            self.rebuild_foliage(view, &coords.iter().map(|c| (c.x, c.z)).collect(), cap, gaps);
+            self.rebuild_foliage(
+                view,
+                &coords.iter().map(|c| (c.x, c.z)).collect(),
+                cap,
+                gaps,
+            );
         }
         Ok((self.tiles.len(), largest))
     }
