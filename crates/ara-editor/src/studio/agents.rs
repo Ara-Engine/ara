@@ -15,7 +15,7 @@ use stillkit::el::{Align, Axis, El, col, el, icon, row, text};
 
 use super::Studio;
 use crate::activity::short_author;
-use crate::shell::agents_panel::{ago, file_change, turns};
+use crate::turns::{ago, file_change, turns};
 
 /// The Agents panel.
 pub(super) fn agents(s: &Studio) -> El<Studio> {
@@ -156,7 +156,7 @@ fn presence_row(s: &Studio, id: &str, p: &crate::state::AgentPresence) -> El<Stu
 }
 
 /// One agent turn: why, who, when, what it did; Undo Turn; its ops when open.
-fn turn_card(s: &Studio, turn: &crate::shell::agents_panel::Turn, now: Instant) -> El<Studio> {
+fn turn_card(s: &Studio, turn: &crate::turns::Turn, now: Instant) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let store = s.editor.host.store();
