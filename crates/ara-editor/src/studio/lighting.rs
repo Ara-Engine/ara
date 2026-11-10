@@ -115,6 +115,31 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .on_dismiss(|s: &mut Studio| s.local.lighting_menu = None),
         );
     }
+    // Reflection probes recapture on demand (the scene is unchanged); a running capture
+    // offers Cancel instead.
+    let capture = if capturing(s) {
+        button(l, Tone::Ghost, Size::Sm, Some(icons::X), "Cancel capture")
+            .key("lighting/probe/cancel")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "lighting.probe.cancel", &crate::catalog::Target::None)
+            })
+    } else {
+        enabled(
+            button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                Some(icons::REFRESH_CW),
+                "Recapture",
+            )
+            .key("lighting/probe/recapture")
+            .tooltip("Capture the selected reflection probes again")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "lighting.probe.recapture", &crate::catalog::Target::None)
+            }),
+            !probes(s, None).is_empty(),
+        )
+    };
     let toolbar = row()
         .h(super::style::TOOLBAR + 6.0)
         .pad_x(6.0)
@@ -122,7 +147,8 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .align(Align::Center)
         .child(search)
         .child(add)
-        .child(presets);
+        .child(presets)
+        .child(capture);
     let body = if rows.is_empty() {
         col().grow(1.0).justify(Justify::Center).child(empty(
             l,
@@ -232,8 +258,93 @@ fn create(s: &mut Studio, kind: Create) {
     }
 }
 
+/// What a probe capture job is followed as (`Local::asset_jobs`).
+const RECAPTURE: &str = "Recapture reflection probes";
+
+/// The selected Reflection Probes (or `entity`, when given).
+fn probes(s: &Studio, entity: Option<&str>) -> Vec<String> {
+    match entity {
+        Some(entity) => vec![entity.to_owned()],
+        None => s
+            .editor
+            .state
+            .selection
+            .iter()
+            .filter(|id| {
+                s.resolved
+                    .get(*id)
+                    .is_some_and(|e| e.record.contains_key("ReflectionProbe"))
+            })
+            .cloned()
+            .collect(),
+    }
+}
+
+/// Queues a fresh capture of the selected Reflection Probes (derived data: the scene is
+/// unchanged); the host loop follows the job, a failure says why.
+pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<()> {
+    let entities = probes(s, entity);
+    if entities.is_empty() {
+        return Err("Select one or more Reflection Probes to recapture".into());
+    }
+    for id in &entities {
+        let value = s
+            .resolved
+            .get(id)
+            .and_then(|e| e.record.get("ReflectionProbe"))
+            .ok_or("That entity has no Reflection Probe")?;
+        let probe: ara_components::render::ReflectionProbe =
+            serde::Deserialize::deserialize(value)?;
+        if let Some(reason) = probe.invalid() {
+            return Err(reason.into());
+        }
+    }
+    let reply = s.editor.action(
+        "render.probe.recapture",
+        serde_json::json!({"doc": s.editor.state.doc, "entities": entities, "why": RECAPTURE}),
+    )?;
+    let job = reply["job"]
+        .as_str()
+        .ok_or("The recapture returned no job")?
+        .to_owned();
+    s.local.asset_jobs.push((job, RECAPTURE.to_owned()));
+    super::note(
+        s,
+        match entities.len() {
+            1 => "Recapturing 1 reflection probe".to_owned(),
+            n => format!("Recapturing {n} reflection probes"),
+        },
+    );
+    Ok(())
+}
+
+/// Asks this window's running probe captures to stop.
+pub(super) fn cancel(s: &mut Studio) -> ara_ui::Result<()> {
+    let jobs: Vec<String> = s
+        .local
+        .asset_jobs
+        .iter()
+        .filter(|(_, why)| why == RECAPTURE)
+        .map(|(job, _)| job.clone())
+        .collect();
+    if jobs.is_empty() {
+        return Err("No probe capture is running".into());
+    }
+    for job in jobs {
+        s.editor
+            .action("render.probe.cancel", serde_json::json!({"job": job}))?;
+    }
+    super::note(s, "Probe capture cancelled");
+    Ok(())
+}
+
+/// Whether a probe capture this window started is still running.
+pub(super) fn capturing(s: &Studio) -> bool {
+    s.local.asset_jobs.iter().any(|(_, why)| why == RECAPTURE)
+}
+
 /// Appends `preset`'s override groups to the selected volumes (one undo step).
-fn apply_preset(s: &mut Studio, preset: Preset) {
+pub(super) fn apply_preset(s: &mut Studio, preset: Preset) {
     s.local.lighting_menu = None;
     match authoring::preset_commands(&s.editor, &s.resolved, preset) {
         Ok((commands, why)) => s.apply(commands, why),
