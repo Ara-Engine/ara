@@ -303,11 +303,17 @@ fn menus_label_undo_explain_disabled_items_and_filter_as_you_type() {
     // Type-to-filter flattens submenus: "grid" finds Snapping ▸ Grid Snap Size….
     let found = shell.filter_menu(&mut editor, 1, "grid").unwrap();
     assert!(found.iter().any(|r| r.0 == "snap.grid"), "{found:?}");
-    // The keymap runs Edit ▸ Undo through Ctrl+Z.
+    // The keymap runs Edit ▸ Undo through Ctrl+Z (Cmd+Z on macOS).
     let mut clipboard = MemoryClipboard::default();
-    shell.key(&mut editor, 224, true, &mut clipboard).unwrap();
+    // The primary modifier: Cmd on macOS, Ctrl elsewhere.
+    let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
+    shell
+        .key(&mut editor, primary, true, &mut clipboard)
+        .unwrap();
     shell.key(&mut editor, 29, true, &mut clipboard).unwrap();
-    shell.key(&mut editor, 224, false, &mut clipboard).unwrap();
+    shell
+        .key(&mut editor, primary, false, &mut clipboard)
+        .unwrap();
     let x =
         editor.view().unwrap().entities()["e_crate001"].record["Transform"]["position"][0].clone();
     assert_eq!(x, json!(0));

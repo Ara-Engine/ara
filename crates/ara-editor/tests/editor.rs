@@ -905,9 +905,15 @@ fn material_canvas_create_connect_and_keyboard_undo() {
             .node,
         source
     );
-    shell.key(&mut editor, 224, true, &mut clipboard).unwrap();
+    // The primary modifier: Cmd on macOS, Ctrl elsewhere.
+    let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
+    shell
+        .key(&mut editor, primary, true, &mut clipboard)
+        .unwrap();
     shell.key(&mut editor, 29, true, &mut clipboard).unwrap();
-    shell.key(&mut editor, 224, false, &mut clipboard).unwrap();
+    shell
+        .key(&mut editor, primary, false, &mut clipboard)
+        .unwrap();
     let undone =
         ara_graph::Graph::from_document(editor.host.store().workspace().doc(&doc).unwrap())
             .unwrap();
