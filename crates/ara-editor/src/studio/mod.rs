@@ -226,7 +226,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             if pump(&mut rt, &mut surface, started, Some(&mut game))? {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(8));
+            std::thread::sleep(Duration::from_millis(1));
             continue;
         }
         // While profiling records, every pass is a frame (the Profiler panel reads them).
@@ -667,7 +667,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
-            if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
+            if (rt.state().graph.dirty || graph_extent != (name, extent))
+                && graph_layer.ready(&renderer)?
+            {
                 let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.

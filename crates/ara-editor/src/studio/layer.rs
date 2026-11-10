@@ -43,9 +43,23 @@ impl Layer {
     }
 
     /// Whether the last frame left the GPU (else skip this pass and draw on a later one).
-    pub fn ready(&self) -> Result<bool> {
-        self.ui
-            .wait_previous_for(std::time::Duration::from_millis(1))
+    pub fn ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+        #[cfg(windows)]
+        let started = std::time::Instant::now();
+        let budget = std::time::Duration::from_millis(1);
+        if !self.ui.wait_previous_for(budget)? {
+            return Ok(false);
+        }
+        // Windows' bounded blit may still read the target the next draw resizes.
+        #[cfg(windows)]
+        if let Some((present, _, _)) = &mut self.present {
+            // SAFETY: the layer and renderer retain the presentation's creating device.
+            return unsafe {
+                present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))
+            };
+        }
+        let _ = renderer;
+        Ok(true)
     }
 
     /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels.
