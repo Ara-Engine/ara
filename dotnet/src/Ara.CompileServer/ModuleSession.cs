@@ -497,6 +497,11 @@ internal sealed partial class ModuleSession
         var escalation = !ctx.Enc || !s.Hot ? Escalation.Cold : Escalation.None;
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
         if (cls is not null) escalation = cls.Escalation;
+        if (escalation == Escalation.None && cls is not null
+            && ((cls.Bodies.Count > 0 && EditClassifier.PrimaryConstructorsAffect(cls.Bodies.Select(body => body.Old), s.Final))
+                || (cls.Inserts.Count > 0 && EditClassifier.PrimaryConstructorsAffect(
+                    cls.Inserts.Where(insert => insert.Node is not BaseTypeDeclarationSyntax and not DelegateDeclarationSyntax).Select(insert => insert.Node), next))))
+            escalation = Escalation.Constructor;
         p.Parse = p.Mark();
         var docsChanged = escalation == Escalation.None && cls is not null && !cls.Additive && EditClassifier.DocsChanged(changes);
         (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, SourceText>)? reuse = null;

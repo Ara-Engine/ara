@@ -123,6 +123,39 @@ internal static class EditClassifier
         return new(Escalation.None, c.Bodies, c.Inserts);
     }
 
+    /// <summary>Primary parameters can become fields when any partial part captures them; their owning types require full generation.</summary>
+    internal static bool PrimaryConstructorsAffect(IEnumerable<SyntaxNode> bodies, Compilation compilation)
+    {
+        var checkedOwners = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var group in bodies.GroupBy(body => body.SyntaxTree))
+        {
+            var model = compilation.GetSemanticModel(group.Key);
+            foreach (var body in group)
+            {
+                if (body is BaseFieldDeclarationSyntax field)
+                {
+                    foreach (var variable in field.Declaration.Variables)
+                        if (Affected(model.GetDeclaredSymbol(variable))) return true;
+                }
+                else if (Affected(model.GetDeclaredSymbol(body))) return true;
+            }
+        }
+        return false;
+
+        bool Affected(ISymbol? symbol)
+        {
+            var owner = symbol?.ContainingType;
+            if (owner is null) return true; // Unresolved ownership cannot prove a body-only change.
+            for (; owner is not null; owner = owner.ContainingType)
+            {
+                if (!checkedOwners.Add(owner)) continue;
+                if (owner.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     /// <summary>
     /// True if any doc comment or its attachment changed. Doc comments are trivia (invisible to the member
     /// diff) but the generator turns them into schema docs, so the compile server checks
