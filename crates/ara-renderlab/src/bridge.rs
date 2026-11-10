@@ -4,9 +4,12 @@
 //! a CPU copy (a readback there, an upload here). Either crossing is timed.
 use crate::{
     ActivePath, Options, PathChoice,
+    decals::Decals,
+    environment,
     gaps::Gaps,
-    lighting::{self, Metering},
-    scene::Scene,
+    lighting::{self, Metering, SkySource},
+    scene::{MAX_GROUPS, Scene},
+    terrain::Terrain,
     shared::SharedHandoff,
 };
 use anyhow::{Context, Result, anyhow};
@@ -15,8 +18,8 @@ use ara_gpu::{
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::engine::{
-    Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, RenderPath, Sky, Sun,
-    headless_adapter,
+    AtmosphereMedium, Background, Capabilities, Engine, EngineDescriptor, EnvironmentId,
+    ExperimentalRayQuery, Light, Limits, RenderPath, Sky, Sun, headless_adapter,
 };
 use std::time::{Duration, Instant};
 
@@ -41,6 +44,8 @@ struct Applied {
     sun: Option<Sun>,
     lights: Vec<Light>,
     sky: Option<Sky>,
+    /// The prepared sky map in use and the content key it was prepared from.
+    sky_map: Option<(u64, EnvironmentId)>,
 }
 
 pub(crate) struct Bridge {
@@ -50,6 +55,8 @@ pub(crate) struct Bridge {
     engine: Engine,
     path: ActivePath,
     scene: Scene,
+    terrain: Terrain,
+    decals: Decals,
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
@@ -102,6 +109,11 @@ impl Bridge {
                 pipeline_cache: options.pipeline_cache.clone(),
                 // Renderlab defaults to none: ground textures smear at grazing angles.
                 texture_anisotropy: 16,
+                // Objects per mesh-material pair: scattered foliage shares one pair.
+                limits: Limits {
+                    max_instances: 65_536,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
@@ -121,6 +133,8 @@ impl Bridge {
             engine,
             path,
             scene: Scene::default(),
+            terrain: Terrain::default(),
+            decals: Decals::default(),
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
@@ -149,7 +163,21 @@ impl Bridge {
         let frame = view.frame;
         self.report_unsupported(view);
         self.engine.resize(view.size[0], view.size[1])?;
-        self.scene.sync(&mut self.engine, frame, &mut self.gaps)?;
+        // Terrain tiles take at most half the mesh-material groups; entity draws and
+        // foliage share the rest.
+        let tiles = self
+            .terrain
+            .sync(&mut self.engine, view, MAX_GROUPS / 2, &mut self.gaps)?;
+        let (foliage, foliage_key) = self.terrain.foliage();
+        self.scene.sync(
+            &mut self.engine,
+            frame,
+            foliage,
+            foliage_key,
+            tiles,
+            &mut self.gaps,
+        )?;
+        self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &self.metering);
         self.engine.set_settings(lighting::settings(
@@ -158,11 +186,7 @@ impl Bridge {
             self.max_reflection_roughness,
             &mut self.gaps,
         ))?;
-        let sky = lighting::sky(view, &mut self.gaps);
-        if self.applied.sky != Some(sky) {
-            self.engine.set_sky(sky)?;
-            self.applied.sky = Some(sky);
-        }
+        self.apply_sky(view)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
@@ -293,15 +317,14 @@ impl Bridge {
     fn report_unsupported(&mut self, view: &ExternalView<'_>) {
         let frame = view.frame;
         if frame.terrain.is_some() {
-            self.gaps
-                .unsupported("terrain and foliage", "the landscape is not drawn");
+            self.gaps.unsupported(
+                "terrain levels of detail, layered terrain materials and foliage wind",
+                "resident tiles draw at full resolution in splat-tinted colour; foliage stands still at its nearest level of detail",
+            );
         }
         if !frame.effects.is_empty() {
             self.gaps
                 .unsupported("VFX graph effects", "particles are not drawn");
-        }
-        if !frame.decals.is_empty() {
-            self.gaps.unsupported("decals", "they are not projected");
         }
         if !frame.look.volumes.is_empty() {
             self.gaps.unsupported(
@@ -327,6 +350,44 @@ impl Bridge {
                 "only the sun lights the sky",
             );
         }
+    }
+
+    /// Sets the frame's sky when it changed. An environment map or gradient sky is
+    /// prepared once per content (`environment`) and then lights and backs the frame.
+    fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
+        let mut replaced = None;
+        let sky = match lighting::sky(view, &mut self.gaps) {
+            SkySource::Atmosphere => Sky::Atmosphere(AtmosphereMedium::default()),
+            SkySource::Map { size, pixels } => {
+                let key = environment::key(size, &pixels);
+                let map = match self.applied.sky_map {
+                    Some((applied, map)) if applied == key => map,
+                    previous => {
+                        let prepared = environment::prepare(size, &pixels)?;
+                        let map = self.engine.create_environment(&prepared)?;
+                        replaced = previous.map(|(_, map)| map);
+                        self.applied.sky_map = Some((key, map));
+                        map
+                    }
+                };
+                Sky::Map {
+                    map,
+                    rotation_y: 0.,
+                    intensity: 1.,
+                    background: Background::Sky,
+                }
+            }
+        };
+        if self.applied.sky != Some(sky) {
+            self.engine.set_sky(sky)?;
+            self.applied.sky = Some(sky);
+        }
+        // Renderlab keeps the selected map alive until the sky changes: the old one
+        // goes only after the new sky is set.
+        if let Some(map) = replaced {
+            self.engine.remove_environment(map)?;
+        }
+        Ok(())
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {

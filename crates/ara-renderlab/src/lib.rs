@@ -14,6 +14,10 @@
 #![warn(missing_docs)]
 
 #[cfg(not(target_vendor = "apple"))]
+mod decals;
+#[cfg(not(target_vendor = "apple"))]
+mod environment;
+#[cfg(not(target_vendor = "apple"))]
 mod gaps;
 
 #[cfg(not(target_vendor = "apple"))]
@@ -24,6 +28,8 @@ mod lighting;
 mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
+#[cfg(not(target_vendor = "apple"))]
+mod terrain;
 #[cfg(not(target_vendor = "apple"))]
 mod texture;
 

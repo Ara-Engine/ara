@@ -9,10 +9,10 @@ use ara_runtime::{
 };
 use ara_runtime_render::{ExternalView, fidelity::EnvironmentMap};
 use renderlab::engine::{
-    AtmosphereMedium, Camera, Exposure, HeightFog, Light, PostSettings, ReflectionSettings,
-    Settings, Sky, Sun, Tonemapper, Vec3, VolumetricFog,
+    Camera, Exposure, HeightFog, Light, PostSettings, ReflectionSettings,
+    Settings, Sun, Tonemapper, Vec3, VolumetricFog,
 };
-use std::f32::consts::PI;
+use std::{borrow::Cow, f32::consts::PI};
 
 /// Where the camera looks from when the world has none (as `ara-runtime-render`).
 const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
@@ -60,54 +60,49 @@ pub(crate) fn sun(frame: &RenderFrame) -> Option<Sun> {
     })
 }
 
-/// Mean radiance (cd/m²) of an equirectangular map's upper hemisphere, weighted by
-/// solid angle: the constant sky that sends the same light down.
-pub(crate) fn mean_sky_radiance(size: [u32; 2], pixels: &[[f32; 4]]) -> [f32; 3] {
-    let [width, height] = size.map(|v| v as usize);
-    let (mut sum, mut weight) = ([0f64; 3], 0f64);
-    for y in 0..height / 2 {
-        let elevation = PI / 2. - (y as f32 + 0.5) / height as f32 * PI;
-        let w = f64::from(elevation.cos());
-        for pixel in &pixels[y * width..(y + 1) * width] {
-            for (s, c) in sum.iter_mut().zip(pixel) {
-                *s += f64::from(c.max(0.)) * w;
-            }
-            weight += w;
-        }
-    }
-    sum.map(|s| if weight > 0. { (s / weight) as f32 } else { 0. })
+/// Where a frame's sky comes from.
+pub(crate) enum SkySource<'a> {
+    /// Renderlab's physical atmosphere, for an authored sky atmosphere.
+    Atmosphere,
+    /// An equirectangular radiance image (cd/m²): the content's HDRI, or the
+    /// gradient sky. `environment` prepares it for `Sky::Map`.
+    Map {
+        size: [u32; 2],
+        pixels: Cow<'a, [[f32; 4]]>,
+    },
 }
 
 /// The sky that lights and backs the frame. An authored physical sky maps to
-/// Renderlab's Earth atmosphere; an environment map or the gradient sky to a
-/// constant sky of the same mean radiance.
-pub(crate) fn sky(view: &ExternalView<'_>, gaps: &mut Gaps) -> Sky {
+/// Renderlab's Earth atmosphere; an environment map or the gradient sky is drawn
+/// and lights the scene as it is.
+pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a> {
     let frame = view.frame;
     if frame.look.sky.is_some() {
         gaps.unsupported(
             "authored sky atmosphere parameters",
             "the sky is Renderlab's default Earth atmosphere",
         );
-        return Sky::Atmosphere(AtmosphereMedium::default());
+        return SkySource::Atmosphere;
     }
-    let radiance = match view.environment {
-        Some(EnvironmentMap { size, pixels }) => {
-            gaps.unsupported(
-                "environment maps (HDRI skies)",
-                "the sky is a constant of the map's mean radiance",
-            );
-            mean_sky_radiance(*size, pixels)
-        }
+    if frame.environment.sky_light != 1. {
+        gaps.unsupported(
+            "a sky light strength other than 1",
+            "the sky lights the scene as brightly as it looks",
+        );
+    }
+    match view.environment {
+        Some(EnvironmentMap { size, pixels }) => SkySource::Map {
+            size: *size,
+            pixels: Cow::Borrowed(pixels),
+        },
         None => {
-            gaps.unsupported(
-                "gradient skies",
-                "the sky is a constant of the gradient's mean radiance",
-            );
             let (size, pixels) = ara_runtime_render::sky(&frame.environment);
-            mean_sky_radiance(size, &pixels)
+            SkySource::Map {
+                size,
+                pixels: Cow::Owned(pixels),
+            }
         }
-    };
-    Sky::Uniform(radiance)
+    }
 }
 
 /// Local lights. Ara's `lumens` is point-equivalent: 4 pi times the candela.
@@ -217,11 +212,25 @@ impl Metering {
     }
 }
 
-/// Exposure stops for the frame: Ara's manual EV100 exactly, else the meter.
+/// Stops that put middle grey where Ara's display curves put it. Ara's Filmic, Neutral
+/// and AgX curves keep 18% grey at 18%; Renderlab's filmic curve (Narkowicz's ACES
+/// fit, which is also Ara's `AcesFit`) lifts it to about 27%, so a scene exposed for
+/// Ara would display about half a stop brighter.
+const GREY_MATCH_STOPS: f32 = -0.467;
+
+/// Exposure stops for the frame: Ara's manual EV100, matched for the display curve,
+/// else the meter (which steers the displayed image and needs no matching).
 pub(crate) fn exposure_stops(view: &ExternalView<'_>, metering: &Metering) -> (f32, bool) {
     let fallback = view.frame.environment.exposure.max(1e-9).log2();
+    let grey = match view.look.tone_mapper {
+        ToneMapper::AcesFit => 0.,
+        _ => GREY_MATCH_STOPS,
+    };
     match view.look.ev100 {
-        Some(_) => (view.look.manual_exposure(1.).max(1e-12).log2(), false),
+        Some(_) => (
+            view.look.manual_exposure(1.).max(1e-12).log2() + grey,
+            false,
+        ),
         None => (metering.stops(fallback), true),
     }
 }
@@ -254,7 +263,7 @@ pub(crate) fn settings(
     if !matches!(look.tone_mapper, ToneMapper::Filmic | ToneMapper::AcesFit) {
         gaps.unsupported(
             "the Neutral and AgX tone mappers",
-            "the display curve is Renderlab's filmic",
+            "the display curve is Renderlab's filmic, exposed so middle grey matches",
         );
     }
     let defaults = Settings::default();
@@ -326,14 +335,10 @@ mod tests {
     }
 
     #[test]
-    fn mean_sky_radiance_weights_the_upper_hemisphere_by_solid_angle() {
-        // Two rows above the horizon (zenith ring 4, horizon ring 1), two below (99).
-        let row = |v: f32| [[v, v, v, 1.]; 2];
-        let pixels = [row(4.), row(1.), row(99.), row(99.)].concat();
-        let mean = mean_sky_radiance([2, 4], &pixels)[0];
-        let (zenith, horizon) = ((3. * PI / 8.).cos(), (PI / 8.).cos());
-        let expected = (4. * zenith + horizon) / (zenith + horizon);
-        assert!((mean - expected).abs() < 1e-4, "{mean} vs {expected}");
+    fn grey_match_puts_18_percent_grey_at_18_percent_on_renderlabs_filmic_curve() {
+        let x = 0.18 * 2f32.powf(GREY_MATCH_STOPS);
+        let displayed = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
+        assert!((displayed - 0.18).abs() < 2e-3, "{displayed}");
     }
 
     #[test]
