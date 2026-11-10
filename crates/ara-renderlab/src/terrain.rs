@@ -28,6 +28,24 @@ use std::collections::{HashMap, HashSet};
 
 /// Foliage part draws kept at most: each is one Renderlab object.
 const MAX_FOLIAGE_DRAWS: usize = 60_000;
+
+/// Triangles a draw's mesh holds (shapes: a few hundred at most).
+fn triangles(draw: &Draw) -> usize {
+    match &draw.geometry {
+        ara_runtime::extract::Geometry::Model { model, primitive } => {
+            model.primitives.get(*primitive).map_or(0, |p| p.indices.len() / 3)
+        }
+        ara_runtime::extract::Geometry::Shape { .. } => 1024,
+    }
+}
+
+/// Instances Renderlab's non-RT virtual shadows can address: they pack an instance and a
+/// triangle of the largest mesh into one 32-bit id, so the largest mesh (doubled, for the
+/// level-of-detail triangles Renderlab appends) leaves the rest of the bits to instances.
+fn packed_instances(largest_triangles: usize) -> usize {
+    let bits = usize::BITS - (largest_triangles.max(1) * 2).leading_zeros();
+    (1usize << 32u32.saturating_sub(bits).min(31)).saturating_sub(2)
+}
 /// Marks foliage render identities apart from entity and terrain-tile identities.
 const FOLIAGE_ENTITY: u64 = 0x7f01_0000_0000_0000;
 const FNV: u64 = 0xcbf2_9ce4_8422_2325;
@@ -61,17 +79,21 @@ pub(crate) struct Terrain {
 impl Terrain {
     /// Places the frame's resident tiles, at most `budget` (each is one of Renderlab's
     /// mesh-material groups), and rebuilds the foliage draws when their inputs
-    /// changed. Returns the number of tiles placed.
+    /// changed. With `packed_ids` (the non-RT path: the largest mesh the scene has
+    /// uploaded), foliage also stays within the instances its shadows can address
+    /// (`packed_instances`). Returns the number of tiles placed and the largest mesh
+    /// the foliage cap assumed.
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         view: &ExternalView<'_>,
         budget: usize,
+        packed_ids: Option<usize>,
         gaps: &mut Gaps,
-    ) -> Result<usize> {
+    ) -> Result<(usize, usize)> {
         let Some(terrain) = view.frame.terrain.as_ref() else {
             self.clear(engine)?;
-            return Ok(0);
+            return Ok((0, 0));
         };
         let mut coords = terrain.tiles.clone();
         coords.sort();
@@ -127,11 +149,27 @@ impl Terrain {
                 key = fnv(key, &part.entity.to_le_bytes());
             }
         }
+        let largest = packed_ids.map_or(0, |uploaded| {
+            wanted
+                .iter()
+                .map(|(_, mesh, _)| mesh.source.indices.len() / 3)
+                .chain(view.frame.draws.iter().map(triangles))
+                .chain(view.foliage_parts.values().flatten().map(triangles))
+                .fold(uploaded, usize::max)
+        });
+        let cap = if packed_ids.is_some() {
+            packed_instances(largest)
+                .saturating_sub(view.frame.draws.len() + budget)
+                .min(MAX_FOLIAGE_DRAWS)
+        } else {
+            MAX_FOLIAGE_DRAWS
+        };
+        key = fnv(key, &cap.to_le_bytes());
         if key != self.foliage_key {
             self.foliage_key = key;
-            self.rebuild_foliage(view, &coords.iter().map(|c| (c.x, c.z)).collect(), gaps);
+            self.rebuild_foliage(view, &coords.iter().map(|c| (c.x, c.z)).collect(), cap, gaps);
         }
-        Ok(self.tiles.len())
+        Ok((self.tiles.len(), largest))
     }
 
     /// The foliage draws and the key of what they were built from.
@@ -154,6 +192,7 @@ impl Terrain {
         &mut self,
         view: &ExternalView<'_>,
         resident: &HashSet<(i32, i32)>,
+        cap: usize,
         gaps: &mut Gaps,
     ) {
         self.foliage.clear();
@@ -187,7 +226,7 @@ impl Terrain {
                 AraVec3::new(x, y, z),
             );
             for (index, part) in parts.iter().enumerate() {
-                if self.foliage.len() == MAX_FOLIAGE_DRAWS {
+                if self.foliage.len() == cap {
                     over += 1;
                     continue;
                 }
@@ -213,7 +252,9 @@ impl Terrain {
         if over > 0 {
             gaps.limit(
                 "foliage draws the bridge keeps",
-                &format!("{over} foliage parts beyond {MAX_FOLIAGE_DRAWS} are not drawn"),
+                &format!(
+                    "{over} foliage parts beyond {cap} are not drawn ({MAX_FOLIAGE_DRAWS} at most; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits)"
+                ),
             );
         }
     }
@@ -339,4 +380,16 @@ fn release(engine: &mut Engine, tile: Tile) -> Result<()> {
         engine.remove_texture(texture)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packed_ids_leave_the_bits_the_largest_mesh_does_not_need() {
+        // 32,768 triangles, doubled: 17 bits, so 15 bits of instances.
+        assert_eq!(packed_instances(32_768), (1 << 15) - 2);
+        assert_eq!(packed_instances(1), (1 << 30) - 2);
+    }
 }

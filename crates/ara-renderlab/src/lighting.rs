@@ -9,8 +9,7 @@ use ara_runtime::{
 };
 use ara_runtime_render::{ExternalView, fidelity::EnvironmentMap};
 use renderlab::engine::{
-    Camera, Exposure, HeightFog, Light, PostSettings, ReflectionSettings, Settings, Sun,
-    Tonemapper, Vec3, VolumetricFog,
+    Camera, Exposure, Light, PostSettings, ReflectionSettings, Settings, Sun, Tonemapper, Vec3,
 };
 use std::{borrow::Cow, f32::consts::PI};
 
@@ -62,8 +61,8 @@ pub(crate) fn sun(frame: &RenderFrame) -> Option<Sun> {
 
 /// Where a frame's sky comes from.
 pub(crate) enum SkySource<'a> {
-    /// Renderlab's physical atmosphere, for an authored sky atmosphere.
-    Atmosphere,
+    /// Renderlab's physical atmosphere, from an authored sky atmosphere.
+    Atmosphere(renderlab::engine::AtmosphereMedium),
     /// An equirectangular radiance image (cd/m²): the content's HDRI, or the
     /// gradient sky. `environment` prepares it for `Sky::Map`.
     Map {
@@ -73,16 +72,12 @@ pub(crate) enum SkySource<'a> {
 }
 
 /// The sky that lights and backs the frame. An authored physical sky maps to
-/// Renderlab's Earth atmosphere; an environment map or the gradient sky is drawn
-/// and lights the scene as it is.
+/// Renderlab's atmosphere with its medium (`atmosphere::medium`); an environment map
+/// or the gradient sky is drawn and lights the scene as it is.
 pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a> {
     let frame = view.frame;
-    if frame.look.sky.is_some() {
-        gaps.unsupported(
-            "authored sky atmosphere parameters",
-            "the sky is Renderlab's default Earth atmosphere",
-        );
-        return SkySource::Atmosphere;
+    if let Some(sky) = &frame.look.sky {
+        return SkySource::Atmosphere(crate::atmosphere::medium(sky, gaps));
     }
     if frame.environment.sky_light != 1. {
         gaps.unsupported(
@@ -247,13 +242,11 @@ pub(crate) fn settings(
     gaps: &mut Gaps,
 ) -> Settings {
     let (frame, look) = (view.frame, view.look);
-    let fog = frame.look.fog.is_some();
-    if fog {
-        gaps.unsupported(
-            "authored height-fog parameters",
-            "fog uses Renderlab's default medium",
-        );
-    }
+    let fog = frame
+        .look
+        .fog
+        .as_ref()
+        .map(|fog| crate::atmosphere::fog(fog, gaps));
     if !frame.look.fog_volumes.is_empty() {
         gaps.unsupported("local fog volumes", "they are not drawn");
     }
@@ -273,8 +266,8 @@ pub(crate) fn settings(
     Settings {
         exposure: Exposure::Manual { stops },
         aerial_perspective: frame.look.sky.is_some(),
-        height_fog: fog.then(HeightFog::default),
-        volumetric_fog: fog.then(VolumetricFog::default),
+        height_fog: fog.map(|(height, _)| height),
+        volumetric_fog: fog.and_then(|(_, volumetric)| volumetric),
         reflections: ReflectionSettings {
             max_roughness: max_reflection_roughness
                 .unwrap_or(defaults.reflections.max_roughness)

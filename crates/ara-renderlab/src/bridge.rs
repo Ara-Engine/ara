@@ -19,8 +19,8 @@ use ara_gpu::{
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::engine::{
-    AtmosphereMedium, Background, Capabilities, Engine, EngineDescriptor, EnvironmentId,
-    ExperimentalRayQuery, Light, Limits, RenderPath, Sky, Sun, headless_adapter,
+    Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery, Light,
+    Limits, RenderPath, Sky, Sun, headless_adapter,
 };
 use std::time::{Duration, Instant};
 
@@ -186,19 +186,32 @@ impl Bridge {
         self.report_unsupported(view);
         self.engine.resize(view.size[0], view.size[1])?;
         // Terrain tiles take at most half the mesh-material groups; entity draws and
-        // foliage share the rest.
-        let tiles = self
-            .terrain
-            .sync(&mut self.engine, view, MAX_GROUPS / 2, &mut self.gaps)?;
-        let (foliage, foliage_key) = self.terrain.foliage();
-        self.scene.sync(
-            &mut self.engine,
-            frame,
-            foliage,
-            foliage_key,
-            tiles,
-            &mut self.gaps,
-        )?;
+        // foliage share the rest. On the non-RT path foliage is capped by the largest
+        // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
+        // foliage is rebuilt for it before the frame renders.
+        let nonrt = self.path == ActivePath::NonRt;
+        for _ in 0..2 {
+            let known = self.scene.largest_triangles();
+            let (tiles, assumed) = self.terrain.sync(
+                &mut self.engine,
+                view,
+                MAX_GROUPS / 2,
+                nonrt.then_some(known),
+                &mut self.gaps,
+            )?;
+            let (foliage, foliage_key) = self.terrain.foliage();
+            self.scene.sync(
+                &mut self.engine,
+                frame,
+                foliage,
+                foliage_key,
+                tiles,
+                &mut self.gaps,
+            )?;
+            if !nonrt || self.scene.largest_triangles() <= assumed {
+                break;
+            }
+        }
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
@@ -389,7 +402,7 @@ impl Bridge {
     fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
         let mut replaced = None;
         let sky = match lighting::sky(view, &mut self.gaps) {
-            SkySource::Atmosphere => Sky::Atmosphere(AtmosphereMedium::default()),
+            SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
             SkySource::Map { size, pixels } if self.constant_sky => {
                 Sky::Uniform(environment::mean_radiance(size, &pixels))
             }
