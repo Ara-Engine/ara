@@ -285,6 +285,16 @@ fn comparison_samplers_read_the_bindless_depth_view() {
         .create_buffer(4, vk::BufferUsageFlags::TRANSFER_SRC, true)
         .unwrap();
     gpu.upload(input, bytemuck::cast_slice(&[0.25f32])).unwrap();
+    let color = gpu
+        .create_image(
+            1,
+            1,
+            vk::Format::R32_SFLOAT,
+            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+        )
+        .unwrap();
+    let regular_image = gpu.sampled_image(color, false).unwrap();
+    let regular = gpu.sampler(&SamplerDesc::default()).unwrap();
     let output = gpu
         .create_buffer(20, vk::BufferUsageFlags::STORAGE_BUFFER, true)
         .unwrap();
@@ -293,8 +303,9 @@ fn comparison_samplers_read_the_bindless_depth_view() {
 struct DepthEntry {ulong unused; depth2d<float> image; ulong metadata;};
 kernel void compareDepth(constant TopLevel& t [[buffer(2)]]){
     device DepthEntry* images=(device DepthEntry*)t.textures;
-    float value=images[t.root[0]].image.sample_compare(t.samplers[t.root[1]].state,float2(0.5),0.5);
-    t.buffers[t.root[2]].data[t.root[3]]=as_type<uint>(value);
+    float value=images[t.root[0]].image.sample_compare(t.comparison_samplers[t.root[1]].state,float2(0.5),0.5);
+    float regular=t.textures[t.root[4]].texture.sample(t.samplers[t.root[5]].state,float2(0.5)).x;
+    t.buffers[t.root[2]].data[t.root[3]]=as_type<uint>(value+regular);
 }
 "#;
     let p = gpu.msl_pipeline_from(
@@ -308,6 +319,16 @@ kernel void compareDepth(constant TopLevel& t [[buffer(2)]]){
         source: input,
         destination: depth,
     });
+    rec.push(Command::UploadImage {
+        source: input,
+        destination: color,
+    });
+    rec.barriers([Barrier {
+        resource: Resource::Image(color),
+        before: Access::CopyDestination,
+        after: Access::ShaderRead,
+        handoff: None,
+    }]);
     rec.barriers([Barrier {
         resource: Resource::Image(depth),
         before: Access::CopyDestination,
@@ -334,7 +355,16 @@ kernel void compareDepth(constant TopLevel& t [[buffer(2)]]){
             })
             .unwrap();
         rec.push(Command::Constants(RootConstants {
-            words: [image.index, sampler.index, out.index, i as u32, 0, 0, 0, 0],
+            words: [
+                image.index,
+                sampler.index,
+                out.index,
+                i as u32,
+                regular_image.index,
+                regular.index,
+                0,
+                0,
+            ],
         }));
         rec.push(Command::Dispatch([1, 1, 1]));
     }
@@ -348,5 +378,5 @@ kernel void compareDepth(constant TopLevel& t [[buffer(2)]]){
         .iter()
         .map(|b| f32::from_le_bytes(*b))
         .collect();
-    assert_eq!(result, [0., 0., 1., 1., 1.]);
+    assert_eq!(result, [0.25, 0.25, 1.25, 1.25, 1.25]);
 }

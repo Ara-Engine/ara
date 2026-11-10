@@ -1,7 +1,7 @@
 use super::Context;
 use crate::{
     GpuError, Result,
-    cooked::{CookedPipeline, Stage, binding_layout_hash, legacy_preview_layout_hash},
+    cooked::{CookedPipeline, Stage, binding_layout_compatible, legacy_preview_layout_hash},
 };
 use ash::vk::{self, TaggedStructure};
 use sha2::{Digest, Sha256};
@@ -91,7 +91,7 @@ pub(super) fn create_inner(
         });
     cooked.state.raster.validate()?;
     if cooked.version != 1
-        || (cooked.binding_layout_hash != binding_layout_hash()
+        || (!binding_layout_compatible(&cooked.binding_layout_hash)
             && !(legacy_preview && cooked.binding_layout_hash == legacy_preview_layout_hash()))
     {
         return Err(GpuError::Contract(

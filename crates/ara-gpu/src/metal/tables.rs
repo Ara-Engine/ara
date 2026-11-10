@@ -1,8 +1,7 @@
 //! Converter descriptor tables: the bindless heap of the Metal backend. Each table is
 //! one shared buffer of [`TableEntry`] records; the top-level argument buffer carries
 //! the table addresses. Slots are immutable while referenced: a slot is written once
-//! when published and freed only after its resource retires on both timelines. The
-//! static-sampler table is written once at device creation and never changes.
+//! when published and freed only after its resource retires on both timelines. The two sampler tables cache immutable regular/comparison states.
 use super::abi::{self, ENTRY_BYTES, TableEntry};
 use super::native::nil;
 use crate::{HeapIndex, Result};
@@ -124,7 +123,12 @@ pub(super) struct Tables {
     pub storage_images: Table,
     pub accelerations: Table,
     samplers: Table,
+    comparison_samplers: Table,
     /// Kept alive for the sampler table's resource IDs.
+    comparison_states: Vec<(
+        crate::sampler::SamplerDesc,
+        Retained<ProtocolObject<dyn MTLSamplerState>>,
+    )>,
     sampler_states: Vec<(
         crate::sampler::SamplerDesc,
         Retained<ProtocolObject<dyn MTLSamplerState>>,
@@ -157,6 +161,13 @@ impl Tables {
                 "Acceleration",
             )?,
             samplers,
+            comparison_samplers: Table::new(
+                device,
+                abi::SAMPLERS,
+                "ara.comparison_samplers",
+                "Comparison sampler",
+            )?,
+            comparison_states: Vec::new(),
             sampler_states,
         })
     }
@@ -166,16 +177,19 @@ impl Tables {
         desc: &crate::sampler::SamplerDesc,
     ) -> Result<HeapIndex> {
         desc.validate()?;
-        if let Some(index) = self.sampler_states.iter().position(|(d, _)| d == desc) {
+        let (table, states) = if desc.compare.is_some() {
+            (&mut self.comparison_samplers, &mut self.comparison_states)
+        } else {
+            (&mut self.samplers, &mut self.sampler_states)
+        };
+        if let Some(index) = states.iter().position(|(d, _)| d == desc) {
             return Ok(HeapIndex {
                 index: index as u32,
             });
         }
         let state = sampler_state(device, desc)?;
-        let slot = self
-            .samplers
-            .insert(TableEntry::sampler(state.gpuResourceID().to_raw()))?;
-        self.sampler_states.push((*desc, state));
+        let slot = table.insert(TableEntry::sampler(state.gpuResourceID().to_raw()))?;
+        states.push((*desc, state));
         Ok(slot)
     }
     /// Table addresses for a top-level argument buffer.
@@ -187,16 +201,18 @@ impl Tables {
             storage_images: self.storage_images.buffer.gpuAddress(),
             accelerations: self.accelerations.buffer.gpuAddress(),
             samplers: self.samplers.buffer.gpuAddress(),
+            comparison_samplers: self.comparison_samplers.buffer.gpuAddress(),
         }
     }
     /// Every table buffer, for the residency set.
-    pub fn buffers(&self) -> [&ProtocolObject<dyn MTLBuffer>; 5] {
+    pub fn buffers(&self) -> [&ProtocolObject<dyn MTLBuffer>; 6] {
         [
             &self.textures.buffer,
             &self.buffers.buffer,
             &self.storage_images.buffer,
             &self.accelerations.buffer,
             &self.samplers.buffer,
+            &self.comparison_samplers.buffer,
         ]
     }
 }

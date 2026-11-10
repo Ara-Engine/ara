@@ -53,6 +53,8 @@ pub(super) struct Heap {
     pool: vk::DescriptorPool,
     samplers: Vec<vk::Sampler>,
     sampler_descs: Vec<crate::sampler::SamplerDesc>,
+    comparison_samplers: Vec<vk::Sampler>,
+    comparison_descs: Vec<crate::sampler::SamplerDesc>,
     free_acceleration: Vec<u32>,
     free_images: Vec<u32>,
     free_buffers: Vec<u32>,
@@ -67,12 +69,18 @@ impl Heap {
     ) -> Result<HeapIndex> {
         use crate::sampler::{AddressMode as A, Filter as F};
         desc.validate()?;
-        if let Some(index) = self.sampler_descs.iter().position(|d| d == desc) {
+        let comparison = desc.compare.is_some();
+        let (samplers, descs) = if comparison {
+            (&mut self.comparison_samplers, &mut self.comparison_descs)
+        } else {
+            (&mut self.samplers, &mut self.sampler_descs)
+        };
+        if let Some(index) = descs.iter().position(|d| d == desc) {
             return Ok(HeapIndex {
                 index: index as u32,
             });
         }
-        if self.samplers.len() >= crate::sampler::SAMPLER_CAPACITY as usize {
+        if samplers.len() >= crate::sampler::SAMPLER_CAPACITY as usize {
             return Err(GpuError::Contract("Sampler heap exhausted".into()));
         }
         let filter = |f| match f {
@@ -107,22 +115,22 @@ impl Heap {
             )
         }
         .map_err(anyhow::Error::from)?;
-        let index = self.samplers.len() as u32;
+        let index = samplers.len() as u32;
         let info = [vk::DescriptorImageInfo::default().sampler(sampler)];
         // SAFETY: a fresh partially bound slot is never read by earlier submissions.
         unsafe {
             gpu.device.update_descriptor_sets(
                 &[vk::WriteDescriptorSet::default()
                     .dst_set(self.set)
-                    .dst_binding(2)
+                    .dst_binding(if comparison { 6 } else { 2 })
                     .dst_array_element(index)
                     .descriptor_type(vk::DescriptorType::SAMPLER)
                     .image_info(&info)],
                 &[],
             );
         }
-        self.samplers.push(sampler);
-        self.sampler_descs.push(*desc);
+        samplers.push(sampler);
+        descs.push(*desc);
         Ok(HeapIndex { index })
     }
     pub fn usage(&self, gpu: &Context) -> DescriptorUsage {
@@ -160,14 +168,20 @@ impl Heap {
                 bindings.push((4, vk::DescriptorType::ACCELERATION_STRUCTURE_KHR, 16));
                 binding_flags.push(flags);
             }
-            // Vulkan requires the variable-count binding to have the highest
-            // binding number, including on devices without acceleration binding 4.
+            // Runtime shader arrays use the capacity selected for this device;
+            // every set has that capacity, so variable descriptor counts are unnecessary.
             bindings.push((
                 5,
                 vk::DescriptorType::SAMPLED_IMAGE,
                 gpu.info.sampled_image_capacity,
             ));
-            binding_flags.push(flags | vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT);
+            binding_flags.push(flags);
+            bindings.push((
+                6,
+                vk::DescriptorType::SAMPLER,
+                crate::sampler::SAMPLER_CAPACITY,
+            ));
+            binding_flags.push(flags);
             let bindings = bindings
                 .into_iter()
                 .map(|(binding, ty, count)| {
@@ -209,17 +223,12 @@ impl Heap {
                 )
                 .map_err(anyhow::Error::from)?;
             guard.push(super::guard::Object::Pool(pool));
-            let counts = [gpu.info.sampled_image_capacity];
-            let mut variable_count =
-                vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
-                    .descriptor_counts(&counts);
             let set = gpu
                 .device
                 .allocate_descriptor_sets(
                     &vk::DescriptorSetAllocateInfo::default()
                         .descriptor_pool(pool)
-                        .set_layouts(&[set_layout])
-                        .push(&mut variable_count),
+                        .set_layouts(&[set_layout]),
                 )
                 .map_err(anyhow::Error::from)?[0];
             let mut samplers = [vk::Sampler::null(); 3];
@@ -284,6 +293,8 @@ impl Heap {
                 pool,
                 samplers: samplers.to_vec(),
                 sampler_descs: crate::sampler::SamplerDesc::defaults().to_vec(),
+                comparison_samplers: Vec::new(),
+                comparison_descs: Vec::new(),
                 free_acceleration: if gpu.info.ray_tracing {
                     (0..16).rev().collect()
                 } else {
@@ -475,7 +486,7 @@ impl Heap {
             gpu.device.destroy_descriptor_pool(self.pool, None);
             gpu.device
                 .destroy_descriptor_set_layout(self.set_layout, None);
-            for sampler in &self.samplers {
+            for sampler in self.samplers.iter().chain(&self.comparison_samplers) {
                 gpu.device.destroy_sampler(*sampler, None);
             }
         }

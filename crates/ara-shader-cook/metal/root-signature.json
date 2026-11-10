@@ -1,7 +1,7 @@
 {
   "RootSignature": {
     "Flags": "IRRootSignatureFlagAllowInputAssemblerInputLayout",
-    "NumParameters": 6,
+    "NumParameters": 7,
     "NumStaticSamplers": 0,
     "Parameters": [
       {
@@ -87,10 +87,27 @@
             {
               "BaseShaderRegister": 0,
               "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
-              "NumDescriptors": 64,
+              "NumDescriptors": 4294967295,
               "OffsetInDescriptorsFromTableStart": 0,
               "RangeType": "IRDescriptorRangeTypeSampler",
               "RegisterSpace": 0
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 4294967295,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSampler",
+              "RegisterSpace": 5
             }
           ],
           "NumDescriptorRanges": 1

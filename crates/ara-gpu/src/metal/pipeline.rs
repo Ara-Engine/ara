@@ -6,7 +6,7 @@
 use super::abi::{STAGE_IN_ATTRIBUTE_START, VERTEX_BUFFER_BIND_POINT};
 use super::cache::Compiler;
 use super::native::{nil, ns_error, raw_format};
-use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
+use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_compatible};
 use crate::{GpuError, Result};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -91,7 +91,7 @@ pub(super) fn load(
     stage: &CookedStage,
     dir: &Path,
 ) -> Result<LoadedStage> {
-    if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
+    if cooked.version != 1 || !binding_layout_compatible(&cooked.binding_layout_hash) {
         return Err(GpuError::Contract(
             "Cooked layout/schema mismatch; recook shaders".into(),
         ));

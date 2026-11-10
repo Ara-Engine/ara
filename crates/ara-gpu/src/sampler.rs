@@ -3,7 +3,7 @@
 //! for the device lifetime, so changing a sampler never overwrites in-flight state.
 use crate::{GpuError, Result};
 
-/// Immutable sampler table capacity, including the three engine defaults.
+/// Capacity of each sampler table; regular samplers include three engine defaults.
 pub const SAMPLER_CAPACITY: u32 = 64;
 /// Texel or mip interpolation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -76,7 +76,8 @@ pub struct SamplerDesc {
     pub mip: Filter,
     /// U, V and W coordinate addressing.
     pub address: [AddressMode; 3],
-    /// Optional depth comparison for shadow sampling.
+    /// Optional depth comparison. Some publishes in the comparison table
+    /// (Vulkan binding 6 / DXIL s0 space5); None uses binding 2 / s0 space0.
     pub compare: Option<CompareOp>,
     /// Maximum anisotropy, 1..=16; one disables it.
     pub anisotropy: u8,

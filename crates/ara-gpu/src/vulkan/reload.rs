@@ -85,7 +85,10 @@ struct ManifestIndex {
 
 fn compatible(old: &CookedPipeline, new: &CookedPipeline) -> Result<()> {
     ensure!(
-        old.version == new.version && old.binding_layout_hash == new.binding_layout_hash,
+        old.version == new.version
+            && (old.binding_layout_hash == new.binding_layout_hash
+                || (crate::cooked::binding_layout_compatible(&old.binding_layout_hash)
+                    && crate::cooked::binding_layout_compatible(&new.binding_layout_hash))),
         "shader schema/layout changed; a Rust rebuild is required"
     );
     ensure!(

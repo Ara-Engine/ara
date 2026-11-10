@@ -13,7 +13,7 @@ pub(super) fn select(
 ) -> Result<Capacities> {
     // Reserve the legacy 128-image alias, at least 128 runtime images, 64 storage
     // images, three samplers and the optional AS binding before growing buffers.
-    let reserved = 128 + 128 + 128 + crate::sampler::SAMPLER_CAPACITY + if rt { 16 } else { 0 };
+    let reserved = 128 + 128 + 128 + 2 * crate::sampler::SAMPLER_CAPACITY + if rt { 16 } else { 0 };
     let storage_buffers = [
         4096,
         limits.max_per_stage_descriptor_update_after_bind_storage_buffers,
@@ -77,10 +77,10 @@ mod tests {
             .max_update_after_bind_descriptors_in_all_pools(100_000);
         let full = select(&limits, true)?;
         assert_eq!((full.storage_buffers, full.sampled_images), (1024, 65_536));
-        limits.max_per_stage_update_after_bind_resources = 525;
+        limits.max_per_stage_update_after_bind_resources = 589;
         let tight = select(&limits, false)?;
         assert_eq!((tight.storage_buffers, tight.sampled_images), (77, 128));
-        limits.max_per_stage_update_after_bind_resources = 512;
+        limits.max_per_stage_update_after_bind_resources = 576;
         let old = select(&limits, false)?;
         assert_eq!((old.storage_buffers, old.sampled_images), (64, 128));
         assert!(select(&limits, true).is_err());

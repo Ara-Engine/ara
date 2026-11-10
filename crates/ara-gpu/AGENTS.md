@@ -65,18 +65,18 @@
 
 ## Contracts
 
-The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled images and 4,096 storage buffers, clamped jointly to set/stage/pool limits (minimum 128 images/64 buffers; capacity changes preserve the runtime-array ABI), plus 64 storage images and optional 16 acceleration structures.
+The v4 heap (v3 prefix compatible) uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled images and 4,096 storage buffers, clamped jointly to set/stage/pool limits (minimum 128 images/64 buffers; capacity changes preserve the runtime-array ABI), plus 64 storage images and optional 16 acceleration structures.
 A full storage heap waits for completed retirement (`reclaim_storage`). Vulkan sRGB
 storage uses a mutable UNORM alias (shaders encode sRGB); window devices enable present scaling.
 `DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
-material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
+material previews only. New cooks use v4; v3 prefixes remain valid. Only material previews accept v1.
 Binding 2 reserves three default samplers: material repeat (up to 16x anisotropic where the
 device allows; native materials sample it with gradients), environment U repeat/V clamp
 and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy affects explicit LODs too; exact trilinear readers use another sampler. `sampler(&SamplerDesc)` caches immutable descriptions in 64 slots
 (defaults occupy 0..3): nearest/linear filters, Repeat/MirrorRepeat/ClampToEdge,
-optional comparison, and up to 16x anisotropy. New shaders use a runtime sampler
-array at Vulkan binding 2 / DXIL s0 space0. Converter table address stays at byte
-64; old static-sampler metallibs keep working. Root constants are 32 bytes.
+and up to 16x anisotropy. Regular samplers use binding 2 / DXIL s0 space0;
+comparison samplers use binding 6 / s0 space5, also 64 slots. Their converter
+pointers are at bytes 64/72; old v3 metallibs retain the prefix. Roots stay 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle
@@ -145,6 +145,6 @@ Vulkan GPU tests run on the PC with validation; Vulkan changes made on the Mac
 remain unverified until that run. Metal gaps tests use native transfers and MSL
 probes (converter download needs Apple sign-in).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
-Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
+Converter ABI (`abi.rs`) keeps the MSC 4.0.3 prefix and appends comparison samplers; one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
 Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): BLAS/TLAS built/refit on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.
 Test: `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 cargo test -p ara-gpu --lib metal`, and once without shader validation; Vulkan GPU tests are ignored on macOS.
