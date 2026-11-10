@@ -347,14 +347,15 @@ fn assets(s: &Studio) -> El<Studio> {
         }))
         .child(sizes)
         .child(view_menu(s));
-    // Type filters (Unreal's filter bar): one type across the whole project.
+    // Type filters (Unreal's filter bar): one type across the whole project. A narrow
+    // panel wraps them onto another line rather than hiding the last ones past its edge.
     let mut chips = row()
-        .h(24.0)
         .min_w(0.0)
         .pad_x(6.0)
+        .pad_y(2.0)
         .gap(3.0)
         .align(Align::Center)
-        .scroll(Axis::Horizontal);
+        .flow_wrap();
     for (id, label, glyph) in FILTERS {
         let on = view.filter == Some(id);
         let tint = category_tint(l, id);
