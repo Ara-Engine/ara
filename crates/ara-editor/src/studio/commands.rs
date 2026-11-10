@@ -252,7 +252,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         "layout.profiling" => act(e, "editor.layout.apply", json!({"name": "profiling"})),
         "layout.laptop" => act(e, "editor.layout.apply", json!({"name": "laptop"})),
         "layout.reset" => act(e, "editor.layout.reset", json!({})),
-        id if id.starts_with("window.") => {
+        id if id.starts_with("window.")
+            && !matches!(id, "window.maximize" | "window.close_panel") =>
+        {
             let panel = id.trim_start_matches("window.");
             // Tool pages open floating in the legacy window; the studio draws no floating
             // windows yet, so they dock in the centre beside the Scene.
@@ -353,6 +355,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             act(e, "editor.preferences", json!({"reduceMotion": on}))
         }
         "play.start" => {
+            if e.state.playing.is_none()
+                && e.state
+                    .settings
+                    .get("game.maximizeOnPlay")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            {
+                let _ = view(e, json!({"maximized": "game"}));
+            }
             let clear = e
                 .state
                 .settings
@@ -383,8 +394,30 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "play.step" => play(e, "play.step", json!({"ticks": 1})),
         "play.stop" => {
-            play(e, "play.stop", json!({})).and_then(|()| view(e, json!({"play": "stopped"})))
+            // A Game view maximized for Play comes back with the layout.
+            let restore = e.state.maximized.as_deref() == Some("game")
+                && e.state
+                    .settings
+                    .get("game.maximizeOnPlay")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+            play(e, "play.stop", json!({}))
+                .and_then(|()| view(e, json!({"play": "stopped"})))
+                .and_then(|()| {
+                    if restore {
+                        view(e, json!({"maximized": ""}))
+                    } else {
+                        Ok(())
+                    }
+                })
         }
+        id if id.starts_with("game.aspect.") => set(
+            e,
+            "game.aspect",
+            json!(id.trim_start_matches("game.aspect.")),
+        ),
+        "game.maximize_on_play" => flip_setting(e, "game.maximizeOnPlay", false),
+        "game.stats" => flip_setting(e, "game.stats", false),
         "view.camera.perspective" => act(
             e,
             "editor.camera",
@@ -1215,6 +1248,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x63) => "view.camera.left",
         (false, false, 0x67) => "view.camera.top",
         (true, false, 0x67) => "view.camera.bottom",
+        (false, true, 0x20) => "window.maximize",
         (false, false, 0x46) => "view.frame",
         (false, false, 0x24) => "view.frame_all",
         (false, false, 0x57) => "view.tool.move",

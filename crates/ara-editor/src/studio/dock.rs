@@ -40,10 +40,32 @@ fn split_key(path: &[u8]) -> String {
 }
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
+    // A maximized panel (Window › Maximize, Game's Maximize on Play) fills the dock alone,
+    // in its own area, until it is restored.
+    if let Some(panel) = s
+        .editor
+        .state
+        .maximized
+        .as_deref()
+        .filter(|p| !p.is_empty())
+        && let Some(id) = area_of(&s.editor.state.layout, panel)
+    {
+        return area(s, &id, &[panel.to_owned()], 0).grow(1.0).pad(3.0);
+    }
     // Panels sit 3 px apart on the window's darkest tone: one rhythm for gutters and splitters.
     node(s, &s.editor.state.layout, &mut Vec::new())
         .pad(3.0)
         .gap(0.0)
+}
+
+/// The id of the area whose tabs hold `panel`.
+fn area_of(n: &DockNode, panel: &str) -> Option<String> {
+    match n {
+        DockNode::Area { id, tabs, .. } => tabs.iter().any(|t| t == panel).then(|| id.clone()),
+        DockNode::Split { first, second, .. } => {
+            area_of(first, panel).or_else(|| area_of(second, panel))
+        }
+    }
 }
 
 fn node(s: &Studio, n: &DockNode, path: &mut Vec<u8>) -> El<Studio> {

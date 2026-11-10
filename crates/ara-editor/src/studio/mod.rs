@@ -895,6 +895,7 @@ fn pump(
         keys.push("profiler/track".into());
         keys.push("graph/view".into());
         keys.push("vfx/preview".into());
+        keys.push("game/area".into());
         keys.push("vfx/stacks".into());
         keys.extend(
             scene_overlays::OVERLAYS

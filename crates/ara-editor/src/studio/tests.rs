@@ -614,6 +614,46 @@ fn the_console_searches_collapses_and_clear_stays_clear() {
 }
 
 #[test]
+fn the_game_view_letterboxes_to_its_aspect_and_maximizes() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "game"})));
+    settle(&mut rt);
+    track(&mut rt, &["game/area"]);
+    press(&mut rt, "game/aspect");
+    press(&mut rt, "game/aspect/4x3");
+    rt.update(|_| {});
+    settle(&mut rt);
+    let view = rt.find("game/view").expect("the Game view");
+    let ratio = view.width() / view.height();
+    assert!(
+        (ratio - 4.0 / 3.0).abs() < 0.02,
+        "4:3 letterbox, got {ratio}"
+    );
+    // Window › Maximize fills the dock with the Game view alone.
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "window.maximize",
+            &crate::catalog::Target::Panel("game".into()),
+        )
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("tab/hierarchy").is_none(),
+        "only the Game view shows"
+    );
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "window.maximize",
+            &crate::catalog::Target::Panel("game".into()),
+        )
+    });
+    settle(&mut rt);
+    assert!(rt.find("tab/hierarchy").is_some(), "restored");
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
