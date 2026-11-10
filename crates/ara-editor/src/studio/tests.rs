@@ -1224,6 +1224,32 @@ fn history_searches_opens_changes_and_undoes_back_to_a_step() {
 }
 
 #[test]
+fn play_clients_show_side_by_side_and_a_click_takes_control_of_one() {
+    // Three players tile two by two; each tile is the view's quarter, 4 px apart.
+    let tiles = super::game::tiles(3, [804.0, 604.0], 4.0);
+    assert_eq!(tiles.len(), 3);
+    assert_eq!(tiles[0], [0.0, 0.0, 400.0, 300.0]);
+    assert_eq!(tiles[1], [404.0, 0.0, 400.0, 300.0]);
+    assert_eq!(tiles[2], [0.0, 304.0, 400.0, 300.0]);
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "game"})));
+    rt.update(|s| {
+        s.editor.state.playing = Some(true);
+        s.local.game.live = true;
+        s.local.game.players = vec![(0, [0, 0, 300, 200], true), (1, [304, 0, 300, 200], true)];
+    });
+    settle(&mut rt);
+    assert!(rt.find("game/tile/0").is_some() && rt.find("game/tile/1").is_some());
+    press(&mut rt, "game/tile/1");
+    assert_eq!(
+        rt.state().play.client,
+        1,
+        "Client 1 takes the keyboard and mouse"
+    );
+    assert!(rt.state().local.game_captured);
+}
+
+#[test]
 fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
     use crate::catalog::Target;
     let mut rt = open();
