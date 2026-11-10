@@ -1,0 +1,2587 @@
+{
+  "date": "2026-11-10",
+  "scope": "Direct production ProjectCompiler.HashFile versus old production Hash(File.ReadAllBytes). Twelve fresh processes: ABBA for each of three immutable four-file sets. Four warmups/set, twenty measured whole-set calls/process.",
+  "timings_accepted": false,
+  "allocation_scope": "GC.GetAllocatedBytesForCurrentThread, synchronous reads+hash+result array/strings included. No complete-compile latency or p95 claim.",
+  "frozen_sha256": {
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Runtime.dll": "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Generators.dll": "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Editor.dll": "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-0.bin": "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-1.bin": "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-2.bin": "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-3.bin": "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-0.bin": "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-1.bin": "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-2.bin": "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-3.bin": "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321",
+    "benchmarks/iteration/source_hash/Program.cs": "ad9dd8396a27b3509d7a6dd99f50854888af45332297d73ed01ccf13302509d0",
+    "dotnet/src/Ara.CompileServer/ProjectCompiler.cs": "0eebc8b5cce9b42694ae6dfeff91a71f7317366689461305ba7be786bcf5b810",
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash.dll": "f1edbfb7a3151f72555fd7930f6207e45910a0424b003a2ae23f972cf2a01b8a"
+  },
+  "runtime": "10.0.14",
+  "sources": {
+    "baseline": "d6ff0da6c source-hash SDK snapshot (before SDK streaming)",
+    "candidate_manifest": {
+      "base_source_commit": "d6ff0da6c",
+      "patch": "ProjectCompiler streams four SDK identities; no whole-file temporary arrays",
+      "files": {
+        "Ara.Analyzers.pdb": "3c36cd2a46807f25abca44efc20e8a3359409a74976e34c4ad87537a6826a904",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+        "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+        "Ara.Runtime.pdb": "c4364df09a4a9243425220cbc0bbde257328a66dfb62792343c59a82bef9d005",
+        "Ara.CompileServer.xml": "bc92946fe3a2165018362b68681cfd30ff4f3bd587e3dcb3976056435c5d7069",
+        "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+        "Ara.Analyzers.dll": "934ece356a878f1aa6684398ab8eff0b9091e8dbc4e1b7e083d0671780f182af",
+        "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+        "Ara.Runtime.dll": "e9d49e3b5c33d5f2bc3b3ba8719cb458c37aab291668e3cf1f74deca4880c13f",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+        "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+        "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+        "Ara.Editor.dll": "6e354fcc72c6347df684c70a4e9ef7d57cb71d331e10b2a134aba077ad151b00",
+        "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+        "Ara.CompileServer.pdb": "02fe57d67aed712128650a607be53bd366223019f17f6a5961e378a3115ee478",
+        "Ara.Analyzers.CodeFixes.pdb": "447505b86043b02dc65a8838ab7f671c785385931e3a524fc88117610dc2f536",
+        "Ara.Generators.pdb": "7088937d32eaab949c4cfa1701636a1adbcacb2b3d7847db7a263f30af6c8219",
+        "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+        "Ara.Editor.pdb": "21a0c932300ee5c587052df49b81e68df9105ea73154588914cfe0a41027aae9",
+        "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+        "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+        "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+        "Ara.Analyzers.CodeFixes.dll": "4a97a3a5c8be3676dc10262da4185b8061710c726e3cd567f96db57517261876",
+        "Ara.CompileServer.dll": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+        "Ara.Generators.dll": "5d29f6d61ca9896e65f5d70374fc7d94b1b5655bf5c122bf9c1ecf9ac1791958"
+      },
+      "ProjectCompiler.cs": "0eebc8b5cce9b42694ae6dfeff91a71f7317366689461305ba7be786bcf5b810"
+    }
+  },
+  "processes": [
+    {
+      "profile": "sdk",
+      "slot": 0,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Editor.dll"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 1,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Editor.dll"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 2,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Editor.dll"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 3,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.Editor.dll"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721672,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          },
+          {
+            "allocatedBytes": 721896,
+            "hashes": [
+              "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+              "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+              "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360",
+              "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "65536",
+      "slot": 0,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "65536",
+      "slot": 1,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "65536",
+      "slot": 2,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "65536",
+      "slot": 3,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/65536/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "allocatedBytes": 263432,
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "1048576",
+      "slot": 0,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "1048576",
+      "slot": 1,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "1048576",
+      "slot": 2,
+      "arm": "candidate",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "streamed": true,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 1992,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "profile": "1048576",
+      "slot": 3,
+      "arm": "baseline",
+      "raw": {
+        "runtime": "10.0.14",
+        "server": "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/hash-candidate-sdk/Ara.CompileServer.dll",
+        "serverHash": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "streamed": false,
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-0.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-1.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-2.bin",
+          "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-preparation-tail-20261110/sdk-allocation-abba/1048576/caf\u00e9-\u65e5\u672c-3.bin"
+        ],
+        "samples": [
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4196040,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "allocatedBytes": 4195816,
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "quality": {
+    "dotnet_tests_passed": 318,
+    "compiler_tests_passed": 222,
+    "native_project_tests_passed": 6,
+    "digest_vectors_equal": true,
+    "all_frozen_files_unchanged": true
+  },
+  "complete_sdk_closures": {
+    "baseline": {
+      "before": {
+        "Ara.Analyzers.pdb": "4aa69612190120e34fc153c6039aa0b02b75d557fe88ffe900454872440c64e0",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+        "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+        "Ara.Runtime.pdb": "ad9580ee8275974358ff7285e74eb403cd5437bd59f9e67ede5a17c8acf0cdc9",
+        "Ara.CompileServer.xml": "4b4650c6296d3a63130e46eecaf499c680e691f6d615decd6e970db7b16c8333",
+        "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+        "Ara.Analyzers.dll": "a14bd058732ed71047a66fb68b8a2ce109e7e1d3f16280b5c86c713b24192aa6",
+        "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+        "Ara.Runtime.dll": "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+        "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+        "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+        "Ara.Editor.dll": "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1",
+        "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+        "Ara.CompileServer.pdb": "b63bf347fcee9f0e708762ca2fa9ff67f3f9fda716332f0224dcb7b4493c33f4",
+        "Ara.Analyzers.CodeFixes.pdb": "6b02196279341b41299cb6890ea1ea7004ff91c51fe95864b67b8e8cb6492cfd",
+        "Ara.Generators.pdb": "b6ae6237f59f522dc10a2f1bb795324e8e98f90274e17a943f71520e90ecb772",
+        "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+        "Ara.Editor.pdb": "0b66bb4984d7a92703cc1a04dde4ec066b7d2c6530385deef976c1ca0df3d35f",
+        "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+        "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+        "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+        "Ara.Analyzers.CodeFixes.dll": "c844113ecc9f7d11cae719677d4c04f0d5803fd36e126c3b9a299036e20e5b83",
+        "Ara.CompileServer.dll": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+        "Ara.Generators.dll": "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360"
+      },
+      "after": {
+        "Ara.Analyzers.pdb": "4aa69612190120e34fc153c6039aa0b02b75d557fe88ffe900454872440c64e0",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+        "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+        "Ara.Runtime.pdb": "ad9580ee8275974358ff7285e74eb403cd5437bd59f9e67ede5a17c8acf0cdc9",
+        "Ara.CompileServer.xml": "4b4650c6296d3a63130e46eecaf499c680e691f6d615decd6e970db7b16c8333",
+        "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+        "Ara.Analyzers.dll": "a14bd058732ed71047a66fb68b8a2ce109e7e1d3f16280b5c86c713b24192aa6",
+        "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+        "Ara.Runtime.dll": "067dcb7e9dc981a678af9a16a3724b8836579dbd5f35ddc1e11c6f62a0e02606",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+        "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+        "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+        "Ara.Editor.dll": "2d2d071a1abb3cf3590b2cb9d360f9b802f7d733991121a51860345fce1bd1f1",
+        "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+        "Ara.CompileServer.pdb": "b63bf347fcee9f0e708762ca2fa9ff67f3f9fda716332f0224dcb7b4493c33f4",
+        "Ara.Analyzers.CodeFixes.pdb": "6b02196279341b41299cb6890ea1ea7004ff91c51fe95864b67b8e8cb6492cfd",
+        "Ara.Generators.pdb": "b6ae6237f59f522dc10a2f1bb795324e8e98f90274e17a943f71520e90ecb772",
+        "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+        "Ara.Editor.pdb": "0b66bb4984d7a92703cc1a04dde4ec066b7d2c6530385deef976c1ca0df3d35f",
+        "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+        "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+        "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+        "Ara.Analyzers.CodeFixes.dll": "c844113ecc9f7d11cae719677d4c04f0d5803fd36e126c3b9a299036e20e5b83",
+        "Ara.CompileServer.dll": "92965889d69206dc67c82aa81342fde56a2ce33de5a5eb9768879e5496185d1d",
+        "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+        "Ara.Generators.dll": "8b3412aa8c8aa6ef39f212465e1e8d331a58565754f396988e4b5f83de943360"
+      },
+      "unchanged": true
+    },
+    "candidate": {
+      "before": {
+        "Ara.Analyzers.pdb": "3c36cd2a46807f25abca44efc20e8a3359409a74976e34c4ad87537a6826a904",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+        "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+        "Ara.Runtime.pdb": "c4364df09a4a9243425220cbc0bbde257328a66dfb62792343c59a82bef9d005",
+        "Ara.CompileServer.xml": "bc92946fe3a2165018362b68681cfd30ff4f3bd587e3dcb3976056435c5d7069",
+        "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+        "Ara.Analyzers.dll": "934ece356a878f1aa6684398ab8eff0b9091e8dbc4e1b7e083d0671780f182af",
+        "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+        "Ara.Runtime.dll": "e9d49e3b5c33d5f2bc3b3ba8719cb458c37aab291668e3cf1f74deca4880c13f",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+        "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+        "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+        "Ara.Editor.dll": "6e354fcc72c6347df684c70a4e9ef7d57cb71d331e10b2a134aba077ad151b00",
+        "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+        "Ara.CompileServer.pdb": "02fe57d67aed712128650a607be53bd366223019f17f6a5961e378a3115ee478",
+        "Ara.Analyzers.CodeFixes.pdb": "447505b86043b02dc65a8838ab7f671c785385931e3a524fc88117610dc2f536",
+        "Ara.Generators.pdb": "7088937d32eaab949c4cfa1701636a1adbcacb2b3d7847db7a263f30af6c8219",
+        "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+        "Ara.Editor.pdb": "21a0c932300ee5c587052df49b81e68df9105ea73154588914cfe0a41027aae9",
+        "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+        "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+        "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+        "Ara.Analyzers.CodeFixes.dll": "4a97a3a5c8be3676dc10262da4185b8061710c726e3cd567f96db57517261876",
+        "Ara.CompileServer.dll": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+        "Ara.Generators.dll": "5d29f6d61ca9896e65f5d70374fc7d94b1b5655bf5c122bf9c1ecf9ac1791958"
+      },
+      "after": {
+        "Ara.Analyzers.pdb": "3c36cd2a46807f25abca44efc20e8a3359409a74976e34c4ad87537a6826a904",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+        "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+        "Ara.Runtime.pdb": "c4364df09a4a9243425220cbc0bbde257328a66dfb62792343c59a82bef9d005",
+        "Ara.CompileServer.xml": "bc92946fe3a2165018362b68681cfd30ff4f3bd587e3dcb3976056435c5d7069",
+        "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+        "Ara.Analyzers.dll": "934ece356a878f1aa6684398ab8eff0b9091e8dbc4e1b7e083d0671780f182af",
+        "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+        "Ara.Runtime.dll": "e9d49e3b5c33d5f2bc3b3ba8719cb458c37aab291668e3cf1f74deca4880c13f",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+        "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+        "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+        "Ara.Editor.dll": "6e354fcc72c6347df684c70a4e9ef7d57cb71d331e10b2a134aba077ad151b00",
+        "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+        "Ara.CompileServer.pdb": "02fe57d67aed712128650a607be53bd366223019f17f6a5961e378a3115ee478",
+        "Ara.Analyzers.CodeFixes.pdb": "447505b86043b02dc65a8838ab7f671c785385931e3a524fc88117610dc2f536",
+        "Ara.Generators.pdb": "7088937d32eaab949c4cfa1701636a1adbcacb2b3d7847db7a263f30af6c8219",
+        "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+        "Ara.Editor.pdb": "21a0c932300ee5c587052df49b81e68df9105ea73154588914cfe0a41027aae9",
+        "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071",
+        "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+        "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+        "Ara.Analyzers.CodeFixes.dll": "4a97a3a5c8be3676dc10262da4185b8061710c726e3cd567f96db57517261876",
+        "Ara.CompileServer.dll": "82bd02780ea9120b67d1f2956e0a05dc053c6cff207bf916ebeb3bfdd81b7590",
+        "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+        "Ara.Generators.dll": "5d29f6d61ca9896e65f5d70374fc7d94b1b5655bf5c122bf9c1ecf9ac1791958"
+      },
+      "unchanged": true
+    }
+  }
+}

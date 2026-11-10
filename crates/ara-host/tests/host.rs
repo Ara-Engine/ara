@@ -979,6 +979,8 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
     );
     host.flush();
     let revision = host.store().revision();
+    let path = content.join("levels/arena.scene");
+    let before = fs::metadata(&path).expect("saved scene metadata");
     let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("saved scene");
     disk["records"]["e_flr1"]["Transform"]["position"] = json!([4, 0, 0]);
     fs::write(
@@ -986,6 +988,17 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
         ara_json::to_canonical_string(&disk),
     )
     .expect("real external edit");
+    // Reproduce a same-size rewrite within one filesystem timestamp quantum.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .expect("edited scene")
+        .set_times(fs::FileTimes::new().set_modified(before.modified().expect("saved time")))
+        .expect("preserve coarse modified time");
+    assert_eq!(
+        fs::metadata(&path).expect("edited metadata").len(),
+        before.len()
+    );
     host.tick();
     assert_eq!(host.store().revision(), revision + 1);
     let history = call(
