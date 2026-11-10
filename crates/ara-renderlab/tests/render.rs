@@ -220,3 +220,89 @@ fn renderlab_draws_a_frame_through_the_presenter_on_each_supported_path() {
     check(PathChoice::HardwareRt, "rt");
     check(PathChoice::NonRt, "nonrt");
 }
+
+/// An equirectangular HDR sky: blue above the horizon with a warm bright patch
+/// toward +X, dark green below.
+fn studio_sky() -> ara_runtime_render::fidelity::EnvironmentMap {
+    let size = [256u32, 128u32];
+    let mut pixels = Vec::with_capacity((size[0] * size[1]) as usize);
+    for y in 0..size[1] {
+        for x in 0..size[0] {
+            let above = y < size[1] / 2;
+            // u = 0.5 is +X; the patch sits 30 to 50 degrees above the horizon there.
+            let patch = (118..138).contains(&x) && (28..43).contains(&y);
+            pixels.push(match (patch, above) {
+                (true, _) => [60_000., 45_000., 30_000., 1.],
+                (false, true) => [600., 1_200., 2_400., 1.],
+                (false, false) => [120., 260., 90., 1.],
+            });
+        }
+    }
+    ara_runtime_render::fidelity::EnvironmentMap { size, pixels }
+}
+
+/// A content-supplied HDR sky is drawn behind the scene and lights it.
+#[test]
+fn an_hdr_environment_map_backs_and_lights_the_frame() {
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("renderlab");
+    std::fs::create_dir_all(&out).unwrap();
+    for (path, name) in [(PathChoice::HardwareRt, "rt"), (PathChoice::NonRt, "nonrt")] {
+        let renderlab = match Renderlab::new(&Options {
+            path,
+            pipeline_cache: Some(out.join("pipeline-cache")),
+            ..Default::default()
+        }) {
+            Ok(renderlab) => renderlab,
+            Err(error) => {
+                println!("skipping {name}: {error:#}");
+                continue;
+            }
+        };
+        let mut presenter = Presenter::new(SIZE, Vec::new(), out.join("gpu-cache"));
+        presenter
+            .set_external_renderer(Some(Box::new(renderlab)))
+            .unwrap();
+        // No sun and no spot: only the sky lights the floor, the box and the sphere.
+        let mut frame = frame(-2.);
+        frame.sun = None;
+        frame.lights.clear();
+        frame.draws[2].emissive = [0.; 3];
+        frame.environment.exposure = 2e-4;
+        let request = CaptureRequest {
+            camera: ara_runtime_render::camera(&frame).unwrap(),
+            size: SIZE,
+            mode: ViewMode::Lit,
+            deterministic: true,
+            exposure: 1.,
+            settle_frames: 4,
+            tick: 0,
+            seed: 0,
+            marks: None,
+        };
+        let capture = presenter
+            .capture_with(&frame, &request, || {
+                Ok(Content {
+                    environment: Some(studio_sky()),
+                    ..Default::default()
+                })
+            })
+            .unwrap();
+        capture
+            .image
+            .save(out.join(format!("{name}-hdr-sky.png")))
+            .unwrap();
+        // The top rows look over the scene at the sky above the horizon: blue.
+        let (mut red, mut blue) = (0f32, 0f32);
+        for x in 0..SIZE[0] {
+            for y in 0..SIZE[1] / 6 {
+                let p = capture.image.get_pixel(x, y).0;
+                red += f32::from(p[0]);
+                blue += f32::from(p[2]);
+            }
+        }
+        assert!(blue > red * 1.3, "{name}: sky rows are not blue ({red} vs {blue})");
+        // The floor in front is lit by that sky: neither black nor flat white.
+        let floor = capture.image.get_pixel(SIZE[0] / 2, SIZE[1] - 20).0;
+        assert!((20..250).contains(&floor[1]), "{name}: floor {floor:?}");
+    }
+}
