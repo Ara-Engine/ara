@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Ara.Generators.Tests;
 
-public class GeneratorTests
+public partial class GeneratorTests
 {
     [Fact]
     public void BehaviourDocumentationIsIndependentOfPartialDeclarationOrder()

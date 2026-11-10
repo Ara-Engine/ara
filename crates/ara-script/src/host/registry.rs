@@ -23,13 +23,16 @@ pub(crate) enum Owner {
     Module(u32),
 }
 
-/// A component C# can view in place.
+/// Script-visible storage; native access and command/catalog encoding are independent.
 #[derive(Debug, Clone)]
 pub(crate) struct ScriptComponent {
     pub name: String,
     pub id: ComponentId,
     pub layout: StructLayout,
     pub owner: Owner,
+    /// Rust storage has a checked C# layout and may be exposed as a raw column.
+    pub native: bool,
+    /// Command/catalog bytes retain their JSON representation independently of native access.
     pub json: bool,
 }
 

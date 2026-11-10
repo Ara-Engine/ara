@@ -24,6 +24,7 @@ pub struct CharacterMotion {
 
 /// Vehicle drivetrain and suspension state mirrored into ECS after each tick.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[repr(C)]
 #[ara(component, module = "physics")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct VehicleTelemetry {

@@ -50,6 +50,14 @@ public sealed class CueAttribute(string? name = null) : Attribute
 /// read/write sets go to the scheduler, so non-conflicting systems run in parallel.
 /// Optional parameters: <c>Entity</c>, <c>in Tick</c>, <c>ref Rng</c>,
 /// <c>ref Commands</c>, and <see cref="ResourceAttribute"/> structs.
+/// A method taking <c>Span&lt;A&gt;</c> and <c>ReadOnlySpan&lt;B&gt;</c> instead receives
+/// one complete native batch per invocation: mutable spans declare writes and readonly
+/// spans declare reads. All component parameters must be spans in this form. Optional
+/// <c>ReadOnlySpan&lt;Entity&gt;</c> supplies matching identities; scalar <c>Entity</c>
+/// and <c>ref Rng</c> parameters are not available. Use <see cref="Rng.For"/> with each
+/// identity for deterministic randomness. Views remain valid only during the call;
+/// filters can produce shorter runs, including one entity. Resources and commands
+/// retain their usual access and ordering rules.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class QueryAttribute : Attribute

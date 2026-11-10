@@ -1,0 +1,556 @@
+{
+  "count": 1003,
+  "steps": 5,
+  "timings_accepted": false,
+  "state_only": true,
+  "records": [
+    {
+      "case": "w1",
+      "mode": "span",
+      "runners": 1,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.json",
+      "clr_result_sha256": "c4cf6dd7b619cc56150c6f3d931b9a4379fc6c0a50142f29cbf77e9c8246551e",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.command.json",
+      "clr_command_sha256": "0e85704d3a6daa8438a7b73817b531f87529b690edf12762fefb3c174e76a7df",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "span",
+      "runners": 1,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.json",
+      "clr_result_sha256": "cce1c2f0f460b70b961d27b4b4d2b501a521eac3ae08f66538f893400215acdd",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.command.json",
+      "clr_command_sha256": "3880870a80a1f402d3a6a2b3ae2fa4276b6ecc7740279acfdfb7dd49d4242424",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "span",
+      "runners": 15,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.json",
+      "clr_result_sha256": "810d184a3f89996faa8500a7cc6538f5d2ded84f18f3fecddf9b7534a40b6729",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.command.json",
+      "clr_command_sha256": "6d4c7bc18fd60af33057bb527ae22df3760b4c64771007cc4bd337a319b62194",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "span",
+      "runners": 15,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.json",
+      "clr_result_sha256": "c7491c5177329ed4f8621b50db9751d4d924e7e4a76d63ea3538f8a9a0196576",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.command.json",
+      "clr_command_sha256": "bc660deb8151d9cbd8b7013ab78b3a02476c9dbb076ccc21e3cb4744739ee86c",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "simd",
+      "runners": 1,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.json",
+      "clr_result_sha256": "fc4d3d060a267e798fade1f495d180fa659111cbc285cf89ad6e6f5a7289d09b",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.command.json",
+      "clr_command_sha256": "13e11b614ced70faa2640501555dfaaa1bad3c4ec0e0bdbaf01bdc292f6243ad",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "simd",
+      "runners": 1,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.json",
+      "clr_result_sha256": "8e05d6ec3af5fbc55dbe31fb8a2335e0cf099944f9b7cffbd2c61e3456ed3ab0",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.command.json",
+      "clr_command_sha256": "83599aee0e105511f2f9144cfbc6872ef970a8bafc5ed6dd49af12a58a708465",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "simd",
+      "runners": 15,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.json",
+      "clr_result_sha256": "0a2b2ed7a984447f89d6b45e06a7f455abe1579cd12e534d75a0414a907079b8",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.command.json",
+      "clr_command_sha256": "1a1d5b387110722cf9dfa3838a682479bb65cac510a32b8551c67af52e6bd5ac",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w1",
+      "mode": "simd",
+      "runners": 15,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "clr_sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.json",
+      "clr_result_sha256": "abf363ac0a43f347dd89510aba208b9637ae46f8a80570fe6e909bc37d3f84f2",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.command.json",
+      "clr_command_sha256": "e505d5e9ef49e969456bb5f759ffcf661d2e32cc202bf7a7f017517e2b5415a8",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "span",
+      "runners": 1,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.json",
+      "clr_result_sha256": "16db619fbfc1e38d600a772f8ff310b8d4923fb95db147cb515233d5ac2ba3c4",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.command.json",
+      "clr_command_sha256": "7a651218cbfa90b79d7c31464b93b81a2dcb76698d43b0e6ad33a1396a0b16a3",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "span",
+      "runners": 1,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.json",
+      "clr_result_sha256": "8d5bbe3c596ddb74fafb9c13604d9742a25e1e3da14953160aea0c3da0384148",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.command.json",
+      "clr_command_sha256": "15fe59745671308fbf26d4a1aaa6031fdf370abfe1856bfc18f8e2c0672309b7",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "span",
+      "runners": 15,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.json",
+      "clr_result_sha256": "7e9111bc8f833db153348aadf25797293b40e9f484edb24ae925961b8a9ccb93",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.command.json",
+      "clr_command_sha256": "760d6e3332fb66a376b34d5d0d66abe7011d835a4a2150e8d09bfb7075f9e56f",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "span",
+      "runners": 15,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.json",
+      "clr_result_sha256": "f14ca5014edbe0d5a519fa664fb561c7dc80546b01bf9f7203b419fd9fc32994",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.command.json",
+      "clr_command_sha256": "5a438bb19f7045363366cc195a8ecb01e5805f65111de13b7377f5da1e735392",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "simd",
+      "runners": 1,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.json",
+      "clr_result_sha256": "797362896ce837971c3d786ed73cca1017dd9337405101110a63f3bd430b9c9f",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.command.json",
+      "clr_command_sha256": "8e4295451f9b66cbd633f0fbc818f6a4354edc97f0b4d1ca377e24911164b881",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "simd",
+      "runners": 1,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.json",
+      "clr_result_sha256": "b2c72148de04b9f07c82a717f969dc9e1ddde82af97e3b3818fc6a40ca6fb233",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.command.json",
+      "clr_command_sha256": "5cc33300430dbab958b93fae49e2156fd349b271425dd4a4fe87e175bb10e8bc",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "simd",
+      "runners": 15,
+      "hot": false,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.json",
+      "clr_result_sha256": "fc72ba9aff4f4863e4aad7ca15332df59c1248c747beb8ecac97ba0ce67a8e5f",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.command.json",
+      "clr_command_sha256": "c1b822d205982aac407bdbc6332a6f98ff7aef86ea1b4ea68f5ee8b53676f6ea",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    },
+    {
+      "case": "w3",
+      "mode": "simd",
+      "runners": 15,
+      "hot": true,
+      "bytes": 48144,
+      "byte_identical": true,
+      "unity_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "clr_sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "unity_path": "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin",
+      "clr_path": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.bin",
+      "clr_result": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.json",
+      "clr_result_sha256": "4120605a0da1a9c3a72e3b13dc72d0a3fd5fb629989b7569298fea3645c29c42",
+      "clr_command": "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.command.json",
+      "clr_command_sha256": "ce583af4bc1637f77de00a110398200995bcb4123ea3d726a9cc4d32a1806030",
+      "clr_exact_ids_and_component_presence": true,
+      "independent_clr_scalar_oracle": true
+    }
+  ],
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "scope": "State-only actual Ara ScriptHost/CoreCLR versus UnityEditorBurst, W1/W3 eachspan/SIMD Release/hot and1/15ceiling,1003rows5ticks. NoCLRtimingcomparison.",
+  "quality_passed": true,
+  "record_count": 16,
+  "file_proofs": {
+    "target/perf-scale/us8/results/current-smoke-01_w1/w1_1003_r15_unity_smoke.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.json": {
+      "sha256": "c4cf6dd7b619cc56150c6f3d931b9a4379fc6c0a50142f29cbf77e9c8246551e",
+      "bytes": 584
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-release.command.json": {
+      "sha256": "0e85704d3a6daa8438a7b73817b531f87529b690edf12762fefb3c174e76a7df",
+      "bytes": 423
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.json": {
+      "sha256": "cce1c2f0f460b70b961d27b4b4d2b501a521eac3ae08f66538f893400215acdd",
+      "bytes": 655
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t1-hot.command.json": {
+      "sha256": "3880870a80a1f402d3a6a2b3ae2fa4276b6ecc7740279acfdfb7dd49d4242424",
+      "bytes": 430
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.json": {
+      "sha256": "810d184a3f89996faa8500a7cc6538f5d2ded84f18f3fecddf9b7534a40b6729",
+      "bytes": 662
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-release.command.json": {
+      "sha256": "6d4c7bc18fd60af33057bb527ae22df3760b4c64771007cc4bd337a319b62194",
+      "bytes": 425
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.json": {
+      "sha256": "c7491c5177329ed4f8621b50db9751d4d924e7e4a76d63ea3538f8a9a0196576",
+      "bytes": 622
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-span-t15-hot.command.json": {
+      "sha256": "bc660deb8151d9cbd8b7013ab78b3a02476c9dbb076ccc21e3cb4744739ee86c",
+      "bytes": 432
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.json": {
+      "sha256": "fc4d3d060a267e798fade1f495d180fa659111cbc285cf89ad6e6f5a7289d09b",
+      "bytes": 612
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-release.command.json": {
+      "sha256": "13e11b614ced70faa2640501555dfaaa1bad3c4ec0e0bdbaf01bdc292f6243ad",
+      "bytes": 423
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.json": {
+      "sha256": "8e05d6ec3af5fbc55dbe31fb8a2335e0cf099944f9b7cffbd2c61e3456ed3ab0",
+      "bytes": 569
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t1-hot.command.json": {
+      "sha256": "83599aee0e105511f2f9144cfbc6872ef970a8bafc5ed6dd49af12a58a708465",
+      "bytes": 430
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.json": {
+      "sha256": "0a2b2ed7a984447f89d6b45e06a7f455abe1579cd12e534d75a0414a907079b8",
+      "bytes": 590
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-release.command.json": {
+      "sha256": "1a1d5b387110722cf9dfa3838a682479bb65cac510a32b8551c67af52e6bd5ac",
+      "bytes": 425
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.bin": {
+      "sha256": "54966d63ae6bda31c747d3a43a299488222b214be9df07830c7e23d1da8f8223",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.json": {
+      "sha256": "abf363ac0a43f347dd89510aba208b9637ae46f8a80570fe6e909bc37d3f84f2",
+      "bytes": 575
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w1-simd-t15-hot.command.json": {
+      "sha256": "e505d5e9ef49e969456bb5f759ffcf661d2e32cc202bf7a7f017517e2b5415a8",
+      "bytes": 432
+    },
+    "target/perf-scale/us8/results/current-smoke-01_w3/w3_1003_r15_unity_smoke.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.json": {
+      "sha256": "16db619fbfc1e38d600a772f8ff310b8d4923fb95db147cb515233d5ac2ba3c4",
+      "bytes": 590
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-release.command.json": {
+      "sha256": "7a651218cbfa90b79d7c31464b93b81a2dcb76698d43b0e6ad33a1396a0b16a3",
+      "bytes": 423
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.json": {
+      "sha256": "8d5bbe3c596ddb74fafb9c13604d9742a25e1e3da14953160aea0c3da0384148",
+      "bytes": 625
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t1-hot.command.json": {
+      "sha256": "15fe59745671308fbf26d4a1aaa6031fdf370abfe1856bfc18f8e2c0672309b7",
+      "bytes": 430
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.json": {
+      "sha256": "7e9111bc8f833db153348aadf25797293b40e9f484edb24ae925961b8a9ccb93",
+      "bytes": 633
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-release.command.json": {
+      "sha256": "760d6e3332fb66a376b34d5d0d66abe7011d835a4a2150e8d09bfb7075f9e56f",
+      "bytes": 425
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.json": {
+      "sha256": "f14ca5014edbe0d5a519fa664fb561c7dc80546b01bf9f7203b419fd9fc32994",
+      "bytes": 629
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-span-t15-hot.command.json": {
+      "sha256": "5a438bb19f7045363366cc195a8ecb01e5805f65111de13b7377f5da1e735392",
+      "bytes": 432
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.json": {
+      "sha256": "797362896ce837971c3d786ed73cca1017dd9337405101110a63f3bd430b9c9f",
+      "bytes": 614
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-release.command.json": {
+      "sha256": "8e4295451f9b66cbd633f0fbc818f6a4354edc97f0b4d1ca377e24911164b881",
+      "bytes": 423
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.json": {
+      "sha256": "b2c72148de04b9f07c82a717f969dc9e1ddde82af97e3b3818fc6a40ca6fb233",
+      "bytes": 589
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t1-hot.command.json": {
+      "sha256": "5cc33300430dbab958b93fae49e2156fd349b271425dd4a4fe87e175bb10e8bc",
+      "bytes": 430
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.json": {
+      "sha256": "fc72ba9aff4f4863e4aad7ca15332df59c1248c747beb8ecac97ba0ce67a8e5f",
+      "bytes": 579
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-release.command.json": {
+      "sha256": "c1b822d205982aac407bdbc6332a6f98ff7aef86ea1b4ea68f5ee8b53676f6ea",
+      "bytes": 425
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.bin": {
+      "sha256": "51c9d5ad1af4d0d8b64bdff7949e9b99c68cfd5774edd5f45c85139bcfe5c3d4",
+      "bytes": 48144
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.json": {
+      "sha256": "4120605a0da1a9c3a72e3b13dc72d0a3fd5fb629989b7569298fea3645c29c42",
+      "bytes": 629
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/smokes/candidate-w3-simd-t15-hot.command.json": {
+      "sha256": "ce583af4bc1637f77de00a110398200995bcb4123ea3d726a9cc4d32a1806030",
+      "bytes": 432
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/candidate/ecs_kernel_bench": {
+      "sha256": "c10c9643e85a6a065147a1c4c86f55f9b945b88afe097e81842ec7c2d311fcaf",
+      "bytes": 12243072
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/candidate/executables.json": {
+      "sha256": "46bfdcdc9414907e3cb30f7baa30001b9111c3bd3a32425c59231d56e60d3306",
+      "bytes": 481
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/candidate/input-hashes.json": {
+      "sha256": "76c59cf1a88190bedd88778e3e8115010f2e12822459b4df91543acef87f842a",
+      "bytes": 2377194
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/build-command.json": {
+      "sha256": "a78421f2e8951e6fba674d50e162f4468f9a9fb300c45e0494afdcc3a8316908",
+      "bytes": 175
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/environment.json": {
+      "sha256": "2011124aedc6559ea49d7a83d367191a6f3efff31b3da75a0e8ec9260e841311",
+      "bytes": 1927
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/host-identities.json": {
+      "sha256": "1c19d2bde6e895e7be183e030c92bd2ac8b11ebf980732e33cc313ecd0610b1d",
+      "bytes": 306
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/candidate-focused-gates.json": {
+      "sha256": "e21377c84007e3ee3de32ebe3c68ac7ebbd898d0b4f4dbc6cefdb04a6c1430df",
+      "bytes": 1651
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/result.json": {
+      "sha256": "62ba3c38c54d3267338148cdb923facf67964131128c6b0029a32a0b845c7096",
+      "bytes": 1488
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/rustc-version.txt": {
+      "sha256": "e003fd3d385fcd0de16bc6b049124efb20207831dd810fd4ab39ff079bbb12a5",
+      "bytes": 192
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/cargo-version.txt": {
+      "sha256": "c35608815f43d0b8788a9b826fad2bb17384f49fb328dc4fe64da9db5f5ef4d6",
+      "bytes": 36
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/dotnet-info.txt": {
+      "sha256": "3bd9486d06ebbedbc9eb12f8ab6c44a71426832b021a378dce39caad877cce92",
+      "bytes": 1522
+    },
+    "target/ecs-clr-scheduling-20261109T082021Z/git-head.txt": {
+      "sha256": "eeafaaf6584212e4d5dec19cbe56baf8825fde9fb4be26b93fff653918736d6a",
+      "bytes": 41
+    },
+    "benchmarks/iteration/unity/current/current_smoke_mac_2026-11-09.json": {
+      "sha256": "cd050915a0e30d1f6cb8c38cb4cfa48990221df1e75ae70757ece56322cce04c",
+      "bytes": 62721
+    }
+  },
+  "raw_log_policy": "No raw logs or incidental host/network text published; source/build/host identity records remain hash-bound under target"
+}

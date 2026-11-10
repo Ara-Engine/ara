@@ -31,6 +31,8 @@ fn metadata(text: &str) -> Option<&str> {
 }
 
 fn identity(text: &str, path: &str) -> Result<AssetId, Diagnostic> {
+    // Identity never bypasses markup validation, including pinned metadata.
+    let elements = ara_ui_document::parse(text).map_err(invalid)?;
     if let Some(id) = metadata(text) {
         let id = AssetId::parse(id).map_err(invalid)?;
         if id.prefix() != "ui" {
@@ -39,7 +41,6 @@ fn identity(text: &str, path: &str) -> Result<AssetId, Diagnostic> {
         return Ok(id);
     }
     // Legacy markup remains readable before its first command establishes metadata.
-    let elements = ara_ui_document::parse(text).map_err(invalid)?;
     if let Some(id) = elements
         .first()
         .and_then(|e| AssetId::parse(&e.id).ok())
@@ -73,18 +74,17 @@ pub(crate) fn with_identity(text: &str, id: &AssetId) -> Result<String, Diagnost
 }
 
 pub(crate) fn header(text: &str, path: &str) -> Option<(String, AssetId)> {
-    SourceDocument::parse(text, DocumentKind::Markup).ok()?;
-    Some(("ui".into(), identity(text, path).ok()?))
+    let id = identity(text, path).ok()?;
+    Some(("ui".into(), id))
 }
 
 pub(crate) fn read(text: &str, path: &str) -> ReadResult {
     let parsed: Result<Document, Diagnostic> = (|| {
-        let source = SourceDocument::parse(text, DocumentKind::Markup).map_err(invalid)?;
-        let id = identity(source.serialize(), path)?;
+        let id = identity(text, path)?;
         let mut doc = Document::new("ui", id);
         doc.insert_unchecked(
             record_id(),
-            serde_json::Map::from_iter([("source".into(), source.serialize().into())]),
+            serde_json::Map::from_iter([("source".into(), text.into())]),
         );
         Ok(doc)
     })();
@@ -112,12 +112,14 @@ pub(crate) fn validate(doc: &Document, path: &str) -> Result<(), Diagnostic> {
         return Ok(());
     }
     let text = source(doc)?;
-    SourceDocument::parse(text, DocumentKind::Markup).map_err(invalid)?;
     if identity(text, path)? != doc.id {
         return Err(invalid("UI source identity differs from its document"));
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(crate) fn write(doc: &Document) -> Result<String, Diagnostic> {
     if !doc.conflicts.is_empty() {

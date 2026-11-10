@@ -2,26 +2,43 @@
 
 The warm out-of-process compile server (A13): Roslyn never runs in the game process, so
 its CPU and GC pauses never stall ticks. One process serves a host over a named pipe
-(`Protocol.cs`, v2) and exits with its parent.
+(`Protocol.cs`, v3) and exits with its parent.
 
 ## Pieces
 
 - `ProjectInventory`: the one D30 folder/source inventory, shared with warm sessions;
   `--inventory` returns reference/storage paths and explicit derived schema results.
+  `ModuleInputs.Scan` skips publication hydration for ownership checks; public/default
+  scans and project builds still validate and hydrate schema/assembly publications.
 - `ProjectCompiler`: `--compile-project` builds deterministically before scene validation,
   returning generated schemas for Rust's canonical publication under `.ara/scripts`.
   Publication markers verify input, schema and assembly hashes; editor code stays separate.
+  Fingerprint payloads serialize directly to UTF8. Parallel snapshot writers share one
+  lazily serialized immutable inventory graph per request.
+- `ProjectSourceCapture`: fully reads each project source and derives its hash once
+  per request. Fingerprints and `ProjectSnapshot` manifests share that captured hash;
+  no extra source capture survives the request, including publication-cache hits.
+- `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
+  changes, sharing their existing source strings instead of retaining equal rereads.
+  Configuration changes still rebuild semantic compilations and generator drivers.
+  All-source edits replace trees together while retaining references, options and
+  global usings; single-file and partial edits retain incremental replacement.
+  `compiler_scale.py --dependency-fanout` measures a shared edit with unchanged consumers.
 - `CodeFixRunner`: `--fix` applies the shipped code-fix providers to immutable input texts,
   returning replacements only. The host commits those through `source.replace` ops.
 
 - `Coordinator`: the scheduler. Modules and their reference graph (a module is watched
   after the modules it references), the work queues and the one worker thread.
-  - Human work (watcher saves, heat, rebuilds) runs first, in order, at normal process
-    priority; queued saves of one module merge.
+  - Human work (watcher saves, heat, rebuilds) runs first, in order, at the helper's
+    launch priority; queued saves of one module merge.
   - Agent edits (`Change` with `OriginAgent`, and watcher events on paths an agent claimed)
     coalesce per module until quiet for `AgentQuiet` (150 ms), run only with no human work
     queued, below normal priority, and are cancelled and requeued when a human edit arrives.
     A human save of the same module absorbs them (D20).
+  - `CompilePriority` captures the launch budget before startup backgrounding in all
+    CLI modes. macOS uses reversible self-process background policy, preserving BSD
+    nice and inherited background state. Any active human retains the launch budget;
+    failed scheduling hints are logged, and never repaired by forcing higher nice.
   - An image (L3) cascades to every dependent in dependency order: relink (same image and EnC
     chain, `Escalation.Relink`) when the dependency's public surface is unchanged, rebuild
     (`Escalation.Dependency`) otherwise. The cascade is one `Reload` message, or nothing
@@ -33,9 +50,17 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   the dependency surfaces it was compiled against) and the generator driver. `Initial`,
   `Compile`, `Full` (heat/rebuild), `Cascade` and `Rebind` return an `Outcome` holding the
   next state; `Commit` adopts it.
+  - `PublishedLoaded` retains the exact loaded PE, publication identity and trusted source
+    snapshot separately from Roslyn state. First edits emit L3 and establish a real new
+    baseline; unchanged saves do no parsing. Published dependents join atomic cascades.
+    Explicit unwatched images without trusted source bodies remain read-only references.
   - Compile: classify; L1/L2 → `EmitDifference` (the generator runs only for inserts and doc
     edits, and any change in its output is L3); L3 → generator + full emit with the analyzers
     in parallel. Errors (compiler, generator, analyzers) are diagnostics; nothing commits.
+  - Cancellation reaches analyzer requests. `PendingAnalysis` drains the Ara-owned task on
+    every L3 exit before the worker yields or reports idle. Legacy providers stop at call
+    boundaries; Roslyn's private callback workers have a separate lifetime. Shutdown requests
+    cancellation while the host retains its bounded helper-process fallback.
 - `EditClassifier`: member-level diff. L1 bodies keep S2's rules (no closures, state machines,
   constructors, primary-constructor types). L2 inserts: methods/operators/non-auto properties,
   class fields and auto-properties without initializers, consts, new non-generic non-partial
@@ -43,9 +68,28 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   (`Escalation.Capability`). Everything else is L3.
 - `ModuleCompiler`: shared framework references, options, emit, EnC deltas (`isAddedSymbol`
   for inserts), baselines from the PDB, `Surface` (hash of public/protected declarations).
+- `ModuleText`: exact replacement ranges for incremental parsing above 2048 UTF-16
+  units; flat owned new text and a weak immediate predecessor, without a strong edit
+  history. Tiny files and path changes parse afresh. EnC classification stays unchanged.
+- `ModuleSource`: reads every decoded source unit, reusing the committed string only
+  after exact EOF equality. A pooled buffer avoids allocating new unchanged strings;
+  changed/new files retain normal text ownership, BOM decoding and editor sharing.
+  Both capture and final source validation read contents; timestamps never grant trust.
+  `PooledReadAheadStream` replaces the private FileStream byte buffer with an owned
+  pooled 4 KiB block, preserving synchronous read-ahead and the unchanged StreamReader.
 - `ModuleWatcher`: one pump thread for every module folder (1 ms spin settle).
 - `AnalyzerSet`: the Ara analyzers over changed trees, with the module's API profile
   (`build_property.AraModuleProfile`). `Diagnostics`: Roslyn → ara-diag JSON.
+  Images, additive/declaration/accessor/directive edits and changed references use
+  full compilation analysis: changes can invalidate another partial file. Repeating
+  per-tree requests is insufficient for some partial-property symbol diagnostics.
+  Ordinary L1 methods may narrow semantic requests only from a globally clean
+  built-in analyzer snapshot. `ModuleState.AnalyzerClean` is immutable, adopted at
+  atomic commit, revoked by warnings/reference changes and never imported from PE
+  publications. Unknown/custom providers keep full-tree analysis. Request-level
+  exception callbacks retain failures Roslyn omits from tree/span results.
+  All analysis entry points promote analyzer exceptions to errors (`AD0001` maps
+  through existing `ARA0900`); incomplete checks never publish a candidate.
 
 ## Runtime config
 
@@ -66,4 +110,7 @@ sat at tier 0 or in PGO instrumentation for many edits; a 5.2k-line L3 emit took
 `dotnet test tests/Ara.CompileServer.Tests`: `ClassifierTests` (the L1/L2/L3 edit matrix,
 capabilities, new/removed files), `SessionTests` (cold → hot, L1, L2, errors, Ara
 declarations, unknown references, L4), `CascadeTests` (local L1, relink, rebuild, breaking
-edits, dependents seeing L2 members), `SchedulingTests` (agent coalescing and priority).
+edits, dependents seeing L2 members), `SchedulingTests` (agent coalescing and priority),
+`Published*Tests` (snapshot integrity, first-edit state, read-only supplied images).
+`AnalyzerBodyTests` and `AnalyzerProvenanceTests` cover exact scoped diagnostics,
+warnings, failed saves, baseline trust, rebinds and actual analyzer exceptions.

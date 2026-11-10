@@ -17,5 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="../Ara.Runtime/Ara.Runtime.csproj" />
     <Compile Include="../Ara.CompileServer/Protocol.cs" Link="Protocol.cs" />
+    <Compile Include="../Ara.CompileServer/PublishedSnapshot.cs" Link="PublishedSnapshot.cs" />
+    <Compile Include="../Ara.CompileServer/PublishedReadOnly.cs" Link="PublishedReadOnly.cs" />
   </ItemGroup>
 </Project>

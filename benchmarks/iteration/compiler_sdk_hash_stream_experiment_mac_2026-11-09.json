@@ -1,0 +1,1390 @@
+{
+  "date": "2026-11-09",
+  "experiment": "Stream SDK assembly hashing instead of materializing full file byte arrays",
+  "promotion_status": "NOT_PROMOTED",
+  "baseline_source_commit": "983d9af60c6d4e2d0b61e701abfafc93b4d571a2",
+  "scope": "Isolated standard-BCL helper projection for four SDK identity file hashes. No full compiler allocation, compilation latency, source text reading, gameplay or market comparison.",
+  "decision": "Allocation improvement proven; latency and extra read-call tradeoff remain unmeasured. Production unchanged.",
+  "design": {
+    "profiles": [
+      "four actual SDK DLLs",
+      "four64KiB files",
+      "four1MiB files"
+    ],
+    "fresh_processes": 12,
+    "order_per_profile": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "warmups_per_process": 2,
+    "measured_whole_set_operations_per_process": 5,
+    "files_per_set": 4,
+    "writes_and_expected_digest_oracles_outside_counters": true,
+    "counter": "GC.GetTotalAllocatedBytes(precise:true)",
+    "runtime": "10.0.14"
+  },
+  "quality": {
+    "success": true,
+    "rows": [
+      {
+        "size": 0,
+        "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 1,
+        "hash": "ca358758f6d27e6cf45272937977a748fd88391db679ceda7dc7bf1f005ee879",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 2,
+        "hash": "140d811b81973993df99b8b1742b383ab83f6f52bf7af850812e7bba02ff11da",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 4095,
+        "hash": "e22f185103f5d75f22898e979206334d51aa47b9a01b6d835df0ec9000aac2e5",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 4096,
+        "hash": "d41d438c379110c7f7b2c561b1f04f26c1b4549110791f8e022f48974280c13e",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 4097,
+        "hash": "bb37fb3430fb3bc003f70512ee0189aec84b029b221885c8f16280d1b935483e",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 65535,
+        "hash": "91d0a03af0efeeb5568bbdcf2bd7fe1c9d932c4d22db3643c7586c1bd1afbeb1",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 65536,
+        "hash": "ef4636928161808e87035fa51983821677527ccd9661991c5d0126a778b2268a",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 65537,
+        "hash": "74f3260f4a9adaf7271c910ba2d111dbae7a176afb487e1b7f655897eadf1093",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "size": 1048576,
+        "hash": "06b7bbfb7824aa03382051691630eb26de85102d1b08a81e907ec0744cd8a286",
+        "digest_and_handle_checks_passed": true
+      },
+      {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-01/quality-fixtures",
+        "error": "System.UnauthorizedAccessException:-2147024891"
+      },
+      {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-01/quality-fixtures/missing.bin",
+        "error": "System.IO.FileNotFoundException:-2147024894"
+      }
+    ],
+    "timings_accepted": false
+  },
+  "summary": [
+    {
+      "profile": "sdk",
+      "baseline_pooled_median": 720600.0,
+      "candidate_pooled_median": 1944.0,
+      "all_digest_vectors_equal": true
+    },
+    {
+      "profile": "64k",
+      "baseline_pooled_median": 263384.0,
+      "candidate_pooled_median": 1944.0,
+      "all_digest_vectors_equal": true
+    },
+    {
+      "profile": "1m",
+      "baseline_pooled_median": 4196552.0,
+      "candidate_pooled_median": 1944.0,
+      "all_digest_vectors_equal": true
+    }
+  ],
+  "raw_processes": [
+    {
+      "profile": "sdk",
+      "slot": 0,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-0-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 720824,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Editor.dll"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 1,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-1-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Editor.dll"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 2,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-2-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Editor.dll"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "sdk",
+      "slot": 3,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/sdk-3-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 720824,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 720600,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 721160,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 720936,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "d79897978640157f72633bcc1aea689e19c8efd01b0d6af3a06c8e06810cf434",
+              "7b72856837da5ea5e9b3fd61c0bcb952940c25010f2ed71dbc1cec13c17e62f6",
+              "f7cb002e7a78f9cc1cd02a3d53b31b439fa62f17953513619a4e748bbad1be2d",
+              "faae0822af070fe61919a39f7840cd5cd473270285b9a2735098cd7086688efa"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.CompileServer.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Runtime.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Generators.dll",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/dotnet/artifacts/bin/Ara.CompileServer/release/Ara.Editor.dll"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "64k",
+      "slot": 0,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-0-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "64k",
+      "slot": 1,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-1-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "64k",
+      "slot": 2,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-2-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "64k",
+      "slot": 3,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/64k-3-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 263384,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "58f414c587d599b6fa1678097a7459ce669c6e0fe894d81be9c7ed2879bd6bcb",
+              "5641386d91cdd61f3bb3b5078c8b9d3ffbf16528803d15d88a7414f4b95c792e",
+              "ea8666237c18016230334931added93db09d3bff5586f443b2b49bc05a1325a0",
+              "5b951efe80c6f327f18e44eef72884d499f5447b50723bb2df9577859927baa5"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/64k/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "1m",
+      "slot": 0,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-0-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 4196440,
+            "collections": [
+              2,
+              2,
+              2
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 4196664,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 4196440,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 4196440,
+            "collections": [
+              2,
+              2,
+              2
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 4196664,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "1m",
+      "slot": 1,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-1-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "1m",
+      "slot": 2,
+      "arm": "candidate",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-manifest.json",
+        "candidate",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-2-candidate.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "candidate",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 1944,
+            "collections": [
+              0,
+              0,
+              0
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    },
+    {
+      "profile": "1m",
+      "slot": 3,
+      "arm": "baseline",
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/bin/Release/net10.0/HashProbe.dll",
+        "--allocation",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-manifest.json",
+        "baseline",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/1m-3-baseline.json"
+      ],
+      "exit": 0,
+      "raw": {
+        "arm": "baseline",
+        "rows": [
+          {
+            "wave": 2,
+            "allocated_bytes": 4197112,
+            "collections": [
+              2,
+              2,
+              2
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 3,
+            "allocated_bytes": 4196664,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 4,
+            "allocated_bytes": 4196440,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 5,
+            "allocated_bytes": 4197112,
+            "collections": [
+              2,
+              2,
+              2
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          },
+          {
+            "wave": 6,
+            "allocated_bytes": 4195992,
+            "collections": [
+              1,
+              1,
+              1
+            ],
+            "hashes": [
+              "1c15b634397059fc8b634d6723502f0e5433e6c9f8d60e40d9128451a9f80c0f",
+              "b69cb8a2e5082ce453c4cd5b08b11fa608dad3b480a8b5166981504899eedd90",
+              "a8e41bef59f89bc6bab7c8c70c9a31fc0109865231c4c78fe92c44a13ba2d875",
+              "fd1bd7034542152405d38df0edb74942744ee63250a5fb0476f6944b9f3e3321"
+            ]
+          }
+        ],
+        "files": [
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/0.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/1.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/2.bin",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-file-hash-20261109/proof-02/fixtures/1m/3.bin"
+        ],
+        "runtime": "10.0.14",
+        "timings_accepted": false
+      }
+    }
+  ],
+  "source_runtime_sdk_and_app_unchanged": true,
+  "timings_accepted": false,
+  "limits": [
+    "The helper body is copied exactly from the source-only candidate; the complete candidate compiler SDK has not been built or validated.",
+    "No inference that lower allocations mean lower compile latency. Stream hashing can use more IO calls.",
+    "Current schema-file and already-captured image hashing are untouched.",
+    "File sharing, error type/HResult and handle release verified on this Mac; no Windows-specific validation.",
+    "All raw GC counts retained. One ABBA campaign per profile, no universal pause or resident-memory claim."
+  ],
+  "proof_sha256": {
+    "target/compiler-project-file-hash-20261109/proof-02/report.json": "cddf39791fdc20e4415f442b670c3ff61b3a460ef754416a67f53af877ed1ba9",
+    "target/compiler-project-file-hash-20261109/proof-01/report.json": "f484715e8c22e697a69ce586ce16b2f34e608297a3b3c4c79658466f7b4b79bc",
+    "target/compiler-project-file-hash-20261109/Driver.cs": "48ddebc29b4fcb3766646553fba450014ef8e202a8bc2f8b9eb39691b4315ac5",
+    "target/compiler-project-file-hash-20261109/ProjectCompiler.cs": "fb974a8a71c0ea26a8cba9f1ffb5b210adf5ecdad45370600a1cdc67cc1cc878",
+    "target/compiler-project-file-hash-20261109/change.patch": "22575bfd91c2fae1cc61963d07e7c0fb4101cb8fe56167b5a3037672db2d8710"
+  }
+}
