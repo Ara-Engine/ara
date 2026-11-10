@@ -120,4 +120,10 @@ field at 3 m, f/0.8). From that folder:
   primitive is its own group (its pose is per mesh).
 - `Engine::capture` blocks for the frame. The path is synchronous: no frames in flight.
 - The first frame compiles Renderlab's pipelines; its pipeline cache lives under the
-  player's GPU cache in `renderlab/`.
+  player's GPU cache in `renderlab/` and is saved during compilation (Renderlab P-PIPE).
+  On the Radeon 760M (RADV) Mesa's own shader cache already makes restarts fast: Showcase
+  starts in 30.2 s (RT) and 33.9 s (non-RT) with every cache cold, and 15.8 and 19.6 s
+  once Mesa's cache is warm, whether or not Renderlab's file exists. Of that, the engine
+  takes 0.2 s to create and 0.3 s to its first frame; the rest is the capture settling
+  49 frames at about 0.3 s each on that iGPU. On NVIDIA the Renderlab cache is what
+  matters (Renderlab#15).
