@@ -1,0 +1,7251 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_crowd",
+  "records": {
+    "e_c0": {
+      "name": "Crate 0",
+      "order": "b10",
+      "MeshRenderer": {
+        "size": [0.3, 0.3, 0.3],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.15, -5.225]
+      }
+    },
+    "e_c1": {
+      "name": "Crate 1",
+      "order": "b11",
+      "MeshRenderer": {
+        "size": [0.3001, 0.3001, 0.3001],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.15, -5.225]
+      }
+    },
+    "e_c10": {
+      "name": "Crate 10",
+      "order": "b1A",
+      "MeshRenderer": {
+        "size": [0.301, 0.301, 0.301],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1505, -5.225]
+      }
+    },
+    "e_c100": {
+      "name": "Crate 100",
+      "order": "b2c",
+      "MeshRenderer": {
+        "size": [0.31, 0.31, 0.31],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.155, -3.575]
+      }
+    },
+    "e_c101": {
+      "name": "Crate 101",
+      "order": "b2d",
+      "MeshRenderer": {
+        "size": [0.3101, 0.3101, 0.3101],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.155, -3.575]
+      }
+    },
+    "e_c102": {
+      "name": "Crate 102",
+      "order": "b2e",
+      "MeshRenderer": {
+        "size": [0.3102, 0.3102, 0.3102],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1551, -3.575]
+      }
+    },
+    "e_c103": {
+      "name": "Crate 103",
+      "order": "b2f",
+      "MeshRenderer": {
+        "size": [0.3103, 0.3103, 0.3103],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1552, -3.575]
+      }
+    },
+    "e_c104": {
+      "name": "Crate 104",
+      "order": "b2g",
+      "MeshRenderer": {
+        "size": [0.3104, 0.3104, 0.3104],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1552, -3.575]
+      }
+    },
+    "e_c105": {
+      "name": "Crate 105",
+      "order": "b2h",
+      "MeshRenderer": {
+        "size": [0.3105, 0.3105, 0.3105],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1552, -3.575]
+      }
+    },
+    "e_c106": {
+      "name": "Crate 106",
+      "order": "b2i",
+      "MeshRenderer": {
+        "size": [0.3106, 0.3106, 0.3106],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1553, -3.575]
+      }
+    },
+    "e_c107": {
+      "name": "Crate 107",
+      "order": "b2j",
+      "MeshRenderer": {
+        "size": [0.3107, 0.3107, 0.3107],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1553, -3.575]
+      }
+    },
+    "e_c108": {
+      "name": "Crate 108",
+      "order": "b2k",
+      "MeshRenderer": {
+        "size": [0.3108, 0.3108, 0.3108],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1554, -3.575]
+      }
+    },
+    "e_c109": {
+      "name": "Crate 109",
+      "order": "b2l",
+      "MeshRenderer": {
+        "size": [0.3109, 0.3109, 0.3109],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1555, -3.575]
+      }
+    },
+    "e_c11": {
+      "name": "Crate 11",
+      "order": "b1B",
+      "MeshRenderer": {
+        "size": [0.3011, 0.3011, 0.3011],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1505, -5.225]
+      }
+    },
+    "e_c110": {
+      "name": "Crate 110",
+      "order": "b2m",
+      "MeshRenderer": {
+        "size": [0.311, 0.311, 0.311],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1555, -3.575]
+      }
+    },
+    "e_c111": {
+      "name": "Crate 111",
+      "order": "b2n",
+      "MeshRenderer": {
+        "size": [0.3111, 0.3111, 0.3111],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1555, -3.575]
+      }
+    },
+    "e_c112": {
+      "name": "Crate 112",
+      "order": "b2o",
+      "MeshRenderer": {
+        "size": [0.3112, 0.3112, 0.3112],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1556, -3.575]
+      }
+    },
+    "e_c113": {
+      "name": "Crate 113",
+      "order": "b2p",
+      "MeshRenderer": {
+        "size": [0.3113, 0.3113, 0.3113],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1557, -3.575]
+      }
+    },
+    "e_c114": {
+      "name": "Crate 114",
+      "order": "b2q",
+      "MeshRenderer": {
+        "size": [0.3114, 0.3114, 0.3114],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1557, -3.575]
+      }
+    },
+    "e_c115": {
+      "name": "Crate 115",
+      "order": "b2r",
+      "MeshRenderer": {
+        "size": [0.3115, 0.3115, 0.3115],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1557, -3.575]
+      }
+    },
+    "e_c116": {
+      "name": "Crate 116",
+      "order": "b2s",
+      "MeshRenderer": {
+        "size": [0.3116, 0.3116, 0.3116],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1558, -3.575]
+      }
+    },
+    "e_c117": {
+      "name": "Crate 117",
+      "order": "b2t",
+      "MeshRenderer": {
+        "size": [0.3117, 0.3117, 0.3117],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1558, -3.575]
+      }
+    },
+    "e_c118": {
+      "name": "Crate 118",
+      "order": "b2u",
+      "MeshRenderer": {
+        "size": [0.3118, 0.3118, 0.3118],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1559, -3.575]
+      }
+    },
+    "e_c119": {
+      "name": "Crate 119",
+      "order": "b2v",
+      "MeshRenderer": {
+        "size": [0.3119, 0.3119, 0.3119],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.156, -3.575]
+      }
+    },
+    "e_c12": {
+      "name": "Crate 12",
+      "order": "b1C",
+      "MeshRenderer": {
+        "size": [0.3012, 0.3012, 0.3012],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1506, -5.225]
+      }
+    },
+    "e_c120": {
+      "name": "Crate 120",
+      "order": "b2w",
+      "MeshRenderer": {
+        "size": [0.312, 0.312, 0.312],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.156, -3.025]
+      }
+    },
+    "e_c121": {
+      "name": "Crate 121",
+      "order": "b2x",
+      "MeshRenderer": {
+        "size": [0.3121, 0.3121, 0.3121],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.156, -3.025]
+      }
+    },
+    "e_c122": {
+      "name": "Crate 122",
+      "order": "b2y",
+      "MeshRenderer": {
+        "size": [0.3122, 0.3122, 0.3122],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1561, -3.025]
+      }
+    },
+    "e_c123": {
+      "name": "Crate 123",
+      "order": "b2z",
+      "MeshRenderer": {
+        "size": [0.3123, 0.3123, 0.3123],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1562, -3.025]
+      }
+    },
+    "e_c124": {
+      "name": "Crate 124",
+      "order": "b30",
+      "MeshRenderer": {
+        "size": [0.3124, 0.3124, 0.3124],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1562, -3.025]
+      }
+    },
+    "e_c125": {
+      "name": "Crate 125",
+      "order": "b31",
+      "MeshRenderer": {
+        "size": [0.3125, 0.3125, 0.3125],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1562, -3.025]
+      }
+    },
+    "e_c126": {
+      "name": "Crate 126",
+      "order": "b32",
+      "MeshRenderer": {
+        "size": [0.3126, 0.3126, 0.3126],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1563, -3.025]
+      }
+    },
+    "e_c127": {
+      "name": "Crate 127",
+      "order": "b33",
+      "MeshRenderer": {
+        "size": [0.3127, 0.3127, 0.3127],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1563, -3.025]
+      }
+    },
+    "e_c128": {
+      "name": "Crate 128",
+      "order": "b34",
+      "MeshRenderer": {
+        "size": [0.3128, 0.3128, 0.3128],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1564, -3.025]
+      }
+    },
+    "e_c129": {
+      "name": "Crate 129",
+      "order": "b35",
+      "MeshRenderer": {
+        "size": [0.3129, 0.3129, 0.3129],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1565, -3.025]
+      }
+    },
+    "e_c13": {
+      "name": "Crate 13",
+      "order": "b1D",
+      "MeshRenderer": {
+        "size": [0.3013, 0.3013, 0.3013],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1507, -5.225]
+      }
+    },
+    "e_c130": {
+      "name": "Crate 130",
+      "order": "b36",
+      "MeshRenderer": {
+        "size": [0.313, 0.313, 0.313],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1565, -3.025]
+      }
+    },
+    "e_c131": {
+      "name": "Crate 131",
+      "order": "b37",
+      "MeshRenderer": {
+        "size": [0.3131, 0.3131, 0.3131],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1565, -3.025]
+      }
+    },
+    "e_c132": {
+      "name": "Crate 132",
+      "order": "b38",
+      "MeshRenderer": {
+        "size": [0.3132, 0.3132, 0.3132],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1566, -3.025]
+      }
+    },
+    "e_c133": {
+      "name": "Crate 133",
+      "order": "b39",
+      "MeshRenderer": {
+        "size": [0.3133, 0.3133, 0.3133],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1567, -3.025]
+      }
+    },
+    "e_c134": {
+      "name": "Crate 134",
+      "order": "b3A",
+      "MeshRenderer": {
+        "size": [0.3134, 0.3134, 0.3134],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1567, -3.025]
+      }
+    },
+    "e_c135": {
+      "name": "Crate 135",
+      "order": "b3B",
+      "MeshRenderer": {
+        "size": [0.3135, 0.3135, 0.3135],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1568, -3.025]
+      }
+    },
+    "e_c136": {
+      "name": "Crate 136",
+      "order": "b3C",
+      "MeshRenderer": {
+        "size": [0.3136, 0.3136, 0.3136],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1568, -3.025]
+      }
+    },
+    "e_c137": {
+      "name": "Crate 137",
+      "order": "b3D",
+      "MeshRenderer": {
+        "size": [0.3137, 0.3137, 0.3137],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1568, -3.025]
+      }
+    },
+    "e_c138": {
+      "name": "Crate 138",
+      "order": "b3E",
+      "MeshRenderer": {
+        "size": [0.3138, 0.3138, 0.3138],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1569, -3.025]
+      }
+    },
+    "e_c139": {
+      "name": "Crate 139",
+      "order": "b3F",
+      "MeshRenderer": {
+        "size": [0.3139, 0.3139, 0.3139],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.157, -3.025]
+      }
+    },
+    "e_c14": {
+      "name": "Crate 14",
+      "order": "b1E",
+      "MeshRenderer": {
+        "size": [0.3014, 0.3014, 0.3014],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1507, -5.225]
+      }
+    },
+    "e_c140": {
+      "name": "Crate 140",
+      "order": "b3G",
+      "MeshRenderer": {
+        "size": [0.314, 0.314, 0.314],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.157, -3.025]
+      }
+    },
+    "e_c141": {
+      "name": "Crate 141",
+      "order": "b3H",
+      "MeshRenderer": {
+        "size": [0.3141, 0.3141, 0.3141],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.157, -3.025]
+      }
+    },
+    "e_c142": {
+      "name": "Crate 142",
+      "order": "b3I",
+      "MeshRenderer": {
+        "size": [0.3142, 0.3142, 0.3142],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1571, -3.025]
+      }
+    },
+    "e_c143": {
+      "name": "Crate 143",
+      "order": "b3J",
+      "MeshRenderer": {
+        "size": [0.3143, 0.3143, 0.3143],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1572, -3.025]
+      }
+    },
+    "e_c144": {
+      "name": "Crate 144",
+      "order": "b3K",
+      "MeshRenderer": {
+        "size": [0.3144, 0.3144, 0.3144],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1572, -3.025]
+      }
+    },
+    "e_c145": {
+      "name": "Crate 145",
+      "order": "b3L",
+      "MeshRenderer": {
+        "size": [0.3145, 0.3145, 0.3145],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1573, -3.025]
+      }
+    },
+    "e_c146": {
+      "name": "Crate 146",
+      "order": "b3M",
+      "MeshRenderer": {
+        "size": [0.3146, 0.3146, 0.3146],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1573, -3.025]
+      }
+    },
+    "e_c147": {
+      "name": "Crate 147",
+      "order": "b3N",
+      "MeshRenderer": {
+        "size": [0.3147, 0.3147, 0.3147],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1573, -3.025]
+      }
+    },
+    "e_c148": {
+      "name": "Crate 148",
+      "order": "b3O",
+      "MeshRenderer": {
+        "size": [0.3148, 0.3148, 0.3148],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1574, -3.025]
+      }
+    },
+    "e_c149": {
+      "name": "Crate 149",
+      "order": "b3P",
+      "MeshRenderer": {
+        "size": [0.3149, 0.3149, 0.3149],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1575, -3.025]
+      }
+    },
+    "e_c15": {
+      "name": "Crate 15",
+      "order": "b1F",
+      "MeshRenderer": {
+        "size": [0.3015, 0.3015, 0.3015],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1507, -5.225]
+      }
+    },
+    "e_c150": {
+      "name": "Crate 150",
+      "order": "b3Q",
+      "MeshRenderer": {
+        "size": [0.315, 0.315, 0.315],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1575, -2.475]
+      }
+    },
+    "e_c151": {
+      "name": "Crate 151",
+      "order": "b3R",
+      "MeshRenderer": {
+        "size": [0.3151, 0.3151, 0.3151],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1575, -2.475]
+      }
+    },
+    "e_c152": {
+      "name": "Crate 152",
+      "order": "b3S",
+      "MeshRenderer": {
+        "size": [0.3152, 0.3152, 0.3152],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1576, -2.475]
+      }
+    },
+    "e_c153": {
+      "name": "Crate 153",
+      "order": "b3T",
+      "MeshRenderer": {
+        "size": [0.3153, 0.3153, 0.3153],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1577, -2.475]
+      }
+    },
+    "e_c154": {
+      "name": "Crate 154",
+      "order": "b3U",
+      "MeshRenderer": {
+        "size": [0.3154, 0.3154, 0.3154],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1577, -2.475]
+      }
+    },
+    "e_c155": {
+      "name": "Crate 155",
+      "order": "b3V",
+      "MeshRenderer": {
+        "size": [0.3155, 0.3155, 0.3155],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1578, -2.475]
+      }
+    },
+    "e_c156": {
+      "name": "Crate 156",
+      "order": "b3W",
+      "MeshRenderer": {
+        "size": [0.3156, 0.3156, 0.3156],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1578, -2.475]
+      }
+    },
+    "e_c157": {
+      "name": "Crate 157",
+      "order": "b3X",
+      "MeshRenderer": {
+        "size": [0.3157, 0.3157, 0.3157],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1578, -2.475]
+      }
+    },
+    "e_c158": {
+      "name": "Crate 158",
+      "order": "b3Y",
+      "MeshRenderer": {
+        "size": [0.3158, 0.3158, 0.3158],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1579, -2.475]
+      }
+    },
+    "e_c159": {
+      "name": "Crate 159",
+      "order": "b3Z",
+      "MeshRenderer": {
+        "size": [0.3159, 0.3159, 0.3159],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.158, -2.475]
+      }
+    },
+    "e_c16": {
+      "name": "Crate 16",
+      "order": "b1G",
+      "MeshRenderer": {
+        "size": [0.3016, 0.3016, 0.3016],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1508, -5.225]
+      }
+    },
+    "e_c160": {
+      "name": "Crate 160",
+      "order": "b3a",
+      "MeshRenderer": {
+        "size": [0.316, 0.316, 0.316],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.158, -2.475]
+      }
+    },
+    "e_c161": {
+      "name": "Crate 161",
+      "order": "b3b",
+      "MeshRenderer": {
+        "size": [0.3161, 0.3161, 0.3161],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.158, -2.475]
+      }
+    },
+    "e_c162": {
+      "name": "Crate 162",
+      "order": "b3c",
+      "MeshRenderer": {
+        "size": [0.3162, 0.3162, 0.3162],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1581, -2.475]
+      }
+    },
+    "e_c163": {
+      "name": "Crate 163",
+      "order": "b3d",
+      "MeshRenderer": {
+        "size": [0.3163, 0.3163, 0.3163],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1582, -2.475]
+      }
+    },
+    "e_c164": {
+      "name": "Crate 164",
+      "order": "b3e",
+      "MeshRenderer": {
+        "size": [0.3164, 0.3164, 0.3164],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1582, -2.475]
+      }
+    },
+    "e_c165": {
+      "name": "Crate 165",
+      "order": "b3f",
+      "MeshRenderer": {
+        "size": [0.3165, 0.3165, 0.3165],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1583, -2.475]
+      }
+    },
+    "e_c166": {
+      "name": "Crate 166",
+      "order": "b3g",
+      "MeshRenderer": {
+        "size": [0.3166, 0.3166, 0.3166],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1583, -2.475]
+      }
+    },
+    "e_c167": {
+      "name": "Crate 167",
+      "order": "b3h",
+      "MeshRenderer": {
+        "size": [0.3167, 0.3167, 0.3167],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1583, -2.475]
+      }
+    },
+    "e_c168": {
+      "name": "Crate 168",
+      "order": "b3i",
+      "MeshRenderer": {
+        "size": [0.3168, 0.3168, 0.3168],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1584, -2.475]
+      }
+    },
+    "e_c169": {
+      "name": "Crate 169",
+      "order": "b3j",
+      "MeshRenderer": {
+        "size": [0.3169, 0.3169, 0.3169],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1585, -2.475]
+      }
+    },
+    "e_c17": {
+      "name": "Crate 17",
+      "order": "b1H",
+      "MeshRenderer": {
+        "size": [0.3017, 0.3017, 0.3017],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1509, -5.225]
+      }
+    },
+    "e_c170": {
+      "name": "Crate 170",
+      "order": "b3k",
+      "MeshRenderer": {
+        "size": [0.317, 0.317, 0.317],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1585, -2.475]
+      }
+    },
+    "e_c171": {
+      "name": "Crate 171",
+      "order": "b3l",
+      "MeshRenderer": {
+        "size": [0.3171, 0.3171, 0.3171],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1585, -2.475]
+      }
+    },
+    "e_c172": {
+      "name": "Crate 172",
+      "order": "b3m",
+      "MeshRenderer": {
+        "size": [0.3172, 0.3172, 0.3172],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1586, -2.475]
+      }
+    },
+    "e_c173": {
+      "name": "Crate 173",
+      "order": "b3n",
+      "MeshRenderer": {
+        "size": [0.3173, 0.3173, 0.3173],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1587, -2.475]
+      }
+    },
+    "e_c174": {
+      "name": "Crate 174",
+      "order": "b3o",
+      "MeshRenderer": {
+        "size": [0.3174, 0.3174, 0.3174],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1587, -2.475]
+      }
+    },
+    "e_c175": {
+      "name": "Crate 175",
+      "order": "b3p",
+      "MeshRenderer": {
+        "size": [0.3175, 0.3175, 0.3175],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1588, -2.475]
+      }
+    },
+    "e_c176": {
+      "name": "Crate 176",
+      "order": "b3q",
+      "MeshRenderer": {
+        "size": [0.3176, 0.3176, 0.3176],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1588, -2.475]
+      }
+    },
+    "e_c177": {
+      "name": "Crate 177",
+      "order": "b3r",
+      "MeshRenderer": {
+        "size": [0.3177, 0.3177, 0.3177],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1588, -2.475]
+      }
+    },
+    "e_c178": {
+      "name": "Crate 178",
+      "order": "b3s",
+      "MeshRenderer": {
+        "size": [0.3178, 0.3178, 0.3178],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1589, -2.475]
+      }
+    },
+    "e_c179": {
+      "name": "Crate 179",
+      "order": "b3t",
+      "MeshRenderer": {
+        "size": [0.3179, 0.3179, 0.3179],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.159, -2.475]
+      }
+    },
+    "e_c18": {
+      "name": "Crate 18",
+      "order": "b1I",
+      "MeshRenderer": {
+        "size": [0.3018, 0.3018, 0.3018],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1509, -5.225]
+      }
+    },
+    "e_c180": {
+      "name": "Crate 180",
+      "order": "b3u",
+      "MeshRenderer": {
+        "size": [0.318, 0.318, 0.318],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.159, -1.925]
+      }
+    },
+    "e_c181": {
+      "name": "Crate 181",
+      "order": "b3v",
+      "MeshRenderer": {
+        "size": [0.3181, 0.3181, 0.3181],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.159, -1.925]
+      }
+    },
+    "e_c182": {
+      "name": "Crate 182",
+      "order": "b3w",
+      "MeshRenderer": {
+        "size": [0.3182, 0.3182, 0.3182],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1591, -1.925]
+      }
+    },
+    "e_c183": {
+      "name": "Crate 183",
+      "order": "b3x",
+      "MeshRenderer": {
+        "size": [0.3183, 0.3183, 0.3183],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1592, -1.925]
+      }
+    },
+    "e_c184": {
+      "name": "Crate 184",
+      "order": "b3y",
+      "MeshRenderer": {
+        "size": [0.3184, 0.3184, 0.3184],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1592, -1.925]
+      }
+    },
+    "e_c185": {
+      "name": "Crate 185",
+      "order": "b3z",
+      "MeshRenderer": {
+        "size": [0.3185, 0.3185, 0.3185],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1593, -1.925]
+      }
+    },
+    "e_c186": {
+      "name": "Crate 186",
+      "order": "b40",
+      "MeshRenderer": {
+        "size": [0.3186, 0.3186, 0.3186],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1593, -1.925]
+      }
+    },
+    "e_c187": {
+      "name": "Crate 187",
+      "order": "b41",
+      "MeshRenderer": {
+        "size": [0.3187, 0.3187, 0.3187],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1593, -1.925]
+      }
+    },
+    "e_c188": {
+      "name": "Crate 188",
+      "order": "b42",
+      "MeshRenderer": {
+        "size": [0.3188, 0.3188, 0.3188],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1594, -1.925]
+      }
+    },
+    "e_c189": {
+      "name": "Crate 189",
+      "order": "b43",
+      "MeshRenderer": {
+        "size": [0.3189, 0.3189, 0.3189],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1595, -1.925]
+      }
+    },
+    "e_c19": {
+      "name": "Crate 19",
+      "order": "b1J",
+      "MeshRenderer": {
+        "size": [0.3019, 0.3019, 0.3019],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.151, -5.225]
+      }
+    },
+    "e_c190": {
+      "name": "Crate 190",
+      "order": "b44",
+      "MeshRenderer": {
+        "size": [0.319, 0.319, 0.319],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1595, -1.925]
+      }
+    },
+    "e_c191": {
+      "name": "Crate 191",
+      "order": "b45",
+      "MeshRenderer": {
+        "size": [0.3191, 0.3191, 0.3191],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1595, -1.925]
+      }
+    },
+    "e_c192": {
+      "name": "Crate 192",
+      "order": "b46",
+      "MeshRenderer": {
+        "size": [0.3192, 0.3192, 0.3192],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1596, -1.925]
+      }
+    },
+    "e_c193": {
+      "name": "Crate 193",
+      "order": "b47",
+      "MeshRenderer": {
+        "size": [0.3193, 0.3193, 0.3193],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1596, -1.925]
+      }
+    },
+    "e_c194": {
+      "name": "Crate 194",
+      "order": "b48",
+      "MeshRenderer": {
+        "size": [0.3194, 0.3194, 0.3194],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1597, -1.925]
+      }
+    },
+    "e_c195": {
+      "name": "Crate 195",
+      "order": "b49",
+      "MeshRenderer": {
+        "size": [0.3195, 0.3195, 0.3195],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1598, -1.925]
+      }
+    },
+    "e_c196": {
+      "name": "Crate 196",
+      "order": "b4A",
+      "MeshRenderer": {
+        "size": [0.3196, 0.3196, 0.3196],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1598, -1.925]
+      }
+    },
+    "e_c197": {
+      "name": "Crate 197",
+      "order": "b4B",
+      "MeshRenderer": {
+        "size": [0.3197, 0.3197, 0.3197],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1598, -1.925]
+      }
+    },
+    "e_c198": {
+      "name": "Crate 198",
+      "order": "b4C",
+      "MeshRenderer": {
+        "size": [0.3198, 0.3198, 0.3198],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1599, -1.925]
+      }
+    },
+    "e_c199": {
+      "name": "Crate 199",
+      "order": "b4D",
+      "MeshRenderer": {
+        "size": [0.3199, 0.3199, 0.3199],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.16, -1.925]
+      }
+    },
+    "e_c2": {
+      "name": "Crate 2",
+      "order": "b12",
+      "MeshRenderer": {
+        "size": [0.3002, 0.3002, 0.3002],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1501, -5.225]
+      }
+    },
+    "e_c20": {
+      "name": "Crate 20",
+      "order": "b1K",
+      "MeshRenderer": {
+        "size": [0.302, 0.302, 0.302],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.151, -5.225]
+      }
+    },
+    "e_c200": {
+      "name": "Crate 200",
+      "order": "b4E",
+      "MeshRenderer": {
+        "size": [0.32, 0.32, 0.32],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.16, -1.925]
+      }
+    },
+    "e_c201": {
+      "name": "Crate 201",
+      "order": "b4F",
+      "MeshRenderer": {
+        "size": [0.3201, 0.3201, 0.3201],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.16, -1.925]
+      }
+    },
+    "e_c202": {
+      "name": "Crate 202",
+      "order": "b4G",
+      "MeshRenderer": {
+        "size": [0.3202, 0.3202, 0.3202],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1601, -1.925]
+      }
+    },
+    "e_c203": {
+      "name": "Crate 203",
+      "order": "b4H",
+      "MeshRenderer": {
+        "size": [0.3203, 0.3203, 0.3203],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1601, -1.925]
+      }
+    },
+    "e_c204": {
+      "name": "Crate 204",
+      "order": "b4I",
+      "MeshRenderer": {
+        "size": [0.3204, 0.3204, 0.3204],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1602, -1.925]
+      }
+    },
+    "e_c205": {
+      "name": "Crate 205",
+      "order": "b4J",
+      "MeshRenderer": {
+        "size": [0.3205, 0.3205, 0.3205],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1603, -1.925]
+      }
+    },
+    "e_c206": {
+      "name": "Crate 206",
+      "order": "b4K",
+      "MeshRenderer": {
+        "size": [0.3206, 0.3206, 0.3206],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1603, -1.925]
+      }
+    },
+    "e_c207": {
+      "name": "Crate 207",
+      "order": "b4L",
+      "MeshRenderer": {
+        "size": [0.3207, 0.3207, 0.3207],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1603, -1.925]
+      }
+    },
+    "e_c208": {
+      "name": "Crate 208",
+      "order": "b4M",
+      "MeshRenderer": {
+        "size": [0.3208, 0.3208, 0.3208],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1604, -1.925]
+      }
+    },
+    "e_c209": {
+      "name": "Crate 209",
+      "order": "b4N",
+      "MeshRenderer": {
+        "size": [0.3209, 0.3209, 0.3209],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1605, -1.925]
+      }
+    },
+    "e_c21": {
+      "name": "Crate 21",
+      "order": "b1L",
+      "MeshRenderer": {
+        "size": [0.3021, 0.3021, 0.3021],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.151, -5.225]
+      }
+    },
+    "e_c210": {
+      "name": "Crate 210",
+      "order": "b4O",
+      "MeshRenderer": {
+        "size": [0.321, 0.321, 0.321],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1605, -1.375]
+      }
+    },
+    "e_c211": {
+      "name": "Crate 211",
+      "order": "b4P",
+      "MeshRenderer": {
+        "size": [0.3211, 0.3211, 0.3211],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1605, -1.375]
+      }
+    },
+    "e_c212": {
+      "name": "Crate 212",
+      "order": "b4Q",
+      "MeshRenderer": {
+        "size": [0.3212, 0.3212, 0.3212],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1606, -1.375]
+      }
+    },
+    "e_c213": {
+      "name": "Crate 213",
+      "order": "b4R",
+      "MeshRenderer": {
+        "size": [0.3213, 0.3213, 0.3213],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1606, -1.375]
+      }
+    },
+    "e_c214": {
+      "name": "Crate 214",
+      "order": "b4S",
+      "MeshRenderer": {
+        "size": [0.3214, 0.3214, 0.3214],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1607, -1.375]
+      }
+    },
+    "e_c215": {
+      "name": "Crate 215",
+      "order": "b4T",
+      "MeshRenderer": {
+        "size": [0.3215, 0.3215, 0.3215],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1608, -1.375]
+      }
+    },
+    "e_c216": {
+      "name": "Crate 216",
+      "order": "b4U",
+      "MeshRenderer": {
+        "size": [0.3216, 0.3216, 0.3216],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1608, -1.375]
+      }
+    },
+    "e_c217": {
+      "name": "Crate 217",
+      "order": "b4V",
+      "MeshRenderer": {
+        "size": [0.3217, 0.3217, 0.3217],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1608, -1.375]
+      }
+    },
+    "e_c218": {
+      "name": "Crate 218",
+      "order": "b4W",
+      "MeshRenderer": {
+        "size": [0.3218, 0.3218, 0.3218],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1609, -1.375]
+      }
+    },
+    "e_c219": {
+      "name": "Crate 219",
+      "order": "b4X",
+      "MeshRenderer": {
+        "size": [0.3219, 0.3219, 0.3219],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.161, -1.375]
+      }
+    },
+    "e_c22": {
+      "name": "Crate 22",
+      "order": "b1M",
+      "MeshRenderer": {
+        "size": [0.3022, 0.3022, 0.3022],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1511, -5.225]
+      }
+    },
+    "e_c220": {
+      "name": "Crate 220",
+      "order": "b4Y",
+      "MeshRenderer": {
+        "size": [0.322, 0.322, 0.322],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.161, -1.375]
+      }
+    },
+    "e_c221": {
+      "name": "Crate 221",
+      "order": "b4Z",
+      "MeshRenderer": {
+        "size": [0.3221, 0.3221, 0.3221],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.161, -1.375]
+      }
+    },
+    "e_c222": {
+      "name": "Crate 222",
+      "order": "b4a",
+      "MeshRenderer": {
+        "size": [0.3222, 0.3222, 0.3222],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1611, -1.375]
+      }
+    },
+    "e_c223": {
+      "name": "Crate 223",
+      "order": "b4b",
+      "MeshRenderer": {
+        "size": [0.3223, 0.3223, 0.3223],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1611, -1.375]
+      }
+    },
+    "e_c224": {
+      "name": "Crate 224",
+      "order": "b4c",
+      "MeshRenderer": {
+        "size": [0.3224, 0.3224, 0.3224],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1612, -1.375]
+      }
+    },
+    "e_c225": {
+      "name": "Crate 225",
+      "order": "b4d",
+      "MeshRenderer": {
+        "size": [0.3225, 0.3225, 0.3225],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1613, -1.375]
+      }
+    },
+    "e_c226": {
+      "name": "Crate 226",
+      "order": "b4e",
+      "MeshRenderer": {
+        "size": [0.3226, 0.3226, 0.3226],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1613, -1.375]
+      }
+    },
+    "e_c227": {
+      "name": "Crate 227",
+      "order": "b4f",
+      "MeshRenderer": {
+        "size": [0.3227, 0.3227, 0.3227],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1613, -1.375]
+      }
+    },
+    "e_c228": {
+      "name": "Crate 228",
+      "order": "b4g",
+      "MeshRenderer": {
+        "size": [0.3228, 0.3228, 0.3228],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1614, -1.375]
+      }
+    },
+    "e_c229": {
+      "name": "Crate 229",
+      "order": "b4h",
+      "MeshRenderer": {
+        "size": [0.3229, 0.3229, 0.3229],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1615, -1.375]
+      }
+    },
+    "e_c23": {
+      "name": "Crate 23",
+      "order": "b1N",
+      "MeshRenderer": {
+        "size": [0.3023, 0.3023, 0.3023],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1512, -5.225]
+      }
+    },
+    "e_c230": {
+      "name": "Crate 230",
+      "order": "b4i",
+      "MeshRenderer": {
+        "size": [0.323, 0.323, 0.323],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1615, -1.375]
+      }
+    },
+    "e_c231": {
+      "name": "Crate 231",
+      "order": "b4j",
+      "MeshRenderer": {
+        "size": [0.3231, 0.3231, 0.3231],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1615, -1.375]
+      }
+    },
+    "e_c232": {
+      "name": "Crate 232",
+      "order": "b4k",
+      "MeshRenderer": {
+        "size": [0.3232, 0.3232, 0.3232],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1616, -1.375]
+      }
+    },
+    "e_c233": {
+      "name": "Crate 233",
+      "order": "b4l",
+      "MeshRenderer": {
+        "size": [0.3233, 0.3233, 0.3233],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1616, -1.375]
+      }
+    },
+    "e_c234": {
+      "name": "Crate 234",
+      "order": "b4m",
+      "MeshRenderer": {
+        "size": [0.3234, 0.3234, 0.3234],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1617, -1.375]
+      }
+    },
+    "e_c235": {
+      "name": "Crate 235",
+      "order": "b4n",
+      "MeshRenderer": {
+        "size": [0.3235, 0.3235, 0.3235],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1618, -1.375]
+      }
+    },
+    "e_c236": {
+      "name": "Crate 236",
+      "order": "b4o",
+      "MeshRenderer": {
+        "size": [0.3236, 0.3236, 0.3236],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1618, -1.375]
+      }
+    },
+    "e_c237": {
+      "name": "Crate 237",
+      "order": "b4p",
+      "MeshRenderer": {
+        "size": [0.3237, 0.3237, 0.3237],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1618, -1.375]
+      }
+    },
+    "e_c238": {
+      "name": "Crate 238",
+      "order": "b4q",
+      "MeshRenderer": {
+        "size": [0.3238, 0.3238, 0.3238],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1619, -1.375]
+      }
+    },
+    "e_c239": {
+      "name": "Crate 239",
+      "order": "b4r",
+      "MeshRenderer": {
+        "size": [0.3239, 0.3239, 0.3239],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.162, -1.375]
+      }
+    },
+    "e_c24": {
+      "name": "Crate 24",
+      "order": "b1O",
+      "MeshRenderer": {
+        "size": [0.3024, 0.3024, 0.3024],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1512, -5.225]
+      }
+    },
+    "e_c240": {
+      "name": "Crate 240",
+      "order": "b4s",
+      "MeshRenderer": {
+        "size": [0.324, 0.324, 0.324],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.162, -0.825]
+      }
+    },
+    "e_c241": {
+      "name": "Crate 241",
+      "order": "b4t",
+      "MeshRenderer": {
+        "size": [0.3241, 0.3241, 0.3241],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.162, -0.825]
+      }
+    },
+    "e_c242": {
+      "name": "Crate 242",
+      "order": "b4u",
+      "MeshRenderer": {
+        "size": [0.3242, 0.3242, 0.3242],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1621, -0.825]
+      }
+    },
+    "e_c243": {
+      "name": "Crate 243",
+      "order": "b4v",
+      "MeshRenderer": {
+        "size": [0.3243, 0.3243, 0.3243],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1621, -0.825]
+      }
+    },
+    "e_c244": {
+      "name": "Crate 244",
+      "order": "b4w",
+      "MeshRenderer": {
+        "size": [0.3244, 0.3244, 0.3244],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1622, -0.825]
+      }
+    },
+    "e_c245": {
+      "name": "Crate 245",
+      "order": "b4x",
+      "MeshRenderer": {
+        "size": [0.3245, 0.3245, 0.3245],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1623, -0.825]
+      }
+    },
+    "e_c246": {
+      "name": "Crate 246",
+      "order": "b4y",
+      "MeshRenderer": {
+        "size": [0.3246, 0.3246, 0.3246],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1623, -0.825]
+      }
+    },
+    "e_c247": {
+      "name": "Crate 247",
+      "order": "b4z",
+      "MeshRenderer": {
+        "size": [0.3247, 0.3247, 0.3247],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1623, -0.825]
+      }
+    },
+    "e_c248": {
+      "name": "Crate 248",
+      "order": "b50",
+      "MeshRenderer": {
+        "size": [0.3248, 0.3248, 0.3248],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1624, -0.825]
+      }
+    },
+    "e_c249": {
+      "name": "Crate 249",
+      "order": "b51",
+      "MeshRenderer": {
+        "size": [0.3249, 0.3249, 0.3249],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1625, -0.825]
+      }
+    },
+    "e_c25": {
+      "name": "Crate 25",
+      "order": "b1P",
+      "MeshRenderer": {
+        "size": [0.3025, 0.3025, 0.3025],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1512, -5.225]
+      }
+    },
+    "e_c250": {
+      "name": "Crate 250",
+      "order": "b52",
+      "MeshRenderer": {
+        "size": [0.325, 0.325, 0.325],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1625, -0.825]
+      }
+    },
+    "e_c251": {
+      "name": "Crate 251",
+      "order": "b53",
+      "MeshRenderer": {
+        "size": [0.3251, 0.3251, 0.3251],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1626, -0.825]
+      }
+    },
+    "e_c252": {
+      "name": "Crate 252",
+      "order": "b54",
+      "MeshRenderer": {
+        "size": [0.3252, 0.3252, 0.3252],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1626, -0.825]
+      }
+    },
+    "e_c253": {
+      "name": "Crate 253",
+      "order": "b55",
+      "MeshRenderer": {
+        "size": [0.3253, 0.3253, 0.3253],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1626, -0.825]
+      }
+    },
+    "e_c254": {
+      "name": "Crate 254",
+      "order": "b56",
+      "MeshRenderer": {
+        "size": [0.3254, 0.3254, 0.3254],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1627, -0.825]
+      }
+    },
+    "e_c255": {
+      "name": "Crate 255",
+      "order": "b57",
+      "MeshRenderer": {
+        "size": [0.3255, 0.3255, 0.3255],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1628, -0.825]
+      }
+    },
+    "e_c256": {
+      "name": "Crate 256",
+      "order": "b58",
+      "MeshRenderer": {
+        "size": [0.3256, 0.3256, 0.3256],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1628, -0.825]
+      }
+    },
+    "e_c257": {
+      "name": "Crate 257",
+      "order": "b59",
+      "MeshRenderer": {
+        "size": [0.3257, 0.3257, 0.3257],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1628, -0.825]
+      }
+    },
+    "e_c258": {
+      "name": "Crate 258",
+      "order": "b5A",
+      "MeshRenderer": {
+        "size": [0.3258, 0.3258, 0.3258],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1629, -0.825]
+      }
+    },
+    "e_c259": {
+      "name": "Crate 259",
+      "order": "b5B",
+      "MeshRenderer": {
+        "size": [0.3259, 0.3259, 0.3259],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.163, -0.825]
+      }
+    },
+    "e_c26": {
+      "name": "Crate 26",
+      "order": "b1Q",
+      "MeshRenderer": {
+        "size": [0.3026, 0.3026, 0.3026],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1513, -5.225]
+      }
+    },
+    "e_c260": {
+      "name": "Crate 260",
+      "order": "b5C",
+      "MeshRenderer": {
+        "size": [0.326, 0.326, 0.326],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.163, -0.825]
+      }
+    },
+    "e_c261": {
+      "name": "Crate 261",
+      "order": "b5D",
+      "MeshRenderer": {
+        "size": [0.3261, 0.3261, 0.3261],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1631, -0.825]
+      }
+    },
+    "e_c262": {
+      "name": "Crate 262",
+      "order": "b5E",
+      "MeshRenderer": {
+        "size": [0.3262, 0.3262, 0.3262],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1631, -0.825]
+      }
+    },
+    "e_c263": {
+      "name": "Crate 263",
+      "order": "b5F",
+      "MeshRenderer": {
+        "size": [0.3263, 0.3263, 0.3263],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1631, -0.825]
+      }
+    },
+    "e_c264": {
+      "name": "Crate 264",
+      "order": "b5G",
+      "MeshRenderer": {
+        "size": [0.3264, 0.3264, 0.3264],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1632, -0.825]
+      }
+    },
+    "e_c265": {
+      "name": "Crate 265",
+      "order": "b5H",
+      "MeshRenderer": {
+        "size": [0.3265, 0.3265, 0.3265],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1633, -0.825]
+      }
+    },
+    "e_c266": {
+      "name": "Crate 266",
+      "order": "b5I",
+      "MeshRenderer": {
+        "size": [0.3266, 0.3266, 0.3266],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1633, -0.825]
+      }
+    },
+    "e_c267": {
+      "name": "Crate 267",
+      "order": "b5J",
+      "MeshRenderer": {
+        "size": [0.3267, 0.3267, 0.3267],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1633, -0.825]
+      }
+    },
+    "e_c268": {
+      "name": "Crate 268",
+      "order": "b5K",
+      "MeshRenderer": {
+        "size": [0.3268, 0.3268, 0.3268],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1634, -0.825]
+      }
+    },
+    "e_c269": {
+      "name": "Crate 269",
+      "order": "b5L",
+      "MeshRenderer": {
+        "size": [0.3269, 0.3269, 0.3269],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1635, -0.825]
+      }
+    },
+    "e_c27": {
+      "name": "Crate 27",
+      "order": "b1R",
+      "MeshRenderer": {
+        "size": [0.3027, 0.3027, 0.3027],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1514, -5.225]
+      }
+    },
+    "e_c270": {
+      "name": "Crate 270",
+      "order": "b5M",
+      "MeshRenderer": {
+        "size": [0.327, 0.327, 0.327],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1635, -0.275]
+      }
+    },
+    "e_c271": {
+      "name": "Crate 271",
+      "order": "b5N",
+      "MeshRenderer": {
+        "size": [0.3271, 0.3271, 0.3271],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1636, -0.275]
+      }
+    },
+    "e_c272": {
+      "name": "Crate 272",
+      "order": "b5O",
+      "MeshRenderer": {
+        "size": [0.3272, 0.3272, 0.3272],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1636, -0.275]
+      }
+    },
+    "e_c273": {
+      "name": "Crate 273",
+      "order": "b5P",
+      "MeshRenderer": {
+        "size": [0.3273, 0.3273, 0.3273],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1636, -0.275]
+      }
+    },
+    "e_c274": {
+      "name": "Crate 274",
+      "order": "b5Q",
+      "MeshRenderer": {
+        "size": [0.3274, 0.3274, 0.3274],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1637, -0.275]
+      }
+    },
+    "e_c275": {
+      "name": "Crate 275",
+      "order": "b5R",
+      "MeshRenderer": {
+        "size": [0.3275, 0.3275, 0.3275],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1638, -0.275]
+      }
+    },
+    "e_c276": {
+      "name": "Crate 276",
+      "order": "b5S",
+      "MeshRenderer": {
+        "size": [0.3276, 0.3276, 0.3276],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1638, -0.275]
+      }
+    },
+    "e_c277": {
+      "name": "Crate 277",
+      "order": "b5T",
+      "MeshRenderer": {
+        "size": [0.3277, 0.3277, 0.3277],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1638, -0.275]
+      }
+    },
+    "e_c278": {
+      "name": "Crate 278",
+      "order": "b5U",
+      "MeshRenderer": {
+        "size": [0.3278, 0.3278, 0.3278],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1639, -0.275]
+      }
+    },
+    "e_c279": {
+      "name": "Crate 279",
+      "order": "b5V",
+      "MeshRenderer": {
+        "size": [0.3279, 0.3279, 0.3279],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.164, -0.275]
+      }
+    },
+    "e_c28": {
+      "name": "Crate 28",
+      "order": "b1S",
+      "MeshRenderer": {
+        "size": [0.3028, 0.3028, 0.3028],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1514, -5.225]
+      }
+    },
+    "e_c280": {
+      "name": "Crate 280",
+      "order": "b5W",
+      "MeshRenderer": {
+        "size": [0.328, 0.328, 0.328],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.164, -0.275]
+      }
+    },
+    "e_c281": {
+      "name": "Crate 281",
+      "order": "b5X",
+      "MeshRenderer": {
+        "size": [0.3281, 0.3281, 0.3281],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1641, -0.275]
+      }
+    },
+    "e_c282": {
+      "name": "Crate 282",
+      "order": "b5Y",
+      "MeshRenderer": {
+        "size": [0.3282, 0.3282, 0.3282],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1641, -0.275]
+      }
+    },
+    "e_c283": {
+      "name": "Crate 283",
+      "order": "b5Z",
+      "MeshRenderer": {
+        "size": [0.3283, 0.3283, 0.3283],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1641, -0.275]
+      }
+    },
+    "e_c284": {
+      "name": "Crate 284",
+      "order": "b5a",
+      "MeshRenderer": {
+        "size": [0.3284, 0.3284, 0.3284],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1642, -0.275]
+      }
+    },
+    "e_c285": {
+      "name": "Crate 285",
+      "order": "b5b",
+      "MeshRenderer": {
+        "size": [0.3285, 0.3285, 0.3285],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1643, -0.275]
+      }
+    },
+    "e_c286": {
+      "name": "Crate 286",
+      "order": "b5c",
+      "MeshRenderer": {
+        "size": [0.3286, 0.3286, 0.3286],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1643, -0.275]
+      }
+    },
+    "e_c287": {
+      "name": "Crate 287",
+      "order": "b5d",
+      "MeshRenderer": {
+        "size": [0.3287, 0.3287, 0.3287],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1643, -0.275]
+      }
+    },
+    "e_c288": {
+      "name": "Crate 288",
+      "order": "b5e",
+      "MeshRenderer": {
+        "size": [0.3288, 0.3288, 0.3288],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1644, -0.275]
+      }
+    },
+    "e_c289": {
+      "name": "Crate 289",
+      "order": "b5f",
+      "MeshRenderer": {
+        "size": [0.3289, 0.3289, 0.3289],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1645, -0.275]
+      }
+    },
+    "e_c29": {
+      "name": "Crate 29",
+      "order": "b1T",
+      "MeshRenderer": {
+        "size": [0.3029, 0.3029, 0.3029],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1515, -5.225]
+      }
+    },
+    "e_c290": {
+      "name": "Crate 290",
+      "order": "b5g",
+      "MeshRenderer": {
+        "size": [0.329, 0.329, 0.329],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1645, -0.275]
+      }
+    },
+    "e_c291": {
+      "name": "Crate 291",
+      "order": "b5h",
+      "MeshRenderer": {
+        "size": [0.3291, 0.3291, 0.3291],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1646, -0.275]
+      }
+    },
+    "e_c292": {
+      "name": "Crate 292",
+      "order": "b5i",
+      "MeshRenderer": {
+        "size": [0.3292, 0.3292, 0.3292],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1646, -0.275]
+      }
+    },
+    "e_c293": {
+      "name": "Crate 293",
+      "order": "b5j",
+      "MeshRenderer": {
+        "size": [0.3293, 0.3293, 0.3293],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1646, -0.275]
+      }
+    },
+    "e_c294": {
+      "name": "Crate 294",
+      "order": "b5k",
+      "MeshRenderer": {
+        "size": [0.3294, 0.3294, 0.3294],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1647, -0.275]
+      }
+    },
+    "e_c295": {
+      "name": "Crate 295",
+      "order": "b5l",
+      "MeshRenderer": {
+        "size": [0.3295, 0.3295, 0.3295],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1648, -0.275]
+      }
+    },
+    "e_c296": {
+      "name": "Crate 296",
+      "order": "b5m",
+      "MeshRenderer": {
+        "size": [0.3296, 0.3296, 0.3296],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1648, -0.275]
+      }
+    },
+    "e_c297": {
+      "name": "Crate 297",
+      "order": "b5n",
+      "MeshRenderer": {
+        "size": [0.3297, 0.3297, 0.3297],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1648, -0.275]
+      }
+    },
+    "e_c298": {
+      "name": "Crate 298",
+      "order": "b5o",
+      "MeshRenderer": {
+        "size": [0.3298, 0.3298, 0.3298],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1649, -0.275]
+      }
+    },
+    "e_c299": {
+      "name": "Crate 299",
+      "order": "b5p",
+      "MeshRenderer": {
+        "size": [0.3299, 0.3299, 0.3299],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.165, -0.275]
+      }
+    },
+    "e_c3": {
+      "name": "Crate 3",
+      "order": "b13",
+      "MeshRenderer": {
+        "size": [0.3003, 0.3003, 0.3003],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1502, -5.225]
+      }
+    },
+    "e_c30": {
+      "name": "Crate 30",
+      "order": "b1U",
+      "MeshRenderer": {
+        "size": [0.303, 0.303, 0.303],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1515, -4.675]
+      }
+    },
+    "e_c300": {
+      "name": "Crate 300",
+      "order": "b5q",
+      "MeshRenderer": {
+        "size": [0.33, 0.33, 0.33],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.165, 0.275]
+      }
+    },
+    "e_c301": {
+      "name": "Crate 301",
+      "order": "b5r",
+      "MeshRenderer": {
+        "size": [0.3301, 0.3301, 0.3301],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1651, 0.275]
+      }
+    },
+    "e_c302": {
+      "name": "Crate 302",
+      "order": "b5s",
+      "MeshRenderer": {
+        "size": [0.3302, 0.3302, 0.3302],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1651, 0.275]
+      }
+    },
+    "e_c303": {
+      "name": "Crate 303",
+      "order": "b5t",
+      "MeshRenderer": {
+        "size": [0.3303, 0.3303, 0.3303],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1651, 0.275]
+      }
+    },
+    "e_c304": {
+      "name": "Crate 304",
+      "order": "b5u",
+      "MeshRenderer": {
+        "size": [0.3304, 0.3304, 0.3304],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1652, 0.275]
+      }
+    },
+    "e_c305": {
+      "name": "Crate 305",
+      "order": "b5v",
+      "MeshRenderer": {
+        "size": [0.3305, 0.3305, 0.3305],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1653, 0.275]
+      }
+    },
+    "e_c306": {
+      "name": "Crate 306",
+      "order": "b5w",
+      "MeshRenderer": {
+        "size": [0.3306, 0.3306, 0.3306],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1653, 0.275]
+      }
+    },
+    "e_c307": {
+      "name": "Crate 307",
+      "order": "b5x",
+      "MeshRenderer": {
+        "size": [0.3307, 0.3307, 0.3307],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1653, 0.275]
+      }
+    },
+    "e_c308": {
+      "name": "Crate 308",
+      "order": "b5y",
+      "MeshRenderer": {
+        "size": [0.3308, 0.3308, 0.3308],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1654, 0.275]
+      }
+    },
+    "e_c309": {
+      "name": "Crate 309",
+      "order": "b5z",
+      "MeshRenderer": {
+        "size": [0.3309, 0.3309, 0.3309],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1655, 0.275]
+      }
+    },
+    "e_c31": {
+      "name": "Crate 31",
+      "order": "b1V",
+      "MeshRenderer": {
+        "size": [0.3031, 0.3031, 0.3031],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1515, -4.675]
+      }
+    },
+    "e_c310": {
+      "name": "Crate 310",
+      "order": "b60",
+      "MeshRenderer": {
+        "size": [0.331, 0.331, 0.331],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1655, 0.275]
+      }
+    },
+    "e_c311": {
+      "name": "Crate 311",
+      "order": "b61",
+      "MeshRenderer": {
+        "size": [0.3311, 0.3311, 0.3311],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1656, 0.275]
+      }
+    },
+    "e_c312": {
+      "name": "Crate 312",
+      "order": "b62",
+      "MeshRenderer": {
+        "size": [0.3312, 0.3312, 0.3312],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1656, 0.275]
+      }
+    },
+    "e_c313": {
+      "name": "Crate 313",
+      "order": "b63",
+      "MeshRenderer": {
+        "size": [0.3313, 0.3313, 0.3313],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1656, 0.275]
+      }
+    },
+    "e_c314": {
+      "name": "Crate 314",
+      "order": "b64",
+      "MeshRenderer": {
+        "size": [0.3314, 0.3314, 0.3314],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1657, 0.275]
+      }
+    },
+    "e_c315": {
+      "name": "Crate 315",
+      "order": "b65",
+      "MeshRenderer": {
+        "size": [0.3315, 0.3315, 0.3315],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1658, 0.275]
+      }
+    },
+    "e_c316": {
+      "name": "Crate 316",
+      "order": "b66",
+      "MeshRenderer": {
+        "size": [0.3316, 0.3316, 0.3316],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1658, 0.275]
+      }
+    },
+    "e_c317": {
+      "name": "Crate 317",
+      "order": "b67",
+      "MeshRenderer": {
+        "size": [0.3317, 0.3317, 0.3317],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1658, 0.275]
+      }
+    },
+    "e_c318": {
+      "name": "Crate 318",
+      "order": "b68",
+      "MeshRenderer": {
+        "size": [0.3318, 0.3318, 0.3318],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1659, 0.275]
+      }
+    },
+    "e_c319": {
+      "name": "Crate 319",
+      "order": "b69",
+      "MeshRenderer": {
+        "size": [0.3319, 0.3319, 0.3319],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1659, 0.275]
+      }
+    },
+    "e_c32": {
+      "name": "Crate 32",
+      "order": "b1W",
+      "MeshRenderer": {
+        "size": [0.3032, 0.3032, 0.3032],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1516, -4.675]
+      }
+    },
+    "e_c320": {
+      "name": "Crate 320",
+      "order": "b6A",
+      "MeshRenderer": {
+        "size": [0.332, 0.332, 0.332],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.166, 0.275]
+      }
+    },
+    "e_c321": {
+      "name": "Crate 321",
+      "order": "b6B",
+      "MeshRenderer": {
+        "size": [0.3321, 0.3321, 0.3321],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1661, 0.275]
+      }
+    },
+    "e_c322": {
+      "name": "Crate 322",
+      "order": "b6C",
+      "MeshRenderer": {
+        "size": [0.3322, 0.3322, 0.3322],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1661, 0.275]
+      }
+    },
+    "e_c323": {
+      "name": "Crate 323",
+      "order": "b6D",
+      "MeshRenderer": {
+        "size": [0.3323, 0.3323, 0.3323],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1661, 0.275]
+      }
+    },
+    "e_c324": {
+      "name": "Crate 324",
+      "order": "b6E",
+      "MeshRenderer": {
+        "size": [0.3324, 0.3324, 0.3324],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1662, 0.275]
+      }
+    },
+    "e_c325": {
+      "name": "Crate 325",
+      "order": "b6F",
+      "MeshRenderer": {
+        "size": [0.3325, 0.3325, 0.3325],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1663, 0.275]
+      }
+    },
+    "e_c326": {
+      "name": "Crate 326",
+      "order": "b6G",
+      "MeshRenderer": {
+        "size": [0.3326, 0.3326, 0.3326],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1663, 0.275]
+      }
+    },
+    "e_c327": {
+      "name": "Crate 327",
+      "order": "b6H",
+      "MeshRenderer": {
+        "size": [0.3327, 0.3327, 0.3327],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1663, 0.275]
+      }
+    },
+    "e_c328": {
+      "name": "Crate 328",
+      "order": "b6I",
+      "MeshRenderer": {
+        "size": [0.3328, 0.3328, 0.3328],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1664, 0.275]
+      }
+    },
+    "e_c329": {
+      "name": "Crate 329",
+      "order": "b6J",
+      "MeshRenderer": {
+        "size": [0.3329, 0.3329, 0.3329],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1664, 0.275]
+      }
+    },
+    "e_c33": {
+      "name": "Crate 33",
+      "order": "b1X",
+      "MeshRenderer": {
+        "size": [0.3033, 0.3033, 0.3033],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1517, -4.675]
+      }
+    },
+    "e_c330": {
+      "name": "Crate 330",
+      "order": "b6K",
+      "MeshRenderer": {
+        "size": [0.333, 0.333, 0.333],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1665, 0.825]
+      }
+    },
+    "e_c331": {
+      "name": "Crate 331",
+      "order": "b6L",
+      "MeshRenderer": {
+        "size": [0.3331, 0.3331, 0.3331],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1666, 0.825]
+      }
+    },
+    "e_c332": {
+      "name": "Crate 332",
+      "order": "b6M",
+      "MeshRenderer": {
+        "size": [0.3332, 0.3332, 0.3332],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1666, 0.825]
+      }
+    },
+    "e_c333": {
+      "name": "Crate 333",
+      "order": "b6N",
+      "MeshRenderer": {
+        "size": [0.3333, 0.3333, 0.3333],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1666, 0.825]
+      }
+    },
+    "e_c334": {
+      "name": "Crate 334",
+      "order": "b6O",
+      "MeshRenderer": {
+        "size": [0.3334, 0.3334, 0.3334],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1667, 0.825]
+      }
+    },
+    "e_c335": {
+      "name": "Crate 335",
+      "order": "b6P",
+      "MeshRenderer": {
+        "size": [0.3335, 0.3335, 0.3335],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1668, 0.825]
+      }
+    },
+    "e_c336": {
+      "name": "Crate 336",
+      "order": "b6Q",
+      "MeshRenderer": {
+        "size": [0.3336, 0.3336, 0.3336],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1668, 0.825]
+      }
+    },
+    "e_c337": {
+      "name": "Crate 337",
+      "order": "b6R",
+      "MeshRenderer": {
+        "size": [0.3337, 0.3337, 0.3337],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1668, 0.825]
+      }
+    },
+    "e_c338": {
+      "name": "Crate 338",
+      "order": "b6S",
+      "MeshRenderer": {
+        "size": [0.3338, 0.3338, 0.3338],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1669, 0.825]
+      }
+    },
+    "e_c339": {
+      "name": "Crate 339",
+      "order": "b6T",
+      "MeshRenderer": {
+        "size": [0.3339, 0.3339, 0.3339],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1669, 0.825]
+      }
+    },
+    "e_c34": {
+      "name": "Crate 34",
+      "order": "b1Y",
+      "MeshRenderer": {
+        "size": [0.3034, 0.3034, 0.3034],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1517, -4.675]
+      }
+    },
+    "e_c340": {
+      "name": "Crate 340",
+      "order": "b6U",
+      "MeshRenderer": {
+        "size": [0.334, 0.334, 0.334],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.167, 0.825]
+      }
+    },
+    "e_c341": {
+      "name": "Crate 341",
+      "order": "b6V",
+      "MeshRenderer": {
+        "size": [0.3341, 0.3341, 0.3341],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1671, 0.825]
+      }
+    },
+    "e_c342": {
+      "name": "Crate 342",
+      "order": "b6W",
+      "MeshRenderer": {
+        "size": [0.3342, 0.3342, 0.3342],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1671, 0.825]
+      }
+    },
+    "e_c343": {
+      "name": "Crate 343",
+      "order": "b6X",
+      "MeshRenderer": {
+        "size": [0.3343, 0.3343, 0.3343],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1671, 0.825]
+      }
+    },
+    "e_c344": {
+      "name": "Crate 344",
+      "order": "b6Y",
+      "MeshRenderer": {
+        "size": [0.3344, 0.3344, 0.3344],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1672, 0.825]
+      }
+    },
+    "e_c345": {
+      "name": "Crate 345",
+      "order": "b6Z",
+      "MeshRenderer": {
+        "size": [0.3345, 0.3345, 0.3345],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1673, 0.825]
+      }
+    },
+    "e_c346": {
+      "name": "Crate 346",
+      "order": "b6a",
+      "MeshRenderer": {
+        "size": [0.3346, 0.3346, 0.3346],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1673, 0.825]
+      }
+    },
+    "e_c347": {
+      "name": "Crate 347",
+      "order": "b6b",
+      "MeshRenderer": {
+        "size": [0.3347, 0.3347, 0.3347],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1673, 0.825]
+      }
+    },
+    "e_c348": {
+      "name": "Crate 348",
+      "order": "b6c",
+      "MeshRenderer": {
+        "size": [0.3348, 0.3348, 0.3348],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1674, 0.825]
+      }
+    },
+    "e_c349": {
+      "name": "Crate 349",
+      "order": "b6d",
+      "MeshRenderer": {
+        "size": [0.3349, 0.3349, 0.3349],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1674, 0.825]
+      }
+    },
+    "e_c35": {
+      "name": "Crate 35",
+      "order": "b1Z",
+      "MeshRenderer": {
+        "size": [0.3035, 0.3035, 0.3035],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1517, -4.675]
+      }
+    },
+    "e_c350": {
+      "name": "Crate 350",
+      "order": "b6e",
+      "MeshRenderer": {
+        "size": [0.335, 0.335, 0.335],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1675, 0.825]
+      }
+    },
+    "e_c351": {
+      "name": "Crate 351",
+      "order": "b6f",
+      "MeshRenderer": {
+        "size": [0.3351, 0.3351, 0.3351],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1676, 0.825]
+      }
+    },
+    "e_c352": {
+      "name": "Crate 352",
+      "order": "b6g",
+      "MeshRenderer": {
+        "size": [0.3352, 0.3352, 0.3352],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1676, 0.825]
+      }
+    },
+    "e_c353": {
+      "name": "Crate 353",
+      "order": "b6h",
+      "MeshRenderer": {
+        "size": [0.3353, 0.3353, 0.3353],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1676, 0.825]
+      }
+    },
+    "e_c354": {
+      "name": "Crate 354",
+      "order": "b6i",
+      "MeshRenderer": {
+        "size": [0.3354, 0.3354, 0.3354],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1677, 0.825]
+      }
+    },
+    "e_c355": {
+      "name": "Crate 355",
+      "order": "b6j",
+      "MeshRenderer": {
+        "size": [0.3355, 0.3355, 0.3355],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1678, 0.825]
+      }
+    },
+    "e_c356": {
+      "name": "Crate 356",
+      "order": "b6k",
+      "MeshRenderer": {
+        "size": [0.3356, 0.3356, 0.3356],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1678, 0.825]
+      }
+    },
+    "e_c357": {
+      "name": "Crate 357",
+      "order": "b6l",
+      "MeshRenderer": {
+        "size": [0.3357, 0.3357, 0.3357],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1678, 0.825]
+      }
+    },
+    "e_c358": {
+      "name": "Crate 358",
+      "order": "b6m",
+      "MeshRenderer": {
+        "size": [0.3358, 0.3358, 0.3358],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1679, 0.825]
+      }
+    },
+    "e_c359": {
+      "name": "Crate 359",
+      "order": "b6n",
+      "MeshRenderer": {
+        "size": [0.3359, 0.3359, 0.3359],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1679, 0.825]
+      }
+    },
+    "e_c36": {
+      "name": "Crate 36",
+      "order": "b1a",
+      "MeshRenderer": {
+        "size": [0.3036, 0.3036, 0.3036],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1518, -4.675]
+      }
+    },
+    "e_c360": {
+      "name": "Crate 360",
+      "order": "b6o",
+      "MeshRenderer": {
+        "size": [0.336, 0.336, 0.336],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.168, 1.375]
+      }
+    },
+    "e_c361": {
+      "name": "Crate 361",
+      "order": "b6p",
+      "MeshRenderer": {
+        "size": [0.3361, 0.3361, 0.3361],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1681, 1.375]
+      }
+    },
+    "e_c362": {
+      "name": "Crate 362",
+      "order": "b6q",
+      "MeshRenderer": {
+        "size": [0.3362, 0.3362, 0.3362],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1681, 1.375]
+      }
+    },
+    "e_c363": {
+      "name": "Crate 363",
+      "order": "b6r",
+      "MeshRenderer": {
+        "size": [0.3363, 0.3363, 0.3363],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1681, 1.375]
+      }
+    },
+    "e_c364": {
+      "name": "Crate 364",
+      "order": "b6s",
+      "MeshRenderer": {
+        "size": [0.3364, 0.3364, 0.3364],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1682, 1.375]
+      }
+    },
+    "e_c365": {
+      "name": "Crate 365",
+      "order": "b6t",
+      "MeshRenderer": {
+        "size": [0.3365, 0.3365, 0.3365],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1683, 1.375]
+      }
+    },
+    "e_c366": {
+      "name": "Crate 366",
+      "order": "b6u",
+      "MeshRenderer": {
+        "size": [0.3366, 0.3366, 0.3366],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1683, 1.375]
+      }
+    },
+    "e_c367": {
+      "name": "Crate 367",
+      "order": "b6v",
+      "MeshRenderer": {
+        "size": [0.3367, 0.3367, 0.3367],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1683, 1.375]
+      }
+    },
+    "e_c368": {
+      "name": "Crate 368",
+      "order": "b6w",
+      "MeshRenderer": {
+        "size": [0.3368, 0.3368, 0.3368],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1684, 1.375]
+      }
+    },
+    "e_c369": {
+      "name": "Crate 369",
+      "order": "b6x",
+      "MeshRenderer": {
+        "size": [0.3369, 0.3369, 0.3369],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1684, 1.375]
+      }
+    },
+    "e_c37": {
+      "name": "Crate 37",
+      "order": "b1b",
+      "MeshRenderer": {
+        "size": [0.3037, 0.3037, 0.3037],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1519, -4.675]
+      }
+    },
+    "e_c370": {
+      "name": "Crate 370",
+      "order": "b6y",
+      "MeshRenderer": {
+        "size": [0.337, 0.337, 0.337],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1685, 1.375]
+      }
+    },
+    "e_c371": {
+      "name": "Crate 371",
+      "order": "b6z",
+      "MeshRenderer": {
+        "size": [0.3371, 0.3371, 0.3371],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1686, 1.375]
+      }
+    },
+    "e_c372": {
+      "name": "Crate 372",
+      "order": "b70",
+      "MeshRenderer": {
+        "size": [0.3372, 0.3372, 0.3372],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1686, 1.375]
+      }
+    },
+    "e_c373": {
+      "name": "Crate 373",
+      "order": "b71",
+      "MeshRenderer": {
+        "size": [0.3373, 0.3373, 0.3373],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1686, 1.375]
+      }
+    },
+    "e_c374": {
+      "name": "Crate 374",
+      "order": "b72",
+      "MeshRenderer": {
+        "size": [0.3374, 0.3374, 0.3374],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1687, 1.375]
+      }
+    },
+    "e_c375": {
+      "name": "Crate 375",
+      "order": "b73",
+      "MeshRenderer": {
+        "size": [0.3375, 0.3375, 0.3375],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1688, 1.375]
+      }
+    },
+    "e_c376": {
+      "name": "Crate 376",
+      "order": "b74",
+      "MeshRenderer": {
+        "size": [0.3376, 0.3376, 0.3376],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1688, 1.375]
+      }
+    },
+    "e_c377": {
+      "name": "Crate 377",
+      "order": "b75",
+      "MeshRenderer": {
+        "size": [0.3377, 0.3377, 0.3377],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1689, 1.375]
+      }
+    },
+    "e_c378": {
+      "name": "Crate 378",
+      "order": "b76",
+      "MeshRenderer": {
+        "size": [0.3378, 0.3378, 0.3378],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1689, 1.375]
+      }
+    },
+    "e_c379": {
+      "name": "Crate 379",
+      "order": "b77",
+      "MeshRenderer": {
+        "size": [0.3379, 0.3379, 0.3379],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1689, 1.375]
+      }
+    },
+    "e_c38": {
+      "name": "Crate 38",
+      "order": "b1c",
+      "MeshRenderer": {
+        "size": [0.3038, 0.3038, 0.3038],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1519, -4.675]
+      }
+    },
+    "e_c380": {
+      "name": "Crate 380",
+      "order": "b78",
+      "MeshRenderer": {
+        "size": [0.338, 0.338, 0.338],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.169, 1.375]
+      }
+    },
+    "e_c381": {
+      "name": "Crate 381",
+      "order": "b79",
+      "MeshRenderer": {
+        "size": [0.3381, 0.3381, 0.3381],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1691, 1.375]
+      }
+    },
+    "e_c382": {
+      "name": "Crate 382",
+      "order": "b7A",
+      "MeshRenderer": {
+        "size": [0.3382, 0.3382, 0.3382],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1691, 1.375]
+      }
+    },
+    "e_c383": {
+      "name": "Crate 383",
+      "order": "b7B",
+      "MeshRenderer": {
+        "size": [0.3383, 0.3383, 0.3383],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1691, 1.375]
+      }
+    },
+    "e_c384": {
+      "name": "Crate 384",
+      "order": "b7C",
+      "MeshRenderer": {
+        "size": [0.3384, 0.3384, 0.3384],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1692, 1.375]
+      }
+    },
+    "e_c385": {
+      "name": "Crate 385",
+      "order": "b7D",
+      "MeshRenderer": {
+        "size": [0.3385, 0.3385, 0.3385],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1693, 1.375]
+      }
+    },
+    "e_c386": {
+      "name": "Crate 386",
+      "order": "b7E",
+      "MeshRenderer": {
+        "size": [0.3386, 0.3386, 0.3386],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1693, 1.375]
+      }
+    },
+    "e_c387": {
+      "name": "Crate 387",
+      "order": "b7F",
+      "MeshRenderer": {
+        "size": [0.3387, 0.3387, 0.3387],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1694, 1.375]
+      }
+    },
+    "e_c388": {
+      "name": "Crate 388",
+      "order": "b7G",
+      "MeshRenderer": {
+        "size": [0.3388, 0.3388, 0.3388],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1694, 1.375]
+      }
+    },
+    "e_c389": {
+      "name": "Crate 389",
+      "order": "b7H",
+      "MeshRenderer": {
+        "size": [0.3389, 0.3389, 0.3389],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1694, 1.375]
+      }
+    },
+    "e_c39": {
+      "name": "Crate 39",
+      "order": "b1d",
+      "MeshRenderer": {
+        "size": [0.3039, 0.3039, 0.3039],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.152, -4.675]
+      }
+    },
+    "e_c390": {
+      "name": "Crate 390",
+      "order": "b7I",
+      "MeshRenderer": {
+        "size": [0.339, 0.339, 0.339],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1695, 1.925]
+      }
+    },
+    "e_c391": {
+      "name": "Crate 391",
+      "order": "b7J",
+      "MeshRenderer": {
+        "size": [0.3391, 0.3391, 0.3391],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1696, 1.925]
+      }
+    },
+    "e_c392": {
+      "name": "Crate 392",
+      "order": "b7K",
+      "MeshRenderer": {
+        "size": [0.3392, 0.3392, 0.3392],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1696, 1.925]
+      }
+    },
+    "e_c393": {
+      "name": "Crate 393",
+      "order": "b7L",
+      "MeshRenderer": {
+        "size": [0.3393, 0.3393, 0.3393],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1696, 1.925]
+      }
+    },
+    "e_c394": {
+      "name": "Crate 394",
+      "order": "b7M",
+      "MeshRenderer": {
+        "size": [0.3394, 0.3394, 0.3394],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1697, 1.925]
+      }
+    },
+    "e_c395": {
+      "name": "Crate 395",
+      "order": "b7N",
+      "MeshRenderer": {
+        "size": [0.3395, 0.3395, 0.3395],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1698, 1.925]
+      }
+    },
+    "e_c396": {
+      "name": "Crate 396",
+      "order": "b7O",
+      "MeshRenderer": {
+        "size": [0.3396, 0.3396, 0.3396],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1698, 1.925]
+      }
+    },
+    "e_c397": {
+      "name": "Crate 397",
+      "order": "b7P",
+      "MeshRenderer": {
+        "size": [0.3397, 0.3397, 0.3397],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1699, 1.925]
+      }
+    },
+    "e_c398": {
+      "name": "Crate 398",
+      "order": "b7Q",
+      "MeshRenderer": {
+        "size": [0.3398, 0.3398, 0.3398],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1699, 1.925]
+      }
+    },
+    "e_c399": {
+      "name": "Crate 399",
+      "order": "b7R",
+      "MeshRenderer": {
+        "size": [0.3399, 0.3399, 0.3399],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1699, 1.925]
+      }
+    },
+    "e_c4": {
+      "name": "Crate 4",
+      "order": "b14",
+      "MeshRenderer": {
+        "size": [0.3004, 0.3004, 0.3004],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1502, -5.225]
+      }
+    },
+    "e_c40": {
+      "name": "Crate 40",
+      "order": "b1e",
+      "MeshRenderer": {
+        "size": [0.304, 0.304, 0.304],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.152, -4.675]
+      }
+    },
+    "e_c400": {
+      "name": "Crate 400",
+      "order": "b7S",
+      "MeshRenderer": {
+        "size": [0.34, 0.34, 0.34],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.17, 1.925]
+      }
+    },
+    "e_c401": {
+      "name": "Crate 401",
+      "order": "b7T",
+      "MeshRenderer": {
+        "size": [0.3401, 0.3401, 0.3401],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1701, 1.925]
+      }
+    },
+    "e_c402": {
+      "name": "Crate 402",
+      "order": "b7U",
+      "MeshRenderer": {
+        "size": [0.3402, 0.3402, 0.3402],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1701, 1.925]
+      }
+    },
+    "e_c403": {
+      "name": "Crate 403",
+      "order": "b7V",
+      "MeshRenderer": {
+        "size": [0.3403, 0.3403, 0.3403],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1701, 1.925]
+      }
+    },
+    "e_c404": {
+      "name": "Crate 404",
+      "order": "b7W",
+      "MeshRenderer": {
+        "size": [0.3404, 0.3404, 0.3404],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1702, 1.925]
+      }
+    },
+    "e_c405": {
+      "name": "Crate 405",
+      "order": "b7X",
+      "MeshRenderer": {
+        "size": [0.3405, 0.3405, 0.3405],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1703, 1.925]
+      }
+    },
+    "e_c406": {
+      "name": "Crate 406",
+      "order": "b7Y",
+      "MeshRenderer": {
+        "size": [0.3406, 0.3406, 0.3406],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1703, 1.925]
+      }
+    },
+    "e_c407": {
+      "name": "Crate 407",
+      "order": "b7Z",
+      "MeshRenderer": {
+        "size": [0.3407, 0.3407, 0.3407],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1704, 1.925]
+      }
+    },
+    "e_c408": {
+      "name": "Crate 408",
+      "order": "b7a",
+      "MeshRenderer": {
+        "size": [0.3408, 0.3408, 0.3408],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1704, 1.925]
+      }
+    },
+    "e_c409": {
+      "name": "Crate 409",
+      "order": "b7b",
+      "MeshRenderer": {
+        "size": [0.3409, 0.3409, 0.3409],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1704, 1.925]
+      }
+    },
+    "e_c41": {
+      "name": "Crate 41",
+      "order": "b1f",
+      "MeshRenderer": {
+        "size": [0.3041, 0.3041, 0.3041],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.152, -4.675]
+      }
+    },
+    "e_c410": {
+      "name": "Crate 410",
+      "order": "b7c",
+      "MeshRenderer": {
+        "size": [0.341, 0.341, 0.341],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1705, 1.925]
+      }
+    },
+    "e_c411": {
+      "name": "Crate 411",
+      "order": "b7d",
+      "MeshRenderer": {
+        "size": [0.3411, 0.3411, 0.3411],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1706, 1.925]
+      }
+    },
+    "e_c412": {
+      "name": "Crate 412",
+      "order": "b7e",
+      "MeshRenderer": {
+        "size": [0.3412, 0.3412, 0.3412],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1706, 1.925]
+      }
+    },
+    "e_c413": {
+      "name": "Crate 413",
+      "order": "b7f",
+      "MeshRenderer": {
+        "size": [0.3413, 0.3413, 0.3413],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1706, 1.925]
+      }
+    },
+    "e_c414": {
+      "name": "Crate 414",
+      "order": "b7g",
+      "MeshRenderer": {
+        "size": [0.3414, 0.3414, 0.3414],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1707, 1.925]
+      }
+    },
+    "e_c415": {
+      "name": "Crate 415",
+      "order": "b7h",
+      "MeshRenderer": {
+        "size": [0.3415, 0.3415, 0.3415],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1708, 1.925]
+      }
+    },
+    "e_c416": {
+      "name": "Crate 416",
+      "order": "b7i",
+      "MeshRenderer": {
+        "size": [0.3416, 0.3416, 0.3416],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1708, 1.925]
+      }
+    },
+    "e_c417": {
+      "name": "Crate 417",
+      "order": "b7j",
+      "MeshRenderer": {
+        "size": [0.3417, 0.3417, 0.3417],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1709, 1.925]
+      }
+    },
+    "e_c418": {
+      "name": "Crate 418",
+      "order": "b7k",
+      "MeshRenderer": {
+        "size": [0.3418, 0.3418, 0.3418],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1709, 1.925]
+      }
+    },
+    "e_c419": {
+      "name": "Crate 419",
+      "order": "b7l",
+      "MeshRenderer": {
+        "size": [0.3419, 0.3419, 0.3419],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1709, 1.925]
+      }
+    },
+    "e_c42": {
+      "name": "Crate 42",
+      "order": "b1g",
+      "MeshRenderer": {
+        "size": [0.3042, 0.3042, 0.3042],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1521, -4.675]
+      }
+    },
+    "e_c420": {
+      "name": "Crate 420",
+      "order": "b7m",
+      "MeshRenderer": {
+        "size": [0.342, 0.342, 0.342],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.171, 2.475]
+      }
+    },
+    "e_c421": {
+      "name": "Crate 421",
+      "order": "b7n",
+      "MeshRenderer": {
+        "size": [0.3421, 0.3421, 0.3421],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1711, 2.475]
+      }
+    },
+    "e_c422": {
+      "name": "Crate 422",
+      "order": "b7o",
+      "MeshRenderer": {
+        "size": [0.3422, 0.3422, 0.3422],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1711, 2.475]
+      }
+    },
+    "e_c423": {
+      "name": "Crate 423",
+      "order": "b7p",
+      "MeshRenderer": {
+        "size": [0.3423, 0.3423, 0.3423],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1711, 2.475]
+      }
+    },
+    "e_c424": {
+      "name": "Crate 424",
+      "order": "b7q",
+      "MeshRenderer": {
+        "size": [0.3424, 0.3424, 0.3424],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1712, 2.475]
+      }
+    },
+    "e_c425": {
+      "name": "Crate 425",
+      "order": "b7r",
+      "MeshRenderer": {
+        "size": [0.3425, 0.3425, 0.3425],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1713, 2.475]
+      }
+    },
+    "e_c426": {
+      "name": "Crate 426",
+      "order": "b7s",
+      "MeshRenderer": {
+        "size": [0.3426, 0.3426, 0.3426],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1713, 2.475]
+      }
+    },
+    "e_c427": {
+      "name": "Crate 427",
+      "order": "b7t",
+      "MeshRenderer": {
+        "size": [0.3427, 0.3427, 0.3427],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1714, 2.475]
+      }
+    },
+    "e_c428": {
+      "name": "Crate 428",
+      "order": "b7u",
+      "MeshRenderer": {
+        "size": [0.3428, 0.3428, 0.3428],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1714, 2.475]
+      }
+    },
+    "e_c429": {
+      "name": "Crate 429",
+      "order": "b7v",
+      "MeshRenderer": {
+        "size": [0.3429, 0.3429, 0.3429],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1714, 2.475]
+      }
+    },
+    "e_c43": {
+      "name": "Crate 43",
+      "order": "b1h",
+      "MeshRenderer": {
+        "size": [0.3043, 0.3043, 0.3043],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1522, -4.675]
+      }
+    },
+    "e_c430": {
+      "name": "Crate 430",
+      "order": "b7w",
+      "MeshRenderer": {
+        "size": [0.343, 0.343, 0.343],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1715, 2.475]
+      }
+    },
+    "e_c431": {
+      "name": "Crate 431",
+      "order": "b7x",
+      "MeshRenderer": {
+        "size": [0.3431, 0.3431, 0.3431],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1716, 2.475]
+      }
+    },
+    "e_c432": {
+      "name": "Crate 432",
+      "order": "b7y",
+      "MeshRenderer": {
+        "size": [0.3432, 0.3432, 0.3432],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1716, 2.475]
+      }
+    },
+    "e_c433": {
+      "name": "Crate 433",
+      "order": "b7z",
+      "MeshRenderer": {
+        "size": [0.3433, 0.3433, 0.3433],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1716, 2.475]
+      }
+    },
+    "e_c434": {
+      "name": "Crate 434",
+      "order": "b80",
+      "MeshRenderer": {
+        "size": [0.3434, 0.3434, 0.3434],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1717, 2.475]
+      }
+    },
+    "e_c435": {
+      "name": "Crate 435",
+      "order": "b81",
+      "MeshRenderer": {
+        "size": [0.3435, 0.3435, 0.3435],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1718, 2.475]
+      }
+    },
+    "e_c436": {
+      "name": "Crate 436",
+      "order": "b82",
+      "MeshRenderer": {
+        "size": [0.3436, 0.3436, 0.3436],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1718, 2.475]
+      }
+    },
+    "e_c437": {
+      "name": "Crate 437",
+      "order": "b83",
+      "MeshRenderer": {
+        "size": [0.3437, 0.3437, 0.3437],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1719, 2.475]
+      }
+    },
+    "e_c438": {
+      "name": "Crate 438",
+      "order": "b84",
+      "MeshRenderer": {
+        "size": [0.3438, 0.3438, 0.3438],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1719, 2.475]
+      }
+    },
+    "e_c439": {
+      "name": "Crate 439",
+      "order": "b85",
+      "MeshRenderer": {
+        "size": [0.3439, 0.3439, 0.3439],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1719, 2.475]
+      }
+    },
+    "e_c44": {
+      "name": "Crate 44",
+      "order": "b1i",
+      "MeshRenderer": {
+        "size": [0.3044, 0.3044, 0.3044],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1522, -4.675]
+      }
+    },
+    "e_c440": {
+      "name": "Crate 440",
+      "order": "b86",
+      "MeshRenderer": {
+        "size": [0.344, 0.344, 0.344],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.172, 2.475]
+      }
+    },
+    "e_c441": {
+      "name": "Crate 441",
+      "order": "b87",
+      "MeshRenderer": {
+        "size": [0.3441, 0.3441, 0.3441],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1721, 2.475]
+      }
+    },
+    "e_c442": {
+      "name": "Crate 442",
+      "order": "b88",
+      "MeshRenderer": {
+        "size": [0.3442, 0.3442, 0.3442],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1721, 2.475]
+      }
+    },
+    "e_c443": {
+      "name": "Crate 443",
+      "order": "b89",
+      "MeshRenderer": {
+        "size": [0.3443, 0.3443, 0.3443],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1721, 2.475]
+      }
+    },
+    "e_c444": {
+      "name": "Crate 444",
+      "order": "b8A",
+      "MeshRenderer": {
+        "size": [0.3444, 0.3444, 0.3444],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1722, 2.475]
+      }
+    },
+    "e_c445": {
+      "name": "Crate 445",
+      "order": "b8B",
+      "MeshRenderer": {
+        "size": [0.3445, 0.3445, 0.3445],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1722, 2.475]
+      }
+    },
+    "e_c446": {
+      "name": "Crate 446",
+      "order": "b8C",
+      "MeshRenderer": {
+        "size": [0.3446, 0.3446, 0.3446],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1723, 2.475]
+      }
+    },
+    "e_c447": {
+      "name": "Crate 447",
+      "order": "b8D",
+      "MeshRenderer": {
+        "size": [0.3447, 0.3447, 0.3447],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1724, 2.475]
+      }
+    },
+    "e_c448": {
+      "name": "Crate 448",
+      "order": "b8E",
+      "MeshRenderer": {
+        "size": [0.3448, 0.3448, 0.3448],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1724, 2.475]
+      }
+    },
+    "e_c449": {
+      "name": "Crate 449",
+      "order": "b8F",
+      "MeshRenderer": {
+        "size": [0.3449, 0.3449, 0.3449],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1724, 2.475]
+      }
+    },
+    "e_c45": {
+      "name": "Crate 45",
+      "order": "b1j",
+      "MeshRenderer": {
+        "size": [0.3045, 0.3045, 0.3045],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1522, -4.675]
+      }
+    },
+    "e_c450": {
+      "name": "Crate 450",
+      "order": "b8G",
+      "MeshRenderer": {
+        "size": [0.345, 0.345, 0.345],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1725, 3.025]
+      }
+    },
+    "e_c451": {
+      "name": "Crate 451",
+      "order": "b8H",
+      "MeshRenderer": {
+        "size": [0.3451, 0.3451, 0.3451],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1726, 3.025]
+      }
+    },
+    "e_c452": {
+      "name": "Crate 452",
+      "order": "b8I",
+      "MeshRenderer": {
+        "size": [0.3452, 0.3452, 0.3452],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1726, 3.025]
+      }
+    },
+    "e_c453": {
+      "name": "Crate 453",
+      "order": "b8J",
+      "MeshRenderer": {
+        "size": [0.3453, 0.3453, 0.3453],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1726, 3.025]
+      }
+    },
+    "e_c454": {
+      "name": "Crate 454",
+      "order": "b8K",
+      "MeshRenderer": {
+        "size": [0.3454, 0.3454, 0.3454],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1727, 3.025]
+      }
+    },
+    "e_c455": {
+      "name": "Crate 455",
+      "order": "b8L",
+      "MeshRenderer": {
+        "size": [0.3455, 0.3455, 0.3455],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1727, 3.025]
+      }
+    },
+    "e_c456": {
+      "name": "Crate 456",
+      "order": "b8M",
+      "MeshRenderer": {
+        "size": [0.3456, 0.3456, 0.3456],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1728, 3.025]
+      }
+    },
+    "e_c457": {
+      "name": "Crate 457",
+      "order": "b8N",
+      "MeshRenderer": {
+        "size": [0.3457, 0.3457, 0.3457],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1729, 3.025]
+      }
+    },
+    "e_c458": {
+      "name": "Crate 458",
+      "order": "b8O",
+      "MeshRenderer": {
+        "size": [0.3458, 0.3458, 0.3458],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1729, 3.025]
+      }
+    },
+    "e_c459": {
+      "name": "Crate 459",
+      "order": "b8P",
+      "MeshRenderer": {
+        "size": [0.3459, 0.3459, 0.3459],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1729, 3.025]
+      }
+    },
+    "e_c46": {
+      "name": "Crate 46",
+      "order": "b1k",
+      "MeshRenderer": {
+        "size": [0.3046, 0.3046, 0.3046],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1523, -4.675]
+      }
+    },
+    "e_c460": {
+      "name": "Crate 460",
+      "order": "b8Q",
+      "MeshRenderer": {
+        "size": [0.346, 0.346, 0.346],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.173, 3.025]
+      }
+    },
+    "e_c461": {
+      "name": "Crate 461",
+      "order": "b8R",
+      "MeshRenderer": {
+        "size": [0.3461, 0.3461, 0.3461],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1731, 3.025]
+      }
+    },
+    "e_c462": {
+      "name": "Crate 462",
+      "order": "b8S",
+      "MeshRenderer": {
+        "size": [0.3462, 0.3462, 0.3462],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1731, 3.025]
+      }
+    },
+    "e_c463": {
+      "name": "Crate 463",
+      "order": "b8T",
+      "MeshRenderer": {
+        "size": [0.3463, 0.3463, 0.3463],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1731, 3.025]
+      }
+    },
+    "e_c464": {
+      "name": "Crate 464",
+      "order": "b8U",
+      "MeshRenderer": {
+        "size": [0.3464, 0.3464, 0.3464],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1732, 3.025]
+      }
+    },
+    "e_c465": {
+      "name": "Crate 465",
+      "order": "b8V",
+      "MeshRenderer": {
+        "size": [0.3465, 0.3465, 0.3465],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1732, 3.025]
+      }
+    },
+    "e_c466": {
+      "name": "Crate 466",
+      "order": "b8W",
+      "MeshRenderer": {
+        "size": [0.3466, 0.3466, 0.3466],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1733, 3.025]
+      }
+    },
+    "e_c467": {
+      "name": "Crate 467",
+      "order": "b8X",
+      "MeshRenderer": {
+        "size": [0.3467, 0.3467, 0.3467],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1734, 3.025]
+      }
+    },
+    "e_c468": {
+      "name": "Crate 468",
+      "order": "b8Y",
+      "MeshRenderer": {
+        "size": [0.3468, 0.3468, 0.3468],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1734, 3.025]
+      }
+    },
+    "e_c469": {
+      "name": "Crate 469",
+      "order": "b8Z",
+      "MeshRenderer": {
+        "size": [0.3469, 0.3469, 0.3469],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1734, 3.025]
+      }
+    },
+    "e_c47": {
+      "name": "Crate 47",
+      "order": "b1l",
+      "MeshRenderer": {
+        "size": [0.3047, 0.3047, 0.3047],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1524, -4.675]
+      }
+    },
+    "e_c470": {
+      "name": "Crate 470",
+      "order": "b8a",
+      "MeshRenderer": {
+        "size": [0.347, 0.347, 0.347],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1735, 3.025]
+      }
+    },
+    "e_c471": {
+      "name": "Crate 471",
+      "order": "b8b",
+      "MeshRenderer": {
+        "size": [0.3471, 0.3471, 0.3471],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1736, 3.025]
+      }
+    },
+    "e_c472": {
+      "name": "Crate 472",
+      "order": "b8c",
+      "MeshRenderer": {
+        "size": [0.3472, 0.3472, 0.3472],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1736, 3.025]
+      }
+    },
+    "e_c473": {
+      "name": "Crate 473",
+      "order": "b8d",
+      "MeshRenderer": {
+        "size": [0.3473, 0.3473, 0.3473],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1736, 3.025]
+      }
+    },
+    "e_c474": {
+      "name": "Crate 474",
+      "order": "b8e",
+      "MeshRenderer": {
+        "size": [0.3474, 0.3474, 0.3474],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1737, 3.025]
+      }
+    },
+    "e_c475": {
+      "name": "Crate 475",
+      "order": "b8f",
+      "MeshRenderer": {
+        "size": [0.3475, 0.3475, 0.3475],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1737, 3.025]
+      }
+    },
+    "e_c476": {
+      "name": "Crate 476",
+      "order": "b8g",
+      "MeshRenderer": {
+        "size": [0.3476, 0.3476, 0.3476],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1738, 3.025]
+      }
+    },
+    "e_c477": {
+      "name": "Crate 477",
+      "order": "b8h",
+      "MeshRenderer": {
+        "size": [0.3477, 0.3477, 0.3477],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1739, 3.025]
+      }
+    },
+    "e_c478": {
+      "name": "Crate 478",
+      "order": "b8i",
+      "MeshRenderer": {
+        "size": [0.3478, 0.3478, 0.3478],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1739, 3.025]
+      }
+    },
+    "e_c479": {
+      "name": "Crate 479",
+      "order": "b8j",
+      "MeshRenderer": {
+        "size": [0.3479, 0.3479, 0.3479],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1739, 3.025]
+      }
+    },
+    "e_c48": {
+      "name": "Crate 48",
+      "order": "b1m",
+      "MeshRenderer": {
+        "size": [0.3048, 0.3048, 0.3048],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1524, -4.675]
+      }
+    },
+    "e_c480": {
+      "name": "Crate 480",
+      "order": "b8k",
+      "MeshRenderer": {
+        "size": [0.348, 0.348, 0.348],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.174, 3.575]
+      }
+    },
+    "e_c481": {
+      "name": "Crate 481",
+      "order": "b8l",
+      "MeshRenderer": {
+        "size": [0.3481, 0.3481, 0.3481],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1741, 3.575]
+      }
+    },
+    "e_c482": {
+      "name": "Crate 482",
+      "order": "b8m",
+      "MeshRenderer": {
+        "size": [0.3482, 0.3482, 0.3482],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1741, 3.575]
+      }
+    },
+    "e_c483": {
+      "name": "Crate 483",
+      "order": "b8n",
+      "MeshRenderer": {
+        "size": [0.3483, 0.3483, 0.3483],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1741, 3.575]
+      }
+    },
+    "e_c484": {
+      "name": "Crate 484",
+      "order": "b8o",
+      "MeshRenderer": {
+        "size": [0.3484, 0.3484, 0.3484],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1742, 3.575]
+      }
+    },
+    "e_c485": {
+      "name": "Crate 485",
+      "order": "b8p",
+      "MeshRenderer": {
+        "size": [0.3485, 0.3485, 0.3485],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1742, 3.575]
+      }
+    },
+    "e_c486": {
+      "name": "Crate 486",
+      "order": "b8q",
+      "MeshRenderer": {
+        "size": [0.3486, 0.3486, 0.3486],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1743, 3.575]
+      }
+    },
+    "e_c487": {
+      "name": "Crate 487",
+      "order": "b8r",
+      "MeshRenderer": {
+        "size": [0.3487, 0.3487, 0.3487],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1744, 3.575]
+      }
+    },
+    "e_c488": {
+      "name": "Crate 488",
+      "order": "b8s",
+      "MeshRenderer": {
+        "size": [0.3488, 0.3488, 0.3488],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1744, 3.575]
+      }
+    },
+    "e_c489": {
+      "name": "Crate 489",
+      "order": "b8t",
+      "MeshRenderer": {
+        "size": [0.3489, 0.3489, 0.3489],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1744, 3.575]
+      }
+    },
+    "e_c49": {
+      "name": "Crate 49",
+      "order": "b1n",
+      "MeshRenderer": {
+        "size": [0.3049, 0.3049, 0.3049],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1525, -4.675]
+      }
+    },
+    "e_c490": {
+      "name": "Crate 490",
+      "order": "b8u",
+      "MeshRenderer": {
+        "size": [0.349, 0.349, 0.349],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1745, 3.575]
+      }
+    },
+    "e_c491": {
+      "name": "Crate 491",
+      "order": "b8v",
+      "MeshRenderer": {
+        "size": [0.3491, 0.3491, 0.3491],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1746, 3.575]
+      }
+    },
+    "e_c492": {
+      "name": "Crate 492",
+      "order": "b8w",
+      "MeshRenderer": {
+        "size": [0.3492, 0.3492, 0.3492],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1746, 3.575]
+      }
+    },
+    "e_c493": {
+      "name": "Crate 493",
+      "order": "b8x",
+      "MeshRenderer": {
+        "size": [0.3493, 0.3493, 0.3493],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1746, 3.575]
+      }
+    },
+    "e_c494": {
+      "name": "Crate 494",
+      "order": "b8y",
+      "MeshRenderer": {
+        "size": [0.3494, 0.3494, 0.3494],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1747, 3.575]
+      }
+    },
+    "e_c495": {
+      "name": "Crate 495",
+      "order": "b8z",
+      "MeshRenderer": {
+        "size": [0.3495, 0.3495, 0.3495],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1747, 3.575]
+      }
+    },
+    "e_c496": {
+      "name": "Crate 496",
+      "order": "b90",
+      "MeshRenderer": {
+        "size": [0.3496, 0.3496, 0.3496],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1748, 3.575]
+      }
+    },
+    "e_c497": {
+      "name": "Crate 497",
+      "order": "b91",
+      "MeshRenderer": {
+        "size": [0.3497, 0.3497, 0.3497],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1749, 3.575]
+      }
+    },
+    "e_c498": {
+      "name": "Crate 498",
+      "order": "b92",
+      "MeshRenderer": {
+        "size": [0.3498, 0.3498, 0.3498],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1749, 3.575]
+      }
+    },
+    "e_c499": {
+      "name": "Crate 499",
+      "order": "b93",
+      "MeshRenderer": {
+        "size": [0.3499, 0.3499, 0.3499],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1749, 3.575]
+      }
+    },
+    "e_c5": {
+      "name": "Crate 5",
+      "order": "b15",
+      "MeshRenderer": {
+        "size": [0.3005, 0.3005, 0.3005],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1502, -5.225]
+      }
+    },
+    "e_c50": {
+      "name": "Crate 50",
+      "order": "b1o",
+      "MeshRenderer": {
+        "size": [0.305, 0.305, 0.305],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1525, -4.675]
+      }
+    },
+    "e_c500": {
+      "name": "Crate 500",
+      "order": "b94",
+      "MeshRenderer": {
+        "size": [0.35, 0.35, 0.35],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.175, 3.575]
+      }
+    },
+    "e_c501": {
+      "name": "Crate 501",
+      "order": "b95",
+      "MeshRenderer": {
+        "size": [0.3501, 0.3501, 0.3501],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1751, 3.575]
+      }
+    },
+    "e_c502": {
+      "name": "Crate 502",
+      "order": "b96",
+      "MeshRenderer": {
+        "size": [0.3502, 0.3502, 0.3502],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1751, 3.575]
+      }
+    },
+    "e_c503": {
+      "name": "Crate 503",
+      "order": "b97",
+      "MeshRenderer": {
+        "size": [0.3503, 0.3503, 0.3503],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1752, 3.575]
+      }
+    },
+    "e_c504": {
+      "name": "Crate 504",
+      "order": "b98",
+      "MeshRenderer": {
+        "size": [0.3504, 0.3504, 0.3504],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1752, 3.575]
+      }
+    },
+    "e_c505": {
+      "name": "Crate 505",
+      "order": "b99",
+      "MeshRenderer": {
+        "size": [0.3505, 0.3505, 0.3505],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1752, 3.575]
+      }
+    },
+    "e_c506": {
+      "name": "Crate 506",
+      "order": "b9A",
+      "MeshRenderer": {
+        "size": [0.3506, 0.3506, 0.3506],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1753, 3.575]
+      }
+    },
+    "e_c507": {
+      "name": "Crate 507",
+      "order": "b9B",
+      "MeshRenderer": {
+        "size": [0.3507, 0.3507, 0.3507],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1754, 3.575]
+      }
+    },
+    "e_c508": {
+      "name": "Crate 508",
+      "order": "b9C",
+      "MeshRenderer": {
+        "size": [0.3508, 0.3508, 0.3508],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1754, 3.575]
+      }
+    },
+    "e_c509": {
+      "name": "Crate 509",
+      "order": "b9D",
+      "MeshRenderer": {
+        "size": [0.3509, 0.3509, 0.3509],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1754, 3.575]
+      }
+    },
+    "e_c51": {
+      "name": "Crate 51",
+      "order": "b1p",
+      "MeshRenderer": {
+        "size": [0.3051, 0.3051, 0.3051],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1525, -4.675]
+      }
+    },
+    "e_c510": {
+      "name": "Crate 510",
+      "order": "b9E",
+      "MeshRenderer": {
+        "size": [0.351, 0.351, 0.351],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1755, 4.125]
+      }
+    },
+    "e_c511": {
+      "name": "Crate 511",
+      "order": "b9F",
+      "MeshRenderer": {
+        "size": [0.3511, 0.3511, 0.3511],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1756, 4.125]
+      }
+    },
+    "e_c512": {
+      "name": "Crate 512",
+      "order": "b9G",
+      "MeshRenderer": {
+        "size": [0.3512, 0.3512, 0.3512],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1756, 4.125]
+      }
+    },
+    "e_c513": {
+      "name": "Crate 513",
+      "order": "b9H",
+      "MeshRenderer": {
+        "size": [0.3513, 0.3513, 0.3513],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1757, 4.125]
+      }
+    },
+    "e_c514": {
+      "name": "Crate 514",
+      "order": "b9I",
+      "MeshRenderer": {
+        "size": [0.3514, 0.3514, 0.3514],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1757, 4.125]
+      }
+    },
+    "e_c515": {
+      "name": "Crate 515",
+      "order": "b9J",
+      "MeshRenderer": {
+        "size": [0.3515, 0.3515, 0.3515],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1757, 4.125]
+      }
+    },
+    "e_c516": {
+      "name": "Crate 516",
+      "order": "b9K",
+      "MeshRenderer": {
+        "size": [0.3516, 0.3516, 0.3516],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1758, 4.125]
+      }
+    },
+    "e_c517": {
+      "name": "Crate 517",
+      "order": "b9L",
+      "MeshRenderer": {
+        "size": [0.3517, 0.3517, 0.3517],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1759, 4.125]
+      }
+    },
+    "e_c518": {
+      "name": "Crate 518",
+      "order": "b9M",
+      "MeshRenderer": {
+        "size": [0.3518, 0.3518, 0.3518],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1759, 4.125]
+      }
+    },
+    "e_c519": {
+      "name": "Crate 519",
+      "order": "b9N",
+      "MeshRenderer": {
+        "size": [0.3519, 0.3519, 0.3519],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1759, 4.125]
+      }
+    },
+    "e_c52": {
+      "name": "Crate 52",
+      "order": "b1q",
+      "MeshRenderer": {
+        "size": [0.3052, 0.3052, 0.3052],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1526, -4.675]
+      }
+    },
+    "e_c520": {
+      "name": "Crate 520",
+      "order": "b9O",
+      "MeshRenderer": {
+        "size": [0.352, 0.352, 0.352],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.176, 4.125]
+      }
+    },
+    "e_c521": {
+      "name": "Crate 521",
+      "order": "b9P",
+      "MeshRenderer": {
+        "size": [0.3521, 0.3521, 0.3521],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1761, 4.125]
+      }
+    },
+    "e_c522": {
+      "name": "Crate 522",
+      "order": "b9Q",
+      "MeshRenderer": {
+        "size": [0.3522, 0.3522, 0.3522],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1761, 4.125]
+      }
+    },
+    "e_c523": {
+      "name": "Crate 523",
+      "order": "b9R",
+      "MeshRenderer": {
+        "size": [0.3523, 0.3523, 0.3523],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1762, 4.125]
+      }
+    },
+    "e_c524": {
+      "name": "Crate 524",
+      "order": "b9S",
+      "MeshRenderer": {
+        "size": [0.3524, 0.3524, 0.3524],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1762, 4.125]
+      }
+    },
+    "e_c525": {
+      "name": "Crate 525",
+      "order": "b9T",
+      "MeshRenderer": {
+        "size": [0.3525, 0.3525, 0.3525],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1762, 4.125]
+      }
+    },
+    "e_c526": {
+      "name": "Crate 526",
+      "order": "b9U",
+      "MeshRenderer": {
+        "size": [0.3526, 0.3526, 0.3526],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1763, 4.125]
+      }
+    },
+    "e_c527": {
+      "name": "Crate 527",
+      "order": "b9V",
+      "MeshRenderer": {
+        "size": [0.3527, 0.3527, 0.3527],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1764, 4.125]
+      }
+    },
+    "e_c528": {
+      "name": "Crate 528",
+      "order": "b9W",
+      "MeshRenderer": {
+        "size": [0.3528, 0.3528, 0.3528],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1764, 4.125]
+      }
+    },
+    "e_c529": {
+      "name": "Crate 529",
+      "order": "b9X",
+      "MeshRenderer": {
+        "size": [0.3529, 0.3529, 0.3529],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1764, 4.125]
+      }
+    },
+    "e_c53": {
+      "name": "Crate 53",
+      "order": "b1r",
+      "MeshRenderer": {
+        "size": [0.3053, 0.3053, 0.3053],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1527, -4.675]
+      }
+    },
+    "e_c530": {
+      "name": "Crate 530",
+      "order": "b9Y",
+      "MeshRenderer": {
+        "size": [0.353, 0.353, 0.353],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1765, 4.125]
+      }
+    },
+    "e_c531": {
+      "name": "Crate 531",
+      "order": "b9Z",
+      "MeshRenderer": {
+        "size": [0.3531, 0.3531, 0.3531],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1766, 4.125]
+      }
+    },
+    "e_c532": {
+      "name": "Crate 532",
+      "order": "b9a",
+      "MeshRenderer": {
+        "size": [0.3532, 0.3532, 0.3532],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1766, 4.125]
+      }
+    },
+    "e_c533": {
+      "name": "Crate 533",
+      "order": "b9b",
+      "MeshRenderer": {
+        "size": [0.3533, 0.3533, 0.3533],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1767, 4.125]
+      }
+    },
+    "e_c534": {
+      "name": "Crate 534",
+      "order": "b9c",
+      "MeshRenderer": {
+        "size": [0.3534, 0.3534, 0.3534],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1767, 4.125]
+      }
+    },
+    "e_c535": {
+      "name": "Crate 535",
+      "order": "b9d",
+      "MeshRenderer": {
+        "size": [0.3535, 0.3535, 0.3535],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1767, 4.125]
+      }
+    },
+    "e_c536": {
+      "name": "Crate 536",
+      "order": "b9e",
+      "MeshRenderer": {
+        "size": [0.3536, 0.3536, 0.3536],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1768, 4.125]
+      }
+    },
+    "e_c537": {
+      "name": "Crate 537",
+      "order": "b9f",
+      "MeshRenderer": {
+        "size": [0.3537, 0.3537, 0.3537],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1769, 4.125]
+      }
+    },
+    "e_c538": {
+      "name": "Crate 538",
+      "order": "b9g",
+      "MeshRenderer": {
+        "size": [0.3538, 0.3538, 0.3538],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1769, 4.125]
+      }
+    },
+    "e_c539": {
+      "name": "Crate 539",
+      "order": "b9h",
+      "MeshRenderer": {
+        "size": [0.3539, 0.3539, 0.3539],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1769, 4.125]
+      }
+    },
+    "e_c54": {
+      "name": "Crate 54",
+      "order": "b1s",
+      "MeshRenderer": {
+        "size": [0.3054, 0.3054, 0.3054],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1527, -4.675]
+      }
+    },
+    "e_c540": {
+      "name": "Crate 540",
+      "order": "b9i",
+      "MeshRenderer": {
+        "size": [0.354, 0.354, 0.354],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.177, 4.675]
+      }
+    },
+    "e_c541": {
+      "name": "Crate 541",
+      "order": "b9j",
+      "MeshRenderer": {
+        "size": [0.3541, 0.3541, 0.3541],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1771, 4.675]
+      }
+    },
+    "e_c542": {
+      "name": "Crate 542",
+      "order": "b9k",
+      "MeshRenderer": {
+        "size": [0.3542, 0.3542, 0.3542],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1771, 4.675]
+      }
+    },
+    "e_c543": {
+      "name": "Crate 543",
+      "order": "b9l",
+      "MeshRenderer": {
+        "size": [0.3543, 0.3543, 0.3543],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1772, 4.675]
+      }
+    },
+    "e_c544": {
+      "name": "Crate 544",
+      "order": "b9m",
+      "MeshRenderer": {
+        "size": [0.3544, 0.3544, 0.3544],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1772, 4.675]
+      }
+    },
+    "e_c545": {
+      "name": "Crate 545",
+      "order": "b9n",
+      "MeshRenderer": {
+        "size": [0.3545, 0.3545, 0.3545],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1772, 4.675]
+      }
+    },
+    "e_c546": {
+      "name": "Crate 546",
+      "order": "b9o",
+      "MeshRenderer": {
+        "size": [0.3546, 0.3546, 0.3546],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1773, 4.675]
+      }
+    },
+    "e_c547": {
+      "name": "Crate 547",
+      "order": "b9p",
+      "MeshRenderer": {
+        "size": [0.3547, 0.3547, 0.3547],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1774, 4.675]
+      }
+    },
+    "e_c548": {
+      "name": "Crate 548",
+      "order": "b9q",
+      "MeshRenderer": {
+        "size": [0.3548, 0.3548, 0.3548],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1774, 4.675]
+      }
+    },
+    "e_c549": {
+      "name": "Crate 549",
+      "order": "b9r",
+      "MeshRenderer": {
+        "size": [0.3549, 0.3549, 0.3549],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1774, 4.675]
+      }
+    },
+    "e_c55": {
+      "name": "Crate 55",
+      "order": "b1t",
+      "MeshRenderer": {
+        "size": [0.3055, 0.3055, 0.3055],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1527, -4.675]
+      }
+    },
+    "e_c550": {
+      "name": "Crate 550",
+      "order": "b9s",
+      "MeshRenderer": {
+        "size": [0.355, 0.355, 0.355],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1775, 4.675]
+      }
+    },
+    "e_c551": {
+      "name": "Crate 551",
+      "order": "b9t",
+      "MeshRenderer": {
+        "size": [0.3551, 0.3551, 0.3551],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1776, 4.675]
+      }
+    },
+    "e_c552": {
+      "name": "Crate 552",
+      "order": "b9u",
+      "MeshRenderer": {
+        "size": [0.3552, 0.3552, 0.3552],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1776, 4.675]
+      }
+    },
+    "e_c553": {
+      "name": "Crate 553",
+      "order": "b9v",
+      "MeshRenderer": {
+        "size": [0.3553, 0.3553, 0.3553],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1777, 4.675]
+      }
+    },
+    "e_c554": {
+      "name": "Crate 554",
+      "order": "b9w",
+      "MeshRenderer": {
+        "size": [0.3554, 0.3554, 0.3554],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1777, 4.675]
+      }
+    },
+    "e_c555": {
+      "name": "Crate 555",
+      "order": "b9x",
+      "MeshRenderer": {
+        "size": [0.3555, 0.3555, 0.3555],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1777, 4.675]
+      }
+    },
+    "e_c556": {
+      "name": "Crate 556",
+      "order": "b9y",
+      "MeshRenderer": {
+        "size": [0.3556, 0.3556, 0.3556],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1778, 4.675]
+      }
+    },
+    "e_c557": {
+      "name": "Crate 557",
+      "order": "b9z",
+      "MeshRenderer": {
+        "size": [0.3557, 0.3557, 0.3557],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1779, 4.675]
+      }
+    },
+    "e_c558": {
+      "name": "Crate 558",
+      "order": "bA0",
+      "MeshRenderer": {
+        "size": [0.3558, 0.3558, 0.3558],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1779, 4.675]
+      }
+    },
+    "e_c559": {
+      "name": "Crate 559",
+      "order": "bA1",
+      "MeshRenderer": {
+        "size": [0.3559, 0.3559, 0.3559],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1779, 4.675]
+      }
+    },
+    "e_c56": {
+      "name": "Crate 56",
+      "order": "b1u",
+      "MeshRenderer": {
+        "size": [0.3056, 0.3056, 0.3056],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1528, -4.675]
+      }
+    },
+    "e_c560": {
+      "name": "Crate 560",
+      "order": "bA2",
+      "MeshRenderer": {
+        "size": [0.356, 0.356, 0.356],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.178, 4.675]
+      }
+    },
+    "e_c561": {
+      "name": "Crate 561",
+      "order": "bA3",
+      "MeshRenderer": {
+        "size": [0.3561, 0.3561, 0.3561],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1781, 4.675]
+      }
+    },
+    "e_c562": {
+      "name": "Crate 562",
+      "order": "bA4",
+      "MeshRenderer": {
+        "size": [0.3562, 0.3562, 0.3562],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1781, 4.675]
+      }
+    },
+    "e_c563": {
+      "name": "Crate 563",
+      "order": "bA5",
+      "MeshRenderer": {
+        "size": [0.3563, 0.3563, 0.3563],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1782, 4.675]
+      }
+    },
+    "e_c564": {
+      "name": "Crate 564",
+      "order": "bA6",
+      "MeshRenderer": {
+        "size": [0.3564, 0.3564, 0.3564],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1782, 4.675]
+      }
+    },
+    "e_c565": {
+      "name": "Crate 565",
+      "order": "bA7",
+      "MeshRenderer": {
+        "size": [0.3565, 0.3565, 0.3565],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1782, 4.675]
+      }
+    },
+    "e_c566": {
+      "name": "Crate 566",
+      "order": "bA8",
+      "MeshRenderer": {
+        "size": [0.3566, 0.3566, 0.3566],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1783, 4.675]
+      }
+    },
+    "e_c567": {
+      "name": "Crate 567",
+      "order": "bA9",
+      "MeshRenderer": {
+        "size": [0.3567, 0.3567, 0.3567],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1784, 4.675]
+      }
+    },
+    "e_c568": {
+      "name": "Crate 568",
+      "order": "bAA",
+      "MeshRenderer": {
+        "size": [0.3568, 0.3568, 0.3568],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1784, 4.675]
+      }
+    },
+    "e_c569": {
+      "name": "Crate 569",
+      "order": "bAB",
+      "MeshRenderer": {
+        "size": [0.3569, 0.3569, 0.3569],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1784, 4.675]
+      }
+    },
+    "e_c57": {
+      "name": "Crate 57",
+      "order": "b1v",
+      "MeshRenderer": {
+        "size": [0.3057, 0.3057, 0.3057],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1529, -4.675]
+      }
+    },
+    "e_c570": {
+      "name": "Crate 570",
+      "order": "bAC",
+      "MeshRenderer": {
+        "size": [0.357, 0.357, 0.357],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1785, 5.225]
+      }
+    },
+    "e_c571": {
+      "name": "Crate 571",
+      "order": "bAD",
+      "MeshRenderer": {
+        "size": [0.3571, 0.3571, 0.3571],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1785, 5.225]
+      }
+    },
+    "e_c572": {
+      "name": "Crate 572",
+      "order": "bAE",
+      "MeshRenderer": {
+        "size": [0.3572, 0.3572, 0.3572],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1786, 5.225]
+      }
+    },
+    "e_c573": {
+      "name": "Crate 573",
+      "order": "bAF",
+      "MeshRenderer": {
+        "size": [0.3573, 0.3573, 0.3573],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1787, 5.225]
+      }
+    },
+    "e_c574": {
+      "name": "Crate 574",
+      "order": "bAG",
+      "MeshRenderer": {
+        "size": [0.3574, 0.3574, 0.3574],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1787, 5.225]
+      }
+    },
+    "e_c575": {
+      "name": "Crate 575",
+      "order": "bAH",
+      "MeshRenderer": {
+        "size": [0.3575, 0.3575, 0.3575],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1787, 5.225]
+      }
+    },
+    "e_c576": {
+      "name": "Crate 576",
+      "order": "bAI",
+      "MeshRenderer": {
+        "size": [0.3576, 0.3576, 0.3576],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1788, 5.225]
+      }
+    },
+    "e_c577": {
+      "name": "Crate 577",
+      "order": "bAJ",
+      "MeshRenderer": {
+        "size": [0.3577, 0.3577, 0.3577],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1789, 5.225]
+      }
+    },
+    "e_c578": {
+      "name": "Crate 578",
+      "order": "bAK",
+      "MeshRenderer": {
+        "size": [0.3578, 0.3578, 0.3578],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1789, 5.225]
+      }
+    },
+    "e_c579": {
+      "name": "Crate 579",
+      "order": "bAL",
+      "MeshRenderer": {
+        "size": [0.3579, 0.3579, 0.3579],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1789, 5.225]
+      }
+    },
+    "e_c58": {
+      "name": "Crate 58",
+      "order": "b1w",
+      "MeshRenderer": {
+        "size": [0.3058, 0.3058, 0.3058],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1529, -4.675]
+      }
+    },
+    "e_c580": {
+      "name": "Crate 580",
+      "order": "bAM",
+      "MeshRenderer": {
+        "size": [0.358, 0.358, 0.358],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.179, 5.225]
+      }
+    },
+    "e_c581": {
+      "name": "Crate 581",
+      "order": "bAN",
+      "MeshRenderer": {
+        "size": [0.3581, 0.3581, 0.3581],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.179, 5.225]
+      }
+    },
+    "e_c582": {
+      "name": "Crate 582",
+      "order": "bAO",
+      "MeshRenderer": {
+        "size": [0.3582, 0.3582, 0.3582],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1791, 5.225]
+      }
+    },
+    "e_c583": {
+      "name": "Crate 583",
+      "order": "bAP",
+      "MeshRenderer": {
+        "size": [0.3583, 0.3583, 0.3583],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1792, 5.225]
+      }
+    },
+    "e_c584": {
+      "name": "Crate 584",
+      "order": "bAQ",
+      "MeshRenderer": {
+        "size": [0.3584, 0.3584, 0.3584],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1792, 5.225]
+      }
+    },
+    "e_c585": {
+      "name": "Crate 585",
+      "order": "bAR",
+      "MeshRenderer": {
+        "size": [0.3585, 0.3585, 0.3585],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1792, 5.225]
+      }
+    },
+    "e_c586": {
+      "name": "Crate 586",
+      "order": "bAS",
+      "MeshRenderer": {
+        "size": [0.3586, 0.3586, 0.3586],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1793, 5.225]
+      }
+    },
+    "e_c587": {
+      "name": "Crate 587",
+      "order": "bAT",
+      "MeshRenderer": {
+        "size": [0.3587, 0.3587, 0.3587],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1794, 5.225]
+      }
+    },
+    "e_c588": {
+      "name": "Crate 588",
+      "order": "bAU",
+      "MeshRenderer": {
+        "size": [0.3588, 0.3588, 0.3588],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1794, 5.225]
+      }
+    },
+    "e_c589": {
+      "name": "Crate 589",
+      "order": "bAV",
+      "MeshRenderer": {
+        "size": [0.3589, 0.3589, 0.3589],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.1794, 5.225]
+      }
+    },
+    "e_c59": {
+      "name": "Crate 59",
+      "order": "b1x",
+      "MeshRenderer": {
+        "size": [0.3059, 0.3059, 0.3059],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.153, -4.675]
+      }
+    },
+    "e_c590": {
+      "name": "Crate 590",
+      "order": "bAW",
+      "MeshRenderer": {
+        "size": [0.359, 0.359, 0.359],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.1795, 5.225]
+      }
+    },
+    "e_c591": {
+      "name": "Crate 591",
+      "order": "bAX",
+      "MeshRenderer": {
+        "size": [0.3591, 0.3591, 0.3591],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.1795, 5.225]
+      }
+    },
+    "e_c592": {
+      "name": "Crate 592",
+      "order": "bAY",
+      "MeshRenderer": {
+        "size": [0.3592, 0.3592, 0.3592],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1796, 5.225]
+      }
+    },
+    "e_c593": {
+      "name": "Crate 593",
+      "order": "bAZ",
+      "MeshRenderer": {
+        "size": [0.3593, 0.3593, 0.3593],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1797, 5.225]
+      }
+    },
+    "e_c594": {
+      "name": "Crate 594",
+      "order": "bAa",
+      "MeshRenderer": {
+        "size": [0.3594, 0.3594, 0.3594],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1797, 5.225]
+      }
+    },
+    "e_c595": {
+      "name": "Crate 595",
+      "order": "bAb",
+      "MeshRenderer": {
+        "size": [0.3595, 0.3595, 0.3595],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1797, 5.225]
+      }
+    },
+    "e_c596": {
+      "name": "Crate 596",
+      "order": "bAc",
+      "MeshRenderer": {
+        "size": [0.3596, 0.3596, 0.3596],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1798, 5.225]
+      }
+    },
+    "e_c597": {
+      "name": "Crate 597",
+      "order": "bAd",
+      "MeshRenderer": {
+        "size": [0.3597, 0.3597, 0.3597],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1799, 5.225]
+      }
+    },
+    "e_c598": {
+      "name": "Crate 598",
+      "order": "bAe",
+      "MeshRenderer": {
+        "size": [0.3598, 0.3598, 0.3598],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1799, 5.225]
+      }
+    },
+    "e_c599": {
+      "name": "Crate 599",
+      "order": "bAf",
+      "MeshRenderer": {
+        "size": [0.3599, 0.3599, 0.3599],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1799, 5.225]
+      }
+    },
+    "e_c6": {
+      "name": "Crate 6",
+      "order": "b16",
+      "MeshRenderer": {
+        "size": [0.3006, 0.3006, 0.3006],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1503, -5.225]
+      }
+    },
+    "e_c60": {
+      "name": "Crate 60",
+      "order": "b1y",
+      "MeshRenderer": {
+        "size": [0.306, 0.306, 0.306],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.153, -4.125]
+      }
+    },
+    "e_c61": {
+      "name": "Crate 61",
+      "order": "b1z",
+      "MeshRenderer": {
+        "size": [0.3061, 0.3061, 0.3061],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.153, -4.125]
+      }
+    },
+    "e_c62": {
+      "name": "Crate 62",
+      "order": "b20",
+      "MeshRenderer": {
+        "size": [0.3062, 0.3062, 0.3062],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1531, -4.125]
+      }
+    },
+    "e_c63": {
+      "name": "Crate 63",
+      "order": "b21",
+      "MeshRenderer": {
+        "size": [0.3063, 0.3063, 0.3063],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1532, -4.125]
+      }
+    },
+    "e_c64": {
+      "name": "Crate 64",
+      "order": "b22",
+      "MeshRenderer": {
+        "size": [0.3064, 0.3064, 0.3064],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1532, -4.125]
+      }
+    },
+    "e_c65": {
+      "name": "Crate 65",
+      "order": "b23",
+      "MeshRenderer": {
+        "size": [0.3065, 0.3065, 0.3065],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1532, -4.125]
+      }
+    },
+    "e_c66": {
+      "name": "Crate 66",
+      "order": "b24",
+      "MeshRenderer": {
+        "size": [0.3066, 0.3066, 0.3066],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1533, -4.125]
+      }
+    },
+    "e_c67": {
+      "name": "Crate 67",
+      "order": "b25",
+      "MeshRenderer": {
+        "size": [0.3067, 0.3067, 0.3067],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1533, -4.125]
+      }
+    },
+    "e_c68": {
+      "name": "Crate 68",
+      "order": "b26",
+      "MeshRenderer": {
+        "size": [0.3068, 0.3068, 0.3068],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1534, -4.125]
+      }
+    },
+    "e_c69": {
+      "name": "Crate 69",
+      "order": "b27",
+      "MeshRenderer": {
+        "size": [0.3069, 0.3069, 0.3069],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1535, -4.125]
+      }
+    },
+    "e_c7": {
+      "name": "Crate 7",
+      "order": "b17",
+      "MeshRenderer": {
+        "size": [0.3007, 0.3007, 0.3007],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1504, -5.225]
+      }
+    },
+    "e_c70": {
+      "name": "Crate 70",
+      "order": "b28",
+      "MeshRenderer": {
+        "size": [0.307, 0.307, 0.307],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-2.475, 0.1535, -4.125]
+      }
+    },
+    "e_c71": {
+      "name": "Crate 71",
+      "order": "b29",
+      "MeshRenderer": {
+        "size": [0.3071, 0.3071, 0.3071],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.925, 0.1535, -4.125]
+      }
+    },
+    "e_c72": {
+      "name": "Crate 72",
+      "order": "b2A",
+      "MeshRenderer": {
+        "size": [0.3072, 0.3072, 0.3072],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-1.375, 0.1536, -4.125]
+      }
+    },
+    "e_c73": {
+      "name": "Crate 73",
+      "order": "b2B",
+      "MeshRenderer": {
+        "size": [0.3073, 0.3073, 0.3073],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.825, 0.1537, -4.125]
+      }
+    },
+    "e_c74": {
+      "name": "Crate 74",
+      "order": "b2C",
+      "MeshRenderer": {
+        "size": [0.3074, 0.3074, 0.3074],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-0.275, 0.1537, -4.125]
+      }
+    },
+    "e_c75": {
+      "name": "Crate 75",
+      "order": "b2D",
+      "MeshRenderer": {
+        "size": [0.3075, 0.3075, 0.3075],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.275, 0.1537, -4.125]
+      }
+    },
+    "e_c76": {
+      "name": "Crate 76",
+      "order": "b2E",
+      "MeshRenderer": {
+        "size": [0.3076, 0.3076, 0.3076],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [0.825, 0.1538, -4.125]
+      }
+    },
+    "e_c77": {
+      "name": "Crate 77",
+      "order": "b2F",
+      "MeshRenderer": {
+        "size": [0.3077, 0.3077, 0.3077],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.375, 0.1538, -4.125]
+      }
+    },
+    "e_c78": {
+      "name": "Crate 78",
+      "order": "b2G",
+      "MeshRenderer": {
+        "size": [0.3078, 0.3078, 0.3078],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [1.925, 0.1539, -4.125]
+      }
+    },
+    "e_c79": {
+      "name": "Crate 79",
+      "order": "b2H",
+      "MeshRenderer": {
+        "size": [0.3079, 0.3079, 0.3079],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [2.475, 0.154, -4.125]
+      }
+    },
+    "e_c8": {
+      "name": "Crate 8",
+      "order": "b18",
+      "MeshRenderer": {
+        "size": [0.3008, 0.3008, 0.3008],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1504, -5.225]
+      }
+    },
+    "e_c80": {
+      "name": "Crate 80",
+      "order": "b2I",
+      "MeshRenderer": {
+        "size": [0.308, 0.308, 0.308],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.025, 0.154, -4.125]
+      }
+    },
+    "e_c81": {
+      "name": "Crate 81",
+      "order": "b2J",
+      "MeshRenderer": {
+        "size": [0.3081, 0.3081, 0.3081],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [3.575, 0.154, -4.125]
+      }
+    },
+    "e_c82": {
+      "name": "Crate 82",
+      "order": "b2K",
+      "MeshRenderer": {
+        "size": [0.3082, 0.3082, 0.3082],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.125, 0.1541, -4.125]
+      }
+    },
+    "e_c83": {
+      "name": "Crate 83",
+      "order": "b2L",
+      "MeshRenderer": {
+        "size": [0.3083, 0.3083, 0.3083],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [4.675, 0.1542, -4.125]
+      }
+    },
+    "e_c84": {
+      "name": "Crate 84",
+      "order": "b2M",
+      "MeshRenderer": {
+        "size": [0.3084, 0.3084, 0.3084],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.225, 0.1542, -4.125]
+      }
+    },
+    "e_c85": {
+      "name": "Crate 85",
+      "order": "b2N",
+      "MeshRenderer": {
+        "size": [0.3085, 0.3085, 0.3085],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [5.775, 0.1542, -4.125]
+      }
+    },
+    "e_c86": {
+      "name": "Crate 86",
+      "order": "b2O",
+      "MeshRenderer": {
+        "size": [0.3086, 0.3086, 0.3086],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.325, 0.1543, -4.125]
+      }
+    },
+    "e_c87": {
+      "name": "Crate 87",
+      "order": "b2P",
+      "MeshRenderer": {
+        "size": [0.3087, 0.3087, 0.3087],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [6.875, 0.1543, -4.125]
+      }
+    },
+    "e_c88": {
+      "name": "Crate 88",
+      "order": "b2Q",
+      "MeshRenderer": {
+        "size": [0.3088, 0.3088, 0.3088],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.425, 0.1544, -4.125]
+      }
+    },
+    "e_c89": {
+      "name": "Crate 89",
+      "order": "b2R",
+      "MeshRenderer": {
+        "size": [0.3089, 0.3089, 0.3089],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [7.975, 0.1545, -4.125]
+      }
+    },
+    "e_c9": {
+      "name": "Crate 9",
+      "order": "b19",
+      "MeshRenderer": {
+        "size": [0.3009, 0.3009, 0.3009],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.1505, -5.225]
+      }
+    },
+    "e_c90": {
+      "name": "Crate 90",
+      "order": "b2S",
+      "MeshRenderer": {
+        "size": [0.309, 0.309, 0.309],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.975, 0.1545, -3.575]
+      }
+    },
+    "e_c91": {
+      "name": "Crate 91",
+      "order": "b2T",
+      "MeshRenderer": {
+        "size": [0.3091, 0.3091, 0.3091],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-7.425, 0.1545, -3.575]
+      }
+    },
+    "e_c92": {
+      "name": "Crate 92",
+      "order": "b2U",
+      "MeshRenderer": {
+        "size": [0.3092, 0.3092, 0.3092],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.875, 0.1546, -3.575]
+      }
+    },
+    "e_c93": {
+      "name": "Crate 93",
+      "order": "b2V",
+      "MeshRenderer": {
+        "size": [0.3093, 0.3093, 0.3093],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-6.325, 0.1547, -3.575]
+      }
+    },
+    "e_c94": {
+      "name": "Crate 94",
+      "order": "b2W",
+      "MeshRenderer": {
+        "size": [0.3094, 0.3094, 0.3094],
+        "color": [0.7, 0.2, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.775, 0.1547, -3.575]
+      }
+    },
+    "e_c95": {
+      "name": "Crate 95",
+      "order": "b2X",
+      "MeshRenderer": {
+        "size": [0.3095, 0.3095, 0.3095],
+        "color": [0.1, 0.65, 0.7, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-5.225, 0.1547, -3.575]
+      }
+    },
+    "e_c96": {
+      "name": "Crate 96",
+      "order": "b2Y",
+      "MeshRenderer": {
+        "size": [0.3096, 0.3096, 0.3096],
+        "color": [0.8, 0.08, 0.06, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.675, 0.1548, -3.575]
+      }
+    },
+    "e_c97": {
+      "name": "Crate 97",
+      "order": "b2Z",
+      "MeshRenderer": {
+        "size": [0.3097, 0.3097, 0.3097],
+        "color": [0.08, 0.6, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-4.125, 0.1548, -3.575]
+      }
+    },
+    "e_c98": {
+      "name": "Crate 98",
+      "order": "b2a",
+      "MeshRenderer": {
+        "size": [0.3098, 0.3098, 0.3098],
+        "color": [0.1, 0.15, 0.8, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.575, 0.1549, -3.575]
+      }
+    },
+    "e_c99": {
+      "name": "Crate 99",
+      "order": "b2b",
+      "MeshRenderer": {
+        "size": [0.3099, 0.3099, 0.3099],
+        "color": [0.85, 0.7, 0.1, 1],
+        "roughness": 0.5
+      },
+      "Transform": {
+        "position": [-3.025, 0.155, -3.575]
+      }
+    },
+    "e_camera": {
+      "name": "Camera",
+      "order": "a3",
+      "Camera": {
+        "fov": 50
+      },
+      "Transform": {
+        "position": [0, 7.5, 10.5],
+        "rotation": [-35.537678, 0, 0]
+      }
+    },
+    "e_env": {
+      "name": "Studio",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.5, 0.48, 0.45, 1],
+        "horizon": [0.6, 0.55, 0.5, 1],
+        "ground": [0.25, 0.22, 0.2, 1],
+        "exposure": 0.002
+      }
+    },
+    "e_floor": {
+      "name": "Floor",
+      "order": "a2",
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [24, 1, 24],
+        "color": [0.55, 0.55, 0.55, 1],
+        "roughness": 0.7
+      },
+      "Transform": {}
+    },
+    "e_sun": {
+      "name": "Key light",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.95, 0.88, 1],
+        "intensity": 2200
+      },
+      "Transform": {
+        "position": [0, 10, 0],
+        "rotation": [-56.30994, -26.529753, -33.821842]
+      }
+    }
+  }
+}

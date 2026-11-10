@@ -94,6 +94,11 @@ scene with a constant sky of the sky image's mean radiance, to measure what the 
 - `cargo test -p ara-renderlab --test render`: a hand-built frame, an HDR sky and a
   601-group crowd (batching; boxes moved and removed) through the presenter on each
   path the adapter supports.
+- `fixtures/gaps/`: `levels/crowd.scene` (600 boxes, 601 groups: batching) and
+  `levels/effects.scene` (campfire, smoke, sparks, swirl). From that folder:
+  `ARA_RENDERER=renderlab-rt ara capture --scene levels/effects.scene --ev100 4 --ticks 120`
+  (crowd: `--ev100 10`); add `--video 60 --video-move 2,0,0 --video-yaw 20` for a moving
+  camera, `--video 6 --video-yaw 300` for cuts.
 - A GPU check renders a real scene: `ara-player --renderer renderlab-rt --headless
   --capture <png> --root <export>` (see the PR that added this crate for the commands).
 
