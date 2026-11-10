@@ -71,6 +71,8 @@ pub(crate) struct Bridge {
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
+    /// The last frame's eye and view direction, to notice a view that jumps.
+    last_view: Option<([f32; 3], [f32; 3])>,
 }
 
 impl Bridge {
@@ -147,6 +149,7 @@ impl Bridge {
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
+            last_view: None,
         })
     }
 
@@ -201,6 +204,13 @@ impl Bridge {
             self.applied.lights = lights;
         }
 
+        // A view that jumps (a camera cut, a teleport) shares nothing with the history
+        // Renderlab accumulated: it starts over, as before a capture.
+        if let Some(camera) = frame.camera {
+            let view = (camera.position, camera.forward);
+            self.cut |= self.last_view.is_some_and(|last| jumped(last, view));
+            self.last_view = Some(view);
+        }
         if std::mem::take(&mut self.cut) {
             self.engine.cut();
         }
@@ -408,6 +418,14 @@ impl Bridge {
         }
         Ok(())
     }
+}
+
+/// Whether the view moved further in one frame than a continuous camera does: more
+/// than 45 degrees, or more than 20 metres.
+fn jumped(last: ([f32; 3], [f32; 3]), now: ([f32; 3], [f32; 3])) -> bool {
+    let dot: f32 = last.1.iter().zip(now.1).map(|(a, b)| a * b).sum();
+    let moved: f32 = last.0.iter().zip(now.0).map(|(a, b)| (a - b) * (a - b)).sum();
+    dot < std::f32::consts::FRAC_1_SQRT_2 || moved > 20. * 20.
 }
 
 /// Brings a new target image to `CopySource`, where the shared copy expects it.
