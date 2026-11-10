@@ -196,6 +196,7 @@ impl Windowed {
         ara_gpu::cpu_scope!("Player.device_and_warm_pipelines");
         let (window, extensions, size) = Self::open_unprepared(name, size, offscreen)?;
         let mut presenter = Presenter::new(size, extensions, cache);
+        crate::renderer::install(&mut presenter, cache);
         presenter.set_quality(quality);
         presenter.set_render_options(options);
         presenter.prepare(&warm_frame())?;
