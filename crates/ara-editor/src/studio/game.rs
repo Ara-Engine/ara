@@ -64,11 +64,14 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
         Some((w, h)) => view.w(w).h(h),
         None => view.grow(1.0).w_full(),
     };
+    // With nothing live to show, a notice sits on the panel's own surface, so it reads
+    // whatever the view's hole would show.
     let notice = |glyph, title: &str, detail: &str| {
         col()
             .absolute(0.0, 0.0)
             .w_full()
             .h_full()
+            .fill(super::style::tones(l).well)
             .justify(Justify::Center)
             .align(Align::Center)
             .child(empty(l, glyph, title, detail, None))

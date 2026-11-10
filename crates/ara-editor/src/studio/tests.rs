@@ -2151,6 +2151,8 @@ fn captures() {
             "lighting",
             "profiler",
             "mesh-paint",
+            "game",
+            "build",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
