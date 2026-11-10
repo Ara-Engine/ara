@@ -50,6 +50,8 @@ pub(crate) fn install(presenter: &mut Presenter, cache: &Path) {
             .and_then(|value| value.parse().ok()),
         // `ARA_RENDERLAB_HANDOFF=copy` forces the CPU copy, to measure it against sharing.
         cpu_copy_handoff: std::env::var("ARA_RENDERLAB_HANDOFF").is_ok_and(|value| value == "copy"),
+        // `ARA_RENDERLAB_SKY=constant` measures what a sky map costs in Renderlab.
+        constant_sky: std::env::var("ARA_RENDERLAB_SKY").is_ok_and(|value| value == "constant"),
     };
     let installed = Renderlab::new(&options)
         .and_then(|renderlab| presenter.set_external_renderer(Some(Box::new(renderlab))));

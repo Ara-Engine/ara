@@ -68,12 +68,14 @@ pub struct Options {
     /// Directory for Renderlab's persistent pipeline cache (kept apart from Ara's).
     pub pipeline_cache: Option<PathBuf>,
     /// Roughness at which Renderlab stops tracing reflections; `None` keeps its own
-    /// default (0.5). Its glossy band (above 0.05) can leave bright speckles on glossy
-    /// surfaces at v0.1.2; 0.05 traces mirrors only.
+    /// default (0.5); 0.05 traces mirrors only (an A/B switch for the glossy band's cost).
     pub max_reflection_roughness: Option<f32>,
     /// Hand frames to the presenter by CPU copy even where the two devices could
     /// share images (A/B measurements; the automatic fallback needs no flag).
     pub cpu_copy_handoff: bool,
+    /// Light the scene with a constant sky of the sky image's mean radiance instead of
+    /// the image itself. For A/B measurement of what a sky map costs in Renderlab.
+    pub constant_sky: bool,
 }
 
 /// Renderlab behind Ara's presenter.

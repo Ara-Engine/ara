@@ -61,6 +61,8 @@ pub(crate) struct Bridge {
     applied: Applied,
     metering: Metering,
     max_reflection_roughness: Option<f32>,
+    /// A sky image lights the scene as a constant of its mean radiance (`Options`).
+    constant_sky: bool,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
     /// Frames until the shared route next reads a frame back for the meter.
@@ -139,6 +141,7 @@ impl Bridge {
             applied: Applied::default(),
             metering: Metering::new(),
             max_reflection_roughness: options.max_reflection_roughness,
+            constant_sky: options.constant_sky,
             cpu_copy: options.cpu_copy_handoff,
             meter_wait: 0,
             gpu_ms: None,
@@ -358,6 +361,9 @@ impl Bridge {
         let mut replaced = None;
         let sky = match lighting::sky(view, &mut self.gaps) {
             SkySource::Atmosphere => Sky::Atmosphere(AtmosphereMedium::default()),
+            SkySource::Map { size, pixels } if self.constant_sky => {
+                Sky::Uniform(environment::mean_radiance(size, &pixels))
+            }
             SkySource::Map { size, pixels } => {
                 let key = environment::key(size, &pixels);
                 let map = match self.applied.sky_map {

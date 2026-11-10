@@ -36,6 +36,24 @@ pub(crate) fn key(size: [u32; 2], pixels: &[[f32; 4]]) -> u64 {
     hash
 }
 
+/// Mean radiance of an equirectangular image's upper hemisphere, weighted by solid
+/// angle: the constant sky that sends the same light down (`Options::constant_sky`).
+pub(crate) fn mean_radiance(size: [u32; 2], pixels: &[[f32; 4]]) -> [f32; 3] {
+    let [width, height] = size.map(|v| v as usize);
+    let (mut sum, mut weight) = ([0f64; 3], 0f64);
+    for (y, row) in pixels.chunks(width.max(1)).take(height / 2).enumerate() {
+        let elevation = PI / 2. - (y as f64 + 0.5) / height as f64 * PI;
+        let w = elevation.cos();
+        for pixel in row {
+            for (s, c) in sum.iter_mut().zip(pixel) {
+                *s += f64::from(c.max(0.)) * w;
+            }
+            weight += w;
+        }
+    }
+    sum.map(|s| if weight > 0. { (s / weight) as f32 } else { 0. })
+}
+
 /// An equirectangular image with a box-filtered mip pyramid, sampled by direction.
 struct Source {
     /// Width, height and texels of each level, largest first.
