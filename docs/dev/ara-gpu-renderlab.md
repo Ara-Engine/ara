@@ -95,5 +95,5 @@ The test is ignored only on macOS. Exercise a physical shared-family device too;
 selection tests alone cannot prove its queue submission/ownership path. Re-cook
 shaders on the canonical host; never merge generated cooked artifacts.
 
-Decision override: D35 supersedes S1's dedicated compute-family assumption.
+Decision override: D36 supersedes S1's dedicated compute-family assumption.
 No other locked decision is overridden.
