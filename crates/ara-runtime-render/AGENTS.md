@@ -8,7 +8,7 @@ device and per-view upload state; no simulation, window or process code.
 
 ## Public API
 - `graphics::plan` composes user scalability overrides (screen GI follows the GI group); `Presenter::set_graphics_settings` adopts them at frame boundaries. Texture/foliage budgets replace native content; unchanged preferences reuse the plan. See `docs/dev/graphics-settings.md`.
-
+- `set_external_renderer(Box<dyn ExternalRenderer>)`: presents, captures and `live_image` draw the frame with that renderer and publish its image as `output()` (Renderlab: `ara-renderlab`, D35); Ara keeps its bootstrap scene.
 - `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the renderer is
   created on the first frame (headless when `window_extensions` is empty).
 - `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
