@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 mod snap;
 
 /// A native geometry hit and its source draw, borrowed from the presented scene snapshot.
-pub(in crate::app) struct SurfaceHit<'a> {
+pub(crate) struct SurfaceHit<'a> {
     /// Presented instance identity, including primitives without an ordinary draw.
     pub entity: u64,
     /// Position on the nearest triangle, in world metres.
@@ -29,7 +29,7 @@ struct Pick {
 impl SceneView {
     /// The retained geometry belongs to this document. A previous scene's
     /// last-good image may stay visible, but cannot accept authoring snap input.
-    pub(in crate::app) fn snap_ready(&self, doc: &str) -> bool {
+    pub(crate) fn snap_ready(&self, doc: &str) -> bool {
         if self
             .raster
             .as_ref()
@@ -81,7 +81,7 @@ impl SceneView {
     }
 
     /// Native mesh query used by Drop to Surface; no invented ground-plane hit.
-    pub(in crate::app) fn ray_hit_excluding(
+    pub(crate) fn ray_hit_excluding(
         &self,
         origin: Vec3,
         direction: Vec3,

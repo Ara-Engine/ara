@@ -63,7 +63,7 @@ fn folded(module: &str) -> &str {
 
 /// Components the whole selection lacks: name, folded module, first doc line.
 fn addable(s: &Studio) -> Vec<(String, String, String)> {
-    let selection = &s.editor.state.selection;
+    let selection = s.inspected();
     let on_all = |name: &str| {
         selection.iter().all(|e| {
             s.resolved
@@ -292,7 +292,24 @@ fn picker(s: &Studio, p: &Picker) -> El<Studio> {
         ),
         None => String::new(),
     };
-    panel.child(list).child(
+    let hover = c.hover_surface.0;
+    let new_script = row()
+        .key("inspector/add/script")
+        .h(28.0)
+        .pad_x(12.0)
+        .gap(8.0)
+        .align(Align::Center)
+        .color(c.foreground.0)
+        .cascade_ink()
+        .label("New script")
+        .tooltip("Create a C# behaviour, name it, and attach it once it compiles")
+        .hovered(move |e| e.fill(hover))
+        .on_press(|s: &mut Studio| {
+            super::commands::run(s, "component.new_script", &crate::catalog::Target::None)
+        })
+        .child(icon(icons::FILE_CODE).size(13.0))
+        .child(text("New script…").text_size(12.0));
+    panel.child(list).child(new_script).child(
         row()
             .min_h(44.0)
             .pad_x(12.0)
@@ -461,9 +478,7 @@ fn add(s: &mut Studio, name: &str) {
     recent.insert(0, name.to_owned());
     recent.truncate(5);
     let commands = s
-        .editor
-        .state
-        .selection
+        .inspected()
         .iter()
         .map(|e| json!({"cmd": "component.add", "args": {"entity": e, "component": name}}))
         .collect();

@@ -92,7 +92,7 @@ fn show(s: &mut Studio, path: &str, kind: &str) {
     let Some(browser) = s.assets.as_mut() else {
         return;
     };
-    if let Ok(storage) = crate::shell::ops::authored::storage(&browser.files, workspace, path) {
+    if let Ok(storage) = crate::authored::storage(&browser.files, workspace, path) {
         browser.insert_path(&storage, kind);
     }
     browser.refresh();
@@ -112,12 +112,9 @@ fn resource(s: &mut Studio, domain: &str, stem: &str, extension: &str) -> anyhow
         s.resolve();
         s.act("editor.focus", json!({"panel": "scene"}));
     } else {
-        s.act("editor.workspace", json!({"resource": doc, "asset": ""}));
-        super::commands::run(
-            s,
-            &format!("window.{domain}"),
-            &crate::shell::commands::Target::None,
-        );
+        if let Some(doc) = doc.as_str() {
+            super::commands::open_resource(s, doc, "");
+        }
     }
     show(s, &path, extension);
     Ok(())
@@ -154,12 +151,8 @@ fn script(s: &mut Studio, kind: &str) -> anyhow::Result<()> {
         format!("{folder}/{name}")
     };
     let storage = match &s.assets {
-        Some(b) => crate::shell::ops::authored::storage(
-            &b.files,
-            s.editor.host.store().workspace(),
-            &logical,
-        )
-        .map_err(|e| anyhow::anyhow!("{e}"))?,
+        Some(b) => crate::authored::storage(&b.files, s.editor.host.store().workspace(), &logical)
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
         None => logical,
     };
     let created = s.editor.action(
@@ -170,8 +163,22 @@ fn script(s: &mut Studio, kind: &str) -> anyhow::Result<()> {
         if let Some(browser) = s.assets.as_mut() {
             browser.insert_path(path, "cs");
         }
-        s.act("editor.workspace", json!({"asset": path}));
+        // Assets opens its folder, so the name field shows.
+        let folder = path.rsplit_once('/').map_or("", |(dir, _)| dir);
+        s.act("editor.layout.show", json!({"panel": "assets"}));
+        s.act(
+            "editor.workspace",
+            json!({"folder": folder, "asset": path, "assetQuery": ""}),
+        );
         s.local.inspect_asset = true;
+        // Named in place before it compiles (Unity's new script): Enter compiles it.
+        let stem = path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".cs");
+        s.local.asset_rename = Some((path.to_owned(), stem.to_owned()));
+        s.local.focus = Some("asset/rename");
     }
     Ok(())
 }

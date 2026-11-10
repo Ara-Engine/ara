@@ -2,15 +2,13 @@
 //! The worker's semantic file index supplies profiles; build.rs owns exporting.
 use super::*;
 use ara_export::preset::PackageFormat;
-use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
 use ara_ui::{
     dialogs::{DialogFuture, DialogOptions},
     input::InputEvent,
 };
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
-/// Typed preference shared by the Settings form, profile select and build commands.
-pub(crate) const PROFILE_SETTING: &str = "build.profile";
+use crate::build::{PROFILE_SETTING, package_formats, profiles, selected_profile};
 const ROOT: &str = "build-options";
 const CONTROL: &str = "build-profile-select";
 
@@ -27,37 +25,6 @@ pub(crate) struct State {
     package: bool,
     format: Option<PackageFormat>,
     pending: Option<Pending>,
-}
-
-/// Profile names accepted by the build API, resolved from cached project entries.
-/// Canonical settings/builds entries take precedence over indexed legacy presets.
-pub(crate) fn profiles(files: &[AuthoredFile]) -> Vec<String> {
-    let mut names = BTreeMap::new();
-    for file in files {
-        if !matches!(&file.scope, AuthoredScope::Project)
-            || !matches!(&file.role, AuthoredRole::BuildPreset)
-        {
-            continue;
-        }
-        let Some((name, canonical)) = profile_name(&file.storage_path) else {
-            continue;
-        };
-        names
-            .entry(name.to_owned())
-            .and_modify(|existing: &mut bool| *existing |= canonical)
-            .or_insert(canonical);
-    }
-    names.into_keys().collect()
-}
-
-fn profile_name(storage: &str) -> Option<(&str, bool)> {
-    let (name, canonical) = storage
-        .strip_prefix("settings/builds/")
-        .map(|name| (name, true))
-        .or_else(|| storage.strip_prefix("presets/").map(|name| (name, false)))?;
-    let name = name.strip_suffix(".export.json")?;
-    (!name.is_empty() && !name.contains(['/', '\\']) && !name.chars().any(char::is_control))
-        .then_some((name, canonical))
 }
 
 impl Shell {
@@ -148,7 +115,8 @@ impl Shell {
             .build_options
             .format
             .unwrap_or(PackageFormat::WindowsPortable);
-        self.package_profile(editor, &profile, None, format)?;
+        self.builder
+            .package_profile(editor, &profile, None, format)?;
         self.build_options.open = false;
         self.rebuild(editor)
     }
@@ -172,11 +140,11 @@ impl Shell {
                         .unwrap_or("")
                         .is_empty() =>
             {
-                return self.build_current(editor);
+                return self.builder.build_current(editor);
             }
             Err(_) => return self.open_build_options(editor),
         };
-        self.build_profile(editor, &profile, None)?;
+        self.builder.build_profile(editor, &profile, None)?;
         self.build_options.open = false;
         self.rebuild(editor)
     }
@@ -243,9 +211,12 @@ impl Shell {
                 let destination = (!destination.is_empty()).then(|| PathBuf::from(destination));
                 match pending.format {
                     Some(format) => {
-                        self.package_profile(editor, &pending.profile, destination, format)
+                        self.builder
+                            .package_profile(editor, &pending.profile, destination, format)
                     }
-                    None => self.build_profile(editor, &pending.profile, destination),
+                    None => self
+                        .builder
+                        .build_profile(editor, &pending.profile, destination),
                 }
             })();
             match result {
@@ -325,13 +296,13 @@ impl Shell {
             out.push_str("<button id='build-profile-create' class='kit-dialog-button ghost' text='Create default profile' action='Dispatch' />");
         }
         out.push_str("<text id='build-options-output-note' class='caption' style='white-space:normal;flex-shrink:0' text='Build creates a new output folder for this profile. Choose output to provide a new destination instead.' />");
-        if let Some(game) = &self.last_build {
+        if let Some(game) = &self.builder.last_build {
             out.push_str(&format!("<text id='package-result-player-title' class='caption' style='flex-shrink:0' text='Last completed player folder' /><text id='package-result-player-path' class='mono caption' style='white-space:normal;flex-shrink:0' text='{}' />",escape(&game.to_string_lossy())));
         }
-        if !self.last_packages.is_empty() {
+        if !self.builder.last_packages.is_empty() {
             out.push_str("<text id='package-result-title' class='caption' text='Last completed package files' style='flex-shrink:0' />");
-            for index in 0..self.last_packages.len() {
-                let artifact = &self.last_packages[index];
+            for index in 0..self.builder.last_packages.len() {
+                let artifact = &self.builder.last_packages[index];
                 let path = artifact.path.to_string_lossy().into_owned();
                 let bytes = artifact.bytes;
                 let id = format!("package-result-{:016x}", ara_ui::source::stable_id(&path));
@@ -387,38 +358,6 @@ impl Shell {
         }
         Ok(true)
     }
-}
-
-fn package_formats() -> [(PackageFormat, &'static str); 6] {
-    [
-        (PackageFormat::Folder, "Plain folder"),
-        (PackageFormat::WindowsPortable, "Windows portable ZIP"),
-        (PackageFormat::WindowsInstaller, "Windows installer + ZIP"),
-        (PackageFormat::LinuxAppimage, "Linux AppImage"),
-        (PackageFormat::LinuxTar, "Linux tar.gz"),
-        (PackageFormat::AndroidPlay, "Android APK + AAB"),
-    ]
-}
-
-fn selected_profile<'a>(names: &'a [String], selected: &str) -> ara_ui::Result<&'a str> {
-    if !selected.is_empty() {
-        return names
-            .iter()
-            .find(|name| name.as_str() == selected)
-            .map(String::as_str)
-            .ok_or_else(|| {
-                format!("Build profile '{selected}' is unavailable. Choose an indexed profile.")
-                    .into()
-            });
-    }
-    names
-        .iter()
-        .find(|name| name.as_str() == build::DEFAULT_PROFILE)
-        .or_else(|| names.first())
-        .map(String::as_str)
-        .ok_or_else(|| {
-            "Create a build profile first, then wait for the project index to refresh".into()
-        })
 }
 
 #[cfg(test)]
