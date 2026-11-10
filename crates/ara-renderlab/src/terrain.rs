@@ -114,7 +114,10 @@ impl Terrain {
 
         // Foliage: rebuilt when the terrain generation, the resident tiles or the
         // resolved parts change.
-        let mut key = fnv(FNV, &(std::sync::Arc::as_ptr(&terrain.data) as usize).to_le_bytes());
+        let mut key = fnv(
+            FNV,
+            &(std::sync::Arc::as_ptr(&terrain.data) as usize).to_le_bytes(),
+        );
         for coord in &coords {
             key = fnv(fnv(key, &coord.x.to_le_bytes()), &coord.z.to_le_bytes());
         }
@@ -190,7 +193,10 @@ impl Terrain {
                 }
                 let mut entity = fnv(FNV, &instance.identity[0].to_le_bytes());
                 entity = fnv(entity, &instance.identity[1].to_le_bytes());
-                entity = fnv(fnv(entity, &rule.to_le_bytes()), &(index as u32).to_le_bytes());
+                entity = fnv(
+                    fnv(entity, &rule.to_le_bytes()),
+                    &(index as u32).to_le_bytes(),
+                );
                 self.foliage.push(Draw {
                     entity: FOLIAGE_ENTITY | (entity & 0x0000_ffff_ffff_ffff),
                     world: placed * part.world,
@@ -244,7 +250,10 @@ impl Layers {
         let mut colours = [[1.; 3]; 4];
         let (mut roughness, mut key) = (0., FNV);
         for (colour, reference) in colours.iter_mut().zip(references) {
-            let material = view.terrain_materials.get(&reference.0).map(|m| &m.material);
+            let material = view
+                .terrain_materials
+                .get(&reference.0)
+                .map(|m| &m.material);
             if let Some(material) = material {
                 colour.copy_from_slice(&material.base_color[..3]);
             }

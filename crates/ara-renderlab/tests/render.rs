@@ -300,7 +300,10 @@ fn an_hdr_environment_map_backs_and_lights_the_frame() {
                 blue += f32::from(p[2]);
             }
         }
-        assert!(blue > red * 1.3, "{name}: sky rows are not blue ({red} vs {blue})");
+        assert!(
+            blue > red * 1.3,
+            "{name}: sky rows are not blue ({red} vs {blue})"
+        );
         // The floor in front is lit by that sky: neither black nor flat white.
         let floor = capture.image.get_pixel(SIZE[0] / 2, SIZE[1] - 20).0;
         assert!((20..250).contains(&floor[1]), "{name}: floor {floor:?}");
