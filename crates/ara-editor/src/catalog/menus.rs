@@ -842,6 +842,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("console.copy"),
             C("console.collapse"),
             C("console.clear_on_play"),
+            C("console.error_pause"),
             C("console.clear"),
         ],
         Context::Profiler => &[

@@ -942,11 +942,46 @@ fn console(s: &Studio) -> El<Studio> {
         ara_diag::Severity::Info,
     ]
     .map(|sev| s.logs.iter().filter(|r| r.severity == sev).count());
-    let shown: Vec<&LogRow> = s
+    let query = s.local.console_search.trim().to_lowercase();
+    let matches = |r: &&LogRow| {
+        query.is_empty()
+            || r.message.to_lowercase().contains(&query)
+            || r.code.to_lowercase().contains(&query)
+            || r.origin.to_lowercase().contains(&query)
+            || r.source
+                .as_deref()
+                .is_some_and(|s| s.to_lowercase().contains(&query))
+    };
+    let filtered = s
         .logs
         .iter()
         .filter(|r| s.local.console[level(r.severity)])
-        .collect();
+        .filter(matches);
+    // Collapse: one row per repeated record, its latest, counting them all (Unity).
+    let shown: Vec<LogRow> = if s.local.console_collapse {
+        let mut merged: Vec<LogRow> = Vec::new();
+        let mut at: std::collections::HashMap<(String, String, Option<String>), usize> =
+            std::collections::HashMap::new();
+        for r in filtered {
+            let key = (r.code.clone(), r.message.clone(), r.source.clone());
+            match at.get(&key) {
+                Some(&i) => {
+                    let count = merged[i].count + r.count.max(1);
+                    merged[i] = LogRow { count, ..r.clone() };
+                }
+                None => {
+                    at.insert(key, merged.len());
+                    merged.push(LogRow {
+                        count: r.count.max(1),
+                        ..r.clone()
+                    });
+                }
+            }
+        }
+        merged
+    } else {
+        filtered.cloned().collect()
+    };
     // Severity filters: the icon in its colour and the count, a soft fill while shown.
     let c = &l.c;
     let toggle = |i: usize, glyph, label: &str| {
@@ -991,11 +1026,73 @@ fn console(s: &Studio) -> El<Studio> {
         .child(toggle(0, icons::CIRCLE_X, "Errors"))
         .child(toggle(1, icons::TRIANGLE_ALERT, "Warnings"))
         .child(toggle(2, icons::INFO, "Messages"))
+        .child(
+            row().w(220.0).child(
+                search(
+                    l,
+                    "console/search",
+                    "Search messages",
+                    &s.local.console_search,
+                    None,
+                    |f| f.on_input(|s: &mut Studio, t| s.local.console_search = t.to_owned()),
+                    |s: &mut Studio| s.local.console_search.clear(),
+                )
+                .grow(1.0),
+            ),
+        )
         .child(el().grow(1.0))
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::LAYERS,
+                "Collapse repeated messages",
+                s.local.console_collapse,
+            )
+            .key("console/collapse")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.collapse", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::ROTATE_CCW,
+                "Clear on Play",
+                s.editor
+                    .state
+                    .settings
+                    .get("console.clearOnPlay")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            )
+            .key("console/clear-on-play")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.clear_on_play", &crate::catalog::Target::None)
+            }),
+        )
+        .child(
+            super::scene_overlays::toggle(
+                l,
+                icons::CIRCLE_PAUSE,
+                "Pause Play on an error",
+                s.editor
+                    .state
+                    .settings
+                    .get("console.errorPause")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            )
+            .key("console/error-pause")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "console.error_pause", &crate::catalog::Target::None)
+            }),
+        )
         .child(
             button(l, Tone::Ghost, Size::Sm, Some(icons::TRASH), "Clear")
                 .key("console/clear")
-                .on_press(|s: &mut Studio| s.logs.clear()),
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "console.clear", &crate::catalog::Target::None)
+                }),
         );
     let body = if shown.is_empty() {
         empty(
@@ -1006,8 +1103,7 @@ fn console(s: &Studio) -> El<Studio> {
             None,
         )
     } else {
-        let rows: std::sync::Arc<Vec<LogRow>> =
-            std::sync::Arc::new(shown.into_iter().cloned().collect());
+        let rows: std::sync::Arc<Vec<LogRow>> = std::sync::Arc::new(shown);
         let n = rows.len();
         let look = l.clone();
         let open = s.local.console_open;
@@ -1057,7 +1153,46 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                 .color(c.foreground.0),
         );
     }
+    let copy = format!(
+        "{} {}{}",
+        r.code,
+        r.message,
+        r.source
+            .as_deref()
+            .map(|s| format!(" ({s})"))
+            .unwrap_or_default()
+    );
     head = head.child(el().grow(1.0)).child(
+        icon_button(l, Tone::Ghost, Size::Sm, icons::COPY, "Copy message")
+            .key("console/detail/copy")
+            .on_press(move |s: &mut Studio| s.local.copy = Some(copy.clone())),
+    );
+    // Its source file opens where the system opens it (scripts in their IDE).
+    if let Some(file) = r
+        .source
+        .as_deref()
+        .map(|s| s.split(':').next().unwrap_or(s).to_owned())
+    {
+        let path = s.editor.host.root().join(&file);
+        if path.is_file() {
+            head = head.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::EXTERNAL_LINK,
+                    "Open source",
+                )
+                .key("console/detail/open")
+                .on_press(move |s: &mut Studio| {
+                    if let Err(error) = crate::shell::ops::open_external(&path) {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                }),
+            );
+        }
+    }
+    head = head.child(
         icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close details")
             .on_press(|s: &mut Studio| s.local.console_open = None),
     );
