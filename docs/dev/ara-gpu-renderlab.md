@@ -364,7 +364,12 @@ CPU microbenchmark, not a frame-speed claim. Evidence:
 `vulkan/context/queues.rs`) runs the storage-image handoff probe on the device's real
 queue selection: compute to graphics and graphics to compute, each immediate and
 under deferred completion. The release and acquire barriers carry two different
-family indices there; the forced shared-family test omits them. A device whose
-graphics and compute classes share one family prints `skipped:` and passes. It is
+family indices there; the forced shared-family test omits them. A Vulkan device whose
+graphics and compute classes share one family prints `skipped:` and passes; with no
+Vulkan device it fails at device creation, as the sibling probes do. A skip looks like
+a pass in the report, so gates known to have two families (NVIDIA, RADV) set
+`ARA_REQUIRE_DISTINCT_FAMILIES=1`, which turns the skip into a failure. Run it in a
+debug build: synchronization validation is what detects a missing or mismatched
+transfer, and the byte read-back cannot, because both families share memory. It is
 ignored on macOS like the other Vulkan hardware probes, so it compiles on the Mac but
 has not run: the first native result comes from the Linux and Windows gates.
