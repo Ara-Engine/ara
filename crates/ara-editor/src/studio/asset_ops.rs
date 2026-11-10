@@ -137,6 +137,23 @@ pub(super) fn open(s: &mut Studio, a: &Asset) {
     }
 }
 
+/// Imports external `files` into storage folder `folder` (else the folder Assets shows),
+/// as Unity imports a drop into the open folder. The batch is checked first; files that
+/// already exist there wait for Rename, Replace or Skip.
+pub(super) fn import(s: &mut Studio, files: Vec<std::path::PathBuf>, folder: Option<&str>) {
+    let storage = folder.map_or_else(|| s.editor.state.asset_folder.clone(), str::to_owned);
+    let destination = match s.assets.as_ref() {
+        Some(b) => b.authored_folder_ref(&storage).map(str::to_owned),
+        None => Err("Assets are still being read".to_owned()),
+    };
+    let result = destination
+        .map_err(Into::into)
+        .and_then(|destination| s.importer.import(&mut s.editor, files, destination));
+    if let Err(error) = result {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+    }
+}
+
 /// What Show in Finder opens: a folder itself, a file's folder.
 fn reveal_target(s: &Studio, a: &Asset) -> std::path::PathBuf {
     let root = s.editor.host.root();
@@ -147,13 +164,48 @@ fn reveal_target(s: &Studio, a: &Asset) -> std::path::PathBuf {
     }
 }
 
-/// Runs an authored file transaction on the project (one undo step).
+/// Runs an authored file transaction on the project (one undo step). File work runs on
+/// a host job; the host loop follows it ([`poll_jobs`]).
 fn transact(s: &mut Studio, commands: Vec<serde_json::Value>, why: &str) -> anyhow::Result<()> {
-    s.editor.action(
+    let reply = s.editor.action(
         "cmd.apply",
         json!({"doc": "ara.project.json", "commands": commands, "why": why}),
     )?;
+    if let Some(job) = crate::asset_import::backend::accepted_job(&reply) {
+        s.local.asset_jobs.push((job.to_owned(), why.to_owned()));
+    }
     Ok(())
+}
+
+/// Follows file operations' jobs: one that ends rescans Assets (so what moved shows where
+/// it went), one that fails says why. Whether any ended.
+pub(super) fn poll_jobs(s: &mut Studio) -> bool {
+    let mut ended = false;
+    let jobs = std::mem::take(&mut s.local.asset_jobs);
+    for (job, why) in jobs {
+        let status = s.editor.action("jobs.status", json!({"job": job}));
+        let status = match status {
+            Ok(raw) => crate::asset_import::backend::Status::read(raw),
+            Err(error) => {
+                s.editor.report_failure(&error);
+                ended = true;
+                continue;
+            }
+        };
+        if status.running() {
+            s.local.asset_jobs.push((job, why));
+            continue;
+        }
+        ended = true;
+        if !status.succeeded() {
+            s.editor
+                .report_failure(&*anyhow::anyhow!("{why}: {}", status.summary()));
+        }
+    }
+    if ended && let Some(b) = s.assets.as_ref() {
+        b.refresh();
+    }
+    ended
 }
 
 fn duplicate(s: &mut Studio, a: Asset) -> anyhow::Result<()> {
@@ -203,6 +255,48 @@ pub(super) fn rename(s: &mut Studio, path: &str, name: &str) {
             };
             b.remove_path(&a.path);
             b.insert_path(&storage, &a.kind);
+            b.refresh();
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        s.editor.report_failure(&*error);
+    }
+}
+
+/// Moves `path` (a file or folder) into storage folder `folder`, its references updated in
+/// the same transaction; shows at once.
+pub(super) fn move_to(s: &mut Studio, path: &str, folder: &str) {
+    s.local.assets_view.moving = None;
+    let Some(a) = target(s, &Target::Asset(path.to_owned())) else {
+        return;
+    };
+    let result = (|| -> anyhow::Result<()> {
+        let destination = s
+            .assets
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Assets are still being read"))?
+            .authored_folder_ref(folder)
+            .map_err(|e| anyhow::anyhow!("{e}"))?
+            .to_owned();
+        let plan = crate::shell::asset_ops::plan::move_to(vec![a.clone()], &destination)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        transact(s, plan.calls, &plan.title)?;
+        if let Some(b) = s.assets.as_mut() {
+            let name = a
+                .path
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or(&a.path);
+            b.remove_path(&a.path);
+            b.insert_path(
+                &match folder {
+                    "" => name.to_owned(),
+                    folder => format!("{folder}/{name}"),
+                },
+                &a.kind,
+            );
             b.refresh();
         }
         Ok(())

@@ -53,6 +53,30 @@ pub(crate) fn field_accepts(
     }
 }
 impl Asset {
+    /// Whether it is a support file Assets hides unless Show All Files is on (notes,
+    /// JSON, solution files). Documents and project settings always show, whatever
+    /// their extension.
+    pub(crate) fn is_noise(&self) -> bool {
+        if self.document_kind.is_some() || self.authored_path.is_none() {
+            return false;
+        }
+        matches!(
+            self.kind.as_str(),
+            "bin"
+                | "md"
+                | "toml"
+                | "json"
+                | "csproj"
+                | "sln"
+                | "slnx"
+                | "lock"
+                | "txt"
+                | "log"
+                | "tmp"
+                | "gitignore"
+                | "gitattributes"
+        )
+    }
     pub(super) fn unindexed(path: String, kind: String) -> Self {
         Self {
             path,

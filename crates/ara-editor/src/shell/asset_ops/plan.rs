@@ -79,7 +79,7 @@ pub(crate) fn delete(sources: Vec<assets::Asset>) -> ara_ui::Result<Plan> {
         false,
     ))
 }
-pub(super) fn move_to(sources: Vec<assets::Asset>, folder: &str) -> ara_ui::Result<Plan> {
+pub(crate) fn move_to(sources: Vec<assets::Asset>, folder: &str) -> ara_ui::Result<Plan> {
     let mut calls = Vec::new();
     let mut labels = Vec::new();
     let mut changes = Vec::new();

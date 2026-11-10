@@ -97,6 +97,12 @@ pub struct AssetsView {
     pub forward: Vec<String>,
     /// The Add menu is open.
     pub add: bool,
+    /// Project files that are not assets show too (notes, JSON, solution files).
+    pub show_all: bool,
+    /// The view menu (⋯) is open.
+    pub menu: bool,
+    /// Move to Folder: the asset moving and the folder search typed.
+    pub moving: Option<(String, String)>,
 }
 
 /// The type filters: id, label, icon.
@@ -316,7 +322,22 @@ fn assets(s: &Studio) -> El<Studio> {
         .child(add)
         .child(crumbs.grow(1.0).pad_x(4.0))
         .child(search)
-        .child(sizes);
+        .children((!query.trim().is_empty()).then(|| {
+            icon_button(
+                l,
+                Tone::Ghost,
+                Size::Sm,
+                icons::BOOKMARK,
+                "Save this search",
+            )
+            .size(22.0)
+            .key("assets/search/save")
+            .on_press(|s: &mut Studio| {
+                super::commands::run(s, "assets.search.save", &crate::catalog::Target::None)
+            })
+        }))
+        .child(sizes)
+        .child(view_menu(s));
     // Type filters (Unreal's filter bar): one type across the whole project.
     let mut chips = row()
         .h(24.0)
@@ -378,7 +399,7 @@ fn assets(s: &Studio) -> El<Studio> {
                 .rsplit('/')
                 .next()
                 .is_some_and(|n| n.starts_with('.'));
-            if hidden {
+            if hidden || (!s.local.assets_view.show_all && a.is_noise()) {
                 false
             } else if let Some(only) = s.local.assets_view.filter {
                 category(a) == Some(only)
@@ -435,7 +456,7 @@ fn assets(s: &Studio) -> El<Studio> {
                 l,
                 icons::FOLDER_OPEN,
                 "This folder is empty",
-                "Drop files onto the window to import them.",
+                "Drop files here from Finder or Explorer to import them, or use Import… in ⋯.",
                 None,
             )
         } else {
@@ -495,12 +516,21 @@ fn assets(s: &Studio) -> El<Studio> {
             })
     };
     // Unity's Project window: the folder tree beside the folder's contents.
-    let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
+    let right = col()
+        .w(0.0)
+        .grow(1.0)
+        .min_h(0.0)
+        .child(toolbar)
+        .children(import_strip(s))
+        .child(body);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
         .child(folder_tree(s, browser, &folder))
         .child(right);
+    if let Some(dialog) = conflicts_dialog(s).or_else(|| move_dialog(s, browser)) {
+        root = root.overlay(dialog);
+    }
     if let Some(path) = s.local.asset_delete.clone() {
         let name = path
             .trim_end_matches('/')
@@ -533,6 +563,426 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     root
+}
+
+/// The Assets view menu (⋯): Import, what shows (every file, the folder only), thumbnails.
+fn view_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let open = s.local.assets_view.menu;
+    let mut b = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key("assets/menu")
+        .expanded(open)
+        .on_press(|s: &mut Studio| s.local.assets_view.menu = !s.local.assets_view.menu);
+    if !open {
+        return b;
+    }
+    let run = |id: &'static str| {
+        move |s: &mut Studio| {
+            s.local.assets_view.menu = false;
+            super::commands::run(s, id, &crate::catalog::Target::None);
+        }
+    };
+    let items = vec![
+        menu_item(
+            l,
+            "assets/menu/import",
+            Some(icons::DOWNLOAD),
+            "Import…",
+            None,
+            false,
+        )
+        .on_press(run("assets.import")),
+        menu_separator(l),
+        menu_check(
+            l,
+            "assets/menu/all",
+            "Show All Files",
+            s.local.assets_view.show_all,
+        )
+        .on_press(run("assets.show_all")),
+        menu_check(
+            l,
+            "assets/menu/scope",
+            "Search Within Current Folder",
+            s.editor.state.asset_search_folder_only,
+        )
+        .on_press(run("assets.search.scope")),
+        menu_separator(l),
+        menu_item(
+            l,
+            "assets/menu/thumbnails",
+            Some(icons::IMAGE),
+            "Rebuild Thumbnails",
+            None,
+            false,
+        )
+        .on_press(run("assets.rebuild_thumbnails")),
+        menu_item(
+            l,
+            "assets/menu/refresh",
+            Some(icons::REFRESH_CW),
+            "Refresh",
+            None,
+            false,
+        )
+        .on_press(run("assets.refresh")),
+    ];
+    b = b.overlay(
+        stillkit::el::menu(menu_panel(l, items))
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::End)
+            .on_dismiss(|s: &mut Studio| s.local.assets_view.menu = false),
+    );
+    b
+}
+
+/// Every folder Assets knows (listed, or holding a listed file), without a trailing `/`.
+fn folders(browser: &crate::shell::assets::Browser) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for a in &browser.items {
+        let path = a.path.trim_end_matches('/');
+        let mut at = if a.kind == "folder" {
+            path
+        } else {
+            parent(path)
+        };
+        while !at.is_empty() && out.insert(at.to_owned()) {
+            at = parent(at);
+        }
+    }
+    out
+}
+
+/// The keys of every folder an asset can be dropped on (tree rows, folder tiles), for the
+/// host to report where they lie while an asset is dragged.
+pub(super) fn drop_keys(s: &Studio) -> Vec<String> {
+    let Some(browser) = s.assets.as_ref() else {
+        return Vec::new();
+    };
+    let mut keys = vec!["assets/tree/".to_owned()];
+    for folder in folders(browser) {
+        keys.push(format!("asset/{folder}"));
+        keys.push(format!("asset/{folder}/"));
+        keys.push(format!("assets/tree/{folder}"));
+    }
+    keys
+}
+
+/// The folder under window point `at` (a tree row or a folder tile), `""` for Project.
+fn folder_at(s: &Studio, at: (f32, f32)) -> Option<String> {
+    s.local.rects.iter().find_map(|(key, r)| {
+        let folder = key
+            .strip_prefix("assets/tree/")
+            .or_else(|| key.strip_prefix("asset/"))?;
+        (at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom)
+            .then(|| folder.trim_end_matches('/').to_owned())
+    })
+}
+
+/// Favourites and saved searches, above the folder tree (Unity's Favorites).
+fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let state = &s.editor.state;
+    let mut out = Vec::new();
+    let heading = |label: &str| {
+        row().h(22.0).pad_x(6.0).align(Align::Center).child(
+            text(label.to_owned())
+                .text_size(11.0)
+                .weight(600)
+                .color(c.muted_foreground.0),
+        )
+    };
+    let line = |key: String, glyph, name: String, on_press: Box<dyn Fn(&mut Studio)>| {
+        let hover = c.hover_surface.0;
+        row()
+            .key(key)
+            .h(super::style::ROW)
+            .pad_x(6.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(super::style::RADIUS)
+            .label(name.clone())
+            .hovered(move |e| e.fill(hover))
+            .on_press(move |s: &mut Studio| on_press(s))
+            .child(icon(glyph).size(12.0).color(c.warning.0))
+            .child(
+                text(name)
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(1)
+                    .w(0.0)
+                    .grow(1.0),
+            )
+    };
+    if !state.asset_favourites.is_empty() {
+        out.push(heading("Favourites"));
+        for path in state.asset_favourites.keys() {
+            let name = path
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or(path);
+            let target = crate::catalog::Target::Text(path.clone());
+            out.push(line(
+                format!("assets/favourite/{path}"),
+                icons::STAR,
+                if name.is_empty() { "Project" } else { name }.to_owned(),
+                Box::new(move |s| super::commands::run(s, "assets.favourite.open", &target)),
+            ));
+        }
+    }
+    if !state.asset_saved_searches.is_empty() {
+        out.push(heading("Searches"));
+        for name in state.asset_saved_searches.keys() {
+            let (open, remove) = (
+                crate::catalog::Target::Text(name.clone()),
+                crate::catalog::Target::Text(name.clone()),
+            );
+            out.push(
+                line(
+                    format!("assets/saved/{name}"),
+                    icons::SEARCH,
+                    name.clone(),
+                    Box::new(move |s| super::commands::run(s, "assets.search.apply", &open)),
+                )
+                .child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Remove this search")
+                        .size(18.0)
+                        .key(format!("assets/saved/{name}/remove"))
+                        .on_press(move |s: &mut Studio| {
+                            super::commands::run(s, "assets.search.remove", &remove)
+                        }),
+                ),
+            );
+        }
+    }
+    if !out.is_empty() {
+        out.push(el().h(6.0));
+    }
+    out
+}
+
+/// A running import (its message, progress and Cancel), or how the last one ended.
+fn import_strip(s: &Studio) -> Option<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let strip = || {
+        row()
+            .key("assets/import")
+            .h(26.0)
+            .pad_x(8.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .fill(super::style::tones(l).band)
+    };
+    if let Some((message, fraction)) = s.importer.progress() {
+        let mut out = strip()
+            .child(spinner(l, 12.0))
+            .child(
+                text(message.to_owned())
+                    .text_size(11.5)
+                    .color(c.foreground.0)
+                    .wrap(1),
+            )
+            .child(progress(l, fraction, Status::Info).w(120.0))
+            .child(el().grow(1.0));
+        if s.importer.can_cancel() {
+            out = out.child(
+                button(l, Tone::Ghost, Size::Sm, None, "Cancel")
+                    .key("assets/import/cancel")
+                    .on_press(|s: &mut Studio| {
+                        super::commands::run(
+                            s,
+                            "assets.import.cancel",
+                            &crate::catalog::Target::None,
+                        )
+                    }),
+            );
+        }
+        return Some(out);
+    }
+    let note = s.importer.note.clone()?;
+    Some(
+        strip()
+            .child(icon(icons::DOWNLOAD).size(12.0).color(c.muted_foreground.0))
+            .child(
+                text(note)
+                    .text_size(11.5)
+                    .color(c.muted_foreground.0)
+                    .wrap(1)
+                    .w(0.0)
+                    .grow(1.0),
+            )
+            .child(
+                icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Dismiss")
+                    .size(18.0)
+                    .key("assets/import/dismiss")
+                    .on_press(|s: &mut Studio| s.importer.note = None),
+            ),
+    )
+}
+
+/// Files the import would overwrite: Rename keeps both, Replace updates the assets, Skip
+/// leaves them (Unity asks the same).
+fn conflicts_dialog(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let conflicts = s.importer.conflicts.as_ref()?;
+    let count = conflicts.labels.len();
+    let mut list = col().gap(2.0);
+    for label in conflicts.labels.iter().take(8) {
+        list = list.child(
+            text(label.clone())
+                .text_size(11.5)
+                .family(mono())
+                .color(c.foreground.0)
+                .wrap(1),
+        );
+    }
+    if count > 8 {
+        list = list.child(
+            text(format!("… and {} more", count - 8))
+                .text_size(11.5)
+                .color(c.muted_foreground.0),
+        );
+    }
+    let choose = |policy: Option<&'static str>| {
+        move |s: &mut Studio| {
+            if let Err(error) = s.importer.resolve(&mut s.editor, policy) {
+                s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+            }
+        }
+    };
+    let panel = dialog_panel(
+        l,
+        Some((Status::Warning, icons::TRIANGLE_ALERT)),
+        &match count {
+            1 => "1 file already exists".to_owned(),
+            n => format!("{n} files already exist"),
+        },
+        col()
+            .gap(8.0)
+            .child(
+                text("Rename keeps both copies. Replace updates the existing assets in place. Skip leaves them as they are.")
+                    .text_size(12.0)
+                    .wrap(3)
+                    .color(c.muted_foreground.0),
+            )
+            .child(list),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("assets/conflict/cancel")
+                .on_press(choose(None)),
+            button(l, Tone::Secondary, Size::Md, None, "Skip")
+                .key("assets/conflict/skip")
+                .on_press(choose(Some("skip"))),
+            button(l, Tone::Secondary, Size::Md, None, "Replace")
+                .key("assets/conflict/replace")
+                .on_press(choose(Some("replace"))),
+            button(l, Tone::Primary, Size::Md, None, "Rename")
+                .key("assets/conflict/rename")
+                .on_press(choose(Some("rename"))),
+        ],
+        choose(None),
+    )
+    .w(460.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(choose(None)))
+}
+
+/// Move to Folder: the project's folders to pick from, searched as you type.
+fn move_dialog(
+    s: &Studio,
+    browser: &crate::shell::assets::Browser,
+) -> Option<stillkit::el::Overlay<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let (path, query) = s.local.assets_view.moving.as_ref()?;
+    let name = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(path);
+    let own = path.trim_end_matches('/');
+    let needle = query.trim().to_lowercase();
+    let mut list = col().gap(1.0).max_h(320.0).scroll(Axis::Vertical);
+    let choices = std::iter::once(String::new())
+        .chain(folders(browser))
+        // Not into itself or its own folder, nor anywhere inside itself.
+        .filter(|f| *f != own && *f != parent(own) && !f.starts_with(&format!("{own}/")))
+        .filter(|f| needle.is_empty() || f.to_lowercase().contains(&needle));
+    let hover = c.hover_surface.0;
+    for folder in choices.take(200) {
+        let (source, to) = (path.clone(), folder.clone());
+        list = list.child(
+            row()
+                .key(format!("assets/move/{folder}"))
+                .h(super::style::ROW)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .radius(super::style::RADIUS)
+                .label(if folder.is_empty() {
+                    "Project".to_owned()
+                } else {
+                    folder.clone()
+                })
+                .hovered(move |e| e.fill(hover))
+                .on_press(move |s: &mut Studio| super::asset_ops::move_to(s, &source, &to))
+                .child(icon(icons::FOLDER).size(13.0).color(folder_tint(l, false)))
+                .child(
+                    text(if folder.is_empty() {
+                        "Project".to_owned()
+                    } else {
+                        folder
+                    })
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(1),
+                ),
+        );
+    }
+    let panel = dialog_panel(
+        l,
+        Some((Status::Info, icons::FOLDER_OPEN)),
+        &format!("Move {name} to…"),
+        col()
+            .gap(8.0)
+            .child(search(
+                l,
+                "assets/move/search",
+                "Search folders",
+                query,
+                None,
+                |f| {
+                    f.on_input(|s: &mut Studio, t| {
+                        if let Some((_, q)) = s.local.assets_view.moving.as_mut() {
+                            *q = t.to_owned();
+                        }
+                    })
+                },
+                |s: &mut Studio| {
+                    if let Some((_, q)) = s.local.assets_view.moving.as_mut() {
+                        q.clear();
+                    }
+                },
+            ))
+            .child(list)
+            .child(
+                text("References to it update in the same step.")
+                    .text_size(11.5)
+                    .color(c.muted_foreground.0),
+            ),
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Cancel")
+                .key("assets/move/cancel")
+                .on_press(|s: &mut Studio| s.local.assets_view.moving = None),
+        ],
+        |s: &mut Studio| s.local.assets_view.moving = None,
+    )
+    .w(420.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(|s: &mut Studio| s.local.assets_view.moving = None))
 }
 
 /// How many visible entries (files and subfolders) each folder holds directly.
@@ -600,7 +1050,7 @@ fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &st
         .pad(4.0)
         .gap(0.0)
         .scroll(Axis::Vertical);
-    tree = tree.child(folder_row(
+    tree = tree.children(bookmarks(s)).child(folder_row(
         l,
         "Project",
         String::new(),
@@ -855,15 +1305,22 @@ fn tile(
                         s.act("editor.workspace", json!({"asset": path}));
                         s.local.inspect_asset = !folder;
                     }
-                    // Models and prefabs drag into the Scene.
-                    PointerPhase::Move
-                        if placeable && e.travel().x.abs() + e.travel().y.abs() >= 4.0 =>
-                    {
+                    // Anything drags onto a folder (moving it there); models and prefabs
+                    // drag into the Scene too.
+                    PointerPhase::Move if e.travel().x.abs() + e.travel().y.abs() >= 4.0 => {
                         s.local.asset_drag = Some((path.clone(), name.clone(), (e.at.x, e.at.y)));
                     }
                     PointerPhase::Up => {
                         if let Some((path, _, at)) = s.local.asset_drag.take() {
-                            place(s, &path, at);
+                            let own = path.trim_end_matches('/');
+                            match folder_at(s, at) {
+                                Some(folder) if folder != parent(own) && folder != own => {
+                                    super::asset_ops::move_to(s, &path, &folder)
+                                }
+                                Some(_) => {}
+                                None if placeable => place(s, &path, at),
+                                None => {}
+                            }
                         }
                     }
                     PointerPhase::Cancel => s.local.asset_drag = None,

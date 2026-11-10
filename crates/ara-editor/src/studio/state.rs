@@ -145,6 +145,16 @@ impl Previews {
         }
     }
 
+    /// Renders every picture again (Rebuild Thumbnails): the cache goes, and what Assets
+    /// shows is asked for anew.
+    pub fn rebuild(&mut self) {
+        if let Some(queue) = self.queue.as_mut() {
+            queue.invalidate_all();
+        }
+        self.asked.clear();
+        self.images.clear();
+    }
+
     /// Takes finished pictures; whether any landed.
     pub fn poll(&mut self) -> bool {
         let Some(queue) = self.queue.as_mut() else {
@@ -320,6 +330,8 @@ pub struct Local {
     pub lighting_menu: Option<&'static str>,
     /// The Play options menu (mode, clients, network, Simulate, Eject, Keep), open.
     pub play_menu: bool,
+    /// File operations still running on host jobs: each job and what it does.
+    pub asset_jobs: Vec<(String, String)>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
@@ -391,6 +403,8 @@ pub struct Studio {
     pub(crate) builder: crate::build::Builder,
     /// Play's runtime controls: Inspect, runtime edits, Keep, Eject and Possess, Simulate.
     pub(crate) play: crate::play_controls::PlayControls,
+    /// File imports: their checks, a conflict choice, the running imports.
+    pub(crate) importer: crate::asset_import::Importer,
 }
 
 impl Studio {
@@ -416,6 +430,7 @@ impl Studio {
             vfx: Default::default(),
             builder: Default::default(),
             play: Default::default(),
+            importer: Default::default(),
         };
         studio.resolve();
         studio

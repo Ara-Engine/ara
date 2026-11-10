@@ -573,6 +573,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.touch(|s| std::mem::take(&mut s.play.release)) {
             rt.update(|s| s.local.game_captured = false);
         }
+        // File operations (move, rename, duplicate, delete) on their jobs.
+        if !rt.state().local.asset_jobs.is_empty() && rt.touch(asset_ops::poll_jobs) {
+            rt.update(|_| {});
+        }
+        // File imports: a finished one shows its files in Assets at once.
+        if rt.touch(|s| s.importer.poll(&mut s.editor)) {
+            rt.update(|s| {
+                if let Some(b) = s.assets.as_ref() {
+                    b.refresh();
+                }
+            });
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});
@@ -836,6 +848,13 @@ fn pump(
                 });
             }
             Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+            // Files from another app import into the folder Assets shows.
+            Event::FilesDropped(_) => {
+                let files = stillkit::take_dropped_files();
+                if !files.is_empty() {
+                    rt.update(|s| asset_ops::import(s, files, None));
+                }
+            }
             Event::Key(vk) => {
                 if FLY_KEYS.contains(&vk) && rt.state().local.flying {
                     rt.touch(|s| s.local.held.insert(vk));
@@ -916,6 +935,10 @@ fn pump(
                 .iter()
                 .map(|d| format!("scene/overlay/{}", d.id)),
         );
+        // While an asset is dragged: the folders it can drop on.
+        if rt.state().local.asset_drag.is_some() {
+            keys.extend(panels::drop_keys(rt.state()));
+        }
         let s = rt.scale();
         let rects = keys
             .into_iter()

@@ -1,9 +1,13 @@
-//! Adapt the generic jobs API; optional import details never replace authority state.
+//! The import authority's replies read as the editor shows them: a job's status (running,
+//! done, failed, cancelled; progress; whether it can still cancel), the preflight's
+//! conflict plan, and the batch's final inventory. Optional details never replace
+//! authority state.
 use serde_json::{Value, json};
 mod preflight;
-pub(super) use preflight::{Plan, Preflight, preflight};
+pub(crate) use preflight::{Plan, Preflight, preflight};
 
-pub(super) fn authored_folder(path: &str) -> bool {
+/// Whether `path` is an authored project-relative folder (empty for the content root).
+pub(crate) fn authored_folder(path: &str) -> bool {
     path.is_empty()
         || (!path.contains([':', '\\'])
             && !path.starts_with('/')
@@ -11,7 +15,8 @@ pub(super) fn authored_folder(path: &str) -> bool {
                 .split('/')
                 .all(|part| !part.is_empty() && part != "." && part != ".."))
 }
-pub(super) fn accepted_job(value: &Value) -> Option<&str> {
+/// The background job a `cmd.apply` reply started, if it names a valid one.
+pub(crate) fn accepted_job(value: &Value) -> Option<&str> {
     value["job"]
         .as_str()
         .filter(|job| !job.trim().is_empty())
@@ -23,8 +28,9 @@ pub(super) fn accepted_job(value: &Value) -> Option<&str> {
         })
 }
 
+/// An import job's status as `jobs.status` reports it.
 #[derive(PartialEq)]
-pub(super) struct Status {
+pub(crate) struct Status {
     raw: Value,
     pub state: String,
     pub message: String,
@@ -88,7 +94,7 @@ impl Status {
         let counts = ["created", "replaced", "skipped", "renamed"]
             .into_iter()
             .filter_map(|name| {
-                super::completed_output(&self.raw)[name]
+                completed_output(&self.raw)[name]
                     .as_array()
                     .map(|paths| format!("{} {name}", paths.len()))
             })
@@ -101,10 +107,26 @@ impl Status {
     }
     /// Selection needs an explicit storage path; authored paths are not guessed.
     pub fn selection_path(&self) -> Option<&str> {
-        super::completed_output(&self.raw)["storagePath"].as_str()
+        completed_output(&self.raw)["storagePath"].as_str()
     }
     pub fn value(&self) -> &Value {
         &self.raw
+    }
+}
+
+/// The import's final inventory, preserving the ordinary cmd.apply batch wrapper.
+pub(crate) fn completed_output(status: &Value) -> &Value {
+    let result = &status["result"];
+    if ["created", "replaced", "skipped", "renamed"]
+        .iter()
+        .any(|key| result.get(*key).is_some())
+    {
+        result
+    } else {
+        result["outputs"]
+            .as_array()
+            .and_then(|outputs| outputs.first())
+            .unwrap_or(result)
     }
 }
 

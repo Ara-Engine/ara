@@ -1500,6 +1500,66 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         "create.mesh" => act(e, "editor.focus", json!({"panel": "assets"})),
+        // Import…: the system's file chooser, into the target folder or the one Assets shows.
+        "assets.import" => {
+            let folder = match target {
+                Target::Folder(path) => Some(path.trim_end_matches('/').to_owned()),
+                Target::Asset(path) => {
+                    Some(path.rsplit_once('/').map_or("", |(dir, _)| dir).to_owned())
+                }
+                _ => None,
+            };
+            let start = e.host.root().to_owned();
+            let files = stillkit::dialog::pick_files("Import into the project", Some(&start), true);
+            if !files.is_empty() {
+                super::asset_ops::import(s, files, folder.as_deref());
+            }
+            Ok(())
+        }
+        "assets.import.cancel" => s.importer.cancel(e),
+        "assets.show_all" => {
+            s.local.assets_view.show_all = !s.local.assets_view.show_all;
+            Ok(())
+        }
+        "assets.rebuild_thumbnails" => {
+            s.previews.rebuild();
+            Ok(())
+        }
+        "assets.move" => match asset_of(e, target) {
+            Some(path) => {
+                s.local.assets_view.moving = Some((path, String::new()));
+                s.local.focus = Some("assets/move/search");
+                Ok(())
+            }
+            None => Err("Select an asset or folder to move".into()),
+        },
+        // Saved searches and favourites: by name (or the query typed, to save it).
+        "assets.search.save" => {
+            let name = match target {
+                Target::Text(name) => name.trim().to_owned(),
+                _ => e
+                    .state
+                    .searches
+                    .get("assets")
+                    .map(|q| q.trim().to_owned())
+                    .unwrap_or_default(),
+            };
+            match name.is_empty() {
+                true => Err("Type a search to save first".into()),
+                false => act(e, "editor.workspace", json!({"saveSearch": name})),
+            }
+        }
+        "assets.search.apply" | "assets.search.remove" | "assets.favourite.open" => match target {
+            Target::Text(name) | Target::Asset(name) | Target::Folder(name) => {
+                let key = match id {
+                    "assets.search.apply" => "openSearch",
+                    "assets.search.remove" => "removeSearch",
+                    _ => "openFavourite",
+                };
+                act(e, "editor.workspace", json!({key: name}))
+            }
+            _ => Err("Choose a saved search or favourite".into()),
+        },
         "tools.terminal" => crate::shell::ops::open_terminal(e.host.root()),
         "tools.references" => match asset_of(e, target) {
             Some(path) => {

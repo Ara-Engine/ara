@@ -879,6 +879,110 @@ fn scan(rt: &mut Runtime<Studio>) {
 }
 
 #[test]
+fn assets_save_searches_hide_support_files_and_move_and_import() {
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    let content = root.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(content.join("art")).unwrap();
+    std::fs::write(content.join("levels/notes.md"), "# Notes").unwrap();
+    std::fs::write(content.join("art/keep.txt"), "").unwrap();
+    scan(&mut rt);
+    let storage = |rt: &Runtime<Studio>, name: &str| {
+        rt.state()
+            .assets
+            .as_ref()
+            .unwrap()
+            .items
+            .iter()
+            .find(|a| a.path.ends_with(name))
+            .map(|a| a.path.clone())
+    };
+    let levels = storage(&rt, "main.scene")
+        .unwrap()
+        .rsplit_once('/')
+        .unwrap()
+        .0
+        .to_owned();
+    rt.update(|s| s.act("editor.workspace", json!({"folder": levels})));
+    settle(&mut rt);
+    let notes = storage(&rt, "notes.md").unwrap();
+    assert!(rt.find(&format!("asset/{notes}")).is_none(), "notes hide");
+    press(&mut rt, "assets/menu");
+    press(&mut rt, "assets/menu/all");
+    assert!(
+        rt.find(&format!("asset/{notes}")).is_some(),
+        "Show All Files shows them"
+    );
+    // A search saves under its query, opens again and goes.
+    rt.update(|s| s.act("editor.workspace", json!({"assetQuery": "main"})));
+    settle(&mut rt);
+    press(&mut rt, "assets/search/save");
+    assert!(rt.find("assets/saved/main").is_some());
+    press(&mut rt, "assets/saved/main/remove");
+    assert!(rt.find("assets/saved/main").is_none());
+    rt.update(|s| s.act("editor.workspace", json!({"assetQuery": ""})));
+    // Move to Folder: pick the folder, the file moves.
+    let art = storage(&rt, "keep.txt")
+        .unwrap()
+        .rsplit_once('/')
+        .unwrap()
+        .0
+        .to_owned();
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "assets.move",
+            &crate::catalog::Target::Asset(notes.clone()),
+        )
+    });
+    settle(&mut rt);
+    press(&mut rt, &format!("assets/move/{art}"));
+    for _ in 0..400 {
+        if rt.touch(|s| {
+            s.editor.tick();
+            super::asset_ops::poll_jobs(s);
+            s.local.asset_jobs.is_empty()
+        }) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(content.join("art/notes.md").is_file(), "moved on disk");
+    assert!(!content.join("levels/notes.md").exists());
+    // Import a file from outside, then again: the second asks before overwriting.
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("readme.txt"), "hello").unwrap();
+    let import = |rt: &mut Runtime<Studio>| {
+        rt.update(|s| super::asset_ops::import(s, vec![outside.join("readme.txt")], Some(&art)));
+        for _ in 0..400 {
+            if rt.touch(|s| {
+                s.editor.tick();
+                s.importer.poll(&mut s.editor);
+                s.importer.progress().is_none()
+            }) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    import(&mut rt);
+    assert!(
+        content.join("art/readme.txt").is_file(),
+        "{:?}",
+        rt.state().importer.note
+    );
+    import(&mut rt);
+    assert!(
+        rt.state().importer.conflicts.is_some(),
+        "an existing file asks first"
+    );
+    settle(&mut rt);
+    press(&mut rt, "assets/conflict/skip");
+    assert!(rt.state().importer.conflicts.is_none());
+}
+
+#[test]
 #[ignore = "writes review captures under target/"]
 fn captures() {
     let mut rt = open();
@@ -888,6 +992,11 @@ fn captures() {
             "editor.workspace",
             json!({"folder": ara_doc::AUTHORING_ROOT}),
         )
+    });
+    // A favourite and a saved search show above the folder tree.
+    rt.update(|s| {
+        s.act("editor.workspace", json!({"favourite": "", "favouriteFolder": true}));
+        s.act("editor.workspace", json!({"saveSearch": "Rocks", "savedSearch": {"query": "rock", "folder": "", "folderOnly": false}}));
     });
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
