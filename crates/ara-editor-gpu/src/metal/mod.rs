@@ -579,6 +579,19 @@ impl NativeUi {
         // SAFETY: the adapter's device outlives the presentation by caller contract.
         unsafe { Present::create(&self.device, window) }
     }
+    /// Create presentation into a host's `CAMetalLayer` (a native layer under a UI
+    /// window's hole, as the studio's Scene view) at `size` physical pixels.
+    /// # Safety
+    /// `layer` is a live `CAMetalLayer` that outlives the presentation; call on its thread.
+    pub unsafe fn create_layer_present(
+        &self,
+        _gpu: &UiDevice,
+        layer: std::ptr::NonNull<std::ffi::c_void>,
+        size: [u32; 2],
+    ) -> Result<Present> {
+        // SAFETY: forwarded caller contract; the adapter's device outlives the presentation.
+        unsafe { Present::from_layer(&self.device, layer, size) }
+    }
     /// Present the last completed UI target.
     /// # Safety
     /// `present` was created by [`Self::create_present`].

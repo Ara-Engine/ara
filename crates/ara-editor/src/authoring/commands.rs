@@ -54,6 +54,11 @@ struct MaterialAddParams {
     kind: String,
     /// Canvas coordinate for the new operation.
     position: [f32; 2],
+    /// Type of the wire the node is made for (`ColorLinear`, `vec3`): where the operation
+    /// allows it, its generated default inputs take this type (scalars elsewhere), and a
+    /// constant or parameter is made of it.
+    #[serde(default)]
+    ty: Option<String>,
 }
 struct MaterialAdd;
 impl Command for MaterialAdd {
@@ -80,28 +85,65 @@ impl Command for MaterialAdd {
             .unwrap_or(0)
             + 1;
         let mut layout = graph.editor;
+        let wanted =
+            p.ty.as_deref()
+                .map(|t| {
+                    Type::ALL
+                        .iter()
+                        .copied()
+                        .find(|ty| ty.name() == t)
+                        .ok_or_else(|| crate::invalid(format!("unknown material type `{t}`")))
+                })
+                .transpose()?;
+        // A constant of the wanted value type (a texture constant stays a float); a
+        // parameter of it, textures included (white, or a flat normal).
+        let value_ty = wanted.filter(|t| !t.is_texture()).unwrap_or(Type::Float);
+        let half = |ty: Type| vec![if ty == Type::Bool { 0. } else { 0.5 }; ty.lanes()];
         if op == "parameter" {
+            let ty = wanted.unwrap_or(Type::Float);
             material.parameters.insert(
                 id.clone(),
                 Parameter {
                     name,
                     order,
-                    ty: Type::Float,
-                    default: ParameterValue::Numeric(vec![0.5]),
+                    ty,
+                    default: if ty.is_texture() || ty == Type::Bool {
+                        ParameterValue::zero(ty)
+                    } else {
+                        ParameterValue::Numeric(half(ty))
+                    },
                     is_static: false,
                 },
             );
         } else {
             let (ty, expr) = if op == "literal" {
-                (Type::Float, Expr::Literal { values: vec![0.5] })
+                (
+                    value_ty,
+                    Expr::Literal {
+                        values: half(value_ty),
+                    },
+                )
             } else {
-                let mut signature = None;
+                // The wanted type where it fits: every input of it first, then with scalars.
+                let mut signature = wanted.and_then(|want| {
+                    (0..=4usize).find_map(|arity| {
+                        (0..1u32 << arity).find_map(|mask| {
+                            let types: Vec<Type> = (0..arity)
+                                .map(|i| {
+                                    if mask & 1 << i == 0 {
+                                        want
+                                    } else {
+                                        Type::Float
+                                    }
+                                })
+                                .collect();
+                            ara_material::library::infer(op, &types).map(|out| (out, types))
+                        })
+                    })
+                });
                 // Registry signatures define the valid arity/types; defaults are independent nodes.
-                for arity in 0..=4 {
-                    if let Some(found) = signature_for(op, arity, &mut Vec::new()) {
-                        signature = Some(found);
-                        break;
-                    }
+                if signature.is_none() {
+                    signature = (0..=4).find_map(|arity| signature_for(op, arity, &mut Vec::new()));
                 }
                 let (output,types)=signature.ok_or_else(||crate::invalid("This operation needs an explicit typed expression; use the synchronized DSL pane."))?;
                 let mut args = Vec::new();
@@ -285,7 +327,9 @@ pub(super) fn register(registry: &mut Registry, db: &mut SchemaDb) {
         .command::<MaterialAdd>(db)
         .command::<AnimationSet>(db)
         .command::<ModuleSet>(db);
-    registry.command::<super::material_fields::Set>(db);
+    registry
+        .command::<super::material_fields::Set>(db)
+        .command::<super::material_duplicate::Duplicate>(db);
 }
 
 fn signature_for(

@@ -3,9 +3,9 @@
 
 mod actions;
 pub mod activity;
-mod app;
+pub(crate) mod app;
 mod asset_service;
-mod asset_tools;
+pub(crate) mod asset_tools;
 mod authoring;
 mod capture;
 pub mod codes;
@@ -27,6 +27,7 @@ mod script_assets;
 pub mod settings;
 pub mod shell;
 pub mod state;
+pub mod studio;
 mod transaction_label;
 mod transport;
 mod view_camera;

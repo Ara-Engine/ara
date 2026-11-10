@@ -843,13 +843,15 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
     use Axis::{Horizontal as H, Vertical as V};
     const DOCUMENTS: &[&str] = &["scene", "game", "material", "vfx", "animation", "profiler"];
     Some(match name {
+        // Hierarchy, then the Scene over Assets and Console, then a full-height Inspector
+        // wide enough for labels (about 360 px of a 1400 px window), as in Unity.
         "default" => split(
             H,
-            0.18,
+            0.16,
             area("outline", &["hierarchy"]),
             split(
                 H,
-                0.73,
+                0.69,
                 split(
                     V,
                     0.72,

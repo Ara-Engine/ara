@@ -251,3 +251,62 @@ fn a_graph_too_big_to_read_opens_readable_with_its_output_in_view() {
         "the output stays in view: {output}"
     );
 }
+
+#[test]
+fn clicking_a_transition_arrow_picks_it() {
+    let mut graph = ara_graph::Graph::new(
+        ara_doc::AssetId::parse("gr_states00").expect("fixture ID"),
+        "animation",
+    );
+    let port = |direction| ara_graph::Port {
+        ty: "state".into(),
+        direction,
+        doc: String::new(),
+        required: false,
+    };
+    for (id, position) in [("n_idle", [0., 0.]), ("n_run", [400., 0.])] {
+        graph.nodes.insert(
+            id.into(),
+            ara_graph::Node {
+                kind: "animation.state".into(),
+                version: 1,
+                ports: [
+                    ("in".into(), port(ara_graph::Direction::Input)),
+                    ("out".into(), port(ara_graph::Direction::Output)),
+                ]
+                .into(),
+                params: Default::default(),
+                payload: serde_json::json!({"name": id, "state": id}),
+                subgraph: None,
+            },
+        );
+        graph.editor.positions.insert(id.into(), position);
+    }
+    let endpoint = |node: &str, port: &str| ara_graph::Endpoint {
+        node: node.into(),
+        port: port.into(),
+    };
+    graph.edges.insert(
+        "w_go".into(),
+        ara_graph::Edge {
+            from: endpoint("n_idle", "out"),
+            to: endpoint("n_run", "in"),
+        },
+    );
+    let mut text = ara_ui_text::TextSystem::bundled().expect("fonts");
+    let mut canvas = Canvas::new(graph, &mut text);
+    let rect = Box2 {
+        x: 0.,
+        y: 0.,
+        w: 960.,
+        h: 700.,
+    };
+    // Halfway between the two states, on the arrow.
+    let at = canvas.screen([284., 22.], rect);
+    assert_eq!(canvas.arrow_at(at, rect).as_deref(), Some("w_go"));
+    canvas.begin(at, 1, false, rect);
+    assert!(canvas.end(at, rect).expect("a pick").is_empty());
+    assert!(canvas.selection.contains("w_go"), "the click picked it");
+    let off = canvas.screen([284., 120.], rect);
+    assert_eq!(canvas.arrow_at(off, rect), None);
+}

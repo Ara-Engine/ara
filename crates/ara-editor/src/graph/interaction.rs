@@ -93,25 +93,10 @@ impl Canvas {
             }
         }
         for (key, group) in &self.graph.editor.groups {
-            let mut bounds = None::<Box2>;
-            for node in self.nodes.iter().filter(|n| group.nodes.contains(&n.id)) {
-                let r = self.node_rect(node, rect);
-                bounds = Some(bounds.map_or(r, |b| Box2 {
-                    x: b.x.min(r.x),
-                    y: b.y.min(r.y),
-                    w: (b.x + b.w).max(r.x + r.w) - b.x.min(r.x),
-                    h: (b.y + b.h).max(r.y + r.h) - b.y.min(r.y),
-                }));
-            }
-            if bounds.is_some_and(|r| {
-                (Box2 {
-                    x: r.x - 16.,
-                    y: r.y - 38.,
-                    w: r.w + 32.,
-                    h: 38.,
-                })
-                .contains(p[0], p[1])
-            }) {
+            if self
+                .group_rect(group, rect)
+                .is_some_and(|(_, head)| head.contains(p[0], p[1]))
+            {
                 self.selection = group.nodes.iter().cloned().collect();
                 self.selection.insert(key.clone());
                 self.drag = Some(Drag::Nodes {
@@ -150,9 +135,28 @@ impl Canvas {
                     .map(|n| (n.id.clone(), n.position))
                     .collect(),
             });
+        } else if let Some(edge) = self.arrow_at(p, rect) {
+            // A state machine's transition arrow picks that transition.
+            self.selection.clear();
+            self.selection.insert(edge);
         } else {
             self.drag = Some(Drag::Box { start: p, additive });
         }
+    }
+    /// The pin a connection is being dragged from, while one is: a host offers the node
+    /// search when it is dropped on empty space (Unreal, Shader Graph).
+    pub fn connecting(&self) -> Option<(Endpoint, Direction)> {
+        match &self.drag {
+            Some(Drag::Connect {
+                endpoint,
+                direction,
+            }) => Some((endpoint.clone(), *direction)),
+            _ => None,
+        }
+    }
+    /// Whether a pin is under `p` (a dropped connection that found none lands on nothing).
+    pub fn port_at(&self, p: [f32; 2], rect: Box2) -> bool {
+        self.hit_port(p, rect).is_some()
     }
     /// Update transient gesture geometry; the authoring graph remains unchanged.
     pub fn motion(&mut self, p: [f32; 2]) {

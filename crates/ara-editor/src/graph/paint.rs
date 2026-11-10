@@ -6,7 +6,7 @@ use super::*;
 use ara_ui::{paint::Draw, source::stable_id};
 
 /// Caption and pin text size relative to the shaping size.
-const SMALL: f32 = 11. / text::SIZE;
+pub(super) const SMALL: f32 = 11. / text::SIZE;
 /// Caption of an in-node preview tile whose render has not landed yet.
 pub(super) const RENDERING: &str = "Rendering…";
 
@@ -38,99 +38,88 @@ impl Canvas {
         list.commands.push(Draw::PopClip);
     }
 
-    /// A quiet dot grid with faint major lines every eight cells.
+    /// Unreal's graph paper: faint lines every 16 units, stronger ones every 128; the minor
+    /// lines fade out as the view zooms away.
     fn grid(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
         let z = self.camera.zoom;
-        let major = 128. * z;
-        let mut line = theme.border;
-        line.3 = 150;
-        if major >= 40. {
+        let mut lines = |step: f32, color: Color| {
             let offset = [
-                self.camera.pan[0].rem_euclid(major),
-                self.camera.pan[1].rem_euclid(major),
+                self.camera.pan[0].rem_euclid(step),
+                self.camera.pan[1].rem_euclid(step),
             ];
-            for x in 0..=(rect.w / major) as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x + offset[0] + x as f32 * major,
-                        y: rect.y,
-                        w: 1.,
-                        h: rect.h,
-                    },
-                    0.,
-                    line,
-                );
+            for x in 0..=(rect.w / step) as usize {
+                let at = Box2 {
+                    x: rect.x + offset[0] + x as f32 * step,
+                    y: rect.y,
+                    w: 1.,
+                    h: rect.h,
+                };
+                fill(list, 1, at, 0., color);
             }
-            for y in 0..=(rect.h / major) as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x,
-                        y: rect.y + offset[1] + y as f32 * major,
-                        w: rect.w,
-                        h: 1.,
-                    },
-                    0.,
-                    line,
-                );
+            for y in 0..=(rect.h / step) as usize {
+                let at = Box2 {
+                    x: rect.x,
+                    y: rect.y + offset[1] + y as f32 * step,
+                    w: rect.w,
+                    h: 1.,
+                };
+                fill(list, 1, at, 0., color);
             }
+        };
+        let minor = 16. * z;
+        if minor >= 8. {
+            let fade = ((minor - 8.) / 8.).clamp(0., 1.);
+            lines(minor, alpha(theme.border, (60. * fade) as u8));
         }
-        let step = 32. * z;
-        if step < 14. {
-            return;
-        }
-        let offset = [
-            self.camera.pan[0].rem_euclid(step),
-            self.camera.pan[1].rem_euclid(step),
-        ];
-        let mut dot = theme.separator;
-        dot.3 = 170;
-        for x in 0..(rect.w / step).ceil() as usize {
-            for y in 0..(rect.h / step).ceil() as usize {
-                fill(
-                    list,
-                    1,
-                    Box2 {
-                        x: rect.x + offset[0] + x as f32 * step - 0.75,
-                        y: rect.y + offset[1] + y as f32 * step - 0.75,
-                        w: 1.5,
-                        h: 1.5,
-                    },
-                    0.75,
-                    dot,
-                );
-            }
+        let major = 128. * z;
+        if major >= 24. {
+            lines(major, alpha(theme.separator, 150));
         }
     }
 
     fn groups(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
-        for group in self.graph.editor.groups.values() {
-            let mut bounds = None::<Box2>;
-            for node in self.nodes.iter().filter(|n| group.nodes.contains(&n.id)) {
-                let r = self.node_rect(node, rect);
-                bounds = Some(bounds.map_or(r, |b| union(b, r)));
-            }
-            if let Some(b) = bounds {
-                let r = Box2 {
-                    x: b.x - 16.,
-                    y: b.y - 38.,
-                    w: b.w + 32.,
-                    h: b.h + 54.,
-                };
-                fill(list, 2, r, 10., alpha(theme.accent, 14));
-                border(list, 2, r, 10., 1., theme.separator);
-                self.labels.paint(
-                    list,
-                    2,
-                    &group.label,
-                    [r.x + 12., r.y + 10.],
-                    1.,
-                    theme.muted,
-                );
-            }
+        let z = self.camera.zoom;
+        for (key, group) in &self.graph.editor.groups {
+            let Some((r, head)) = self.group_rect(group, rect) else {
+                continue;
+            };
+            // Unreal's comment box: a translucent body under a solid title band.
+            let radius = 6. * z;
+            let selected = self.selection.contains(key);
+            fill(list, 2, r, radius, alpha(theme.muted, 20));
+            fill(list, 2, head, radius, alpha(theme.muted, 72));
+            fill(
+                list,
+                2,
+                Box2 {
+                    y: head.y + head.h - radius,
+                    h: radius,
+                    ..head
+                },
+                0.,
+                alpha(theme.muted, 72),
+            );
+            border(
+                list,
+                2,
+                r,
+                radius,
+                if selected { 2. } else { 1. },
+                if selected {
+                    theme.select
+                } else {
+                    alpha(theme.muted, 110)
+                },
+            );
+            let scale = z * 1.2;
+            self.labels.paint(
+                list,
+                2,
+                &group.label,
+                [head.x + 12. * z, head.y + (head.h - 16. * scale) * 0.5],
+                scale,
+                theme.foreground,
+            );
         }
     }
 
@@ -168,8 +157,11 @@ impl Canvas {
             if selecting && !related {
                 color.3 = 120;
             }
-            let width = if related { 2.75 } else { 2. };
+            let width = if related { 3.25 } else { 2.25 };
             let id = stable_id(&wire.id);
+            // A dark under-stroke keeps a wire legible over any node or grid line.
+            let under = Color(0, 0, 0, if selecting && !related { 40 } else { 90 });
+            curve(list, id, a, b, width + 2.5, under);
             let mut previous = a;
             for (index, p) in wire.points.iter().enumerate() {
                 let p = if let Some(super::interaction::Drag::Reroute {
@@ -228,6 +220,7 @@ impl Canvas {
             }
             let related = self.selection.contains(&a.id)
                 || self.selection.contains(&b.id)
+                || self.selection.contains(&wire.id)
                 || self.highlight.contains(&wire.id);
             let fading = self.live.as_ref().is_some_and(|live| {
                 live.node == a.id && live.fade.as_ref().is_some_and(|(to, _)| *to == b.id)
@@ -261,20 +254,16 @@ impl Canvas {
                 head(list, id, to, [0., 1.], color);
                 continue;
             }
-            let ca = centre(ra);
-            let cb = centre(rb);
-            let length = (cb[0] - ca[0]).hypot(cb[1] - ca[1]).max(1e-3);
-            let d = [(cb[0] - ca[0]) / length, (cb[1] - ca[1]) / length];
-            let n = [-d[1], d[0]];
-            let shift = if pairs.contains(&(b.id.as_str(), a.id.as_str())) {
-                6. * z.max(0.6)
-            } else {
-                0.
+            let Some(super::ArrowLine {
+                start,
+                end,
+                normal: n,
+                shift,
+            }) = self.arrow_line(wire, ra, rb, &pairs)
+            else {
+                continue;
             };
-            let oa = [ca[0] + n[0] * shift, ca[1] + n[1] * shift];
-            let ob = [cb[0] + n[0] * shift, cb[1] + n[1] * shift];
-            let start = edge_point(ra, oa, d, 3.);
-            let end = edge_point(rb, ob, [-d[0], -d[1]], 4.);
+            let d = [n[1], -n[0]];
             line(list, id, start, end, 1.75, color);
             head(list, id, end, d, color);
             if let Some(label) = wire.label.as_deref().filter(|_| z >= 0.5) {
@@ -368,14 +357,34 @@ impl Canvas {
         let selected = self.selection.contains(&node.id);
         let error = self.errors.get(&node.id);
         let accent = theme.accent(node.look.accent);
-        fill(list, id, offset(r, 0., 2. * z), radius, theme.shadow);
+        // A soft, layered shadow lifts the card off the graph paper.
+        for (spread, lift, strength) in [(6., 4., 0.35), (2., 2., 0.6)] {
+            let mut shade = theme.shadow;
+            shade.3 = (f32::from(shade.3) * strength) as u8;
+            fill(
+                list,
+                id,
+                offset(grow(r, spread * z), 0., lift * z),
+                radius + spread * z,
+                shade,
+            );
+        }
         if selected {
-            border(list, id, grow(r, 3.), radius + 3., 2., theme.accent);
+            // Unreal's selection: a bright ring just outside the card.
+            border(
+                list,
+                id,
+                grow(r, 2.5 * z),
+                radius + 2.5 * z,
+                2.5 * z.max(0.8),
+                theme.select,
+            );
         }
         fill(list, id, r, radius, theme.card);
-        // Header: rounded top, flat bottom, tinted by category, ruled in its accent.
+        // Header: the category's colour, solid as Unreal's material nodes; a light rule
+        // under it.
         let header = Box2 { h: HEADER * z, ..r };
-        let tint = mix(theme.raised, accent, 0.14);
+        let tint = header_tint(theme.card, accent);
         fill(list, id, header, radius, tint);
         fill(
             list,
@@ -392,13 +401,14 @@ impl Canvas {
             list,
             id,
             Box2 {
-                y: header.y + header.h - 2. * z,
-                h: 2. * z,
+                y: header.y + header.h - 1.,
+                h: 1.,
                 ..header
             },
             0.,
-            accent,
+            alpha(accent, 200),
         );
+        // A dark rim, not a light outline: the card reads as a solid object.
         border(
             list,
             id,
@@ -408,7 +418,7 @@ impl Canvas {
             if error.is_some() {
                 theme.error
             } else {
-                theme.separator
+                Color(0, 0, 0, 150)
             },
         );
         let detailed = z >= 0.45;
@@ -473,7 +483,7 @@ impl Canvas {
                 color,
             );
             if !pin.connected {
-                let inner = outer * 0.55;
+                let inner = outer * 0.6;
                 fill(
                     list,
                     id,
@@ -485,6 +495,31 @@ impl Canvas {
                     },
                     inner,
                     theme.card,
+                );
+            }
+            if let Some(inline) = pin.inline.as_ref().filter(|_| detailed && input) {
+                // Unreal's pin default: a sunken value box beside the label.
+                let b = self.inline_box(pin, inline, r.x, y);
+                fill(list, id, b, 3. * z, mix(theme.background, theme.card, 0.3));
+                border(list, id, b, 3. * z, 1., alpha(theme.separator, 160));
+                let mut tx = b.x + 6. * z;
+                if let Some(swatch) = inline.swatch {
+                    let chip = Box2 {
+                        x: tx,
+                        y: b.y + 3. * z,
+                        w: 10. * z,
+                        h: 10. * z,
+                    };
+                    fill(list, id, chip, 2. * z, swatch);
+                    tx += 14. * z;
+                }
+                self.labels.paint(
+                    list,
+                    id,
+                    &inline.text,
+                    [tx, y - 7. * z],
+                    small,
+                    theme.foreground,
                 );
             }
             if detailed {
@@ -829,7 +864,7 @@ pub(super) fn union(a: Box2, b: Box2) -> Box2 {
         h: (a.y + a.h).max(b.y + b.h) - a.y.min(b.y),
     }
 }
-fn centre(r: Box2) -> [f32; 2] {
+pub(super) fn centre(r: Box2) -> [f32; 2] {
     [r.x + r.w * 0.5, r.y + r.h * 0.5]
 }
 fn grow(r: Box2, by: f32) -> Box2 {
@@ -848,7 +883,7 @@ fn offset(r: Box2, x: f32, y: f32) -> Box2 {
     }
 }
 /// Where a ray from `origin` (inside `r`) along `d` leaves the box, pulled back by `gap`.
-fn edge_point(r: Box2, origin: [f32; 2], d: [f32; 2], gap: f32) -> [f32; 2] {
+pub(super) fn edge_point(r: Box2, origin: [f32; 2], d: [f32; 2], gap: f32) -> [f32; 2] {
     let half = [
         (r.w * 0.5 - (origin[0] - r.x - r.w * 0.5).abs()).max(0.),
         (r.h * 0.5 - (origin[1] - r.y - r.h * 0.5).abs()).max(0.),
@@ -871,6 +906,20 @@ fn alpha(mut color: Color, a: u8) -> Color {
     color
 }
 /// `base` moved `amount` of the way toward `tint` (opaque result).
+/// A node header's colour: the category's accent over the card, kept dark enough that its
+/// light title reads (a pale accent, such as a light theme's primary, tints less).
+fn header_tint(card: Color, accent: Color) -> Color {
+    let luminance = |c: Color| {
+        (0.2126 * f32::from(c.0) + 0.7152 * f32::from(c.1) + 0.0722 * f32::from(c.2)) / 255.
+    };
+    let tint = mix(card, accent, 0.42);
+    if luminance(tint) > 0.32 {
+        mix(card, accent, 0.18)
+    } else {
+        tint
+    }
+}
+
 fn mix(base: Color, tint: Color, amount: f32) -> Color {
     let lerp = |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * amount).round() as u8;
     Color(
