@@ -333,7 +333,9 @@ fn op_line(s: &Studio, op: &ara_doc::Op) -> (Rgba, String) {
     }
 }
 
-/// The History panel: every transaction, newest first, with Undo and Redo.
+/// The History panel (Unreal's Transaction History, Unity's Undo History): every
+/// transaction newest first, searched by what or who; a click opens what it changed, a
+/// right-click its menu; your own steps undo back to any one of them.
 pub(super) fn history(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
@@ -357,6 +359,20 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
                 },
             ),
         )
+        .child(
+            row().w(220.0).child(
+                search(
+                    l,
+                    "history/search",
+                    "Search changes",
+                    &s.local.history_search,
+                    None,
+                    |f| f.on_input(|s: &mut Studio, t| s.local.history_search = t.to_owned()),
+                    |s: &mut Studio| s.local.history_search.clear(),
+                )
+                .grow(1.0),
+            ),
+        )
         .child(el().grow(1.0))
         .child(
             text(match store.history().len() {
@@ -377,10 +393,13 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         ));
     }
     let now = Instant::now();
+    let query = s.local.history_search.trim().to_lowercase();
     let mut list = col().pad(4.0).gap(1.0);
-    for txn in history.iter().rev().take(300) {
+    let mut shown = 0;
+    for txn in history.iter().rev() {
         let undone = store.reverted_by(&txn.id).is_some();
         let revert = txn.reverts.is_some();
+        let human = matches!(txn.author, ara_ops::Author::Human);
         let who = match &txn.author {
             ara_ops::Author::Human => "You".to_owned(),
             other => short_author(&other.to_string()),
@@ -390,6 +409,16 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             .clone()
             .or_else(|| txn.label.clone())
             .unwrap_or_else(|| "Edit".into());
+        if !query.is_empty()
+            && !what.to_lowercase().contains(&query)
+            && !who.to_lowercase().contains(&query)
+        {
+            continue;
+        }
+        shown += 1;
+        if shown > 300 {
+            break;
+        }
         let when = s
             .editor
             .activity
@@ -398,7 +427,7 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             .unwrap_or_else(|| "earlier".into());
         let glyph = if revert {
             icons::UNDO_2
-        } else if matches!(txn.author, ara_ops::Author::Human) {
+        } else if human {
             icons::USER
         } else {
             icons::BOT
@@ -408,36 +437,119 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
         } else {
             c.foreground.0
         };
-        list = list.child(
-            row()
-                .h(28.0)
-                .pad_x(8.0)
-                .gap(8.0)
-                .align(Align::Center)
-                .radius(4.0)
-                .child(icon(glyph).size(13.0).color(c.muted_foreground.0))
-                .child(
-                    text(if revert {
-                        format!("Undo: {what}")
-                    } else {
-                        what
-                    })
-                    .text_size(12.0)
-                    .color(ink)
-                    .grow(1.0),
+        let id = txn.id.0.clone();
+        let open = s.local.history_open.as_deref() == Some(id.as_str());
+        let hover = c.hover_surface.0;
+        let (toggle, menu) = (id.clone(), id.clone());
+        let mut line = super::style::chosen(l, row(), open)
+            .key(format!("history/{id}"))
+            .h(28.0)
+            .pad_x(8.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .radius(4.0)
+            .label(what.clone())
+            .expanded(open)
+            .hovered(move |e| if open { e } else { e.fill(hover) })
+            .on_press(move |s: &mut Studio| {
+                s.local.history_open = (s.local.history_open.as_deref() != Some(toggle.as_str()))
+                    .then(|| toggle.clone())
+            })
+            .on_context_menu(move |s: &mut Studio, x, y| {
+                use crate::catalog::{Target, menus::Context};
+                s.local.context = Some((Context::History, Target::Text(menu.clone()), (x, y)));
+            })
+            .child(icon(glyph).size(13.0).color(c.muted_foreground.0))
+            .child(
+                text(if revert {
+                    format!("Undo: {what}")
+                } else {
+                    what
+                })
+                .text_size(12.0)
+                .color(ink)
+                .wrap(1)
+                .w(0.0)
+                .grow(1.0),
+            );
+        // Your own steps undo back to here (later ones first), as Unity's list jumps.
+        if human && !undone && !revert && history.last().is_some_and(|last| last.id != txn.id) {
+            let to = crate::catalog::Target::Text(id.clone());
+            line = line.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::ROTATE_CCW,
+                    "Undo back to here",
                 )
-                .child(
-                    text(if undone { "undone".to_owned() } else { who })
+                .size(20.0)
+                .key(format!("history/{id}/undo-to"))
+                .on_press(move |s: &mut Studio| super::commands::run(s, "history.undo_to", &to)),
+            );
+        }
+        line = line
+            .child(
+                text(if undone { "undone".to_owned() } else { who })
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0),
+            )
+            .child(
+                text(when)
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0.with_alpha(0.7))
+                    .w(70.0)
+                    .text_align(stillkit::el::TextAlign::End),
+            );
+        list = list.child(line);
+        if open {
+            let mut diff = col().pad_x(30.0).pad_y(4.0).gap(2.0);
+            for op in txn.ops.iter().take(60) {
+                let (tone, line) = op_line(s, op);
+                diff = diff.child(
+                    row()
+                        .gap(6.0)
+                        .align(Align::Center)
+                        .child(el().w(3.0).h(14.0).radius(1.5).fill(tone))
+                        .child(
+                            text(line)
+                                .text_size(11.5)
+                                .family(mono())
+                                .color(c.foreground.0)
+                                .wrap(1),
+                        ),
+                );
+            }
+            if txn.ops.len() > 60 {
+                diff = diff.child(
+                    text(format!("and {} more", txn.ops.len() - 60))
                         .text_size(11.0)
                         .color(c.muted_foreground.0),
-                )
-                .child(
-                    text(when)
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0.with_alpha(0.7))
-                        .w(70.0)
-                        .text_align(stillkit::el::TextAlign::End),
+                );
+            }
+            let copy = crate::catalog::Target::Text(id.clone());
+            diff = diff.child(
+                row().pad_y(2.0).child(
+                    button(
+                        l,
+                        Tone::Ghost,
+                        Size::Sm,
+                        Some(icons::COPY),
+                        "Copy transaction",
+                    )
+                    .key(format!("history/{id}/copy"))
+                    .on_press(move |s: &mut Studio| super::commands::run(s, "history.copy", &copy)),
                 ),
+            );
+            list = list.child(diff);
+        }
+    }
+    if shown == 0 {
+        list = list.child(
+            text("No changes match the search.")
+                .text_size(12.0)
+                .color(c.muted_foreground.0)
+                .pad(10.0),
         );
     }
     col()

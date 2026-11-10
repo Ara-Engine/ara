@@ -1628,6 +1628,33 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose an agent turn".into()),
         },
+        "history.inspect" => match target {
+            Target::Text(txn) => {
+                s.local.history_open = Some(txn.clone());
+                act(e, "editor.focus", json!({"panel": "history"}))
+            }
+            _ => Err("Choose a transaction".into()),
+        },
+        // Undoes your steps until `txn` is undone too; stops if an undo changes nothing
+        // (the step was not yours to undo).
+        "history.undo_to" => match target {
+            Target::Text(txn) => {
+                let id = ara_ops::TxnId(txn.clone());
+                let mut result = Ok(());
+                for _ in 0..500 {
+                    if e.host.store().reverted_by(&id).is_some() {
+                        break;
+                    }
+                    let before = e.host.store().revision();
+                    result = act(e, "history.undo", json!({}));
+                    if result.is_err() || e.host.store().revision() == before {
+                        break;
+                    }
+                }
+                result
+            }
+            _ => Err("Choose a transaction".into()),
+        },
         "history.copy" => match target {
             Target::Text(txn) => {
                 let found = e.host.store().history().iter().find(|x| x.id.0 == *txn);

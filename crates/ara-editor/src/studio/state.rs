@@ -343,6 +343,10 @@ pub struct Local {
     pub device: String,
     /// About Ara or System Info, open.
     pub(crate) about: Option<super::about::Page>,
+    /// The History transaction opened to its changes.
+    pub history_open: Option<String>,
+    /// The History search: transactions whose description or author match.
+    pub history_search: String,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
     /// Each Scene overlay's length along its edge when last shown expanded (design px), so
