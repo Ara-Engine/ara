@@ -47,10 +47,8 @@ pub(super) fn record(
             presenter.present_with(frame, || content(frame))?;
             if i >= WARMUP {
                 presenter
-                    .renderer_mut()
-                    .context("raster renderer for live frames")?
-                    .capture_completed(request)?
-                    .image
+                    .live_image(request)
+                    .context("live frame")?
                     .save(dir.join(format!("{:05}.png", i - WARMUP)))?;
             }
         }

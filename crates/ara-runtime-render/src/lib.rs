@@ -10,6 +10,8 @@ extern crate glam34 as glam;
 mod captures;
 mod composite;
 mod emitters;
+mod external;
+pub use external::{EXTERNAL_PASSES, ExternalFrame, ExternalRenderer, ExternalView};
 pub mod fidelity;
 pub mod geometry;
 mod gi;
@@ -92,6 +94,9 @@ pub struct PresentStats {
     /// undisplayed window). Hosts skip the UI, the blit or the publish for it and
     /// keep pumping events.
     pub skipped: bool,
+    /// Wall milliseconds an external renderer (`Presenter::set_external_renderer`)
+    /// spent moving its image onto the presenter's device; None for Ara's renderer.
+    pub external_handoff_ms: Option<f64>,
 }
 
 /// Owns the renderer and the per-draw upload state.
@@ -162,6 +167,12 @@ pub struct Presenter {
     profile_next: Option<u64>,
     /// Timestamp samples paired with their actual submitting CPU frame.
     profile_completed: std::collections::VecDeque<(u64, Vec<ara_gpu::commands::PassTiming>)>,
+    /// The renderer drawing in place of `ara-render` (`set_external_renderer`).
+    external: Option<Box<dyn ExternalRenderer>>,
+    /// Draw count the external path last resolved content for (its environment map).
+    external_draws: Option<usize>,
+    /// The external renderer's own pass timings for its last frame (`ExternalFrame::passes`).
+    external_passes: [(&'static str, f64); EXTERNAL_PASSES],
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -268,6 +279,9 @@ impl Presenter {
             in_flight: std::collections::VecDeque::new(),
             profile_next: None,
             profile_completed: std::collections::VecDeque::new(),
+            external: None,
+            external_draws: None,
+            external_passes: [("", 0.); EXTERNAL_PASSES],
         }
     }
 

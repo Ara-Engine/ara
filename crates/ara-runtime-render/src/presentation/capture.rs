@@ -77,6 +77,10 @@ impl Presenter {
             request
         };
         self.resize(request.size)?;
+        if self.external.is_some() {
+            self.drain()?;
+            return self.capture_external(frame, request, resolve);
+        }
         self.prepare_with(frame, resolve)?;
         let prepared_stats = self.stats;
         if let Some(raster) = &mut self.raster

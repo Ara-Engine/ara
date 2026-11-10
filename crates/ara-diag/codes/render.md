@@ -1,8 +1,10 @@
-# Reflection probes and debug views (named codes, slots 6100–6199)
+# Reflection probes, debug views and the Renderlab bridge (named codes, slots 6100–6199)
 
 `ara-runtime-render` reports reflection-probe capture jobs and `ara-render` debug view
 availability with named codes. Capture jobs are derived runtime work: they never edit
 documents, and a failed or cancelled capture always keeps the last valid one.
+`ara-renderlab` reports what the Renderlab renderer path cannot start, draw or fit
+(6120–6123).
 
 ## ARA6101 PROBE_MISSING: Reflection probe not found
 owner: ara-runtime-render
@@ -123,3 +125,57 @@ Causes:
 
 Fixes:
 - Follow the reason in `render.probes.query` capabilities; switch the preset or wait for readiness.
+
+## ARA6120 RENDERLAB_UNAVAILABLE: Renderlab renderer could not start
+owner: ara-renderlab
+shown as: ARA_RENDERLAB_UNAVAILABLE
+
+The launch selected the Renderlab renderer (`--renderer renderlab*` or `ARA_RENDERER`), but it could not start on this machine. The view renders with Ara's own renderer instead, which is complete on every device.
+
+Causes:
+- No Vulkan adapter, or the GPU lacks the features the requested Renderlab path needs (hardware ray queries for `renderlab-rt`; 64-bit storage atomics and descriptor indexing for `renderlab-nonrt`).
+- The machine is a Mac: Renderlab renders through Vulkan only and has no Metal path yet.
+- Renderlab's engine failed to create its device or pipelines; the message carries its error.
+
+Fixes:
+- Use `--renderer renderlab` to let it pick the path the GPU supports, or `--renderer ara`.
+- Update the GPU driver, then run `ara doctor`.
+
+## ARA6121 RENDERLAB_UNSUPPORTED: Feature not rendered by Renderlab
+owner: ara-renderlab
+shown as: ARA_RENDERLAB_UNSUPPORTED
+
+A frame uses something Ara's renderer draws that the Renderlab path does not map yet. The message names the feature and what the image shows instead. Each feature reports once per renderer; the rest of the frame renders normally.
+
+Causes:
+- The scene uses a feature on the bridge's gap list (`crates/ara-renderlab/AGENTS.md`): for example terrain and foliage, VFX graph effects, decals, emissive materials, environment-map skies or area lights.
+
+Fixes:
+- Nothing is required to keep working: switch to `--renderer ara` to see the feature.
+- To close the gap, map the feature in `ara-renderlab` (its gap list says what each one takes).
+
+## ARA6122 RENDERLAB_LIMIT: Scene exceeds a Renderlab limit
+owner: ara-renderlab
+shown as: ARA_RENDERLAB_LIMIT
+
+The frame needs more than Renderlab draws at this version, so part of it is left out. The message names the limit and how much was dropped.
+
+Causes:
+- More than 64 distinct mesh-material groups in one frame (objects sharing a mesh and a material count once; every skinned primitive counts once).
+
+Fixes:
+- Share meshes and materials between objects, or render the scene with `--renderer ara`.
+- The limit is Renderlab's (`TRACED_DRAWS`); raising it is a renderer change, not a bridge change.
+
+## ARA6123 RENDERLAB_NONRT_PATENT: Renderlab non-RT sun shadows await legal review
+owner: ara-renderlab
+shown as: ARA_RENDERLAB_NONRT_PATENT
+
+A notice, printed once when Renderlab's non-RT path starts. Its sun-shadow method carries an open patent question (Renderlab `docs/patent-via-8471853.md`: an engineering claim chart, not legal clearance). The image is correct; the notice is about shipping.
+
+Causes:
+- `--renderer renderlab-nonrt` was selected, or `--renderer renderlab` chose the non-RT path because the GPU has no hardware ray queries.
+
+Fixes:
+- Prefer `--renderer renderlab-rt` on GPUs with hardware ray tracing: that path does not use the method.
+- Do not ship the non-RT path in a product before a legal review, or before Renderlab replaces the method.
