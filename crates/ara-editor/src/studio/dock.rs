@@ -359,7 +359,7 @@ fn split_at<'a>(node: &'a mut DockNode, path: &[u8]) -> Option<&'a mut DockNode>
 }
 
 /// Every panel a dock area can hold, in the Window menu's order.
-pub(super) const PANELS: [&str; 17] = [
+pub(super) const PANELS: [&str; 18] = [
     "scene",
     "game",
     "hierarchy",
@@ -377,6 +377,7 @@ pub(super) const PANELS: [&str; 17] = [
     "build",
     "import",
     "settings",
+    "mesh-paint",
 ];
 
 /// The id of the area whose tabs hold `panel`, in the main window's layout.
@@ -404,6 +405,7 @@ pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
         "build" => ("Build", icons::HAMMER),
         "import" => ("Import", icons::DOWNLOAD),
         "settings" => ("Settings", icons::SETTINGS),
+        "mesh-paint" => ("Mesh Paint", icons::BRUSH),
         _ => ("Panel", icons::SQUARE),
     }
 }

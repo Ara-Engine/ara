@@ -1600,6 +1600,54 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 .and_then(|()| act(e, "editor.focus", json!({"panel": "inspector"}))),
             None => Err("Choose a lighting entity".into()),
         },
+        // Mesh Paint: on and off, and the brush (each change turns it on).
+        "window.mesh_paint" => act(e, "editor.layout.show", json!({"panel": "mesh-paint"})),
+        "paint.mode" => {
+            // Its panel shows first: a layout action writes the window's state back.
+            if e.state.paint.take().is_none() {
+                let _ = act(e, "editor.layout.show", json!({"panel": "mesh-paint"}));
+                e.state.paint = Some(Default::default());
+            }
+            Ok(())
+        }
+        id if id.starts_with("paint.tool.") => {
+            match crate::paint::PaintTool::parse(id.trim_start_matches("paint.tool.")) {
+                Some(tool) => {
+                    super::mesh_paint::edit(s, |p| p.tool = tool);
+                    Ok(())
+                }
+                None => Err(format!("{id}: unknown command").into()),
+            }
+        }
+        id if id.starts_with("paint.") => {
+            use crate::paint::PaintSettings;
+            let change: Option<fn(&mut PaintSettings)> = match id.trim_start_matches("paint.") {
+                "channel.red" => Some(|p| p.channels[0] = !p.channels[0]),
+                "channel.green" => Some(|p| p.channels[1] = !p.channels[1]),
+                "channel.blue" => Some(|p| p.channels[2] = !p.channels[2]),
+                "channel.alpha" => Some(|p| p.channels[3] = !p.channels[3]),
+                "color.white" => Some(|p| p.color = [1.0, 1.0, 1.0, 1.0]),
+                "color.black" => Some(|p| p.color = [0.0, 0.0, 0.0, 1.0]),
+                "color.red" => Some(|p| p.color = [1.0, 0.0, 0.0, 1.0]),
+                "color.green" => Some(|p| p.color = [0.0, 1.0, 0.0, 1.0]),
+                "color.blue" => Some(|p| p.color = [0.0, 0.0, 1.0, 1.0]),
+                "swap" => Some(|p| std::mem::swap(&mut p.color, &mut p.erase)),
+                "radius.up" => Some(|p| p.radius = (p.radius * 1.25).min(100.0)),
+                "radius.down" => Some(|p| p.radius = (p.radius / 1.25).max(0.005)),
+                "strength.up" => Some(|p| p.strength = (p.strength + 0.1).min(1.0)),
+                "strength.down" => Some(|p| p.strength = (p.strength - 0.1).max(0.0)),
+                "falloff.up" => Some(|p| p.falloff = (p.falloff + 0.1).min(1.0)),
+                "falloff.down" => Some(|p| p.falloff = (p.falloff - 0.1).max(0.0)),
+                _ => None,
+            };
+            match change {
+                Some(change) => {
+                    super::mesh_paint::edit(s, change);
+                    Ok(())
+                }
+                None => Err(format!("{id}: unknown command").into()),
+            }
+        }
         "tools.cs.reload" => super::scripts::reload(s),
         "tools.cs.solution" => super::scripts::solution(s),
         "component.new_script" => {
