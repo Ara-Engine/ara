@@ -49,3 +49,21 @@ dotnet target/iteration-perf/source-hash-probe/bin/SourceHash/release/SourceHash
 ```
 
 `plot_followup.py --output /absolute/graphs` regenerates the publication PNGs (optional matplotlib dependency; never a build prerequisite).
+
+## SDK fingerprint streams
+
+The next production slice replaces whole-assembly byte arrays with standard `SHA256.HashData(Stream)` for tool/runtime/generator/editor identities. Every byte is still read on every identity computation. File sharing remains read-only and `using` closes each handle. There is no metadata cache or custom decoder. Streaming may issue more reads; allocation savings alone do not establish a latency gain.
+
+Twelve fresh direct-call processes (ABBA per four-file set), four warmups plus twenty measured sets/process, all digests equal:
+
+| Four-file set | Baseline allocated bytes | Candidate allocated bytes |
+| --- | ---: | ---: |
+| Actual compiler/runtime/generator/editor DLLs | 721,672 | 1,992 |
+| Four 64 KiB files | 263,432 | 1,992 |
+| Four 1 MiB files | 4,195,816 | 1,992 |
+
+These medians count reads, hash work, result arrays and strings on the current thread. No clocks are admitted. The [raw SDK packet](sdk_hash_allocations_mac_2026-11-10.json) retains every sample, exact input hashes, production DLL identity and source bindings. The optional helper also accepts `--sdk-files /absolute/files.json` after the server path; baseline DLLs without `HashFile` call the original production `Hash(File.ReadAllBytes)` path. Input writes and reference digests stay outside the counter.
+
+Audited Release build, all 318 .NET tests (222 compiler), and six native publication/lifecycle tests pass. SDK hashing tests cover empty/small/page-boundary/large files, Unicode paths, exclusive sharing errors, missing/directory errors, immediate handle release, and actual installed SDK images.
+
+[Rejected campaign ledger](compiler_followup_rejections_mac_2026-11-10.json) preserves each failed admission, its first observer error, raw unaccepted request durations and report hashes. The original 2026-11-09 one-way dependency pair remains historical evidence; no rejected follow-up fills in its missing reverse arm.

@@ -1,0 +1,406 @@
+{
+  "date": "2026-11-10",
+  "scope": "Rejected admissions and quality identity mismatch; no durations in this packet are accepted performance evidence. Each finite campaign stopped after the rejected cell and never started a later arm. Original raw artifacts remain under target/script-preparation-tail-20261110.",
+  "attempts": [
+    {
+      "name": "paired-smoke",
+      "accepted": false,
+      "failure": "RuntimeError('competing build before launch; no retry')",
+      "campaign_sha256": "32bf51bcb7ebc67b07dcc36bbf3bcb70c811040e61c26c6e3dfb266d1a46c18e",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": null,
+          "observer_error_count": 1,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 87599,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/usr/local/share/dotnet/dotnet",
+              "argv": "/usr/local/share/dotnet/dotnet /usr/local/share/dotnet/sdk/10.0.203/MSBuild.dll /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false",
+              "ps_cumulative_cpu": "0:03.16"
+            }
+          },
+          "stable_bundles": null,
+          "stable_scripts": null,
+          "stable_power": null,
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "paired-smoke-02",
+      "accepted": false,
+      "failure": "RuntimeError('competing build before launch; no retry')",
+      "campaign_sha256": "1b4949dbdcab9f24df2f690e4b94039bb1f12a40936e712aa0ec40bb0883584e",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": null,
+          "observer_error_count": 3,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 97131,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -p renderlab --features backend-ara --test ara_backend -- --nocapture --test-threads=1",
+              "ps_cumulative_cpu": "0:00.14"
+            }
+          },
+          "stable_bundles": null,
+          "stable_scripts": null,
+          "stable_power": null,
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "paired-quality",
+      "accepted": false,
+      "failure": "RuntimeError('exact PE/PDB/schema parity failed; timings unaccepted')",
+      "campaign_sha256": "6fd3c87e6b213b7207449c497b580262ffaa6e9c74446a84fd49094fa63638cd",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 0,
+          "first_error": null,
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 1665.650458977325,
+            "all_ms": [
+              1665.650458977325,
+              30.84016701905057,
+              14.597208006307483
+            ],
+            "warmup_count": 1,
+            "p50_ms": 22.718687512679026,
+            "p95_ms": 30.84016701905057,
+            "peak_rss_bytes": 165232640,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329"
+          },
+          "raw_report_sha256": "5864268960c5930032bc850ffc285a43306b28307910e3da08e0e67c4179d3ef",
+          "original_cell_flag": true,
+          "timings_accepted": false
+        },
+        {
+          "key": "1-candidate",
+          "exit": 0,
+          "observer_error_count": 0,
+          "first_error": null,
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 1503.937333007343,
+            "all_ms": [
+              1503.937333007343,
+              30.67575002205558,
+              11.88625002396293
+            ],
+            "warmup_count": 1,
+            "p50_ms": 21.281000023009256,
+            "p95_ms": 30.67575002205558,
+            "peak_rss_bytes": 164888576,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "d072e4c18faf7feb6b29122af54df7b2096c0b375b2aa5c974564395b5981891"
+          },
+          "raw_report_sha256": "a139e516c99f5f32ae5a0d64f5319ac719a2f25306314b113780d44bb9c3c263",
+          "original_cell_flag": true,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "dependency-abba",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "b321d4d625d0d6976f435d9c019425f7b41d945767273eb9bddf0d6d5627a95d",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 107,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 1835,
+              "pcpu_diagnostic_only": 15.6,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -p renderlab --features backend-ara --test ara_backend all_ported_stages -- --nocapture",
+              "ps_cumulative_cpu": "0:00.12"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 3773.6309170140885,
+            "all_ms": [
+              3773.6309170140885,
+              2613.531499984674,
+              2699.256666994188,
+              2674.340375000611,
+              2663.4862500068266,
+              2640.4753339884337,
+              2723.9904160087463,
+              2738.2249170041177,
+              2715.7861669838894,
+              2677.744000015082,
+              2762.4585409939755,
+              2732.536458002869,
+              2757.0595419965684,
+              2698.74091699603,
+              2747.2778340161312,
+              2745.012333994964,
+              2733.462167001562,
+              2721.935500012478,
+              2802.58237500675,
+              2778.60991700436,
+              2738.967000012053,
+              2808.034540998051,
+              2856.408417021157,
+              2932.5812500028405,
+              3020.671832986409
+            ],
+            "warmup_count": 5,
+            "p50_ms": 2741.9896670035087,
+            "p95_ms": 2932.5812500028405,
+            "peak_rss_bytes": 614318080,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329"
+          },
+          "raw_report_sha256": "92b20da6c4995ae3c89df35cfe9bbaac12f036c6b34f4ce81bf3d019b1b1da25",
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "retained-abba",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "c025f6bc6c9b4e9d44d7686b9ccdf5c96fa4f0da3df880de31277b4bbe2d9b3d",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 178,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 4133,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -p renderlab --features backend-ara --test ara_backend packed_light_clusters -- --nocapture --test-threads=1",
+              "ps_cumulative_cpu": "0:00.04"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 2886.9698340131436,
+            "all_ms": [
+              2886.9698340131436,
+              1439.3192919960711,
+              1450.6250830017962,
+              1508.5501249996014,
+              1548.2261659926735,
+              1549.7001250041649,
+              1648.1581249972805,
+              1646.8631669995375,
+              1608.7234999868087,
+              1623.9694170071743,
+              1640.5009999871254,
+              1601.6180829901714,
+              1554.194500000449,
+              1541.6683749936055,
+              1535.6054999865592,
+              1523.9665830158629,
+              1511.2353329895996,
+              1496.1442920030095,
+              1519.1657500108704,
+              1532.887417008169,
+              1522.4224159901496,
+              1526.735625026049,
+              1483.7246669922024,
+              1508.5134170076344,
+              1508.4699580038432
+            ],
+            "warmup_count": 5,
+            "p50_ms": 1534.246458497364,
+            "p95_ms": 1646.8631669995375,
+            "peak_rss_bytes": 257343488,
+            "runtime": {
+              "version": "10.0.7",
+              "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "4b8b6715976ab0b626474dbe62d4afc1cd4cd80e9794975b28f63393237f8043"
+          },
+          "raw_report_sha256": "681be1a558da2d6cc11eff7c2233649e60339e69f0ed40bb00267dd81125894d",
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "retained-abba-quiet",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "6ee5474d11c394c9617fbe3b58d0819f1a73c57bd34c5a8d907afea6500c6057",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 118,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 15533,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -p renderlab --features backend-ara --test ara_backend -- --nocapture --test-threads=1",
+              "ps_cumulative_cpu": "0:00.04"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 2955.194208974717,
+            "all_ms": [
+              2955.194208974717,
+              1527.9934580030385,
+              1593.760125018889,
+              1597.4087500071619,
+              1586.0821249953005,
+              1603.584750002483,
+              1568.0915839911904,
+              1508.6951659759507,
+              1495.233666995773,
+              1486.882459023036,
+              1513.611583999591,
+              1517.652625014307,
+              1514.451959024882,
+              1503.3132499956992,
+              1496.393999987049,
+              1491.477457981091,
+              1499.8567500151694,
+              1521.7268340056762,
+              1537.9732079745736,
+              1548.2416250160895,
+              1579.6515420079231,
+              1579.5604159939103,
+              1650.539458001731,
+              1632.3231670248788,
+              1617.9635000007693
+            ],
+            "warmup_count": 5,
+            "p50_ms": 1519.6897295099916,
+            "p95_ms": 1632.3231670248788,
+            "peak_rss_bytes": 254377984,
+            "runtime": {
+              "version": "10.0.7",
+              "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "4b8b6715976ab0b626474dbe62d4afc1cd4cd80e9794975b28f63393237f8043"
+          },
+          "raw_report_sha256": "8c656c10bd545b4b05228e9364f42da2e3cd21c674f0f3eb18ccb9d91d39a69d",
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    },
+    {
+      "name": "dependency-abba-quiet",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "99c58847743a37bb606583af75c72a104664a1d2496edcdfe2632ddc7e9e9286",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 240,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 30064,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -p renderlab --features backend-ara --test ara_backend atmosphere_lut_chain -- --nocapture --test-threads=1",
+              "ps_cumulative_cpu": "0:00.03"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "unaccepted_raw": {
+            "first_ms": 3941.8931670079473,
+            "all_ms": [
+              3941.8931670079473,
+              2674.871124996571,
+              2743.6759589763824,
+              2790.119958022842,
+              2775.4082499886863,
+              2822.7852920244914,
+              2815.402875014115,
+              2755.6197910162155,
+              2818.77570800134,
+              2773.271082987776,
+              2756.663625012152,
+              2741.932375007309,
+              2772.7542920038104,
+              2760.8478339971043,
+              2783.664292015601,
+              2734.4317079987377,
+              2887.951290991623,
+              2838.0052089923993,
+              2696.424082998419,
+              2729.317541990895,
+              2837.0138329919428,
+              2789.4393329916056,
+              2858.5775830142666,
+              3004.9989169929177,
+              4054.3651249899995
+            ],
+            "warmup_count": 5,
+            "p50_ms": 2786.5518125036033,
+            "p95_ms": 3004.9989169929177,
+            "peak_rss_bytes": 628375552,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329"
+          },
+          "raw_report_sha256": "56cff8ca21b92953460c09751c8fd7b7d954a4f7f79588de7232729cdcc680c3",
+          "original_cell_flag": false,
+          "timings_accepted": false
+        }
+      ]
+    }
+  ]
+}
