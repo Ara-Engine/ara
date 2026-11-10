@@ -29,7 +29,8 @@ pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool, from: Queue) -> anyhow
     let shared = info.graphics_family == info.compute_family;
     if deferred {
         gpu.begin_deferred_completion()?;
-        // One family aliases both classes onto the scene queue; two families never do.
+        // Guards the forced single-family device, where deferred graphics must alias the
+        // compute queue. Two families can never share a native queue, so there it holds.
         anyhow::ensure!(
             shared == (gpu.native_queue(Queue::Graphics) == gpu.native_queue(Queue::Compute)),
             "deferred queues do not match the device's family layout"
