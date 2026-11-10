@@ -79,6 +79,34 @@ fn asset_of(e: &Editor, target: &Target) -> Option<String> {
     model.or_else(|| e.state.asset_path.clone())
 }
 
+/// Flips a user setting that is `default` when unset.
+fn flip_setting(e: &mut Editor, key: &str, default: bool) -> R {
+    let on = e
+        .state
+        .settings
+        .get(key)
+        .and_then(Value::as_bool)
+        .unwrap_or(default);
+    set(e, key, json!(!on))
+}
+
+/// `snake_case` as `camelCase` (the `editor.view` mode names).
+fn camel(snake: &str) -> String {
+    let mut out = String::with_capacity(snake.len());
+    let mut upper = false;
+    for c in snake.chars() {
+        if c == '_' {
+            upper = true;
+        } else if upper {
+            out.extend(c.to_uppercase());
+            upper = false;
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// `roots` and everything under them, roots first.
 fn with_descendants(resolved: &ara_doc::prefab::Resolved, roots: &[String]) -> Vec<String> {
     let mut out: Vec<String> = roots.to_vec();
@@ -180,6 +208,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         super::asset_ops::run(s, id, target);
         return;
     }
+    let revision = s.editor.host.store().revision();
     let e = &mut s.editor;
     let result = match id {
         "file.save" | "file.save_all" => {
@@ -508,6 +537,244 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             None => Err("Select a prefab instance".into()),
         },
+        // View: modes, effects, quality, what draws, gizmos, the camera, the UI.
+        id if id.starts_with("view.mode.") => {
+            let mode = match id.trim_start_matches("view.mode.") {
+                "unlit" | "base_color" => "baseColor".to_owned(),
+                "gi_debug" => "gi_diffuse".to_owned(),
+                snake => camel(snake),
+            };
+            view(e, json!({"viewMode": mode}))
+        }
+        id if id.starts_with("view.debug.") => {
+            type Flip = fn(&mut ara_render::RenderDebug);
+            let flip: Option<Flip> = match id.trim_start_matches("view.debug.") {
+                "ambient_occlusion" => Some(|d| d.ambient_occlusion = !d.ambient_occlusion),
+                "shadows" => Some(|d| d.shadows = !d.shadows),
+                "soft_shadows" => Some(|d| d.soft_shadows = !d.soft_shadows),
+                "screen_reflections" => Some(|d| d.screen_reflections = !d.screen_reflections),
+                "reflection_captures" => Some(|d| d.reflection_captures = !d.reflection_captures),
+                "global_illumination" => Some(|d| d.global_illumination = !d.global_illumination),
+                "screen_gi" => Some(|d| d.screen_gi = !d.screen_gi),
+                "volumetric_fog" => Some(|d| d.volumetric_fog = !d.volumetric_fog),
+                "temporal_jitter" => Some(|d| d.temporal_jitter = !d.temporal_jitter),
+                "full_resolution" => Some(|d| d.full_resolution = !d.full_resolution),
+                "reflections" => Some(|d| {
+                    use ara_render::ReflectionView as R;
+                    d.reflections = if d.reflections == R::Reflections {
+                        R::Lit
+                    } else {
+                        R::Reflections
+                    }
+                }),
+                "reflection_sources" => Some(|d| {
+                    use ara_render::ReflectionView as R;
+                    d.reflections = if d.reflections == R::Sources {
+                        R::Lit
+                    } else {
+                        R::Sources
+                    }
+                }),
+                "reset" => Some(|d| *d = ara_render::RenderDebug::default()),
+                _ => None,
+            };
+            match flip {
+                Some(flip) => {
+                    super::scene_overlays::flip_effect(s, flip);
+                    Ok(())
+                }
+                None => Err(format!("{id}: unknown effect").into()),
+            }
+        }
+        id if id.starts_with("view.quality.") => set(
+            e,
+            "viewport.quality",
+            json!(id.trim_start_matches("view.quality.")),
+        ),
+        "view.fidelity" => {
+            use ara_render_fidelity::presets::QualityPreset;
+            let low = |c| e.state.resolve_quality(c) == Some(QualityPreset::Low);
+            let next = if e.state.quality {
+                "low"
+            } else if low(e.state.project_quality()) {
+                "auto"
+            } else {
+                "project"
+            };
+            set(e, "viewport.quality", json!(next))
+        }
+        "view.show.grid" | "view.show.outline" => {
+            flip_setting(e, &format!("viewport.{}", &id[10..]), true)
+        }
+        "view.show.bounds" | "view.show.colliders" | "view.show.stats" => {
+            flip_setting(e, &format!("viewport.{}", &id[10..]), false)
+        }
+        "view.show.gizmos" | "view.gizmos.toggle" => flip_setting(e, "viewport.gizmos", true),
+        "view.gizmos.icons" => flip_setting(e, "viewport.icons", true),
+        "view.gizmos.icons3d" => flip_setting(e, "viewport.icons3d", true),
+        "view.gizmos.icon_size.small" => set(e, "viewport.iconSize", json!(60)),
+        "view.gizmos.icon_size.medium" => set(e, "viewport.iconSize", json!(100)),
+        "view.gizmos.icon_size.large" => set(e, "viewport.iconSize", json!(140)),
+        "view.gizmos.icon_size.huge" => set(e, "viewport.iconSize", json!(200)),
+        "view.gizmos.all_types" => set(e, "viewport.gizmoTypes", json!({})),
+        "view.show.orientation" => {
+            super::scene_overlays::update(s, "orientation", |d| d.hidden = !d.hidden);
+            Ok(())
+        }
+        "view.overlays.reset" => {
+            super::scene_overlays::reset(s);
+            Ok(())
+        }
+        "view.hide_overlays" => {
+            let hidden = e.state.hide_overlays;
+            view(e, json!({"hideOverlays": !hidden}))
+        }
+        "view.game" => {
+            let on = e.state.game_view;
+            view(e, json!({"gameView": !on}))
+        }
+        "view.camera.front" | "view.camera.back" | "view.camera.left" | "view.camera.right"
+        | "view.camera.top" | "view.camera.bottom" => {
+            use std::f32::consts::{FRAC_PI_2, PI};
+            let (yaw, pitch) = match &id[12..] {
+                "front" => (0.0, 0.0),
+                "back" => (PI, 0.0),
+                "left" => (-FRAC_PI_2, 0.0),
+                "right" => (FRAC_PI_2, 0.0),
+                "top" => (0.0, 1.54),
+                _ => (0.0, -1.54),
+            };
+            let c = e.state.camera;
+            act(
+                e,
+                "editor.camera",
+                json!({"target": c.target.to_array(), "yaw": yaw, "pitch": pitch, "distance": c.distance}),
+            )
+        }
+        "view.camera.align" => match target.entity(&e.state) {
+            Some(entity) => act(e, "editor.camera", json!({"entity": entity})),
+            None => Err("Select a Camera entity".into()),
+        },
+        "view.camera.speed.slow" => set(e, "viewport.cameraSpeed", json!(1.0)),
+        "view.camera.speed.normal" => set(e, "viewport.cameraSpeed", json!(4.0)),
+        "view.camera.speed.fast" => set(e, "viewport.cameraSpeed", json!(16.0)),
+        "view.camera.speed_up" | "view.camera.speed_down" => {
+            let v = e
+                .state
+                .settings
+                .get("viewport.cameraSpeed")
+                .and_then(Value::as_f64)
+                .unwrap_or(4.0);
+            let v = if id.ends_with("up") { v * 2.0 } else { v / 2.0 };
+            set(e, "viewport.cameraSpeed", json!(v.clamp(0.5, 50.0)))
+        }
+        "view.camera.bookmark.save" => act(e, "editor.camera.bookmark", json!({"action": "save"})),
+        "view.camera.fov" | "view.camera.bookmarks" | "view.camera.bookmark.delete" => {
+            s.local.overlay_settings = Some("camera");
+            Ok(())
+        }
+        "view.zoom_in" | "view.zoom_out" | "view.zoom_reset" => {
+            let v = e
+                .state
+                .settings
+                .get("appearance.uiScale")
+                .and_then(Value::as_f64)
+                .unwrap_or(1.0);
+            let next = match id {
+                "view.zoom_in" => (((v + 0.1) * 20.0).round() / 20.0).clamp(0.75, 2.0),
+                "view.zoom_out" => (((v - 0.1) * 20.0).round() / 20.0).clamp(0.75, 2.0),
+                _ => 1.0,
+            };
+            set(e, "appearance.uiScale", json!(next))
+        }
+        "view.density.compact" => set(e, "appearance.density", json!("compact")),
+        "view.density.comfortable" => set(e, "appearance.density", json!("comfortable")),
+        // Snapping: the overlay's panel holds the steps.
+        "snap.grid" | "snap.rotation" | "snap.scale" | "snap.settings" => {
+            s.local.overlay_settings = Some("snapping");
+            Ok(())
+        }
+        "snap.surface" => flip_setting(e, "viewport.surfaceSnap", false),
+        "snap.vertex" => flip_setting(e, "viewport.vertexSnap", false),
+        // Selection.
+        "select.siblings" | "select.same_type" | "select.same_asset" => {
+            let this = target
+                .entity(&e.state)
+                .and_then(|entity| s.resolved.get(entity));
+            let Some(this) = this else {
+                e.report_failure(&*anyhow::anyhow!("Select an entity"));
+                return;
+            };
+            let components = |r: &ara_doc::Record| {
+                r.keys()
+                    .filter(|k| ara_doc::is_component_key(k))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+            let model = |r: &ara_doc::Record| {
+                r.get("MeshRenderer")
+                    .map(|m| (m.get("model").cloned(), m.get("shape").cloned()))
+            };
+            let ids = s
+                .resolved
+                .iter()
+                .filter(|(_, x)| match id {
+                    "select.siblings" => x.parent == this.parent,
+                    "select.same_type" => components(&x.record) == components(&this.record),
+                    _ => model(&this.record).is_some() && model(&x.record) == model(&this.record),
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            select(e, ids)
+        }
+        "edit.invert_selection" => {
+            let ids = s
+                .resolved
+                .keys()
+                .filter(|id| !e.state.selection.contains(id))
+                .cloned()
+                .collect();
+            select(e, ids)
+        }
+        // Transform.
+        "transform.reset_position" | "transform.reset_rotation" | "transform.reset_scale" => {
+            let field = id.trim_start_matches("transform.reset_");
+            let commands = target
+                .entities(&e.state)
+                .iter()
+                .map(|entity| json!({"cmd": "editor.property.reset", "args": {"entity": entity, "path": format!("Transform.{field}")}}))
+                .collect();
+            apply(e, commands, &format!("Reset {field}"))
+        }
+        "transform.move_to_view" => {
+            let p = e.state.camera.target;
+            let commands = crate::inspector::edit_commands(
+                &target.entities(&e.state),
+                "Transform.position",
+                &json!([p.x, p.y, p.z]),
+            );
+            apply(e, commands, "Move to view")
+        }
+        // Window.
+        "window.maximize" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            let next = if e.state.maximized.as_deref() == Some(panel.as_str()) {
+                String::new()
+            } else {
+                panel
+            };
+            view(e, json!({"maximized": next}))
+        }
+        "window.close_panel" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            act(e, "editor.layout.close", json!({"panel": panel}))
+        }
         "build.current" => {
             super::build_page::build(s);
             Ok(())
@@ -642,7 +909,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
         _ => Err(format!("{id}: unknown command").into()),
     };
-    if result.is_ok() && id.starts_with("create.") {
+    // Whatever changed the document shows at once, not on the host's next pass.
+    if s.editor.host.store().revision() != revision {
         s.resolve();
     }
     if let Err(error) = result {
@@ -678,6 +946,14 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
         (false, false, 0x48) => "edit.hide",
         (false, true, 0x48) => "view.isolate",
+        (false, true, 0x47) => "view.hide_overlays",
+        (true, true, 0x47) => "view.gizmos.toggle",
+        (false, false, 0x61) => "view.camera.front",
+        (true, false, 0x61) => "view.camera.back",
+        (false, false, 0x63) => "view.camera.right",
+        (true, false, 0x63) => "view.camera.left",
+        (false, false, 0x67) => "view.camera.top",
+        (true, false, 0x67) => "view.camera.bottom",
         (false, false, 0x46) => "view.frame",
         (false, false, 0x24) => "view.frame_all",
         (false, false, 0x57) => "view.tool.move",

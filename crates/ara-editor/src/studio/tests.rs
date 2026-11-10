@@ -484,6 +484,49 @@ fn the_build_window_offers_a_profile_and_starts_creating_one() {
 }
 
 #[test]
+fn view_selection_and_transform_commands_run_in_the_studio() {
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str| {
+        rt.update(|s| super::commands::run(s, id, &crate::catalog::Target::None));
+        settle(rt);
+    };
+    run(&mut rt, "view.mode.lit_wireframe");
+    assert_eq!(rt.state().editor.state.view_mode, "litWireframe");
+    run(&mut rt, "view.debug.shadows");
+    assert!(!rt.state().editor.state.render_debug.shadows);
+    run(&mut rt, "view.debug.reset");
+    assert!(rt.state().editor.state.render_debug.shadows);
+    run(&mut rt, "view.show.grid");
+    assert_eq!(
+        rt.state().editor.state.settings["viewport.grid"],
+        json!(false)
+    );
+    run(&mut rt, "view.camera.top");
+    assert!(rt.state().editor.state.camera.pitch > 1.5, "looking down");
+    run(&mut rt, "view.hide_overlays");
+    assert!(
+        rt.find("scene/overlay/tools").is_none(),
+        "Hide Overlays clears the image"
+    );
+    run(&mut rt, "view.hide_overlays");
+    assert!(rt.find("scene/overlay/tools").is_some());
+    // The box moved, then reset.
+    rt.update(|s| s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_box","path":"Transform.position","value":[4,0,0]}})], "Move"));
+    assert_eq!(position(&rt, "e_box"), json!([4, 0, 0]));
+    run(&mut rt, "transform.reset_position");
+    assert_ne!(position(&rt, "e_box"), json!([4, 0, 0]));
+    run(&mut rt, "edit.invert_selection");
+    assert!(
+        !rt.state()
+            .editor
+            .state
+            .selection
+            .contains(&"e_box".to_owned())
+    );
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

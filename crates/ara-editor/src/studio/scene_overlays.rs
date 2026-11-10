@@ -295,6 +295,10 @@ fn set(s: &mut Studio, key: &str, value: Value) {
 /// The overlays over the Scene view: one stack per edge and corner, then the overlay
 /// being dragged at the pointer, with its landing edge marked.
 pub(super) fn layer(s: &Studio) -> Vec<El<Studio>> {
+    // View › Hide Overlays (Shift+G) clears the image of every one.
+    if s.editor.state.hide_overlays {
+        return Vec::new();
+    }
     let dragging = s.local.overlay_drag;
     let mut stacks: BTreeMap<(u8, bool), Vec<(f32, &'static Def)>> = BTreeMap::new();
     for d in &OVERLAYS {
@@ -855,7 +859,7 @@ const EFFECTS: [Switch; 9] = [
 
 /// Flips one render debug switch: the Scene view reads it each frame, a running Play
 /// gets it at once, and each Play start carries it.
-fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)) {
+pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)) {
     flip(&mut s.editor.state.render_debug);
     if let Some(world) = s.editor.play_world.clone() {
         let debug = s.editor.state.render_debug;
