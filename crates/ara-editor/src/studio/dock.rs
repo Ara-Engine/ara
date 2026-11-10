@@ -92,25 +92,22 @@ pub(super) fn floating(s: &Studio) -> Vec<El<Studio>> {
                 .first()
                 .map_or("Window", |p| panel_title(p).0)
                 .to_owned();
+            // A slim drag strip: the tabs below already name what the window holds.
             let bar = row()
                 .key(format!("float/{id}/bar"))
-                .h(22.0)
-                .pad_x(8.0)
-                .gap(6.0)
+                .h(18.0)
+                .pad_x(4.0)
                 .align(Align::Center)
                 .cursor(Cursor::Move)
                 .label(format!("{title} window: drag to move"))
                 .on_pointer(gesture(false))
+                .child(el().size(18.0))
                 .child(
-                    icon(icons::GRIP_HORIZONTAL)
-                        .size(12.0)
-                        .color(c.muted_foreground.0),
-                )
-                .child(
-                    text(title)
-                        .text_size(11.5)
-                        .color(c.muted_foreground.0)
-                        .grow(1.0),
+                    row().grow(1.0).justify(Justify::Center).child(
+                        icon(icons::GRIP_HORIZONTAL)
+                            .size(12.0)
+                            .color(c.muted_foreground.0),
+                    ),
                 )
                 .child(
                     icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close window")
