@@ -5,6 +5,11 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use support::{Agent, demo_copy};
 
+/// Exposure lock (EV100) for every capture here. The brightness comparisons below
+/// need it: automatic exposure meters each image back to the same mean, so a lamp
+/// switched off would read as bright as one switched on.
+const EV100: f32 = 9.;
+
 fn capture(agent: &mut Agent, world: &Value, root: &Path, name: &str) -> [f64; 3] {
     let path = root.join(format!("{name}.png"));
     let result = agent.play(
@@ -75,7 +80,8 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
     agent.pool_ready();
     let world = agent.play(
         "start",
-        json!({"scene":"levels/parts.scene","startPaused":true,"seed":81}),
+        json!({"scene":"levels/parts.scene","startPaused":true,"seed":81,
+        "renderDebug":{"exposure":EV100}}),
     )["world"]
         .clone();
     let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -157,7 +163,8 @@ fn agent_swaps_native_material_assets_on_a_procedural_primitive_in_play() {
     agent.pool_ready();
     let world = agent.play(
         "start",
-        json!({"scene":"levels/material.scene","startPaused":true,"seed":82}),
+        json!({"scene":"levels/material.scene","startPaused":true,"seed":82,
+        "renderDebug":{"exposure":EV100}}),
     )["world"]
         .clone();
     let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
