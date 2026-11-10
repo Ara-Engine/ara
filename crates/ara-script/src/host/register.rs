@@ -378,7 +378,7 @@ impl Registry {
             for a in &s.columns {
                 if self
                     .component(&a.name)
-                    .is_some_and(|i| self.components[i as usize].json)
+                    .is_some_and(|i| !self.components[i as usize].native)
                 {
                     problems.push(error(codes::BAD_DESCRIPTOR, format!("system `{}` requests a raw column for accessor component `{}`; use World.Get in a behaviour or command",s.name,a.name)));
                 }
@@ -498,6 +498,7 @@ impl Registry {
                         id,
                         layout,
                         owner,
+                        native: true,
                         json: false,
                     };
                     ids_changed = true;
@@ -509,6 +510,7 @@ impl Registry {
                         id,
                         layout,
                         owner,
+                        native: true,
                         json: false,
                     });
                     self.catalog_dirty = true;

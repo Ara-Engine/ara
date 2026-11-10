@@ -1,0 +1,579 @@
+{
+  "date_local": "2026-11-09",
+  "status": "Verified correctness smoke only. No feature performance measurements accepted.",
+  "scope": "Real query_filter fixture: retained Unity EntityQuery with Burst IJobEntity Schedule+Complete versus retained Bevy QueryState with contiguous iteration/dispatch. This does not measure full Ara runtime, C# bridge, shipping-player or frame performance.",
+  "quality_passed": true,
+  "timings_accepted": false,
+  "timing_comparable": false,
+  "actual_versions": {
+    "unity_editor": "6000.4.5f1 arm64",
+    "unity_packages": [
+      {
+        "name": "com.unity.burst",
+        "version": "1.8.29",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.collections",
+        "version": "6.4.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.entities",
+        "version": "6.4.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.ext.nunit",
+        "version": "2.0.5",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.mathematics",
+        "version": "1.3.3",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.modules.assetbundle",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.audio",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.hierarchycore",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.imgui",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.jsonserialize",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.physics",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.ui",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.uielements",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.unityanalytics",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.modules.unitywebrequest",
+        "version": "1.0.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.nuget.mono-cecil",
+        "version": "1.11.6",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.profiling.core",
+        "version": "1.0.3",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.scriptablebuildpipeline",
+        "version": "2.6.1",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.serialization",
+        "version": "3.1.5",
+        "source": "Registry"
+      },
+      {
+        "name": "com.unity.test-framework",
+        "version": "1.6.0",
+        "source": "BuiltIn"
+      },
+      {
+        "name": "com.unity.test-framework.performance",
+        "version": "3.4.0",
+        "source": "Registry"
+      }
+    ],
+    "bevy_family": {
+      "bevy_ecs": "0.20.0",
+      "bevy_ecs_macro_logic": "0.20.0",
+      "bevy_ecs_macros": "0.20.0",
+      "bevy_macro_utils": "0.20.0",
+      "bevy_platform": "0.20.0",
+      "bevy_ptr": "0.20.0",
+      "bevy_reflect": "0.20.0",
+      "bevy_reflect_derive": "0.20.0",
+      "bevy_tasks": "0.20.0",
+      "bevy_utils": "0.20.0"
+    },
+    "bevy_family_matches_root_lock": true,
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "blake3": "1.8.7",
+    "serde_json": "1.0.154"
+  },
+  "build": {
+    "provenance_path": "target/perf-scale/feature-rust/build-provenance.json",
+    "provenance_sha256": "11a7eb0e49be2a0eae24d8a4d624ae90fd80ad5a2b5543991a015445ea95a4fd",
+    "executable_sha256": "0f34f697658a498ae90ff03b1a852c57f59ef1131eceae1ad88c49c4944d4938",
+    "source_sha256": {
+      "benchmarks/iteration/unity/features/rust/src/protocol.rs": "d4d49abf92bec95e6695588444ffc4d3e7961f4140f9d69c031eafeacf53d917",
+      "benchmarks/iteration/unity/features/rust/src/world.rs": "2ed6f0ba1a12c1115367db65cc19338e96d25ed3d90958a169d51484c1bd3fe0",
+      "benchmarks/iteration/unity/features/rust/src/main.rs": "d47f120e64fe118b095557c7b4ba7fe097cced7dcc9edbc90ae5d62a08e2fb4a",
+      "benchmarks/iteration/unity/features/rust/Cargo.toml": "74232af276c7bdb7015a4479e1583a0b459122d4b7b4ab99fb02bc322992acbe"
+    },
+    "cargo_lock_sha256": "52ff010a23aef80c7f8e127f68d404d878a2a2018953b229dafa167a7e29207c",
+    "command": [
+      "/usr/bin/nice",
+      "-n",
+      "10",
+      "cargo",
+      "build",
+      "--release",
+      "--manifest-path",
+      "/Users/islam/.t3/worktrees/ara/t3-6f34c966/benchmarks/iteration/unity/features/rust/Cargo.toml"
+    ],
+    "environment": {
+      "CARGO_TARGET_DIR": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/feature-rust",
+      "CARGO_BUILD_JOBS": "2",
+      "RUSTFLAGS": "-C target-cpu=native",
+      "CARGO_PROFILE_RELEASE_LTO": "thin",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1",
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
+      "CARGO_PROFILE_RELEASE_DEBUG": "0",
+      "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "false"
+    },
+    "architecture": "arm64",
+    "host": "macOS-27.0-arm64-arm-64bit",
+    "source_root_revision": "50196248c4137b54c7b167cc17c26324bc7cd9c1"
+  },
+  "prepared_project": {
+    "marker_path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/uf/.ara-query-feature.json",
+    "marker_sha256": "081d4e5ec10d2df4f4f859f8efa19a85e9e258d2b0ff41d6c3314af4bba6a7a8",
+    "input_manifest_sha256": "667fd102be053ecdff43a072621101207ec303a980be1ba2294cc3476630b22f",
+    "input_manifest": {
+      "fixture": "query_filter-v1",
+      "editor": "/Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents/MacOS/Unity",
+      "requested_packages": {
+        "com.unity.entities": "6.4.0",
+        "com.unity.collections": "6.4.0",
+        "com.unity.burst": "1.8.29",
+        "com.unity.mathematics": "1.3.3"
+      },
+      "input_manifest_version": 1,
+      "template_inputs": {
+        "benchmarks/iteration/unity/MacBatch.cs": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+        "benchmarks/iteration/unity/bench.py": "4a83dbdd24b133de9f6a773b1ddadcd6f3dc1bd5fef13f195fe38f0edbffbc3f",
+        "benchmarks/iteration/unity/features/build.py": "14afdc1cc31791bcef7586d66e05d1baeec1bfca977576c5bc567b52470d88fd",
+        "benchmarks/iteration/unity/features/inputs.py": "976ca0b37967b8114fff0fa9354621ea63f8cde869ccb5410945dd6f3de174cd",
+        "benchmarks/iteration/unity/features/project.py": "50ba758420bed9e2d61c6618d4939d0826818782062e3ffe7ebffbfd44b85d41",
+        "benchmarks/iteration/unity/features/reference.py": "dd9fee9034aabedb0ee93348c0d92bea4d8d5989a6978865c0a6dbb6e7f1031c",
+        "benchmarks/iteration/unity/features/run.py": "3b3f03ef8981d8e03d0167ec8a3e1b34387652410e1ad77790c56f07ba113d9b",
+        "benchmarks/iteration/unity/features/rust/Cargo.toml": "74232af276c7bdb7015a4479e1583a0b459122d4b7b4ab99fb02bc322992acbe",
+        "benchmarks/iteration/unity/features/rust/src/main.rs": "d47f120e64fe118b095557c7b4ba7fe097cced7dcc9edbc90ae5d62a08e2fb4a",
+        "benchmarks/iteration/unity/features/rust/src/protocol.rs": "d4d49abf92bec95e6695588444ffc4d3e7961f4140f9d69c031eafeacf53d917",
+        "benchmarks/iteration/unity/features/rust/src/world.rs": "2ed6f0ba1a12c1115367db65cc19338e96d25ed3d90958a169d51484c1bd3fe0",
+        "benchmarks/iteration/unity/features/unity/Assets/Features.asmdef": "a299f83e6ac74be1735d5abc8befdbc68686d39f1accb9ebdb2037003192a19b",
+        "benchmarks/iteration/unity/features/unity/Assets/QueryBenchmark.cs": "db389b0d337fbe926a754ca0c7e624a95b4ac35320ae41c317d04385c0c0a7f9",
+        "benchmarks/iteration/unity/features/unity/Assets/QueryComponents.cs": "90d6cd7cc5b82ec1785509503ca31232d5be8ce7876eccaca9a11e96ce83767d",
+        "benchmarks/iteration/unity/features/unity/Assets/QuerySystem.cs": "767a5fb73de7f502ec8a0d5f4b49a0b35b62eab28a8996461fd0750908313c47",
+        "benchmarks/iteration/unity/features/unity/Assets/StateWriter.cs": "3bab83ce3819fb2055f4b1561a92225a42c5c4ca30456e35b7ea8e1ff9fe671d",
+        "benchmarks/iteration/unity/features/verify.py": "39d25ed5040dfe148fdbe418028beed519f9972286181f98fc7bfdff77823a7f"
+      },
+      "prepared_inputs": {
+        "Assets/Editor/Features.Editor.asmdef": "df0f3ff292faa696f35a382186cfaea74c33666892f18f06f577163f795a56b0",
+        "Assets/Editor/Features.Editor.asmdef.meta": "7b32240b0763a215d2c33c598d04582fddd0b772f4c340fc4537ef38c9ba79f7",
+        "Assets/Editor/MacBatch.cs": "b937ed2619ba4c74bc3b3a94395dc7363ce7c1c3ba17f4c4b3f32b3ea012191e",
+        "Assets/Editor/MacBatch.cs.meta": "15a927be4d6a735be6419f858f248241bd4b94528296f9eea2b2f2eda17acf8f",
+        "Assets/Editor.meta": "aa760fb2688aad07008eb2ff0a341297d2fce26e86c4187d85f6861addc49174",
+        "Assets/Features.asmdef": "a299f83e6ac74be1735d5abc8befdbc68686d39f1accb9ebdb2037003192a19b",
+        "Assets/Features.asmdef.meta": "d512d56bb9e66519af0078db155033ea706f65abb844f34e596b03e34b6ed267",
+        "Assets/QueryBenchmark.cs": "db389b0d337fbe926a754ca0c7e624a95b4ac35320ae41c317d04385c0c0a7f9",
+        "Assets/QueryBenchmark.cs.meta": "2a9c2195540b7f35e9a8ea192755b544d2adde03c241846c1d7703a99f15c7eb",
+        "Assets/QueryComponents.cs": "90d6cd7cc5b82ec1785509503ca31232d5be8ce7876eccaca9a11e96ce83767d",
+        "Assets/QueryComponents.cs.meta": "3d17bbe973093f746c50c5b0ffcd0520cdf6c646ba300bbff6092d8d87f09462",
+        "Assets/QuerySystem.cs": "767a5fb73de7f502ec8a0d5f4b49a0b35b62eab28a8996461fd0750908313c47",
+        "Assets/QuerySystem.cs.meta": "480246d4a87a30707dfcaf53a65a4cbff92ac483b013ddcbec515adc5388d4a7",
+        "Assets/StateWriter.cs": "3bab83ce3819fb2055f4b1561a92225a42c5c4ca30456e35b7ea8e1ff9fe671d",
+        "Assets/StateWriter.cs.meta": "498b489c9d02947d73ca2fc4e6eb4a3dbc26c65a5e5a2a79a5c3a98c12ba2a0c",
+        "Packages/manifest.json": "fa91eacabba80a5a635c5d586c69956e0131c17360cf92dde1ae6f7616cb8f68",
+        "Packages/packages-lock.json": "748c106a204dd959a6e655ed75534069aa16f02d28e281d5fbea202334d323a8",
+        "ProjectSettings/AudioManager.asset": "9543c41dbfc7d3951217c4dd9481ed026eb8e529b85ecf4463969a0fea747729",
+        "ProjectSettings/ClusterInputManager.asset": "40e65dd214bf254955d2c8829ca8ce2130fd3510485560ce012e9a1ddd93e623",
+        "ProjectSettings/DynamicsManager.asset": "fb36e677f7de32325bede8462e7e3eaf0be86ca374216d2907886fce7cb1d488",
+        "ProjectSettings/EditorBuildSettings.asset": "1942c088ddfeeef348fdf12390e2a2d6da51056e197458d67969d44e7b2cbbd3",
+        "ProjectSettings/EditorSettings.asset": "89cb14ab05ce8ce1e1413fa559e9d9ccb2633db48685215527d44eba43412aff",
+        "ProjectSettings/GraphicsSettings.asset": "40de98f4d46d02fb08e268ad3a722a00eed7289f4ef6d2e759984b1b4a85d2af",
+        "ProjectSettings/InputManager.asset": "d0f454ddb880912abcae92e3e12957a7446786ba89e24937e019ff3bbc0d4300",
+        "ProjectSettings/MemorySettings.asset": "cb2e41edd7f5a64298d68dd4ab768e8908e33a00f26e5ee53638e4d4251c358e",
+        "ProjectSettings/MultiplayerManager.asset": "ce4075d7a7dd8ac7ffe55de2427692c63f90dae398208bd80cec0f27cbe09f4b",
+        "ProjectSettings/NavMeshAreas.asset": "7ebbf8f53b8033104e1878b95ca07a28d0954092d81c220f14196a42f651e658",
+        "ProjectSettings/Physics2DSettings.asset": "1cfc0c8fbceec604fd7cd2a06c04ff05dddee6335b75c92b0f5715ad80ba9490",
+        "ProjectSettings/PresetManager.asset": "29c125923fe6e29f90190d4fce1c82d660e7051546e2c9d02908d18c9cf2436c",
+        "ProjectSettings/ProjectSettings.asset": "9540a69480fcf8c7c3932945e615a318220ca0bc23fd2b0c28af5aa24a7fa649",
+        "ProjectSettings/ProjectVersion.txt": "c88aca53996b7a2c9be5551cb82a59b405b91d5eb9ac511bdb83b16cfb0c4d96",
+        "ProjectSettings/QualitySettings.asset": "f1f893b1be47ad2442f58338dd7c860dc1986bb317e2f5bb31084454ffabbf4c",
+        "ProjectSettings/TagManager.asset": "996628fdc904025b83606bbfbda4fe08c0bbe916475146110e77cdc2f22c2013",
+        "ProjectSettings/TimeManager.asset": "3396f52fdc16d445024e01d7a2d99db6f0a37569d1d73c0302e9ffb857d90287",
+        "ProjectSettings/UnityConnectSettings.asset": "11251dae0356b6f43dd2c67bb511f6b7ecda4e5de425186bba3297e6f3dc1c6f",
+        "ProjectSettings/VFXManager.asset": "2973a6af930e142f62cde00076beda8a3cc3a66d9bfcde7a58ba7d4be2251c26",
+        "ProjectSettings/VersionControlSettings.asset": "e199cdfa6a8f2bf33cfd47e549198f13e3eb2a5099e908fdb4e0f14d939ccc6b"
+      },
+      "wrapper_template_sha256": "29932b7482fb6a186c85e047fba616dab4d82e44abcb2b94847aa029e4af9fe0",
+      "prepared_wrapper_sha256": "b937ed2619ba4c74bc3b3a94395dc7363ce7c1c3ba17f4c4b3f32b3ea012191e"
+    }
+  },
+  "oracle": {
+    "path": "target/perf-scale/uf/results/query-oracle-20261109/reference.bin",
+    "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+    "state_blake3": "8eddf6cc49a8acc16d35880bb84d458c930b5b1fa4a3d17e70f3c8e5d1d213f8",
+    "bytes": 36132,
+    "exact_unique_ids": 1003,
+    "actual_tag_presence_checked": true,
+    "matched_entities": 251,
+    "total_updates": 1255
+  },
+  "cases": [
+    {
+      "runners_available": 1,
+      "count": 1003,
+      "archetypes": 64,
+      "warmup": 2,
+      "frames": 3,
+      "validation": {
+        "workload": "query_filter",
+        "count": 1003,
+        "archetypes": 64,
+        "execution_lane": "correctness-smoke",
+        "quality_passed": true,
+        "timings_accepted": false,
+        "full_state_byte_identical": true,
+        "independent_scalar_reference_verified": true,
+        "full_state_blake3": "8eddf6cc49a8acc16d35880bb84d458c930b5b1fa4a3d17e70f3c8e5d1d213f8",
+        "hash_library_sha256": "e517787665aacdab64016b5e1db3f0b3057c127ccbf5126a8887fa68dc718aa5",
+        "hash_helper_link_flags": [],
+        "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+        "state_bytes": 36132,
+        "runner_budget": 1,
+        "result_sha256": {
+          "bevy": "0997d064fb008ecf47741f336e9ed71060f5de5842a7e290ce589a91d6c7ee5d",
+          "unity": "fbf134b666f44f848d909678ab3b69edadb5ed4324c39366afea04020864ea2c"
+        },
+        "power_profile_matched": true,
+        "prepared_input_manifest_sha256": {
+          "bevy": "667fd102be053ecdff43a072621101207ec303a980be1ba2294cc3476630b22f",
+          "unity": "667fd102be053ecdff43a072621101207ec303a980be1ba2294cc3476630b22f"
+        },
+        "prepared_input_manifests_match": true,
+        "resource_guards_passed": true,
+        "timing_comparable_under_recorded_controls": false,
+        "timing_comparable": false
+      },
+      "validation_path": "target/perf-scale/uf/results/query-serial-20261109-01/query_filter_1003_a64_r1_unity_smoke.validation.json",
+      "validation_sha256": "4eb0c716c3d1c601bfeab5f6c632830f766c38b226b205a2b658aa0a4b632262",
+      "engines": {
+        "bevy": {
+          "result_path": "target/perf-scale/uf/results/query-serial-20261109-01/query_filter_1003_a64_r1_bevy_smoke.json",
+          "result_sha256": "0997d064fb008ecf47741f336e9ed71060f5de5842a7e290ce589a91d6c7ee5d",
+          "launch_path": "target/perf-scale/uf/results/query-serial-20261109-01/query_filter_1003_a64_r1_bevy_smoke.launch.json",
+          "launch_sha256": "7a04236206231ee2eb34c847af742a13fe916335fe494fc8fbb4ee7c6eb04292",
+          "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+          "matched_entities": 251,
+          "total_updates": 1255,
+          "full_ids_tags_updates_checked": true,
+          "before": {
+            "loadavg": [
+              1.46630859375,
+              1.97216796875,
+              2.26220703125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "after": {
+            "loadavg": [
+              1.46630859375,
+              1.97216796875,
+              2.26220703125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "strict_timing_guard_enforced": false,
+          "configured_workers": 0
+        },
+        "unity": {
+          "result_path": "target/perf-scale/uf/results/query-serial-20261109-01/query_filter_1003_a64_r1_unity_smoke.json",
+          "result_sha256": "fbf134b666f44f848d909678ab3b69edadb5ed4324c39366afea04020864ea2c",
+          "launch_path": "target/perf-scale/uf/results/query-serial-20261109-01/query_filter_1003_a64_r1_unity_smoke.launch.json",
+          "launch_sha256": "7005fded2552134249f99be63a9d252d8af133362dbca534b4b7dbbbfc1868d9",
+          "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+          "matched_entities": 251,
+          "total_updates": 1255,
+          "full_ids_tags_updates_checked": true,
+          "before": {
+            "loadavg": [
+              1.46630859375,
+              1.97216796875,
+              2.26220703125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "after": {
+            "loadavg": [
+              1.810546875,
+              2.02197265625,
+              2.27392578125
+            ],
+            "busy_tools": [],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "strict_timing_guard_enforced": false,
+          "configured_workers": 0,
+          "environment_sha256": "f62ca79ce704e8510a9673bb24c76215498c4d1142f1e87b5bb06e80ab075e3c",
+          "effective_burst": {
+            "burst_enabled": true,
+            "burst_safety_checks": false,
+            "burst_force_safety_checks": false,
+            "burst_debug": false,
+            "finally_restored": true,
+            "initial_editor_preferences": [
+              {
+                "key": "BurstCompilation",
+                "existed": true,
+                "value": true
+              },
+              {
+                "key": "BurstCompileSynchronously",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstShowTimings",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstDebug",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstForceSafetyChecks",
+                "existed": true,
+                "value": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "runners_available": 15,
+      "count": 1003,
+      "archetypes": 64,
+      "warmup": 2,
+      "frames": 3,
+      "validation": {
+        "workload": "query_filter",
+        "count": 1003,
+        "archetypes": 64,
+        "execution_lane": "correctness-smoke",
+        "quality_passed": true,
+        "timings_accepted": false,
+        "full_state_byte_identical": true,
+        "independent_scalar_reference_verified": true,
+        "full_state_blake3": "8eddf6cc49a8acc16d35880bb84d458c930b5b1fa4a3d17e70f3c8e5d1d213f8",
+        "hash_library_sha256": "e517787665aacdab64016b5e1db3f0b3057c127ccbf5126a8887fa68dc718aa5",
+        "hash_helper_link_flags": [],
+        "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+        "state_bytes": 36132,
+        "runner_budget": 15,
+        "result_sha256": {
+          "bevy": "06495d92060078386de684640920d947ed2f679ac7404b74678238e2c9ae8959",
+          "unity": "682f5099c7833925f82257c69d0a026088096729bb50e138a246baa09ecfa161"
+        },
+        "power_profile_matched": true,
+        "prepared_input_manifest_sha256": {
+          "bevy": "667fd102be053ecdff43a072621101207ec303a980be1ba2294cc3476630b22f",
+          "unity": "667fd102be053ecdff43a072621101207ec303a980be1ba2294cc3476630b22f"
+        },
+        "prepared_input_manifests_match": true,
+        "resource_guards_passed": false,
+        "timing_comparable_under_recorded_controls": false,
+        "timing_comparable": false
+      },
+      "validation_path": "target/perf-scale/uf/results/query-parallel-20261109-01/query_filter_1003_a64_r15_unity_smoke.validation.json",
+      "validation_sha256": "8fea034803db6fab821dd4abf23bae4cd7476f8a2056efff2f4b9f6173d2ea65",
+      "engines": {
+        "bevy": {
+          "result_path": "target/perf-scale/uf/results/query-parallel-20261109-01/query_filter_1003_a64_r15_bevy_smoke.json",
+          "result_sha256": "06495d92060078386de684640920d947ed2f679ac7404b74678238e2c9ae8959",
+          "launch_path": "target/perf-scale/uf/results/query-parallel-20261109-01/query_filter_1003_a64_r15_bevy_smoke.launch.json",
+          "launch_sha256": "e60666a21113d92aa661459fd5eac9cf367d2abb6fdb79eac212be1a26ed2df0",
+          "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+          "matched_entities": 251,
+          "total_updates": 1255,
+          "full_ids_tags_updates_checked": true,
+          "before": {
+            "loadavg": [
+              2.3115234375,
+              2.1025390625,
+              2.2919921875
+            ],
+            "busy_tools": [
+              {
+                "pid": 61011,
+                "pcpu": 4.8,
+                "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests"
+              }
+            ],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "after": {
+            "loadavg": [
+              2.3115234375,
+              2.1025390625,
+              2.2919921875
+            ],
+            "busy_tools": [
+              {
+                "pid": 61011,
+                "pcpu": 3.0,
+                "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests"
+              }
+            ],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "strict_timing_guard_enforced": false,
+          "configured_workers": 14
+        },
+        "unity": {
+          "result_path": "target/perf-scale/uf/results/query-parallel-20261109-01/query_filter_1003_a64_r15_unity_smoke.json",
+          "result_sha256": "682f5099c7833925f82257c69d0a026088096729bb50e138a246baa09ecfa161",
+          "launch_path": "target/perf-scale/uf/results/query-parallel-20261109-01/query_filter_1003_a64_r15_unity_smoke.launch.json",
+          "launch_sha256": "98e960b07bba8794ee97cb788d28b19e6ba99eb008e89e4b87c45971e6a1db2b",
+          "state_sha256": "25fe10d5e6d672f095a006400bbbc1febbce2fa06aaf88a21740bc5e9bd019ea",
+          "matched_entities": 251,
+          "total_updates": 1255,
+          "full_ids_tags_updates_checked": true,
+          "before": {
+            "loadavg": [
+              2.3115234375,
+              2.1025390625,
+              2.2919921875
+            ],
+            "busy_tools": [
+              {
+                "pid": 61011,
+                "pcpu": 1.8,
+                "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests"
+              }
+            ],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "after": {
+            "loadavg": [
+              2.70263671875,
+              2.19580078125,
+              2.3212890625
+            ],
+            "busy_tools": [
+              {
+                "pid": 61546,
+                "pcpu": 6.8,
+                "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests"
+              },
+              {
+                "pid": 61556,
+                "pcpu": 63.2,
+                "command": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/rustc --crate-name ara_editor --edition=2024 crates/ara-editor/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C opt-level=1 -C embed-bitcode=no --warn=clippy::all --warn=clippy::unwrap_used --deny=unsafe_op_in_unsafe_fn --warn=clippy::undocumented_unsafe_blocks -C debug-assertions=on --test --check-cfg cfg(docsrs,test) --check-cfg cfg(feature, values(\"hotpatch\", \"tracy\")) -C metadata=52952e3e30ddba3d -C extra-filename=-dbb0cbddec49d02b --out-dir /Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps -C incremental=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/incremental -C strip=debuginfo -L dependency=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps --extern accesskit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libaccesskit-4753e5e3f16decdb.rlib --extern anyhow=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libanyhow-a7bf4e8e416eaa57.rlib --extern ara_ai=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ai-d370ad7bfe934123.rlib --extern ara_anim=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_anim-c025e7ab14782297.rlib --extern ara_asset=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset-ffdb6ce850775c65.rlib --extern ara_asset_format=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_format-5eccf6f101ff7e13.rlib --extern ara_asset_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_host-76162a8e36926da8.rlib --extern ara_audio_why=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_audio_why-5317f80be7f41cd6.rlib --extern ara_cmd=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_cmd-b5505ba9085211ab.rlib --extern ara_components=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_components-27ddf0c4b54bcb81.rlib --extern ara_crash=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_crash-2bc63f03bfbb408b.rlib --extern ara_diag=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_diag-69401b0144a2002b.rlib --extern ara_doc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_doc-653aae0547942f43.rlib --extern ara_editor_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_editor_gpu-6182407c3b22f09a.rlib --extern ara_export=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_export-5a42e6951279bc24.rlib --extern ara_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_gpu-fb1cffc545703f7c.rlib --extern ara_graph=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_graph-b281de7caa5428ce.rlib --extern ara_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_host-f79d54088d2bf299.rlib --extern ara_importers=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_importers-9c99bdf815264d6a.rlib --extern ara_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_json-f149a1ac8d538c92.rlib --extern ara_kit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_kit-12e075b1e03936e6.rlib --extern ara_material=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_material-62e0700f9aad9813.rlib --extern ara_mcp=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_mcp-9415c5a5f9f94520.rlib --extern ara_ops=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ops-2a369c4296b5fccf.rlib --extern ara_physics=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_physics-cf776a5211101a7a.rlib --extern ara_platform=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_platform-1edc317f5be03743.rlib --extern ara_play_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_play_host-28b860a43624f4a8.rlib --extern ara_profile=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_profile-fdb50973a027d196.rlib --extern ara_proto=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_proto-f861120ee30f0aaf.rlib --extern ara_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render-d8d0aaf82fb968e5.rlib --extern ara_render_fidelity=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render_fidelity-9d3689773616d4cd.rlib --extern ara_rpc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_rpc-22561c4d5ef360e9.rlib --extern ara_runtime=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime-ada3c05dbe734e64.rlib --extern ara_runtime_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime_render-e8ab555c5f182365.rlib --extern ara_schema=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_schema-431c17cc5e9f4815.rlib --extern ara_script=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_script-ea4aee15b8d0d917.rlib --extern ara_shader_cook=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_shader_cook-814011aea1441067.rlib --extern ara_texture_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_texture_gpu-bf76ff8e33b861f7.rlib --extern ara_ui=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui-0274701700160b0d.rlib --extern ara_ui_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_render-7beef6e125597287.rlib --extern ara_ui_test=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_test-d0f08a6ddf6532a1.rlib --extern ara_ui_text=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_text-292ba328737dcfa3.rlib --extern ara_update=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_update-09f07024375d4234.rlib --extern ara_vfx=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx-f2d0a429c5bf02d5.rlib --extern ara_vfx_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx_gpu-c5dcb04f163bdeb5.rlib --extern ara_world=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_world-5affad5f5206127d.rlib --extern bevy_ecs=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbevy_ecs-db826ee65d787aac.rlib --extern blake3=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libblake3-9050c4e2c9cf2e8c.rlib --extern bytemuck=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbytemuck-5cdc420bf87d9b80.rlib --extern dunce=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libdunce-64b973c242e82a34.rlib --extern glam=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-742e66c91b4bff99.rlib --extern glam34=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-27b3345d7f5adc69.rlib --extern gltf=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libgltf-037fdf4b419c0e2e.rlib --extern image=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libimage-25f77fb93d619de4.rlib --extern notify=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libnotify-2f6dca7e8952dd9e.rlib --extern parley=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libparley-9575aae5162438f1.rlib --extern resvg=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libresvg-c860fc0600b17ff3.rlib --extern sdl3_sys=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsdl3_sys-2ab59601c929f0aa.rlib --extern serde=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde-2becdd2144a45f07.rlib --extern serde_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde_json-2f804274ac0e1320.rlib --extern sha2=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsha2-00c6199dfb0ff5dd.rlib --extern stillkit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libstillkit-7da8026883dd0cbf.rlib -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-nav-sys-3d4f2e60af151ecd/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-opus-sys-5193f383c0582a3d/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-sdl3-src-7aca0f95a32eedc8/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/meshopt-9e84f2d6f897e233/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-meshopt-sys-6b81294470223b9e/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ufbx-7f1535e0a5cf25df/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/zstd-sys-58c53019c6f713b0/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/symbolic-demangle-4f6768da75c0b3a9/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-jolt-sys-1266f157505a7d03/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ring-e9cbadf03bb127b7/out -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc"
+              }
+            ],
+            "strict_timing_guard": false,
+            "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t76%; charging; (no estimate) present: true"
+          },
+          "strict_timing_guard_enforced": false,
+          "configured_workers": 14,
+          "environment_sha256": "f89c433a1adc590a9b06b2c247f14601373e9797cf83bee5045a4e09b40e2509",
+          "effective_burst": {
+            "burst_enabled": true,
+            "burst_safety_checks": false,
+            "burst_force_safety_checks": false,
+            "burst_debug": false,
+            "finally_restored": true,
+            "initial_editor_preferences": [
+              {
+                "key": "BurstCompilation",
+                "existed": true,
+                "value": true
+              },
+              {
+                "key": "BurstCompileSynchronously",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstShowTimings",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstDebug",
+                "existed": true,
+                "value": false
+              },
+              {
+                "key": "BurstForceSafetyChecks",
+                "existed": true,
+                "value": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "checks": {
+    "python_tests": 10,
+    "python_tests_passed": true,
+    "rustfmt_check_passed": true,
+    "standalone_release_clippy_all_targets_deny_warnings_passed": true,
+    "clippy_log": "target/perf-scale/feature-rust/clippy.log"
+  },
+  "setup_notes": [
+    "First Unity codegen required the explicit Unity.Mathematics assembly reference; fixed in the owned fixture assembly.",
+    "Unity API updater adapted serialization package APIs in its private scratch cache during first import. No user project was opened or modified; no license-management action was attempted.",
+    "Import metadata and Editor revision changes were rejected as unaccepted bootstrap outputs, then re-prepared before both actual smoke pairs.",
+    "The first resolver-selected Bevy0.20.1 build was never executed and remains an unused setup snapshot; all tested Bevy family versions were precisely aligned to root0.20.0 in Cargo.lock, keeping caret manifests."
+  ],
+  "serial_dispatch_scope": "Unity serial uses Schedule+Complete with zero job workers; Bevy serial uses its direct contiguous query. Their dispatch overhead differs and is not compared by these correctness-only runs.",
+  "remaining": "Other feature cases are contracts/oracle code only. Timed query_filter matrices require separate quiet, controlled execution; these raw smoke samples must never be promoted."
+}

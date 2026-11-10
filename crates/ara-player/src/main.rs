@@ -1166,7 +1166,7 @@ impl Player {
         // Windowed and embedded players present live frames (and stream live).
         let presenting = self.window.is_some() || self.embed.is_some();
         let (mut world, build_ms) = World::build(
-            &scene,
+            scene,
             start.role,
             start.net.as_ref(),
             presenting,

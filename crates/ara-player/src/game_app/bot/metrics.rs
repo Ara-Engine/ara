@@ -60,7 +60,7 @@ mod tests {
             clients: vec![None; 3],
             join: None,
         };
-        let (mut world, _) = World::prepare_game(&content.scene, Some(&net), None)?;
+        let (mut world, _) = World::prepare_game(content.scene, Some(&net), None)?;
         ara_runtime_net::attach_motors(&mut world.runtime);
         if let Some(path) = std::env::var_os("ARA_OUTPOST_TEST_REPLAY") {
             let replay = ara_sim::Replay::from_bytes(&std::fs::read(path)?)?;

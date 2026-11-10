@@ -273,15 +273,17 @@ Fixes:
 ## ARA0900 script::COMPILE_ERROR: C# compilation failed
 owner: ara-script, Ara.CompileServer
 
-A C# compiler error prevented producing the replacement module. The message retains the Roslyn `CS` identifier and source location. The last good code keeps running; a module without a successful prior compilation is unavailable.
+A C# compiler error or failed analyzer check prevented producing the replacement module. The message retains the Roslyn `CS` or `AD` identifier and source location when available. The last good code keeps running; a module without a successful prior compilation is unavailable.
 
 Causes:
 - Syntax, type or name-resolution errors in edited C# source.
 - Missing or incompatible referenced types after a dependency change.
+- An analyzer threw an exception (`AD0001`), leaving the candidate incompletely checked.
 
 Fixes:
 - Fix the `CS` error at the reported file, line and column, then compile or reload again.
 - Correct module references and update callers to match changed dependency APIs.
+- For `AD0001`, retain the diagnostic and offending source when reporting the analyzer failure. Retry after the analyzer is repaired or the triggering edit is corrected.
 
 ## ARA0901 script::COMPILE_WARNING: C# compiler warning
 owner: ara-script, Ara.CompileServer
@@ -327,10 +329,12 @@ The compile-server connection failed, the process exited, or a requested module 
 Causes:
 - The compile server crashed, could not start, or lost its pipe connection.
 - No initial module image arrived within the loader's three-minute timeout.
+- SDK tools could not be located, including a custom build layout without its artifact override.
 
 Fixes:
 - Correct the reported process or connection failure, then restart the script host and its compile server.
 - Verify the configured compile-server executable or DLL exists and uses the expected .NET installation; inspect server output for a stalled compilation.
+- Build `dotnet/Ara.slnx -c Release`. For custom C# output locations, set `ARA_DOTNET_ARTIFACTS` to the `artifacts/bin` directory containing `Ara.Host/release/Ara.Host.dll` and `Ara.CompileServer/release/Ara.CompileServer.dll`.
 
 ## ARA0905 script::DELTA_REJECTED: Runtime rejected reload delta
 owner: ara-script, Ara.Runtime

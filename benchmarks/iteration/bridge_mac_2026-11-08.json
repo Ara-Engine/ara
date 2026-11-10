@@ -1,0 +1,250 @@
+{
+  "date": "2026-11-08",
+  "machine": "Apple M5 Pro, macOS, arm64",
+  "dotnet": "10.0.203",
+  "lane": "Release Runtime.Tests; DOTNET_TieredCompilation=0; same generated Velocity codec with native callback fixture",
+  "scope": "Generated codec-backed access and ordered flush; native callback fixture supplies valid JSON. Does not measure Rust serialization, full gameplay ticks or native supplementary views.",
+  "method": "64/1024/8192 entities per exclusive callback batch; 8 warmup, 12 samples; first access writes and repeated access reads; bindings and flush included. Assertions/checksums match between variants. Fresh processes repeated.",
+  "command": "ARA_BRIDGE_BENCH_OUTPUT=<target/report.json> DOTNET_TieredCompilation=0 dotnet test dotnet/tests/Ara.Runtime.Tests -c Release --filter FullyQualifiedName~BridgeScaleTests",
+  "before_runtime_commit": "0260cd275",
+  "before": [
+    {
+      "entities": 64,
+      "p50_ms": 0.1194,
+      "bytes_per_batch": 161912,
+      "samples_ms": [
+        0.1194,
+        0.1188,
+        0.1222,
+        0.1408,
+        0.1217,
+        0.1188,
+        0.1179,
+        0.1237,
+        0.1232,
+        0.118,
+        0.118,
+        0.1193
+      ]
+    },
+    {
+      "entities": 1024,
+      "p50_ms": 3.8066,
+      "bytes_per_batch": 2588888,
+      "samples_ms": [
+        3.7846,
+        3.7391,
+        4.0757,
+        3.8183,
+        3.8711,
+        4.0432,
+        3.7866,
+        3.771,
+        4.0357,
+        3.7374,
+        3.7712,
+        3.8066
+      ]
+    },
+    {
+      "entities": 8192,
+      "p50_ms": 139.1283,
+      "bytes_per_batch": 20709664,
+      "samples_ms": [
+        144.1292,
+        142.9321,
+        140.8746,
+        140.2348,
+        142.9995,
+        138.8464,
+        137.2797,
+        127.7256,
+        136.5728,
+        133.8896,
+        139.1283,
+        131.5739
+      ]
+    }
+  ],
+  "after": [
+    {
+      "entities": 64,
+      "p50_ms": 0.1066,
+      "bytes_per_batch": 52736,
+      "samples_ms": [
+        0.1067,
+        0.1065,
+        0.1075,
+        0.1052,
+        0.106,
+        0.106,
+        0.1078,
+        0.1071,
+        0.1066,
+        0.1074,
+        0.1063,
+        0.1051
+      ]
+    },
+    {
+      "entities": 1024,
+      "p50_ms": 1.6615,
+      "bytes_per_batch": 843776,
+      "samples_ms": [
+        3.4766,
+        1.6746,
+        1.6717,
+        1.6481,
+        1.6589,
+        1.6465,
+        1.6615,
+        1.696,
+        2.3434,
+        1.6282,
+        1.6189,
+        1.6095
+      ]
+    },
+    {
+      "entities": 8192,
+      "p50_ms": 13.4777,
+      "bytes_per_batch": 6750208,
+      "samples_ms": [
+        13.4777,
+        14.4157,
+        14.235,
+        13.3336,
+        13.5723,
+        12.8967,
+        13.9645,
+        13.3826,
+        13.3124,
+        13.4388,
+        13.2844,
+        13.536
+      ]
+    }
+  ],
+  "before_repeat": [
+    {
+      "entities": 64,
+      "p50_ms": 0.1204,
+      "bytes_per_batch": 161912,
+      "samples_ms": [
+        0.1279,
+        0.1204,
+        0.1178,
+        0.1507,
+        0.1143,
+        0.1181,
+        0.1144,
+        0.1158,
+        0.1182,
+        0.1477,
+        0.1454,
+        0.1323
+      ]
+    },
+    {
+      "entities": 1024,
+      "p50_ms": 3.7742,
+      "bytes_per_batch": 2588888,
+      "samples_ms": [
+        3.7742,
+        3.7818,
+        4.0037,
+        3.8379,
+        3.4205,
+        3.8751,
+        3.7099,
+        3.7129,
+        3.9774,
+        3.3065,
+        3.3245,
+        3.3811
+      ]
+    },
+    {
+      "entities": 8192,
+      "p50_ms": 136.4237,
+      "bytes_per_batch": 20709664,
+      "samples_ms": [
+        132.8192,
+        128.1733,
+        136.4237,
+        131.8364,
+        141.299,
+        133.4775,
+        141.0249,
+        140.4841,
+        135.434,
+        136.5145,
+        145.1811,
+        130.7087
+      ]
+    }
+  ],
+  "after_repeat": [
+    {
+      "entities": 64,
+      "p50_ms": 0.1046,
+      "bytes_per_batch": 52736,
+      "samples_ms": [
+        0.105,
+        0.1056,
+        0.1106,
+        0.1041,
+        0.1037,
+        0.1057,
+        0.103,
+        0.1046,
+        0.1041,
+        0.1035,
+        0.1054,
+        0.1038
+      ]
+    },
+    {
+      "entities": 1024,
+      "p50_ms": 1.5934,
+      "bytes_per_batch": 843776,
+      "samples_ms": [
+        1.5998,
+        1.5931,
+        1.5885,
+        1.5999,
+        1.5967,
+        1.6742,
+        2.4927,
+        1.575,
+        1.5799,
+        1.5934,
+        1.5919,
+        1.587
+      ]
+    },
+    {
+      "entities": 8192,
+      "p50_ms": 12.9973,
+      "bytes_per_batch": 6750208,
+      "samples_ms": [
+        12.7995,
+        12.9872,
+        12.9636,
+        12.9973,
+        13.0966,
+        12.7546,
+        12.9676,
+        12.987,
+        13.0455,
+        13.0627,
+        13.3975,
+        13.0866
+      ]
+    }
+  ],
+  "checks": {
+    "runtime_tests_passed": 23,
+    "independent_review": "depth-scoped cache candidate has no must-fix findings; A-B-A regression reproduced red then passed"
+  }
+}

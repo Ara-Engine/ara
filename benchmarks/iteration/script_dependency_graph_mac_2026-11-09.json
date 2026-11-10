@@ -1,0 +1,717 @@
+{
+  "scope": "Production C# host dependency planning and developer-profile Bevy schedule initialization; not Roslyn compile time or complete play latency",
+  "change": [
+    "Replace all-earlier-system conflict scans/edges with last-writer and active-reader hazards, keeping component/resource index spaces distinct and structural reservations ordered.",
+    "Run totally ordered system chains on the caller, retaining row parallelism. Forks keep the multithreaded system executor.",
+    "Skip invalid descriptors before adding dependency history."
+  ],
+  "quality": [
+    "1024 deterministic mixed access graphs preserve every legacy reachability relation, including duplicate declarations and resource namespaces.",
+    "10000 shared writers and10000 structural systems each require9999edges, rather than a redundant fullclique.",
+    "Actual CLR chain/fork/single transitions preserve deferred Stamp visibility that tick, query refresh, state/nativehandles and unload; zero-worker process also passes.",
+    "15focused CLR integration tests plus4graph unit tests pass; strengthenedfork2rerun, all-targetClippy-Dwarnings andworkspacefmt109packages pass.",
+    "Independent code review: no mustfix, including deferred sync distance/finalplayback."
+  ],
+  "method": {
+    "profile": "cargo test profile, optimized dev settings, not Release kernel numbers",
+    "processes": 1,
+    "plan_samples_per_variant": 20,
+    "schedule_samples_per_variant": 6,
+    "order": "alternating old/new within each fresh World; warmup4plan/2schedule rounds",
+    "schedule_jobs": "Real Bevy mutable-resource jobs using script IDs/dependencies, with identical authoritative state after3ticks; CLR not started. Old path uses original lazy pairwise configuration loop.",
+    "guard_interval_seconds": 1,
+    "guard_scope": "knowncompiler/test processes and sampled stablepower; otherOSbackgroundwork not excluded"
+  },
+  "limits": [
+    "Only ordered writer chains were timed; mixedgraphs/forks checked semantically but not benchmarked here.",
+    "Six schedule samples in one process; nearest-rank descriptive percentiles, not confidence intervals.",
+    "Plan-only legacy timings materialize an adjacencylist for inspection. RealSchedule timings use original lazy loop, avoiding that extra legacy allocation.",
+    "No matched Unity/Unreal comparison or complete save-to-firstcorrecttick improvement claimed.",
+    "Old/new schedule graph setup and executorpolicy both included in realSchedule initialization."
+  ],
+  "summary": {
+    "scope": "dependency planning and Bevy schedule initialization only; no CLR, compilation, scene load or complete play latency",
+    "plan": [
+      {
+        "systems": 128,
+        "edges": [
+          8128,
+          127
+        ],
+        "ms": [
+          [
+            0.039708,
+            0.039834,
+            0.041958,
+            0.041582999999999995,
+            0.039625,
+            0.039583,
+            0.042042,
+            0.030625,
+            0.030625,
+            0.030625,
+            0.030666000000000002,
+            0.030750000000000003,
+            0.030625,
+            0.030625,
+            0.030708,
+            0.030667000000000003,
+            0.030583999999999997,
+            0.030625,
+            0.033292,
+            0.030750000000000003
+          ],
+          [
+            0.011583000000000001,
+            0.011334,
+            0.011375,
+            0.011417,
+            0.012416,
+            0.011542,
+            0.011334,
+            0.009417,
+            0.008875000000000001,
+            0.008875000000000001,
+            0.008749999999999999,
+            0.008917,
+            0.008749999999999999,
+            0.008667,
+            0.008667,
+            0.008667,
+            0.008709000000000001,
+            0.008708,
+            0.008749999999999999,
+            0.008749999999999999
+          ]
+        ],
+        "legacy_p50_ms": 0.030708,
+        "planned_p50_ms": 0.008875000000000001,
+        "legacy_p95_ms": 0.041958,
+        "planned_p95_ms": 0.011583000000000001
+      },
+      {
+        "systems": 512,
+        "edges": [
+          130816,
+          511
+        ],
+        "ms": [
+          [
+            0.311459,
+            0.323125,
+            0.33825,
+            0.336708,
+            0.33675000000000005,
+            0.315375,
+            0.307042,
+            0.313125,
+            0.306333,
+            0.32249999999999995,
+            0.321458,
+            0.325625,
+            0.334625,
+            0.333959,
+            0.329583,
+            0.31125,
+            0.306625,
+            0.312708,
+            0.306916,
+            0.372167
+          ],
+          [
+            0.032208,
+            0.036792000000000005,
+            0.036708000000000005,
+            0.0385,
+            0.031459,
+            0.030875,
+            0.0315,
+            0.031375,
+            0.031542,
+            0.031083,
+            0.040417,
+            0.031666,
+            0.033834,
+            0.032208,
+            0.03125,
+            0.030833000000000003,
+            0.031042,
+            0.030667000000000003,
+            0.031291,
+            0.030917000000000004
+          ]
+        ],
+        "legacy_p50_ms": 0.321458,
+        "planned_p50_ms": 0.031459,
+        "legacy_p95_ms": 0.33825,
+        "planned_p95_ms": 0.0385
+      },
+      {
+        "systems": 2048,
+        "edges": [
+          2096128,
+          2047
+        ],
+        "ms": [
+          [
+            3.9530420000000004,
+            3.8310000000000004,
+            3.848583,
+            3.803417,
+            3.821792,
+            3.87425,
+            3.8251660000000003,
+            3.8145840000000004,
+            4.235208,
+            4.3288329999999995,
+            4.357291999999999,
+            4.345792,
+            4.344708,
+            4.333375,
+            4.2490000000000006,
+            3.9693330000000002,
+            4.0465420000000005,
+            4.021834,
+            4.020042,
+            4.2594579999999995
+          ],
+          [
+            0.125375,
+            0.12025,
+            0.125709,
+            0.129917,
+            0.121208,
+            0.121458,
+            0.12670800000000002,
+            0.12220800000000001,
+            0.13574999999999998,
+            0.13379200000000002,
+            0.13549999999999998,
+            0.135417,
+            0.132042,
+            0.132209,
+            0.131333,
+            0.126167,
+            0.124,
+            0.123666,
+            0.121958,
+            0.12358399999999999
+          ]
+        ],
+        "legacy_p50_ms": 4.020042,
+        "planned_p50_ms": 0.125709,
+        "legacy_p95_ms": 4.345792,
+        "planned_p95_ms": 0.13549999999999998
+      }
+    ],
+    "schedule": [
+      {
+        "systems": 64,
+        "build_ms": [
+          [
+            1.040666,
+            1.039458,
+            1.000584,
+            0.994375,
+            1.0759999999999998,
+            1.056791
+          ],
+          [
+            0.314209,
+            0.291583,
+            0.29233299999999995,
+            0.282292,
+            0.32045799999999997,
+            0.29783400000000004
+          ]
+        ],
+        "three_ticks_exact": true,
+        "legacy_p50_ms": 1.039458,
+        "planned_p50_ms": 0.29233299999999995,
+        "legacy_p95_ms": 1.0759999999999998,
+        "planned_p95_ms": 0.32045799999999997
+      },
+      {
+        "systems": 256,
+        "build_ms": [
+          [
+            17.230333,
+            16.19525,
+            16.364667,
+            17.138875000000002,
+            16.915584000000003,
+            17.041959
+          ],
+          [
+            3.0283749999999996,
+            3.079334,
+            2.875709,
+            2.975875,
+            2.881292,
+            3.037083
+          ]
+        ],
+        "three_ticks_exact": true,
+        "legacy_p50_ms": 16.915584000000003,
+        "planned_p50_ms": 2.975875,
+        "legacy_p95_ms": 17.230333,
+        "planned_p95_ms": 3.079334
+      },
+      {
+        "systems": 512,
+        "build_ms": [
+          [
+            78.51925,
+            83.544208,
+            79.637875,
+            79.499292,
+            82.078,
+            83.91562499999999
+          ],
+          [
+            11.02525,
+            10.719667000000001,
+            11.365709,
+            11.328041,
+            11.075042,
+            11.214917
+          ]
+        ],
+        "three_ticks_exact": true,
+        "legacy_p50_ms": 79.637875,
+        "planned_p50_ms": 11.075042,
+        "legacy_p95_ms": 83.91562499999999,
+        "planned_p95_ms": 11.365709
+      }
+    ]
+  },
+  "report": {
+    "scope": "Developer test-profile dependency planning and real Bevy schedule initialization, not CLR compilation/full play latency",
+    "command": [
+      "/usr/bin/nice",
+      "-n",
+      "10",
+      "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-win-2026-11-09/dependency-graph-probe/test-c3b2028f00477f39ca4f2e358e94aa0e0af833e35393311728e17ad968871cd1",
+      "host::dependencies::tests::bench::dependency_plan_benchmark",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "executable_sha256": "c3b2028f00477f39ca4f2e358e94aa0e0af833e35393311728e17ad968871cd1",
+    "input_sha256": {
+      "Cargo.toml": "aa8689aa9272288425fe2ce1108b004b78287fa6477ea2fc4515677c9fd3ba77",
+      "Cargo.lock": "d52b3f5f81f1fd61f50c5592f058854d40341d2d27c95cf2e359abeffea3960c",
+      ".cargo/config.toml": "353500d89ca7b0bfd80655d0448389a106ed1db97ce2c9a8c5412e1843633590",
+      "crates/ara-script/Cargo.toml": "12305f58c57d3efd329ffdaa0e06a29d977015da4c7c0d70fa99d68537b006ff",
+      "crates/ara-script/src/abi/describe.rs": "9b64b4e24b7334eb63c3c270f1f237ffc2d240e189f8667d53c183a97defb136",
+      "crates/ara-script/src/abi/mod.rs": "44854171094b41495da288471f5e4bf7a78828840a658afd3e2b6774f014fcc3",
+      "crates/ara-script/src/boost.rs": "c6f961dc8b6d7ab375265ab46186f2a56435742e16633afa03cf9391c2cb4077",
+      "crates/ara-script/src/clr.rs": "0104914cfbba33709268900091f61fbad221b5e70c98f852e3371512293257d3",
+      "crates/ara-script/src/codes.rs": "a2766542fac22c29d564cb01f74985bef7c655653b77a8cd2118a40751574c18",
+      "crates/ara-script/src/csgen/abi.rs": "be9e70458cce02923c3fe3f19dc824d6279408476cbeafc0f229ef0ba1434424",
+      "crates/ara-script/src/csgen/components.rs": "5bf36bb8d9c50bf97bd48462c6433f9483e96a58562bc19447a2393e058721d8",
+      "crates/ara-script/src/csgen/cs.rs": "f05d0fca8d85cdfec273d1aceb7dcf02f4be268988088390068929a1ad513ac9",
+      "crates/ara-script/src/csgen/mod.rs": "6662167d99562f1ddf68a045b2a02de125117f9ca4ee3fd01f3a0aff04dbad61",
+      "crates/ara-script/src/csgen/values.rs": "606b0a38e346331388d23b44c92cb1896ec788dd0f211a3b76c52a18424f93e2",
+      "crates/ara-script/src/ecs/behaviour.rs": "953ef8bc53e7a893ddd5254771b8cf7265d30c1b91aa9061391645e6ab0350eb",
+      "crates/ara-script/src/ecs/cmdbuf.rs": "a4748b7393b7e976d27eef2ad92beac1a42e65ed165ad4d168ec18c8745efdc9",
+      "crates/ara-script/src/ecs/mod.rs": "cace3b4d0249d522bdba70162d86ad02a67532cb67860486f889e6684fc7f723",
+      "crates/ara-script/src/ecs/system/sparse.rs": "dd14ae331f3ec5a58b59654a2fb26d556a78d3b714a7250de70e961fbe1c5349",
+      "crates/ara-script/src/ecs/system/streaming_tests.rs": "0aa9c797a7c3e6d4c49b88e2e1b0821860f0394bca28d095403b22fc46613240",
+      "crates/ara-script/src/ecs/system.rs": "66a867c44f44d1423492cced0b76ca9509aa2ee281d4969f0779a2b3d76e072f",
+      "crates/ara-script/src/ecs/system_tests.rs": "d5f1524d806d8ead8703ba19b10f77db6cd1a5ff5b117f0900dcdd36c84406cb",
+      "crates/ara-script/src/host/bindings.rs": "50ecaedfa87d094dd515c508de717406b6cc9c36ba90743ef9ccf4f2395a4165",
+      "crates/ara-script/src/host/command.rs": "15c5de850f1e3e2748496ee0f8d5d76a80381fdc70a7a6fe07cf6ead59bd210d",
+      "crates/ara-script/src/host/ctx.rs": "43347ce85f871f1ad6c31126388210408bbcd04049e9ad9ef9bd5f65826aa81e",
+      "crates/ara-script/src/host/ctx_codec_tests.rs": "f2fb1a300579cd6dddbc31b5e018453a347770447eb7eb77c17bd97e77ac516d",
+      "crates/ara-script/src/host/dependencies.rs": "3d6c92ad9b52ab39254dad124d3fea826f378122013b97ae55a30aeb9d38cdf8",
+      "crates/ara-script/src/host/dependencies_bench.rs": "f5ccb93a67c88d6dcf1149f66718dde677bff422b774bf1d7f55a3d8906dd183",
+      "crates/ara-script/src/host/dependencies_tests.rs": "00fdff8343b2d215d138b76bbbb57589dc96cc712f25ef2a07d8e4058d7cc8cb",
+      "crates/ara-script/src/host/mod.rs": "0955f5e634978b60a525e3e20f7ea9a372780b228f9574cfe58b9f3c21c0b979",
+      "crates/ara-script/src/host/register.rs": "dcf0fb4bc1d8e3c8fb0a7b3e2941e0d0be5f03b3526d42d22a3d30ef1dfd442b",
+      "crates/ara-script/src/host/registry.rs": "16e9680cc48dacd84ea0de1a112e364c8911ea653efde777fff5fbc870cfdfe3",
+      "crates/ara-script/src/host/scene.rs": "952edba8c50616552968a19c0233e68eee4b2591d8f22ac9f17547a5262e3717",
+      "crates/ara-script/src/host/source_claim.rs": "262a3627990a6885c07bb800975b9a740f0262f83f63d0e74e833920140cb620",
+      "crates/ara-script/src/lib.rs": "92c26344a52ed801f49b01775f35de83bb9276774632578a81abadd38ee8893a",
+      "crates/ara-script/src/module.rs": "0785dc3482c262fec8724ef06b9802cb30e6103dee257a4d928e94b61aef8d24",
+      "crates/ara-script/src/project/editor.rs": "2631456244d5d8add4486ff0351f95098508c319da0edbe4845b8ba87e24f095",
+      "crates/ara-script/src/project/fixes.rs": "382c6fdee77f934cb460d0492c15b4de88d0a69d08aada6489a72599ea53b529",
+      "crates/ara-script/src/project/lifecycle.rs": "1f8e82e1d66030eb9f0898f3f5e6ef90583f5bf15fa4e3b41819397e5b1f3a2f",
+      "crates/ara-script/src/project/lock.rs": "a186e8a33d701080ace8f83a400d266c816e926a805c2f06245619861eddc913",
+      "crates/ara-script/src/project/session.rs": "a098f4285414650f2cb7ba15fa5e96a220c45b055d7c15259d7c22b495f4923a",
+      "crates/ara-script/src/project/tool.rs": "d90fd91112e03425a3ebbec0809c2ceb7c13e9f2417eb686453304868098b434",
+      "crates/ara-script/src/project.rs": "ece074a7dc75a9d13cc4ef94db62ddaeebf878820c2eb4901ca47041c4653665",
+      "crates/ara-script/src/reload_diag.rs": "0eea717eb38180664368477aa97b848a17b033d6dbc4733d931dbc9899c54071",
+      "crates/ara-script/src/run/job.rs": "e9578c0348c9f007c17b178c92611605f28a3a04fd83a093a7ac7ee2802982c6",
+      "crates/ara-script/src/run/mod.rs": "c5d47a20507bab99653b5db24f41f950c9aadb0aaf5dbc3aef8cd8e8f3839119",
+      "crates/ara-script/src/shipping.rs": "f476f6072741c247fd9be27abb53299569a213dbfdb6e32d25306f2ce5225581",
+      "crates/ara-script/src/value.rs": "47068e5693cbe85412eea9a157c676cec730081afea00e9025de8d53bf78bfc7"
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\n",
+    "environment": {
+      "RUSTFLAGS": null,
+      "CARGO_BUILD_JOBS": null,
+      "RUSTUP_TOOLCHAIN": null
+    },
+    "git_head": "55956bd14a8715e48b42479a54811a2cfad41e5b",
+    "build_log": "   Compiling ara-script v0.0.1-alpha (/Users/islam/.t3/worktrees/ara/t3-6f34c966/crates/ara-script)\n    Finished `test` profile [optimized] target(s) in 2.62s\n     Running unittests src/lib.rs (target/debug/deps/ara_script-9989e7825d6240d2)\n\nrunning 5 tests\ntest host::dependencies::tests::bench::dependency_plan_benchmark ... ignored, explicit performance probe; run alone and capture under target\ntest host::dependencies::tests::chains_need_not_form_a_clique_and_forks_keep_outer_parallelism ... ok\ntest host::dependencies::tests::namespaces_duplicates_and_readers_before_a_writer_are_distinct ... ok\ntest host::dependencies::tests::ten_thousand_writers_or_structural_systems_need_linear_edges ... ok\ntest host::dependencies::tests::mixed_hazard_graphs_preserve_every_original_ordering_relation ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 20 filtered out; finished in 0.03s\n\n",
+    "before": {
+      "loadavg": [
+        2.29541015625,
+        2.5517578125,
+        2.5634765625
+      ],
+      "busy_tools": [],
+      "strict_timing_guard": false,
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+    },
+    "exit_code": 0,
+    "observations": [
+      {
+        "loadavg": [
+          2.29541015625,
+          2.5517578125,
+          2.5634765625
+        ],
+        "busy_tools": [],
+        "strict_timing_guard": false,
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+      },
+      {
+        "loadavg": [
+          2.29541015625,
+          2.5517578125,
+          2.5634765625
+        ],
+        "busy_tools": [],
+        "strict_timing_guard": false,
+        "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+      }
+    ],
+    "after": {
+      "loadavg": [
+        2.29541015625,
+        2.5517578125,
+        2.5634765625
+      ],
+      "busy_tools": [],
+      "strict_timing_guard": false,
+      "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; charged; 0:00 remaining present: true"
+    },
+    "source_unchanged": true,
+    "accepted": true,
+    "result": {
+      "scope": "dependency planning and Bevy schedule initialization only; no CLR, compilation, scene load or complete play latency",
+      "plan": [
+        {
+          "systems": 128,
+          "edges": [
+            8128,
+            127
+          ],
+          "ms": [
+            [
+              0.039708,
+              0.039834,
+              0.041958,
+              0.041582999999999995,
+              0.039625,
+              0.039583,
+              0.042042,
+              0.030625,
+              0.030625,
+              0.030625,
+              0.030666000000000002,
+              0.030750000000000003,
+              0.030625,
+              0.030625,
+              0.030708,
+              0.030667000000000003,
+              0.030583999999999997,
+              0.030625,
+              0.033292,
+              0.030750000000000003
+            ],
+            [
+              0.011583000000000001,
+              0.011334,
+              0.011375,
+              0.011417,
+              0.012416,
+              0.011542,
+              0.011334,
+              0.009417,
+              0.008875000000000001,
+              0.008875000000000001,
+              0.008749999999999999,
+              0.008917,
+              0.008749999999999999,
+              0.008667,
+              0.008667,
+              0.008667,
+              0.008709000000000001,
+              0.008708,
+              0.008749999999999999,
+              0.008749999999999999
+            ]
+          ],
+          "legacy_p50_ms": 0.030708,
+          "planned_p50_ms": 0.008875000000000001,
+          "legacy_p95_ms": 0.041958,
+          "planned_p95_ms": 0.011583000000000001
+        },
+        {
+          "systems": 512,
+          "edges": [
+            130816,
+            511
+          ],
+          "ms": [
+            [
+              0.311459,
+              0.323125,
+              0.33825,
+              0.336708,
+              0.33675000000000005,
+              0.315375,
+              0.307042,
+              0.313125,
+              0.306333,
+              0.32249999999999995,
+              0.321458,
+              0.325625,
+              0.334625,
+              0.333959,
+              0.329583,
+              0.31125,
+              0.306625,
+              0.312708,
+              0.306916,
+              0.372167
+            ],
+            [
+              0.032208,
+              0.036792000000000005,
+              0.036708000000000005,
+              0.0385,
+              0.031459,
+              0.030875,
+              0.0315,
+              0.031375,
+              0.031542,
+              0.031083,
+              0.040417,
+              0.031666,
+              0.033834,
+              0.032208,
+              0.03125,
+              0.030833000000000003,
+              0.031042,
+              0.030667000000000003,
+              0.031291,
+              0.030917000000000004
+            ]
+          ],
+          "legacy_p50_ms": 0.321458,
+          "planned_p50_ms": 0.031459,
+          "legacy_p95_ms": 0.33825,
+          "planned_p95_ms": 0.0385
+        },
+        {
+          "systems": 2048,
+          "edges": [
+            2096128,
+            2047
+          ],
+          "ms": [
+            [
+              3.9530420000000004,
+              3.8310000000000004,
+              3.848583,
+              3.803417,
+              3.821792,
+              3.87425,
+              3.8251660000000003,
+              3.8145840000000004,
+              4.235208,
+              4.3288329999999995,
+              4.357291999999999,
+              4.345792,
+              4.344708,
+              4.333375,
+              4.2490000000000006,
+              3.9693330000000002,
+              4.0465420000000005,
+              4.021834,
+              4.020042,
+              4.2594579999999995
+            ],
+            [
+              0.125375,
+              0.12025,
+              0.125709,
+              0.129917,
+              0.121208,
+              0.121458,
+              0.12670800000000002,
+              0.12220800000000001,
+              0.13574999999999998,
+              0.13379200000000002,
+              0.13549999999999998,
+              0.135417,
+              0.132042,
+              0.132209,
+              0.131333,
+              0.126167,
+              0.124,
+              0.123666,
+              0.121958,
+              0.12358399999999999
+            ]
+          ],
+          "legacy_p50_ms": 4.020042,
+          "planned_p50_ms": 0.125709,
+          "legacy_p95_ms": 4.345792,
+          "planned_p95_ms": 0.13549999999999998
+        }
+      ],
+      "schedule": [
+        {
+          "systems": 64,
+          "build_ms": [
+            [
+              1.040666,
+              1.039458,
+              1.000584,
+              0.994375,
+              1.0759999999999998,
+              1.056791
+            ],
+            [
+              0.314209,
+              0.291583,
+              0.29233299999999995,
+              0.282292,
+              0.32045799999999997,
+              0.29783400000000004
+            ]
+          ],
+          "three_ticks_exact": true,
+          "legacy_p50_ms": 1.039458,
+          "planned_p50_ms": 0.29233299999999995,
+          "legacy_p95_ms": 1.0759999999999998,
+          "planned_p95_ms": 0.32045799999999997
+        },
+        {
+          "systems": 256,
+          "build_ms": [
+            [
+              17.230333,
+              16.19525,
+              16.364667,
+              17.138875000000002,
+              16.915584000000003,
+              17.041959
+            ],
+            [
+              3.0283749999999996,
+              3.079334,
+              2.875709,
+              2.975875,
+              2.881292,
+              3.037083
+            ]
+          ],
+          "three_ticks_exact": true,
+          "legacy_p50_ms": 16.915584000000003,
+          "planned_p50_ms": 2.975875,
+          "legacy_p95_ms": 17.230333,
+          "planned_p95_ms": 3.079334
+        },
+        {
+          "systems": 512,
+          "build_ms": [
+            [
+              78.51925,
+              83.544208,
+              79.637875,
+              79.499292,
+              82.078,
+              83.91562499999999
+            ],
+            [
+              11.02525,
+              10.719667000000001,
+              11.365709,
+              11.328041,
+              11.075042,
+              11.214917
+            ]
+          ],
+          "three_ticks_exact": true,
+          "legacy_p50_ms": 79.637875,
+          "planned_p50_ms": 11.075042,
+          "legacy_p95_ms": 83.91562499999999,
+          "planned_p95_ms": 11.365709
+        }
+      ]
+    },
+    "postprocessing": {
+      "initial_controller_sha256": "e9fcaa6c7477e8d28dec2d6fd35fa301c4e87d94f6d0dc0cac0ebff020093727",
+      "fixed_controller_sha256": "a5f72e1a646d8b47f4cfa64787245344f58dc9241b737c7f303802bfe8a6df7d",
+      "note": "Initial stdout parser expected JSON at column0; test harness prefixed the JSON. Reparsed preserved stdout only, without rerunning or modifying any measurements. Child test exited0; initial controller exited1 after timing."
+    }
+  },
+  "controller_source": "from pathlib import Path\nimport json,hashlib,subprocess,sys,os,re,time,datetime,shutil\nroot=Path.cwd();base=root/'target/perf-win-2026-11-09';out=base/'dependency-graph-probe';out.mkdir(exist_ok=False)\nsys.path.insert(0,str(root/'benchmarks/iteration/unity/features'))\nimport project,monitor\nsha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nlog=(base/'dependencies-unit.log').read_text();exe=root/re.search(r'Running unittests[^\\n]+\\(([^)]+)\\)',log)[1]\nsources=[root/'Cargo.toml',root/'Cargo.lock',root/'.cargo/config.toml',root/'crates/ara-script/Cargo.toml',*sorted((root/'crates/ara-script/src').rglob('*.rs'))]\ninputs={str(p.relative_to(root)):sha(p) for p in sources}\nfor p in sources:\n target=out/'source'/p.relative_to(root);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)\ndigest=sha(exe);frozen=out/('test-'+digest);shutil.copy2(exe,frozen)\nrecord={'scope':'Developer test-profile dependency planning and real Bevy schedule initialization, not CLR compilation/full play latency','command':['/usr/bin/nice','-n','10',str(frozen),'host::dependencies::tests::bench::dependency_plan_benchmark','--exact','--ignored','--nocapture','--test-threads=1'],'executable_sha256':digest,'input_sha256':inputs,'rustc':subprocess.check_output(['rustc','-Vv'],text=True),'cargo':subprocess.check_output(['cargo','-V'],text=True),'environment':{k:os.environ.get(k) for k in ['RUSTFLAGS','CARGO_BUILD_JOBS','RUSTUP_TOOLCHAIN']},'git_head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'build_log':log}\na=project.resources(strict=False);record['before']=a\nif a['busy_tools']:raise RuntimeError('competing tools before graph probe')\nobserved=[];start=time.monotonic()\nwith (out/'stdout.log').open('w') as stdout,(out/'stderr.log').open('w') as stderr:\n child=subprocess.Popen(record['command'],stdout=stdout,stderr=stderr)\n print('graph probe started',child.pid,flush=True)\n while child.poll() is None:\n  if time.monotonic()-start>180:child.terminate();child.wait(timeout=10);raise RuntimeError('graph probe timeout')\n  try:child.wait(timeout=1)\n  except subprocess.TimeoutExpired:observed.append(project.resources(strict=False))\n status=child.wait()\nz=project.resources(strict=False);record.update(exit_code=status,observations=observed,after=z)\nrecord['source_unchanged']=all(sha(root/p)==h for p,h in inputs.items())\nrecord['accepted']=not status and record['source_unchanged'] and not any(x['busy_tools'] for x in [a,*observed,z]) and monitor.power_stable(a,observed,z)\nrows=[json.loads(s[s.index('{'):]) for s in (out/'stdout.log').read_text().splitlines() if '{\"scope\":' in s]\nrecord['result']=rows[-1] if rows else None\n(out/'report.json').write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps({'exit_code':status,'accepted':record['accepted'],'result':record['result']}),flush=True)\nif not record['accepted'] or not rows:raise RuntimeError('unaccepted graph probe; preserve outputs')\n",
+  "resource_guard_function_source": "def resources(strict=True):\n    \"\"\"Timed engines require quiet tools; smoke/build lanes retain observed context.\"\"\"\n    busy = []\n    rows = subprocess.check_output([\"ps\", \"-axo\", \"pid=,pcpu=,comm=\"], text=True)\n    for line in rows.splitlines():\n        parts = line.split(None, 2)\n        if len(parts) != 3:\n            continue\n        pid, cpu, command = parts\n        build = any(name in command.lower() for name in [\"rustc\", \"/cargo\", \"clippy-driver\", \"/dotnet\", \"vbcscompiler\"])\n        test = \"/target/\" in command and any(name in command for name in [\"/deps/\", \"/examples/\"])\n        if float(cpu) > 1 and (build or test):\n            argv = subprocess.run([\"ps\", \"-p\", pid, \"-o\", \"command=\"], capture_output=True, text=True).stdout.strip()\n            busy.append({\"pid\": int(pid), \"pcpu\": float(cpu), \"command\": argv})\n    if busy and strict:\n        raise RuntimeError(\"competing tool/test work observed; no valid timing claim: \" + json.dumps(busy))\n    return {\"loadavg\": list(os.getloadavg()), \"busy_tools\": busy, \"strict_timing_guard\": strict,\n            \"power\": subprocess.check_output([\"pmset\", \"-g\", \"batt\"], text=True).strip()}\n",
+  "power_guard_source": "def power_stable(before, observations, after):\n    \"\"\"A transient source switch is invalid even when the endpoints agree.\"\"\"\n    source = before[\"power\"].splitlines()[0]\n    return all(record[\"power\"].splitlines()[0] == source for record in [*observations, after])\n",
+  "file_proofs": {
+    "target/perf-win-2026-11-09/dependencies-unit.log": {
+      "sha256": "cb37f3d13eeb1c0e3bb6cde6ae1fdf3f4ea09e90af7d1176eb33824538ce3ca0",
+      "bytes": 901
+    },
+    "target/perf-win-2026-11-09/dependencies-clr-gates.log": {
+      "sha256": "cbf6b1d1d9e1a7aa6e06decd8c4be21cdda04e43f1ed949120159c653380278a",
+      "bytes": 2360
+    },
+    "target/perf-win-2026-11-09/dependencies-fork-gates.log": {
+      "sha256": "da290bd7c0a900773745737a2e943ace1e3937d2343ae959ffe48a5eed7905c3",
+      "bytes": 724
+    },
+    "target/perf-win-2026-11-09/dependencies-all-clippy.log": {
+      "sha256": "2756991e3089fd275ec0e1bb9120b70d55bad7ed4fd5e4272a7f9cb67e875daa",
+      "bytes": 158
+    },
+    "target/perf-win-2026-11-09/graph-checkpoint-fmt.log": {
+      "sha256": "a4af447dffb298f471f1c96ca8ffc94e413f3c23545afa108fa37a5e19a1523e",
+      "bytes": 5362
+    },
+    "target/perf-win-2026-11-09/probe_dependencies.parser-v1.py": {
+      "sha256": "e9fcaa6c7477e8d28dec2d6fd35fa301c4e87d94f6d0dc0cac0ebff020093727",
+      "bytes": 2927
+    },
+    "target/perf-win-2026-11-09/probe_dependencies.py": {
+      "sha256": "a5f72e1a646d8b47f4cfa64787245344f58dc9241b737c7f303802bfe8a6df7d",
+      "bytes": 2941
+    },
+    "target/perf-win-2026-11-09/dependency-graph-probe/stdout.log": {
+      "sha256": "14b3eeea29ceb54bb67b33d069fb49f70ff050dd2d79b1cad62859c08ef09388",
+      "bytes": 3259
+    },
+    "target/perf-win-2026-11-09/dependency-graph-probe/stderr.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "target/perf-win-2026-11-09/dependency-graph-probe/report.json": {
+      "sha256": "041ba04bae3558a6642ca0f89c87d61a75fc96b2fd94c2d973fffe0a71f4c8d5",
+      "bytes": 14960
+    }
+  },
+  "gated_test_source_sha256": {
+    "crates/ara-script/tests/executor/fixture.rs": "4ea538fdeb0f10ad4ee02be98eb540cf3878e91cfbb458a7021df9e02e645788",
+    "crates/ara-script/tests/executor_caller.rs": "14125c6a82fb9307cf52bbaee675529a31dafed63157520691a76ee373e62b66",
+    "crates/ara-script/tests/executor_zero.rs": "e6afb2bc4dc3bf164b456ea7e0786f2de2bfe2e388ace24dd80426083414f225"
+  }
+}

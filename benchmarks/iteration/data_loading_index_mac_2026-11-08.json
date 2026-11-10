@@ -1,0 +1,634 @@
+{
+  "date": "2026-11-08",
+  "machine": "Apple M5 Pro, macOS, arm64",
+  "rust": "1.99.1",
+  "profile": "dev: workspace opt-level 1; dependencies opt-level 3",
+  "scope": "Project::open indexing/schema setup only; excludes C# publication, Project::load, imports, Play and GPU. Warm OS file cache; no cold-disk or quiet-machine claim.",
+  "reference": "Pre-slice committed Project::open clones document paths and canonicalizes each indexed path twice. Native UI header/read/validate constructs a SourceDocument then reparses legacy markup for identity.",
+  "current": "Reuse one canonical relative path per document without cloning the path list. Native UI identity performs the existing strict markup parse once; header/read/validate use it and source bytes copy directly into UiSource. No additional concurrency or caches.",
+  "fixtures": "Native JSON scenes/prefabs and native XML UI documents. UI-heavy legacy and pinned-identity cases are separate; both contain 256 UI documents and 130 scene/prefab records.",
+  "method": "Four fresh-process runs: before, after, after, before. Three warmup and twelve measured opens per case. Identical benchmark harness; reference binary frozen before source changes. Fixture setup, initial native-roundtrip verification and returned-project destruction are outside timing.",
+  "commands": [
+    "CARGO_BUILD_JOBS=2 cargo run -p ara-host --example project_load_bench -- --open-only",
+    "target/iteration-perf/project-index-before-pinned-bin --open-only",
+    "target/debug/examples/project_load_bench --open-only"
+  ],
+  "before": [
+    {
+      "case": "small",
+      "documents": 6,
+      "records": 130,
+      "ui_documents": 1
+    },
+    {
+      "case": "small_open",
+      "p50_ms": 0.6063959999999999,
+      "p95_ms": 0.6832919999999999,
+      "samples_ms": [
+        0.560708,
+        0.5853339999999999,
+        0.586666,
+        0.587208,
+        0.593625,
+        0.601125,
+        0.611667,
+        0.647583,
+        0.654417,
+        0.66525,
+        0.670875,
+        0.6832919999999999
+      ]
+    },
+    {
+      "case": "many_tiny",
+      "documents": 65,
+      "records": 96,
+      "ui_documents": 0
+    },
+    {
+      "case": "many_tiny_open",
+      "p50_ms": 2.557146,
+      "p95_ms": 2.716583,
+      "samples_ms": [
+        2.349042,
+        2.368875,
+        2.3758749999999997,
+        2.448417,
+        2.4521249999999997,
+        2.5292499999999998,
+        2.585042,
+        2.586208,
+        2.6063750000000003,
+        2.7077910000000003,
+        2.713417,
+        2.716583
+      ]
+    },
+    {
+      "case": "ui_heavy",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_heavy_open",
+      "p50_ms": 18.8480415,
+      "p95_ms": 20.154083,
+      "samples_ms": [
+        18.731583,
+        18.746042,
+        18.782166999999998,
+        18.812708,
+        18.816833000000003,
+        18.822083,
+        18.874,
+        18.898875,
+        18.973209,
+        19.015666,
+        19.515874999999998,
+        20.154083
+      ]
+    },
+    {
+      "case": "ui_pinned",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_pinned_open",
+      "p50_ms": 13.7992705,
+      "p95_ms": 13.979959000000001,
+      "samples_ms": [
+        13.607833,
+        13.662291999999999,
+        13.722417,
+        13.740959,
+        13.771208,
+        13.78875,
+        13.809791,
+        13.83575,
+        13.849,
+        13.889959000000001,
+        13.894,
+        13.979959000000001
+      ]
+    },
+    {
+      "case": "medium",
+      "documents": 73,
+      "records": 8224,
+      "ui_documents": 8
+    },
+    {
+      "case": "medium_open",
+      "p50_ms": 4.835020999999999,
+      "p95_ms": 5.071125,
+      "samples_ms": [
+        4.699125,
+        4.781750000000001,
+        4.814541999999999,
+        4.822708,
+        4.830083,
+        4.8306249999999995,
+        4.839417,
+        4.852208999999999,
+        4.859083,
+        4.863833,
+        4.947125,
+        5.071125
+      ]
+    },
+    {
+      "case": "large",
+      "documents": 273,
+      "records": 32896,
+      "ui_documents": 16
+    },
+    {
+      "case": "large_open",
+      "p50_ms": 17.6469585,
+      "p95_ms": 18.109333,
+      "samples_ms": [
+        17.548458999999998,
+        17.555833,
+        17.610416,
+        17.629625,
+        17.630167,
+        17.640625,
+        17.653292,
+        17.662708,
+        17.711084,
+        17.773457999999998,
+        17.775375,
+        18.109333
+      ]
+    }
+  ],
+  "after": [
+    {
+      "case": "small",
+      "documents": 6,
+      "records": 130,
+      "ui_documents": 1
+    },
+    {
+      "case": "small_open",
+      "p50_ms": 0.5248539999999999,
+      "p95_ms": 0.6366670000000001,
+      "samples_ms": [
+        0.45925000000000005,
+        0.46741699999999997,
+        0.521042,
+        0.52275,
+        0.523208,
+        0.523583,
+        0.526125,
+        0.532792,
+        0.535083,
+        0.553125,
+        0.5534589999999999,
+        0.6366670000000001
+      ]
+    },
+    {
+      "case": "many_tiny",
+      "documents": 65,
+      "records": 96,
+      "ui_documents": 0
+    },
+    {
+      "case": "many_tiny_open",
+      "p50_ms": 1.851396,
+      "p95_ms": 2.008958,
+      "samples_ms": [
+        1.710167,
+        1.748084,
+        1.753458,
+        1.758833,
+        1.825833,
+        1.849083,
+        1.853709,
+        1.855708,
+        1.860541,
+        1.8645,
+        1.979125,
+        2.008958
+      ]
+    },
+    {
+      "case": "ui_heavy",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_heavy_open",
+      "p50_ms": 10.8977295,
+      "p95_ms": 10.998833,
+      "samples_ms": [
+        10.773665999999999,
+        10.775083,
+        10.784709,
+        10.818125,
+        10.871167,
+        10.880084,
+        10.915375,
+        10.921625,
+        10.980458,
+        10.980500000000001,
+        10.996792,
+        10.998833
+      ]
+    },
+    {
+      "case": "ui_pinned",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_pinned_open",
+      "p50_ms": 10.8351665,
+      "p95_ms": 11.052249999999999,
+      "samples_ms": [
+        10.723833,
+        10.757958,
+        10.773083,
+        10.815916999999999,
+        10.815999999999999,
+        10.829165999999999,
+        10.841167,
+        10.841667,
+        10.85475,
+        10.895792,
+        10.905,
+        11.052249999999999
+      ]
+    },
+    {
+      "case": "medium",
+      "documents": 73,
+      "records": 8224,
+      "ui_documents": 8
+    },
+    {
+      "case": "medium_open",
+      "p50_ms": 3.7893540000000003,
+      "p95_ms": 3.8892919999999997,
+      "samples_ms": [
+        3.7451659999999998,
+        3.752791,
+        3.764459,
+        3.7734579999999998,
+        3.78575,
+        3.787875,
+        3.790833,
+        3.79975,
+        3.800916,
+        3.812041,
+        3.8354589999999997,
+        3.8892919999999997
+      ]
+    },
+    {
+      "case": "large",
+      "documents": 273,
+      "records": 32896,
+      "ui_documents": 16
+    },
+    {
+      "case": "large_open",
+      "p50_ms": 14.321271,
+      "p95_ms": 14.529791,
+      "samples_ms": [
+        14.141875,
+        14.218791,
+        14.243125000000001,
+        14.273041000000001,
+        14.299375,
+        14.307375,
+        14.335167,
+        14.353625,
+        14.390041,
+        14.405625,
+        14.519625,
+        14.529791
+      ]
+    }
+  ],
+  "after_repeat": [
+    {
+      "case": "small",
+      "documents": 6,
+      "records": 130,
+      "ui_documents": 1
+    },
+    {
+      "case": "small_open",
+      "p50_ms": 0.3282295,
+      "p95_ms": 0.359375,
+      "samples_ms": [
+        0.32425,
+        0.324333,
+        0.326667,
+        0.327542,
+        0.328042,
+        0.32808400000000004,
+        0.328375,
+        0.335084,
+        0.339667,
+        0.339875,
+        0.34045800000000004,
+        0.359375
+      ]
+    },
+    {
+      "case": "many_tiny",
+      "documents": 65,
+      "records": 96,
+      "ui_documents": 0
+    },
+    {
+      "case": "many_tiny_open",
+      "p50_ms": 1.5902915,
+      "p95_ms": 1.6325,
+      "samples_ms": [
+        1.514167,
+        1.5705,
+        1.5724580000000001,
+        1.582125,
+        1.583125,
+        1.589375,
+        1.591208,
+        1.595042,
+        1.6021670000000001,
+        1.616375,
+        1.621833,
+        1.6325
+      ]
+    },
+    {
+      "case": "ui_heavy",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_heavy_open",
+      "p50_ms": 10.988291999999998,
+      "p95_ms": 11.394667,
+      "samples_ms": [
+        10.438209,
+        10.535041,
+        10.6485,
+        10.725625,
+        10.830083,
+        10.945666999999998,
+        11.030916999999999,
+        11.089709,
+        11.146875000000001,
+        11.17425,
+        11.227292,
+        11.394667
+      ]
+    },
+    {
+      "case": "ui_pinned",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_pinned_open",
+      "p50_ms": 11.1251455,
+      "p95_ms": 11.626833,
+      "samples_ms": [
+        10.60525,
+        10.680041,
+        10.75825,
+        10.920541,
+        10.980792,
+        11.094541,
+        11.155750000000001,
+        11.159208,
+        11.171916000000001,
+        11.245583,
+        11.616249999999999,
+        11.626833
+      ]
+    },
+    {
+      "case": "medium",
+      "documents": 73,
+      "records": 8224,
+      "ui_documents": 8
+    },
+    {
+      "case": "medium_open",
+      "p50_ms": 3.7502295,
+      "p95_ms": 3.857958,
+      "samples_ms": [
+        3.675416,
+        3.706458,
+        3.7086659999999996,
+        3.7168330000000003,
+        3.718417,
+        3.747875,
+        3.752584,
+        3.778875,
+        3.812291,
+        3.847292,
+        3.8532089999999997,
+        3.857958
+      ]
+    },
+    {
+      "case": "large",
+      "documents": 273,
+      "records": 32896,
+      "ui_documents": 16
+    },
+    {
+      "case": "large_open",
+      "p50_ms": 14.339270500000001,
+      "p95_ms": 15.396125,
+      "samples_ms": [
+        13.965708000000001,
+        14.03925,
+        14.063208000000001,
+        14.205,
+        14.257541,
+        14.3255,
+        14.353041000000001,
+        14.616209,
+        14.724499999999999,
+        14.870375,
+        14.998667000000001,
+        15.396125
+      ]
+    }
+  ],
+  "before_repeat": [
+    {
+      "case": "small",
+      "documents": 6,
+      "records": 130,
+      "ui_documents": 1
+    },
+    {
+      "case": "small_open",
+      "p50_ms": 0.5329165,
+      "p95_ms": 0.827583,
+      "samples_ms": [
+        0.438625,
+        0.446041,
+        0.450084,
+        0.4515,
+        0.459541,
+        0.528166,
+        0.537667,
+        0.579083,
+        0.58375,
+        0.6149169999999999,
+        0.656042,
+        0.827583
+      ]
+    },
+    {
+      "case": "many_tiny",
+      "documents": 65,
+      "records": 96,
+      "ui_documents": 0
+    },
+    {
+      "case": "many_tiny_open",
+      "p50_ms": 2.3396665,
+      "p95_ms": 3.170791,
+      "samples_ms": [
+        2.1275,
+        2.154791,
+        2.284166,
+        2.297875,
+        2.3188750000000002,
+        2.324541,
+        2.354792,
+        2.4007080000000003,
+        2.435292,
+        2.5409170000000003,
+        2.617292,
+        3.170791
+      ]
+    },
+    {
+      "case": "ui_heavy",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_heavy_open",
+      "p50_ms": 18.2033125,
+      "p95_ms": 18.562917000000002,
+      "samples_ms": [
+        17.97025,
+        18.073625,
+        18.077917,
+        18.111209,
+        18.125542000000003,
+        18.186042,
+        18.220582999999998,
+        18.233791,
+        18.2585,
+        18.279958,
+        18.30625,
+        18.562917000000002
+      ]
+    },
+    {
+      "case": "ui_pinned",
+      "documents": 261,
+      "records": 130,
+      "ui_documents": 256
+    },
+    {
+      "case": "ui_pinned_open",
+      "p50_ms": 13.3852495,
+      "p95_ms": 13.739917,
+      "samples_ms": [
+        13.184916,
+        13.245916999999999,
+        13.347207999999998,
+        13.353041,
+        13.361708,
+        13.381333,
+        13.389166,
+        13.499333,
+        13.53475,
+        13.537624999999998,
+        13.673541,
+        13.739917
+      ]
+    },
+    {
+      "case": "medium",
+      "documents": 73,
+      "records": 8224,
+      "ui_documents": 8
+    },
+    {
+      "case": "medium_open",
+      "p50_ms": 4.6622295000000005,
+      "p95_ms": 4.717042,
+      "samples_ms": [
+        4.463417,
+        4.516958,
+        4.634250000000001,
+        4.642208,
+        4.649625,
+        4.651334,
+        4.673125000000001,
+        4.680583,
+        4.703749999999999,
+        4.7045,
+        4.710332999999999,
+        4.717042
+      ]
+    },
+    {
+      "case": "large",
+      "documents": 273,
+      "records": 32896,
+      "ui_documents": 16
+    },
+    {
+      "case": "large_open",
+      "p50_ms": 17.1973545,
+      "p95_ms": 17.71675,
+      "samples_ms": [
+        16.986541000000003,
+        17.047041999999998,
+        17.05,
+        17.075209,
+        17.118583,
+        17.13475,
+        17.259959,
+        17.260333,
+        17.291416,
+        17.357833,
+        17.460917,
+        17.71675
+      ]
+    }
+  ],
+  "validation": {
+    "ara_host_tests_passed": 100,
+    "ara_host_doctests_ignored": 1,
+    "checks": [
+      "CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=2 cargo test -p ara-host",
+      "CARGO_BUILD_JOBS=2 cargo clippy -p ara-host --all-targets -- -D warnings",
+      "cargo fmt -p ara-host -- --check"
+    ],
+    "coverage": "Differential against old SourceDocument+identity path: pinned/root/path-derived IDs, UTF-8 and CRLF exact native bytes, metadata precedence, malformed markup, duplicate element IDs, unsupported attributes, and error ordering. Existing project layout/migration, parallel loader and full host suites remain green."
+  }
+}

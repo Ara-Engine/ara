@@ -1,0 +1,114 @@
+{
+  "date": "2026-11-09",
+  "source_base_commit": "1ba4e6044e3362b611bf70dbaf5fe1dc3f2b4cc6",
+  "scope": "Fix shutdown-only writes to the locally disposed compiler pipe. Keep original remote IOException host-gone exit behavior; ObjectDisposedException returns so main retains its own exit status. No compiler/analyzer exception filters or cancellation/drain/timeout changes.",
+  "timings_accepted": false,
+  "discovery": {
+    "real_clr_tests_passed": 9,
+    "unhandled_closed_pipe_exceptions_before": 5,
+    "before_log": {
+      "path": "target/compiler-shutdown-disconnect-20261109/clr-before.log",
+      "sha256": "2536bc346b6a4462bb2dcf81c9b6d8c9672ffb78bee6b84cef7453067b4b8de1"
+    },
+    "after_log": {
+      "path": "target/compiler-shutdown-disconnect-20261109/clr-after.log",
+      "sha256": "3a94233b0213d2e42be8f7e716ed7c4f8dc1ddc39551269c0dee6d88d096f582"
+    },
+    "unhandled_closed_pipe_exceptions_after": 0
+  },
+  "controlled_regression": {
+    "same_probe_all_children": true,
+    "actual_production_sink_and_coordinator": true,
+    "real_connected_named_pipe": true,
+    "positive_analysis_entered_handshake_before_disconnect": true,
+    "stop_and_local_pipe_disposal_before_provider_release": true,
+    "candidate_requires_analysis_cancelled_exited_no_active_calls_and_worker_join_and_terminal_idle_send_returns": true,
+    "cases": {
+      "Complete": true,
+      "Results": [
+        {
+          "label": "before-active",
+          "mode": "active",
+          "Exit": 134,
+          "Accepted": true,
+          "FirstHandshake": "ANALYSIS_ENTERED",
+          "Product": "56273f9b6a8c96d7bb935da550676ba1c46d0c933f0a8b8463136b38dd5e42eb",
+          "Probe": "3ee4271dcb5a39b5ca73413d21a9979bb203504bf495eb69ef0f5651eed705fb"
+        },
+        {
+          "label": "after-active",
+          "mode": "active",
+          "Exit": 0,
+          "Accepted": true,
+          "FirstHandshake": "ANALYSIS_ENTERED",
+          "Product": "854b57952d44138fd4f0243a51ceca7da91072f76f9834964be5bd5308a199cd",
+          "Probe": "3ee4271dcb5a39b5ca73413d21a9979bb203504bf495eb69ef0f5651eed705fb"
+        },
+        {
+          "label": "after-sentinel",
+          "mode": "sentinel",
+          "Exit": 23,
+          "Accepted": true,
+          "FirstHandshake": "CONNECTED",
+          "Product": "854b57952d44138fd4f0243a51ceca7da91072f76f9834964be5bd5308a199cd",
+          "Probe": "3ee4271dcb5a39b5ca73413d21a9979bb203504bf495eb69ef0f5651eed705fb"
+        }
+      ],
+      "Scope": "shutdown quality only; no latency acceptance"
+    },
+    "initial_probe_build_missing_Ara_namespace_preserved": {
+      "path": "target/compiler-shutdown-disconnect-20261109/probe-build.log",
+      "sha256": "cec6a1f187b3f38ad0df45aafcada2750db7877f8dce26b448716a1d34c0382a"
+    },
+    "mechanical_fix": "Added using Ara; no runtime behavior/oracle change.",
+    "accepted_build": {
+      "path": "target/compiler-shutdown-disconnect-20261109/probe-build-namespace-fixed.log",
+      "sha256": "8ae5375f4882d11a163af4f9e8aaf9417c244c1dfabc1b2a9663a92eb8b62a1f"
+    },
+    "source_files": [
+      {
+        "path": "target/compiler-shutdown-disconnect-20261109/Program.cs",
+        "sha256": "6fba4b08b171265b66621bc84c3766282ffca6d7e3c04b7249068110ec74d72b"
+      },
+      {
+        "path": "target/compiler-shutdown-disconnect-20261109/Child.cs",
+        "sha256": "4e135e8c2b72711150302f904c4f8c7eca47241470ff9ba2ff70fdc6b405d14f"
+      },
+      {
+        "path": "target/compiler-shutdown-disconnect-20261109/ShutdownProbe.csproj",
+        "sha256": "0d18c0b15630f3581cb8252197e9a03ae3deeaa0d76da4a929374f8104198108"
+      }
+    ],
+    "original_source_freeze": {
+      "path": "target/compiler-shutdown-disconnect-20261109/source-freeze.json",
+      "sha256": "e170bc722a52fd4d890a046544e02ae3b2a04237364ddbce860cb3d57077ab29"
+    }
+  },
+  "production_quality": {
+    "solution_warnings": 0,
+    "solution_errors": 0,
+    "build": {
+      "path": "target/compiler-shutdown-disconnect-20261109/build-final.log",
+      "sha256": "51a1807b7e3c869f7c5444de367f5ca6e5a421247b6dcb4c3bd7df44bfc32028"
+    },
+    "compiler_tests": 216,
+    "compiler_tests_passed": 216,
+    "test_settings": "xUnit.MaxParallelThreads=2; all original timeouts/internal concurrency retained",
+    "tests": {
+      "path": "target/compiler-shutdown-disconnect-20261109/full-tests.log",
+      "sha256": "950ab7cb762a81866b68636c62ed9a0ea7e9b2dad31a6286d302a822e7fe0ce2"
+    },
+    "real_clr_tests": 9,
+    "real_clr_tests_passed": 9
+  },
+  "production_source": {
+    "path": "dotnet/src/Ara.CompileServer/Program.cs",
+    "sha256": "6ffabc74877cd8ebcda943d3483a8de0ea6b6ef4ee6a045ac82a8d4ccbf7b767"
+  },
+  "limits": [
+    "Before and after bundles both include the same uncommitted pooled source-reader slice; only Program.cs differs between these controlled compiler bundles.",
+    "The friend-console probe is a target-only quality harness using the actual production sink and Coordinator, not the production --pipe entry. Existing actual-entry and CLR-backed reload checks also passed.",
+    "First broad ObjectDisposedException\u2192Environment.Exit(0) candidate was built but never accepted; final implementation returns to preserve main status. Sentinel23 rejects forced exit0.",
+    "This is correctness evidence, not a latency/throughput claim."
+  ]
+}

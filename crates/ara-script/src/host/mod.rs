@@ -11,6 +11,7 @@
 mod bindings;
 mod command;
 mod ctx;
+mod dependencies;
 mod graphics;
 mod register;
 mod registry;
@@ -27,7 +28,7 @@ use ara_schema::SchemaDb;
 use bevy_ecs::component::ComponentId;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{IntoScheduleConfigs, Mut, Res, Resource};
-use bevy_ecs::schedule::{MultiThreadedExecutor, Schedule, SystemSet};
+use bevy_ecs::schedule::{MultiThreadedExecutor, Schedule, SingleThreadedExecutor, SystemSet};
 use bevy_ecs::system::{ParamBuilder, SystemParamBuilder, SystemState};
 use bevy_ecs::world::World;
 use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
@@ -232,6 +233,7 @@ impl ScriptHost {
                 id,
                 layout,
                 owner: Owner::Engine,
+                native: true,
                 json: false,
             });
         }
@@ -239,6 +241,12 @@ impl ScriptHost {
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
         ara_runtime::register_components(&mut codecs)
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
+        let mut accessor_views: BTreeMap<_, _> = EngineBindings::accessor_views()
+            .resolve(&registry.schema, world)
+            .map_err(|d| vec![d])?
+            .into_iter()
+            .map(|(name, id, layout)| (name, (id, layout)))
+            .collect();
         let names: Vec<_> = ara_runtime::schema(&[])
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?
             .components()
@@ -254,15 +262,22 @@ impl ScriptHost {
                     format!("engine schema is missing `{name}`"),
                 )]);
             }
-            let id = codecs
-                .install_component(world, &name)
-                .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
-            let layout = crate::csgen::binding_layout(&registry.schema, &name);
+            let (id, layout, native) = match accessor_views.remove(&name) {
+                Some((id, layout)) => (id, layout, true),
+                None => (
+                    codecs.install_component(world, &name).map_err(|e| {
+                        vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())]
+                    })?,
+                    crate::csgen::binding_layout(&registry.schema, &name),
+                    false,
+                ),
+            };
             registry.components.push(ScriptComponent {
                 name,
                 id,
                 layout,
                 owner: Owner::Engine,
+                native,
                 json: true,
             });
         }
@@ -542,9 +557,9 @@ impl ScriptHost {
             .collect();
         systems.sort_by(|a, b| (a.order, &a.name, a.id).cmp(&(b.order, &b.name, b.id)));
         let mut schedule = Schedule::default();
-        schedule.set_executor(MultiThreadedExecutor::new());
+        let mut dependencies = dependencies::Dependencies::default();
         let comp = |i: u32| reg.components.get(i as usize);
-        for (k, s) in systems.iter().enumerate() {
+        for s in &systems {
             let columns: Option<Vec<_>> = s
                 .columns
                 .iter()
@@ -599,22 +614,20 @@ impl ScriptHost {
                     q.run(&tick.0)
                 },
             );
-            let conflicts = |a: &registry::SystemDecl, b: &registry::SystemDecl| {
-                let clash = |x: &[(u32, bool)], y: &[(u32, bool)]| {
-                    x.iter()
-                        .any(|(i, w)| y.iter().any(|(j, v)| i == j && (*w || *v)))
-                };
-                clash(&a.columns, &b.columns) || clash(&a.resources, &b.resources)
-            };
             let mut config = system.in_set(ScriptSet(s.id)).into_configs();
-            // Structural systems never overlap: their entity reservations stay in a deterministic order.
-            for earlier in systems[..k]
-                .iter()
-                .filter(|e| conflicts(e, s) || (e.structural && s.structural))
-            {
-                config = config.after(ScriptSet(earlier.id));
+            for earlier in dependencies.push(s) {
+                config = config.after(ScriptSet(earlier));
             }
             schedule.add_systems(config);
+        }
+        // A chain already parallelizes its rows and has no outer concurrency.
+        // Keep its caller available instead of relaying each stage to a worker.
+        // With no workers, the outer schedule has no system-level parallelism to
+        // exploit either; its tasks would be drained by the caller regardless.
+        if dependencies.is_chain() || ComputeTaskPool::get().thread_num() == 0 {
+            schedule.set_executor(SingleThreadedExecutor::new());
+        } else {
+            schedule.set_executor(MultiThreadedExecutor::new());
         }
         self.schedule = Some(schedule);
         self.behaviours = reg

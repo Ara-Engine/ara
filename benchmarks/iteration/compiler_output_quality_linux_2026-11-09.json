@@ -1,0 +1,171 @@
+{
+  "date": "2026-11-09",
+  "scope": "Original complete-SDK compiler output quality comparison; not a timing experiment. Exact PE/PDB parity failed and is not waived.",
+  "baseline_source_commit": "1e04fe5dd9d04ede28592597dace9c0c06a15f9a",
+  "candidate_source_commit": "15bf7c3de10b56aef02c5c2da82efd9349795abe",
+  "not_latest_branch_serialization_or_source_capture_measurement": true,
+  "timings_accepted": false,
+  "exact_artifact_gate": "failed",
+  "quality_cases": 5,
+  "quality_revisions_per_case": 2,
+  "arms": 2,
+  "responses": 20,
+  "normalized_complete_response_pairs_equal": 10,
+  "module_pair_fields": {
+    "module_pairs": 134,
+    "allIL_equal": 134,
+    "verified_equal": 134,
+    "references_equal": 134,
+    "attributes_equal": 134,
+    "documents_equal": 134,
+    "mvid_equal": 0,
+    "assembly_equal": 134,
+    "version_equal": 134,
+    "verified_methods_per_arm": 16388
+  },
+  "aggregate_field_sha256": {
+    "allIL": {
+      "baseline": "d9b9240d28d78768026d2249bb2c33c9cf82372a9bbb573d107ad15ec9fccc55",
+      "candidate": "d9b9240d28d78768026d2249bb2c33c9cf82372a9bbb573d107ad15ec9fccc55",
+      "exact_equal": true
+    },
+    "verified": {
+      "baseline": "5d1d5529cf8dc6311f88e2a7813a12eed88fc1d7ecdc9231bcd279edff3ceb46",
+      "candidate": "5d1d5529cf8dc6311f88e2a7813a12eed88fc1d7ecdc9231bcd279edff3ceb46",
+      "exact_equal": true
+    },
+    "references": {
+      "baseline": "9c455ec47dcc2f68624064c9ebed65908b07ff894e69d49210d2e0ab206b5b90",
+      "candidate": "9c455ec47dcc2f68624064c9ebed65908b07ff894e69d49210d2e0ab206b5b90",
+      "exact_equal": true
+    },
+    "attributes": {
+      "baseline": "81663e576c0ff5677a1b2879d283771e0e2bafd18501061773e7a60f9a86d549",
+      "candidate": "81663e576c0ff5677a1b2879d283771e0e2bafd18501061773e7a60f9a86d549",
+      "exact_equal": true
+    },
+    "documents": {
+      "baseline": "0c6c569ab50e8ce3ef5d74a649927d5591568f99933c1bdb2d0a2465b357c20f",
+      "candidate": "0c6c569ab50e8ce3ef5d74a649927d5591568f99933c1bdb2d0a2465b357c20f",
+      "exact_equal": true
+    }
+  },
+  "artifact_hash_vector_proof": {
+    "pairs": 134,
+    "equal": {
+      "pe": 0,
+      "pdb": 0,
+      "schema": 134
+    },
+    "baseline_hash_vector_sha256": "3744111c23e5af1f6e6a8b727678ed83363fb34938afac65042d6e70e8c6162b",
+    "candidate_hash_vector_sha256": "5570563fb4d783a92aaf2c697b2be951c1383cb03577c7fce519e0d45c5385d0"
+  },
+  "pe_hash_pairs_equal": 0,
+  "pdb_hash_pairs_equal": 0,
+  "schema_hash_pairs_equal": 134,
+  "metadata_reference_diagnosis": {
+    "scope": "Read-only metadata diagnosis; no equivalence waiver or timings",
+    "primary_format_source": "https://github.com/dotnet/runtime/blob/main/docs/design/specs/PortablePdb-Metadata.md#compilation-metadata-references-c-and-vb-compilers",
+    "quality_result_sha256": "2552ae14492962ddbcf0c6ee57cecb29d703a5451ab3fc6ddea2a4a1a00d6fb5",
+    "runtime_image_identities": {
+      "baseline": {
+        "timestamp": 3091944233,
+        "size_of_image": 352256,
+        "mvid": "4ebc733e-cb0b-4823-99d3-122242009269",
+        "sha256": "ec80cad9a0887022144e9a4611c2b45502caad7a5925e11d269d583c7f6cf34d"
+      },
+      "candidate": {
+        "timestamp": 4157707785,
+        "size_of_image": 352256,
+        "mvid": "5244d7a3-cdd5-4770-b5b6-0d9fd15b5910",
+        "sha256": "bcf1beeab1173b43845ccc8abb2cfc7f69ebd2ea3bf03170f7fafc89b71817e6"
+      }
+    },
+    "changed_reference_record_counts": {
+      "Ara.Runtime.dll": 134
+    },
+    "examples": {
+      "Ara.Runtime.dll": {
+        "baseline": {
+          "file": "Ara.Runtime.dll",
+          "aliases": "",
+          "flags": 1,
+          "timestamp": 3091944233,
+          "size_of_image": 352256,
+          "mvid": "4ebc733e-cb0b-4823-99d3-122242009269"
+        },
+        "candidate": {
+          "file": "Ara.Runtime.dll",
+          "aliases": "",
+          "flags": 1,
+          "timestamp": 4157707785,
+          "size_of_image": 352256,
+          "mvid": "5244d7a3-cdd5-4770-b5b6-0d9fd15b5910"
+        }
+      }
+    }
+  },
+  "observer": {
+    "fatal_errors": [],
+    "quiet_admission_passed": false,
+    "quiet_admission_rejections": {
+      "foreign CPU activity: 2848666": 1,
+      "foreign CPU activity: 3321857": 48,
+      "foreign CPU activity: 3322254": 15,
+      "foreign CPU activity: 6474": 27,
+      "foreign CPU activity: 3882330": 53,
+      "foreign CPU activity: 3167516": 7,
+      "foreign CPU activity: 6172": 3,
+      "foreign CPU activity: 18": 2,
+      "foreign CPU activity: 3883148": 9,
+      "foreign CPU activity: 72": 1,
+      "foreign CPU activity: 15": 9,
+      "foreign CPU activity: 29207": 5,
+      "host pressure": 902,
+      "foreign CPU activity: 3931608": 5,
+      "foreign CPU activity: 3935887": 10,
+      "foreign CPU activity: 9000": 3,
+      "foreign CPU activity: 6767": 1,
+      "foreign CPU activity: 98": 1,
+      "foreign CPU activity: 54": 1,
+      "foreign CPU activity: 109317": 1,
+      "foreign CPU activity: 36": 2,
+      "foreign CPU activity: 6492": 2,
+      "foreign CPU activity: 6176": 3,
+      "foreign CPU activity: 43": 1,
+      "foreign CPU activity: 48": 1,
+      "foreign CPU activity: 510": 2,
+      "foreign CPU activity: 84": 1,
+      "foreign CPU activity: 403": 1,
+      "foreign CPU activity: 1": 2,
+      "foreign CPU activity: 24": 1,
+      "foreign CPU activity: 112559": 1,
+      "foreign CPU activity: 6500": 1,
+      "foreign CPU activity: 3941337": 6,
+      "foreign CPU activity: 3866811": 1,
+      "sampled owned PID exited before scheduling read: 3941544": 1,
+      "foreign CPU activity: 3939186": 1,
+      "foreign CPU activity: 3939167": 1,
+      "sampled owned PID exited before scheduling read: 3941608": 1,
+      "foreign CPU activity: 3928181": 2,
+      "foreign CPU activity: 421": 1,
+      "foreign CPU activity: 2823686": 1,
+      "foreign CPU activity: 10635": 1
+    },
+    "sampling_blind_spot": "processes born and exited within sample interval are not observable via procfs"
+  },
+  "frozen_inputs_before_after_equal": true,
+  "raw_proof": {
+    "remote_root": "/home/islam/projects/ara-csharp-perf-20261109/target/compiler-linux-matrix-20261109/source-revision-08",
+    "quality_result_sha256": "2552ae14492962ddbcf0c6ee57cecb29d703a5451ab3fc6ddea2a4a1a00d6fb5",
+    "source_freeze_sha256": "2d0d7aa005cbc3e4fd73f9e42a9e37898ac4fbf863133fa7bea50970200d0dd4",
+    "reference_identity_diagnosis_sha256": "0c9019aef2f0e740ab6b8795fb8d54640ce883cb4aeb5e651c420aa105976ce7"
+  },
+  "limits": [
+    "Full PE/PDB bytes were not archived before the original shared PROJECT path was reused. Retained decoded metadata, IL, source checksums and hashes do not establish full binary equivalence.",
+    "All IL and verified bodies match, but the verifier does not export every type/field/layout metadata row. No full metadata-layout or runtime execution equivalence claim.",
+    "Original test/build/readiness and all failed harness attempts are retained separately. No Unity, Unreal, frame-time, peak-RSS or compile-latency win follows.",
+    "The changing PDB reference timestamp/MVID is proven against each actual Ara.Runtime.dll. Self MVID/PDB identity propagation is consistent with this difference but is not a byte-normalization acceptance policy.",
+    "A separate planned compiler-only experiment will rebuild both source revisions against one immutable dependency set and retain complete output artifacts; its outcomes remain unmeasured."
+  ]
+}

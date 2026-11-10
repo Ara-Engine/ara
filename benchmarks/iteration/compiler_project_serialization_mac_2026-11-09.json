@@ -1,0 +1,2796 @@
+{
+  "date": "2026-11-09",
+  "baseline_source_commit": "15bf7c3de10b56aef02c5c2da82efd9349795abe",
+  "scope": "Standalone managed-allocation projection of ProjectCompiler configuration/fingerprint JSON serialization and per-request graph reuse. Two direct UTF8 serializer calls replace UTF16 JSON strings plus UTF8 re-encoding; one thread-safe lazy graph replaces per-snapshot graph serialization.",
+  "timings_accepted": false,
+  "limits": [
+    "All elapsed values are permanently unaccepted; the driver records no elapsed fields.",
+    "No source reading, source capture, source-file sharing/retry/decoder validation, IO or cache-validation behavior is measured by this projection.",
+    "No Roslyn parse/analyze/emit, production publication trust, full-project compilation, time-to-play, peak RSS or Unity/Unreal comparison claim.",
+    "The copied candidate ProjectCompiler.cs was NOT compiled during this microproof. Production Graph and ManifestBytes were invoked from a copied existing production DLL.",
+    "Manifest PE/PDB inputs are synthetic bytes and are not valid image/symbol proof.",
+    "The common driver Request wrapper exists in both arms; the production compiler closure layout is not reproduced. Result byte arrays stay live until validation outside counters in both arms.",
+    "48 labeled quality cells include duplicate disabled/no-snapshot count-zero cells; they are not 48 distinct behaviors.",
+    "Each fresh process compares complete payload/manifest bytes against its own pre-counter baseline oracle. The frozen app does not export cross-process payload hash vectors."
+  ],
+  "production_integration": {
+    "status": "Passed: fresh solution build0warnings/errors, all216CompilerServer tests, actualCLRproject lifecycle check, ara-script all-target Clippy andfmt114. Production source byte-exact to reviewed candidate.",
+    "production_source": {
+      "path": "dotnet/src/Ara.CompileServer/ProjectCompiler.cs",
+      "sha256": "8016e75e12a2a13febca7f38e1add91ebbbc0605d80dab5fcdf6c21d69687a11"
+    },
+    "candidate_source": {
+      "path": "target/compiler-project-serialization-20261109/Candidate/ProjectCompiler.cs",
+      "sha256": "8016e75e12a2a13febca7f38e1add91ebbbc0605d80dab5fcdf6c21d69687a11"
+    },
+    "production_source_byte_exact_to_reviewed_candidate": true,
+    "baseline_source_snapshot": {
+      "path": "target/compiler-project-serialization-20261109/Original/ProjectCompiler.cs.txt",
+      "sha256": "ed0bc1a399e05fbc62e7b0f4c4d766e9da5006cb05e1428a70c7908100f96c15"
+    },
+    "baseline_snapshot_byte_exact_to_commit_file": true,
+    "patch": {
+      "path": "target/compiler-project-serialization-20261109/Candidate/change.patch",
+      "sha256": "210adcf33e70974724a203c888b548fc3f4fb110af00d0a8b08bac505b3c0df4"
+    },
+    "allowed_delta": "Exactly two SerializeToUtf8Bytes substitutions; one request-local Lazy<string> with ExecutionAndPublication after existing tool/runtime/generator reads; graph.Value only inside WriteSnapshot. IO, inventory/cache/diagnostic/manifest/publication code otherwise unchanged.",
+    "quality": {
+      "solution_build": {
+        "path": "target/compiler-project-serialization-production-20261109/build.log",
+        "sha256": "91ea5bf1e6c27c0d8f3d43127430a1ec229671e0e2b3b09be2569c4c444d3a48"
+      },
+      "compiler_tests": 216,
+      "compiler_passed": 216,
+      "test_config": "xUnit.MaxParallelThreads=2; original timeouts and internal concurrent requests unchanged",
+      "compiler_log": {
+        "path": "target/compiler-project-serialization-production-20261109/full-tests.log",
+        "sha256": "58e6fba4aa8e3a9b10844c2d537da97aaf1cff3e47dfbff7c1bb28c531165ff8"
+      },
+      "actual_clr_project_lifecycle": {
+        "path": "target/compiler-project-serialization-production-20261109/project-lifecycle.log",
+        "sha256": "01325d47c4a70c436bb55611da471db3248594fd4ea992226953635b90729808"
+      },
+      "actual_clr_tests": 1,
+      "actual_clr_passed": 1,
+      "clippy": {
+        "path": "target/compiler-project-serialization-production-20261109/clippy.log",
+        "sha256": "9ccff36cfa23c89ab0d1f9557f71871b937c2d242ca661602f5b0079d567c6c1"
+      },
+      "fmt": {
+        "path": "target/compiler-project-serialization-production-20261109/fmt.log",
+        "sha256": "e87a4639d09672d4e68ae4382d8fc4190066b3a622e14554479272c237505a29"
+      }
+    }
+  },
+  "configuration": {
+    "fresh_processes": 18,
+    "profiles": [
+      {
+        "name": "small",
+        "modules": 2,
+        "sources_per_module": 512,
+        "source_utf16_units": 256
+      },
+      {
+        "name": "wide",
+        "modules": 32,
+        "sources_per_module": 32,
+        "source_utf16_units": 256
+      },
+      {
+        "name": "large",
+        "modules": 8,
+        "sources_per_module": 128,
+        "source_utf16_units": 4096
+      }
+    ],
+    "all_profiles_source_count": 1024,
+    "source_fixture": "Pre-owned ASCII comment strings and source descriptors. Modules are independent in allocation profiles; dependency and order cases are quality fixtures.",
+    "snapshot_modes": [
+      "none",
+      "one",
+      "all"
+    ],
+    "warmups_per_process": 2,
+    "measured_passes_per_process": 5,
+    "allocation_internal_workers": 1,
+    "arm_order": "Alternates across nine configurations; no reversed pair per configuration, retries or extra cells.",
+    "counter": "GC.GetTotalAllocatedBytes(precise:true), whole process around the serialization request. Corpus/oracle creation, explicit GC, complete byte validation and JSON output excluded.",
+    "included_work": "Both arms retain the original source Encoding.UTF8+SHA256 work, fingerprint hashing, PE/PDB/source hashing in actual ManifestBytes and complete manifest serialization. Candidate lazy allocation is counted even when no snapshot requests a graph.",
+    "before_each_pass": "Clear previous actual result array and force generation 2 GC outside counters. Oracle result arrays remain equally owned in both arms.",
+    "runtime": "10.0.14",
+    "timeout_seconds_per_process": 180,
+    "environment_overrides": {
+      "DOTNET_ROOT": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet",
+      "DOTNET_CLI_HOME": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/cli-home",
+      "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+      "DOTNET_NOLOGO": "1"
+    },
+    "inherited_relevant_environment": {},
+    "PATH": "/opt/homebrew/Caskroom/codex/0.164.0/codex-path:/Users/islam/.codeium/windsurf/bin:/Users/islam/.opencode/bin:/Users/islam/Library/Android/sdk/emulator:/Users/islam/Library/Android/sdk/platform-tools:/Users/islam/Library/Android/sdk/cmdline-tools/latest/bin:/opt/homebrew/opt/openjdk@17/bin:/Users/islam/.local/share/gem/ruby/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/islam/.local/bin:/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/opt/X11/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/opt/homebrew/bin:/Users/islam/.codex/tmp/arg0-macos/codex-arg0L2qTO3:/opt/homebrew/Caskroom/codex/0.164.0/codex-path:/Users/islam/.codeium/windsurf/bin:/Users/islam/.unity/bin:/Users/islam/.railway/bin:/Users/islam/.opencode/bin:/Users/islam/Library/Android/sdk/emulator:/Users/islam/Library/Android/sdk/platform-tools:/Users/islam/Library/Android/sdk/cmdline-tools/latest/bin:/opt/homebrew/opt/openjdk@17/bin:/Users/islam/.local/share/gem/ruby/3.3.0/bin:/opt/homebrew/opt/ruby@3.3/bin:/Users/islam/.local/bin:/opt/homebrew/opt/python@3.13/libexec/bin:/opt/homebrew/sbin:/Users/islam/.cargo/bin:/Users/islam/.orbstack/bin:/Users/islam/.lmstudio/bin:/Users/islam/.orbstack/bin:/Users/islam/.lmstudio/bin",
+    "cwd": "/Users/islam/.t3/worktrees/ara/t3-6f34c966"
+  },
+  "results": [
+    {
+      "shape": "small",
+      "publication": "none",
+      "baseline_median_allocated_bytes": 916736,
+      "candidate_median_allocated_bytes": 663176,
+      "fraction_fewer_allocated_bytes": 0.2765899888299358,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "small",
+      "publication": "one",
+      "baseline_median_allocated_bytes": 1534432,
+      "candidate_median_allocated_bytes": 1280872,
+      "fraction_fewer_allocated_bytes": 0.1652468144564243,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "small",
+      "publication": "all",
+      "baseline_median_allocated_bytes": 2151792,
+      "candidate_median_allocated_bytes": 1897336,
+      "fraction_fewer_allocated_bytes": 0.1182530653520415,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "wide",
+      "publication": "none",
+      "baseline_median_allocated_bytes": 996416,
+      "candidate_median_allocated_bytes": 715976,
+      "fraction_fewer_allocated_bytes": 0.2814487121844691,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "wide",
+      "publication": "one",
+      "baseline_median_allocated_bytes": 1051192,
+      "candidate_median_allocated_bytes": 770752,
+      "fraction_fewer_allocated_bytes": 0.266782852228708,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "wide",
+      "publication": "all",
+      "baseline_median_allocated_bytes": 2738832,
+      "candidate_median_allocated_bytes": 2192536,
+      "fraction_fewer_allocated_bytes": 0.19946312880819272,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "large",
+      "publication": "none",
+      "baseline_median_allocated_bytes": 4864832,
+      "candidate_median_allocated_bytes": 4605896,
+      "fraction_fewer_allocated_bytes": 0.053226092905161004,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "large",
+      "publication": "one",
+      "baseline_median_allocated_bytes": 5515864,
+      "candidate_median_allocated_bytes": 5256928,
+      "fraction_fewer_allocated_bytes": 0.04694386953702989,
+      "all_inprocess_full_bytes_equal": true
+    },
+    {
+      "shape": "large",
+      "publication": "all",
+      "baseline_median_allocated_bytes": 10070736,
+      "candidate_median_allocated_bytes": 9794776,
+      "fraction_fewer_allocated_bytes": 0.02740216802426354,
+      "all_inprocess_full_bytes_equal": true
+    }
+  ],
+  "raw_allocations": [
+    {
+      "execution_order": 1,
+      "shape": "small",
+      "publication": "none",
+      "arm": "baseline",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        916736,
+        916736,
+        916736,
+        916736,
+        916736
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/01-small-none-baseline.stdout.log",
+        "sha256": "84424198fea3166c231d6a32240b696c2f5dd087d468582119f7324e6b393ba4"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/01-small-none-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-1537740-44658/result.json",
+        "sha256": "20b3318c538b7ac328306c0ee62b9bee06ed040f88f4531666840da43166ac02"
+      }
+    },
+    {
+      "execution_order": 2,
+      "shape": "small",
+      "publication": "none",
+      "arm": "candidate",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        663176,
+        663176,
+        663176,
+        663176,
+        662168
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/02-small-none-candidate.stdout.log",
+        "sha256": "74be65702e3e59964b2d695a2d9e0b10f9ff475e5a3b87ccb9cb280ea48ab896"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/02-small-none-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-2943560-44659/result.json",
+        "sha256": "576ae6d498ab75a466aed3efc71cae8a8333e084332f042a8a17f4d5065ad6ae"
+      }
+    },
+    {
+      "execution_order": 3,
+      "shape": "small",
+      "publication": "one",
+      "arm": "candidate",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        1280872,
+        1280872,
+        1280872,
+        1280872,
+        1280872
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/03-small-one-candidate.stdout.log",
+        "sha256": "ebaaa4d30fbaf206baf65f250ec18071126bd024541a781fdbb9d32720672027"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/03-small-one-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-4453630-44662/result.json",
+        "sha256": "6ec82c60ba91d5d555b5d57c8498167a44094047319301bed18006b351dc29fa"
+      }
+    },
+    {
+      "execution_order": 4,
+      "shape": "small",
+      "publication": "one",
+      "arm": "baseline",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        1534432,
+        1534432,
+        1534432,
+        1534432,
+        1534432
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/04-small-one-baseline.stdout.log",
+        "sha256": "8b74fc937ffa398ed68570be54a3842ab2847d519f62714dad2e98824659d949"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/04-small-one-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-5837860-44663/result.json",
+        "sha256": "5776780b9bb96e1b335baa7a4e7f2611c96c2cc5bcb789758d6f260a648e873e"
+      }
+    },
+    {
+      "execution_order": 5,
+      "shape": "small",
+      "publication": "all",
+      "arm": "baseline",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 2,
+      "allocated_bytes_process_wide_precise": [
+        2151792,
+        2151792,
+        2151792,
+        2151792,
+        2151792
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "small",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/05-small-all-baseline.stdout.log",
+        "sha256": "59f9ee0fca97ad3c221a1213d55b22cec91b0608360b27c2e84941280015c686"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/05-small-all-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-7238190-44664/result.json",
+        "sha256": "74de41dff946f73214ffd620506faa46d48dfe82e01cd3d39f43f3efc396a27b"
+      }
+    },
+    {
+      "execution_order": 6,
+      "shape": "small",
+      "publication": "all",
+      "arm": "candidate",
+      "modules": 2,
+      "sources": 1024,
+      "snapshot_count": 2,
+      "allocated_bytes_process_wide_precise": [
+        1897336,
+        1897336,
+        1897336,
+        1896280,
+        1897048
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "small",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/06-small-all-candidate.stdout.log",
+        "sha256": "b0694f1d7d2e09f9831697c3af8456931d2e1f8d0f1ebadeec29f68218746f80"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/06-small-all-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-8566430-44665/result.json",
+        "sha256": "308b5c32ab4961c5f3d2f0efd66ef737afd1a70ed1d0853e1961e483f0ac7afd"
+      }
+    },
+    {
+      "execution_order": 7,
+      "shape": "wide",
+      "publication": "none",
+      "arm": "candidate",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        715976,
+        715976,
+        715976,
+        715976,
+        715976
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "wide",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/07-wide-none-candidate.stdout.log",
+        "sha256": "a8ce1e02a97e3fbc1800292903691c71c206155ef0f0417b5884db26875e4deb"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/07-wide-none-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165232-9906750-44666/result.json",
+        "sha256": "c56e1f9785ba501c48f0f95644970ffc1a02f3d4d04c6eec4bf486fa5c051d2c"
+      }
+    },
+    {
+      "execution_order": 8,
+      "shape": "wide",
+      "publication": "none",
+      "arm": "baseline",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        996416,
+        995408,
+        996416,
+        996416,
+        996416
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "wide",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/08-wide-none-baseline.stdout.log",
+        "sha256": "e482fb6d2292b87cdecc8613ebfcaf893aeff701fa6fc07a4a375645e5884158"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/08-wide-none-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-1381970-44667/result.json",
+        "sha256": "5f746b18605534b67220fb343a2cdfaf7bb175cf061a695d025af3c54e4eb6de"
+      }
+    },
+    {
+      "execution_order": 9,
+      "shape": "wide",
+      "publication": "one",
+      "arm": "baseline",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        1051192,
+        1049848,
+        1049848,
+        1051192,
+        1051192
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "wide",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/09-wide-one-baseline.stdout.log",
+        "sha256": "a559ff0846d2d06fc9acba01642f849fd9ed5cfb4e67f210a6e7fcb26585d318"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/09-wide-one-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-2754200-44668/result.json",
+        "sha256": "37447ee6b653b4647c61027a98f347b453e302e60ef7b1d1c2985c736f46799a"
+      }
+    },
+    {
+      "execution_order": 10,
+      "shape": "wide",
+      "publication": "one",
+      "arm": "candidate",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        770752,
+        770752,
+        770752,
+        770752,
+        770752
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "wide",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/10-wide-one-candidate.stdout.log",
+        "sha256": "afc1992091288c26344e97af8e0ff20a78225f5b10226a2e420c41c9ce0c4dc6"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/10-wide-one-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-4176520-44669/result.json",
+        "sha256": "9921229ed0d96ea78bcddd595e5a144ce01867419525a0cb38ba9b142d0215c5"
+      }
+    },
+    {
+      "execution_order": 11,
+      "shape": "wide",
+      "publication": "all",
+      "arm": "candidate",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 32,
+      "allocated_bytes_process_wide_precise": [
+        2192536,
+        2192536,
+        2192536,
+        2192536,
+        2192536
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "wide",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/11-wide-all-candidate.stdout.log",
+        "sha256": "862129c9d2c7747687e737898bb9e811de1c7d7511261ca887bd8517fb9e271a"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/11-wide-all-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-5670630-44670/result.json",
+        "sha256": "2b6ffc0f99fd0aff496821dcf010395cafa6172a273eadc40df6d5c262a8fd39"
+      }
+    },
+    {
+      "execution_order": 12,
+      "shape": "wide",
+      "publication": "all",
+      "arm": "baseline",
+      "modules": 32,
+      "sources": 1024,
+      "snapshot_count": 32,
+      "allocated_bytes_process_wide_precise": [
+        2738832,
+        2738832,
+        2738832,
+        2737488,
+        2738832
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        32,
+        32,
+        32,
+        32,
+        32
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "wide",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/12-wide-all-baseline.stdout.log",
+        "sha256": "b27d212202ad341754602d83b5807d9b9f25021fce0cb25ff6248e31927f6986"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/12-wide-all-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-7219170-44671/result.json",
+        "sha256": "89d253475f5afcbc3e71a434b1712ea95cbf5e26b81b1fbbce00e957ed5722f9"
+      }
+    },
+    {
+      "execution_order": 13,
+      "shape": "large",
+      "publication": "none",
+      "arm": "baseline",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        4864832,
+        4864832,
+        4864832,
+        4864832,
+        4864832
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/13-large-none-baseline.stdout.log",
+        "sha256": "00a4a2b0b1befad6bbbeb1867318ca282a584d4efe54f69d8f7d3b92a3c6cfe4"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/13-large-none-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-8593220-44673/result.json",
+        "sha256": "786e12e0115b570422791c208ae6944feecd4ac79f32beb43a76847abd565119"
+      }
+    },
+    {
+      "execution_order": 14,
+      "shape": "large",
+      "publication": "none",
+      "arm": "candidate",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 0,
+      "allocated_bytes_process_wide_precise": [
+        4605896,
+        4605896,
+        4605896,
+        4605896,
+        4605896
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "none"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/14-large-none-candidate.stdout.log",
+        "sha256": "96019e6556550f48b806ffe4a28e58533edc16ca4dda76b333270ecd747f2784"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/14-large-none-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165233-9983730-44674/result.json",
+        "sha256": "f87669e9e0f02d04a26592b80bdf10cd270a5da80763141f886b26c97211ba18"
+      }
+    },
+    {
+      "execution_order": 15,
+      "shape": "large",
+      "publication": "one",
+      "arm": "candidate",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        5256928,
+        5256928,
+        5256928,
+        5256928,
+        5256928
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/15-large-one-candidate.stdout.log",
+        "sha256": "ca2162252ec71c065fc28b69d8919cb5387fbd842e4f716207076cdf10b9d582"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/15-large-one-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165234-1559760-44675/result.json",
+        "sha256": "ac8c007bacc505e905622f1d745f79627ee9438c171ea81bf5ba631eea134dcd"
+      }
+    },
+    {
+      "execution_order": 16,
+      "shape": "large",
+      "publication": "one",
+      "arm": "baseline",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 1,
+      "allocated_bytes_process_wide_precise": [
+        5515864,
+        5515864,
+        5515864,
+        5515864,
+        5515864
+      ],
+      "gen0_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "one"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/16-large-one-baseline.stdout.log",
+        "sha256": "62c83eaf4a9413ce6e5f38ead1c8dd2eed33f97d1651d81d06cfb8748179089b"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/16-large-one-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165234-3346860-44677/result.json",
+        "sha256": "4c8e8ba430374246bbe06fd5dece732dfd1204f3ac0ef3395ed7a1d7bcafd93b"
+      }
+    },
+    {
+      "execution_order": 17,
+      "shape": "large",
+      "publication": "all",
+      "arm": "baseline",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 8,
+      "allocated_bytes_process_wide_precise": [
+        10070736,
+        10070736,
+        10070736,
+        10070736,
+        10070736
+      ],
+      "gen0_collections": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "baseline",
+        "large",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/17-large-all-baseline.stdout.log",
+        "sha256": "c84bb3b879325d1b7899b6e2763e85e692f7ff957af11509536636d10a641112"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/17-large-all-baseline.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165234-4893040-44678/result.json",
+        "sha256": "65cebd476670ddacaa6bd701505a04dd25ef94080d96776b67f3a5eb85792a1a"
+      }
+    },
+    {
+      "execution_order": 18,
+      "shape": "large",
+      "publication": "all",
+      "arm": "candidate",
+      "modules": 8,
+      "sources": 1024,
+      "snapshot_count": 8,
+      "allocated_bytes_process_wide_precise": [
+        9794776,
+        9794776,
+        9794776,
+        9794776,
+        9794776
+      ],
+      "gen0_collections": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "gen1_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "gen2_collections": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "graph_calls": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "complete_payload_and_manifest_bytes_equal_to_inprocess_baseline": true,
+      "argv": [
+        "/usr/bin/nice",
+        "-n",
+        "10",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+        "--allocation",
+        "candidate",
+        "large",
+        "all"
+      ],
+      "exit_code": 0,
+      "stdout": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/18-large-all-candidate.stdout.log",
+        "sha256": "237d0df2ec7a6a8ddccf9bb11cf4c1a321678459890d7616be047c1a991fe107"
+      },
+      "stderr": {
+        "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/18-large-all-candidate.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result": {
+        "path": "target/compiler-project-serialization-20261109/runs/20261109-165234-6738600-44679/result.json",
+        "sha256": "7aad6f44209f29f8552f45a7d6549969b9f2695f05bc8b2e8ea40d6ca65a742c"
+      }
+    }
+  ],
+  "allocation_validation": {
+    "all18processes_exit_zero": true,
+    "all90measuredrequests_complete_configuration_fingerprint_manifest_bytes_equal_to_precount_baseline": true,
+    "all_expected_graph_counts_match": true,
+    "baseline_graph_evaluations": "Zero with none; one with one; 2/32/8 with all by shape.",
+    "candidate_graph_evaluations": "Zero with none, exactly one with one/all; parallel behavior covered separately in quality.",
+    "source_reference_complete_closure_actual_app_and_actual_runtime_hashes_unchanged": true,
+    "sample_variation": "All five precise allocation samples are retained, including small/wide variation; no filtering or retries.",
+    "gc_counts": "All measured collection counts zero except large/all: both arms have one Gen0 and zero Gen1/Gen2 collections in every measured pass. No general GC-count guarantee is inferred."
+  },
+  "quality": {
+    "report": {
+      "path": "target/compiler-project-serialization-20261109/proof/quality-1794243082011580000/report.json",
+      "sha256": "164f85c48961302f5eb3a81fb3cdf20f19bc7391fca11b092ef5ac648b1e4ed7"
+    },
+    "result": {
+      "path": "target/compiler-project-serialization-20261109/runs/20261109-165126-5784910-42674/result.json",
+      "sha256": "21d6f68f4534d833925857de5e124d19ae8a1759eb96216a734e5df30cacac78"
+    },
+    "labeled_configurations": 48,
+    "shape": "8 fixtures \u00d7 3 publication labels \u00d7 workers 1/2; each cell executes both baseline/candidate. Disabled and no-snapshot are duplicate count-zero operation labels.",
+    "fixtures": [
+      "Empty inventory",
+      "One module with no sources",
+      "Plain",
+      "Hot",
+      "Editor reference",
+      "Dependency diamond",
+      "Unicode/escaping and standard encoder fallback for unpaired surrogates",
+      "Reversed module/source order"
+    ],
+    "requirements": [
+      "Full configuration input bytes and hash equality",
+      "Full fingerprint input bytes and hash equality",
+      "Complete manifest bytes equal",
+      "Manifest Graph equals actual production ModuleSession.Graph output",
+      "No request graph factory evaluation for zero snapshots",
+      "Baseline one graph evaluation per snapshot",
+      "Candidate exactly one graph evaluation for snapshots, including parallel consumption"
+    ],
+    "gates": [
+      {
+        "name": "build",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "build",
+          "target/compiler-project-serialization-20261109/SerializationProbe.csproj",
+          "-c",
+          "Release",
+          "-m:2",
+          "--disable-build-servers",
+          "-p:UseSharedCompilation=false",
+          "-v:minimal"
+        ],
+        "exit_code": 0,
+        "stdout": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/proof/quality-1794243082011580000/build.stdout.log",
+        "stdout_sha256": "861f39ed3f60fd0d8b05f907cba61700599aee27039e6743cbc64582f420a574",
+        "stderr": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/proof/quality-1794243082011580000/build.stderr.log",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "quality",
+        "argv": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/dotnet",
+          "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll",
+          "--quality"
+        ],
+        "exit_code": 0,
+        "stdout": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/proof/quality-1794243082011580000/quality.stdout.log",
+        "stdout_sha256": "17fb5865dc7e355eef0960476f796ab47e289f62b89017f5f056e98812993fae",
+        "stderr": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/compiler-project-serialization-20261109/proof/quality-1794243082011580000/quality.stderr.log",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "observations": [
+      {
+        "label": "empty",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "empty",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "empty",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "empty",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "empty",
+        "publication": "all",
+        "workers": 1,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "empty",
+        "publication": "all",
+        "workers": 2,
+        "modules": 0,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": []
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "all",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": "abba60098081f2489fa066bbc81a25a7493686e6d18a68e47c91f6a35f5ab9af"
+          }
+        ]
+      },
+      {
+        "label": "single-empty-sources",
+        "publication": "all",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "d9fa0141ce0eff30ec130241890105e25022229c5c87afaf40b81faebbcb9e10",
+            "manifest": "abba60098081f2489fa066bbc81a25a7493686e6d18a68e47c91f6a35f5ab9af"
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "all",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "d15e9a4dcf7f31ef92539ba32de90dfedc3a999f7497be276dfb65490c9afa8a"
+          }
+        ]
+      },
+      {
+        "label": "plain",
+        "publication": "all",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "d15e9a4dcf7f31ef92539ba32de90dfedc3a999f7497be276dfb65490c9afa8a"
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "all",
+        "workers": 1,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": "810b053a0fdabbe6ff2e5969668bb6816028c15d5baf2b51c3405c8738e0634c"
+          }
+        ]
+      },
+      {
+        "label": "hot",
+        "publication": "all",
+        "workers": 2,
+        "modules": 1,
+        "baseline_graph_calls": 1,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "034bd3a8c027ccf45255fa9a39e41f47030d3c8a1b79b30d6a0cdf9f16678845",
+            "fingerprint": "dc00b29a0987ff12e160370114826fb3cb09ad453cca14dc4a891f37e6e89858",
+            "manifest": "810b053a0fdabbe6ff2e5969668bb6816028c15d5baf2b51c3405c8738e0634c"
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "all",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 2,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "a24743dbb14ac0baf09a3d1549c9b095e5a35b52c4d9ce3080bf798a563b581f"
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": "39a5d332cd14536460c02e0664fd1a4710eb405c6ecb4ed25360db8d5a901e47"
+          }
+        ]
+      },
+      {
+        "label": "editor-reference",
+        "publication": "all",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 2,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "a24743dbb14ac0baf09a3d1549c9b095e5a35b52c4d9ce3080bf798a563b581f"
+          },
+          {
+            "configuration": "8560892846a8df585a61676035160ba859bdf58caa2f2347b2b8f07250a9d5d8",
+            "fingerprint": "bda9f2a96fa068b3276a8573f16169f00cdaf0e30c525c9aae11ad24caca26a2",
+            "manifest": "39a5d332cd14536460c02e0664fd1a4710eb405c6ecb4ed25360db8d5a901e47"
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": null
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": null
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": null
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": null
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "all",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 4,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "801e6189f87928b23f1fc20bf6d3f9757c36cccc057cbb8006d8f6f82f4f4f7f"
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": "8defc26ff572e6ad45e592c29943855b10f8690787d9f49e5bf1621c18b93b6b"
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": "8830b8f523117540fc3f066c276f965f0ed894e10704a21fca7827007d3cbda7"
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": "6242dcf37f03aa7b3c87e75d56646da0f4946d461993f19631dd4ca8f08011e1"
+          }
+        ]
+      },
+      {
+        "label": "diamond",
+        "publication": "all",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 4,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "0a196b6098470a0bdc9278fd0c672eef83fd5e95d6dba50677e004f58bd5cea6",
+            "manifest": "801e6189f87928b23f1fc20bf6d3f9757c36cccc057cbb8006d8f6f82f4f4f7f"
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "69c2fa17821e489e81b40d9992ff35589814d1fdf687f52978be880796a1f1f5",
+            "manifest": "8defc26ff572e6ad45e592c29943855b10f8690787d9f49e5bf1621c18b93b6b"
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "8a8334862879e9ab47cb37f8bf48d6694b607c22a780c3764d69e170b22c869b",
+            "manifest": "8830b8f523117540fc3f066c276f965f0ed894e10704a21fca7827007d3cbda7"
+          },
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "e5ae13444af0e1cf89fdf5aff73f83684c79925ebcdfb048cbb28ecde37a3dff",
+            "manifest": "6242dcf37f03aa7b3c87e75d56646da0f4946d461993f19631dd4ca8f08011e1"
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": null
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": null
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": null
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": null
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "all",
+        "workers": 1,
+        "modules": 2,
+        "baseline_graph_calls": 2,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": "3010358bee6a93370db90565bdb6aa08e001fd5273e6344e52c3775364290a61"
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": "c3df8f4cbd4bcedfc38bd8db3287aca23ead909c0e618da8cc09ba0b57a5be19"
+          }
+        ]
+      },
+      {
+        "label": "unicode-escaping",
+        "publication": "all",
+        "workers": 2,
+        "modules": 2,
+        "baseline_graph_calls": 2,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "c347fb83f8e4c5d44a4cde767bb60397ff2f44b54b4351b61f85dc8f4dea3825",
+            "manifest": "3010358bee6a93370db90565bdb6aa08e001fd5273e6344e52c3775364290a61"
+          },
+          {
+            "configuration": "7d861cd5c1a9f6bd5fafc03df6e491d9d277e2f0e43e72111e29828783be67a4",
+            "fingerprint": "361c3a6329c06fdd5c6c72cac268cfccd8080dfe9e67a6989b8bdab348fa3f96",
+            "manifest": "c3df8f4cbd4bcedfc38bd8db3287aca23ead909c0e618da8cc09ba0b57a5be19"
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "disabled",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": null
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "disabled",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": null
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "no-snapshot",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": null
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "no-snapshot",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 0,
+        "candidate_graph_calls": 0,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": null
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": null
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": null
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": null
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "all",
+        "workers": 1,
+        "modules": 4,
+        "baseline_graph_calls": 4,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": "c1ee1f2596e1f763120c35f8513e04681d5e744c24cafbbe08d0dc14333ab5d5"
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": "987e586d00e5dc1453e57ec93c24e6dc90278492703f38c99bf93d3e04bfcaa4"
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": "8b744ffd982a890fd3f4b81f71e2ff1adac15f00507b7b62a6216f27ccb22b22"
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": "e705ee6b49a589d7cd821adefb8d6f30cc07fa8b6baca103a2d2b52c07997037"
+          }
+        ]
+      },
+      {
+        "label": "reversed-order",
+        "publication": "all",
+        "workers": 2,
+        "modules": 4,
+        "baseline_graph_calls": 4,
+        "candidate_graph_calls": 1,
+        "all_configuration_fingerprint_and_manifest_bytes_equal": true,
+        "payload_hashes": [
+          {
+            "configuration": "23d11764ba0cdd8f9aec58382e8ec94483c54362cc71fc4b2e2ba38725d1a06d",
+            "fingerprint": "f3ce773fb4af6d111a9ab12d4337804bc7a45de89a5c38ede3518253dc1cd6be",
+            "manifest": "c1ee1f2596e1f763120c35f8513e04681d5e744c24cafbbe08d0dc14333ab5d5"
+          },
+          {
+            "configuration": "dfd24fc8cc8159c84a7326d3980d88b5a33ce1e6840f93008af42e7b95619f41",
+            "fingerprint": "5b9e22151d9813421359a14c90709dbc86a3185b13d7f4662928c2b9c7e0d282",
+            "manifest": "987e586d00e5dc1453e57ec93c24e6dc90278492703f38c99bf93d3e04bfcaa4"
+          },
+          {
+            "configuration": "d2b8b11779c82b49a04a1dc1428ef26d0b5798a5552631e8c7cffcb4131d7136",
+            "fingerprint": "557f6c0c9c9ab84f336678c6716e12edbc2101510db14e004b7b34b617aa6e4e",
+            "manifest": "8b744ffd982a890fd3f4b81f71e2ff1adac15f00507b7b62a6216f27ccb22b22"
+          },
+          {
+            "configuration": "ed45e4d4545e20f7741e2b8a27a5d209e1b13cf1bef5c97464a986c81f029cdd",
+            "fingerprint": "cc5b68313065ffbd8914ab91802c3a5b80d599a59bd642671150f80f1d40b187",
+            "manifest": "e705ee6b49a589d7cd821adefb8d6f30cc07fa8b6baca103a2d2b52c07997037"
+          }
+        ]
+      }
+    ],
+    "actual_graph_and_manifest_assembly": {
+      "path": "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.dll",
+      "sha256": "854b57952d44138fd4f0243a51ceca7da91072f76f9834964be5bd5308a199cd",
+      "matches_readonly_production_reference_snapshot": true
+    },
+    "not_a_compiled_candidate_ProjectCompiler_integration_gate": true,
+    "synthetic_pe_pdb_scope": "Only exact ManifestBytes serialization/hash inputs; no emit/SymbolsMatch/cache-trust behavior asserted."
+  },
+  "source_and_binary_bindings": {
+    "initial_snapshots": {
+      "path": "target/compiler-project-serialization-20261109/INITIAL_BINDINGS.json",
+      "sha256": "0014bc50d51bad94c7c4e280da658614136438cc07c0471dbb977925eaddb890"
+    },
+    "source_manifest": {
+      "path": "target/compiler-project-serialization-20261109/SOURCE_BINDINGS.json",
+      "sha256": "d967dd91cfde8b05b6da0c5fad7be15d5719c7df55c1caafa868a3a7cf05dbaa"
+    },
+    "quality_frozen_sources_before_and_after_equal": {
+      "target/compiler-project-serialization-20261109/Candidate/ProjectCompiler.cs": "8016e75e12a2a13febca7f38e1add91ebbbc0605d80dab5fcdf6c21d69687a11",
+      "target/compiler-project-serialization-20261109/Candidate/change.patch": "210adcf33e70974724a203c888b548fc3f4fb110af00d0a8b08bac505b3c0df4",
+      "target/compiler-project-serialization-20261109/Directory.Build.props": "8c922d080fdbec5336e647505801014967d77e552de6197cfaa46945b7f09431",
+      "target/compiler-project-serialization-20261109/INITIAL_BINDINGS.json": "0014bc50d51bad94c7c4e280da658614136438cc07c0471dbb977925eaddb890",
+      "target/compiler-project-serialization-20261109/Original/ModuleSession.cs.txt": "7f5424403b49edd09724baa05ede456f041dc2150dd6b2cc8b4957112e08e3e9",
+      "target/compiler-project-serialization-20261109/Original/ProjectCompilations.cs.txt": "f15e18ba44e8ac1f87339262cec1d6fd4a9452e8c731e7878bc6fb8f4746721b",
+      "target/compiler-project-serialization-20261109/Original/ProjectCompiler.cs.txt": "ed0bc1a399e05fbc62e7b0f4c4d766e9da5006cb05e1428a70c7908100f96c15",
+      "target/compiler-project-serialization-20261109/Original/ProjectInventory.cs.txt": "321f6583dab069d156a1a821a94a2cab0d7c111252e4405a2d1b2435cd9c5fe4",
+      "target/compiler-project-serialization-20261109/Original/PublishedSnapshot.cs.txt": "ed9b72d90b23859ddf9827eac76f78f65747ebede58eba562d3393ab6e33ccb4",
+      "target/compiler-project-serialization-20261109/PLAN.md": "7306b0bebf125cf94315f4b51659cd9ca08ee8ba4278194a333e9a53ccebe15c",
+      "target/compiler-project-serialization-20261109/SOURCE_BINDINGS.json": "d967dd91cfde8b05b6da0c5fad7be15d5719c7df55c1caafa868a3a7cf05dbaa",
+      "target/compiler-project-serialization-20261109/SerializationProbe.csproj": "0d8d9a5cba9fc6d2d2d17bfd2c303f5785ef5f28c3749e6316c3fd5040f9b9d9",
+      "target/compiler-project-serialization-20261109/Src/Fixtures.cs": "4909db7b325b40882d0de886119765c8da82756363cbbbbf9799e39fa0cdf2ff",
+      "target/compiler-project-serialization-20261109/Src/Payloads.cs": "74b949f9748fa8043156e69f6e67c403d21af50b5803be0b7092fecc0bb0c150",
+      "target/compiler-project-serialization-20261109/Src/Program.cs": "3889b2e825c1557170fa435d0cf0cb657a03b90b7d174eac4e2becc438bddc0c",
+      "target/compiler-project-serialization-20261109/run_quality.py": "642641508b3d1646ca798f39b756ed4778372aa5b81c9645301e965d242bff96"
+    },
+    "complete_readonly_reference_closure_before_and_after_equal": {
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.Analyzers.CodeFixes.dll": "3b5e62c9a7545b3a1f928ef3c75412f8fc7cb3b43a5b8c0f100f1b1f005f5197",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.Analyzers.dll": "4104fefdd9b67da5bc3cfb70bb2405fee385219227db83ee947429e6e325783b",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.CompileServer.dll": "854b57952d44138fd4f0243a51ceca7da91072f76f9834964be5bd5308a199cd",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.CompileServer.pdb": "1f73949b977e3a8b492077b070c9191f84cc47557678153128148871121bb53b",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.Editor.dll": "d5559e560d2979cc38d478875183869ae4d5bd5ae0318a9a281aa1b420e5df9b",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.Generators.dll": "ad7e74518c730842492dc5c2dcc66afc0b2832e781070e8f379c24f5dc74292c",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Ara.Runtime.dll": "ceed6a57991ca09b454e14cdac9fc94cfaae5f87df1e3c93b7aa9033e085b5ac",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "target/compiler-project-serialization-20261109/Original/assemblies/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "target/compiler-project-serialization-20261109/Original/assemblies/System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "target/compiler-project-serialization-20261109/Original/assemblies/System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "target/compiler-project-serialization-20261109/Original/assemblies/System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "target/compiler-project-serialization-20261109/Original/assemblies/System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "target/compiler-project-serialization-20261109/Original/assemblies/System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "actual_app_before_and_after_equal": {
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.Analyzers.CodeFixes.dll": "3b5e62c9a7545b3a1f928ef3c75412f8fc7cb3b43a5b8c0f100f1b1f005f5197",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.Analyzers.dll": "4104fefdd9b67da5bc3cfb70bb2405fee385219227db83ee947429e6e325783b",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests": "b1013f8d18b6e93dc8fe2438676da8b387df29d7e353bae21bffb10c88740ece",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.deps.json": "34f9c1a69e333f4dd1d050aafd16de9dff0e5211c11f1a14e06e2f43793ce8fd",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.dll": "ccc08155028c47db04f6e3df3d1e87634a85793720fc9e5e7265badd105d9f5d",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.pdb": "f6b3435ebbf000c4cd339cfb23a6f8b14d4064534323d52bd252cab02fd10a2d",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.Tests.runtimeconfig.json": "c64c3d669be7a8f99461142d6d1a8e5702044a8c627dbfc1041254b80a5f904c",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.dll": "854b57952d44138fd4f0243a51ceca7da91072f76f9834964be5bd5308a199cd",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.CompileServer.pdb": "1f73949b977e3a8b492077b070c9191f84cc47557678153128148871121bb53b",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.Editor.dll": "d5559e560d2979cc38d478875183869ae4d5bd5ae0318a9a281aa1b420e5df9b",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.Generators.dll": "ad7e74518c730842492dc5c2dcc66afc0b2832e781070e8f379c24f5dc74292c",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Ara.Runtime.dll": "ceed6a57991ca09b454e14cdac9fc94cfaae5f87df1e3c93b7aa9033e085b5ac",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "target/compiler-project-serialization-20261109/artifacts/bin/SerializationProbe/release/System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "actual_runtime_before_and_after_equal": {
+      "target/toolchains/dotnet/dotnet": "09448be14f72ee40d5ddaaf6039e9103c1dfdab1b975982aa68b537c4fad4a9b",
+      "target/toolchains/dotnet/host/fxr/10.0.14/libhostfxr.dylib": "650b36591c9657c205b13b0aa864529fb65671e98c5fd02e971ee8c7ec6cd96e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/.version": "b9754dc907d29a69007a652af41cd6658aa5c9a3afd511ce548785d8450cb78c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.CSharp.dll": "ddd21369b4f36bcb085bce0d06c23da9b34ffdff3113beab3030b0ad4d6747d1",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.NETCore.App.deps.json": "f4da9a5efc805f4072ff7477bfae676c73e4947a43ca1c182dd95070def3bc3d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.NETCore.App.runtimeconfig.json": "b0389faed3531f74a620de69039790f308c6e08affe1ebd21bc51c3b80cde8b5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.VisualBasic.Core.dll": "9a52233da51605e19c53bca66d96f868abbba5a72cf4e3234d2d346a4f4b7604",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.VisualBasic.dll": "1b14a575c210b34e5c2472c1f829919fd53fa6017b3ef20753305e9f0190f16d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.Win32.Primitives.dll": "21011d02d026e6e3a8d0819e269c3068459a6ac17071b7e80b8d21232a70f541",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/Microsoft.Win32.Registry.dll": "2ef4997b8c1b1bf9663f3ff07f5249e361cdf21f1163537a101bb4e9f9e8d5c5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.AppContext.dll": "b6240c4f27562bb0b8b5c65ed84fe79794fec87b55c413ece285d9b4278eafe4",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Buffers.dll": "f1a98e6e82d7608c53946028cdc1b4303250a336e539e3df0ffc3b5f47305588",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Collections.Concurrent.dll": "59d9427180c8eb2f41eb74ece43664d60841ae482c57d69da928e32806c003e3",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Collections.Immutable.dll": "72992e1aa7d26ce1b2e15e839e649db24cfa448c141a6f21121ea94694eecf91",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Collections.NonGeneric.dll": "86274033418d53943ae9d3a37ccea83cc94314ce68aed494b021e62babe1fb7d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Collections.Specialized.dll": "92970c59949528ad0233d4345d72e2f4ccd9004d0d31841ebc0fd1b6b637d653",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Collections.dll": "467208a4f124d93381e08c9a22ff8ae13c4a5a0050ee640ff828d86f98538239",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.Annotations.dll": "aa5a4bd2e98f0813196c904da160ce12d2810de18b0aae0587f39faca8dde24e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.DataAnnotations.dll": "bea2a771a3e57c9a0fc700ca1f594b268a97f0360ac8473526d54437e1f6c6d4",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.EventBasedAsync.dll": "e60681a2ce2e52f16b6995b7432abba4f4e9e127da7941d8960b918398ee739a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.Primitives.dll": "5e4dc624faad30fc7a08b6fe398387433c34ed70e52ceaf2d6663da841e15e5b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.TypeConverter.dll": "562d88f0b1f9e81edde25f5a334618e3c5306c441eb7783bc253cdfc94176151",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ComponentModel.dll": "35b8dbd0305f56708db418cdc043ac1078795c1c69d14b799f5472576da22543",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Configuration.dll": "dacfdb6be7740424b0d9eef72fe8b412aadb9fb8f209b7aa685b37d4588576ce",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Console.dll": "808b83c1bc98e23cf8dd8e818d163610654d1b150ee95ffabf6fc76dd210b22c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Core.dll": "a6059ed7dd7bf7b26ec6eb1d6e83649aab32e82d26b601415c01135c67819905",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Data.Common.dll": "94718944ea25489cebf79fce3ed60a66006fb6b2973fed3665d1ad9dfeaa26da",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Data.DataSetExtensions.dll": "16facf58b8dd0fc5ab17f94adf74cd5981056bbd87a485a954973cda3d9e0ba5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Data.dll": "9d96f285ae19806ae96be2853e9751cb616b0fd31d3720d7fd134116fa911328",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.Contracts.dll": "9327d37ee03c1912e3e24a81dbe046792beabb7fb28b8ad30f0ff15ccccc9141",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.Debug.dll": "418d4eec4152b1b2965c826f86d1a6c2bab0e7982a17036a6b1d0fcaa24e0066",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.DiagnosticSource.dll": "9effc909b7765ed69aa12a9572287ef6edb6a39267aee9fada391dd8bf6a13e2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.FileVersionInfo.dll": "aab0df336b1806ee24a63eb04310f22b77010db5dc7260d15bbe5f223dbd056d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.Process.dll": "604ac0853fc69a58b1aa100e4aa89114d056a9fb5036c9998dde22d937bffefe",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.StackTrace.dll": "765eda258127d4369b560146c5d777a1006dc42df66ab0c836bd1af511c19ffd",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.TextWriterTraceListener.dll": "3acdc0814232cc95a590b01943cec3ceebcc8e70da2aa31ee5368c329ed62940",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.Tools.dll": "b608f19cca5a6cf9b6299c7697ca8675f21159d9c38bbd05ddea08fcfabf8bd6",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.TraceSource.dll": "b6fecc12395a21fe315c83b882bdd57c296fd874903d7ce3b2c259e6cc83c4c4",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Diagnostics.Tracing.dll": "35c90fdf6a6ad9a062f60cc1a43fb95fe4a4d1388b6cf0e7546dacb98038a44b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Drawing.Primitives.dll": "305029513be86f5f1e561e649101547f773180b5f57aa91dcba8d4802d09bce0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Drawing.dll": "a7badf418b8750d52333d1fff23d754aba3281ce84a1c218637a1f5b4c9a8c4b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Dynamic.Runtime.dll": "39312fa9ff8b213e16bd374274ddf15523617d260981d2dd4bddd186950d577e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Formats.Asn1.dll": "b7b295033dcfcfd6a2f8bf5d19e498505c687edc01c37fdd5e7d2b3c2a6229a7",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Formats.Tar.dll": "08cb06c5af80d7a3516141c1e56c29e6e0a85d72bcbe7819226f35f6c14d46a2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Globalization.Calendars.dll": "f68cd76aa9ac1cd5be4c1111dfb98e52869fd6b774a009da1eaa89051b46b3b2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Globalization.Extensions.dll": "2840cbf2d2ec1624bc06ea5c9d67d13df3dbe5ad90892e75477cf888f86429eb",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Globalization.dll": "599f561ad2fa0e0cd631ea51d9d7d4d55806e31e13f21e904b33f9646e2953b2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Compression.Brotli.dll": "6b57d4342672a76258ee3a0400204a87be030a2f20a390301d76dd7627044bb4",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Compression.FileSystem.dll": "40dbbe4f8be427e24f74fe13faa7bf48f782f7f49129fee88cf367bb85f340b2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Compression.ZipFile.dll": "e0370a04ca1b70709040908dfc8c69b94328abb6aec6f142e7637e1c2b20b6c0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Compression.dll": "5b358cba29471e9ffd041f2b1a65b01d361315be64eb08359667a6b77d7a4ad1",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.FileSystem.AccessControl.dll": "b1f11eea13fb6317835f9ae4c33e983a728ccb852de3e7166f99a261ae6e625b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.FileSystem.DriveInfo.dll": "4681aa911cf2437b956699ceeb3f27fc78c807db890eeea1a201801995b44793",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.FileSystem.Primitives.dll": "82db1a414b17ce4bb9605962cf4df8bca3ed41872056e0f283c1dca21654290e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.FileSystem.Watcher.dll": "00fa00d3c10d9f42a7cc6537bdc02f245a43eab2598bf15c00829c5a6974dc22",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.FileSystem.dll": "ce1a2003fd8da1e736ef74c98b56b4c7d00118724596adb3b4b4d941d3b6152a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.IsolatedStorage.dll": "5a172e722952efe031c0968effbadb053e8ce3d76f5c8274a189342b20c8d02e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.MemoryMappedFiles.dll": "92bdb7d20018f7cc63b9eecd7ca70547ab7fd11f2e7773cf63f677933c6df020",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Pipelines.dll": "eee370c2b79939963244b2e10959cc2c48a29ec438f0104fef751ab658038e74",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Pipes.AccessControl.dll": "f71830930905a652d690d361aac3496dd5adefb648e1e10177c04bdf2d29eda5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.Pipes.dll": "dbfa199a6ec680cd4c69635dd0202035f13dd754a991bf478b4eba9ed8a2a7db",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.UnmanagedMemoryStream.dll": "341160946793f67478fef6ae79bde446dc71aaa786d8c6d7f1cb073a036e3480",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.IO.dll": "45f974e48d8e5591aafaff97cc7b03751ede47c4a1f18ecc2262e6f2e3dd631b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Linq.AsyncEnumerable.dll": "c35f3bd3c9ada6763eb175c7b91566083fd4b640eb09b57c28fd04a5157e42b6",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Linq.Expressions.dll": "41343b72d9e3fd13a7ffe84c43defb12665e4ad47a5f0067c9f6334deea4c3f7",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Linq.Parallel.dll": "8126d9dfe13b571d5d37fe16ca6a7bffd114bac7a7defe4a9655d51e4237ed73",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Linq.Queryable.dll": "0ff106fcae6669983afcf68d6b93c94465179ccf6bb2c16751fd00ab13bab164",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Linq.dll": "cd0f2922546b509d1fd06359e00a6bfff8fbb77f8be041cf472e5af447a06743",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Memory.dll": "bfaf04666909d1822d5cc42780209fc504d002078574f6f847ec11ff0b6b1f94",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Http.Json.dll": "4361fcd8d6dd45ef8398e9427a3ccbe14e4475d44e4cd75266a53164435ef726",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Http.dll": "64534e7b464f9bad7efc1b1244e1b8a79d41db3aff299a8577e4230399e3b40f",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.HttpListener.dll": "46824c26e51725b55cfd2b0f8de639302f626f74c8ec8da8d4a408b9c7233969",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Mail.dll": "5b977ee55c7991f7704cc98fde2af28de052bfe9156445020cf67cd4ecdeb2da",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.NameResolution.dll": "4d24779981102fbf975e2c319518799de04a89a6756730a9117919ddfce0f29d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.NetworkInformation.dll": "dea73974864c3c79722509e429f38620a9ad462241552e7aaf6a97a8b1aadcff",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Ping.dll": "9d7802846564db2859c8e5eae47ad56d55fc108992f6d4e81d6f51907109bdfa",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Primitives.dll": "4423cd510ecf4e44e62c4546f3ec9f8b58da02cc5773a532c088863cbe650aeb",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Quic.dll": "a80c773b17ef6978eb463fd52a815f2d0eae68f28e54687401a92a0c92eeccca",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Requests.dll": "61a7abcf287c154fd861180f4e173f9bc50b2e5705cdc24f67630d3c0b7e6c3d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Security.dll": "8c5887c95ac5805f1f45b4dc36cd390bf507caf23aac0b6f9ef8eb9a9e86767d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.ServerSentEvents.dll": "350928c49aaf16796f32b0aa422640e3a84f84d3219e9a568adfe4c9f9f0d1d0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.ServicePoint.dll": "882f6d4afa228fe7991b421cc44367fd4bb29bc6f3df2bdb52613097a231a801",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.Sockets.dll": "0fe6b488ec95a3c5352199a0c75215342a9cd87ebfce2f690a1a3bb06a4b1069",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.WebClient.dll": "121868ae87bcd05bf5ae8cbeae54be6a09a62ded506010b96ec6592c90f9d2e0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.WebHeaderCollection.dll": "fbeb9e43928bbac9201007826d19d576764bfe6f223f28bc8e7a40cd173cd5af",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.WebProxy.dll": "360e0a4997ebbbc4ed645449af236ce70f2f9d0a7044d121393f01392b4c1a08",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.WebSockets.Client.dll": "c441bf4df79c053ff3c515d86ed34726e89b85e94c5d1235a7d18d9510bd8cbd",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.WebSockets.dll": "73512dc72bb0c568634cfe5d380201ddda17e11ed9782532cab23c415b1effcd",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Net.dll": "4596e5ee7e768c5de73e5543eaa9a539455b74335a11c2f569e17f23c0e342d0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Numerics.Vectors.dll": "125353f84a030a1fd1d4939dff21c6e01c8a541cdc6ec5fab3688b37f1ae4199",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Numerics.dll": "e4d151711d80b35ec80128bb2ab2c10b86a556c2215e8f1d4a39b699d69376ac",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ObjectModel.dll": "720600d90212934e233b3c24ef0ed389c203ed6a3cf6d0b51c25f16b683e2ddc",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.CoreLib.dll": "f3dbc0161042e1519953162ee8b8ab6908e1377d07b8e88c987a910963c2be33",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.DataContractSerialization.dll": "143ceec9429a4728a621998d0e1ab154d76a51a6ac38398e0d1c64ce03870a5f",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.Uri.dll": "a8ead2e48b3e8435c6633eb49c4154040bd8f5a3e3d9733600f4443b6ab01a30",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.Xml.Linq.dll": "46420ecf6fc5fb7839290f2d21c12415b33253ed93875ec35be773ecdb33f0ce",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Private.Xml.dll": "0477be690c86357678468386d721d60cb2b604ce18989b7ee394e268cbef1d5b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.DispatchProxy.dll": "213b1960cdc26d4786793d94a186f737ea3ebee69a44415e4d2387a0bc5e9f5b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Emit.ILGeneration.dll": "0a1c8885662642d7cfacf160ffd33d7537e50c0009be4c24b28c097d22481cec",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Emit.Lightweight.dll": "4650affd03cc07f0b73de807f186f85296fb5bdc1ac343065353bd26779fa175",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Emit.dll": "ba93a3d92f85b9a0da26eb8ac6b52903d89b6db024b1666ff0c2b3c1a0a50e60",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Extensions.dll": "eb8f45aa25b7fdd5247a3b98e2af79e7b7b9923f224c10058d95f3ec76138ca5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Metadata.dll": "faa8a9b7496629c93f02dda6893168975b4692f297fcc6c43458e3efb08a123b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.Primitives.dll": "2957f284f87e1176738849dfecc84189dfe4ae13894f1d5cdd2ee470937e1537",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.TypeExtensions.dll": "ab2acb7762e2ca966bcacf444f8b69d8c3f753976641fe71a7a60ab623d10515",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Reflection.dll": "9bac39fb7e3d60d8fb6c924a4bca61afe1d5bce31919e1ca690ee8a6b69f98b3",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Resources.Reader.dll": "ed930cd36287bac7daf4ffbcea00111d334dce05afa04abb5f0a9ba43dc772ea",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Resources.ResourceManager.dll": "06880e29ba04c6b902f03c0c76af834b282f3a23f696a4548ae14da9a6a36440",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Resources.Writer.dll": "0ed0c74d80f28549ce44c0c67404741aa917d6ad768d38af7451ef6bfb72a5ad",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.CompilerServices.Unsafe.dll": "0f7b52f07e5c54e5f0d51c732b853680b85fb174bb8e52f486e1edc81eeb8d88",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.CompilerServices.VisualC.dll": "8a13c1d449028012a2d602d87167cb1ff87fe790476fab7ba8299ce6f829586c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Extensions.dll": "94a25289afedfd29405f8dcd013e0a66324c9c7cf3ddd240ef0275b5b3912807",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Handles.dll": "e486edf170d635bf01502108b6366af83da7c3c2d40a4bc0055eaabd9b94f1f5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.InteropServices.JavaScript.dll": "e38b6eb38c00d2358d847ceb5e894b9988fc23ff0c19d3cbaa23f2404d3c5ee5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.InteropServices.RuntimeInformation.dll": "2de5c1eb6f4892a8ba3d3217aa9c2eff8ad083cc7c34bbc0e7638cd16d07360b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.InteropServices.dll": "706be590aed0732bdb63a5d9111f510728c7ea0193c70b9b52cb884af0f692ba",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Intrinsics.dll": "06c8ca6875c201ab8a1cc8bd3eb4641119c764fd987c7ee00d7b0c1a24052235",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Loader.dll": "64d41a26302e6969b8065d2c2643ce2a70f96f8d96e7a4009ab7f21abeaef40b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Numerics.dll": "6f9950bb3084fa54c32307231902dddac5854577b326d024fbd01900a4bf2d26",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Serialization.Formatters.dll": "1eeab5a8c4fb54ddf4c3bf95c17d209515acee3dd28f54e7d0a4435836f4d805",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Serialization.Json.dll": "ef82a10c038724ff48f968717eb51851aec0420107cc6c38e41152688ad529a9",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Serialization.Primitives.dll": "b420f53158f138fc99571c10947b11ced9e514a43983ce707111c61e23098dde",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Serialization.Xml.dll": "a06dbe0c1c0e031978c47b0ccc32ab107b56710054cb6f79c28143f1f1e624ac",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.Serialization.dll": "b28c65683be4397423690da613762d656b7334fa34cb191e1e2f14119521d337",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Runtime.dll": "c32d8e757bc2632f97b2c1256c2e04a59a81b6d25171c6b830d96f874d003a65",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.AccessControl.dll": "8e69118123dea5c5f2d45d5f092d09249c13e38e36b20f0b99da61d0714fac44",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Claims.dll": "5f1a0532fded16cd189d28eb219f0f9d74fc7ccff8c70a232c5d9e2823dc80be",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.Algorithms.dll": "2447953a72068dbdafb134a9538e43c6b0548f6e3e0902d5137df7272e8ea207",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.Cng.dll": "85f6156821887887a128f206422f17f7ab18f95102e46ce91882ae54713e0595",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.Csp.dll": "5e0b9aea1ee6eb0e884fd3336d341c78faebadffe7d45ed41615ead1f24b9101",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.Encoding.dll": "bcd75cd58de6e787d966c106a0735ae791bca95c0d65bc6d45626552b9fd351b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.OpenSsl.dll": "a644d45e7368e1ffde9dcdf03bd4a9b7d3db347f242c9d061668e3e320df0c45",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.Primitives.dll": "ad4590074ade4556177160bcddd31fcbdc0fb4b7c1aa1aec14574bc19783d41b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.X509Certificates.dll": "52a69436074bf96118c6a8044ba22a7701e9d713f77bf555270148cdca085d07",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Cryptography.dll": "8402add0a78bf1a364cd3cae0fde129f574f73dd3642fec9fd9c4c6bdc524a5a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Principal.Windows.dll": "50eb23fe92b9c99c954a2d276c9be17e137f87a864baefcc6cc5c41d9e4e26c0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.Principal.dll": "c5d89c345498d40914ca0dc522063d7dbf2887fcfc16477dbd58b8ab2fcb2e4c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.SecureString.dll": "02d383dc7deac0c8e7c14a6560eedb25b3783ea1b72032122f55a7425fdc62de",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Security.dll": "07e8076004f6defb5042d5e4f61e11ac8b26e4a43bbe3b38d1911a2fa1aca692",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ServiceModel.Web.dll": "0bece0fb3276b06bff068427c969af89ec3548138a870ea3d3fc32bcb03ce0f5",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ServiceProcess.dll": "5991736c7ef4acd5e0f08e757291000f4799fa9b2ca2bad1ddea3e1a722f8250",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Encoding.CodePages.dll": "b56759d58fe5323708b0e4653bb2b514aea4e319e310082a471189b5b16685b0",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Encoding.Extensions.dll": "e5c23ceec3f8ffc5b3e2e2fc6da26f2513b33e155394c26c7296fe3c7d8a9724",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Encoding.dll": "66f0d4ac831cfc6bd238da5fbd830d9b7c18aa2cd714df7825acfd938a48dc5e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Encodings.Web.dll": "621fb4ad270825430ae15283dbe7cb9d59c503e0a085ee5835c94ce92c7a4be2",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.Json.dll": "eac0c5c0ad5add86559e9acac2dc7e45c178acfdd803bac9eb28a503838b37b8",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Text.RegularExpressions.dll": "1b82db0fc1256bed666048cfc6838fc8b08b5b75f7b9ccbec8ee35005786af00",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.AccessControl.dll": "b54c9c27133aa3cd99b3b30387ae01a74b609929babe563ecdb2e73db669488d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Channels.dll": "768503dc8d9ba5174367166f57fa7170c36bab8b9f55b99e5c7a5221788bf696",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Overlapped.dll": "962acc0c15eab13166083889cd7e9b17933624825ddfc17499576143db03a1e4",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Tasks.Dataflow.dll": "67e0d1b9670508f70603f90b2c996f011a740f81d6a78757e8ed4bcbb9ccb086",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Tasks.Extensions.dll": "69f8245362a7e96183a0b87d9feaf9155e1117394c2e660719fdb7a5610d2b94",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Tasks.Parallel.dll": "e2d6f788291da668a9585bce1c3b539855223c98f7f8840b70fce02068940e01",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Tasks.dll": "bc3786d93d452a6f84baeb24c0cfbdd8678234fafc63980b9dd4184bba5fbd4e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Thread.dll": "8dda8edb79c042363c1e29ff1ea2d5a9fa4240a7358ffe844190d450b1dae5fd",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.ThreadPool.dll": "92e5b03e68859b497d0fb2f8982630f1f5f2fd3343a80ce773416cab8fcb992d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.Timer.dll": "c88b5636f73ce58c5f02c1db120c6f57de5287ad877729523866b9d7fc2127b7",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Threading.dll": "830481d74b824faf006bea676abb267059eef9c5c6c621110404ce8360772a03",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Transactions.Local.dll": "0050866e42231510c6379ea21be88a4afcd1a76c4c6f4cc049dec9229212c6fd",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Transactions.dll": "67d84daf0ae7c30287db4f172838a1ecdf6199eedd9f86e4d6632d8dec93d0c9",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.ValueTuple.dll": "fc0880dcff9bd3ef2fffe0000ca6aa7b90491f64d1de9f040e0c53972758023a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Web.HttpUtility.dll": "e9d11d8df49268ad6d055d1585c94c177f1f0a1291a0d8845d4beb064a49892a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Web.dll": "da839f98cc31a6d1cfb7f4db3a19225a83227099cefcd40b4e706e55bb6a1065",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Windows.dll": "6fa01fe1a35fd73c0a0ac3dd0de6219a19f5d7fd5dd684fbe13878895a66320d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.Linq.dll": "d5c8f7b44b6f75b01c263b4446f7d7f0c1d809797769f1085faea8e0a969ea6e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.ReaderWriter.dll": "f33069027de17059c50d6ba52639478ff0716c185533c60a024edc41e25fedaf",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.Serialization.dll": "1758dbebe473e6b277d032fbbfb3ebd1a8aee9418a33683324cd0de04389e3cf",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.XDocument.dll": "1ba67deb0723b5ef5a4d9b62cb82692a364a3783a9b0dcc7074a4519517fb5c9",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.XPath.XDocument.dll": "7dbe6245236767ce90b0568188d13427531fb9afcfa6c53d0f0b6acae483e25c",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.XPath.dll": "e98b17faad58c3d875c6ba086903fc6f858bee6805e657ebe3e52c0b9009c359",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.XmlDocument.dll": "48d5169ca1725fc9f8625ca0c1b6ee900438804cab7287bd419118e310babb5d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.XmlSerializer.dll": "e9461fb253512e39ec17ee160fac96c4eb55eaa166bb0803f65b0de1625ba63f",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.Xml.dll": "97bc251432e638e135d046bdfe76a02eddd255cc71a0cb44f11eacf14c322112",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/System.dll": "955397cb937a7666dda9261d9642863a6cb36233b78f5c0127110e8a4939ba9e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/WindowsBase.dll": "4fa5c53b211c0f465bcdbaca09c1d8f01a1a655bcb187206c22444905c34331d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/createdump": "073b0b8bfb2e2d1c2d98aa878285205a02479e255ddceb3eb52ecad4481e9645",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libSystem.Globalization.Native.dylib": "280fe05765a2d740b4930c351455f74146d964ee8fb870d6520d78340ff72334",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libSystem.IO.Compression.Native.dylib": "a2355d684de4917f2cc145f3aedd45815113ac2ecbfd80ac24a18df2c2128c06",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libSystem.Native.dylib": "d4517f7452ceed6ca7ebdbc9d379fb9bdaec25aafb0e72423706128bc831b38d",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libSystem.Net.Security.Native.dylib": "4153a7d955c08c400a3e656ea117f71179bdc38efa2055c45c82711e435da656",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libSystem.Security.Cryptography.Native.Apple.dylib": "ba77c9ee4067678a9fbbabf83dcd837373c5aede3ac3442becf69c71bd5b992a",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libclrgc.dylib": "6eb63fedd443a4952391e6e95e279fd8c980404de5b89e8ea11520f1d5493baf",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libclrgcexp.dylib": "c99ac32a7f14f93393d6d0c24dc845308427eaa8d71cdfe82d487597c10c8e30",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libclrjit.dylib": "099941a2d7566e20444e77eaa515595fa6b135b558a75597965c0a9604f5c037",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib": "704493d2348cb314bb3a68bb426b7d536f9b84e4ec9ce3c6fc3054c5a35f8921",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libhostpolicy.dylib": "a340443a097f68169590bdcb1cc357bdd557e83f7e4bc266a5b5def27d9e8e6e",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libmscordaccore.dylib": "6bc9a3310cc72b0e70fcbb66ab56decf694a0d53ca30dcf481f46b50c7a96a99",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libmscordbi.dylib": "685e13517c4f4f3c80a2a2b86a1558714f91530c14c05f3851b7907d79899f57",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/mscorlib.dll": "0cc8516cf286f226acef656d525f244f97b4ce6750b55f7316e32aaebed8c18b",
+      "target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/netstandard.dll": "cfdb27beeab936f6acf860eb9271df753b626f456cbceed1ffd930841c9d31f9"
+    },
+    "sdk_compiler_build_identity": {
+      "target/toolchains/dotnet/sdk/10.0.403/.version": "15928bd46e96e52e716d8833132533474506de4e93526b68c3cdae2e1b404a03",
+      "target/toolchains/dotnet/sdk/10.0.403/Roslyn/bincore/csc.dll": "28b234f738e80f13ff8a12a4051154713ceeda058c120476e9dcaef8990569ea"
+    },
+    "friend_identity": "Existing Ara.CompileServer.Tests InternalsVisibleTo; no production friend declaration changed.",
+    "payload_binding": "Configuration and fingerprint anonymous field casing/order/projections mirror the copied production source. IO-provided image hashes/texts are fixture inputs. The driver generically chooses the original Serialize\u2192UTF8 path or direct SerializeToUtf8Bytes over the same payload types.",
+    "graph_manifest_source_snapshots": [
+      {
+        "path": "target/compiler-project-serialization-20261109/Original/ModuleSession.cs.txt",
+        "sha256": "7f5424403b49edd09724baa05ede456f041dc2150dd6b2cc8b4957112e08e3e9"
+      },
+      {
+        "path": "target/compiler-project-serialization-20261109/Original/PublishedSnapshot.cs.txt",
+        "sha256": "ed9b72d90b23859ddf9827eac76f78f65747ebede58eba562d3393ab6e33ccb4"
+      }
+    ],
+    "source_to_binary_limit": "Source snapshots and actual called DLL hashes are preserved. No separate portable-PDB document-checksum source-to-binary proof was performed by this microdriver."
+  },
+  "raw_proof": {
+    "allocation_report": {
+      "path": "target/compiler-project-serialization-20261109/proof/allocations-1794243151993353000/report.json",
+      "sha256": "d04319ad08ee3cce78134d5e5553fb8c7927fe09e21e7f7322c4cebeefdc25b3"
+    },
+    "allocation_controller": {
+      "path": "target/compiler-project-serialization-20261109/run_allocations.py",
+      "sha256": "a77d5183435ff887fdd14ed8d1e4054290f8e753a7c47a30c2dd4499303ae440"
+    },
+    "quality_controller": {
+      "path": "target/compiler-project-serialization-20261109/run_quality.py",
+      "sha256": "642641508b3d1646ca798f39b756ed4778372aa5b81c9645301e965d242bff96"
+    },
+    "plan": {
+      "path": "target/compiler-project-serialization-20261109/PLAN.md",
+      "sha256": "7306b0bebf125cf94315f4b51659cd9ca08ee8ba4278194a333e9a53ccebe15c"
+    },
+    "frozen_manifest": "The allocation report retains the complete before/after frozen-input hash map, including quality report, source/project/props, reference DLL closure, actual app and installed runtime. All matched.",
+    "all_stdout_stderr_and_result_references_retained": true,
+    "all_elapsed_permanently_unaccepted": true
+  }
+}

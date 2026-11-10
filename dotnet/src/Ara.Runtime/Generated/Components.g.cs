@@ -770,7 +770,7 @@ public partial struct CharacterController : IComponent<CharacterController>
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 11;
     /// <inheritdoc/>
-    public static ref CharacterController Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadCharacterController, EngineValueCodecs.WriteCharacterController);
+    public static ref CharacterController Access(Entity entity, bool write) => ref World.NativeOrCodecAccess(entity, write, EngineValueCodecs.ReadCharacterController, EngineValueCodecs.WriteCharacterController);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in CharacterController value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteCharacterController));
     /// <inheritdoc/>
@@ -3192,7 +3192,7 @@ public partial struct PhysicsId : IComponent<PhysicsId>
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 37;
     /// <inheritdoc/>
-    public static ref PhysicsId Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsId, EngineValueCodecs.WritePhysicsId);
+    public static ref PhysicsId Access(Entity entity, bool write) => ref World.NativeOrCodecAccess(entity, write, EngineValueCodecs.ReadPhysicsId, EngineValueCodecs.WritePhysicsId);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in PhysicsId value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePhysicsId));
     /// <inheritdoc/>
@@ -3225,7 +3225,7 @@ public partial struct PhysicsPose : IComponent<PhysicsPose>
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 38;
     /// <inheritdoc/>
-    public static ref PhysicsPose Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPhysicsPose, EngineValueCodecs.WritePhysicsPose);
+    public static ref PhysicsPose Access(Entity entity, bool write) => ref World.NativeOrCodecAccess(entity, write, EngineValueCodecs.ReadPhysicsPose, EngineValueCodecs.WritePhysicsPose);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in PhysicsPose value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePhysicsPose));
     /// <inheritdoc/>
@@ -4999,7 +4999,7 @@ public partial struct VehicleTelemetry : IComponent<VehicleTelemetry>
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 56;
     /// <inheritdoc/>
-    public static ref VehicleTelemetry Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleTelemetry, EngineValueCodecs.WriteVehicleTelemetry);
+    public static ref VehicleTelemetry Access(Entity entity, bool write) => ref World.NativeOrCodecAccess(entity, write, EngineValueCodecs.ReadVehicleTelemetry, EngineValueCodecs.WriteVehicleTelemetry);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in VehicleTelemetry value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVehicleTelemetry));
     /// <inheritdoc/>
@@ -5032,7 +5032,7 @@ public partial struct Velocity : IComponent<Velocity>
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 57;
     /// <inheritdoc/>
-    public static ref Velocity Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity, EngineValueCodecs.WriteVelocity);
+    public static ref Velocity Access(Entity entity, bool write) => ref World.NativeOrCodecAccess(entity, write, EngineValueCodecs.ReadVelocity, EngineValueCodecs.WriteVelocity);
     /// <inheritdoc/>
     public static void Insert(in Commands commands, Entity entity, in Velocity value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteVelocity));
     /// <inheritdoc/>

@@ -20,3 +20,6 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ara-sim = { path = "../ara-sim" }

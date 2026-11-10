@@ -13,7 +13,7 @@ fn world() -> World {
             "e_camera":{"name":"Camera","order":"a0","Transform":{"position":[2.,3.,4.]},"Camera":{}}
         }}]
     })).unwrap();
-    World::build(&scene, ara_play::Role::Local, None, false, None)
+    World::build(scene, ara_play::Role::Local, None, false, None)
         .unwrap()
         .0
 }

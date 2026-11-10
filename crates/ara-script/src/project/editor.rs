@@ -23,8 +23,7 @@ impl EditorClient {
     /// Start the installed SDK worker without creating a window. Owned process only.
     pub fn start(root: &Path) -> Result<Self, Diagnostic> {
         let root = std::fs::canonicalize(root).map_err(io)?;
-        let tools = ToolPaths::locate(&root)
-            .ok_or_else(|| failure("installed C# editor tools are missing"))?;
+        let tools = ToolPaths::locate(&root).ok_or_else(|| failure(ToolPaths::MISSING))?;
         let mut command = Command::new("dotnet");
         command
             .arg("exec")

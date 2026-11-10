@@ -7,6 +7,27 @@ use ara_doc::{AssetId, read, write};
 use serde_json::{Map, Value, json};
 
 #[test]
+fn validation_returns_resolved_rows_and_retains_prefab_errors() {
+    let db = common::db();
+    let mut workspace = common::workspace(&db);
+    let scene = workspace.find("levels/arena.scene").expect("scene").clone();
+    let mut resolution_diagnostics = Vec::new();
+    let expected = workspace.resolve(&scene, &db, &mut resolution_diagnostics);
+    let (rows, diagnostics) = workspace.check_resolved(&scene, None, &db);
+    assert_eq!(rows, expected);
+    assert_eq!(diagnostics, workspace.check(&scene, None, &db));
+    assert!(diagnostics.iter().all(|d| !d.is_error()), "{diagnostics:?}");
+
+    workspace.remove("pf_crate001");
+    let (_, diagnostics) = workspace.check_resolved(&scene, None, &db);
+    assert!(
+        diagnostics.iter().any(|d| d.is_error()),
+        "missing prefab must fail validation"
+    );
+    assert_eq!(diagnostics, workspace.check(&scene, None, &db));
+}
+
+#[test]
 fn canonical_fixtures_round_trip_byte_identical() {
     let db = common::db();
     let ix = common::index(&db);
