@@ -654,6 +654,59 @@ fn the_game_view_letterboxes_to_its_aspect_and_maximizes() {
 }
 
 #[test]
+fn a_prefab_instance_lists_its_overrides_to_apply_or_revert() {
+    let mut rt = open();
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "create.prefab",
+            &crate::catalog::Target::Entity("e_box".into()),
+        )
+    });
+    let instance = rt.state().editor.state.selection[0].clone();
+    let overrides = |rt: &Runtime<Studio>| {
+        let s = rt.state();
+        crate::prefab::instance(s.editor.host.store(), &s.editor.state.doc, &instance)
+            .expect("a prefab instance")
+            .overrides
+    };
+    let scale = |rt: &mut Runtime<Studio>, v: f64| {
+        let entity = rt.state().editor.state.selection[0].clone();
+        rt.update(|s| s.apply(vec![json!({"cmd":"property.set","args":{"entity":entity,"path":"Transform.scale","value":[v,v,v]}})], "Scale"));
+        settle(rt);
+    };
+    scale(&mut rt, 2.0);
+    assert_eq!(overrides(&rt), vec!["Transform.scale".to_owned()]);
+    assert!(
+        rt.find("inspector/prefab").is_some(),
+        "the prefab bar shows"
+    );
+    press(&mut rt, "inspector/overrides");
+    press(&mut rt, "inspector/overrides/Transform.scale/apply");
+    settle(&mut rt);
+    assert!(overrides(&rt).is_empty(), "applied into the prefab");
+    assert_eq!(
+        rt.state().resolved[&instance].record["Transform"]["scale"],
+        json!([2.0, 2.0, 2.0]),
+        "the instance keeps the value, now from its prefab"
+    );
+    scale(&mut rt, 3.0);
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "prefab.revert_override",
+            &crate::catalog::Target::Field("Transform.scale".into()),
+        )
+    });
+    settle(&mut rt);
+    assert!(overrides(&rt).is_empty(), "reverted");
+    assert_eq!(
+        rt.state().resolved[&instance].record["Transform"]["scale"],
+        json!([2.0, 2.0, 2.0])
+    );
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
