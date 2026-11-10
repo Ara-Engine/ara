@@ -122,7 +122,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
     }
     if let Some(asset) = asset
         && matches!(asset.kind.as_str(), "graph" | "animation")
-        && let Some(doc) = crate::shell::import_panel::namespace::document(workspace, asset)
+        && let Some(doc) = crate::asset_links::namespace::document(workspace, asset)
     {
         let id = doc.id.to_string();
         body = body.child(
@@ -162,7 +162,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
         );
     }
     if let Some(browser) = &s.assets {
-        let (uses, used_by) = crate::shell::import_panel::links(browser, workspace, path);
+        let (uses, used_by) = crate::asset_links::links(browser, workspace, path);
         for (title, links) in [("Uses", uses), ("Used by", used_by)] {
             body = body.child(band(l, &format!("{title} · {}", links.len())));
             if links.is_empty() {
