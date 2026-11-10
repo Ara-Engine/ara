@@ -286,6 +286,20 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
 fn area_tools(s: &Studio, panel: &str) -> Vec<El<Studio>> {
     let l = &s.look;
     match panel {
+        "scene" => {
+            let mut button = icon_button(l, Tone::Ghost, Size::Sm, icons::LAYERS, "Overlays (`)")
+                .key("scene/overlays")
+                .on_press(|s: &mut Studio| s.local.overlays_menu = !s.local.overlays_menu);
+            if s.local.overlays_menu {
+                button = button.overlay(
+                    stillkit::el::menu(menu_panel(l, super::scene_overlays::menu_items(s)))
+                        .side(stillkit::el::Side::Bottom)
+                        .align(stillkit::el::Align::End)
+                        .on_dismiss(|s: &mut Studio| s.local.overlays_menu = false),
+                );
+            }
+            vec![button]
+        }
         "hierarchy" => vec![
             icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "Create (Shift+A)")
                 .key("hierarchy/create")

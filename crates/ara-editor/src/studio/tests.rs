@@ -224,6 +224,64 @@ fn a_list_field_adds_edits_and_removes_elements_in_place() {
 }
 
 #[test]
+fn scene_overlays_move_to_another_edge_collapse_and_hide() {
+    let mut rt = open();
+    settle(&mut rt);
+    let dock = |rt: &Runtime<Studio>, id: &str| super::scene_overlays::dock(rt.state(), id);
+    track(&mut rt, &["scene/view", "scene/overlay/tools"]);
+    let grip = rt
+        .find("scene/overlay/tools/grip")
+        .expect("the Tools overlay has a grip");
+    let view = rt.find("scene/view").expect("the Scene view");
+    // Drag the Tools overlay to the bottom right corner.
+    rt.pointer_move(grip.center().x, grip.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(grip.center().x, grip.center().y);
+    for step in 1..=8 {
+        let t = step as f32 / 8.0;
+        rt.pointer_move(
+            grip.center().x + (view.right - 60.0 - grip.center().x) * t,
+            grip.center().y + (view.bottom - 20.0 - grip.center().y) * t,
+        );
+        rt.frame(FRAME);
+    }
+    assert!(
+        rt.state().local.overlay_drag.is_some(),
+        "the overlay follows the pointer"
+    );
+    rt.pointer_up(view.right - 60.0, view.bottom - 20.0);
+    settle(&mut rt);
+    let d = dock(&rt, "tools");
+    assert_eq!(
+        (d.edge, d.end),
+        (super::scene_overlays::Edge::Bottom, true),
+        "{d:?}"
+    );
+    // A click on the grip collapses it to its icon.
+    let grip = rt.find("scene/overlay/tools/grip").expect("still there");
+    rt.pointer_move(grip.center().x, grip.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(grip.center().x, grip.center().y);
+    rt.pointer_up(grip.center().x, grip.center().y);
+    settle(&mut rt);
+    assert!(dock(&rt, "tools").collapsed);
+    assert!(
+        rt.find("scene/view.tool.move").is_none(),
+        "only its icon shows"
+    );
+    assert!(rt.find("scene/overlay/tools/open").is_some());
+    // The Overlays menu hides it, and Reset brings everything back.
+    press(&mut rt, "scene/overlays");
+    press(&mut rt, "scene/overlays/tools");
+    assert!(dock(&rt, "tools").hidden);
+    assert!(rt.find("scene/overlay/tools").is_none());
+    rt.update(super::scene_overlays::reset);
+    settle(&mut rt);
+    let d = dock(&rt, "tools");
+    assert!(!d.hidden && !d.collapsed && d.edge == super::scene_overlays::Edge::Top);
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
@@ -745,6 +803,15 @@ fn the_animation_page_shows_states_added_to_its_controller() {
     rt.touch(|s| super::graph::sync(s, "animation"));
     let nodes = super::graph::node_ids(rt.state());
     assert_eq!(nodes.len(), 2, "{doc}: {nodes:?}");
+}
+
+/// Records where `keys` are laid out, as the host does after each frame.
+fn track(rt: &mut Runtime<Studio>, keys: &[&str]) {
+    let rects: Vec<_> = keys
+        .iter()
+        .filter_map(|k| rt.find(k).map(|r| ((*k).to_owned(), r)))
+        .collect();
+    rt.touch(|s| s.local.rects.extend(rects));
 }
 
 /// Presses the element keyed `key` (hovered first, as a pointer would).

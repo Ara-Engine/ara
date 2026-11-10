@@ -229,6 +229,18 @@ pub struct Local {
     /// The open colour picker: its field path and the colour it holds (kept as HSV, so a
     /// grey keeps its hue while dragging).
     pub picker: Option<(String, stillkit_kit::Hsva)>,
+    /// A Scene overlay's grip held down: which overlay, and where in it (overlay px).
+    pub overlay_grab: Option<(&'static str, (f32, f32))>,
+    /// A Scene overlay being dragged to a new dock.
+    pub overlay_drag: Option<super::scene_overlays::Drag>,
+    /// A Scene overlay's right-click menu: which, and where (window px).
+    pub overlay_menu: Option<(&'static str, (f32, f32))>,
+    /// A collapsed Scene overlay opened as a popup.
+    pub overlay_popup: Option<&'static str>,
+    /// A Scene overlay's settings panel, open.
+    pub overlay_settings: Option<&'static str>,
+    /// The Scene tab's Overlays menu, open.
+    pub overlays_menu: bool,
     /// The open reference picker (an asset or entity field): its path and the search typed.
     pub reference: Option<(String, String)>,
     /// What the Game view shows (the host loop reports it).
