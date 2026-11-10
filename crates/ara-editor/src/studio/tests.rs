@@ -395,6 +395,21 @@ fn the_inspector_locks_searches_and_copies_component_values() {
 }
 
 #[test]
+fn the_hierarchy_filters_by_component_type_and_name() {
+    let mut rt = open();
+    rt.update(|s| s.local.hierarchy_query = "t:light".into());
+    settle(&mut rt);
+    assert!(rt.find("row/e_sun").is_some(), "the Sun has a Light");
+    assert!(rt.find("row/e_box").is_none());
+    rt.update(|s| s.local.hierarchy_query = "t:light lamp".into());
+    settle(&mut rt);
+    assert!(rt.find("row/e_sun").is_none(), "every term must match");
+    rt.update(|s| s.local.hierarchy_query = "bo".into());
+    settle(&mut rt);
+    assert!(rt.find("row/e_box").is_some() && rt.find("row/e_sun").is_none());
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

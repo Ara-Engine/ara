@@ -26,6 +26,21 @@ struct Row {
     children: bool,
     open: bool,
     glyph: stillkit::icons::Icon,
+    /// Part of a prefab instance (its root or inside it): drawn in the prefab colour.
+    prefab: bool,
+}
+
+/// Whether entity `id` (`record`) matches every term of a Hierarchy search: `t:Light`
+/// matches a component type, other words the name (Unity's search syntax).
+fn matches(terms: &[String], id: &str, name: &str, record: &ara_doc::Record) -> bool {
+    let name = name.to_lowercase();
+    terms.iter().all(|term| match term.strip_prefix("t:") {
+        Some(kind) => record
+            .keys()
+            .filter(|k| ara_doc::is_component_key(k))
+            .any(|k| k.to_lowercase().contains(kind)),
+        None => name.contains(term.as_str()) || id.to_lowercase() == *term,
+    })
 }
 
 /// The icon for what an entity is, by its components.
@@ -56,7 +71,7 @@ pub(super) fn glyph(record: &ara_doc::Record) -> stillkit::icons::Icon {
 }
 
 /// The visible rows: depth-first in sibling order, collapsed branches skipped, filtered by
-/// `query` (matches and their ancestors, all open).
+/// `query` ([`matches`] and their ancestors, all open).
 fn rows(s: &Studio, query: &str) -> Vec<Row> {
     let resolved = &s.resolved;
     let mut children: BTreeMap<Option<&str>, Vec<(&str, &str, &str)>> = BTreeMap::new();
@@ -71,12 +86,12 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
     for list in children.values_mut() {
         list.sort();
     }
-    let query = query.trim().to_lowercase();
-    let keep: Option<BTreeSet<&str>> = (!query.is_empty()).then(|| {
+    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let keep: Option<BTreeSet<&str>> = (!terms.is_empty()).then(|| {
         let mut keep = BTreeSet::new();
         for (id, e) in resolved.iter() {
             let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
-            if name.to_lowercase().contains(&query) {
+            if matches(&terms, id, name, &e.record) {
                 let mut at = Some(id.as_str());
                 while let Some(a) = at.filter(|a| keep.insert(*a)) {
                     at = resolved.get(a).and_then(|e| e.parent.as_deref());
@@ -112,6 +127,7 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
                 children: has_children,
                 open,
                 glyph: glyph(record),
+                prefab: id.contains('/') || record.get("prefab").is_some(),
             });
             if has_children && open {
                 walk(Some(id), depth + 1, s, children, keep, out);
@@ -129,7 +145,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let search = search(
         l,
         "hierarchy/search",
-        "Filter entities",
+        "Filter: name, or t:Light",
         &query,
         None,
         |f| f.on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into()),
@@ -315,7 +331,14 @@ fn row_el(
         None => text(r.name.clone())
             .text_size(12.0)
             .grow(1.0)
-            .color(if hidden { muted } else { ink }),
+            .color(if hidden {
+                muted
+            } else if r.prefab {
+                // Prefab instances read in the prefab colour, as Unity's do.
+                c.info_foreground.0
+            } else {
+                ink
+            }),
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
