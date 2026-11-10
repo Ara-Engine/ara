@@ -26,6 +26,20 @@ pub(super) struct Compositor {
 }
 
 impl Compositor {
+    /// Release the Scene images before the renderer recycles or resizes them.
+    #[cfg(windows)]
+    pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+        let timeout = std::time::Duration::from_millis(1);
+        if !self.ui.wait_previous_for(timeout)? {
+            return Ok(false);
+        }
+        // A bounded present can return with its blit still reading the UI target.
+        self.present.as_mut().map_or(Ok(true), |(present, _)| {
+            // SAFETY: this compositor retains the presentation and its creating device.
+            unsafe { present.settled(renderer.gpu(), timeout) }
+        })
+    }
+
     /// An adapter on the renderer's GPU, themed for `light`.
     /// # Safety
     /// The renderer outlives the compositor; one thread submits for both.
@@ -218,4 +232,101 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
     };
     let tokens = theme.tokens().map_err(|e| anyhow::anyhow!("{e}"))?;
     ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use ara_gpu::vulkan::QueueGate;
+    use ara_render::scene::{CameraSpec, Material, Scene, Texture};
+    use glam::Vec3;
+
+    #[test]
+    #[ignore = "requires Vulkan and the shared GPU lease"]
+    fn scene_recycling_waits_for_the_compositor_read() -> Result<()> {
+        let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/studio-compositor-handoff");
+        let mut renderer = ara_render::Renderer::new_raster(
+            Scene {
+                meshes: Vec::new(),
+                materials: vec![Material::default()],
+                textures: vec![Texture {
+                    size: [1, 1],
+                    rgba: vec![255; 4],
+                    srgb: false,
+                }],
+                lights: Vec::new(),
+                sun_direction: Vec3::Y,
+                sun_lux: Vec3::ZERO,
+                environment: vec![[0.2, 0.3, 0.4, 1.]; 8],
+                environment_size: [4, 2],
+            },
+            [64, 48],
+            &[],
+            cache,
+        )?;
+        renderer.render_view(
+            &CameraSpec::LookAt {
+                position: Vec3::new(0., 0., 3.),
+                target: Vec3::ZERO,
+                vertical_fov: 55f32.to_radians(),
+            },
+            1.,
+            ara_render::capture::ViewMode::Lit,
+        )?;
+        renderer.submit_scene_frame(|_| Ok(()))?;
+        renderer.wait_scene_frame()?;
+        // SAFETY: the renderer outlives its compositor on this owner thread.
+        let mut compositor = unsafe { Compositor::new(&renderer, false)? };
+        let image = renderer.output();
+        // SAFETY: this retained, completed image stays live through the UI read.
+        unsafe {
+            compositor.ui.external_image(
+                overlay::viewport_image(),
+                renderer.gpu().native_image(image)?,
+                renderer.gpu().image_view(image)?,
+            )?;
+        }
+        let context = renderer.gpu().context();
+        let mut gate = QueueGate::new(context, context.graphics)?;
+        compositor
+            .paint
+            .render(
+                &mut compositor.ui,
+                &DisplayList {
+                    commands: vec![Draw::Image {
+                        node: 1,
+                        rect: Box2 {
+                            x: 0.,
+                            y: 0.,
+                            w: 64.,
+                            h: 48.,
+                        },
+                        image: overlay::viewport_image(),
+                        tint: Color(255, 255, 255, 255),
+                    }],
+                    glyphs: Vec::new(),
+                },
+                &[],
+                [64, 48],
+                TextMode::Raster,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        assert!(
+            !compositor.scene_ready(&renderer)?,
+            "a pending external read must prevent recycling and resize"
+        );
+        gate.open()?;
+        compositor.ui.wait_previous()?;
+        assert!(compositor.scene_ready(&renderer)?);
+        // Two publications recycle the pair that the compositor just released.
+        for _ in 0..2 {
+            renderer.submit_scene_frame(|_| Ok(()))?;
+            renderer.wait_scene_frame()?;
+        }
+        renderer.resize([80, 60])?;
+        compositor.retire(&renderer);
+        renderer.gpu().assert_clean()?;
+        Ok(())
+    }
 }

@@ -220,6 +220,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
+        // Windows uses separate Scene/UI queues: finish external reads before recycling images.
+        #[cfg(windows)]
+        if !compositor.scene_ready(&renderer)? {
+            if pump(&mut rt, &mut surface, started, Some(&mut game))? {
+                break;
+            }
+            continue;
+        }
         // While profiling records, every pass is a frame (the Profiler panel reads them).
         let profiling = rt.touch(|s| {
             let profiler = s.editor.host.profiler();
