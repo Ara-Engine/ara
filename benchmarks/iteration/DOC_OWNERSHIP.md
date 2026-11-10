@@ -10,7 +10,7 @@ Moved comments now rerun generation. Invalid saves report ARA0703 and retain the
 
 - Original red run: two failing missing-documentation cases (`None`/`Delta` instead of `Errors`); two related valid schema-change cases already passed.
 - Final focused run: all five pass, including body-edit variants, last-good retention, repair, changed-schema generation and unchanged attachment after body-length changes.
-- All **334 .NET tests** pass: compiler 238, generator 29, analyzer 30, runtime 28, worker 9. This branch starts independently from main, so it does not include PR #16/#17 tests.
+- All **334 .NET tests** pass: compiler 238, generator 29, analyzer 30, runtime 28, worker 9. That initial proof is before integrating PR #16; PR #17 is separate. After a real merge of main `2f72e2de5` (including editor #6 and scripting #16), all **340 .NET tests**, ten native scripting tests and formatting pass again. The final Release solution build has zero warnings/errors. Own source blobs are unchanged by the merge; initial guard counters remain explicitly bound to the earlier main rather than being relabeled as new measurements.
 - Ten native scripting tests pass across batch queries, publication, project/compile lifecycle and reload levels. Formatting passes all 116 packages. Audited Release solution build has zero warnings/errors.
 - Independent source review found no must-fix in the final traversal. No code is copied from reference engines. ECS state and deterministic simulation behavior are unchanged.
 
