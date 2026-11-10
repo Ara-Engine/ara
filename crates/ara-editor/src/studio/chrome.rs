@@ -659,10 +659,17 @@ fn status_bar(s: &Studio) -> El<Studio> {
         1 => "Authority ready · 1 agent connected".to_owned(),
         n => format!("Authority ready · {n} agents connected"),
     };
-    let hint = text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
-        .text_size(11.0)
-        .color(c.muted_foreground.0.with_alpha(0.8));
-    row()
+    // What the last request did, for a few seconds; else the keys worth knowing.
+    let hint = match &s.local.note {
+        Some((note, at)) if at.elapsed() < std::time::Duration::from_secs(8) => text(note.clone())
+            .key("status/note")
+            .text_size(11.0)
+            .color(c.foreground.0),
+        _ => text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
+            .text_size(11.0)
+            .color(c.muted_foreground.0.with_alpha(0.8)),
+    };
+    let bar = row()
         .key("status")
         .h(22.0)
         .pad_x(10.0)
@@ -685,7 +692,11 @@ fn status_bar(s: &Studio) -> El<Studio> {
         )
         .child(el().grow(1.0))
         .child(hint)
-        .child(right)
+        .child(right);
+    match super::scripts::chooser(s) {
+        Some(chooser) => bar.overlay(chooser),
+        None => bar,
+    }
 }
 
 /// One palette result.

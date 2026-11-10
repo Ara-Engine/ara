@@ -170,8 +170,22 @@ fn script(s: &mut Studio, kind: &str) -> anyhow::Result<()> {
         if let Some(browser) = s.assets.as_mut() {
             browser.insert_path(path, "cs");
         }
-        s.act("editor.workspace", json!({"asset": path}));
+        // Assets opens its folder, so the name field shows.
+        let folder = path.rsplit_once('/').map_or("", |(dir, _)| dir);
+        s.act("editor.layout.show", json!({"panel": "assets"}));
+        s.act(
+            "editor.workspace",
+            json!({"folder": folder, "asset": path, "assetQuery": ""}),
+        );
         s.local.inspect_asset = true;
+        // Named in place before it compiles (Unity's new script): Enter compiles it.
+        let stem = path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".cs");
+        s.local.asset_rename = Some((path.to_owned(), stem.to_owned()));
+        s.local.focus = Some("asset/rename");
     }
     Ok(())
 }

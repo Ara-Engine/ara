@@ -36,6 +36,7 @@ mod references;
 mod running;
 mod scene;
 mod scene_overlays;
+mod scripts;
 pub mod state;
 mod style;
 #[cfg(test)]
@@ -573,6 +574,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.touch(|s| std::mem::take(&mut s.play.release)) {
             rt.update(|s| s.local.game_captured = false);
         }
+        // C#: a reload in Play, module discovery for the IDE.
+        if rt.touch(scripts::poll) {
+            rt.update(|_| {});
+        }
         // File operations (move, rename, duplicate, delete) on their jobs.
         if !rt.state().local.asset_jobs.is_empty() && rt.touch(asset_ops::poll_jobs) {
             rt.update(|_| {});
@@ -748,6 +753,11 @@ fn overlays_key(s: &Studio) -> u64 {
     )
         .hash(&mut h);
     h.finish()
+}
+
+/// Shows `message` in the status bar for a few seconds (what a request did).
+pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
+    s.local.note = Some((message.into(), Instant::now()));
 }
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.

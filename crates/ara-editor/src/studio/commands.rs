@@ -561,7 +561,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             None => Err("Select a prefab instance".into()),
         },
         "prefab.apply_all" => match target.entity(&e.state).map(str::to_owned) {
-            Some(entity) => crate::prefab::apply(e, &entity, None, None).map(drop),
+            Some(entity) => crate::prefab::apply(e, &entity, None, None)
+                .map(|source| super::note(s, format!("Applied to {source}"))),
             None => Err("Select a prefab instance".into()),
         },
         // Apply To: a source from `prefab::source_choices` (its `@path#id`), or the
@@ -588,15 +589,17 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Target::Text(text) => serde_json::from_str::<Choice>(text).map_err(Into::into),
                 _ => Err("Choose a prefab source to apply to".into()),
             };
-            choice.and_then(|c| {
-                crate::prefab::apply(e, &c.entity, c.path.as_deref(), Some(&c.destination))
-                    .map(drop)
-            })
+            choice
+                .and_then(|c| {
+                    crate::prefab::apply(e, &c.entity, c.path.as_deref(), Some(&c.destination))
+                })
+                .map(|source| super::note(s, format!("Applied to {source}")))
         }
         "prefab.apply_override" | "prefab.revert_override" => {
             match (target, e.state.selection.first().cloned()) {
                 (Target::Field(path), Some(entity)) if id == "prefab.apply_override" => {
-                    crate::prefab::apply(e, &entity, Some(path), None).map(drop)
+                    crate::prefab::apply(e, &entity, Some(path), None)
+                        .map(|source| super::note(s, format!("Applied {path} to {source}")))
                 }
                 (Target::Field(path), Some(entity)) => apply(
                     e,
@@ -613,7 +616,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Some(root) => {
                 let root = root.to_owned();
                 let files = s.assets.as_ref().map_or(&[][..], |b| b.files.as_slice());
-                crate::prefab::from_selection(e, files, &root).map(drop)
+                crate::prefab::from_selection(e, files, &root)
+                    .map(|path| super::note(s, format!("Created {path}")))
             }
             None => Err("Select an entity to make a prefab of".into()),
         },
@@ -1441,6 +1445,21 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose an emitter".into()),
         },
+        "tools.cs.reload" => super::scripts::reload(s),
+        "tools.cs.solution" => super::scripts::solution(s),
+        "component.new_script" => {
+            s.local.script_attach = target.entities(&e.state);
+            s.local.add_component = None;
+            super::asset_create::create(s, "script");
+            Ok(())
+        }
+        "assets.open_ide" => match asset_of(e, target).filter(|p| p.ends_with(".cs")) {
+            Some(path) => {
+                super::asset_ops::open_in_ide(s, &path, None);
+                Ok(())
+            }
+            None => Err("Select a C# script".into()),
+        },
         "component.add" => {
             s.local.add_component = Some(Default::default());
             s.local.focus = Some("inspector/add/search");
@@ -1627,6 +1646,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x41) => "edit.select_all",
         (true, true, 0x41) => "edit.deselect",
         (true, false, 0x4B) | (true, true, 0x50) => "edit.palette",
+        (true, false, 0x52) => "tools.cs.reload",
         (true, true, 0x4E) => "create.empty",
         (false, true, 0x41) => "create.at_cursor",
         (true, false, 0xBC) => "edit.preferences",

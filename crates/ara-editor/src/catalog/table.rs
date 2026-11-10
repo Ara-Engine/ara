@@ -2491,4 +2491,32 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Search saved asset and folder bookmarks.",
     },
+    Command {
+        id: "assets.open_ide",
+        title: "Open in IDE",
+        icon: "file-code",
+        keys: "",
+        summary: "Open the selected C# source in the configured IDE.",
+    },
+    Command {
+        id: "component.new_script",
+        title: "New Script…",
+        icon: "file-code",
+        keys: "",
+        summary: "Create a Behaviour, choose its name, then compile and attach it to the selected entities.",
+    },
+    Command {
+        id: "tools.cs.reload",
+        title: "Reload Scripts",
+        icon: "refresh-cw",
+        keys: "Ctrl+R",
+        summary: "Reload the current Play world's C# modules without restarting; inspect each player's authoritative result.",
+    },
+    Command {
+        id: "tools.cs.solution",
+        title: "Open Scripts in IDE",
+        icon: "file-code",
+        keys: "",
+        summary: "Discover modules in the background, then choose which one to open in the configured IDE.",
+    },
 ];

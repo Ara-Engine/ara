@@ -73,7 +73,11 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         ("assets.rename", Some(a)) => {
-            s.local.asset_rename = Some((a.path.clone(), a.name().to_owned()));
+            let name = match a.kind.as_str() {
+                "cs" => a.name().trim_end_matches(".cs"),
+                _ => a.name(),
+            };
+            s.local.asset_rename = Some((a.path.clone(), name.to_owned()));
             s.local.focus = Some("asset/rename");
             Ok(())
         }
@@ -97,6 +101,10 @@ pub(super) fn open(s: &mut Studio, a: &Asset) {
             "editor.workspace",
             json!({"folder": a.path.trim_end_matches('/')}),
         );
+        return;
+    }
+    if a.kind == "cs" {
+        open_in_ide(s, &a.path, None);
         return;
     }
     if a.document_kind.as_deref() == Some("scene")
@@ -231,6 +239,10 @@ pub(super) fn rename(s: &mut Studio, path: &str, name: &str) {
     let Some(a) = target(s, &Target::Asset(path.to_owned())) else {
         return;
     };
+    if a.kind == "cs" {
+        rename_script(s, &a.path, name.trim_end_matches(".cs"));
+        return;
+    }
     if name.is_empty() || name == a.name() {
         return;
     }
@@ -303,6 +315,42 @@ pub(super) fn move_to(s: &mut Studio, path: &str, folder: &str) {
     })();
     if let Err(error) = result {
         s.editor.report_failure(&*error);
+    }
+}
+
+/// Renames script `path` to `stem`.cs: its class with it, then compiles it (attaching it to
+/// the entities New Script was asked from), as the shell's inline naming does.
+fn rename_script(s: &mut Studio, path: &str, stem: &str) {
+    let attach = std::mem::take(&mut s.local.script_attach);
+    let to = match path.rsplit_once('/') {
+        Some((dir, _)) => format!("{dir}/{stem}.cs"),
+        None => format!("{stem}.cs"),
+    };
+    let reply = s.editor.action(
+        "script.rename",
+        json!({"path": path, "to": to, "attachTo": attach, "doc": s.editor.state.doc}),
+    );
+    match reply {
+        Ok(reply) => {
+            if let Some(b) = s.assets.as_mut() {
+                b.remove_path(path);
+                b.insert_path(&to, "cs");
+            }
+            s.act("editor.workspace", json!({"asset": to}));
+            if let Some(job) = reply["job"].as_str() {
+                s.local
+                    .asset_jobs
+                    .push((job.to_owned(), format!("Compile {stem}.cs")));
+            }
+        }
+        Err(error) => s.editor.report_failure(&error),
+    }
+}
+
+/// Opens `path` in the configured IDE, at `location` (line, column) when given.
+pub(super) fn open_in_ide(s: &mut Studio, path: &str, location: Option<(u32, u32)>) {
+    if let Err(error) = crate::ide::open(&s.editor, std::path::Path::new(path), location) {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
     }
 }
 

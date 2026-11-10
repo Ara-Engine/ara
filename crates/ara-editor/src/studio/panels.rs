@@ -1646,12 +1646,12 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
             .key("console/detail/copy")
             .on_press(move |s: &mut Studio| s.local.copy = Some(copy.clone())),
     );
-    // Its source file opens where the system opens it (scripts in their IDE).
-    if let Some(file) = r
-        .source
-        .as_deref()
-        .map(|s| s.split(':').next().unwrap_or(s).to_owned())
-    {
+    // Its source opens where the system opens it; a script in the IDE, at its line.
+    if let Some(source) = r.source.as_deref() {
+        let mut parts = source.split(':');
+        let file = parts.next().unwrap_or(source).to_owned();
+        let line = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
+        let column = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
         let path = s.editor.host.root().join(&file);
         if path.is_file() {
             head = head.child(
@@ -1664,7 +1664,10 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                 )
                 .key("console/detail/open")
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) = crate::shell::ops::open_external(&path) {
+                    if file.ends_with(".cs") {
+                        let at = line.map(|l| (l, column.unwrap_or(1)));
+                        super::asset_ops::open_in_ide(s, &file, at);
+                    } else if let Err(error) = crate::shell::ops::open_external(&path) {
                         s.editor.report_failure(&*anyhow::anyhow!("{error}"));
                     }
                 }),
