@@ -32,10 +32,27 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
     let l = &s.look;
     let status = &s.local.game;
     let playing = s.editor.state.playing.is_some();
+    let aspect = setting_str(s, "game.aspect", "free");
+    let ratio = match aspect {
+        "16x9" => Some(16.0 / 9.0),
+        "16x10" => Some(16.0 / 10.0),
+        "21x9" => Some(21.0 / 9.0),
+        "4x3" => Some(4.0 / 3.0),
+        "9x16" => Some(9.0 / 16.0),
+        _ => None,
+    };
+    // A fixed aspect letterboxes the player inside the area (Unity's Game view).
+    let fitted = ratio.and_then(|ratio| {
+        let area = s.local.rects.get("game/area")?;
+        let (w, h) = (area.width(), area.height());
+        Some(if w / h > ratio {
+            (h * ratio, h)
+        } else {
+            (w, w / ratio)
+        })
+    });
     let mut view = native(GAME_LAYER)
         .key("game/view")
-        .grow(1.0)
-        .w_full()
         .focusable()
         .label("Game view")
         .on_pointer(|s: &mut super::Studio, e, _| {
@@ -45,6 +62,10 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
             }
             false
         });
+    view = match fitted {
+        Some((w, h)) => view.w(w).h(h),
+        None => view.grow(1.0).w_full(),
+    };
     let notice = |glyph, title: &str, detail: &str| {
         col()
             .absolute(0.0, 0.0)
@@ -110,7 +131,134 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
                 .child(stillkit::el::el().h(12.0)),
         );
     }
-    view
+    if setting_bool(s, "game.stats") {
+        let text_line = match status.fps {
+            Some(fps) => format!(
+                "{fps} fps · {} × {}",
+                s.editor.game_size[0], s.editor.game_size[1]
+            ),
+            None => format!("{} × {}", s.editor.game_size[0], s.editor.game_size[1]),
+        };
+        view = view.child(
+            row()
+                .absolute(8.0, 8.0)
+                .h(22.0)
+                .pad_x(8.0)
+                .align(Align::Center)
+                .radius(super::style::RADIUS)
+                .fill(super::style::tones(l).strip.with_alpha(0.9))
+                .child(
+                    text(text_line)
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(l.c.muted_foreground.0),
+                ),
+        );
+    }
+    let area = col()
+        .key("game/area")
+        .grow(1.0)
+        .min_h(0.0)
+        .align(Align::Center)
+        .justify(Justify::Center)
+        .fill(stillkit::Rgba::new(0.0, 0.0, 0.0, 1.0))
+        .child(view);
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .child(toolbar(s, aspect))
+        .child(area)
+}
+
+fn setting_str<'a>(s: &'a super::Studio, key: &str, default: &'a str) -> &'a str {
+    s.editor
+        .state
+        .settings
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(default)
+}
+
+fn setting_bool(s: &super::Studio, key: &str) -> bool {
+    s.editor
+        .state
+        .settings
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// The Game view's toolbar (Unity's): aspect, Maximize on Play, statistics.
+fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
+    use ara_kit::{icons, ui::*};
+    use stillkit::el::{Align, row};
+    let l = &s.look;
+    const KEY: &str = "game/aspect";
+    const ASPECTS: [(&str, &str); 6] = [
+        ("free", "Free aspect"),
+        ("16x9", "16:9"),
+        ("16x10", "16:10"),
+        ("21x9", "21:9"),
+        ("4x3", "4:3"),
+        ("9x16", "9:16 portrait"),
+    ];
+    let title = ASPECTS
+        .iter()
+        .find(|(k, _)| *k == aspect)
+        .map_or("Free aspect", |(_, t)| t);
+    let open = s.local.select.as_deref() == Some(KEY);
+    let mut trigger = select(l, Size::Sm, KEY, title)
+        .w(140.0)
+        .expanded(open)
+        .on_press(|s: &mut super::Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if open {
+        let items = ASPECTS
+            .iter()
+            .map(|(key, name)| {
+                menu_check(l, &format!("{KEY}/{key}"), name, *key == aspect).on_press(
+                    move |s: &mut super::Studio| {
+                        s.local.select = None;
+                        super::commands::run(
+                            s,
+                            &format!("game.aspect.{key}"),
+                            &crate::catalog::Target::None,
+                        );
+                    },
+                )
+            })
+            .collect();
+        trigger = trigger.overlay(
+            stillkit::el::menu(menu_panel(l, items))
+                .match_width()
+                .on_dismiss(|s: &mut super::Studio| s.local.select = None),
+        );
+    }
+    let flag = |id: &'static str, key: &str, glyph, label: &str| {
+        super::scene_overlays::toggle(l, glyph, label, setting_bool(s, key))
+            .key(format!("game/{id}"))
+            .on_press(move |s: &mut super::Studio| {
+                super::commands::run(s, id, &crate::catalog::Target::None)
+            })
+    };
+    row()
+        .h(super::style::TOOLBAR)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .child(trigger)
+        .child(stillkit::el::el().grow(1.0))
+        .child(flag(
+            "game.maximize_on_play",
+            "game.maximizeOnPlay",
+            icons::MAXIMIZE_2,
+            "Maximize on Play",
+        ))
+        .child(flag("game.stats", "game.stats", icons::GAUGE, "Statistics"))
 }
 
 /// What the Game view shows, for its panel's notices.
@@ -126,6 +274,8 @@ pub struct Status {
     pub phase: Option<String>,
     /// Why Play failed to start or stopped, when it did.
     pub fault: Option<String>,
+    /// Frames presented in the last second while a player runs (the Stats readout).
+    pub fps: Option<u32>,
 }
 
 /// The studio's answer to the Game preview: the Game view's size and the scene's camera.
@@ -180,6 +330,8 @@ pub(super) struct Game {
     /// Play's start phase and fault, read from `play.status` on a cadence.
     play: (Option<String>, Option<String>),
     checked: Option<std::time::Instant>,
+    /// Live frames presented since `.0`, and the last full second's count.
+    presents: (std::time::Instant, u32, u32),
 }
 
 impl Game {
@@ -198,6 +350,7 @@ impl Game {
             held: Default::default(),
             pointer: None,
             play: (None, None),
+            presents: (std::time::Instant::now(), 0, 0),
             checked: None,
         })
     }
@@ -301,6 +454,7 @@ impl Game {
             camera: self.host.gameplay_camera(editor).is_some(),
             phase: self.play.0.clone(),
             fault: self.play.1.clone(),
+            fps: self.host.live.then_some(self.presents.2),
         };
         let (Some((layer, extent)), Some(image), true) = (layer, image, ready) else {
             return Ok(status);
@@ -331,6 +485,13 @@ impl Game {
                 .draw(renderer, layer, extent, scale, &list, &[])?
         };
         self.shown = Some((image, extent));
+        if self.host.live {
+            let (since, count, _) = &mut self.presents;
+            *count += 1;
+            if since.elapsed() >= std::time::Duration::from_secs(1) {
+                self.presents = (std::time::Instant::now(), 0, *count);
+            }
+        }
         Ok(status)
     }
 
