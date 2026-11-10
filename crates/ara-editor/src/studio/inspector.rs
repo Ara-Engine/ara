@@ -29,7 +29,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     {
         return super::asset_inspector::view(s, path);
     }
-    let selection = &s.editor.state.selection;
+    let selection = s.inspected();
     if selection.is_empty() {
         return empty(
             l,
@@ -56,21 +56,46 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         selection,
         &changes,
     );
+    // The search keeps fields whose name, path or component matches (Unreal's Details).
+    let query = s.local.inspector_search.trim().to_lowercase();
+    let matches = |f: &&Field| {
+        query.is_empty()
+            || f.label.to_lowercase().contains(&query)
+            || f.path.to_lowercase().contains(&query)
+            || spaced(&f.label).to_lowercase().contains(&query)
+    };
     let mut by_component: BTreeMap<String, Vec<&Field>> = BTreeMap::new();
     let mut order = Vec::new();
-    for f in &fields {
+    for f in fields.iter().filter(matches) {
         let component = f.path.split('.').next().unwrap_or("").to_owned();
         if !by_component.contains_key(&component) {
             order.push(component.clone());
         }
         by_component.entry(component).or_default().push(f);
     }
-    let mut page = col().pad(4.0).gap(3.0).child(header(s));
+    let mut page = col()
+        .pad(4.0)
+        .gap(3.0)
+        .child(header(s))
+        .child(search_row(s));
+    if order.is_empty() && !query.is_empty() {
+        page = page.child(
+            row().pad(10.0).child(
+                text(format!(
+                    "No properties match “{}”",
+                    s.local.inspector_search.trim()
+                ))
+                .text_size(12.0)
+                .color(l.c.muted_foreground.0),
+            ),
+        );
+    }
     // Transform leads, as in every engine; the rest keep their record order.
     order.sort_by_key(|c| c != "Transform");
     for component in order {
         page = page.child(section(s, &component, &by_component[&component]));
     }
+    page = page.children(paste_as_new(s));
     page = page.child(super::components::button_and_picker(s));
     col()
         .grow(1.0)
@@ -83,15 +108,37 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
 fn header(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let selection = &s.editor.state.selection;
+    let selection = s.inspected();
     // What it is, as the Hierarchy shows it (a light, a camera, a mesh…).
-    let glyph = match selection.as_slice() {
+    let glyph = match selection {
         [id] => s
             .resolved
             .get(id)
             .map_or(icons::BOX, |e| super::hierarchy::glyph(&e.record)),
         _ => icons::BOXES,
     };
+    let locked = s.local.inspector_lock.is_some();
+    let lock = super::scene_overlays::toggle(
+        l,
+        if locked {
+            icons::LOCK
+        } else {
+            icons::LOCK_OPEN
+        },
+        if locked {
+            "Unlock: follow the selection again"
+        } else {
+            "Lock: keep showing these while you select others"
+        },
+        locked,
+    )
+    .key("inspector/lock")
+    .on_press(|s: &mut Studio| {
+        s.local.inspector_lock = match s.local.inspector_lock {
+            Some(_) => None,
+            None => Some(s.editor.state.selection.clone()),
+        }
+    });
     let mut head = row().h(28.0).gap(8.0).align(Align::Center).child(
         el().size(24.0)
             .radius(6.0)
@@ -100,7 +147,7 @@ fn header(s: &Studio) -> El<Studio> {
             .justify(Justify::Center)
             .child(icon(glyph).size(14.0).color(c.primary.0)),
     );
-    if let [id] = selection.as_slice() {
+    if let [id] = selection {
         let entity = id.clone();
         head = head
             .child(
@@ -131,14 +178,97 @@ fn header(s: &Studio) -> El<Studio> {
                     .color(c.muted_foreground.0),
             );
     }
-    head
+    head.child(lock)
+}
+
+/// The property search under the header.
+fn search_row(s: &Studio) -> El<Studio> {
+    row().child(
+        search(
+            &s.look,
+            "inspector/search",
+            "Search properties",
+            &s.local.inspector_search,
+            None,
+            |f| f.on_input(|s: &mut Studio, t| s.local.inspector_search = t.to_owned()),
+            |s: &mut Studio| s.local.inspector_search.clear(),
+        )
+        .grow(1.0),
+    )
+}
+
+/// The copied component, offered as a new one on entities that lack it (Unity's Paste
+/// Component As New).
+fn paste_as_new(s: &Studio) -> Option<El<Studio>> {
+    let (kind, value) = s.local.component_clipboard.as_ref()?;
+    let lacking = s.inspected().iter().any(|id| {
+        s.resolved
+            .get(id)
+            .is_some_and(|e| e.record.get(kind).is_none())
+    });
+    if !lacking {
+        return None;
+    }
+    let (kind, value) = (kind.clone(), value.clone());
+    Some(
+        row().justify(Justify::Center).child(
+            button(
+                &s.look,
+                Tone::Ghost,
+                Size::Sm,
+                Some(icons::CLIPBOARD_PASTE),
+                &format!("Paste {} as new", spaced(&kind)),
+            )
+            .key("inspector/paste-new")
+            .on_press(move |s: &mut Studio| {
+                let commands = s
+                    .inspected()
+                    .iter()
+                    .filter(|id| s.resolved.get(*id).is_some_and(|e| e.record.get(&kind).is_none()))
+                    .map(|e| json!({"cmd": "component.add", "args": {"entity": e, "component": kind, "value": value}}))
+                    .collect();
+                s.apply(commands, &format!("Paste {kind}"));
+            }),
+        ),
+    )
+}
+
+/// Resets `component` on every inspected entity (prefab instances back to their prefab),
+/// or with `paste`, sets every field from those values (defaults where they have none),
+/// as one undo step.
+fn component_values(s: &mut Studio, component: &str, paste: Option<&Value>) {
+    let db = s.editor.host.store().schema();
+    let Some(ara_schema::Shape::Struct { fields, .. }) = db.get(component).map(|t| &t.shape) else {
+        return;
+    };
+    let mut commands = Vec::new();
+    for desc in fields.iter().filter(|f| !f.editor.read_only) {
+        let path = format!("{component}.{}", desc.name);
+        match paste {
+            None => commands.extend(s.inspected().iter().map(
+                |entity| json!({"cmd": "editor.property.reset", "args": {"entity": entity, "path": path}}),
+            )),
+            Some(values) => {
+                let value = values
+                    .get(&desc.name)
+                    .cloned()
+                    .unwrap_or_else(|| db.field_default(desc));
+                commands.extend(crate::inspector::edit_commands(s.inspected(), &path, &value));
+            }
+        }
+    }
+    let why = format!(
+        "{} {component}",
+        if paste.is_some() { "Paste" } else { "Reset" }
+    );
+    s.apply(commands, &why);
 }
 
 /// A component's section: a header (fold, icon, name) over its fields.
 fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let folded = s.local.folded.contains(component);
+    let folded = s.local.folded.contains(component) && s.local.inspector_search.trim().is_empty();
     let name = component.to_owned();
     let t = super::style::tones(l);
     let hover = t.hover;
@@ -283,7 +413,7 @@ fn scrubbable(
         .on_pointer(move |s: &mut Studio, e, _| {
             match e.phase {
                 PointerPhase::Down => {
-                    for id in s.editor.state.selection.clone() {
+                    for id in s.inspected().to_vec() {
                         let _ = s.editor.field_gesture(&id, &path, true);
                     }
                     s.local.scrub = Some((path.clone(), axis, value, value));
@@ -324,7 +454,7 @@ fn scrubbable(
 /// has it (position, rotation in degrees, scale), so the Inspector moves with the gizmo.
 fn dragged(s: &Studio, path: &str) -> Option<[f64; 3]> {
     let gesture = s.editor.gesture.as_ref()?;
-    let matrix = gesture.current.get(s.editor.state.selection.first()?)?;
+    let matrix = gesture.current.get(s.inspected().first()?)?;
     let (scale, rotation, position) = matrix.to_scale_rotation_translation();
     let v = match path {
         "Transform.position" => position,
@@ -346,9 +476,7 @@ fn whole(s: &Studio, path: &str, axis: Option<usize>, value: f64) -> Value {
     };
     let scale = path.ends_with(".scale");
     let current: Vec<f64> = s
-        .editor
-        .state
-        .selection
+        .inspected()
         .first()
         .and_then(|id| s.resolved.get(id))
         .and_then(|e| {
@@ -391,7 +519,7 @@ impl Preview {
         Self {
             key,
             draft,
-            selection: s.editor.state.selection.clone(),
+            selection: s.inspected().to_vec(),
         }
     }
 }
@@ -431,7 +559,7 @@ pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, val
     if let Some(a) = axis
         && s.local.scale_linked
         && path.ends_with(".scale")
-        && let Some(id) = s.editor.state.selection.first()
+        && let Some(id) = s.inspected().first()
     {
         // An unauthored scale is its default, one on every axis.
         let current = s
@@ -466,7 +594,7 @@ pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, val
 
 /// Commits `value` at `path` to every selected entity (one undo step).
 fn commit(s: &mut Studio, path: &str, value: Value, why: &str) {
-    let commands = crate::inspector::edit_commands(&s.editor.state.selection, path, &value);
+    let commands = crate::inspector::edit_commands(s.inspected(), path, &value);
     s.apply(commands, why);
 }
 
@@ -909,7 +1037,7 @@ fn field_menu(
     if provenance != Provenance::Default {
         items.push(menu_item(l, &format!("field/{path}/reset"), Some(icons::UNDO_2), "Reset to Default", None, false).on_press(move |s: &mut Studio| {
             s.local.field_menu = None;
-            let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "editor.property.reset", "args": {"entity": e, "path": reset}})).collect();
+            let commands = s.inspected().iter().map(|e| json!({"cmd": "editor.property.reset", "args": {"entity": e, "path": reset}})).collect();
             s.apply(commands, "Reset value");
         }));
         items.push(menu_separator(l));
@@ -939,7 +1067,7 @@ fn field_menu(
         )
         .on_press(move |s: &mut Studio| {
             s.local.field_menu = None;
-            if let Some(entity) = s.editor.state.selection.first().cloned() {
+            if let Some(entity) = s.inspected().first().cloned() {
                 s.local.copy = Some(format!(
                     "{}/{copy_path}",
                     crate::shell::commands::table::reference(&s.editor, &entity)
@@ -950,7 +1078,7 @@ fn field_menu(
     menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.field_menu = None)
 }
 
-/// A component's ⋯ menu: remove it from the selection, fold the others.
+/// A component's ⋯ menu: reset it, copy and paste its values, fold the others, remove it.
 fn component_menu(s: &Studio, component: &str) -> El<Studio> {
     let l = &s.look;
     let open = s.local.component_menu.as_deref() == Some(component);
@@ -968,16 +1096,45 @@ fn component_menu(s: &Studio, component: &str) -> El<Studio> {
         });
     if open {
         let (remove, others) = (component.to_owned(), component.to_owned());
+        let (reset, copy, paste) = (
+            component.to_owned(),
+            component.to_owned(),
+            component.to_owned(),
+        );
+        let can_paste = s
+            .local
+            .component_clipboard
+            .as_ref()
+            .is_some_and(|(kind, _)| kind == component);
         let items = vec![
+            menu_item(l, &format!("component/{component}/reset"), Some(icons::UNDO_2), "Reset", None, false).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                component_values(s, &reset, None);
+            }),
+            menu_item(l, &format!("component/{component}/copy"), Some(icons::COPY), "Copy Values", None, false).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                let value = s.inspected().first().and_then(|id| s.resolved.get(id)).and_then(|e| e.record.get(&copy).cloned());
+                s.local.component_clipboard = value.map(|v| (copy.clone(), v));
+            }),
+            enabled(
+                menu_item(l, &format!("component/{component}/paste"), Some(icons::CLIPBOARD), "Paste Values", None, false).on_press(move |s: &mut Studio| {
+                    s.local.component_menu = None;
+                    if let Some((_, value)) = s.local.component_clipboard.clone() {
+                        component_values(s, &paste, Some(&value));
+                    }
+                }),
+                can_paste,
+            ),
+            menu_separator(l),
             menu_item(l, &format!("component/{component}/fold"), Some(icons::CHEVRONS_UP_DOWN), "Fold Others", None, false).on_press(move |s: &mut Studio| {
                 s.local.component_menu = None;
-                let all: Vec<String> = s.resolved.get(&s.editor.state.selection[0]).map(|e| e.record.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect()).unwrap_or_default();
+                let all: Vec<String> = s.resolved.get(&s.inspected()[0]).map(|e| e.record.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect()).unwrap_or_default();
                 s.local.folded = all.into_iter().filter(|k| *k != others).collect();
             }),
             menu_separator(l),
             menu_item(l, &format!("component/{component}/remove"), Some(icons::TRASH), "Remove Component", None, true).on_press(move |s: &mut Studio| {
                 s.local.component_menu = None;
-                let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "component.remove", "args": {"entity": e, "component": remove}})).collect();
+                let commands = s.inspected().iter().map(|e| json!({"cmd": "component.remove", "args": {"entity": e, "component": remove}})).collect();
                 s.apply(commands, &format!("Remove {remove}"));
             }),
         ];

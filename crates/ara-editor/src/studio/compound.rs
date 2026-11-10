@@ -48,9 +48,7 @@ fn element_default(db: &SchemaDb, ty: &ValueType) -> Value {
 /// Edits `path` at `pointer` on every selected entity as one undo step.
 fn nested(s: &mut Studio, path: &str, pointer: &str, operation: &str, value: Value, why: &str) {
     let commands = s
-        .editor
-        .state
-        .selection
+        .inspected()
         .iter()
         .map(|entity| {
             json!({"cmd": "editor.property.nested.edit", "args": {
@@ -67,8 +65,7 @@ pub(super) fn commit_target(s: &mut Studio, target: &str, value: Value, why: &st
     match target.split_once('#') {
         Some((path, pointer)) => nested(s, path, pointer, "set", value, why),
         None => {
-            let commands =
-                crate::inspector::edit_commands(&s.editor.state.selection, target, &value);
+            let commands = crate::inspector::edit_commands(s.inspected(), target, &value);
             s.apply(commands, why);
         }
     }
