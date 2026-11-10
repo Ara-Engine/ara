@@ -539,6 +539,7 @@ name = "ara-anim"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-cmd",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-json",
@@ -845,6 +846,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-curve"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
@@ -912,6 +922,7 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-crash",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-editor-gpu",
@@ -2453,6 +2464,7 @@ name = "ara-vfx"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-cmd",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-graph",

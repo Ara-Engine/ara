@@ -746,6 +746,35 @@ fn settings(
                 }
             }
         };
+        // Size over Life's keys are a curve: drawn and edited as one, full width.
+        if let ara_vfx::Module::SizeOverLife { curve } = &module.module {
+            let item = format!("vfx/{emitter}/{stage}/{}", module.name);
+            out.push(
+                col()
+                    .pad_x(10.0)
+                    .pad_y(6.0)
+                    .gap(6.0)
+                    .child(
+                        text("Size over life (m)")
+                            .text_size(11.5)
+                            .color(c.muted_foreground.0),
+                    )
+                    .child(super::curve::editor(
+                        s,
+                        &item,
+                        curve,
+                        Some((0.0, 1.0)),
+                        2,
+                        move |s: &mut Studio, curve| {
+                            let saved =
+                                ara_json::to_value(&ara_vfx::Module::SizeOverLife { curve })
+                                    .unwrap_or_default();
+                            set(s, saved["keys"].clone());
+                        },
+                    )),
+            );
+            continue;
+        }
         let editor: El<Studio> = match v {
             Value::Bool(on) => {
                 let on = *on;

@@ -2700,6 +2700,56 @@ fn captures() {
             )
             .unwrap();
         }
+        // The Size over Life curve in the VFX Selection, a key picked (its handles shown).
+        if !light {
+            rt.touch(|s| {
+                let doc = s
+                    .editor
+                    .action(
+                        "editor.resource.create",
+                        json!({"path": "samples/capture.graph", "domain": "vfx"}),
+                    )
+                    .unwrap()["doc"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                s.act("editor.workspace", json!({"resource": doc}));
+            });
+        }
+        rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+        let effect = effect_at(&rt, "samples/capture.graph");
+        if let Some((emitter, module, curve)) = effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        }) {
+            let mut shaped = curve;
+            shaped.keys[0].interpolation = ara_curve::Interpolation::Cubic;
+            rt.update(|s| {
+                s.editor.state.resource_item = Some(format!("{emitter}|update|{module}"));
+                s.local.curve_pick = Some((format!("curve/vfx/{emitter}/update/{module}"), 1));
+                s.local.curve_drag = Some(super::curve::CurveDrag {
+                    field: format!("curve/vfx/{emitter}/update/{module}"),
+                    frame: super::curve::Frame::of(&shaped, Some((0.0, 1.0))),
+                    curve: shaped,
+                    grab: super::curve::Grab::Key(1),
+                });
+            });
+            host_feedback(&mut rt);
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{}-vfx-curve.png", if light { "light" } else { "dark" });
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+            rt.update(|s| s.local.curve_drag = None);
+        }
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
@@ -3922,6 +3972,180 @@ fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
         ara_json::to_value(&edited.module).unwrap()[&key],
         json!(7.0)
     );
+}
+
+#[test]
+fn the_size_over_life_curve_takes_a_key_and_a_dragged_one_in_one_step() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/fire.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let size_curve = |rt: &Runtime<Studio>| {
+        let effect = effect_at(rt, "samples/fire.graph");
+        effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        })
+    };
+    let (emitter, module, curve) = size_curve(&rt).expect("a Size over Life module");
+    press(&mut rt, &format!("vfx/module/{emitter}|update|{module}"));
+    let plot = rt
+        .find(&format!("curve/vfx/{emitter}/update/{module}"))
+        .expect("the curve shows in the Selection");
+    let (w, h) = (plot.width(), plot.height());
+    let frame = super::curve::Frame::of(&curve, Some((0.0, 1.0)));
+    let at = |(x, y): (f32, f32)| (plot.left + x, plot.top + y);
+    // A double-click on the plot adds a key there.
+    let (x, y) = at(frame.place((0.5, curve.evaluate(0.5) * 0.5), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    let pointer = stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.handle(&stillkit::Event::DoubleClick(
+        pointer,
+        stillkit::Button::Left,
+    ));
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    let (_, _, added) = size_curve(&rt).expect("still there");
+    assert_eq!(added.keys.len(), curve.keys.len() + 1, "a key added");
+    let undo_depth = rt.state().editor.host.store().history().len();
+    // The first key dragged up: higher, saved once on release.
+    let first = added.keys[0];
+    let frame = super::curve::Frame::of(&added, Some((0.0, 1.0)));
+    let (x, y) = at(frame.place((first.time, first.value), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x, y - 6.0 * step as f32);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth,
+        "nothing saved mid-drag"
+    );
+    rt.pointer_up(x, y - 24.0);
+    settle(&mut rt);
+    let (_, _, dragged) = size_curve(&rt).expect("still there");
+    assert!(
+        dragged.keys[0].value > first.value,
+        "{} > {}",
+        dragged.keys[0].value,
+        first.value
+    );
+    assert_eq!(dragged.keys[0].time, 0.0, "kept at the start of life");
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth + 1,
+        "one undo step"
+    );
+}
+
+#[test]
+fn a_transition_s_blend_curve_shapes_it_and_straightens_back() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/run.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let blend = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .blend
+            .clone()
+    };
+    let transition = {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .id
+            .clone()
+    };
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition))
+    });
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "straight to start");
+    let plot = rt
+        .find(&format!("curve/animation/{transition}"))
+        .expect("the blend curve shows with the transition");
+    let (w, h) = (plot.width(), plot.height());
+    let straight = ara_curve::Preset::Linear.curve();
+    let frame = super::curve::Frame::of(&straight, Some((0.0, 1.0)));
+    let (kx, ky) = frame.place((0.0, 0.0), (w, h));
+    let (x, y) = (plot.left + kx, plot.top + ky);
+    // Pick the first key, then pull its leaving handle flat: the fade eases in.
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "picking a key changes nothing");
+    // The handle lies along the straight line, 36 px out.
+    let (ex, ey) = frame.place((1.0, 1.0), (w, h));
+    let len = ((ex - kx).powi(2) + (ey - ky).powi(2)).sqrt();
+    let handle = (x + (ex - kx) / len * 36.0, y + (ey - ky) / len * 36.0);
+    rt.pointer_move(handle.0, handle.1);
+    rt.frame(FRAME);
+    rt.pointer_down(handle.0, handle.1);
+    rt.pointer_move(handle.0 + 10.0, y);
+    rt.frame(FRAME);
+    rt.pointer_up(handle.0 + 10.0, y);
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let shaped = blend(&rt).expect("shaped");
+    assert!(
+        shaped.evaluate(0.25) < 0.2,
+        "eases in: {}",
+        shaped.evaluate(0.25)
+    );
+    press(&mut rt, "animation/transition/blend/reset");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    assert_eq!(blend(&rt), None, "straight again");
 }
 
 #[test]
