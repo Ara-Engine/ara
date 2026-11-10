@@ -73,6 +73,17 @@ pub(crate) struct Bridge {
     cut: bool,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
+    /// The sky being prepared off the frame loop, if any.
+    sky_job: Option<SkyJob>,
+    /// Replaced sky maps waiting for the next sky change to be removed.
+    stale_maps: Vec<EnvironmentId>,
+}
+
+/// One sky image being prepared for `Sky::Map` on a worker thread.
+struct SkyJob {
+    /// Content key of the image (`environment::key`).
+    key: u64,
+    worker: std::thread::JoinHandle<Result<renderlab::engine::PreparedEnvironment>>,
 }
 
 impl Bridge {
@@ -150,6 +161,8 @@ impl Bridge {
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
             last_view: None,
+            sky_job: None,
+            stale_maps: Vec::new(),
         })
     }
 
@@ -366,7 +379,10 @@ impl Bridge {
     }
 
     /// Sets the frame's sky when it changed. An environment map or gradient sky is
-    /// prepared once per content (`environment`) and then lights and backs the frame.
+    /// prepared once per content (`environment`) on a worker thread, a few hundred
+    /// milliseconds of filtering: the frame loop keeps the sky it has (a constant of
+    /// the image's mean before the first one) until the new one is ready. A capture or
+    /// a cut waits for it, so stills never show a sky in transition.
     fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
         let mut replaced = None;
         let sky = match lighting::sky(view, &mut self.gaps) {
@@ -376,21 +392,45 @@ impl Bridge {
             }
             SkySource::Map { size, pixels } => {
                 let key = environment::key(size, &pixels);
-                let map = match self.applied.sky_map {
-                    Some((applied, map)) if applied == key => map,
-                    previous => {
-                        let prepared = environment::prepare(size, &pixels)?;
+                loop {
+                    // Take over a finished preparation (any, when waiting).
+                    if let Some(job) = self
+                        .sky_job
+                        .take_if(|job| self.cut || job.worker.is_finished())
+                    {
+                        let prepared = job
+                            .worker
+                            .join()
+                            .map_err(|_| anyhow!("the sky preparation thread panicked"))??;
                         let map = self.engine.create_environment(&prepared)?;
-                        replaced = previous.map(|(_, map)| map);
-                        self.applied.sky_map = Some((key, map));
-                        map
+                        let previous = self.applied.sky_map.replace((job.key, map));
+                        // Two maps can finish between sky changes: all but the last go.
+                        if let Some(stale) = replaced.replace(previous.map(|(_, map)| map)) {
+                            self.stale_maps.extend(stale);
+                        }
                     }
-                };
-                Sky::Map {
-                    map,
-                    rotation_y: 0.,
-                    intensity: 1.,
-                    background: Background::Sky,
+                    let current = self.applied.sky_map.map(|(applied, _)| applied);
+                    if current == Some(key) || self.sky_job.is_some() {
+                        break;
+                    }
+                    let (owned, wait) = (pixels.to_vec(), self.cut);
+                    let worker = std::thread::Builder::new()
+                        .name("renderlab-sky".into())
+                        .spawn(move || environment::prepare(size, &owned))
+                        .context("sky preparation thread")?;
+                    self.sky_job = Some(SkyJob { key, worker });
+                    if !wait {
+                        break;
+                    }
+                }
+                match self.applied.sky_map {
+                    Some((_, map)) => Sky::Map {
+                        map,
+                        rotation_y: 0.,
+                        intensity: 1.,
+                        background: Background::Sky,
+                    },
+                    None => Sky::Uniform(environment::mean_radiance(size, &pixels)),
                 }
             }
         };
@@ -398,9 +438,9 @@ impl Bridge {
             self.engine.set_sky(sky)?;
             self.applied.sky = Some(sky);
         }
-        // Renderlab keeps the selected map alive until the sky changes: the old one
-        // goes only after the new sky is set.
-        if let Some(map) = replaced {
+        // Renderlab keeps the selected map alive until the sky changes: old ones go
+        // only after the new sky is set.
+        for map in replaced.flatten().into_iter().chain(self.stale_maps.drain(..)) {
             self.engine.remove_environment(map)?;
         }
         Ok(())
