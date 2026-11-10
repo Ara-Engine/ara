@@ -675,6 +675,31 @@ fn the_play_menu_sets_mode_clients_network_and_start_paused() {
 }
 
 #[test]
+fn import_defaults_set_and_reset_the_projects_importer_values() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "import"})));
+    settle(&mut rt);
+    let mipmaps = |rt: &Runtime<Studio>| {
+        crate::import_edit::inherited_defaults(
+            &rt.state().editor,
+            "ara.texture",
+            crate::import_edit::settings("ara.texture").unwrap().0,
+        )
+        .unwrap()["mipmaps"]
+            .clone()
+    };
+    let before = mipmaps(&rt);
+    assert!(
+        rt.find("import/defaults/reset").is_some(),
+        "the project's defaults show"
+    );
+    press(&mut rt, "asset/setting/mipmaps");
+    assert_ne!(mipmaps(&rt), before, "the texture default changed");
+    press(&mut rt, "import/defaults/reset");
+    assert_eq!(mipmaps(&rt), before, "reset to built-in");
+}
+
+#[test]
 fn the_computers_own_messages_fold_into_their_own_console_group() {
     let mut rt = open();
     let row = |seq: u64, diagnostic: ara_diag::Diagnostic| super::state::LogRow {
