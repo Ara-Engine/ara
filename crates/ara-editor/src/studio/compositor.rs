@@ -2,8 +2,6 @@
 //! (grid, selection and agent outlines by entity, the transform gizmo) drawn over it on the
 //! GPU UI adapter, then presented into the studio's native layer. The overlays are the same
 //! `shell::overlay` geometry and shaders the legacy window used; only the host changed.
-use std::ffi::c_void;
-use std::ptr::NonNull;
 
 use anyhow::Result;
 use ara_ui::paint::{Box2, DisplayList, Draw};
@@ -78,7 +76,7 @@ impl Compositor {
     /// to the renderer and `scene` redraws. False skips the frame while the last one is
     /// still on the GPU: call again on a later pass.
     /// # Safety
-    /// `layer` is the live `CAMetalLayer` of the Scene view.
+    /// `layer` is the Scene view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
@@ -89,7 +87,7 @@ impl Compositor {
         changed: &std::collections::BTreeMap<u64, &str>,
         gizmo: GizmoState,
         revision: u64,
-        layer: NonNull<c_void>,
+        layer: super::present::Target,
         extent: [u32; 2],
         scale: f32,
     ) -> Result<bool> {
@@ -166,12 +164,12 @@ impl Compositor {
         let present = match self.present.take() {
             Some((mut present, was)) => {
                 if was != extent {
-                    resize(&mut present, extent)?;
+                    super::present::resize(&mut present, extent)?;
                 }
                 present
             }
             // SAFETY: forwarded caller contract.
-            None => unsafe { layer_present(&self.ui, renderer, layer, extent)? },
+            None => unsafe { super::present::create(&self.ui, renderer, layer, extent)? },
         };
         let (present, _) = self.present.insert((present, extent));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
@@ -204,50 +202,4 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
     };
     let tokens = theme.tokens().map_err(|e| anyhow::anyhow!("{e}"))?;
     ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
-}
-
-/// Presentation into one of the studio's native layers (the Scene's or the Game's).
-/// # Safety
-/// `layer` is the live `CAMetalLayer` of the Scene view.
-#[cfg(target_os = "macos")]
-pub(super) unsafe fn layer_present(
-    ui: &NativeUi,
-    renderer: &ara_render::Renderer,
-    layer: NonNull<c_void>,
-    extent: [u32; 2],
-) -> Result<ara_platform::Present> {
-    // SAFETY: forwarded caller contract.
-    let mut present = unsafe { ui.create_layer_present(ui_device(renderer.gpu()), layer, extent)? };
-    // The UI thread presents: never wait on a full drawable pool (a covered window shows
-    // none), skip the frame and present again on the next pass.
-    present.set_wait(std::time::Duration::from_millis(1))?;
-    Ok(present)
-}
-
-/// The Scene layer's swapchain for a child HWND (Windows) is not built yet; the studio
-/// defaults to the legacy window there (`main.rs`).
-/// # Safety
-/// No requirement: it only reports that the path is missing.
-#[cfg(not(target_os = "macos"))]
-pub(super) unsafe fn layer_present(
-    _: &NativeUi,
-    _: &ara_render::Renderer,
-    _: NonNull<c_void>,
-    _: [u32; 2],
-) -> Result<ara_platform::Present> {
-    anyhow::bail!(
-        "the studio's Scene view presents on macOS today; run with --legacy-ui on this platform"
-    )
-}
-
-#[cfg(target_os = "macos")]
-pub(super) fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
-    present.resize(extent)
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(super) fn resize(_: &mut ara_platform::Present, _: [u32; 2]) -> Result<()> {
-    anyhow::bail!(
-        "the studio's Scene view presents on macOS today; run with --legacy-ui on this platform"
-    )
 }

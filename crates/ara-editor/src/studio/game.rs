@@ -3,8 +3,6 @@
 //! camera on the Scene's renderer); during Play, the embedded player's newest frame (D19).
 //! A click in it while playing sends the keyboard and mouse to the game; Esc, or a click
 //! outside it, gives them back.
-use std::ffi::c_void;
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -373,7 +371,7 @@ impl Game {
     /// present whichever is on screen into `layer` at `extent` physical pixels. `layer` is
     /// None while the Game view is not laid out. `resolved` is the scene at `revision`.
     /// # Safety
-    /// `layer` is the live `CAMetalLayer` of the Game view.
+    /// `layer` is the Game view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn frame(
         &mut self,
@@ -383,7 +381,7 @@ impl Game {
         view: &DocumentView,
         resolved: &Arc<Resolved>,
         revision: u64,
-        layer: Option<(NonNull<c_void>, [u32; 2])>,
+        layer: Option<(super::present::Target, [u32; 2])>,
         scale: f32,
     ) -> Result<Status> {
         self.host.frame = layer.map(|(_, extent)| extent);
