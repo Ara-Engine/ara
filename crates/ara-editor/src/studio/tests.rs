@@ -1089,6 +1089,29 @@ fn the_assets_footer_names_the_selection_or_the_folder() {
 }
 
 #[test]
+fn the_inspectors_debug_mode_shows_the_record() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "inspector/raw");
+    assert!(rt.find("inspector/record").is_some(), "the record shows");
+    assert!(
+        rt.find("component/Transform").is_none(),
+        "instead of the fields"
+    );
+    press(&mut rt, "inspector/record/copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(
+        copied.contains("MeshRenderer") && copied.contains("Transform"),
+        "{copied}"
+    );
+    press(&mut rt, "inspector/raw");
+    assert!(
+        rt.find("component/Transform").is_some(),
+        "back to the fields"
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2392,6 +2415,24 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The Inspector's Debug mode: the record itself.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "inspector"}));
+            s.local.inspector_raw = true;
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-inspector-debug.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.inspector_raw = false);
         // The scene header's own menu.
         let header = rt.find("hierarchy/scene").unwrap();
         rt.right_click(header.center().x, header.center().y);
