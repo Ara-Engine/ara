@@ -886,9 +886,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 _ => e.state.focus.clone(),
             };
             let (w, h) = s.size;
+            // On the desktop, over the main window's middle (its own window there).
+            let (ox, oy) = match s.local.desktop.on {
+                true => s.local.desktop.origin,
+                false => (0.0, 0.0),
+            };
             let rect = [
-                w * 0.25,
-                h * 0.2,
+                ox + w * 0.25,
+                oy + h * 0.2,
                 (w * 0.4).max(320.0),
                 (h * 0.5).max(240.0),
             ];
@@ -901,6 +906,11 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         // Gather: every floating window back inside the main window.
         "window.gather" => {
             let size = s.size;
+            // Native windows gather over the main window on the desktop.
+            let (ox, oy) = match s.local.desktop.on {
+                true => s.local.desktop.origin,
+                false => (0.0, 0.0),
+            };
             let windows: Vec<(String, [i32; 4])> = e
                 .state
                 .floating
@@ -910,8 +920,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             for (id, r) in windows {
                 let [x, y, w, h] = r.map(|v| v as f32);
                 let fitted = [
-                    x.clamp(0.0, (size.0 - w).max(0.0)),
-                    y.clamp(0.0, (size.1 - h).max(0.0)),
+                    x.clamp(ox, ox + (size.0 - w).max(0.0)),
+                    y.clamp(oy, oy + (size.1 - h).max(0.0)),
                     w,
                     h,
                 ];

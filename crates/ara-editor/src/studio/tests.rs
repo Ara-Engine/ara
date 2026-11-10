@@ -2329,6 +2329,110 @@ fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
 }
 
 #[test]
+fn a_native_floating_window_shows_its_region_and_its_tab_docks_back_or_tears_out() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    // The host's native windows: the main window at (200, 100) on the desktop.
+    rt.update(|s| {
+        s.local.desktop.on = true;
+        s.local.desktop.origin = (200.0, 100.0);
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let floating = |rt: &Runtime<Studio>| rt.state().editor.state.floating.clone();
+    let window = floating(&rt);
+    assert_eq!(window.len(), 1, "Console floats");
+    let id = window[0].id.clone();
+    assert!(
+        window[0].rect[0] >= 200 && window[0].rect[1] >= 100,
+        "opened on the desktop over the main window: {:?}",
+        window[0].rect
+    );
+    // It lays out in its region, beyond the main window, and shows there alone.
+    let region = super::dock::region(rt.state(), 0, &id, window[0].rect);
+    rt.set_portals(&[region]);
+    settle(&mut rt);
+    let bar = rt.find(&format!("float/{id}/bar")).expect("its title bar");
+    let (w, _) = rt.state().size;
+    assert!(
+        bar.left >= w && bar.left >= region.left,
+        "{bar:?} in {region:?}"
+    );
+    let image = rt.snap_region(region).unwrap();
+    assert_eq!(
+        (image.width, image.height),
+        (region.width() as u32, region.height() as u32)
+    );
+    // Its tab drags back into the Scene's strip: the host sends the pointer to the main
+    // window once the desktop point is over it, and the native window goes.
+    let keys = super::dock::all_drag_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let scene = super::dock::area_holding(rt.state(), "scene").unwrap();
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    let tab = rt.find("tab/console").unwrap();
+    assert!(tab.left >= region.left, "the tab is in the region");
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(strip.right - 40.0, strip.top + 10.0);
+    rt.frame(FRAME);
+    rt.pointer_up(strip.right - 40.0, strip.top + 10.0);
+    settle(&mut rt);
+    assert!(floating(&rt).is_empty(), "the emptied window closes");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console"),
+        Some(scene.clone())
+    );
+    // Dragged out past the main window's edge, the tab tears out where the pointer is on
+    // the desktop (a second monitor's, say).
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    let tab = rt.find("tab/console").unwrap();
+    let (w, h) = rt.state().size;
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(w + 300.0, h / 2.0);
+    rt.touch(|s| s.local.desktop.pointer = Some((2400.0, 500.0)));
+    rt.frame(FRAME);
+    rt.pointer_up(w + 300.0, h / 2.0);
+    settle(&mut rt);
+    let torn = floating(&rt);
+    assert_eq!(torn.len(), 1, "a window of its own");
+    assert_eq!(super::dock::tabs_of(&torn[0].root), ["console"]);
+    let [x, y, ..] = torn[0].rect;
+    assert!(
+        (x - 2400).abs() < 100 && (y - 500).abs() < 40,
+        "under the pointer: {:?}",
+        torn[0].rect
+    );
+}
+
+#[test]
+fn a_desktop_point_maps_into_the_topmost_window_under_it() {
+    use super::portals::{Placement, locate};
+    let main = Placement {
+        client: [0.0, 0.0, 1000.0, 800.0],
+        origin: (0.0, 0.0),
+    };
+    let float = Placement {
+        client: [900.0, 100.0, 400.0, 300.0],
+        origin: (100_000.0, 0.0),
+    };
+    let windows = [float, main];
+    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_050.0, 50.0)));
+    assert_eq!(locate(&windows, (500.0, 500.0)), Some((500.0, 500.0)));
+    assert_eq!(locate(&windows, (2000.0, 500.0)), None);
+}
+
+#[test]
 fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
