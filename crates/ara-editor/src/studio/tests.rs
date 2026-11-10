@@ -429,6 +429,77 @@ fn the_inspector_locks_searches_and_copies_component_values() {
 }
 
 #[test]
+fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str, target: Target| {
+        rt.update(|s| super::commands::run(s, id, &target));
+        settle(rt);
+    };
+    // Why? asks about the selection, then shows the diagnostic service's answer.
+    run(&mut rt, "tools.why", Target::None);
+    let asked = rt.state().local.prompt.as_ref().map(|p| p.text.clone());
+    assert_eq!(asked.as_deref(), Some("e_box not visible"));
+    press(&mut rt, "prompt/ok");
+    let answer = rt.state().local.why.clone();
+    assert!(
+        answer.as_ref().is_some_and(|(_, lines)| !lines.is_empty()),
+        "{answer:?}"
+    );
+    press(&mut rt, "why/close");
+    assert!(rt.state().local.why.is_none());
+    // Set Baseline needs frames; Compare then hides and shows the comparison.
+    run(&mut rt, "profiler.compare", Target::None);
+    assert!(
+        !rt.state().local.profiler_hide_compare,
+        "no baseline to compare with"
+    );
+    rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+    run(&mut rt, "profiler.baseline", Target::None);
+    assert!(rt.state().editor.profile_baseline.is_some());
+    run(&mut rt, "profiler.compare", Target::None);
+    assert!(rt.state().local.profiler_hide_compare);
+    // Two floating windows: focusing the first brings it to the front.
+    rt.update(|s| {
+        for (id, panel) in [("float-a", "console"), ("float-b", "problems")] {
+            s.editor.state.floating.push(ara_ui::docking::Floating {
+                id: id.into(),
+                rect: [40, 40, 400, 300],
+                root: ara_ui::docking::DockNode::Area {
+                    id: format!("{id}-area"),
+                    tabs: vec![panel.into()],
+                    active: 0,
+                },
+            });
+        }
+    });
+    run(
+        &mut rt,
+        "window.focus_window",
+        Target::Window("float-a".into()),
+    );
+    let order: Vec<_> = rt
+        .state()
+        .editor
+        .state
+        .floating
+        .iter()
+        .map(|f| f.id.clone())
+        .collect();
+    assert_eq!(order, ["float-b", "float-a"]);
+    // Commands not built yet say why instead of failing.
+    run(&mut rt, "file.save_as", Target::None);
+    assert!(
+        rt.state()
+            .local
+            .note
+            .as_ref()
+            .is_some_and(|(n, _)| n.starts_with("Save As"))
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();

@@ -40,6 +40,7 @@ pub fn view(s: &Studio) -> El<Studio> {
         )
         .overlay(super::preferences::overlay(s))
         .overlay(prompt(s))
+        .overlay(why(s))
         .overlay(super::about::overlay(s));
     palette(s, root)
 }
@@ -68,7 +69,7 @@ fn prompt(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
             Size::Md,
             "prompt/field",
             None,
-            "Name",
+            p.hint,
             &p.text,
             move |f| {
                 f.on_input(|s: &mut Studio, t| {
@@ -84,7 +85,7 @@ fn prompt(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
                 .key("prompt/cancel")
                 .on_press(close),
             enabled(
-                button(l, Tone::Primary, Size::Md, None, "Save")
+                button(l, Tone::Primary, Size::Md, None, p.ok)
                     .key("prompt/ok")
                     .on_press(move |s: &mut Studio| submit(s, &typed)),
                 !p.text.trim().is_empty(),
@@ -93,6 +94,43 @@ fn prompt(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
         close,
     )
     .w(380.0);
+    Some(stillkit::el::dialog(panel).on_dismiss(close))
+}
+
+/// The diagnostic service's answer (Tools › Why?), line by line, with Ask Again.
+fn why(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let (question, lines) = s.local.why.as_ref()?;
+    let l = &s.look;
+    let close = |s: &mut Studio| s.local.why = None;
+    let body = col().gap(4.0).children(lines.iter().map(|line| {
+        text(line.clone())
+            .text_size(12.0)
+            .wrap(52)
+            .color(l.c.foreground.0)
+    }));
+    let again = question.clone();
+    let panel = dialog_panel(
+        l,
+        None,
+        &format!("Why? · {question}"),
+        body,
+        vec![
+            button(l, Tone::Ghost, Size::Md, None, "Ask again")
+                .key("why/again")
+                .on_press(move |s: &mut Studio| {
+                    s.local.why = None;
+                    commands::run(s, "tools.why", &Target::Text(String::new()));
+                    if let Some(p) = s.local.prompt.as_mut() {
+                        p.text = again.clone();
+                    }
+                }),
+            button(l, Tone::Primary, Size::Md, None, "Close")
+                .key("why/close")
+                .on_press(close),
+        ],
+        close,
+    )
+    .w(520.0);
     Some(stillkit::el::dialog(panel).on_dismiss(close))
 }
 
@@ -429,8 +467,22 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
                 })
                 .collect()
         }
-        // The studio has no floating windows yet.
-        Dynamic::Windows => Vec::new(),
+        // Floating windows, by the panels they hold; the front one is checked.
+        Dynamic::Windows => {
+            let front = e.state.floating.last().map(|f| f.id.clone());
+            e.state
+                .floating
+                .iter()
+                .map(|f| {
+                    let title = super::dock::window_title(&f.root);
+                    entry(
+                        title,
+                        Target::Window(f.id.clone()),
+                        Some(front.as_ref() == Some(&f.id)),
+                    )
+                })
+                .collect()
+        }
         // Panels not open yet, to open as a tab beside the clicked one.
         Dynamic::AddTab => {
             let Target::Panel(beside) = target else {

@@ -3235,6 +3235,11 @@ pub(crate) const UNBUILT: &[&str] = &[
     "tools.ui_designer",
     "tools.vcs",
     "tools.plugins",
+    "help.cs_api",
+    "help.agent_guide",
+    "help.report",
+    "layout.saved",
+    "window.auto_hide",
 ];
 
 /// Commands the legacy editor runs that the studio does not yet; each leaves this list
@@ -3249,15 +3254,4 @@ pub(crate) const UNPORTED: &[&str] = &[
     "lighting.probe.copy",
     "assets.search.restore",
     "window.render_debug",
-    "tools.why",
-    "agents.connect",
-    "layout.saved",
-    "window.auto_hide",
-    "window.focus_window",
-    "help.cs_api",
-    "help.agent_guide",
-    "help.report",
-    "profiler.freeze",
-    "profiler.baseline",
-    "profiler.compare",
 ];

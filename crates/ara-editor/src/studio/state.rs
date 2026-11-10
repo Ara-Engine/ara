@@ -355,6 +355,12 @@ pub struct Local {
     pub note: Option<(String, std::time::Instant)>,
     /// A one-field question open (Save Layout As): what it asks, and the text typed.
     pub prompt: Option<Prompt>,
+    /// The diagnostic service's last answer (Tools › Why?): the question and its lines.
+    pub why: Option<(String, Vec<String>)>,
+    /// The Agents panel shows how to connect one even while agents are connected.
+    pub agents_connect: bool,
+    /// The Profiler hides the baseline comparison (Profiler › Compare off).
+    pub profiler_hide_compare: bool,
     /// Opened in the background (`--background`): fields are not given keyboard focus (on
     /// Windows that would bring the window forward) until a person activates the window.
     pub background: bool,
@@ -459,6 +465,10 @@ pub struct Prompt {
     pub title: &'static str,
     /// The text typed so far.
     pub text: String,
+    /// What the field shows while empty.
+    pub hint: &'static str,
+    /// The button that runs it.
+    pub ok: &'static str,
     /// The command Enter runs, with the text as its target.
     pub then: &'static str,
 }
