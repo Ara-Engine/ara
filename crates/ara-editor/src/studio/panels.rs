@@ -454,6 +454,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .cmp(&(a.kind == "folder"))
             .then_with(|| a.path.to_lowercase().cmp(&b.path.to_lowercase()))
     });
+    let footer = assets_footer(s, &folder, items.len());
     let body = if let Some(error) = &browser.error {
         empty(
             l,
@@ -534,7 +535,8 @@ fn assets(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         .child(toolbar)
         .children(import_strip(s))
-        .child(body);
+        .child(body)
+        .child(footer);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
@@ -575,6 +577,42 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     root
+}
+
+/// Under the contents, as Unity's Project window: the selected asset's path, or what the
+/// folder shows (`shown` items) and where it is.
+fn assets_footer(s: &Studio, folder: &str, shown: usize) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let (glyph, line) = match s.editor.state.asset_path.as_deref() {
+        Some(path) if !path.is_empty() => (icons::FILE, path.to_owned()),
+        _ => {
+            let place = if folder.is_empty() { "Project" } else { folder };
+            let items = match shown {
+                1 => "1 item".to_owned(),
+                n => format!("{n} items"),
+            };
+            (icons::FOLDER, format!("{place} · {items}"))
+        }
+    };
+    row()
+        .key("assets/footer")
+        .h(22.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .fill(super::style::tones(l).band)
+        .label(line.clone())
+        .child(icon(glyph).size(12.0).color(c.muted_foreground.0))
+        .child(
+            text(line)
+                .text_size(11.0)
+                .family(mono())
+                .wrap(1)
+                .color(c.muted_foreground.0)
+                .grow(1.0)
+                .min_w(0.0),
+        )
 }
 
 /// The Assets view menu (⋯): Import, what shows (every file, the folder only), thumbnails.
@@ -1862,6 +1900,18 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Stu
                 Some(seq)
             }
         })
+        // Its menu (Copy, Collapse, Clear…), the message open in the details.
+        .on_context_menu({
+            let line = format!("{}: {}", r.code, r.message);
+            move |s: &mut Studio, x, y| {
+                s.local.console_open = Some(seq);
+                s.local.context = Some((
+                    crate::catalog::menus::Context::Console,
+                    crate::catalog::Target::Text(line.clone()),
+                    (x, y),
+                ));
+            }
+        })
         .child(severity_glyph(l, r.severity))
         .child(
             col()
@@ -1988,6 +2038,19 @@ fn problems(s: &Studio) -> El<Studio> {
         )
     } else {
         let mut out = col().pad(8.0).gap(8.0);
+        // Files with errors first, then the most problems, then by name.
+        let mut groups: Vec<_> = groups.into_iter().collect();
+        groups.sort_by_key(|(file, rows)| {
+            let errors = rows
+                .iter()
+                .filter(|r| r.severity == ara_diag::Severity::Error)
+                .count();
+            (
+                std::cmp::Reverse(errors),
+                std::cmp::Reverse(rows.len()),
+                *file,
+            )
+        });
         for (file, rows) in groups {
             let mut card = col()
                 .radius(super::style::RADIUS)

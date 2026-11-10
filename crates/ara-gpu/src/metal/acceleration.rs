@@ -1,12 +1,15 @@
-//! Metal 4 acceleration structures behind `VulkanDevice`'s static BLAS/TLAS API: one
+//! Metal 4 acceleration structures behind the portable BLAS/TLAS API: one
 //! primitive structure per triangle range and an instance structure over BLAS resource
-//! IDs, each built once on a compute encoder. Every structure is resident while alive,
+//! IDs, built or refit on a compute encoder. Every structure is resident while alive,
 //! since a TLAS reaches its BLASes only by ID. Shaders reach a TLAS the way Metal
 //! Shader Converter expects inline ray queries to: the descriptor at root parameter 4
 //! holds the address of a header with the TLAS resource ID and one hit-group
 //! contribution per instance (`bind_acceleration_structure`).
+mod compact;
 use super::*;
-use crate::acceleration::{AccelerationDesc, TriangleRange};
+use crate::acceleration::{
+    AccelerationDesc, AccelerationInstance, AccelerationOptions, TriangleRange,
+};
 use objc2_foundation::NSArray;
 
 /// MSC's `IRRaytracingAccelerationStructureGPUHeader` (runtime header): the TLAS
@@ -28,6 +31,7 @@ pub(super) enum Geometry {
 /// One structure and the storage its build and shader binding own.
 pub(super) struct NativeAcceleration {
     pub structure: Retained<ProtocolObject<dyn MTLAccelerationStructure>>,
+    pub heap: Option<super::memory::Heap>,
     geometry: Geometry,
     scratch: Buffer,
     /// BLASes a TLAS references; they cannot retire while it lives.
@@ -35,6 +39,10 @@ pub(super) struct NativeAcceleration {
     /// Buffers retired with the structure: scratch, instance descriptors, the header.
     pub auxiliary: Vec<Buffer>,
     pub built: bool,
+    built_count: u32,
+    compacted: bool,
+    pub options: AccelerationOptions,
+    pub capacity: u32,
 }
 
 impl MetalDevice {
@@ -44,9 +52,28 @@ impl MetalDevice {
         &mut self,
         desc: &AccelerationDesc,
     ) -> Result<AccelerationStructure> {
+        self.create_acceleration_with_options(desc, AccelerationOptions::default())
+    }
+    /// Allocate an update-enabled BLAS/TLAS with optional instance headroom.
+    pub fn create_acceleration_with_options(
+        &mut self,
+        desc: &AccelerationDesc,
+        options: AccelerationOptions,
+    ) -> Result<AccelerationStructure> {
         if !self.info.ray_tracing {
             return Err(GpuError::Contract(
                 "RT-tier acceleration structures are unavailable".into(),
+            ));
+        }
+        let initial = match desc {
+            AccelerationDesc::Instances(v) => u32::try_from(v.len())
+                .map_err(|_| GpuError::Contract("Too many TLAS instances".into()))?,
+            _ => 0,
+        };
+        let capacity = options.instance_capacity.max(initial);
+        if options.instance_capacity != 0 && options.instance_capacity < initial {
+            return Err(GpuError::Contract(
+                "Instance capacity below initial count".into(),
             ));
         }
         let mut dependencies = Vec::new();
@@ -72,49 +99,17 @@ impl MetalDevice {
                 if instances.is_empty() {
                     return Err(GpuError::Contract("Empty TLAS".into()));
                 }
-                let mut native = Vec::with_capacity(instances.len());
-                for instance in instances {
-                    let blas = &self.accelerations.get(instance.geometry)?.raw;
-                    if !matches!(blas.geometry, Geometry::Triangles(_))
-                        || instance.custom_index > 0xffffff
-                        || instance.transform.iter().any(|v| !v.is_finite())
-                    {
-                        return Err(GpuError::Contract("Invalid TLAS instance".into()));
-                    }
-                    let t = instance.transform;
-                    let column = |c: usize| MTLPackedFloat3 {
-                        x: t[c],
-                        y: t[4 + c],
-                        z: t[8 + c],
-                    };
-                    native.push(MTLIndirectAccelerationStructureInstanceDescriptor {
-                        transformationMatrix: MTLPackedFloat4x3 {
-                            columns: [column(0), column(1), column(2), column(3)],
-                        },
-                        // Opaque, double-sided geometry, as on Vulkan.
-                        options: MTLAccelerationStructureInstanceOptions::Opaque
-                            | MTLAccelerationStructureInstanceOptions::DisableTriangleCulling,
-                        mask: u32::from(instance.mask),
-                        intersectionFunctionTableOffset: 0,
-                        userID: instance.custom_index,
-                        accelerationStructureID: blas.structure.gpuResourceID(),
-                    });
-                    dependencies.push(instance.geometry);
-                }
-                // SAFETY: the descriptors are initialized repr(C) records without padding.
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(
-                        native.as_ptr().cast::<u8>(),
-                        std::mem::size_of_val(native.as_slice()),
-                    )
-                };
+                let (bytes, refs) = self.instance_data(instances)?;
+                dependencies = refs;
                 let descriptors = self.create_buffer(
-                    bytes.len() as u64,
+                    u64::from(capacity)
+                        * std::mem::size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>()
+                            as u64,
                     vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
                         | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
                     true,
                 )?;
-                self.upload(descriptors, bytes)?;
+                self.upload(descriptors, &bytes)?;
                 auxiliary.push(descriptors);
                 Geometry::Instances {
                     descriptors,
@@ -123,30 +118,45 @@ impl MetalDevice {
                 }
             }
         };
-        let descriptor = self.descriptor(&geometry)?;
+        let sizing = match geometry {
+            Geometry::Instances { descriptors, .. } => Geometry::Instances {
+                descriptors,
+                count: capacity,
+            },
+            Geometry::Triangles(r) => Geometry::Triangles(r),
+        };
+        let descriptor = self.descriptor(&sizing)?;
+        if options.allow_update {
+            descriptor.setUsage(MTLAccelerationStructureUsage::Refit);
+        }
         let sizes = self
             .device
             .accelerationStructureSizesWithDescriptor(&descriptor);
         let scratch = self.create_buffer(
-            (sizes.buildScratchBufferSize as u64).max(4),
+            (sizes
+                .buildScratchBufferSize
+                .max(sizes.refitScratchBufferSize) as u64)
+                .max(4),
             vk::BufferUsageFlags::STORAGE_BUFFER,
             false,
         )?;
         auxiliary.push(scratch);
-        let structure = self
-            .device
-            .newAccelerationStructureWithSize(sizes.accelerationStructureSize)
-            .ok_or_else(|| nil("acceleration structure"))?;
-        self.residency
-            .addAllocation(ProtocolObject::from_ref(&*structure));
-        self.residency_dirty = true;
+        let (structure, heap) = self
+            .memory
+            .acceleration(&self.device, sizes.accelerationStructureSize)?;
+        self.resident_heap(&heap);
         self.accelerations.insert(Owned::new(NativeAcceleration {
             structure,
+            heap: Some(heap),
             geometry,
             scratch,
             dependencies,
             auxiliary,
             built: false,
+            built_count: 0,
+            compacted: false,
+            options,
+            capacity,
         }))
     }
 
@@ -166,6 +176,7 @@ impl MetalDevice {
             return Ok(index);
         }
         let id = native.raw.structure.gpuResourceID().to_raw();
+        let count = native.raw.capacity.max(count);
         let size = std::mem::size_of::<Header>() as u64;
         let header = self.create_buffer(
             size + u64::from(count) * 4,
@@ -200,12 +211,15 @@ impl MetalDevice {
         structure: AccelerationStructure,
     ) -> Result<()> {
         let native = &self.accelerations.get(structure)?.raw;
-        if native.built {
+        if native.built && (!native.options.allow_update || native.compacted) {
             return Err(GpuError::Contract(
                 "Static AS already built; replacement requires a fresh identity".into(),
             ));
         }
         let descriptor = self.descriptor(&native.geometry)?;
+        if native.options.allow_update {
+            descriptor.setUsage(MTLAccelerationStructureUsage::Refit);
+        }
         let scratch = &self.buffers.get(native.scratch)?.raw;
         // SAFETY: creation sized the structure and scratch for this descriptor; both,
         // the inputs and every BLAS a TLAS references are resident and retained.
@@ -223,10 +237,20 @@ impl MetalDevice {
     }
 
     /// Record builds as done once their submission is committed (static structures).
-    pub(super) fn mark_built(&mut self, commands: &[crate::commands::Command]) -> Result<()> {
+    pub(super) fn mark_built(
+        &mut self,
+        commands: &[crate::commands::Command],
+        queue: Queue,
+    ) -> Result<()> {
         for command in commands {
             if let crate::commands::Command::BuildAccelerationStructure(h) = command {
-                self.accelerations.get_mut(*h)?.raw.built = true;
+                let native = self.accelerations.get_mut(*h)?;
+                native.owner = queue;
+                native.raw.built = true;
+                if let Geometry::Instances { descriptors, count } = native.raw.geometry {
+                    native.raw.built_count = count;
+                    self.buffers.get_mut(descriptors)?.owner = queue;
+                }
             }
         }
         Ok(())
@@ -293,6 +317,109 @@ impl MetalDevice {
         })
     }
 
+    fn instance_data(
+        &self,
+        instances: &[AccelerationInstance],
+    ) -> Result<(Vec<u8>, Vec<AccelerationStructure>)> {
+        let mut dependencies = Vec::with_capacity(instances.len());
+        let mut native = Vec::with_capacity(instances.len());
+        for instance in instances {
+            let blas = &self.accelerations.get(instance.geometry)?.raw;
+            if !matches!(blas.geometry, Geometry::Triangles(_))
+                || instance.custom_index > 0xffffff
+                || instance.transform.iter().any(|v| !v.is_finite())
+            {
+                return Err(GpuError::Contract("Invalid TLAS instance".into()));
+            }
+            let t = instance.transform;
+            let column = |c: usize| MTLPackedFloat3 {
+                x: t[c],
+                y: t[4 + c],
+                z: t[8 + c],
+            };
+            native.push(MTLIndirectAccelerationStructureInstanceDescriptor {
+                transformationMatrix: MTLPackedFloat4x3 {
+                    columns: [column(0), column(1), column(2), column(3)],
+                },
+                // Opaque, double-sided geometry, as on Vulkan.
+                options: MTLAccelerationStructureInstanceOptions::Opaque
+                    | MTLAccelerationStructureInstanceOptions::DisableTriangleCulling,
+                mask: u32::from(instance.mask),
+                intersectionFunctionTableOffset: 0,
+                userID: instance.custom_index,
+                accelerationStructureID: blas.structure.gpuResourceID(),
+            });
+            dependencies.push(instance.geometry);
+        }
+        // SAFETY: the descriptors are initialized repr(C) records without padding.
+        let bytes = unsafe {
+            std::slice::from_raw_parts(
+                native.as_ptr().cast::<u8>(),
+                std::mem::size_of_val(native.as_slice()),
+            )
+        };
+        Ok((bytes.to_vec(), dependencies))
+    }
+    /// Queue an immutable upload of new TLAS instances on its owning queue. Rebuild
+    /// afterward; count changes within capacity are supported by rebuilds, not refits.
+    pub fn update_instances(
+        &mut self,
+        structure: AccelerationStructure,
+        instances: &[AccelerationInstance],
+    ) -> Result<()> {
+        let native = &self.accelerations.get(structure)?.raw;
+        let Geometry::Instances { descriptors, .. } = native.geometry else {
+            return Err(GpuError::Contract("Instance updates require a TLAS".into()));
+        };
+        if !native.options.allow_update
+            || instances.is_empty()
+            || instances.len() > native.capacity as usize
+        {
+            return Err(GpuError::Contract(
+                "Invalid dynamic TLAS instance count".into(),
+            ));
+        }
+        let (bytes, dependencies) = self.instance_data(instances)?;
+        self.upload_ordered(descriptors, 0, &bytes)?;
+        let native = &mut self.accelerations.get_mut(structure)?.raw;
+        native.geometry = Geometry::Instances {
+            descriptors,
+            count: instances.len() as u32,
+        };
+        native.dependencies = dependencies;
+        Ok(())
+    }
+    pub(super) fn encode_as_refit(
+        &self,
+        encoder: &ProtocolObject<dyn MTL4ComputeCommandEncoder>,
+        structure: AccelerationStructure,
+    ) -> Result<()> {
+        let native = &self.accelerations.get(structure)?.raw;
+        if !native.built
+            || !native.options.allow_update
+            || matches!(native.geometry,Geometry::Instances{count,..} if count != native.built_count)
+        {
+            return Err(GpuError::Contract(
+                "Refit requires a built update-enabled AS".into(),
+            ));
+        }
+        let descriptor = self.descriptor(&native.geometry)?;
+        descriptor.setUsage(MTLAccelerationStructureUsage::Refit);
+        let scratch = &self.buffers.get(native.scratch)?.raw;
+        // SAFETY: in-place refit, checked capabilities; creation reserved max build/refit scratch.
+        unsafe {
+            encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer(
+                &native.structure,
+                &descriptor,
+                None,
+                MTL4BufferRange {
+                    bufferAddress: scratch.buffer.gpuAddress(),
+                    length: scratch.size,
+                },
+            );
+        }
+        Ok(())
+    }
     fn triangle_input(&self, range: TriangleRange) -> Result<Geometry> {
         let (vertices, indices) = (
             &self.buffers.get(range.vertices)?.raw,

@@ -22,7 +22,10 @@ pub(super) struct Worker<K, Job, Output> {
 }
 
 impl<K: 'static, Job: Send + 'static, Output: Send + 'static> Worker<K, Job, Output> {
-    pub fn new(name: &str, run: impl Fn(Job) -> Result<Output> + Send + 'static) -> Result<Self> {
+    pub fn new(
+        name: &str,
+        mut run: impl FnMut(Job) -> Result<Output> + Send + 'static,
+    ) -> Result<Self> {
         let (send, jobs) = mpsc::channel::<(Handle<K>, Job)>();
         let (results, receive) = mpsc::channel();
         let thread = std::thread::Builder::new()

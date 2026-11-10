@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195",
+  "key": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0",
   "stages": [
     {
-      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/reset/resetMain.dxil",
+      "dxil": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/reset/resetMain.dxil",
       "dxil_hash": "94aa47440cf6c0a8504762a927fff6c5be41ced4329f920351d23a0acc70e2f2",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/reset/resetMain.metallib",
+        "metallib": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/reset/resetMain.metallib",
         "metallib_hash": "1f2a46bd74e175786694be9ec14b5168cc11b37ab3e9e4735102e2a22d49b5f6",
-        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/reset/resetMain.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/reset/resetMain.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "resetMain",
-      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/reset/resetMain.spv",
+      "spirv": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/reset/resetMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "458aa2de916a9a13185a4cce193ada394de8d05cb8104b0a7137067bc7e38c41",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1
