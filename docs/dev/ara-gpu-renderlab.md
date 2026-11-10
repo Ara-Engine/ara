@@ -106,8 +106,9 @@ Reproduce with the opt-in `mixed_allocation_footprint` library test through
 JSON under `target/ara-gpu/mixed-allocation.json`. CPU barrier timing now alternates
 200 AB/BA measured pairs after warm-up and reports recording/submit/total p50 and
 p95, excluding GPU waits. Default-threshold attempts refused timing due foreign
-CPU load; the latest peak was 24.65% against the 10% limit. No quiet CPU result is
-claimed yet; the failed lease evidence is under `target/ara-dev/gpu-load/`.
+CPU load (including 24.65% and a later 99.99% peak against the 10% limit). No quiet
+CPU result is claimed; failed lease evidence is under `target/ara-dev/gpu-load/`.
+The paired probe is ready to run when the shared Mac is quiet.
 
 Windows is the canonical shader cook host and has Metal Shader Converter 4.0.3.
 Fresh v4 artifacts are being produced there, then verified on Metal; no Mac install
@@ -128,6 +129,10 @@ cargo test -p ara-gpu --lib native_private_allocations_share_blocks_without_over
 The test is ignored only on macOS. Exercise a physical shared-family device too;
 selection tests alone cannot prove its queue submission/ownership path. Re-cook
 shaders on the canonical host; never merge generated cooked artifacts.
+
+The [migration design](../design/renderlab-on-ara-gpu.md) also identifies raster
+attachment mip/layer selection as required work before moving Renderlab's shadow
+passes. Shader views already select subresources; render attachments do not yet.
 
 Decision override: D36 supersedes S1's dedicated compute-family assumption.
 No other locked decision is overridden.
