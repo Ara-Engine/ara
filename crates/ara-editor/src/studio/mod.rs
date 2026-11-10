@@ -110,7 +110,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     rt.frame(Duration::ZERO);
     rt.present(&mut surface, (0, 0))?;
     chrome_parts(&surface, &rt);
-    surface.show_active(false);
+    // In the background (automated captures, tests beside a person's work) the window
+    // shows without activating or taking focus; otherwise it comes forward, active.
+    if options.background {
+        rt.touch(|s| s.local.background = true);
+        surface.show();
+    } else {
+        surface.show_active(false);
+    }
 
     // The renderer starts on a worker; the window keeps drawing and taking input meanwhile.
     let scene_rect = rt
@@ -923,6 +930,8 @@ fn pump(
                 });
             }
             Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+            // A person activated a window opened in the background: it behaves as usual.
+            Event::Activated => rt.touch(|s| s.local.background = false),
             // Files from another app import into the folder Assets shows.
             Event::FilesDropped(_) => {
                 let files = stillkit::take_dropped_files();
@@ -975,7 +984,9 @@ fn pump(
     let painted = trace::time("ui frame", Duration::from_millis(3), || {
         rt.frame(started.elapsed().saturating_sub(rt.now()))
     });
-    if let Some(key) = rt.touch(|s| s.local.focus.take()) {
+    if let Some(key) = rt.touch(|s| s.local.focus.take())
+        && !rt.state().local.background
+    {
         rt.focus(key);
     }
     if let Some(text) = rt.touch(|s| s.local.copy.take()) {

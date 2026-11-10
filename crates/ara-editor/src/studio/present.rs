@@ -15,6 +15,8 @@ use std::ptr::NonNull;
 
 use anyhow::{Context, Result};
 
+// Windows presents with `ui_device` too, once its child-window swapchain lands (PR #10).
+#[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
 use crate::gpu::{NativeUi, ui_device};
 
 /// A native layer to present into, as stillkit gives it.
