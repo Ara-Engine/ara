@@ -1,0 +1,667 @@
+{
+  "passed": true,
+  "timings_accepted": false,
+  "frozen_sha256": {
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/tag-discovery/baseline-sdk": {
+      "Ara.Analyzers.CodeFixes.dll": "8910d49e9c21e3792ce5fabdf0bcab95cfc623e37dc7d2376f1996d6bf020182",
+      "Ara.Analyzers.CodeFixes.pdb": "481261941a5d5a1f0341b5b67cfe7630f74341b2b2f4fe3350f1f6c475a5f1d3",
+      "Ara.Analyzers.dll": "d38985b12f0f7d839dde9d8e1e7effa5252a418de029cc01ce044dbd900972ee",
+      "Ara.Analyzers.pdb": "846b7d2cc825a17f6098ed59c2e9a501ee25120e413e2bdeee6d27a8aae3b4b9",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.CompileServer.dll": "9f53d0d5a9f85619696977c574ed43040e2e785f214fe44fef083d6ec26f62f7",
+      "Ara.CompileServer.pdb": "9ff2c5551febbdc143aa35e88efa46688415e663bbae7427e2ead9987af3031d",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.CompileServer.xml": "f97d80671e5817b980ba98d81564c60e4a2cd817721c58d31f8f8f712e710270",
+      "Ara.Editor.dll": "5f9581b7b41aeed6752c73c56c15c8d44aa6838ec173ad81011180cb0761fc4b",
+      "Ara.Editor.pdb": "5aa647983307d709afaedf3fe3aa1b22b7dc4a1a6533c244d0cf9955e205869e",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Generators.dll": "0944c132e2920c26b672a9413cd0f5654c80a7456fbc0acd8cbe75dd29076c9c",
+      "Ara.Generators.pdb": "5f88ba82317a7a0830c5db7c4dcac90360bdd4ec32262b8dfc8f23a5aa228686",
+      "Ara.Runtime.dll": "c3e9401b9d214d201608f330c5cad9d4d039324cdc01ca6e86d3f3be71f4cbd4",
+      "Ara.Runtime.pdb": "770508e35c82f2d8b9b504a45fc77abaf59f37ccfbd22b7ccef723af58369c62",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/doc-ownership/candidate-final-sdk": {
+      "Ara.Analyzers.CodeFixes.dll": "8910d49e9c21e3792ce5fabdf0bcab95cfc623e37dc7d2376f1996d6bf020182",
+      "Ara.Analyzers.CodeFixes.pdb": "481261941a5d5a1f0341b5b67cfe7630f74341b2b2f4fe3350f1f6c475a5f1d3",
+      "Ara.Analyzers.dll": "d38985b12f0f7d839dde9d8e1e7effa5252a418de029cc01ce044dbd900972ee",
+      "Ara.Analyzers.pdb": "846b7d2cc825a17f6098ed59c2e9a501ee25120e413e2bdeee6d27a8aae3b4b9",
+      "Ara.CompileServer": "fee90a250bd1cf65b07de41b3b7ffe1336d400e9812d7a92dc5f3d658a11f540",
+      "Ara.CompileServer.deps.json": "aafb7e4b129bda427440155e671beb1d4c5b8b92719199dd532df28871d81199",
+      "Ara.CompileServer.dll": "a93968392622edb7286ac4338e17842ee7e1c5a8b483dc512acc56499c4818c4",
+      "Ara.CompileServer.pdb": "e8c76d1457d6d426031423acb584ed8d39bf434813162c0b342dc18515eac875",
+      "Ara.CompileServer.runtimeconfig.json": "e279f837552a9b7c6d15d8ee7565929c117aed678161b2c0cdb32b8c394bfadc",
+      "Ara.CompileServer.xml": "4d70e52bc497e7c609b944f41397cbb85e017cfe5322e7e623d82bc1bf5b7a62",
+      "Ara.Editor.dll": "5f9581b7b41aeed6752c73c56c15c8d44aa6838ec173ad81011180cb0761fc4b",
+      "Ara.Editor.pdb": "5aa647983307d709afaedf3fe3aa1b22b7dc4a1a6533c244d0cf9955e205869e",
+      "Ara.Editor.xml": "103cddbff48ef3236707de6d9909f81ece18bd537a56706fd3fc6080fb4cc033",
+      "Ara.Generators.dll": "0944c132e2920c26b672a9413cd0f5654c80a7456fbc0acd8cbe75dd29076c9c",
+      "Ara.Generators.pdb": "5f88ba82317a7a0830c5db7c4dcac90360bdd4ec32262b8dfc8f23a5aa228686",
+      "Ara.Runtime.dll": "c3e9401b9d214d201608f330c5cad9d4d039324cdc01ca6e86d3f3be71f4cbd4",
+      "Ara.Runtime.pdb": "770508e35c82f2d8b9b504a45fc77abaf59f37ccfbd22b7ccef723af58369c62",
+      "Ara.Runtime.xml": "5764b4f1c5ab05f31cd2f0bcd2da8292adcc07c4a46f8f843d6c1dc4838caec7",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "ef03424905dffee18c0cac518ae42b68720f6f404db389bced72a62cc6776ec6",
+      "Microsoft.CodeAnalysis.CSharp.dll": "54142770a00e594942ee8923726ea49126303d0c523932886c2417eb66dc07f8",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "e7e0da983447ba41964e851f163d6144feed60ad68ff4fa72cf03213d4850b50",
+      "Microsoft.CodeAnalysis.dll": "ad857f1ce7f8e26c2722ade705fac3f90502a47590c14075df1327210f10b1ef",
+      "System.Composition.AttributedModel.dll": "d4f1ec85e742b77cda48f709210daaf34d8b4a7e1e540f353eff741dcc058128",
+      "System.Composition.Convention.dll": "be95f480449ab3236315beb321ce598a61382d64479ddf500e7434637345f474",
+      "System.Composition.Hosting.dll": "2c8f10923c3b60fd1b16d89f2661712a9be112e697990bedbd6fab9dbaabb1b6",
+      "System.Composition.Runtime.dll": "148012db7ddafc76d28bbeaa0baea3e2351e7bc195e9031d57f107989c2e0eaa",
+      "System.Composition.TypedParts.dll": "ebc942c358d997e41635c9a365db542a3fd2a05f301f602d5d6a8b0d5dd42071"
+    },
+    "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/doc-guard/bin/Probe/release": {
+      "Probe": "d6b411a9827be3b18d9e8c3fc4132e364ec2faeb1898dbedd84a50bb1b973329",
+      "Probe.deps.json": "270e6953bb252252523c7ac8dae60651c18b12e6fc3f86cea95c9af79e10f37d",
+      "Probe.dll": "c3e687cd95cd016486311e1e01f6e808894f880433352ffe0c5985062c94d91e",
+      "Probe.pdb": "d72e67b194b3f943881acf0d9b5a2518955b03135aa450e13b3073993c7735c5",
+      "Probe.runtimeconfig.json": "73dea1f77a0ad6dbaa6cc5923bd2dac899e0a94eaf9ae810a188092260c57fa8"
+    }
+  },
+  "rows": [
+    {
+      "slot": 0,
+      "arm": "baseline",
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/doc-guard/bin/Probe/release/Probe.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/tag-discovery/baseline-sdk"
+      ],
+      "report": {
+        "runtime": "10.0.7",
+        "compilerSha256": "9f53d0d5a9f85619696977c574ed43040e2e785f214fe44fef083d6ec26f62f7",
+        "scope": "Actual DocsChanged allocation including reflection return boxing; no latency admission. Body edits with 0/1/128/1024 documented fields.",
+        "cases": [
+          {
+            "fields": 0,
+            "samples": [
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728
+            ]
+          },
+          {
+            "fields": 1,
+            "samples": [
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016
+            ]
+          },
+          {
+            "fields": 128,
+            "samples": [
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968
+            ]
+          },
+          {
+            "fields": 1024,
+            "samples": [
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "slot": 1,
+      "arm": "candidate",
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/doc-guard/bin/Probe/release/Probe.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/doc-ownership/candidate-final-sdk"
+      ],
+      "report": {
+        "runtime": "10.0.7",
+        "compilerSha256": "a93968392622edb7286ac4338e17842ee7e1c5a8b483dc512acc56499c4818c4",
+        "scope": "Actual DocsChanged allocation including reflection return boxing; no latency admission. Body edits with 0/1/128/1024 documented fields.",
+        "cases": [
+          {
+            "fields": 0,
+            "samples": [
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328
+            ]
+          },
+          {
+            "fields": 1,
+            "samples": [
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336
+            ]
+          },
+          {
+            "fields": 128,
+            "samples": [
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488
+            ]
+          },
+          {
+            "fields": 1024,
+            "samples": [
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "slot": 2,
+      "arm": "candidate",
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/doc-guard/bin/Probe/release/Probe.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/doc-ownership/candidate-final-sdk"
+      ],
+      "report": {
+        "runtime": "10.0.7",
+        "compilerSha256": "a93968392622edb7286ac4338e17842ee7e1c5a8b483dc512acc56499c4818c4",
+        "scope": "Actual DocsChanged allocation including reflection return boxing; no latency admission. Body edits with 0/1/128/1024 documented fields.",
+        "cases": [
+          {
+            "fields": 0,
+            "samples": [
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328,
+              328
+            ]
+          },
+          {
+            "fields": 1,
+            "samples": [
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336,
+              1336
+            ]
+          },
+          {
+            "fields": 128,
+            "samples": [
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488,
+              50488
+            ]
+          },
+          {
+            "fields": 1024,
+            "samples": [
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888,
+              408888
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "slot": 3,
+      "arm": "baseline",
+      "command": [
+        "/usr/local/share/dotnet/dotnet",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/iteration-perf/doc-guard/bin/Probe/release/Probe.dll",
+        "/Users/islam/.t3/worktrees/ara/mac-main-gate-20261110/target/script-overnight-20261110/tag-discovery/baseline-sdk"
+      ],
+      "report": {
+        "runtime": "10.0.7",
+        "compilerSha256": "9f53d0d5a9f85619696977c574ed43040e2e785f214fe44fef083d6ec26f62f7",
+        "scope": "Actual DocsChanged allocation including reflection return boxing; no latency admission. Body edits with 0/1/128/1024 documented fields.",
+        "cases": [
+          {
+            "fields": 0,
+            "samples": [
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728,
+              728
+            ]
+          },
+          {
+            "fields": 1,
+            "samples": [
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016,
+              1016
+            ]
+          },
+          {
+            "fields": 128,
+            "samples": [
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968,
+              54968
+            ]
+          },
+          {
+            "fields": 1024,
+            "samples": [
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552,
+              438552
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": [
+    {
+      "fields": 0,
+      "baseline": 728.0,
+      "candidate": 328.0
+    },
+    {
+      "fields": 1,
+      "baseline": 1016.0,
+      "candidate": 1336.0
+    },
+    {
+      "fields": 128,
+      "baseline": 54968.0,
+      "candidate": 50488.0
+    },
+    {
+      "fields": 1024,
+      "baseline": 438552.0,
+      "candidate": 408888.0
+    }
+  ],
+  "main_base": "5794174e8",
+  "quality": {
+    "red_failures": 2,
+    "red_passed_related_schema_cases": 2,
+    "focused_final_passed": 5,
+    "native_passed": 10,
+    "independent_source_review": "No must-fix in final stack traversal; ordinary trivia may conservatively regenerate.",
+    "dotnet_passed": 334
+  },
+  "rejected_dictionary_prototype": [
+    {
+      "fields": 0,
+      "baseline": 728.0,
+      "candidate": 568.0
+    },
+    {
+      "fields": 1,
+      "baseline": 1016.0,
+      "candidate": 3992.0
+    },
+    {
+      "fields": 128,
+      "baseline": 54968.0,
+      "candidate": 227304.0
+    },
+    {
+      "fields": 1024,
+      "baseline": 438552.0,
+      "candidate": 2039496.0
+    }
+  ],
+  "proof_sha256": {
+    "target/script-overnight-20261110/doc-ownership/red.log": "f5549ca7f21ae4eb72506a9e16994d75e6c5dc7452213f4d64c09120ad3acc38",
+    "target/script-overnight-20261110/doc-ownership/green.log": "2aa79f5e07c596a2b30a0e23483c7a207b0055ee0b660374359e3e95032815c2",
+    "target/script-overnight-20261110/doc-ownership/green-02.log": "e1958bf6fe3627f6ce94adb9aebca97a7ec85923a07cc100515a2b5c3ed1566b",
+    "target/script-overnight-20261110/doc-ownership/green-03.log": "c479a4be67f477bfe8213fac0bac53e42567bae123ce1aa0f4b226d59b28975e",
+    "target/script-overnight-20261110/doc-ownership/green-04.log": "fe88dd87719a6a9202ddca323a8c43d0a35dc204c108783d8dde0dcb986643b9",
+    "target/script-overnight-20261110/doc-ownership/native-tests.log": "9efe7e526ce1917f37de4a3ede87ad88a076d61887937aa7bc948ca5ccc9be55",
+    "target/script-overnight-20261110/doc-ownership/fmt.log": "fb1f45f3087e20c8292eb3c0212934e7b679ba99b65fc0d3e8e7f7d5c57b9f4f",
+    "dotnet/src/Ara.CompileServer/EditClassifier.cs": "24724eb5b235ddb69d2a525822ef0509145f7c1e3678d0e93c42812a7dadc5f3",
+    "dotnet/src/Ara.CompileServer/ModuleSession.cs": "e2d2cd6808603bdaa9a596efe09019373b369a90334c35301710f7128bb72856",
+    "dotnet/tests/Ara.CompileServer.Tests/DocumentationOwnershipTests.cs": "3ea1cc3c4ea2da2a84d30829f22ab0756cf55178683e0a335131f57c140e1f6f",
+    "target/script-overnight-20261110/doc-ownership/build-final.log": "f537e262d598b8bdf2ea1a10f04fc1d2a3de7c99c9eac4dac4dd648631fdad7b",
+    "target/script-overnight-20261110/doc-ownership/all-final-tests.log": "916a366eda4276692cb6cbb2ecf79a90e1344431c2b8789e47a2e171942e3f72"
+  },
+  "latest_timing_rejections": [
+    {
+      "name": "retained-window-04",
+      "accepted": false,
+      "campaign_sha256": "5a60fbb5d9d3b178dcb84e2773a62501b4b64912db830d4d04b472e554e8a603",
+      "failure": "RuntimeError('competing build before launch; no retry')",
+      "compiler_processes_launched": 0,
+      "first_errors": [
+        {
+          "kind": "competing_tool",
+          "tool": {
+            "pid": 84136,
+            "pcpu_diagnostic_only": 0.0,
+            "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+            "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests::captures -- --ignored",
+            "ps_cumulative_cpu": "0:00.30"
+          }
+        },
+        {
+          "kind": "competing_tool",
+          "tool": {
+            "pid": 84138,
+            "pcpu_diagnostic_only": 102.9,
+            "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/rustc",
+            "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/rustc --crate-name ara_editor --edition=2024 crates/ara-editor/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C opt-level=1 -C embed-bitcode=no --warn=clippy::all --warn=clippy::unwrap_used --deny=unsafe_op_in_unsafe_fn --warn=clippy::undocumented_unsafe_blocks -C debug-assertions=on --test --check-cfg cfg(docsrs,test) --check-cfg cfg(feature, values(\"hotpatch\", \"tracy\")) -C metadata=16911314d36dd449 -C extra-filename=-b1e2473d7bc7dd7b --out-dir /Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps -C incremental=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/incremental -C strip=debuginfo -L dependency=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps --extern accesskit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libaccesskit-4753e5e3f16decdb.rlib --extern anyhow=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libanyhow-a7bf4e8e416eaa57.rlib --extern ara_agents=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_agents-23498c92edbe0554.rlib --extern ara_ai=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ai-3f902e0648f21415.rlib --extern ara_anim=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_anim-8ec0349830f2c615.rlib --extern ara_asset=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset-f1034d1c4253b32b.rlib --extern ara_asset_format=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_format-5eccf6f101ff7e13.rlib --extern ara_asset_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_host-00cde5ce0bbbd0a7.rlib --extern ara_audio_why=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_audio_why-b97abae41017792e.rlib --extern ara_cmd=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_cmd-4470a999bee81a17.rlib --extern ara_components=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_components-895ed1e751476fc2.rlib --extern ara_crash=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_crash-32de20e17e7b5223.rlib --extern ara_diag=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_diag-69401b0144a2002b.rlib --extern ara_doc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_doc-653aae0547942f43.rlib --extern ara_editor_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_editor_gpu-0037c62f8e5204bb.rlib --extern ara_export=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_export-2c49f7ba6aad4404.rlib --extern ara_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_gpu-fb1cffc545703f7c.rlib --extern ara_graph=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_graph-0110d319d8c058cf.rlib --extern ara_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_host-1b110e7213d82bb1.rlib --extern ara_importers=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_importers-9185259821fbc32d.rlib --extern ara_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_json-f149a1ac8d538c92.rlib --extern ara_kit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_kit-149c4602ca0be6db.rlib --extern ara_material=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_material-9d231d745feb6a6d.rlib --extern ara_mcp=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_mcp-9415c5a5f9f94520.rlib --extern ara_ops=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ops-2a369c4296b5fccf.rlib --extern ara_physics=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_physics-cf776a5211101a7a.rlib --extern ara_platform=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_platform-1edc317f5be03743.rlib --extern ara_play_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_play_host-c7ef95b2a8be2a63.rlib --extern ara_profile=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_profile-fdb50973a027d196.rlib --extern ara_proto=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_proto-f861120ee30f0aaf.rlib --extern ara_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render-89019de2531c986f.rlib --extern ara_render_fidelity=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render_fidelity-88d6d2f090bb210b.rlib --extern ara_rpc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_rpc-22561c4d5ef360e9.rlib --extern ara_runtime=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime-cd6eeaad8cd2a26f.rlib --extern ara_runtime_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime_render-ce06823c59035474.rlib --extern ara_schema=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_schema-431c17cc5e9f4815.rlib --extern ara_script=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_script-b698c37607b7f09d.rlib --extern ara_shader_cook=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_shader_cook-814011aea1441067.rlib --extern ara_texture_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_texture_gpu-46611a7b9f5fde9d.rlib --extern ara_ui=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui-0274701700160b0d.rlib --extern ara_ui_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_render-7beef6e125597287.rlib --extern ara_ui_test=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_test-d0f08a6ddf6532a1.rlib --extern ara_ui_text=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_text-292ba328737dcfa3.rlib --extern ara_update=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_update-09f07024375d4234.rlib --extern ara_vfx=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx-b1f6abe6390090e0.rlib --extern ara_vfx_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx_gpu-80219d54125fdb10.rlib --extern ara_world=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_world-01b745cd7aaab214.rlib --extern bevy_ecs=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbevy_ecs-db826ee65d787aac.rlib --extern blake3=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libblake3-9050c4e2c9cf2e8c.rlib --extern bytemuck=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbytemuck-5cdc420bf87d9b80.rlib --extern dunce=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libdunce-64b973c242e82a34.rlib --extern glam=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-ef467e10bf71a957.rlib --extern glam34=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-27b3345d7f5adc69.rlib --extern gltf=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libgltf-6b6908a7bba2f899.rlib --extern image=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libimage-ce3f2aba2f9ebd6c.rlib --extern notify=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libnotify-2f6dca7e8952dd9e.rlib --extern parley=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libparley-9575aae5162438f1.rlib --extern resvg=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libresvg-c860fc0600b17ff3.rlib --extern sdl3_sys=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsdl3_sys-2ab59601c929f0aa.rlib --extern serde=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde-2becdd2144a45f07.rlib --extern serde_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde_json-2f804274ac0e1320.rlib --extern sha2=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsha2-00c6199dfb0ff5dd.rlib --extern stillkit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libstillkit-9d025ccf9497bfd3.rlib --extern stillkit_kit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libstillkit_kit-d24a92939e5781c1.rlib -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-nav-sys-3d4f2e60af151ecd/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-opus-sys-5193f383c0582a3d/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-sdl3-src-7aca0f95a32eedc8/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/meshopt-9e84f2d6f897e233/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-meshopt-sys-6b81294470223b9e/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ufbx-7f1535e0a5cf25df/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/zstd-sys-58c53019c6f713b0/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/symbolic-demangle-4f6768da75c0b3a9/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-jolt-sys-1266f157505a7d03/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ring-e9cbadf03bb127b7/out -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc",
+            "ps_cumulative_cpu": "0:26.94"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dependency-window-05",
+      "accepted": false,
+      "campaign_sha256": "a8d5dcc6db00b11dbe1ce70bb799641801624975b52d5e1895e89f5b203556c5",
+      "failure": "RuntimeError('competing build before launch; no retry')",
+      "compiler_processes_launched": 0,
+      "first_errors": [
+        {
+          "kind": "competing_tool",
+          "tool": {
+            "pid": 97694,
+            "pcpu_diagnostic_only": 0.0,
+            "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+            "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests::captures -- --ignored",
+            "ps_cumulative_cpu": "0:00.31"
+          }
+        },
+        {
+          "kind": "competing_tool",
+          "tool": {
+            "pid": 97712,
+            "pcpu_diagnostic_only": 21.6,
+            "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/rustc",
+            "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/rustc --crate-name ara_editor --edition=2024 crates/ara-editor/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C opt-level=1 -C embed-bitcode=no --warn=clippy::all --warn=clippy::unwrap_used --deny=unsafe_op_in_unsafe_fn --warn=clippy::undocumented_unsafe_blocks -C debug-assertions=on --test --check-cfg cfg(docsrs,test) --check-cfg cfg(feature, values(\"hotpatch\", \"tracy\")) -C metadata=16911314d36dd449 -C extra-filename=-b1e2473d7bc7dd7b --out-dir /Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps -C incremental=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/incremental -C strip=debuginfo -L dependency=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps --extern accesskit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libaccesskit-4753e5e3f16decdb.rlib --extern anyhow=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libanyhow-a7bf4e8e416eaa57.rlib --extern ara_agents=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_agents-23498c92edbe0554.rlib --extern ara_ai=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ai-3f902e0648f21415.rlib --extern ara_anim=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_anim-8ec0349830f2c615.rlib --extern ara_asset=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset-f1034d1c4253b32b.rlib --extern ara_asset_format=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_format-5eccf6f101ff7e13.rlib --extern ara_asset_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_asset_host-00cde5ce0bbbd0a7.rlib --extern ara_audio_why=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_audio_why-b97abae41017792e.rlib --extern ara_cmd=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_cmd-4470a999bee81a17.rlib --extern ara_components=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_components-895ed1e751476fc2.rlib --extern ara_crash=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_crash-32de20e17e7b5223.rlib --extern ara_diag=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_diag-69401b0144a2002b.rlib --extern ara_doc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_doc-653aae0547942f43.rlib --extern ara_editor_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_editor_gpu-0037c62f8e5204bb.rlib --extern ara_export=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_export-2c49f7ba6aad4404.rlib --extern ara_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_gpu-fb1cffc545703f7c.rlib --extern ara_graph=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_graph-0110d319d8c058cf.rlib --extern ara_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_host-1b110e7213d82bb1.rlib --extern ara_importers=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_importers-9185259821fbc32d.rlib --extern ara_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_json-f149a1ac8d538c92.rlib --extern ara_kit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_kit-149c4602ca0be6db.rlib --extern ara_material=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_material-9d231d745feb6a6d.rlib --extern ara_mcp=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_mcp-9415c5a5f9f94520.rlib --extern ara_ops=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ops-2a369c4296b5fccf.rlib --extern ara_physics=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_physics-cf776a5211101a7a.rlib --extern ara_platform=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_platform-1edc317f5be03743.rlib --extern ara_play_host=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_play_host-c7ef95b2a8be2a63.rlib --extern ara_profile=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_profile-fdb50973a027d196.rlib --extern ara_proto=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_proto-f861120ee30f0aaf.rlib --extern ara_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render-89019de2531c986f.rlib --extern ara_render_fidelity=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_render_fidelity-88d6d2f090bb210b.rlib --extern ara_rpc=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_rpc-22561c4d5ef360e9.rlib --extern ara_runtime=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime-cd6eeaad8cd2a26f.rlib --extern ara_runtime_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_runtime_render-ce06823c59035474.rlib --extern ara_schema=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_schema-431c17cc5e9f4815.rlib --extern ara_script=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_script-b698c37607b7f09d.rlib --extern ara_shader_cook=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_shader_cook-814011aea1441067.rlib --extern ara_texture_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_texture_gpu-46611a7b9f5fde9d.rlib --extern ara_ui=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui-0274701700160b0d.rlib --extern ara_ui_render=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_render-7beef6e125597287.rlib --extern ara_ui_test=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_test-d0f08a6ddf6532a1.rlib --extern ara_ui_text=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_ui_text-292ba328737dcfa3.rlib --extern ara_update=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_update-09f07024375d4234.rlib --extern ara_vfx=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx-b1f6abe6390090e0.rlib --extern ara_vfx_gpu=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_vfx_gpu-80219d54125fdb10.rlib --extern ara_world=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libara_world-01b745cd7aaab214.rlib --extern bevy_ecs=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbevy_ecs-db826ee65d787aac.rlib --extern blake3=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libblake3-9050c4e2c9cf2e8c.rlib --extern bytemuck=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libbytemuck-5cdc420bf87d9b80.rlib --extern dunce=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libdunce-64b973c242e82a34.rlib --extern glam=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-ef467e10bf71a957.rlib --extern glam34=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libglam-27b3345d7f5adc69.rlib --extern gltf=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libgltf-6b6908a7bba2f899.rlib --extern image=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libimage-ce3f2aba2f9ebd6c.rlib --extern notify=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libnotify-2f6dca7e8952dd9e.rlib --extern parley=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libparley-9575aae5162438f1.rlib --extern resvg=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libresvg-c860fc0600b17ff3.rlib --extern sdl3_sys=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsdl3_sys-2ab59601c929f0aa.rlib --extern serde=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde-2becdd2144a45f07.rlib --extern serde_json=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libserde_json-2f804274ac0e1320.rlib --extern sha2=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libsha2-00c6199dfb0ff5dd.rlib --extern stillkit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libstillkit-9d025ccf9497bfd3.rlib --extern stillkit_kit=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/deps/libstillkit_kit-d24a92939e5781c1.rlib -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-nav-sys-3d4f2e60af151ecd/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-opus-sys-5193f383c0582a3d/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-sdl3-src-7aca0f95a32eedc8/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/meshopt-9e84f2d6f897e233/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-meshopt-sys-6b81294470223b9e/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ufbx-7f1535e0a5cf25df/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/zstd-sys-58c53019c6f713b0/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/symbolic-demangle-4f6768da75c0b3a9/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ara-jolt-sys-1266f157505a7d03/out -L native=/Users/islam/.t3/worktrees/ara/t3-4359603b/target/debug/build/ring-e9cbadf03bb127b7/out -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc -L native=/Users/islam/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/intel_tex_2-0.5.0/src/ispc",
+            "ps_cumulative_cpu": "1:12.06"
+          }
+        }
+      ]
+    }
+  ],
+  "final_solution_matches_measured_closure": true
+}
