@@ -68,8 +68,8 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 | Automatic exposure | The bridge meters the displayed image toward middle grey | An `Exposure::Auto` in Renderlab with Ara's histogram metering | Yes |
 | Tone mappers, grading, LUTs, depth of field | Renderlab's filmic curve, exposed so middle grey matches Ara's curves; bloom and motion blur follow the look | Map `PostSettings` fields; add the Neutral and AgX curves to Renderlab | Yes |
 | Sky-atmosphere luminance factors and clouds, fog volumes, volumetric fog emission | Authored `SkyAtmosphere` and `HeightFog` map to Renderlab's medium and fog value for value (`atmosphere.rs`); the artistic factors, the cloud layer, fog volumes and fog emission are reported and left out | Luminance factors and clouds in Renderlab's atmosphere; local fog volumes need a renderer feature | Yes |
-| Opacity maps' partial coverage, alpha masks on skinned meshes, normal maps on cut meshes, transmission that varies over a surface | Masked materials (and opacity maps, at half coverage) are cut into their geometry at load with Renderlab's `cutout`; cut meshes carry no tangents, skinned primitives draw opaque, uniform alpha and uniform transmission are glass | Tangents through `cutout`; cutting skinned primitives; blended coverage needs a renderer feature, as does per-texel transmission | Yes |
-| Emissive maps | The surface glows uniformly at the map's mean colour times its factor, and lights the scene through GI | A fourth per-draw texture slot in Renderlab's materials and traced binding arrays, sampled by the bridge's emissive program | Yes |
+| Alpha masks on skinned meshes, transmission that varies over a surface | A masked material is cut into its geometry at load with Renderlab's `cutout` (the mask averaged to the cut grid's scale, so detail finer than a cell counts by coverage; a mask that hides nothing is not cut); cut meshes keep their normal maps on tangents derived from their uv mapping (`cutout.rs`). A blended material, by alpha factor or by its map's alpha, draws in Renderlab's transparent pass. Skinned masked primitives draw opaque; uniform transmission is glass | Cutting skinned primitives; per-texel transmission needs a renderer feature | Yes |
+| Emissive maps on see-through materials or with their own texture coordinates | An opaque material's emissive map glows per texel: the map rides in its base-colour alpha and its metallic-roughness red and alpha (`texture::with_glow`), and global illumination receives the map's mean. Those two cases do not glow, reported. In an emissive surface's own reflections other emissive objects glow with its strength | An emissive texture slot in Renderlab's material; its own parameters at reflection hits | Yes |
 | Material-graph materials, vertex paint, second UV set, AO maps | Base factors and maps on the standard program | Compile Ara material graphs to Renderlab WGSL programs | Yes |
 | Rect, disc and tube lights; IES profiles | Wide spot or sphere of the same intensity; no profile | Area-light and profile support in Renderlab's light types | Yes |
 | Texture compression and streaming | Textures decode to RGBA8 with full mip chains (about 5x the BC7 memory) | BC7/BC5 upload in Renderlab's texture path | Yes, for shipping memory |
@@ -111,4 +111,12 @@ scene with a constant sky of the sky image's mean radiance, to measure what the 
   primitive is its own group (its pose is per mesh).
 - `Engine::capture` blocks for the frame. The path is synchronous: no frames in flight.
 - The first frame compiles Renderlab's pipelines; its pipeline cache lives under the
-  player's GPU cache in `renderlab/`.
+  player's GPU cache in `renderlab/`. On NVIDIA that first start is slow (about 90 s
+  for a simple scene at v0.1.3) and Renderlab saves the cache only when it exits
+  cleanly. `ara capture` gives the player 120 s, so a first non-RT capture of Showcase
+  fails and, the player being stopped, fails again. Reported to Renderlab.
+- A Renderlab program gets its material's texels in `surface` only. At reflection hits
+  on other objects (shaded with the reflecting surface's program) and at GI hits a
+  lookup returns something else: the emissive programs read their map in `surface`,
+  pass global illumination a plain parameter, and glow only on a material marked in
+  its base-colour alpha (`GLOW_MARK`).

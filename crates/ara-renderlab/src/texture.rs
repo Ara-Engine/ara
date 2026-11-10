@@ -26,6 +26,57 @@ pub(crate) fn chain(size: [u32; 2], top: Vec<u8>, role: TextureRole) -> Texture 
     Texture { role, mips }
 }
 
+/// A material texture with an emissive map packed into channels its role leaves
+/// unused. Renderlab materials have three texture slots and none for emission, but an
+/// opaque material never reads its base colour's alpha, nor a metallic-roughness
+/// texture's red and alpha. `channels` pairs a channel of this texture with the
+/// emissive channel it carries, stored as the square root of the linear value so eight
+/// bits keep the dark end (`scene`'s emissive-map program squares it back). The map is
+/// resampled to the host's size; a material without the host texture gets a white one
+/// of the map's size. `glow` is the map's finest level: its size and tightly packed
+/// sRGB RGBA8 texels.
+pub(crate) fn with_glow(
+    host: Option<&[u8]>,
+    glow: ([u32; 2], &[u8]),
+    role: TextureRole,
+    channels: &[(usize, usize)],
+) -> Result<Texture> {
+    let (glow_size, glow) = glow;
+    let (size, mut rgba) = match host {
+        Some(ktx2) => {
+            let decoded = ara_runtime_render::decode_texture(ktx2)?;
+            (decoded.size, decoded.rgba)
+        }
+        None => (glow_size, vec![255; glow.len()]),
+    };
+    let decode: Vec<f32> = (0..=255u8).map(srgb_to_linear).collect();
+    let [width, height] = glow_size.map(i64::from);
+    // Linear emission at a texel, wrapping as the sampler repeats.
+    let texel = |x: i64, y: i64, channel: usize| {
+        let at = (y.rem_euclid(height) * width + x.rem_euclid(width)) as usize * 4;
+        decode[glow[at + channel] as usize]
+    };
+    for y in 0..size[1] {
+        for x in 0..size[0] {
+            // Bilinear at this texel's centre; exact when the sizes agree.
+            let u = (x as f32 + 0.5) / size[0] as f32 * width as f32 - 0.5;
+            let v = (y as f32 + 0.5) / size[1] as f32 * height as f32 - 0.5;
+            let (x0, y0) = (u.floor(), v.floor());
+            let (fx, fy) = (u - x0, v - y0);
+            let (x0, y0) = (x0 as i64, y0 as i64);
+            let at = ((y * size[0] + x) * 4) as usize;
+            for (to, from) in channels {
+                let top = texel(x0, y0, *from) * (1. - fx) + texel(x0 + 1, y0, *from) * fx;
+                let bottom =
+                    texel(x0, y0 + 1, *from) * (1. - fx) + texel(x0 + 1, y0 + 1, *from) * fx;
+                let linear = top * (1. - fy) + bottom * fy;
+                rgba[at + to] = (linear.max(0.).sqrt().min(1.) * 255.).round() as u8;
+            }
+        }
+    }
+    Ok(chain(size, rgba, role))
+}
+
 /// Mean linear RGB of sRGB-encoded RGBA8 texels (zero for an empty image).
 pub(crate) fn mean_linear(rgba8: &[u8]) -> [f32; 3] {
     let texels = rgba8.as_chunks::<4>().0;
@@ -137,6 +188,22 @@ mod tests {
         let m = mean_linear(&[255, 255, 255, 255, 0, 0, 0, 255]);
         assert!(m.iter().all(|c| (c - 0.5).abs() < 1e-3), "{m:?}");
         assert_eq!(mean_linear(&[]), [0.; 3]);
+    }
+
+    #[test]
+    fn an_emissive_map_rides_in_spare_channels_as_square_roots() {
+        // Two texels: black, and full red with sRGB 137 (a quarter, linear) green.
+        let glow = [0, 0, 0, 255, 255, 137, 0, 255];
+        let (role, channels) = (TextureRole::MetallicRoughnessLinear, [(0, 0), (3, 1)]);
+        let packed =
+            with_glow(None, ([2, 1], &glow), role, &channels).expect("no host texture to decode");
+        let top = &packed.mips[0];
+        assert_eq!((top.width, top.height), (2, 1));
+        // A white host: roughness and metalness scales stay one; red carries the
+        // map's red and alpha its green, as square roots (a quarter is a half).
+        assert_eq!(top.rgba8[..4], [0, 255, 255, 0]);
+        assert_eq!(top.rgba8[4..7], [255, 255, 255]);
+        assert!(top.rgba8[7].abs_diff(128) <= 1, "{}", top.rgba8[7]);
     }
 
     #[test]

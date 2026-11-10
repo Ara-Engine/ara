@@ -7,15 +7,20 @@
 //! directory. A path the adapter cannot run is skipped with a note.
 #![cfg(not(target_vendor = "apple"))]
 
+use ara_asset_format::{TextureFormat, write_ktx2};
 use ara_render::capture::{CaptureRequest, ViewMode};
 use ara_renderlab::{Options, PathChoice, Renderlab};
 use ara_runtime::{
     components::{LightKind, MeshShape},
     extract::{CameraView, Draw, Geometry, LightView, RenderFrame},
 };
+use ara_runtime::{
+    material::MaterialAsset,
+    model::{ModelMaterial, ModelTexture, TextureUsage},
+};
 use ara_runtime_render::{Presenter, fidelity::native::Content};
 use glam34::{Mat4, Vec3};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 const SIZE: [u32; 2] = [640, 360];
 
@@ -466,6 +471,179 @@ fn more_groups_than_the_limit_all_draw() {
             hue(capture.image.get_pixel(x, y).0),
             Some(0),
             "{name}: removed box"
+        );
+    }
+}
+
+/// One BC7 block (mode 6) of a single colour. Both endpoints share a parity bit, taken
+/// from alpha so 0 and 255 are exact; colours land within one level.
+fn bc7_solid(rgba: [u8; 4]) -> [u8; 16] {
+    let parity = u128::from(rgba[3] & 1);
+    let mut bits = 1u128 << 6;
+    for (channel, value) in rgba.into_iter().enumerate() {
+        let endpoint = u128::from(value >> 1);
+        bits |= endpoint << (7 + 14 * channel) | endpoint << (14 + 14 * channel);
+    }
+    (bits | parity << 63 | parity << 64).to_le_bytes()
+}
+
+/// A cooked 8 by 8 colour texture whose left half is `left` and right half `right`.
+fn halves(name: &str, left: [u8; 4], right: [u8; 4]) -> ModelTexture {
+    let blocks = [left, right, left, right].map(bc7_solid).concat();
+    ModelTexture {
+        name: name.into(),
+        usage: TextureUsage::Color,
+        ktx2: write_ktx2(8, 8, TextureFormat::Bc7Srgb, &[blocks])
+            .unwrap()
+            .into(),
+    }
+}
+
+/// A two-metre card facing the camera at `at`, with `material` over `textures`.
+fn card(entity: u64, at: Vec3, material: ModelMaterial, textures: Vec<ModelTexture>) -> Draw {
+    let asset = MaterialAsset {
+        asset: format!("mt_card{entity}"),
+        digest: ara_asset::Digest::of(format!("card {entity}").as_bytes()),
+        material,
+        textures,
+        texture_generations: Vec::new(),
+        base_color_decode_srgb: true,
+        emissive_decode_srgb: true,
+        paint_layers: Vec::new(),
+        decal: None,
+    };
+    Draw {
+        // The plane lies in XZ with u along +X: stood up, its texture reads as an image.
+        world: Mat4::from_translation(at)
+            * Mat4::from_rotation_x(std::f32::consts::FRAC_PI_2)
+            * Mat4::from_scale(Vec3::splat(2.)),
+        material: Some(Arc::new(asset)),
+        ..shape(entity, MeshShape::Plane, [1.; 3], Vec3::ZERO, [1.; 4])
+    }
+}
+
+/// Mean RGB over a block of pixels.
+fn mean(rgba: &image::RgbaImage, x: std::ops::Range<u32>, y: std::ops::Range<u32>) -> [f32; 3] {
+    let mut sum = [0f32; 3];
+    for y in y.clone() {
+        for x in x.clone() {
+            let p = rgba.get_pixel(x, y).0;
+            for (sum, value) in sum.iter_mut().zip(p) {
+                *sum += f32::from(value);
+            }
+        }
+    }
+    sum.map(|channel| channel / ((x.end - x.start) * (y.end - y.start)) as f32)
+}
+
+/// An alpha mask is cut into its card (the wall behind shows through the masked half),
+/// and an emissive map glows where it is lit and nowhere else.
+#[test]
+fn masks_are_cut_and_emissive_maps_glow_where_they_are_lit() {
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("renderlab");
+    std::fs::create_dir_all(&out).unwrap();
+    for (path, name) in [(PathChoice::HardwareRt, "rt"), (PathChoice::NonRt, "nonrt")] {
+        let renderlab = match Renderlab::new(&Options {
+            path,
+            pipeline_cache: Some(out.join("pipeline-cache")),
+            ..Default::default()
+        }) {
+            Ok(renderlab) => renderlab,
+            Err(error) => {
+                println!("skipping {name}: {error:#}");
+                continue;
+            }
+        };
+        let mut presenter = Presenter::new(SIZE, Vec::new(), out.join("gpu-cache"));
+        presenter
+            .set_external_renderer(Some(Box::new(renderlab)))
+            .unwrap();
+
+        let mut frame = frame(-1.5);
+        let eye = Vec3::new(0., 1.5, 6.);
+        frame.camera = Some(CameraView {
+            position: eye.to_array(),
+            forward: (Vec3::new(0., 1., 0.) - eye).normalize().to_array(),
+            fov: 50.,
+        });
+        frame.lights.clear();
+        // The red box becomes a wall behind the masked card; no glowing sphere.
+        frame.draws.truncate(1);
+        frame.draws.push(shape(
+            2,
+            MeshShape::Box,
+            [2.4, 2.4, 0.4],
+            Vec3::new(-1.5, 1.2, -1.5),
+            [0.8, 0.05, 0.05, 1.],
+        ));
+        // Green where the mask is opaque (left), nothing where it is clear (right).
+        let masked = ModelMaterial {
+            alpha_mode: 1,
+            alpha_cutoff: 0.5,
+            base_color_texture: Some(0),
+            ..Default::default()
+        };
+        let leaf = halves("leaf", [20, 220, 20, 255], [20, 220, 20, 0]);
+        frame
+            .draws
+            .push(card(4, Vec3::new(-1.5, 1.1, 0.), masked, vec![leaf]));
+        // A dark card whose emissive map is black on the left and white on the right.
+        let glowing = ModelMaterial {
+            base_color: [0.05, 0.05, 0.05, 1.],
+            emissive: [1.; 3],
+            emissive_texture: Some(0),
+            ..Default::default()
+        };
+        let sign = halves("sign", [0, 0, 0, 255], [255, 255, 255, 255]);
+        let mut lit = card(5, Vec3::new(1.5, 1.1, 0.), glowing, vec![sign]);
+        lit.emissive = [20_000.; 3];
+        frame.draws.push(lit);
+
+        let request = CaptureRequest {
+            camera: ara_runtime_render::camera(&frame).unwrap(),
+            size: SIZE,
+            mode: ViewMode::Lit,
+            deterministic: true,
+            exposure: 1.,
+            settle_frames: 4,
+            tick: 0,
+            seed: 0,
+            marks: None,
+        };
+        let capture = presenter
+            .capture_with(&frame, &request, || Ok(Content::default()))
+            .unwrap();
+        capture
+            .image
+            .save(out.join(format!("{name}-cards.png")))
+            .unwrap();
+
+        // Each card covers about 128 columns either side of the centre; the blocks
+        // sampled sit well inside each half.
+        let rows = 140..210;
+        let (kept, cut) = (
+            mean(&capture.image, 170..212, rows.clone()),
+            mean(&capture.image, 235..277, rows.clone()),
+        );
+        assert!(
+            kept[1] > kept[0] + 30.,
+            "{name}: the opaque half of the masked card is not green ({kept:?})"
+        );
+        assert!(
+            cut[0] > cut[1] + 30.,
+            "{name}: the wall does not show through the masked half ({cut:?})"
+        );
+        let (dark, bright) = (
+            mean(&capture.image, 362..406, rows.clone()),
+            mean(&capture.image, 426..470, rows),
+        );
+        assert!(
+            bright[1] > dark[1] + 60.,
+            "{name}: the emissive map does not glow where it is lit ({dark:?} vs {bright:?})"
+        );
+        assert!(
+            dark[1] < 90.,
+            "{name}: the card glows where its emissive map is black ({dark:?})"
         );
     }
 }

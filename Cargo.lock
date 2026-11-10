@@ -1926,6 +1926,8 @@ name = "ara-renderlab"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-asset",
+ "ara-asset-format",
  "ara-components",
  "ara-gpu",
  "ara-material",
