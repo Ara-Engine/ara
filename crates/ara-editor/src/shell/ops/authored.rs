@@ -59,7 +59,7 @@ pub(crate) fn storage(
 }
 /// Cached files and live logical documents avoid obvious collisions; the typed
 /// host command remains authoritative if another participant creates the name.
-pub(in crate::shell) fn available(
+pub(crate) fn available(
     files: &[AuthoredFile],
     workspace: &ara_doc::Workspace,
     logical: &str,

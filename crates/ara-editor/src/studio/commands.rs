@@ -556,9 +556,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             })
         }
         "prefab.open" => {
-            let instance = target.entity(&e.state).and_then(|entity| {
-                crate::shell::prefab_ops::instance(e.host.store(), &e.state.doc, entity)
-            });
+            let instance = target
+                .entity(&e.state)
+                .and_then(|entity| crate::prefab::instance(e.host.store(), &e.state.doc, entity));
             match instance {
                 Some(found) => act(e, "editor.scene.open", json!({"scene": found.prefab_doc})),
                 None => Err("Not a prefab instance".into()),
@@ -578,6 +578,63 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 )
             }
             None => Err("Select a prefab instance".into()),
+        },
+        "prefab.apply_all" => match target.entity(&e.state).map(str::to_owned) {
+            Some(entity) => crate::prefab::apply(e, &entity, None, None).map(drop),
+            None => Err("Select a prefab instance".into()),
+        },
+        // Apply To: a source from `prefab::source_choices` (its `@path#id`), or the
+        // field-aware choice `{"entity", "path", "destination"}`.
+        "prefab.apply_to" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Choice {
+                entity: String,
+                path: Option<String>,
+                destination: String,
+            }
+            let choice = match target {
+                Target::Text(text) if text.starts_with('@') => e
+                    .state
+                    .selection
+                    .first()
+                    .map(|entity| Choice {
+                        entity: entity.clone(),
+                        path: None,
+                        destination: text.clone(),
+                    })
+                    .ok_or_else(|| "Select a prefab instance".into()),
+                Target::Text(text) => serde_json::from_str::<Choice>(text).map_err(Into::into),
+                _ => Err("Choose a prefab source to apply to".into()),
+            };
+            choice.and_then(|c| {
+                crate::prefab::apply(e, &c.entity, c.path.as_deref(), Some(&c.destination))
+                    .map(drop)
+            })
+        }
+        "prefab.apply_override" | "prefab.revert_override" => {
+            match (target, e.state.selection.first().cloned()) {
+                (Target::Field(path), Some(entity)) if id == "prefab.apply_override" => {
+                    crate::prefab::apply(e, &entity, Some(path), None).map(drop)
+                }
+                (Target::Field(path), Some(entity)) => apply(
+                    e,
+                    vec![
+                        json!({"cmd": "prefab.override.revert", "args": {"entity": entity, "path": path}}),
+                    ],
+                    "Revert override",
+                ),
+                (Target::Field(_), None) => Err("Select a prefab instance".into()),
+                _ => Err("Right-click an overridden field".into()),
+            }
+        }
+        "create.prefab" | "assets.create.prefab" => match target.entity(&e.state) {
+            Some(root) => {
+                let root = root.to_owned();
+                let files = s.assets.as_ref().map_or(&[][..], |b| b.files.as_slice());
+                crate::prefab::from_selection(e, files, &root).map(drop)
+            }
+            None => Err("Select an entity to make a prefab of".into()),
         },
         // View: modes, effects, quality, what draws, gizmos, the camera, the UI.
         id if id.starts_with("view.mode.") => {

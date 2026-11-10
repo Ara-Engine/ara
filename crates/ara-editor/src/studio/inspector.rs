@@ -77,6 +77,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .pad(4.0)
         .gap(3.0)
         .child(header(s))
+        .children(prefab_bar(s))
         .child(search_row(s));
     if order.is_empty() && !query.is_empty() {
         page = page.child(
@@ -179,6 +180,140 @@ fn header(s: &Studio) -> El<Studio> {
             );
     }
     head.child(lock)
+}
+
+/// A prefab instance's bar (Unity's Prefab header): where it comes from, Open, and the
+/// Overrides menu listing each overridden field to apply or revert, then all of them.
+fn prefab_bar(s: &Studio) -> Option<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let [entity] = s.inspected() else {
+        return None;
+    };
+    let found = crate::prefab::instance(s.editor.host.store(), &s.editor.state.doc, entity)?;
+    let run = |id: &'static str, target: crate::catalog::Target| {
+        move |s: &mut Studio| {
+            s.local.select = None;
+            super::commands::run(s, id, &target);
+        }
+    };
+    const MENU: &str = "inspector/overrides";
+    let open = s.local.select.as_deref() == Some(MENU);
+    let count = found.overrides.len();
+    let mut overrides = button(
+        l,
+        Tone::Ghost,
+        Size::Sm,
+        None,
+        &match count {
+            0 => "No overrides".to_owned(),
+            1 => "1 override".to_owned(),
+            n => format!("{n} overrides"),
+        },
+    )
+    .key(MENU)
+    .expanded(open)
+    .on_press(|s: &mut Studio| {
+        s.local.select = match s.local.select.as_deref() == Some(MENU) {
+            true => None,
+            false => Some(MENU.into()),
+        }
+    });
+    if open {
+        let mut items: Vec<El<Studio>> = Vec::new();
+        for path in &found.overrides {
+            let field = crate::catalog::Target::Field(path.clone());
+            items.push(
+                row()
+                    .key(format!("{MENU}/{path}"))
+                    .h(26.0)
+                    .pad_x(8.0)
+                    .gap(4.0)
+                    .align(Align::Center)
+                    .child(el().w(2.0).h(14.0).radius(1.0).fill(c.info.0))
+                    .child(
+                        text(path.clone())
+                            .text_size(11.5)
+                            .family(mono())
+                            .color(c.foreground.0)
+                            .wrap(1)
+                            .w(0.0)
+                            .grow(1.0),
+                    )
+                    .child(
+                        icon_button(l, Tone::Ghost, Size::Sm, icons::UPLOAD, "Apply to prefab")
+                            .key(format!("{MENU}/{path}/apply"))
+                            .on_press(run("prefab.apply_override", field.clone())),
+                    )
+                    .child(
+                        icon_button(l, Tone::Ghost, Size::Sm, icons::UNDO_2, "Revert")
+                            .key(format!("{MENU}/{path}/revert"))
+                            .on_press(run("prefab.revert_override", field)),
+                    ),
+            );
+        }
+        if count > 0 {
+            items.push(menu_separator(l));
+        }
+        let all = crate::catalog::Target::Entity(entity.clone());
+        items.push(enabled(
+            menu_item(
+                l,
+                &format!("{MENU}/apply"),
+                Some(icons::UPLOAD),
+                "Apply All",
+                None,
+                false,
+            )
+            .on_press(run("prefab.apply_all", all.clone())),
+            count > 0,
+        ));
+        items.push(enabled(
+            menu_item(
+                l,
+                &format!("{MENU}/revert"),
+                Some(icons::UNDO_2),
+                "Revert All",
+                None,
+                true,
+            )
+            .on_press(run("prefab.revert_all", all)),
+            count > 0,
+        ));
+        overrides = overrides.overlay(
+            menu(menu_panel(l, items).min_w(300.0))
+                .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    let target = crate::catalog::Target::Entity(entity.clone());
+    Some(
+        row()
+            .key("inspector/prefab")
+            .h(28.0)
+            .pad_x(8.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(super::style::RADIUS)
+            .fill(c.info.0.with_alpha(0.10))
+            .child(icon(icons::PACKAGE).size(13.0).color(c.info_foreground.0))
+            .child(
+                text(found.prefab_path.clone())
+                    .text_size(11.5)
+                    .family(mono())
+                    .color(c.foreground.0)
+                    .wrap(1)
+                    .w(0.0)
+                    .grow(1.0)
+                    .tooltip("The prefab this instance follows"),
+            )
+            .child(
+                button(l, Tone::Ghost, Size::Sm, Some(icons::PACKAGE_OPEN), "Open")
+                    .key("inspector/prefab/open")
+                    .tooltip("Edit the prefab itself; every instance follows")
+                    .on_press(run("prefab.open", target)),
+            )
+            .child(overrides),
+    )
 }
 
 /// The property search under the header.
@@ -1040,6 +1175,29 @@ fn field_menu(
             let commands = s.inspected().iter().map(|e| json!({"cmd": "editor.property.reset", "args": {"entity": e, "path": reset}})).collect();
             s.apply(commands, "Reset value");
         }));
+        items.push(menu_separator(l));
+    }
+    if provenance == Provenance::Override {
+        for (id, glyph, title) in [
+            ("prefab.apply_override", icons::UPLOAD, "Apply to Prefab"),
+            ("prefab.revert_override", icons::UNDO_2, "Revert Override"),
+        ] {
+            let target = crate::catalog::Target::Field(path.to_owned());
+            items.push(
+                menu_item(
+                    l,
+                    &format!("field/{path}/{id}"),
+                    Some(glyph),
+                    title,
+                    None,
+                    false,
+                )
+                .on_press(move |s: &mut Studio| {
+                    s.local.field_menu = None;
+                    super::commands::run(s, id, &target);
+                }),
+            );
+        }
         items.push(menu_separator(l));
     }
     items.push(
