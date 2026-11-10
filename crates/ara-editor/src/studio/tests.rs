@@ -1784,6 +1784,12 @@ fn named_targets_run_as_agents_and_the_palette_send_them() {
         rt.state().local.window,
         Some(super::state::WindowRequest::Minimize)
     );
+    // View › Full Screen (F11) asks the window for full screen.
+    run(&mut rt, "view.fullscreen", Target::None);
+    assert_eq!(
+        rt.state().local.window,
+        Some(super::state::WindowRequest::Fullscreen)
+    );
     assert_eq!(failures(&mut rt), before, "nothing failed");
 }
 

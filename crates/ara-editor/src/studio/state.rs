@@ -514,6 +514,8 @@ pub enum WindowRequest {
     Minimize,
     /// Maximize it, or restore it when it is.
     Maximize,
+    /// Full screen, or back to a window when it is (View › Full Screen, F11).
+    Fullscreen,
 }
 
 /// The studio's runtime state.

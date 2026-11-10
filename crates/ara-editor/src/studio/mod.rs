@@ -873,24 +873,12 @@ pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
 
-/// Whether the window is maximized (the drawn Restore button). Linux's stillkit surface
-/// does not report it yet, so there it reads as not maximized.
-fn maximized(surface: &Surface) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        let _ = surface;
-        false
-    }
-    #[cfg(not(target_os = "linux"))]
-    surface.is_maximized()
-}
-
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface) -> state::Frame {
     let s = surface.scale();
     state::Frame {
         inset: surface.system_controls().map_or(0.0, |r| r.right / s),
-        controls: (!cfg!(target_os = "macos")).then(|| maximized(surface)),
+        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
     }
 }
 
@@ -929,6 +917,7 @@ fn pump(
     match rt.touch(|s| s.local.window.take()) {
         Some(state::WindowRequest::Minimize) => surface.minimize(),
         Some(state::WindowRequest::Maximize) => surface.toggle_maximize(),
+        Some(state::WindowRequest::Fullscreen) => surface.toggle_fullscreen(),
         None => {}
     }
     while let Some((id, event)) = next_event() {
