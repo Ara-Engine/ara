@@ -61,6 +61,14 @@ pub(crate) fn sun(frame: &RenderFrame) -> Option<Sun> {
     })
 }
 
+/// The strength of a map sky's light over the sky drawn (Ara's `Environment.skyLight`):
+/// Renderlab's `Sky::Map` lights at this intensity and draws the map at 1
+/// (`Background::ScaledSky`) when it differs from 1.
+pub(crate) fn sky_light(view: &ExternalView<'_>) -> f32 {
+    let light = view.frame.environment.sky_light;
+    if light.is_finite() { light.max(0.) } else { 1. }
+}
+
 /// Where a frame's sky comes from.
 pub(crate) enum SkySource<'a> {
     /// Renderlab's physical atmosphere, from an authored sky atmosphere.
@@ -75,17 +83,17 @@ pub(crate) enum SkySource<'a> {
 
 /// The sky that lights and backs the frame. An authored physical sky maps to
 /// Renderlab's atmosphere with its medium (`atmosphere::medium`); an environment map
-/// or the gradient sky is drawn and lights the scene as it is.
+/// or the gradient sky is drawn as it is and lights the scene at `sky_light`.
 pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a> {
     let frame = view.frame;
     if let Some(sky) = &frame.look.sky {
+        if frame.environment.sky_light != 1. {
+            gaps.unsupported(
+                "a sky light strength other than 1 under a physical sky",
+                "the sky lights the scene as brightly as it looks",
+            );
+        }
         return SkySource::Atmosphere(crate::atmosphere::medium(sky, gaps));
-    }
-    if frame.environment.sky_light != 1. {
-        gaps.unsupported(
-            "a sky light strength other than 1",
-            "the sky lights the scene as brightly as it looks",
-        );
     }
     match view.environment {
         Some(EnvironmentMap { size, pixels }) => SkySource::Map {
