@@ -22,6 +22,8 @@ owns the child process and native handler; drop detaches and reaps it. Isolated
 launches set `ARA_CRASH_IPC_DIR` to a short base under target/; this strict override
 never falls back to the profile. The final socket must fit 103 UTF-8 bytes. See
 `src/capture/ipc.rs` for platform fallbacks, permissions and shared cleanup.
+Crash tests use private short OS-temp roots, reserving the maximum PID suffix;
+their socket paths do not depend on checkout depth.
 Startup failures retain monitor stderr in ARA-EXP-CRASH-004; export verification
 rejects that coded failure. The crash callback only requests a dump over
 preconnected IPC. Never allocate, symbolize or upload from that callback.
