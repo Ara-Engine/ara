@@ -38,7 +38,7 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     let mut resources = Vec::new();
     // The same runtime buffer binding must really address slots above 63.
     let buffer_capacity = gpu.context().info.storage_buffer_capacity;
-    let reserved = buffer_capacity.saturating_sub(2).min(70);
+    let reserved = buffer_capacity.saturating_sub(2).min(1025);
     for _ in 0..reserved {
         let buffer = gpu
             .create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)
@@ -93,7 +93,20 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
             Access::CopyDestination,
             Access::ShaderRead,
         )]);
-        indices.push(gpu.sampled_image(image, false).unwrap().index);
+        indices.push(
+            gpu.sampled_view(
+                image,
+                ara_gpu::texture::ImageViewDesc {
+                    dimension: ara_gpu::texture::ViewDimension::D2,
+                    base_mip: 0,
+                    mip_count: mips,
+                    base_layer: 0,
+                    layer_count: 1,
+                },
+            )
+            .unwrap()
+            .index,
+        );
         expected.extend(color);
         resources.extend([Resource::Image(image), Resource::Buffer(stage)]);
     }
@@ -118,6 +131,7 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     gpu.upload(input, bytemuck::cast_slice(&indices)).unwrap();
     let input_slot = gpu.storage_buffer(input).unwrap().index;
     let output_slot = gpu.storage_buffer(output).unwrap().index;
+    eprintln!("storage-buffer capacity {buffer_capacity}; shader output slot {output_slot}");
     if buffer_capacity > 64 {
         assert!(
             output_slot > 63,
@@ -135,7 +149,7 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
     ]);
     commands.push(Command::Pipeline(pipeline));
     commands.push(Command::Constants(RootConstants {
-        words: [input_slot, output_slot, 257, 0, 0, 0, 0, 0],
+        words: [input_slot, output_slot, 257, 0, 0, 2, 0, 0],
     }));
     commands.push(Command::BeginPass("Heap.SampleHighSlots".into()));
     commands.push(Command::Dispatch([257u32.div_ceil(64), 1, 1]));
@@ -164,25 +178,54 @@ fn variable_heap_samples_high_slots_and_filters_native_mips() {
         timings[0].milliseconds
     );
 
-    let mut commands = gpu.begin(Queue::Graphics);
-    commands.barriers([edge(
-        Resource::Buffer(output),
-        Access::HostRead,
-        Access::Storage,
-    )]);
-    commands.push(Command::Pipeline(pipeline));
-    commands.push(Command::Constants(RootConstants {
-        words: [input_slot, output_slot, 1, 0.5f32.to_bits(), 256, 0, 0, 0],
-    }));
-    commands.push(Command::Dispatch([1, 1, 1]));
-    commands.barriers([edge(
-        Resource::Buffer(output),
-        Access::Storage,
-        Access::HostRead,
-    )]);
-    let point = gpu.submit(commands.finish(), &[]).unwrap();
-    gpu.resolve(point).unwrap();
-    assert_eq!(&gpu.read(output).unwrap()[..4], &[128, 0, 128, 255]);
+    use ara_gpu::sampler::{AddressMode, Filter, SamplerDesc};
+    for (filter, address, expected_pixel) in [
+        (Filter::Linear, AddressMode::ClampToEdge, [128, 0, 128, 255]),
+        (Filter::Nearest, AddressMode::Repeat, [0, 0, 255, 255]),
+        (
+            Filter::Linear,
+            AddressMode::MirrorRepeat,
+            [128, 0, 128, 255],
+        ),
+    ] {
+        let sampler = gpu
+            .sampler(&SamplerDesc {
+                min: filter,
+                mag: filter,
+                mip: filter,
+                address: [address; 3],
+                ..Default::default()
+            })
+            .unwrap();
+        let mut commands = gpu.begin(Queue::Graphics);
+        commands.barriers([edge(
+            Resource::Buffer(output),
+            Access::HostRead,
+            Access::Storage,
+        )]);
+        commands.push(Command::Pipeline(pipeline));
+        commands.push(Command::Constants(RootConstants {
+            words: [
+                input_slot,
+                output_slot,
+                1,
+                0.5f32.to_bits(),
+                256,
+                sampler.index,
+                0,
+                0,
+            ],
+        }));
+        commands.push(Command::Dispatch([1, 1, 1]));
+        commands.barriers([edge(
+            Resource::Buffer(output),
+            Access::Storage,
+            Access::HostRead,
+        )]);
+        let point = gpu.submit(commands.finish(), &[]).unwrap();
+        gpu.resolve(point).unwrap();
+        assert_eq!(&gpu.read(output).unwrap()[..4], &expected_pixel);
+    }
     for resource in resources {
         gpu.retire(resource).unwrap();
     }

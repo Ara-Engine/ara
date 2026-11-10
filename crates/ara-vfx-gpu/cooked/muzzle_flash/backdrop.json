@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb",
+  "key": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46",
   "stages": [
     {
-      "dxil": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/backdropFragment.dxil",
+      "dxil": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/backdropFragment.dxil",
       "dxil_hash": "727a9fb35be4de6cf3040882562bf23b0470a9f01038bb6ff20d92c4fa4a8fc3",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/backdropFragment.metallib",
+        "metallib": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/backdropFragment.metallib",
         "metallib_hash": "f0fc6fd3f537744197cd1a25da28274ceb2eb9260c66d24f94a65507b837f9bb",
-        "reflection": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/backdropFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/backdropFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "backdropFragment",
-      "spirv": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/backdropFragment.spv",
+      "spirv": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/backdropFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "e0c3251197c97ce82bed13e91dfa4f8d3f91a6dea4730e6d17268c0e676b2d70",
       "stage": "fragment"
     },
     {
-      "dxil": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/screenVertex.dxil",
+      "dxil": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/screenVertex.dxil",
       "dxil_hash": "b9e64d59497ad3f256cef5a57e9b679e98c1a935fbfd9d8610b6789cdda2eafe",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/screenVertex.metallib",
+        "metallib": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/screenVertex.metallib",
         "metallib_hash": "70f87ed06281f8cd83c9dfbf66982589d84d2d85ca4a11fe6bfd802edfd5db7c",
-        "reflection": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/screenVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/screenVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "screenVertex",
-      "spirv": "6ee931f985f0c873e50df414f13544c729e1bc718c977a804fddae476a20eefb/backdrop/screenVertex.spv",
+      "spirv": "4b9e4fd94ea612b6a0fc1727654da6cfcbe9926dc6a4ab4f7a94c3f9b0f18e46/backdrop/screenVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "355196214be9615bef01ad6af76e915afc39b52d4d87188f6fb43f92aa42909e",
       "stage": "vertex"
@@ -45,6 +45,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

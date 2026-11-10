@@ -1,5 +1,4 @@
 use super::image_copy::copy_regions;
-use super::recording::access;
 use super::*;
 use crate::attachments::{Load, Ops};
 use crate::commands::*;
@@ -9,92 +8,18 @@ impl VulkanDevice {
         &self,
         cmd: vk::CommandBuffer,
         queue: Queue,
-        query: vk::QueryPool,
-        timestamp: &mut u32,
+        timing: (vk::QueryPool, &mut u32),
         scopes: &mut std::vec::IntoIter<Vec<crate::attachments::Ops>>,
         command: &Command,
+        staging: Option<vk::Buffer>,
     ) -> Result<()> {
+        let (query, timestamp) = timing;
         let device = &self.context.device;
         // SAFETY: All handles were validated, scopes checked, and command buffer is recording.
         unsafe {
             match command {
-                // A discard orders nothing; `attachments::ops` already consumed it, and
-                // Vulkan has no transition to UNDEFINED.
-                Command::Barrier(b) if b.after == Access::Undefined => {}
-                Command::Barrier(b) => {
-                    let source_queue = b.handoff.map(|h| h.from).unwrap_or(queue);
-                    let dest_queue = b.handoff.map(|h| h.to).unwrap_or(queue);
-                    let (mut src_stage, mut src_access, old) = access(b.before, source_queue);
-                    let (mut dst_stage, mut dst_access, new) = access(b.after, dest_queue);
-                    let (from, to) = if let Some(h) = b.handoff {
-                        if h.release {
-                            dst_stage = vk::PipelineStageFlags2::NONE;
-                            dst_access = vk::AccessFlags2::NONE;
-                        } else {
-                            src_stage = vk::PipelineStageFlags2::NONE;
-                            src_access = vk::AccessFlags2::NONE;
-                        }
-                        (self.family(h.from), self.family(h.to))
-                    } else {
-                        (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED)
-                    };
-                    match b.resource {
-                        Resource::AccelerationStructure(h) => {
-                            let structure = self.accelerations.get(h)?;
-                            let barrier = vk::BufferMemoryBarrier2::default()
-                                .buffer(structure.raw.backing.handle)
-                                .size(structure.raw.backing.size)
-                                .src_stage_mask(src_stage)
-                                .src_access_mask(src_access)
-                                .dst_stage_mask(dst_stage)
-                                .dst_access_mask(dst_access)
-                                .src_queue_family_index(from)
-                                .dst_queue_family_index(to);
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier]),
-                            );
-                        }
-                        Resource::Image(h) => {
-                            let i = self.images.get(h)?;
-                            let barrier = image_barrier(
-                                i.raw.handle,
-                                i.raw.aspect,
-                                old,
-                                new,
-                                (src_stage, src_access),
-                                (dst_stage, dst_access),
-                            )
-                            .src_queue_family_index(from)
-                            .dst_queue_family_index(to)
-                            .subresource_range(
-                                vk::ImageSubresourceRange::default()
-                                    .aspect_mask(i.raw.aspect)
-                                    .level_count(i.raw.mip_levels)
-                                    .layer_count(1),
-                            );
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
-                            );
-                        }
-                        Resource::Buffer(h) => {
-                            let b = self.buffers.get(h)?;
-                            let barrier = vk::BufferMemoryBarrier2::default()
-                                .buffer(b.raw.handle)
-                                .size(b.raw.size)
-                                .src_stage_mask(src_stage)
-                                .src_access_mask(src_access)
-                                .dst_stage_mask(dst_stage)
-                                .dst_access_mask(dst_access)
-                                .src_queue_family_index(from)
-                                .dst_queue_family_index(to);
-                            device.cmd_pipeline_barrier2(
-                                cmd,
-                                &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier]),
-                            );
-                        }
-                    }
+                Command::Barrier(_) | Command::Barriers(_) => {
+                    self.encode_barriers(cmd, queue, command.barriers())?
                 }
                 Command::Pipeline(h) => {
                     let p = self.pipelines.get(*h)?;
@@ -121,6 +46,7 @@ impl VulkanDevice {
                     bytemuck::bytes_of(c),
                 ),
                 Command::BuildAccelerationStructure(h) => self.encode_as_build(cmd, *h)?,
+                Command::RefitAccelerationStructure(h) => self.encode_as_mode(cmd, *h, true)?,
                 Command::Dispatch(groups) => {
                     device.cmd_dispatch(cmd, groups[0], groups[1], groups[2])
                 }
@@ -131,17 +57,40 @@ impl VulkanDevice {
                         *offset,
                     );
                 }
-                Command::BeginRendering {
+                Command::BeginRenderingSubresources {
                     colors,
                     depth,
+                    resolves,
                     size,
                 } => {
                     let ops = scopes
                         .next()
+                        .expect("attachment analysis lists every rendering scope");
+                    self.encode_render_targets(cmd, colors, *depth, resolves, *size, &ops)?;
+                }
+                Command::BeginRendering {
+                    colors,
+                    depth,
+                    size,
+                }
+                | Command::BeginRenderingResolved {
+                    colors,
+                    depth,
+                    size,
+                    ..
+                } => {
+                    let resolves = command.resolves().unwrap_or(&[]);
+                    let ops = scopes
+                        .next()
                         .expect("attachments::ops lists every rendering scope of the list");
-                    let attachment = |a: &Attachment, depth: bool, ops: Ops| -> Result<_> {
-                        Ok(vk::RenderingAttachmentInfo::default()
-                            .image_view(self.images.get(a.image)?.raw.view)
+                    let attachment = |a: &Attachment,
+                                      depth: bool,
+                                      ops: Ops,
+                                      resolve: Option<Image>|
+                     -> Result<_> {
+                        let raw = self.images.get(a.image)?.raw;
+                        let mut info = vk::RenderingAttachmentInfo::default()
+                            .image_view(raw.attachment_view.unwrap_or(raw.view))
                             .image_layout(if depth {
                                 vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL
                             } else {
@@ -170,16 +119,40 @@ impl VulkanDevice {
                                         float32: a.clear.unwrap_or([0.; 4]),
                                     },
                                 }
-                            }))
+                            });
+                        if let Some(target) = resolve {
+                            let target = self.images.get(target)?.raw;
+                            let integer = matches!(
+                                raw.format,
+                                vk::Format::R32_UINT
+                                    | vk::Format::R32G32_UINT
+                                    | vk::Format::R32G32B32A32_UINT
+                                    | vk::Format::R32_SINT
+                                    | vk::Format::R32G32_SINT
+                                    | vk::Format::R32G32B32A32_SINT
+                            );
+                            info = info
+                                .resolve_mode(if integer {
+                                    vk::ResolveModeFlags::SAMPLE_ZERO
+                                } else {
+                                    vk::ResolveModeFlags::AVERAGE
+                                })
+                                .resolve_image_view(target.attachment_view.unwrap_or(target.view))
+                                .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                        }
+                        Ok(info)
                     };
                     let depth = depth
                         .as_ref()
-                        .map(|a| attachment(a, true, ops[colors.len()]))
+                        .map(|a| attachment(a, true, ops[colors.len()], None))
                         .transpose()?;
                     let colors = colors
                         .iter()
                         .zip(&ops)
-                        .map(|(a, ops)| attachment(a, false, *ops))
+                        .enumerate()
+                        .map(|(index, (a, ops))| {
+                            attachment(a, false, *ops, resolves.get(index).copied().flatten())
+                        })
                         .collect::<Result<Vec<_>>>()?;
                     let mut info = vk::RenderingInfo::default()
                         .render_area(vk::Rect2D {
@@ -244,6 +217,36 @@ impl VulkanDevice {
                     );
                     device.cmd_draw_indexed(cmd, d.index_count, 1, d.first_index, 0, 0);
                 }
+                Command::DrawVertexBuffers {
+                    vertices,
+                    indices,
+                    first_index,
+                    index_count,
+                    vertex_offset,
+                    instances,
+                    first_instance,
+                } => {
+                    let buffers: Vec<_> = vertices
+                        .iter()
+                        .map(|b| self.buffers.get(b.buffer).map(|b| b.raw.handle))
+                        .collect::<Result<_>>()?;
+                    let offsets: Vec<_> = vertices.iter().map(|b| b.offset).collect();
+                    device.cmd_bind_vertex_buffers(cmd, 0, &buffers, &offsets);
+                    device.cmd_bind_index_buffer(
+                        cmd,
+                        self.buffers.get(*indices)?.raw.handle,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_draw_indexed(
+                        cmd,
+                        *index_count,
+                        *instances,
+                        *first_index,
+                        *vertex_offset,
+                        *first_instance,
+                    );
+                }
                 Command::DrawIndirect { arguments, offset } => device.cmd_draw_indirect(
                     cmd,
                     self.buffers.get(*arguments)?.raw.handle,
@@ -280,6 +283,85 @@ impl VulkanDevice {
                     device.cmd_draw_indexed(cmd, *count, *instances, *first_index, 0, 0);
                 }
                 Command::EndRendering => device.cmd_end_rendering(cmd),
+                Command::UploadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let image = self.images.get(*destination)?.raw;
+                    let buffer = self.buffers.get(*source)?.raw;
+                    let region = super::image_copy::buffer_region(
+                        image,
+                        *region,
+                        *buffer_offset,
+                        buffer.size,
+                    )?;
+                    device.cmd_copy_buffer_to_image(
+                        cmd,
+                        buffer.handle,
+                        image.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[region],
+                    );
+                }
+                Command::ReadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let image = self.images.get(*source)?.raw;
+                    let buffer = self.buffers.get(*destination)?.raw;
+                    let region = super::image_copy::buffer_region(
+                        image,
+                        *region,
+                        *buffer_offset,
+                        buffer.size,
+                    )?;
+                    device.cmd_copy_image_to_buffer(
+                        cmd,
+                        image.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        buffer.handle,
+                        &[region],
+                    );
+                }
+                Command::CopyImageRegion {
+                    source,
+                    destination,
+                    from,
+                    to,
+                } => {
+                    let a = self.images.get(*source)?.raw;
+                    let b = self.images.get(*destination)?.raw;
+                    let region = vk::ImageCopy::default()
+                        .src_subresource(super::image_copy::subresource(a, *from)?)
+                        .dst_subresource(super::image_copy::subresource(b, *to)?)
+                        .src_offset(vk::Offset3D {
+                            x: from.origin[0] as i32,
+                            y: from.origin[1] as i32,
+                            z: from.origin[2] as i32,
+                        })
+                        .dst_offset(vk::Offset3D {
+                            x: to.origin[0] as i32,
+                            y: to.origin[1] as i32,
+                            z: to.origin[2] as i32,
+                        })
+                        .extent(vk::Extent3D {
+                            width: from.extent[0],
+                            height: from.extent[1],
+                            depth: from.extent[2],
+                        });
+                    device.cmd_copy_image(
+                        cmd,
+                        a.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        b.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[region],
+                    );
+                }
                 Command::UploadImage {
                     source,
                     destination,
@@ -322,6 +404,20 @@ impl VulkanDevice {
                             .size(*size)],
                     );
                 }
+                Command::FillBuffer {
+                    destination,
+                    offset,
+                    size,
+                    value,
+                } => {
+                    device.cmd_fill_buffer(
+                        cmd,
+                        self.buffers.get(*destination)?.raw.handle,
+                        *offset,
+                        *size,
+                        *value,
+                    );
+                }
                 Command::UpdateBuffer {
                     destination,
                     offset,
@@ -341,19 +437,55 @@ impl VulkanDevice {
                             .src_access_mask(
                                 vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
                             )
-                            .dst_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .dst_stage_mask(vk::PipelineStageFlags2::ALL_TRANSFER)
                             .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)]),
                     );
-                    device.cmd_update_buffer(cmd, buffer, *offset, bytes);
+                    if let Some(source) = staging {
+                        device.cmd_copy_buffer(
+                            cmd,
+                            source,
+                            buffer,
+                            &[vk::BufferCopy::default()
+                                .dst_offset(*offset)
+                                .size(bytes.len() as u64)],
+                        );
+                    } else {
+                        device.cmd_update_buffer(cmd, buffer, *offset, bytes);
+                    }
                     device.cmd_pipeline_barrier2(
                         cmd,
                         &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier
-                            .src_stage_mask(vk::PipelineStageFlags2::CLEAR)
+                            .src_stage_mask(vk::PipelineStageFlags2::ALL_TRANSFER)
                             .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                             .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
                             .dst_access_mask(
                                 vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
                             )]),
+                    );
+                }
+                Command::ResolveImage {
+                    source,
+                    destination,
+                } => {
+                    let a = self.images.get(*source)?.raw;
+                    let b = self.images.get(*destination)?.raw;
+                    let sub = vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .layer_count(1);
+                    device.cmd_resolve_image(
+                        cmd,
+                        a.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        b.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[vk::ImageResolve::default()
+                            .src_subresource(sub)
+                            .dst_subresource(sub)
+                            .extent(vk::Extent3D {
+                                width: a.width,
+                                height: a.height,
+                                depth: 1,
+                            })],
                     );
                 }
                 Command::CopyImage {
@@ -408,7 +540,12 @@ impl VulkanDevice {
         Ok(())
     }
 }
-unsafe fn viewport(device: &ash::Device, cmd: vk::CommandBuffer, origin: [u32; 2], size: [u32; 2]) {
+pub(super) unsafe fn viewport(
+    device: &ash::Device,
+    cmd: vk::CommandBuffer,
+    origin: [u32; 2],
+    size: [u32; 2],
+) {
     // SAFETY: Called only within a graphics command buffer, with positive attachment extent.
     unsafe {
         device.cmd_set_viewport(

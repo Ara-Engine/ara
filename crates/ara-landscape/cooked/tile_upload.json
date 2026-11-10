@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195",
+  "key": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0",
   "stages": [
     {
-      "dxil": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/tile_upload/tileUpload.dxil",
+      "dxil": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/tile_upload/tileUpload.dxil",
       "dxil_hash": "6771140f3708482ac557db202a8805a4eda430679bc233b88bfc019c90611a29",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/tile_upload/tileUpload.metallib",
+        "metallib": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/tile_upload/tileUpload.metallib",
         "metallib_hash": "2c38d3c723b740430329f81024f64d551cc4b342e5e09573de1172e0594b8c60",
-        "reflection": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/tile_upload/tileUpload.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/tile_upload/tileUpload.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "tileUpload",
-      "spirv": "1fda1ee201e9d84ad9cb5afbde03b814faaebd88459b2368b3ee9a0de4fed195/tile_upload/tileUpload.spv",
+      "spirv": "359b779df82ab22a2e6b8ef226fc7165bdb334af991bfc2217dc8803c70234c0/tile_upload/tileUpload.spv",
       "spirv_entry": "main",
       "spirv_hash": "759a8c0532c992029bb29bbb06ffed0aba05af46ffb5aa192bb0b406299c81b1",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

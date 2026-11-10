@@ -19,7 +19,11 @@ pub(super) struct Clear {
     library: Retained<ProtocolObject<dyn MTLLibrary>>,
     entry: String,
     pub depth: Retained<ProtocolObject<dyn MTLDepthStencilState>>,
-    variants: Vec<(Vec<MTLPixelFormat>, RenderState)>,
+    variants: Vec<(
+        Vec<MTLPixelFormat>,
+        crate::texture::SampleCount,
+        RenderState,
+    )>,
 }
 
 impl Clear {
@@ -61,12 +65,18 @@ impl Clear {
         &mut self,
         compiler: &Compiler,
         colors: &[MTLPixelFormat],
+        samples: crate::texture::SampleCount,
     ) -> Result<RenderState> {
-        if let Some((_, state)) = self.variants.iter().find(|(formats, _)| formats == colors) {
+        if let Some((_, _, state)) = self
+            .variants
+            .iter()
+            .find(|(formats, count, _)| formats == colors && *count == samples)
+        {
             return Ok(state.clone());
         }
-        let state = pipeline::depth_only(compiler, &self.library, &self.entry, colors)?;
-        self.variants.push((colors.to_vec(), state.clone()));
+        let state = pipeline::depth_only(compiler, &self.library, &self.entry, colors, samples)?;
+        self.variants
+            .push((colors.to_vec(), samples, state.clone()));
         Ok(state)
     }
 }
