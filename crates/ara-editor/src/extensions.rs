@@ -133,7 +133,7 @@ impl Extensions {
                         return;
                     }
                 };
-                let reserved: Vec<_> = crate::shell::commands::all().iter().map(|c| c.id).collect();
+                let reserved: Vec<_> = crate::catalog::all().iter().map(|c| c.id).collect();
                 let mut client = None;
                 let mut reload = true;
                 loop {

@@ -5,8 +5,8 @@
 //! an availability check that explains why it is disabled, and how it runs.
 //! Menu paths are derived from [`menus::MENUS`], so they never drift.
 mod extensions;
-pub(crate) mod keys;
 pub(crate) use crate::catalog::menus;
+pub(crate) use crate::keys;
 pub(crate) mod table;
 use super::Shell;
 use crate::{Editor, state::EditorState};
@@ -17,7 +17,6 @@ pub use crate::catalog::Target;
 /// Inputs to availability checks; built from navigation state and the op store.
 pub(crate) struct Ctx<'a> {
     pub state: &'a EditorState,
-    pub extensions: &'a crate::extensions::Catalog,
     pub store: &'a ara_ops::Store,
     pub target: &'a Target,
     /// The shell holds copied entities (Paste is available).
@@ -149,26 +148,6 @@ pub(crate) fn menu_path(id: &str) -> String {
     }
     String::new()
 }
-/// The registry as agents see it: ids, titles, menu paths, bindings and availability.
-pub(crate) fn export(cx: &Ctx, keymap: &keys::Keymap) -> Value {
-    json!(
-        entries(cx.extensions)
-            .map(|c| {
-                let avail = c.avail(cx);
-                json!({
-                    "id": c.id,
-                    "title": c.title(cx),
-                    "menu": registered_menu_path(cx.extensions, c.id),
-                    "summary": c.summary,
-                    "shortcuts": keymap.chords(c.id).iter().map(|k| k.text()).collect::<Vec<_>>(),
-                    "enabled": avail.ready(),
-                    "checked": match avail { Avail::Checked(v) => Some(v), _ => None },
-                    "disabledReason": match &avail { Avail::Blocked(r) => Some(r.clone()), _ => None },
-                })
-            })
-            .collect::<Vec<_>>()
-    )
-}
 /// The keymap for the current preferences.
 pub(crate) fn keymap(state: &EditorState, extensions: &crate::extensions::Catalog) -> keys::Keymap {
     let preset = keys::Preset::parse(
@@ -199,7 +178,6 @@ impl Shell {
     pub(crate) fn ctx<'a>(&'a self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
         Ctx {
             state: &editor.state,
-            extensions: &editor.extensions,
             store: editor.host.store(),
             target,
             clipboard_entities: self.entity_clipboard.is_some(),

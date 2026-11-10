@@ -155,7 +155,57 @@ impl Chord {
     pub fn text(self) -> String {
         self.caps().join("+")
     }
+    /// The chord for a window key event: `vk` is the virtual-key code stillkit reports
+    /// (`KeyCode`), `ctrl` is Ctrl, or ⌘ on macOS. `None` for keys no shortcut names.
+    pub fn from_key(vk: u16, ctrl: bool, shift: bool, alt: bool) -> Option<Self> {
+        let key = match vk {
+            0x41..=0x5A => i32::from(vk - 0x41) + 4,
+            0x31..=0x39 => i32::from(vk - 0x31) + 30,
+            0x30 => 39,
+            0x70..=0x7B => i32::from(vk - 0x70) + 58,
+            0x61..=0x69 => i32::from(vk - 0x61) + 89,
+            0x60 => 98,
+            other => match other {
+                0x0D => 40,
+                0x1B => 41,
+                0x08 => 42,
+                0x09 => 43,
+                0x20 => 44,
+                0xBD => 45,
+                0xBB => 46,
+                0xDB => 47,
+                0xDD => 48,
+                0xDC => 49,
+                0xBA => 51,
+                0xDE => 52,
+                0xC0 => 53,
+                0xBC => 54,
+                0xBE => 55,
+                0xBF => 56,
+                0x13 => 72,
+                0x2D => 73,
+                0x24 => 74,
+                0x21 => 75,
+                0x2E => 76,
+                0x23 => 77,
+                0x22 => 78,
+                0x27 => 79,
+                0x25 => 80,
+                0x28 => 81,
+                0x26 => 82,
+                0x6E => 99,
+                _ => return None,
+            },
+        };
+        Some(Self {
+            ctrl,
+            shift,
+            alt,
+            key,
+        })
+    }
 }
+
 /// Parse a registry shortcut list; alternatives are separated by ` / `.
 pub(crate) fn parse_list(text: &str) -> Vec<Chord> {
     text.split(" / ").filter_map(Chord::parse).collect()
@@ -327,6 +377,26 @@ mod tests {
         assert_eq!(parse_list("Ctrl+Y / Ctrl+Shift+Z").len(), 2);
         assert!(Chord::parse("Ctrl+Nope").is_none());
         assert_eq!(Chord::parse("Num.").map(|c| c.key), Some(99));
+    }
+    #[test]
+    fn window_keys_name_the_same_physical_keys() {
+        for (vk, name) in [
+            (0x5A, "Z"),
+            (0x30, "0"),
+            (0x31, "1"),
+            (0x74, "F5"),
+            (0x2E, "Del"),
+            (0x61, "Num1"),
+            (0x60, "Num0"),
+            (0xBC, ","),
+            (0x24, "Home"),
+            (0x13, "Pause"),
+        ] {
+            let chord = Chord::from_key(vk, false, false, false).map(Chord::text);
+            assert_eq!(chord.as_deref(), Some(name), "{vk:#x}");
+        }
+        let undo = Chord::from_key(0x5A, true, true, false).map(Chord::text);
+        assert_eq!(undo.as_deref(), Some("Ctrl+Shift+Z"));
     }
     #[test]
     fn presets_and_overrides_layer_over_defaults() {

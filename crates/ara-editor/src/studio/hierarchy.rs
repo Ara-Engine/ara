@@ -668,8 +668,8 @@ fn navigate(
             s.local.rename = Some((r.id.clone(), r.name.clone()));
             tx.focus("hierarchy/rename");
         }
-        _ => match super::commands::for_key(key, tx.modifiers()) {
-            Some(id) => super::commands::run(s, id, &crate::catalog::Target::None),
+        _ => match super::commands::for_key(s, key, tx.modifiers()) {
+            Some(id) => super::commands::run(s, &id, &crate::catalog::Target::None),
             None => return Handled::No,
         },
     }
