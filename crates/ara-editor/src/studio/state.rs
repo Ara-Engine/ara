@@ -332,6 +332,11 @@ pub struct Local {
     pub play_menu: bool,
     /// File operations still running on host jobs: each job and what it does.
     pub asset_jobs: Vec<(String, String)>,
+    /// Entities a script being named attaches to once it compiles (New Script from the
+    /// Inspector).
+    pub script_attach: Vec<String>,
+    /// What the last request did, shown in the status bar for a few seconds.
+    pub note: Option<(String, std::time::Instant)>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,
@@ -405,6 +410,8 @@ pub struct Studio {
     pub(crate) play: crate::play_controls::PlayControls,
     /// File imports: their checks, a conflict choice, the running imports.
     pub(crate) importer: crate::asset_import::Importer,
+    /// C# requests in flight: a reload in Play, module discovery for the IDE.
+    pub(crate) scripts: super::scripts::Scripts,
 }
 
 impl Studio {
@@ -431,6 +438,7 @@ impl Studio {
             builder: Default::default(),
             play: Default::default(),
             importer: Default::default(),
+            scripts: Default::default(),
         };
         studio.resolve();
         studio

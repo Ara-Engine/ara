@@ -1,6 +1,7 @@
 //! Captured argv and policy only: no test invokes the process launcher.
 #![allow(clippy::unwrap_used)] // Fixture setup and captured requests are asserted in tests.
 use super::*;
+use serde_json::json;
 
 fn paths() -> (PathBuf, PathBuf) {
     let root = std::path::absolute("Ara IDE proof/مرحبا project").unwrap();

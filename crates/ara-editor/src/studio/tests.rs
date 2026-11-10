@@ -983,6 +983,55 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
 }
 
 #[test]
+fn new_script_is_named_in_place_then_compiles_and_attaches() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "component.new_script", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let (path, name) = rt
+        .state()
+        .local
+        .asset_rename
+        .clone()
+        .expect("named in place");
+    assert_eq!(name, "NewBehaviour", "the stem, without .cs");
+    assert!(rt.find("asset/rename").is_some());
+    rt.update(|s| super::asset_ops::rename(s, &path, "Mover"));
+    let root = rt.state().editor.host.root().to_owned();
+    let moved = path.replace("NewBehaviour", "Mover");
+    for _ in 0..3000 {
+        if rt.touch(|s| {
+            s.editor.tick();
+            super::asset_ops::poll_jobs(s);
+            s.local.asset_jobs.is_empty()
+        }) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let source = std::fs::read_to_string(root.join(&moved)).expect("renamed on disk");
+    assert!(source.contains("class Mover"), "the class follows the file");
+    // Where the engine's C# tools are built it compiles and attaches; elsewhere the
+    // compile says why it could not.
+    rt.update(|s| {
+        s.resolve();
+        s.poll_logs();
+    });
+    let s = rt.state();
+    let attached = s.resolved["e_box"].record.get("Mover").is_some();
+    let explained = s
+        .logs
+        .iter()
+        .any(|r| r.message.starts_with("Compile Mover.cs: "));
+    assert!(
+        attached || explained,
+        "compiled and attached, or said why not"
+    );
+}
+
+#[test]
 #[ignore = "writes review captures under target/"]
 fn captures() {
     let mut rt = open();

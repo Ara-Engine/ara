@@ -1,5 +1,12 @@
-//! Literal IDE argv, retained before policy decides whether a process may launch.
-use super::*;
+//! Opening source files in the person's IDE: the literal argv for the configured editor
+//! (`scripts.ide`: empty for VS Code with the system's association as fallback, `system`,
+//! or a program), kept before the launch policy decides whether a process may start
+//! (never in offscreen sessions).
+use std::path::{Path, PathBuf};
+
+use serde_json::Value;
+
+use crate::Editor;
 
 /// The last requested invocation, including suppression and any attempted fallback.
 /// `launched` means process creation succeeded, not that the editor delivered a location.
@@ -21,13 +28,16 @@ pub(crate) struct IdeRequest {
     fallback: Option<Box<IdeRequest>>,
 }
 
+/// Whether a launch may start a process, and why not.
 #[derive(Clone, Copy)]
-struct LaunchPolicy {
+pub(crate) struct LaunchPolicy {
     suppressed: Option<&'static str>,
 }
 
 impl LaunchPolicy {
-    fn new(offscreen: bool, open_ide: bool, environment_offscreen: bool) -> Self {
+    /// No launch offscreen, when IDE launches are off for the session, or in an offscreen
+    /// environment (`ARA_PLAY_OFFSCREEN=1`).
+    pub(crate) fn new(offscreen: bool, open_ide: bool, environment_offscreen: bool) -> Self {
         Self {
             suppressed: if offscreen {
                 Some("offscreen")
@@ -43,7 +53,8 @@ impl LaunchPolicy {
 }
 
 impl IdeRequest {
-    fn build(
+    /// The invocation opening `file` (in project `root`) at `location` with `configured`.
+    pub(crate) fn build(
         root: &Path,
         file: &Path,
         location: Option<(u32, u32)>,
@@ -130,7 +141,8 @@ impl IdeRequest {
         )
     }
 
-    fn execute(
+    /// Launches it (or its fallback when it fails), unless `policy` suppresses it.
+    pub(crate) fn execute(
         &mut self,
         policy: LaunchPolicy,
         launch: &mut impl FnMut(&IdeRequest) -> std::io::Result<()>,
@@ -182,7 +194,8 @@ fn is_vscode(program: &str) -> bool {
     )
 }
 
-fn spawn(request: &IdeRequest) -> std::io::Result<()> {
+/// Starts `request`'s process.
+pub(crate) fn spawn(request: &IdeRequest) -> std::io::Result<()> {
     let mut command = std::process::Command::new(&request.program);
     command.args(&request.args).current_dir(&request.cwd);
     #[cfg(windows)]
@@ -193,8 +206,9 @@ fn spawn(request: &IdeRequest) -> std::io::Result<()> {
     command.spawn().map(|_| ())
 }
 
-/// Reuse project path containment, including its explicit missing-relative-source contract.
-pub(super) fn resolve_target(root: &Path, path: &Path) -> ara_ui::Result<(PathBuf, PathBuf)> {
+/// `path` (absolute, or relative to the project) as absolute paths of the project and the
+/// file; refuses a file outside the project.
+pub(crate) fn resolve_target(root: &Path, path: &Path) -> ara_ui::Result<(PathBuf, PathBuf)> {
     let root = std::fs::canonicalize(root)?;
     let file = if path.is_absolute() {
         std::fs::canonicalize(path)?
@@ -210,40 +224,25 @@ pub(super) fn resolve_target(root: &Path, path: &Path) -> ara_ui::Result<(PathBu
     Ok((root, file))
 }
 
-impl Shell {
-    /// Inspect the exact last request without launching a process or changing its outcome.
-    pub(crate) fn script_ide_request(&self) -> Value {
-        self.ide_request
-            .as_ref()
-            .map_or(Value::Null, |request| json!(request))
-    }
-
-    /// Store complete argv first; hidden verification never reaches process creation.
-    pub(in crate::shell::scripts) fn request_script_ide(
-        &mut self,
-        editor: &Editor,
-        root: &Path,
-        file: &Path,
-        location: Option<(u32, u32)>,
-    ) -> ara_ui::Result<()> {
-        let configured = editor
-            .state
-            .settings
-            .get("scripts.ide")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let request = IdeRequest::build(root, file, location, configured)?;
-        let request = self.ide_request.insert(request);
-        let policy = LaunchPolicy::new(
-            self.offscreen,
-            self.open_ide,
-            std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1"),
-        );
-        request.execute(policy, &mut spawn)?;
-        Ok(())
-    }
+/// Opens `path` (in the project) at `location` (line, column) in the configured IDE, as
+/// the window's person asked; gives back what was launched.
+pub(crate) fn open(
+    editor: &Editor,
+    path: &Path,
+    location: Option<(u32, u32)>,
+) -> ara_ui::Result<IdeRequest> {
+    let (root, file) = resolve_target(editor.host.root(), path)?;
+    let configured = editor
+        .state
+        .settings
+        .get("scripts.ide")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let mut request = IdeRequest::build(&root, &file, location, configured)?;
+    let offscreen = std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|v| v == "1");
+    request.execute(LaunchPolicy::new(false, true, offscreen), &mut spawn)?;
+    Ok(request)
 }
 
 #[cfg(test)]
-#[path = "ide/tests.rs"]
 mod tests;
