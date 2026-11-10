@@ -63,7 +63,7 @@ fn folded(module: &str) -> &str {
 
 /// Components the whole selection lacks: name, folded module, first doc line.
 fn addable(s: &Studio) -> Vec<(String, String, String)> {
-    let selection = &s.editor.state.selection;
+    let selection = s.inspected();
     let on_all = |name: &str| {
         selection.iter().all(|e| {
             s.resolved
@@ -461,9 +461,7 @@ fn add(s: &mut Studio, name: &str) {
     recent.insert(0, name.to_owned());
     recent.truncate(5);
     let commands = s
-        .editor
-        .state
-        .selection
+        .inspected()
         .iter()
         .map(|e| json!({"cmd": "component.add", "args": {"entity": e, "component": name}}))
         .collect();

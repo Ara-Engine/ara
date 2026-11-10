@@ -350,6 +350,51 @@ fn the_camera_overlay_saves_and_recalls_views() {
 }
 
 #[test]
+fn the_inspector_locks_searches_and_copies_component_values() {
+    let mut rt = open();
+    settle(&mut rt);
+    // Lock on the box, then select the lamp: the Inspector stays on the box.
+    press(&mut rt, "inspector/lock");
+    rt.update(|s| s.select(vec!["e_lamp".into()], false));
+    settle(&mut rt);
+    assert!(rt.find("component/MeshRenderer").is_some(), "still the box");
+    press(&mut rt, "inspector/lock");
+    assert!(
+        rt.find("component/MeshRenderer").is_none(),
+        "unlocked: the lamp"
+    );
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    settle(&mut rt);
+    // Search narrows to matching properties.
+    press(&mut rt, "inspector/search");
+    rt.type_text("rough");
+    settle(&mut rt);
+    assert!(rt.find("field/MeshRenderer.roughness").is_some());
+    assert!(
+        rt.find("field/Transform.position").is_none(),
+        "only what matches"
+    );
+    rt.update(|s| s.local.inspector_search.clear());
+    settle(&mut rt);
+    // Copy the box's renderer, change it, paste it back; then reset.
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/copy");
+    let roughness = |rt: &Runtime<Studio>| {
+        rt.state().resolved["e_box"].record["MeshRenderer"]["roughness"].clone()
+    };
+    rt.update(|s| s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_box","path":"MeshRenderer.roughness","value":0.9}})], "Rough"));
+    settle(&mut rt);
+    assert_eq!(roughness(&rt), json!(0.9));
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/paste");
+    assert_ne!(roughness(&rt), json!(0.9), "pasted back");
+    rt.update(|s| s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_box","path":"MeshRenderer.roughness","value":0.9}})], "Rough"));
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/reset");
+    assert_ne!(roughness(&rt), json!(0.9), "reset to its default");
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

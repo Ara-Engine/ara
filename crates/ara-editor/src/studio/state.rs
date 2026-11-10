@@ -242,6 +242,13 @@ pub struct Local {
     /// A box being dragged in the Scene view to select what it covers: where it started
     /// and where the pointer is (view px), and whether it adds to the selection.
     pub marquee: Option<([f32; 2], [f32; 2], bool)>,
+    /// The Inspector locked on these entities (Unity's padlock): selecting others leaves
+    /// it showing them.
+    pub inspector_lock: Option<Vec<String>>,
+    /// Properties the Inspector shows: those whose name or component matches.
+    pub inspector_search: String,
+    /// A component's values copied from the Inspector: its type and its fields.
+    pub component_clipboard: Option<(String, serde_json::Value)>,
     /// The Scene tab's Overlays menu, open.
     pub overlays_menu: bool,
     /// The open reference picker (an asset or entity field): its path and the search typed.
@@ -439,6 +446,15 @@ impl Studio {
         let excess = self.logs.len().saturating_sub(2000);
         self.logs.drain(..excess);
         self.logs.len() != before || excess > 0
+    }
+
+    /// The entities the Inspector shows and edits: the locked ones while it is locked
+    /// (and one of them still exists), else the selection.
+    pub fn inspected(&self) -> &[String] {
+        match &self.local.inspector_lock {
+            Some(ids) if ids.iter().any(|id| self.resolved.contains_key(id)) => ids,
+            _ => &self.editor.state.selection,
+        }
     }
 
     /// An entity's display name.
