@@ -114,7 +114,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
         None => content::ui(&root)?,
     };
     let no_window = args.game.dedicated || args.standalone.headless;
-    let (window, presenter) = if no_window {
+    let (window, mut presenter) = if no_window {
         (
             None,
             Presenter::new(settings.size(), Vec::new(), &args.gpu_cache),
@@ -146,6 +146,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
         )?);
         (Some(window), presenter)
     };
+    crate::renderer::install(&mut presenter, &args.gpu_cache);
     let headless_ui = if window.is_none() {
         Some(Surface::plain(&ui, settings.size(), 1.)?)
     } else {

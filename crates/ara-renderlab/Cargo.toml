@@ -1,0 +1,35 @@
+[package]
+name = "ara-renderlab"
+description = "Bridge from extracted Ara frames to the external Renderlab renderer (provisional: D35)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+ara-gpu = { path = "../ara-gpu" }
+ara-render-fidelity = { path = "../ara-render-fidelity" }
+ara-runtime = { path = "../ara-runtime" }
+ara-runtime-render = { path = "../ara-runtime-render" }
+
+# Renderlab is Vulkan-only today; Apple targets keep Ara's renderer (`ARA_RENDERLAB_UNAVAILABLE`).
+# Pinned: the engine builds against a frozen renderer while it is improved
+# behind `renderlab::engine`. Nothing outside this crate names a Renderlab type.
+[target.'cfg(not(target_vendor = "apple"))'.dependencies]
+# Renderlab main after v0.1.2: `Engine::queue()`, which the shared-image handoff submits
+# its copy on, the skinned-caster GI fix and the glossy-speck and non-RT GI fixes.
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "4652ea39e5ea3fe1f964349b52db742a3b636523" }
+# The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
+# the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
+wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
+ash038 = { package = "ash", version = "0.38", default-features = false, features = ["std"] }
+# Foliage instance transforms, in the glam the extracted frame uses.
+glam34 = { workspace = true }
+
+[dev-dependencies]
+ara-render = { path = "../ara-render" }
+image = { workspace = true, features = ["png"] }
