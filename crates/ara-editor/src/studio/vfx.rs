@@ -242,17 +242,18 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .rects
         .get("vfx/preview")
         .map_or(360.0, |r| (r.width() - 20.0).clamp(160.0, 720.0));
+    // Before its first frame: the worker is starting, or the effect has to compile first.
+    let waiting = match &fx {
+        Ok(_) => "Starting the preview…",
+        Err(_) => "The preview starts once the effect compiles.",
+    };
     let preview = match &s.vfx.frame {
         Some(frame) => image(frame.clone()).size(size),
         None => el()
             .size(size)
             .align(Align::Center)
             .justify(Justify::Center)
-            .child(
-                text("Compiling the effect…")
-                    .text_size(12.0)
-                    .color(c.muted_foreground.0),
-            ),
+            .child(text(waiting).text_size(12.0).color(c.muted_foreground.0)),
     };
     let seconds = s.vfx.tick as f32 / s.vfx.hz.max(1) as f32;
     let status = match &fx {
@@ -542,13 +543,11 @@ fn stack(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> Vec<El<Studio>> {
     out
 }
 
-/// A module's title: its name, or its kind in words when it is named after it.
-fn module_title(module: &ara_vfx::StackModule, kind: &str) -> String {
-    if module.name == kind {
-        crate::names::sentence(kind)
-    } else {
-        module.name.clone()
-    }
+/// A module's title: its name in words (`hearth_light` reads "Hearth light"), so a stack
+/// reads one way whether its modules are named after their kinds or not. Keys keep the
+/// name itself.
+fn module_title(module: &ara_vfx::StackModule) -> String {
+    crate::names::sentence(&module.name)
 }
 
 /// A module in its stage: its checkbox and name, as Niagara lists them; picking it shows it
@@ -564,9 +563,7 @@ fn module_row(
     let c = &l.c;
     let item = format!("{emitter}|{stage}|{}", module.name);
     let picked = s.editor.state.resource_item.as_deref() == Some(item.as_str());
-    let value = ara_json::to_value(&module.module).unwrap_or_default();
-    let kind = value["op"].as_str().unwrap_or("module").to_owned();
-    let title = module_title(module, &kind);
+    let title = module_title(module);
     let (doc_pick, item_pick) = (doc.to_owned(), item.clone());
     let hover = c.hover_surface.0;
     super::style::chosen(l, row(), picked)
@@ -675,7 +672,7 @@ fn selection(s: &Studio, doc: &str, effect: &ara_vfx::Effect) -> El<Studio> {
                         .grow(1.0)
                         .gap(2.0)
                         .child(
-                            text(module_title(module, &kind))
+                            text(module_title(module))
                                 .text_size(13.0)
                                 .weight(600)
                                 .color(c.foreground.0),
