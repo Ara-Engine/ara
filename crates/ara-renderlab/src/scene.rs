@@ -2,7 +2,8 @@
 //! materials are shared by content key, objects follow their entity, and skinned
 //! primitives are posed on the GPU from the frame's palettes. Renderlab draws at
 //! most `TRACED_DRAWS` mesh-material groups per frame; draws beyond that are left
-//! out and reported (`ARA_RENDERLAB_LIMIT`).
+//! out and reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives itself (foliage)
+//! are placed once per content key and then left alone.
 use crate::{gaps::Gaps, texture};
 use anyhow::{Context, Result};
 use ara_runtime::{
@@ -22,7 +23,7 @@ use std::{
 };
 
 /// Mesh-material groups Renderlab draws in one frame.
-const MAX_GROUPS: usize = renderlab::TRACED_DRAWS as usize;
+pub(crate) const MAX_GROUPS: usize = renderlab::TRACED_DRAWS as usize;
 const FNV: u64 = 0xcbf2_9ce4_8422_2325;
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -63,6 +64,8 @@ pub(crate) struct Scene {
     materials: HashMap<u64, Shared<MaterialId>>,
     textures: HashMap<(u64, u8), TextureId>,
     objects: HashMap<u64, Object>,
+    /// Key of the static draws last placed (`sync`'s `static_key`).
+    static_key: Option<u64>,
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
@@ -147,7 +150,7 @@ fn material_key(draw: &Draw) -> u64 {
     hash
 }
 
-fn vertex(v: &ModelVertex) -> Vertex {
+pub(crate) fn vertex(v: &ModelVertex) -> Vertex {
     let normal = glam_normalize(v.normal);
     Vertex {
         position: v.position,
@@ -275,28 +278,53 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 }
 
 impl Scene {
-    /// Makes Renderlab's objects equal `frame.draws`.
+    /// Makes Renderlab's objects equal `frame.draws` followed by `static_draws`
+    /// (draws the bridge derives itself, such as foliage). `static_key` names the
+    /// content of `static_draws`: while it is unchanged, draws already placed are not
+    /// looked at again. `reserved` mesh-material groups are in use elsewhere (terrain
+    /// tiles) and come off this frame's budget.
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
+        static_draws: &[Draw],
+        static_key: u64,
+        reserved: usize,
         gaps: &mut Gaps,
     ) -> Result<()> {
-        let mut live = HashSet::with_capacity(frame.draws.len());
+        let budget = MAX_GROUPS.saturating_sub(reserved);
+        let settled = self.static_key == Some(static_key);
+        let mut live = HashSet::with_capacity(frame.draws.len() + static_draws.len());
         let mut groups = HashSet::new();
         let mut dropped = 0usize;
-        for draw in &frame.draws {
-            let mesh = match draw.skin {
-                Some(_) => MeshKey::Skinned(draw.entity),
-                None => MeshKey::Static(geometry_key(draw)),
-            };
-            let material = material_key(draw);
+        let draws = frame
+            .draws
+            .iter()
+            .map(|draw| (draw, false))
+            .chain(static_draws.iter().map(|draw| (draw, true)));
+        for (draw, fixed) in draws {
+            let placed = self
+                .objects
+                .get(&draw.entity)
+                .filter(|_| fixed && settled)
+                .map(|object| (object.mesh, object.material));
+            let (mesh, material) = placed.unwrap_or_else(|| {
+                let mesh = match draw.skin {
+                    Some(_) => MeshKey::Skinned(draw.entity),
+                    None => MeshKey::Static(geometry_key(draw)),
+                };
+                (mesh, material_key(draw))
+            });
             if !groups.contains(&(mesh, material)) {
-                if groups.len() == MAX_GROUPS {
+                if groups.len() >= budget {
                     dropped += 1;
                     continue;
                 }
                 groups.insert((mesh, material));
+            }
+            live.insert(draw.entity);
+            if placed.is_some() {
+                continue;
             }
             if draw.paint.is_some() {
                 gaps.unsupported(
@@ -304,13 +332,15 @@ impl Scene {
                     "the mesh keeps its own colours",
                 );
             }
-            live.insert(draw.entity);
             self.place(engine, frame, draw, mesh, material, gaps)?;
         }
+        self.static_key = Some(static_key);
         if dropped > 0 {
             gaps.limit(
-                "64 mesh-material groups per frame",
-                &format!("{dropped} draws of this frame are not drawn"),
+                "mesh-material groups per frame",
+                &format!(
+                    "{dropped} draws of this frame are not drawn (the limit is {MAX_GROUPS}, {reserved} of them terrain tiles)"
+                ),
             );
         }
         let gone: Vec<u64> = self
