@@ -48,6 +48,8 @@ impl Converter {
                 .or_else(|| {
                     [
                         "/opt/metal-shaderconverter/bin",
+                        // The macOS pkg's own install location.
+                        "/usr/local/bin",
                         r"C:\Program Files\Metal Shader Converter\bin",
                     ]
                     .into_iter()

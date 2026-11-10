@@ -100,6 +100,8 @@ re-running the view; use `rt.update` (or settle) before finding what it should s
 
 ## Gaps
 
-The Windows Scene layer is PR #10. The material preview sphere needs slangc (the Vulkan
-SDK). Floating windows live inside the main window (OS windows need stillkit's
+The Windows Scene layer is PR #10. Material previews on macOS cook a Metal stage
+(Slang to HLSL, the Vulkan SDK's dxc, Metal Shader Converter: set
+`ARA_METAL_SHADERCONVERTER`); the SDK is found under `~/VulkanSDK` without `VULKAN_SDK`.
+Floating windows live inside the main window (OS windows need stillkit's
 multi-window runtime); Full Screen needs a stillkit window call.
