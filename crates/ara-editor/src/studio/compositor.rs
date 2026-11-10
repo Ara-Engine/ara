@@ -43,6 +43,7 @@ impl Compositor {
             };
         }
         if ready {
+            self.ui.order_before_scene(ui_device(renderer.gpu()))?;
             self.scene_stall = None;
         } else {
             let (since, reported) = self.scene_stall.get_or_insert((started, false));
@@ -192,10 +193,10 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
-        // Metal: the adapter has its own queue (Vulkan shares the renderer's). A synchronous
-        // frame's image needs ordering after the renderer's work. An asynchronous Scene shows
-        // its last completed frame instead, so waiting on the renderer would wait on the
-        // frame still in flight and stall the UI until it lands (seconds while converging).
+        // Metal orders a synchronous frame after the renderer on its adapter's queue.
+        // An asynchronous Scene shows a completed pair instead; waiting for its pending
+        // frame would stall the UI while it converges. The Vulkan host gates the pair's
+        // reuse separately, before the renderer starts the next pass.
         #[cfg(target_os = "macos")]
         if !renderer.scene_frame_async() {
             self.ui.order_after(renderer.gpu());
@@ -267,7 +268,10 @@ mod tests {
         let mut renderer = ara_render::Renderer::new_raster(
             Scene {
                 meshes: Vec::new(),
-                materials: vec![Material::default()],
+                materials: vec![Material {
+                    textures: [0; 4],
+                    ..Default::default()
+                }],
                 textures: vec![Texture {
                     size: [1, 1],
                     rgba: vec![255; 4],

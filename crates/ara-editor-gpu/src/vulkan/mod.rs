@@ -71,6 +71,17 @@ pub struct NativeUi {
     pool: vk::CommandPool,
     command: vk::CommandBuffer,
     fence: vk::Fence,
+    /// UI reads handed back to the async Scene queue on Windows.
+    #[cfg(windows)]
+    completion: vk::Semaphore,
+    #[cfg(windows)]
+    completion_value: std::cell::Cell<u64>,
+    #[cfg(windows)]
+    ordered_value: std::cell::Cell<u64>,
+    #[cfg(windows)]
+    scene_handoff: std::cell::Cell<bool>,
+    #[cfg(windows)]
+    scene_queue: vk::Queue,
     layout: vk::DescriptorSetLayout,
     descriptors: vk::DescriptorPool,
     set: vk::DescriptorSet,
@@ -134,6 +145,16 @@ impl NativeUi {
             pool: vk::CommandPool::null(),
             command: vk::CommandBuffer::null(),
             fence: vk::Fence::null(),
+            #[cfg(windows)]
+            completion: vk::Semaphore::null(),
+            #[cfg(windows)]
+            completion_value: std::cell::Cell::new(0),
+            #[cfg(windows)]
+            ordered_value: std::cell::Cell::new(0),
+            #[cfg(windows)]
+            scene_handoff: std::cell::Cell::new(false),
+            #[cfg(windows)]
+            scene_queue: gpu.scene_graphics,
             layout: vk::DescriptorSetLayout::null(),
             descriptors: vk::DescriptorPool::null(),
             set: vk::DescriptorSet::null(),
@@ -502,6 +523,16 @@ impl Drop for NativeUi {
         // SAFETY: Device outlives the adapter by constructor contract. Queue idle precedes every teardown.
         unsafe {
             let _ = device.queue_wait_idle(self.queue);
+            #[cfg(windows)]
+            {
+                // A handoff submission also retains the completion semaphore.
+                if self.scene_handoff.get() && self.scene_queue != self.queue {
+                    let _ = device.queue_wait_idle(self.scene_queue);
+                }
+                if self.completion != vk::Semaphore::null() {
+                    device.destroy_semaphore(self.completion, None);
+                }
+            }
             if self.pipeline != vk::Pipeline::null() {
                 device.destroy_pipeline(self.pipeline, None);
             }
