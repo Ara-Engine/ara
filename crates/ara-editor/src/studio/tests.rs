@@ -2503,13 +2503,16 @@ fn a_desktop_point_maps_into_the_topmost_window_under_it() {
     let main = Placement {
         client: [0.0, 0.0, 1000.0, 800.0],
         origin: (0.0, 0.0),
+        k: 1.0,
     };
+    // A floating window on a 1x monitor beside a 2x runtime: its pixels count double.
     let float = Placement {
         client: [900.0, 100.0, 400.0, 300.0],
         origin: (100_000.0, 0.0),
+        k: 2.0,
     };
     let windows = [float, main];
-    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_050.0, 50.0)));
+    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_100.0, 100.0)));
     assert_eq!(locate(&windows, (500.0, 500.0)), Some((500.0, 500.0)));
     assert_eq!(locate(&windows, (2000.0, 500.0)), None);
 }
