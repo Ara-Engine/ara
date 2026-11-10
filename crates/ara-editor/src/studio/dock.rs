@@ -172,6 +172,12 @@ pub(super) fn place_window(s: &mut Studio, id: &str, rect: [f32; 4]) {
     }
 }
 
+/// A floating window's name: its panels' titles, as its tabs read.
+pub(super) fn window_title(root: &DockNode) -> String {
+    let titles: Vec<&str> = tabs_of(root).iter().map(|p| panel_title(p).0).collect();
+    titles.join(", ")
+}
+
 /// Every panel in `node`, in order.
 fn tabs_of(node: &DockNode) -> Vec<String> {
     match node {

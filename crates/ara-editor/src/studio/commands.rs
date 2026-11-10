@@ -1519,6 +1519,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                     s.local.prompt = Some(super::state::Prompt {
                         title: "Save overlay preset as",
                         text: String::new(),
+                        hint: "Name",
+                        ok: "Save",
                         then: "view.overlays.preset.save",
                     });
                     s.local.focus = Some("prompt/field");
@@ -1609,6 +1611,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 s.local.prompt = Some(super::state::Prompt {
                     title: "Save layout as",
                     text: String::new(),
+                    hint: "Name",
+                    ok: "Save",
                     then: "layout.save",
                 });
                 s.local.focus = Some("prompt/field");
@@ -1699,6 +1703,29 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 None => Err(format!("{id}: unknown command").into()),
             }
         }
+        // Freeze keeps what was recorded, Set Baseline freezes it to compare later captures
+        // with, and Compare shows or hides that comparison.
+        "profiler.freeze" => {
+            if s.local.profiling || s.local.profiler_player_recording {
+                super::profiler::toggle_record(s);
+            }
+            Ok(())
+        }
+        "profiler.baseline" => match s.profile.frames.is_empty() {
+            true => Err("Record some frames to set them as the baseline".into()),
+            false => {
+                s.editor.profile_baseline = Some(s.profile.clone());
+                s.local.profiler_hide_compare = false;
+                Ok(())
+            }
+        },
+        "profiler.compare" => match s.editor.profile_baseline {
+            None => Err("Set a baseline to compare with first".into()),
+            Some(_) => {
+                s.local.profiler_hide_compare = !s.local.profiler_hide_compare;
+                Ok(())
+            }
+        },
         "profiler.record" => {
             super::profiler::toggle_record(s);
             Ok(())
@@ -1753,6 +1780,67 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             Target::Text(agent) => act(e, "editor.follow", json!({"agent": agent})),
             _ => Err("Choose an agent".into()),
+        },
+        "agents.connect" => {
+            s.local.agents_connect = true;
+            act(
+                &mut s.editor,
+                "editor.layout.show",
+                json!({"panel": "agents"}),
+            )
+        }
+        // Why?: a code, a reference or a question for the project's diagnostic service;
+        // without one, it asks, offering the selection.
+        "tools.why" => match target {
+            Target::Text(question) if !question.trim().is_empty() => {
+                let doc = s.editor.state.doc.clone();
+                let asked = json!({"question": question, "doc": doc, "full": true});
+                match s.editor.action("why", asked) {
+                    Err(error) => Err(error.to_string().into()),
+                    Ok(report) => match report["text"].as_str() {
+                        None => Err("The diagnostic service gave no explanation".into()),
+                        Some(text) => {
+                            let lines = text.lines().map(str::to_owned).collect();
+                            s.local.why = Some((question.clone(), lines));
+                            Ok(())
+                        }
+                    },
+                }
+            }
+            _ => {
+                let state = &s.editor.state;
+                let question = match target {
+                    Target::Entity(entity) => format!("{entity} not visible"),
+                    _ => state
+                        .selection
+                        .first()
+                        .map(|entity| format!("{entity} not visible"))
+                        .unwrap_or_default(),
+                };
+                s.local.prompt = Some(super::state::Prompt {
+                    title: "Why?",
+                    text: question,
+                    hint: "A diagnostic code, an asset reference, or a question about an entity",
+                    ok: "Explain",
+                    then: "tools.why",
+                });
+                Ok(())
+            }
+        },
+        // A floating window comes to the front (Window › Floating).
+        "window.focus_window" => match target {
+            Target::Window(id) => {
+                let floating = &mut s.editor.state.floating;
+                match floating.iter().position(|f| &f.id == id) {
+                    Some(at) => {
+                        let window = floating.remove(at);
+                        floating.push(window);
+                        act(&mut s.editor, "editor.layout.save", json!({}))
+                    }
+                    None => Err("That window has closed".into()),
+                }
+            }
+            _ => Err("Choose a window".into()),
         },
         "agents.stop_following" => act(e, "editor.follow", json!({})),
         // A turn is one transaction, or several sharing a `gesture-turn:<group>|` label;

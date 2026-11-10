@@ -24,9 +24,10 @@ pub(super) fn agents(s: &Studio) -> El<Studio> {
     let mut page = col().gap(6.0).pad(8.0);
     // Who is connected, and what they see.
     let presence = &s.editor.state.presence;
-    if presence.is_empty() {
+    if presence.is_empty() || s.local.agents_connect {
         page = page.child(connect_card(s));
-    } else {
+    }
+    if !presence.is_empty() {
         for (id, p) in presence {
             page = page.child(presence_row(s, id, p));
         }
