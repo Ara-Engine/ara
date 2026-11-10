@@ -122,6 +122,7 @@ impl VulkanDevice {
                     bytemuck::bytes_of(c),
                 ),
                 Command::BuildAccelerationStructure(h) => self.encode_as_build(cmd, *h)?,
+                Command::RefitAccelerationStructure(h) => self.encode_as_mode(cmd, *h, true)?,
                 Command::Dispatch(groups) => {
                     device.cmd_dispatch(cmd, groups[0], groups[1], groups[2])
                 }

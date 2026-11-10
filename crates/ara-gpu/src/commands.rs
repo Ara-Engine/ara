@@ -33,6 +33,9 @@ pub enum Command {
     Constants(RootConstants),
     /// Construct a static BLAS/TLAS using its preallocated aligned scratch.
     BuildAccelerationStructure(AccelerationStructure),
+    /// Refit a previously built, update-enabled structure, preserving topology/count.
+    /// Order modified inputs before AsBuild, then transition the structure to AsRead.
+    RefitAccelerationStructure(AccelerationStructure),
     /// Dispatch compute workgroups.
     Dispatch([u32; 3]),
     /// Dispatch using three U32 workgroup counts at an aligned buffer offset.

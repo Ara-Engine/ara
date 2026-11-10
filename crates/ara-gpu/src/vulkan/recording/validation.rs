@@ -48,6 +48,12 @@ impl VulkanDevice {
                         self.images.get(h)?;
                     }
                 },
+                Command::RefitAccelerationStructure(h) => {
+                    if rendering {
+                        return Err(GpuError::Contract("AS refit inside rendering".into()));
+                    }
+                    self.validate_as_refit(*h)?;
+                }
                 Command::BuildAccelerationStructure(h) => {
                     if rendering {
                         return Err(GpuError::Contract("AS build inside rendering scope".into()));
