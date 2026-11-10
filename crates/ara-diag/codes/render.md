@@ -158,14 +158,17 @@ Fixes:
 owner: ara-renderlab
 shown as: ARA_RENDERLAB_LIMIT
 
-The frame needs more than Renderlab draws at this version, so part of it is left out. The message names the limit and how much was dropped.
+The frame needs more than Renderlab draws at this version, so part of it is drawn in a cheaper form or left out. The message names the limit and what happened.
 
 Causes:
-- More than 64 distinct mesh-material groups in one frame (objects sharing a mesh and a material count once; every skinned primitive counts once).
+- More than 256 distinct mesh-material groups in one frame (objects sharing a mesh and a material count once; every skinned primitive counts once). Opaque static groups that share a material are then merged into one world-space batch per material; a batch whose members move is rebuilt each frame.
+- More distinct materials than the limit even after merging: the last-appearing draws are left out.
+- An effect emitter needs more live particles than Renderlab's emitters hold.
 
 Fixes:
+- Share materials between static objects: merged batches then fit, and nothing is left out.
 - Share meshes and materials between objects, or render the scene with `--renderer ara`.
-- The limit is Renderlab's (`TRACED_DRAWS`); raising it is a renderer change, not a bridge change.
+- The limits are Renderlab's (`TRACED_DRAWS`, `MAX_PARTICLES`); raising them is a renderer change, not a bridge change.
 
 ## ARA6123 RENDERLAB_NONRT_PATENT: Renderlab non-RT sun shadows await legal review
 owner: ara-renderlab
