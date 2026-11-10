@@ -18,8 +18,9 @@ use ara_runtime::{
 use renderlab::{
     asset::{TangentBasis, TextureRole},
     engine::{
-        Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Primitive,
-        ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value, Vertex,
+        AlphaMask, Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId,
+        Primitive, ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value,
+        Vertex,
     },
 };
 use std::{
@@ -128,6 +129,35 @@ fn normal_mapped(draw: &Draw) -> bool {
     source(draw).is_some_and(|(m, _)| m.normal_texture.is_some())
 }
 
+/// How a draw's geometry is cut to its material's alpha: the base-colour map's alpha
+/// times `opacity`, kept where it reaches `cutoff`. Masked materials cut at their cutoff;
+/// blended ones whose alpha lives in the map (opacity maps) cut at half coverage.
+struct Cut<'a> {
+    texture: &'a ModelTexture,
+    opacity: f32,
+    cutoff: f32,
+}
+
+/// The cut a draw's material asks for; None for opaque materials and uniform glass.
+fn cut(draw: &Draw) -> Option<Cut<'_>> {
+    let (m, textures) = source(draw)?;
+    let texture = textures.get(m.base_color_texture?)?;
+    let opacity = m.base_color[3] * draw.color[3];
+    match m.alpha_mode {
+        1 => Some(Cut {
+            texture,
+            opacity,
+            cutoff: m.alpha_cutoff,
+        }),
+        2 if opacity >= 1. => Some(Cut {
+            texture,
+            opacity,
+            cutoff: 0.5,
+        }),
+        _ => None,
+    }
+}
+
 /// Whether the draw can be seen through (as `Scene::material` decides): such draws
 /// sort per object and never join a static batch.
 fn see_through(draw: &Draw) -> bool {
@@ -150,7 +180,13 @@ fn geometry_key(draw: &Draw) -> u64 {
             &(*primitive as u64).to_le_bytes(),
         ),
     };
-    fnv(hash, &[u8::from(normal_mapped(draw))])
+    let hash = fnv(hash, &[u8::from(normal_mapped(draw))]);
+    // Cut geometry belongs to its mask as much as to its triangles: the material key
+    // names the mask's texture, opacity and cutoff.
+    match cut(draw) {
+        Some(_) => fnv(hash, &material_key(draw).to_le_bytes()),
+        None => hash,
+    }
 }
 
 fn material_key(draw: &Draw) -> u64 {
@@ -347,7 +383,10 @@ impl Scene {
             let group = *index.entry((mesh, material)).or_insert_with(|| {
                 groups.push(Group {
                     material,
-                    mergeable: matches!(mesh, MeshKey::Static(_)) && !see_through(draw),
+                    // Cut geometry comes from its own upload, so it never joins a batch.
+                    mergeable: matches!(mesh, MeshKey::Static(_))
+                        && !see_through(draw)
+                        && cut(draw).is_none(),
                     objects: 0,
                 });
                 groups.len() - 1
@@ -524,7 +563,7 @@ impl Scene {
                 }
                 (MeshKey::Skinned(_), joints) => {
                     let joints = joints.unwrap_or(0);
-                    let (id, tangents) = skinned_mesh(engine, draw, joints)?;
+                    let (id, tangents) = skinned_mesh(engine, draw, joints, gaps)?;
                     (id, Some((id, joints)), tangents)
                 }
             };
@@ -617,6 +656,11 @@ impl Scene {
         }
         let wanted = normal_mapped(draw);
         let (mut source, mut indices) = triangles(draw)?;
+        if let Some(c) = cut(draw) {
+            let id = cut_mesh(engine, &source, &indices, &c, wanted, gaps)?;
+            self.meshes.insert(key, (Shared { id, users: 1 }, false));
+            return Ok((id, false));
+        }
         if wanted {
             split_handedness(source.to_mut(), indices.to_mut());
         }
@@ -673,7 +717,14 @@ impl Scene {
             desc.normal_scale = m.normal_scale;
             let factor = draw.emissive_factor.unwrap_or(m.emissive);
             glow = scaled(factor);
-            emissive_map = m.emissive_texture.is_some();
+            // An emissive map glows uniformly at its mean colour: Renderlab materials
+            // have no slot for a fourth map yet.
+            if let Some(texture) = m.emissive_texture.and_then(|i| textures.get(i)) {
+                emissive_map = true;
+                let mean =
+                    texture::mean_linear(&ara_runtime_render::decode_texture(&texture.ktx2)?.rgba);
+                glow = std::array::from_fn(|i| glow[i] * mean[i]);
+            }
             let mut bind = |slot: Option<usize>, role: TextureRole| -> Result<Option<TextureRef>> {
                 let Some(texture) = slot.and_then(|index| textures.get(index)) else {
                     return Ok(None);
@@ -700,13 +751,17 @@ impl Scene {
             // A uniform alpha below one is see-through; alpha that lives only in the
             // base-colour map (masks, opacity maps) needs cutouts Renderlab makes from
             // geometry, so those draw opaque.
+            // Masks and opacity maps are cut into the geometry (`cut`); the material
+            // itself is then opaque.
             let mapped = m.alpha_mode != 0 && m.base_color_texture.is_some();
             blend = m.alpha_mode == 2 && desc.base_color[3] < 1.;
             if mapped && !blend {
-                gaps.unsupported(
-                    "alpha masks and opacity maps",
-                    "those materials draw opaque, without cutouts",
-                );
+                if m.alpha_mode == 2 {
+                    gaps.unsupported(
+                        "partial coverage from opacity maps",
+                        "they are cut where coverage reaches half, without blending",
+                    );
+                }
                 desc.base_color[3] = 1.;
             }
             // glTF transmission belongs to the dielectric part only: a metal does not
@@ -746,8 +801,12 @@ impl Scene {
         let glow = glow.map(|c| if c.is_finite() { c.max(0.) } else { 0. });
         if glow.iter().any(|c| *c > 0.) {
             if emissive_map {
-                gaps.unsupported("emissive maps", "the material does not emit or glow");
-            } else if let Some(program) = self.emissive_program(engine, gaps) {
+                gaps.unsupported(
+                    "emissive maps",
+                    "the surface glows uniformly at the map's mean colour",
+                );
+            }
+            if let Some(program) = self.emissive_program(engine, gaps) {
                 parameters = [("glow", Value::Vec3(glow))];
                 desc.program = Some(program);
                 desc.parameters = &parameters;
@@ -848,9 +907,52 @@ fn upload(
     })
 }
 
+/// Uploads `source` cut to its material's alpha (`Cut`): Renderlab keeps the triangles
+/// where the mask passes, with new edges along the contour. Cut meshes carry no
+/// tangents, so a normal map on them is dropped (reported).
+fn cut_mesh(
+    engine: &mut Engine,
+    source: &[ModelVertex],
+    indices: &[u32],
+    c: &Cut<'_>,
+    normal_mapped: bool,
+    gaps: &mut Gaps,
+) -> Result<MeshId> {
+    let decoded = ara_runtime_render::decode_texture(&c.texture.ktx2)?;
+    let [width, height] = decoded.size;
+    let mask = AlphaMask::from_rgba8(width, height, &decoded.rgba);
+    let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
+    let data = MeshData {
+        vertices: &vertices,
+        indices,
+    };
+    // About eight texels per contour cell, within the 32 to 128 cells per uv unit that
+    // foliage cards take.
+    let cells = (width.max(height) / 8).clamp(32, 128);
+    let cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    if normal_mapped {
+        gaps.unsupported(
+            "normal maps on alpha-cut meshes",
+            "cut cards and foliage shade with their vertex normals",
+        );
+    }
+    Ok(engine.create_mesh(&cut.data())?)
+}
+
 /// Uploads one skinned primitive with its own pose (`joints` plus the identity joint).
 /// Returns the mesh and whether it carries tangents.
-fn skinned_mesh(engine: &mut Engine, draw: &Draw, joints: usize) -> Result<(MeshId, bool)> {
+fn skinned_mesh(
+    engine: &mut Engine,
+    draw: &Draw,
+    joints: usize,
+    gaps: &mut Gaps,
+) -> Result<(MeshId, bool)> {
+    if cut(draw).is_some() {
+        gaps.unsupported(
+            "alpha masks on skinned meshes",
+            "those primitives draw opaque, without cutouts",
+        );
+    }
     let (mut source, mut indices) = triangles(draw)?;
     if normal_mapped(draw) {
         split_handedness(source.to_mut(), indices.to_mut());
