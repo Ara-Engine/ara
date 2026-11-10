@@ -9,8 +9,10 @@ using Ara.Hosting;
 // Started by the game or editor process (Ara.Host's CompileClient). Connects to its pipe and
 // exits with its parent. Idle and agent compiles run below normal priority; the human's run at
 // their launch budget while the host raises its tick threads above normal (A13, D20).
-// Capture that budget before backgrounding every CLI/session mode, including startup.
-if (CompilePriority.Apply(null) is { } priorityFailure) Console.Error.WriteLine(priorityFailure);
+// Capture that budget before backgrounding compilation, including startup. A bounded
+// one-shot code fix retains its launch budget so unrelated load cannot starve its response.
+if (CompilePriority.Apply(args.Contains("--fix", StringComparer.Ordinal) ? false : null) is { } priorityFailure)
+    Console.Error.WriteLine(priorityFailure);
 
 if (args.Contains("--inventory", StringComparer.Ordinal))
 {
