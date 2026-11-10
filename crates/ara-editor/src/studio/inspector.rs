@@ -1,0 +1,1021 @@
+//! Inspector: the selection's components as folding sections, every field from the schema
+//! (`crate::inspector::fields`: widget kind, unit, provenance, mixed values across a
+//! multi-selection). Numbers scrub by dragging their label (8 px a step; Shift fine, Alt coarse) and
+//! commit one undo step on release; typing commits on Enter. Vectors label their axes in the
+//! gizmo's colours. Every edit is `property.set` through `cmd.apply`, as agents edit.
+use std::collections::BTreeMap;
+
+use ara_kit::icons;
+use ara_kit::ui::*;
+use serde_json::{Value, json};
+use stillkit::Cursor;
+use stillkit::el::{
+    Align, Axis, El, Justify, PointerPhase, col, el, icon, menu, popover, row, text, text_input,
+};
+
+use super::Studio;
+use crate::inspector::{Field, Provenance, Widget};
+
+/// The label column's share of a row (Unity's 40/60 split).
+const LABEL: f32 = 0.4;
+/// A field row's height.
+const ROW: f32 = super::style::ROW;
+
+pub(super) fn view(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    // An asset picked in Assets has the Inspector until an entity is picked again (Unity).
+    if s.local.inspect_asset
+        && let Some(path) = s.editor.state.asset_path.as_deref()
+    {
+        return super::asset_inspector::view(s, path);
+    }
+    let selection = &s.editor.state.selection;
+    if selection.is_empty() {
+        return empty(
+            l,
+            icons::MOUSE_POINTER_2,
+            "Nothing selected",
+            "Select an entity in the Scene or the Hierarchy to edit its components.",
+            None,
+        );
+    }
+    let Some(doc) = s.editor.host.store().workspace().doc(&s.editor.state.doc) else {
+        return empty(
+            l,
+            icons::FILE,
+            "Scene unavailable",
+            "Open a scene to inspect its entities.",
+            None,
+        );
+    };
+    let changes = s.editor.agent_fields();
+    let fields = crate::inspector::fields(
+        s.editor.host.store().schema(),
+        doc,
+        &s.resolved,
+        selection,
+        &changes,
+    );
+    let mut by_component: BTreeMap<String, Vec<&Field>> = BTreeMap::new();
+    let mut order = Vec::new();
+    for f in &fields {
+        let component = f.path.split('.').next().unwrap_or("").to_owned();
+        if !by_component.contains_key(&component) {
+            order.push(component.clone());
+        }
+        by_component.entry(component).or_default().push(f);
+    }
+    let mut page = col().pad(4.0).gap(3.0).child(header(s));
+    // Transform leads, as in every engine; the rest keep their record order.
+    order.sort_by_key(|c| c != "Transform");
+    for component in order {
+        page = page.child(section(s, &component, &by_component[&component]));
+    }
+    page = page.child(super::components::button_and_picker(s));
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .scroll(Axis::Vertical)
+        .child(page.child(el().h(12.0)))
+}
+
+/// The selection in one row: what it is, its name (editable for one entity) and its id.
+fn header(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let selection = &s.editor.state.selection;
+    // What it is, as the Hierarchy shows it (a light, a camera, a mesh…).
+    let glyph = match selection.as_slice() {
+        [id] => s
+            .resolved
+            .get(id)
+            .map_or(icons::BOX, |e| super::hierarchy::glyph(&e.record)),
+        _ => icons::BOXES,
+    };
+    let mut head = row().h(28.0).gap(8.0).align(Align::Center).child(
+        el().size(24.0)
+            .radius(6.0)
+            .fill(c.primary.0.with_alpha(0.14))
+            .align(Align::Center)
+            .justify(Justify::Center)
+            .child(icon(glyph).size(14.0).color(c.primary.0)),
+    );
+    if let [id] = selection.as_slice() {
+        let entity = id.clone();
+        head = head
+            .child(
+                field(l, Size::Sm, "inspector/name", None, "Name", &s.name(id), move |f| {
+                    f.text_size(13.0).on_submit(move |s: &mut Studio, t| {
+                        let name = t.trim().to_owned();
+                        if !name.is_empty() {
+                            s.apply(vec![json!({"cmd":"property.set","args":{"entity":entity,"path":"name","value":name}})], "Rename entity");
+                        }
+                    })
+                })
+                .w(0.0)
+                .grow(1.0),
+            )
+            .child(text(id.clone()).text_size(10.5).family(mono()).color(c.muted_foreground.0.with_alpha(0.75)).tooltip("Entity id: what agents and references use"));
+    } else {
+        head = head
+            .child(
+                text(format!("{} entities", selection.len()))
+                    .text_size(13.0)
+                    .weight(600)
+                    .color(c.foreground.0)
+                    .grow(1.0),
+            )
+            .child(
+                text("Differing values show —")
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0),
+            );
+    }
+    head
+}
+
+/// A component's section: a header (fold, icon, name) over its fields.
+fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let folded = s.local.folded.contains(component);
+    let name = component.to_owned();
+    let t = super::style::tones(l);
+    let hover = t.hover;
+    // A band a step above the panel, the fields flush under it: no card, no rule.
+    let head = row()
+        .key(format!("component/{component}"))
+        .h(22.0)
+        .pad_x(4.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .radius(super::style::RADIUS)
+        .fill(t.band)
+        .hovered(move |e| e.fill(hover))
+        .color(c.foreground.0)
+        .cascade_ink()
+        .label(component.to_owned())
+        .expanded(!folded)
+        .on_press(move |s: &mut Studio| {
+            if !s.local.folded.remove(&name) {
+                s.local.folded.insert(name.clone());
+            }
+        })
+        .child(
+            icon(if folded {
+                icons::CHEVRON_RIGHT
+            } else {
+                icons::CHEVRON_DOWN
+            })
+            .size(11.0)
+            .color(c.muted_foreground.0),
+        )
+        .child(
+            icon(component_icon(component))
+                .size(13.0)
+                .color(c.info_foreground.0),
+        )
+        .child(
+            text(spaced(component))
+                .text_size(super::style::TEXT)
+                .weight(600)
+                .grow(1.0),
+        )
+        .child(component_menu(s, component));
+    let mut out = col().child(head);
+    if !folded {
+        let mut body = col().pad_x(6.0).pad_y(3.0).gap(1.0);
+        for f in fields {
+            body = body.child(field_row(s, f));
+            if let Widget::Compound { ty, .. } = &f.widget {
+                body = body.children(super::compound::rows(s, f, ty));
+            }
+        }
+        out = out.child(body);
+    }
+    out
+}
+
+pub(super) fn component_icon(component: &str) -> stillkit::icons::Icon {
+    match component {
+        "Transform" => icons::MOVE_3D,
+        "MeshRenderer" => icons::BOX,
+        "Light" => icons::LIGHTBULB,
+        "Camera" => icons::VIDEO,
+        "Rigidbody" | "Collider" => icons::ATOM,
+        "AudioSource" => icons::VOLUME_2,
+        "Terrain" => icons::MOUNTAIN,
+        "Animator" => icons::PERSON_STANDING,
+        _ => icons::COMPONENT,
+    }
+}
+
+/// One field: its label (scrubs numbers; a tick marks authored values) and its editor.
+fn field_row(s: &Studio, f: &Field) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let mark = match f.provenance {
+        Provenance::Default => stillkit::Rgba::TRANSPARENT,
+        Provenance::AgentChanged => c.warning.0,
+        Provenance::Override => c.info.0,
+        _ => c.primary.0.with_alpha(0.7),
+    };
+    let mut label = row()
+        .w(0.0)
+        .grow(LABEL)
+        .min_w(84.0)
+        .h(ROW)
+        .gap(6.0)
+        .align(Align::Center)
+        .child(el().w(2.0).h(14.0).radius(1.0).fill(mark))
+        .child(
+            text(sentence(&f.label))
+                .text_size(12.0)
+                .color(c.muted_foreground.0),
+        )
+        .tooltip(if f.doc.is_empty() {
+            f.label.clone()
+        } else {
+            f.doc.clone()
+        });
+    if let Widget::Number { step, min, max, .. } = &f.widget
+        && !f.read_only
+    {
+        label = scrubbable(
+            label,
+            f.path.clone(),
+            None,
+            f.value.as_f64().unwrap_or(0.0),
+            *step,
+            *min,
+            *max,
+        );
+    }
+    let (path, value) = (f.path.clone(), f.value.to_string());
+    let mut out = row()
+        .gap(6.0)
+        .align(Align::Center)
+        .min_h(ROW)
+        .on_context_menu(move |s: &mut Studio, x, y| {
+            s.local.field_menu = Some((path.clone(), value.clone(), (x, y)))
+        });
+    if let Some((_, value, (x, y))) = s.local.field_menu.as_ref().filter(|(p, ..)| *p == f.path) {
+        out = out.overlay(field_menu(s, &f.path, value, f.provenance).at(*x, *y));
+    }
+    out.child(label)
+        .child(editor(s, f).w(0.0).grow(1.0 - LABEL).min_w(0.0))
+}
+
+/// A label that scrubs a number: 8 px per step to the right, Shift for a tenth, Alt for ten.
+#[allow(clippy::too_many_arguments)]
+fn scrubbable(
+    label: El<Studio>,
+    path: String,
+    axis: Option<usize>,
+    value: f64,
+    step: f64,
+    min: Option<f64>,
+    max: Option<f64>,
+) -> El<Studio> {
+    let step = if step > 0.0 { step } else { 0.01 };
+    label
+        .cursor(Cursor::ResizeHorizontal)
+        .on_pointer(move |s: &mut Studio, e, _| {
+            match e.phase {
+                PointerPhase::Down => {
+                    for id in s.editor.state.selection.clone() {
+                        let _ = s.editor.field_gesture(&id, &path, true);
+                    }
+                    s.local.scrub = Some((path.clone(), axis, value, value));
+                }
+                PointerPhase::Move => {
+                    let k = if e.mods.shift {
+                        0.1
+                    } else if e.mods.alt {
+                        10.0
+                    } else {
+                        1.0
+                    };
+                    if let Some((_, _, _, now)) = s.local.scrub.as_mut() {
+                        // 8 logical px per schema step (I02).
+                        *now = (*now + f64::from(e.delta.x) / 8.0 * step * k)
+                            .clamp(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX));
+                        let now = *now;
+                        // The whole value previews in the Scene and the Inspector as it moves.
+                        s.local.draft = Some((path.clone(), whole(s, &path, axis, now)));
+                    }
+                }
+                PointerPhase::Up | PointerPhase::Cancel => {
+                    if let Some((path, axis, base, now)) = s.local.scrub.take() {
+                        s.local.draft = None;
+                        let _ = s.editor.end_field_gestures();
+                        if e.phase == PointerPhase::Up && (now - base).abs() > f64::EPSILON {
+                            commit_number(s, &path, axis, now);
+                        }
+                    }
+                }
+                PointerPhase::Hover => return false,
+            }
+            true
+        })
+}
+
+/// While a gizmo drags the first selected entity, its Transform field at `path` as the drag
+/// has it (position, rotation in degrees, scale), so the Inspector moves with the gizmo.
+fn dragged(s: &Studio, path: &str) -> Option<[f64; 3]> {
+    let gesture = s.editor.gesture.as_ref()?;
+    let matrix = gesture.current.get(s.editor.state.selection.first()?)?;
+    let (scale, rotation, position) = matrix.to_scale_rotation_translation();
+    let v = match path {
+        "Transform.position" => position,
+        "Transform.scale" => scale,
+        "Transform.rotation" => {
+            let (x, y, z) = rotation.to_euler(glam::EulerRot::XYZ);
+            glam::Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
+        }
+        _ => return None,
+    };
+    Some(v.to_array().map(f64::from))
+}
+
+/// The whole value of `path` with `value` set: the number itself, or the first selected
+/// entity's vector with channel `axis` replaced (every channel scaled, for a linked scale).
+fn whole(s: &Studio, path: &str, axis: Option<usize>, value: f64) -> Value {
+    let Some(a) = axis else {
+        return json!(round(value));
+    };
+    let scale = path.ends_with(".scale");
+    let current: Vec<f64> = s
+        .editor
+        .state
+        .selection
+        .first()
+        .and_then(|id| s.resolved.get(id))
+        .and_then(|e| {
+            let (component, field) = path.split_once('.')?;
+            e.record.get(component)?.get(field)?.as_array().cloned()
+        })
+        .map(|v| v.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect())
+        // An unauthored scale is its default, one on every axis.
+        .unwrap_or_else(|| vec![if scale { 1.0 } else { 0.0 }; 3]);
+    let base = current.get(a).copied().unwrap_or(0.0);
+    let linked = scale && s.local.scale_linked;
+    let out = current.iter().enumerate().map(|(i, v)| {
+        let v = match (i == a, linked) {
+            (true, _) => value,
+            (false, true) if base.abs() > 1e-9 => v * value / base,
+            (false, true) => value,
+            (false, false) => *v,
+        };
+        json!(round(v))
+    });
+    Value::Array(out.collect())
+}
+
+/// The Inspector's live preview for the Scene: the field being scrubbed, as its whole value
+/// on every selected entity (`SceneSync::preview` draws it until the commit lands).
+pub(super) struct Preview {
+    key: BTreeMap<String, String>,
+    draft: Option<(String, Value)>,
+    selection: Vec<String>,
+}
+
+impl Preview {
+    /// The preview of `s`'s current draft (empty when nothing is being scrubbed).
+    pub fn of(s: &Studio) -> Self {
+        let draft = s.local.draft.clone();
+        let key = draft
+            .iter()
+            .map(|(path, value)| (path.clone(), value.to_string()))
+            .collect();
+        Self {
+            key,
+            draft,
+            selection: s.editor.state.selection.clone(),
+        }
+    }
+}
+
+impl crate::app::scene_sync::Drafts for Preview {
+    fn drafts(&self) -> &BTreeMap<String, String> {
+        &self.key
+    }
+    fn draft_records(
+        &self,
+        _: &crate::editor::Editor,
+        view: &crate::world::DocumentView,
+    ) -> Option<BTreeMap<String, ara_doc::Record>> {
+        use crate::world::EditWorldView;
+        let (path, value) = self.draft.as_ref()?;
+        let (component, field) = path.split_once('.')?;
+        let records: BTreeMap<_, _> = self
+            .selection
+            .iter()
+            .filter_map(|id| {
+                let mut record = view.entities().get(id)?.record.clone();
+                record
+                    .entry(component.to_owned())
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()?
+                    .insert(field.to_owned(), value.clone());
+                Some((id.clone(), record))
+            })
+            .collect();
+        (!records.is_empty()).then_some(records)
+    }
+}
+
+/// Commits a number (one channel of a vector when `axis` is set) to every selected entity.
+pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, value: f64) {
+    // A linked scale moves every axis by the same ratio (equal values from a zero axis).
+    if let Some(a) = axis
+        && s.local.scale_linked
+        && path.ends_with(".scale")
+        && let Some(id) = s.editor.state.selection.first()
+    {
+        // An unauthored scale is its default, one on every axis.
+        let current = s
+            .resolved
+            .get(id)
+            .and_then(|e| {
+                let (component, field) = path.split_once('.')?;
+                e.record.get(component)?.get(field)?.as_array().cloned()
+            })
+            .unwrap_or_else(|| vec![json!(1.0); 3]);
+        let old: Vec<f64> = current.iter().map(|v| v.as_f64().unwrap_or(1.0)).collect();
+        let base = old.get(a).copied().unwrap_or(1.0);
+        let scaled: Vec<Value> = old
+            .iter()
+            .map(|v| {
+                json!(round(if base.abs() < 1e-9 {
+                    value
+                } else {
+                    v * value / base
+                }))
+            })
+            .collect();
+        commit(s, path, Value::Array(scaled), "Scale uniformly");
+        return;
+    }
+    let target = match axis {
+        Some(a) => format!("{path}.{}", ["x", "y", "z", "w"][a.min(3)]),
+        None => path.to_owned(),
+    };
+    commit(s, &target, json!(round(value)), "Set value");
+}
+
+/// Commits `value` at `path` to every selected entity (one undo step).
+fn commit(s: &mut Studio, path: &str, value: Value, why: &str) {
+    let commands = crate::inspector::edit_commands(&s.editor.state.selection, path, &value);
+    s.apply(commands, why);
+}
+
+/// Six significant decimals, so scrubbing never writes float noise.
+fn round(v: f64) -> f64 {
+    (v * 1e6).round() / 1e6
+}
+
+/// A number shown compactly: at most three decimals, as Unreal's transform fields, so it
+/// fits a vector field. Typing a value keeps its full precision.
+fn show(v: f64) -> String {
+    let r = (v * 1e3).round() / 1e3;
+    if r.fract() == 0.0 && r.abs() < 1e9 {
+        format!("{:.0}", r + 0.0)
+    } else {
+        format!("{r:.3}").trim_end_matches('0').to_owned()
+    }
+}
+
+/// The field's editor by widget kind.
+fn editor(s: &Studio, f: &Field) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let path = f.path.clone();
+    if f.mixed {
+        return text("—").text_size(12.0).color(c.muted_foreground.0);
+    }
+    match &f.widget {
+        Widget::Number { .. } => {
+            let shown = match &s.local.draft {
+                Some((p, v)) if *p == f.path => v.as_f64().unwrap_or(0.0),
+                _ => f.value.as_f64().unwrap_or(0.0),
+            };
+            number(
+                l,
+                &format!("field/{}", f.path),
+                shown,
+                f.unit.as_deref(),
+                f.read_only,
+                move |s, v| commit_number(s, &path, None, v),
+            )
+        }
+        Widget::Vector {
+            count,
+            color: false,
+            ..
+        } => {
+            let axes = ["X", "Y", "Z", "W"];
+            let tints = [
+                stillkit::Rgba::rgb8([240, 82, 82], 1.0),
+                stillkit::Rgba::rgb8([94, 200, 108], 1.0),
+                stillkit::Rgba::rgb8([80, 140, 255], 1.0),
+                c.muted_foreground.0,
+            ];
+            let mut out = row().gap(4.0);
+            for axis in 0..(*count).min(4) {
+                let value = match (&s.local.draft, dragged(s, &f.path)) {
+                    (_, Some(v)) => v[axis.min(2)],
+                    (Some((p, v)), _) if *p == f.path => {
+                        v.get(axis).and_then(Value::as_f64).unwrap_or(0.0)
+                    }
+                    _ => f
+                        .channels
+                        .get(axis)
+                        .and_then(Value::as_f64)
+                        .or_else(|| f.value.get(axis).and_then(Value::as_f64))
+                        .unwrap_or(0.0),
+                };
+                let path = f.path.clone();
+                let tag = scrubbable(
+                    el().key(format!("field/{}/{axis}/scrub", f.path))
+                        .w(14.0)
+                        .h(22.0)
+                        .align(Align::Center)
+                        .justify(Justify::Center)
+                        .child(
+                            text(axes[axis])
+                                .text_size(10.5)
+                                .weight(700)
+                                .color(tints[axis]),
+                        ),
+                    f.path.clone(),
+                    Some(axis),
+                    value,
+                    0.01,
+                    None,
+                    None,
+                );
+                out = out.child(
+                    row()
+                        .grow(1.0)
+                        .w(0.0)
+                        .h(ROW)
+                        .pad_x(2.0)
+                        .align(Align::Center)
+                        .radius(l.radius.xs)
+                        .fill(l.well())
+                        .child(tag)
+                        .child(
+                            number(
+                                l,
+                                &format!("field/{}/{axis}", f.path),
+                                value,
+                                None,
+                                f.read_only,
+                                move |s, v| commit_number(s, &path, Some(axis), v),
+                            )
+                            .grow(1.0)
+                            .fill(stillkit::Rgba::TRANSPARENT)
+                            .border(0.0, stillkit::Rgba::TRANSPARENT),
+                        ),
+                );
+            }
+            // Scale: a chain keeps the proportions (I06), off by default as in Unity.
+            if f.path.ends_with(".scale") {
+                let linked = s.local.scale_linked;
+                out = out.child(
+                    toggle_button(
+                        l,
+                        Size::Sm,
+                        if linked { icons::LINK } else { icons::UNLINK },
+                        if linked {
+                            "Proportions kept: click to edit axes alone"
+                        } else {
+                            "Keep proportions"
+                        },
+                        linked,
+                    )
+                    .size(ROW)
+                    .key(format!("field/{}/link", f.path))
+                    .on_press(|s: &mut Studio| s.local.scale_linked = !s.local.scale_linked),
+                );
+            }
+            out
+        }
+        Widget::Vector {
+            color: true,
+            count,
+            hdr,
+            ..
+        } => color_field(s, f, *count, *hdr),
+        Widget::Bool => {
+            let on = f.value.as_bool().unwrap_or(false);
+            let p = f.path.clone();
+            row().child(
+                checkbox(l, format!("field/{}", f.path), &f.label, on)
+                    .on_press(move |s: &mut Studio| commit(s, &p, json!(!on), "Toggle value")),
+            )
+        }
+        Widget::Enum { options } => {
+            let current = f.value.as_str().unwrap_or("").to_owned();
+            let key = format!("field/{}", f.path);
+            let open = s.local.select.as_deref() == Some(key.as_str());
+            let k = key.clone();
+            let mut trigger = select(l, Size::Sm, key.clone(), &current)
+                .expanded(open)
+                .on_press(move |s: &mut Studio| {
+                    s.local.select = if s.local.select.as_deref() == Some(k.as_str()) {
+                        None
+                    } else {
+                        Some(k.clone())
+                    }
+                });
+            if open {
+                let items = options
+                    .iter()
+                    .map(|o| {
+                        let (p, v) = (f.path.clone(), o.clone());
+                        menu_check(l, &format!("{key}/{o}"), o, *o == current).on_press(
+                            move |s: &mut Studio| {
+                                s.local.select = None;
+                                commit(s, &p, json!(v), "Choose value");
+                            },
+                        )
+                    })
+                    .collect();
+                trigger = trigger.overlay(
+                    menu(menu_panel(l, items))
+                        .match_width()
+                        .on_dismiss(|s: &mut Studio| s.local.select = None),
+                );
+            }
+            trigger
+        }
+        Widget::Text => {
+            let p = f.path.clone();
+            let shown = match &f.value {
+                Value::String(s) => s.clone(),
+                Value::Null => String::new(),
+                other => other.to_string(),
+            };
+            field(
+                l,
+                Size::Sm,
+                format!("field/{}", f.path),
+                None,
+                "",
+                &shown,
+                move |x| x.on_submit(move |s: &mut Studio, t| commit(s, &p, json!(t), "Edit text")),
+            )
+        }
+        Widget::Asset { .. } | Widget::Entity if !f.read_only => {
+            super::references::field(s, f, commit)
+        }
+        Widget::Compound { ty, .. } => super::compound::head(s, f, ty),
+        // Read-only references show what they point at.
+        Widget::Asset { .. } | Widget::Entity => {
+            let shown = match &f.value {
+                Value::String(s) => s.rsplit('/').next().unwrap_or(s).to_owned(),
+                Value::Null => "None".to_owned(),
+                other => other.to_string(),
+            };
+            row()
+                .h(ROW)
+                .pad_x(8.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .radius(l.radius.xs)
+                .fill(l.well())
+                .child(
+                    icon(if matches!(f.widget, Widget::Asset { .. }) {
+                        icons::PACKAGE
+                    } else {
+                        icons::LIST_TREE
+                    })
+                    .size(13.0)
+                    .color(c.muted_foreground.0),
+                )
+                .child(text(shown).text_size(12.0).color(c.foreground.0).grow(1.0))
+        }
+    }
+}
+
+/// A colour field: a swatch that opens the picker (live in the Scene while dragging, one
+/// undo step on release) and the hex value, typed on Enter. An HDR colour picks its base
+/// colour and keeps its intensity (its brightest channel above one).
+fn color_field(s: &Studio, f: &Field, count: usize, hdr: bool) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let value = match &s.local.draft {
+        Some((p, v)) if *p == f.path => v.clone(),
+        _ => f.value.clone(),
+    };
+    let channel = |i: usize| {
+        value
+            .get(i)
+            .or_else(|| value.get(["r", "g", "b", "a"][i]))
+            .and_then(Value::as_f64)
+            .unwrap_or(if i == 3 { 1.0 } else { 0.0 }) as f32
+    };
+    let rgba = stillkit::Rgba::new(channel(0), channel(1), channel(2), channel(3));
+    let intensity = if hdr {
+        rgba.r.max(rgba.g).max(rgba.b).max(1.0)
+    } else {
+        1.0
+    };
+    let base = stillkit::Rgba::new(
+        rgba.r / intensity,
+        rgba.g / intensity,
+        rgba.b / intensity,
+        rgba.a,
+    );
+    let to8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let hex = format!("#{:02X}{:02X}{:02X}", to8(base.r), to8(base.g), to8(base.b));
+    let key = format!("field/{}/swatch", f.path);
+    let open = s.local.picker.as_ref().is_some_and(|(p, _)| *p == f.path);
+    // The value in the field's own shape (an array or `r g b a` keys), at its intensity.
+    let shaped = {
+        let template = f.value.clone();
+        move |c: stillkit::Rgba| {
+            let channels = [c.r * intensity, c.g * intensity, c.b * intensity, c.a];
+            let n = count.clamp(3, 4);
+            match &template {
+                Value::Object(_) => Value::Object(
+                    ["r", "g", "b", "a"][..n]
+                        .iter()
+                        .zip(channels)
+                        .map(|(k, v)| ((*k).to_owned(), json!(round(f64::from(v)))))
+                        .collect(),
+                ),
+                _ => Value::Array(
+                    channels[..n]
+                        .iter()
+                        .map(|v| json!(round(f64::from(*v))))
+                        .collect(),
+                ),
+            }
+        }
+    };
+    let path = f.path.clone();
+    let mut swatch = row()
+        .key(key.clone())
+        .w(36.0)
+        .h(ROW - 2.0)
+        .radius(super::style::RADIUS)
+        .fill(base.with_alpha(1.0))
+        .label("Pick colour")
+        .tooltip("Pick colour")
+        .expanded(open)
+        .on_press(move |s: &mut Studio| {
+            s.local.picker = match &s.local.picker {
+                Some((p, _)) if *p == path => None,
+                _ => Some((path.clone(), stillkit_kit::Hsva::from_rgba(base))),
+            };
+        });
+    if open && let Some((_, hsva)) = &s.local.picker {
+        let (path, commit_path, shaped_commit) = (f.path.clone(), f.path.clone(), shaped.clone());
+        let picker = stillkit_kit::ColorPicker::new(*hsva)
+            .alpha(count >= 4)
+            .width(232.0)
+            .on_change(move |s: &mut Studio, picked, done| {
+                let value = shaped(picked.rgba());
+                s.local.picker = Some((path.clone(), picked));
+                if done {
+                    s.local.draft = None;
+                    commit(s, &path, value, "Pick colour");
+                } else {
+                    s.local.draft = Some((path.clone(), value));
+                }
+            })
+            .build();
+        let hex_field = field(
+            l,
+            Size::Sm,
+            format!("field/{}/hex", f.path),
+            Some(icons::HASH),
+            "",
+            hex.trim_start_matches('#'),
+            move |x| {
+                x.on_submit(move |s: &mut Studio, t| {
+                    if let Some(rgb) = parse_hex(t) {
+                        let picked = stillkit::Rgba::new(rgb[0], rgb[1], rgb[2], base.a);
+                        s.local.picker =
+                            Some((commit_path.clone(), stillkit_kit::Hsva::from_rgba(picked)));
+                        commit(s, &commit_path, shaped_commit(picked), "Set colour");
+                    }
+                })
+            },
+        );
+        let panel = super::style::float(l, col())
+            .pad(10.0)
+            .gap(10.0)
+            .radius(l.radius.md)
+            .child(picker)
+            .child(hex_field);
+        swatch = swatch.overlay(popover(panel).on_dismiss(|s: &mut Studio| {
+            s.local.picker = None;
+            s.local.draft = None;
+        }));
+    }
+    row()
+        .gap(8.0)
+        .align(Align::Center)
+        .child(swatch)
+        .child(
+            text(hex)
+                .text_size(11.5)
+                .family(mono())
+                .color(c.foreground.0),
+        )
+        .children(hdr.then(|| {
+            text(format!("× {intensity:.2}"))
+                .text_size(11.0)
+                .color(c.muted_foreground.0)
+        }))
+}
+
+/// `RRGGBB` or `RGB` (with or without `#`) as channels from 0 to 1.
+fn parse_hex(text: &str) -> Option<[f32; 3]> {
+    let t = text.trim().trim_start_matches('#');
+    let full: String = match t.len() {
+        3 => t.chars().flat_map(|c| [c, c]).collect(),
+        6 => t.to_owned(),
+        _ => return None,
+    };
+    let byte = |i: usize| u8::from_str_radix(full.get(i..i + 2)?, 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
+}
+
+/// A number box: the value to edit, its unit after it as a quiet label (not part of what
+/// you type, as in Unreal); a new value on Enter.
+fn number(
+    l: &ara_kit::look::Look,
+    key: &str,
+    value: f64,
+    unit: Option<&str>,
+    read_only: bool,
+    commit: impl Fn(&mut Studio, f64) + 'static,
+) -> El<Studio> {
+    let shown = show(value);
+    let unit = unit.filter(|u| !u.is_empty()).map(str::to_owned);
+    let label = unit
+        .clone()
+        .map(|u| text(u).text_size(10.5).color(l.c.muted_foreground.0));
+    let mut f = text_input(key.to_owned())
+        .focus_ring(false)
+        .grow(1.0)
+        .value(shown.clone())
+        .select_all_on_focus()
+        .text_size(12.5)
+        .text_align(stillkit::el::TextAlign::Start)
+        .color(l.c.foreground.0)
+        .on_submit(move |s: &mut Studio, t| {
+            // The box shows a rounded value: Enter on it untouched keeps the exact one.
+            if t == shown {
+                return;
+            }
+            if let Ok(v) = crate::inspector::parse_number(t, unit.as_deref()) {
+                commit(s, v);
+            }
+        });
+    if read_only {
+        f = f.read_only();
+    }
+    row()
+        .h(ROW)
+        .pad_x(6.0)
+        .align(Align::Center)
+        .radius(super::style::RADIUS)
+        .fill(l.well())
+        .border(1.0, stillkit::Rgba::TRANSPARENT)
+        .focus_within({
+            let ring = l.c.ring.0;
+            move |e| e.border(1.0, ring)
+        })
+        .child(f)
+        .children(label)
+}
+
+/// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.
+fn field_menu(
+    s: &Studio,
+    path: &str,
+    value: &str,
+    provenance: Provenance,
+) -> stillkit::el::Overlay<Studio> {
+    let l = &s.look;
+    let (reset, copy_value, copy_path) = (path.to_owned(), value.to_owned(), path.to_owned());
+    let mut items = Vec::new();
+    if provenance != Provenance::Default {
+        items.push(menu_item(l, &format!("field/{path}/reset"), Some(icons::UNDO_2), "Reset to Default", None, false).on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "editor.property.reset", "args": {"entity": e, "path": reset}})).collect();
+            s.apply(commands, "Reset value");
+        }));
+        items.push(menu_separator(l));
+    }
+    items.push(
+        menu_item(
+            l,
+            &format!("field/{path}/copy"),
+            Some(icons::COPY),
+            "Copy Value",
+            None,
+            false,
+        )
+        .on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            s.local.copy = Some(copy_value.clone());
+        }),
+    );
+    items.push(
+        menu_item(
+            l,
+            &format!("field/{path}/path"),
+            Some(icons::LINK),
+            "Copy Path",
+            None,
+            false,
+        )
+        .on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            if let Some(entity) = s.editor.state.selection.first().cloned() {
+                s.local.copy = Some(format!(
+                    "{}/{copy_path}",
+                    crate::shell::commands::table::reference(&s.editor, &entity)
+                ));
+            }
+        }),
+    );
+    menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.field_menu = None)
+}
+
+/// A component's ⋯ menu: remove it from the selection, fold the others.
+fn component_menu(s: &Studio, component: &str) -> El<Studio> {
+    let l = &s.look;
+    let open = s.local.component_menu.as_deref() == Some(component);
+    let name = component.to_owned();
+    let mut b = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key(format!("component/{component}/more"))
+        .expanded(open)
+        .on_press(move |s: &mut Studio| {
+            s.local.component_menu = if s.local.component_menu.as_deref() == Some(name.as_str()) {
+                None
+            } else {
+                Some(name.clone())
+            };
+        });
+    if open {
+        let (remove, others) = (component.to_owned(), component.to_owned());
+        let items = vec![
+            menu_item(l, &format!("component/{component}/fold"), Some(icons::CHEVRONS_UP_DOWN), "Fold Others", None, false).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                let all: Vec<String> = s.resolved.get(&s.editor.state.selection[0]).map(|e| e.record.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect()).unwrap_or_default();
+                s.local.folded = all.into_iter().filter(|k| *k != others).collect();
+            }),
+            menu_separator(l),
+            menu_item(l, &format!("component/{component}/remove"), Some(icons::TRASH), "Remove Component", None, true).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "component.remove", "args": {"entity": e, "component": remove}})).collect();
+                s.apply(commands, &format!("Remove {remove}"));
+            }),
+        ];
+        b = b.overlay(
+            menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.component_menu = None),
+        );
+    }
+    b
+}
+
+/// A type name with spaces between its words: `MeshRenderer` reads "Mesh Renderer".
+pub(super) fn spaced(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    let chars: Vec<char> = name.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        let next_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
+        if i > 0 && c.is_uppercase() && (chars[i - 1].is_lowercase() || next_lower) {
+            out.push(' ');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// A schema name as a label: `emissiveStrength` reads "Emissive strength".
+fn sentence(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    for (i, c) in name.chars().enumerate() {
+        if i == 0 {
+            out.extend(c.to_uppercase());
+        } else if c.is_uppercase() {
+            out.push(' ');
+            out.extend(c.to_lowercase());
+        } else if c == '_' {
+            out.push(' ');
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}

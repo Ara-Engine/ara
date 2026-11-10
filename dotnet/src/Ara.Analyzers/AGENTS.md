@@ -30,7 +30,10 @@ their own APIs; ARA05xx stays quiet there instead of reporting twice.
 
 - IDs are stable; add rules at the end of a range. Messages say what to use instead.
 - Analyzers skip generated code and attribute arguments.
-- The compile server runs them on every edit (changed files only); errors block the reload.
+- The compile server runs them on every edit; errors block the reload. Ordinary
+  method-body edits check changed trees. Images, declarations, additions, accessors,
+  directives and reference changes use full compilation analysis, including unchanged
+  partial files whose policy changed. Per-tree loops can omit partial-symbol diagnostics.
 
 ## Testing
 

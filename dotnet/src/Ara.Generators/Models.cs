@@ -76,11 +76,19 @@ public sealed record DataModel(Shell Shell, string Role, string SchemaName, Equa
     EquatableArray<TypeDef> Defs, EquatableArray<DiagInfo> Diags);
 
 /// <summary>One parameter of a system's <c>Run</c> method.</summary>
-public sealed record SystemParam(string Kind, string CsType, string RefKind, string SchemaName);
+public sealed record SystemParam(string Kind, string CsType, string RefKind, string SchemaName)
+{
+    /// <summary>A component access, whether supplied one row at a time or as a batch span.</summary>
+    public bool IsColumn => Kind is "column" or "span";
+}
 
 /// <summary>A <c>[Query]</c> system.</summary>
 public sealed record SystemModel(Shell Shell, string Method, string Name, int Order, EquatableArray<SystemParam> Params,
-    EquatableArray<string> With, EquatableArray<string> Without, EquatableArray<DiagInfo> Diags);
+    EquatableArray<string> With, EquatableArray<string> Without, EquatableArray<DiagInfo> Diags)
+{
+    /// <summary>True when the method consumes a complete contiguous run through spans.</summary>
+    public bool IsBatch => Params.Any(p => p.Kind is "span" or "entity-span");
+}
 
 /// <summary>One <c>[Property]</c> of a behaviour.</summary>
 public sealed record PropModel(string Modifiers, string CsType, string Name, bool HasGet, string? SetKeyword, string Doc);

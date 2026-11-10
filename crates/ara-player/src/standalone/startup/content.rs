@@ -13,7 +13,7 @@ pub(super) struct Prepared {
 /// Resolve the first immutable extraction on the runtime worker. No SDL or
 /// main-thread input/network owner is attached until this preparation completes.
 pub(super) fn prepare(
-    scene: &ara_play::PlayScene,
+    scene: ara_play::PlayScene,
     source: Arc<dyn ara_runtime::assets::AssetSource>,
 ) -> Result<Prepared> {
     let (mut world, build_ms) = World::prepare_packed(scene, Arc::clone(&source))?;

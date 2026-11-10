@@ -142,9 +142,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
     perf.configure_rt(render_options.ray_tracing, quality);
-    let scene = Arc::new(scene);
+    let scene_id = scene.scene.clone();
     let (mut world, build_ms, window, presenter) = if args.standalone.headless {
-        let (world, build_ms) = World::build_packed(&scene, source, false)?;
+        let (world, build_ms) = World::build_packed(scene, source, false)?;
         (
             world,
             build_ms,
@@ -153,7 +153,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         )
     } else {
         let Some(loaded) = startup::load(
-            Arc::clone(&scene),
+            scene,
             source,
             startup::Settings {
                 name: launch
@@ -434,7 +434,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     println!(
         "ARA_RESULT {}",
         json!({"verified":true,"template_contract":launch.contract,
-        "scene":scene.scene,"entities":started.entities,"tick":world.runtime.tick(),
+        "scene":scene_id,"entities":started.entities,"tick":world.runtime.tick(),
         "capture":result,"reads":reads,"quality":presenter.quality().map(|value| value.name()),
         "gpu_ms":presenter.stats().gpu_ms,"elapsed_ms":began.elapsed().as_millis(),
         "startup":phases,"frames_after_first":frame_count,

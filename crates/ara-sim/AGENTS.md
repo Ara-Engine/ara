@@ -17,8 +17,10 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
   actual Bevy `ChildOf`, and `SceneMetadata` (name/order). `entity` maps addresses;
   `children` sorts by order then stable ID. Do not assume Bevy Children insertion
   order is authoring order. `apply_transaction` / `apply_ops` mirror committed ops;
-  unchanged entities/components survive. Prefab resolution/validation currently
-  scans the document before applying only changed ECS rows; there is no world reload.
+  unchanged entities/components survive. Local scene Set batches validate/resolve
+  touched source records when addresses, hierarchy and live mappings stay stable.
+  Structural/dependency edits and uncertain cases use full resolution before
+  applying changed ECS rows. A large prefab instance is still resolved in full.
 - `DynamicLayout`: native scalar/vector fields inline in a descriptor-backed table
   element, with an owned header for variable/nested schema values. `fields` reports
   offsets. Private encode/decode/drop routines are the only unsafe projection code.
@@ -114,7 +116,7 @@ non-finite runtime values are rejected. Each world has its own dynamic component
 
 ## Gates
 
-Set `CARGO_BUILD_JOBS=4`. Run:
+Set `CARGO_BUILD_JOBS=2`. Run:
 
 ```
 cargo test -p ara-sim -p ara-input -p ara-components

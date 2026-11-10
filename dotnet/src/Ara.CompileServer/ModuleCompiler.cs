@@ -97,12 +97,17 @@ internal sealed class ModuleCompiler
     /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
     internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Errors) Emit(Compilation c, CancellationToken ct = default)
     {
+        var (image, diagnostics) = EmitWithDiagnostics(c, ct);
+        return (image, [.. diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)]);
+    }
+
+    /// <summary>Emits once and returns compiler warnings as well as errors, without a separate diagnostic pass.</summary>
+    internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Diagnostics) EmitWithDiagnostics(Compilation c, CancellationToken ct = default)
+    {
         using var pe = new MemoryStream();
         using var pdb = new MemoryStream();
         var r = c.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb), cancellationToken: ct);
-        return r.Success
-            ? (new ModuleImage(pe.ToArray(), pdb.ToArray()), [])
-            : (null, [.. r.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)]);
+        return (r.Success ? new ModuleImage(pe.ToArray(), pdb.ToArray()) : null, r.Diagnostics);
     }
 
     static readonly SymbolDisplayFormat SurfaceFormat = SymbolDisplayFormat.FullyQualifiedFormat

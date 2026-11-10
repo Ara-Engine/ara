@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-10",
+  "scope": "Build/security and SDK-discovery correctness only; no performance result. Windows integration recheck remains separate.",
+  "package": "Microsoft.DotNet.ILCompiler",
+  "minimum_net10_nativeaot_version": "10.0.14",
+  "advisory": "https://github.com/advisories/GHSA-p3jp-9v83-76w9",
+  "release": "https://devblogs.microsoft.com/dotnet/dotnet-october-2026-oob-security-updates/",
+  "package_fix_commit": "b38b0d11b",
+  "baseline": {
+    "sdk": "10.0.203",
+    "compiler": "10.0.7",
+    "audit_enabled": true,
+    "result": "NU1903, high severity GHSA-p3jp-9v83-76w9",
+    "artifact_output": "isolated control directory; fresh HTTP audit cache"
+  },
+  "patched": {
+    "sdk": "10.0.203",
+    "release_solution_build": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "tests": {
+      "passed": 314,
+      "failed": 0,
+      "skipped": 0,
+      "compiler": 218,
+      "analyzer": 30,
+      "generator": 29,
+      "runtime": 28,
+      "run_worker": 9
+    },
+    "native_aot_execution_tests_passed": 2,
+    "audit_override": false,
+    "resolved_compiler": [
+      "Microsoft.DotNet.ILCompiler/10.0.14"
+    ],
+    "restore_audit_properties": {
+      "enableAudit": "true",
+      "auditLevel": "low",
+      "auditMode": "all"
+    },
+    "vulnerable_direct_or_transitive_packages_reported": 0,
+    "eight_version_floor_controls": "older/patched/newer tool versions; native runtime pack floor; CoreCLR and net9 packs unchanged"
+  },
+  "sdk_discovery": {
+    "reproduction": "Move project_lifecycle executable and its project outside checkout; remove ARA_DOTNET_ARTIFACTS; existing default SDK assemblies remain inside checkout.",
+    "baseline": "fails: installed C# project tools are missing",
+    "candidate": "same public lifecycle succeeds without artifact override",
+    "regression_cases": [
+      "external source-build executable/project",
+      "packaged engine cannot fall back to build checkout",
+      "explicit override for packaged engine",
+      "installed tools retain priority over override",
+      "ARA0904 explains build command and artifacts/bin layout"
+    ],
+    "project_tests_passed": 7,
+    "unit_tests_passed": 24,
+    "ignored_unit_tests": {
+      "count": 1,
+      "reason": "opt-in dependency-plan performance probe"
+    },
+    "diagnostic_catalog_coverage": "passed",
+    "all_target_clippy_warnings_denied": "passed",
+    "workspace_format": "passed"
+  },
+  "production_source_sha256": {
+    "dotnet/Directory.Build.targets": "cb0d29783ba5536c52f2507c2fb8cf694e45d1e2c03efed6d76062c34388f5d9",
+    "crates/ara-script/src/project.rs": "5ed47c257c2261d5a547293614ed23b5fb959a08bc2c7fba2b6b65873a17e284",
+    "crates/ara-script/src/project/session.rs": "8b11ef4cec7fdd0cdb5d4a6cc42c0426214df3bc1912def3a7885313ec8defa8",
+    "crates/ara-script/src/project/tool.rs": "eff8171e6e73c0f8775b5d6e2ef07d43d57e7e52a6e34d2b56225584fef6a5a6",
+    "crates/ara-script/src/project/editor.rs": "d40df788e6af2674183434c33dd990ce936bdc06b6c173c4cbe6c0b7649a3c83",
+    "crates/ara-script/tests/tool_paths.rs": "413148ed5f3dcf71683851583c3526defd4ec9fb63dd4f8d6eccc02066e55098"
+  },
+  "raw_log_root": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/ilcompiler-audit-fix-20261110",
+  "proof_sha256": {
+    "baseline-old-sdk.log": "7a7e70ca2df36d8b8cbdbb7bc827d8e2c1f1c4c2f8c8c9be45ca6e944683575e",
+    "baseline.json": "a08a2b0e33bfdf7d241e120b5e8bb5bac2fa06683b00a4a8bb2c590dfce5b2cc",
+    "patched-restore-result.json": "c2e8ca426a6fde40ceeea86da31084777e30c7b59c70ad51a8883f8cf26ce8d8",
+    "floor-policy-result.json": "6e00371f84ea99ff0ec2a403455db1b7e37e911d8602fd734bbfaf30638f1345",
+    "verification-01/report.json": "2cc301ca18df7c1b2d23de22602c316b6493ce03a9d342caae313806ab90fc12",
+    "verification-01/release-build.log": "b770866633803a10081d77beef241f6c84afacaf53c419bda14eef75373d6e70",
+    "verification-01/solution-tests.log": "0061cd20f51d1419796c696cb8fa078c8cf127573c7dd1fba4ef3ff07ea37245",
+    "verification-01/package-audit.log": "ae37a9542485dc1e6b26ed7dd2ff61615778be3c67a45fa463e273010fd3eb80",
+    "verification-01/native-aot.log": "abbbcc0814cd7995d1a334b28e3905a28e8344ec7aab41f3df9f59e4a7563478",
+    "external-path-baseline.json": "fd88b35228f98cfc52a8ae75f942faf622e00c70beedf02b298015835106e3fd",
+    "external-path-baseline.log": "e51f1b66ecb273de10c6ddfbb1e9270327bbb3f9738a6a2af7e204e1ac2acc85",
+    "discovery-verification-01/report.json": "6270330d0df4d318c97aa7ef044d8f3400a2faa861fd43e82f6f776e908d3a19",
+    "discovery-verification-01/external-lifecycle-result.json": "d79816413b5c538ad353e5f956fdad77afe89f870e1da514d59f069547f50286",
+    "discovery-verification-01/external-lifecycle.log": "bd0560bd05221f88a9e3492bd4711c0b43341ea47a5767180f0157eeaeedd92c"
+  }
+}

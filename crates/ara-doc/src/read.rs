@@ -5,12 +5,15 @@ use std::collections::BTreeMap;
 
 use ara_diag::{Diagnostic, FixAction, Location, codes};
 use ara_schema::SchemaDb;
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::document::Document;
 use crate::refs::{AssetIndex, repair_record};
 use crate::validate::{check_entity_refs, check_record, check_structure, record_type};
 use crate::{AssetId, RecordId};
+
+mod header;
+pub use header::read_header;
 
 /// Top-level keys, in canonical order.
 pub(crate) const HEADER: [&str; 5] = ["$schema", "id", "versions", "$conflicts", "records"];
@@ -291,13 +294,4 @@ fn read_versions(
         }
     }
     versions
-}
-
-/// Parses only the header of a document: its kind and asset ID. Used to build the
-/// asset index before full reads.
-pub fn read_header(text: &str, db: &SchemaDb) -> Option<(String, AssetId)> {
-    let root: Map<String, Value> = ara_json::parse(text).ok()?.as_object()?.clone();
-    let (kind, _) = db.kind_for_schema(root.get("$schema")?.as_str()?).ok()?;
-    let id = AssetId::parse(root.get("id")?.as_str()?).ok()?;
-    Some((kind.name.clone(), id))
 }

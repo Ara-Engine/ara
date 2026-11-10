@@ -263,45 +263,152 @@ fn decode(ty: &ValueType, bytes: &[u8], tail: &[Value]) -> Result<Value> {
     })
 }
 
+/// Copies the source once, then fills defaults and normalizes its owned values.
 pub(crate) fn materialize(db: &SchemaDb, ty: &ValueType, value: &Value) -> Value {
-    match (ty, value) {
-        (ValueType::I32 | ValueType::I64, Value::Number(number)) if number.as_i64().is_none() => {
-            number
-                .as_f64()
-                .map(|n| Value::from(n as i64))
-                .unwrap_or_else(|| value.clone())
-        }
-        (
-            ValueType::U8 | ValueType::U16 | ValueType::U32 | ValueType::U64,
-            Value::Number(number),
-        ) if number.as_u64().is_none() => number
-            .as_f64()
-            .map(|n| Value::from(n as u64))
-            .unwrap_or_else(|| value.clone()),
-        (ValueType::Named(name), Value::Object(object)) => {
-            let Some(desc) = db.get(name) else {
-                return value.clone();
-            };
-            let mut out = object.clone();
-            for field in desc.fields() {
-                let v = object
-                    .get(&field.name)
-                    .cloned()
-                    .unwrap_or_else(|| db.field_default(field));
-                out.insert(field.name.clone(), materialize(db, &field.ty, &v));
+    let mut complete = value.clone();
+    materialize_in_place(db, ty, &mut complete);
+    complete
+}
+
+/// Preserves existing key order and unknown values while visiting reflected fields.
+fn materialize_in_place(db: &SchemaDb, ty: &ValueType, value: &mut Value) {
+    match ty {
+        ValueType::I32 | ValueType::I64 if value.as_i64().is_none() => {
+            if let Some(number) = value.as_f64() {
+                *value = Value::from(number as i64);
             }
-            Value::Object(out)
         }
-        (ValueType::Option(inner), v) if !v.is_null() => materialize(db, inner, v),
-        (ValueType::List(inner) | ValueType::Keyed(inner), Value::Array(items)) => {
-            Value::Array(items.iter().map(|v| materialize(db, inner, v)).collect())
+        ValueType::U8 | ValueType::U16 | ValueType::U32 | ValueType::U64
+            if value.as_u64().is_none() =>
+        {
+            if let Some(number) = value.as_f64() {
+                *value = Value::from(number as u64);
+            }
         }
-        (ValueType::Map(inner), Value::Object(items)) => Value::Object(
-            items
-                .iter()
-                .map(|(k, v)| (k.clone(), materialize(db, inner, v)))
-                .collect(),
-        ),
-        _ => value.clone(),
+        ValueType::Named(name) => {
+            if let (Some(desc), Some(object)) = (db.get(name), value.as_object_mut()) {
+                for field in desc.fields() {
+                    let slot = object
+                        .entry(field.name.clone())
+                        .or_insert_with(|| db.field_default(field));
+                    materialize_in_place(db, &field.ty, slot);
+                }
+            }
+        }
+        ValueType::Option(inner) if !value.is_null() => materialize_in_place(db, inner, value),
+        ValueType::List(inner) | ValueType::Keyed(inner) => {
+            if let Some(items) = value.as_array_mut() {
+                for item in items {
+                    materialize_in_place(db, inner, item);
+                }
+            }
+        }
+        ValueType::Map(inner) => {
+            if let Some(items) = value.as_object_mut() {
+                for item in items.values_mut() {
+                    materialize_in_place(db, inner, item);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use ara_schema::Schema;
+    use serde_json::json;
+
+    use super::*;
+
+    /// Nested defaults and numeric normalization must survive every container.
+    #[derive(Schema)]
+    #[allow(dead_code)]
+    struct Child {
+        /// Integral stored value.
+        #[ara(default = 7)]
+        amount: u64,
+        /// Floating point payload, including signed zero.
+        signed: f64,
+    }
+
+    /// Complete reflected input with owned variable data.
+    #[derive(Schema)]
+    #[allow(dead_code)]
+    struct Payload {
+        /// Nested value.
+        child: Child,
+        /// Optional nested value.
+        optional: Option<Child>,
+        /// Ordered values.
+        items: Vec<Child>,
+        /// Named values.
+        entries: BTreeMap<String, Child>,
+        /// Unreflected JSON remains untouched.
+        raw: Value,
+    }
+
+    #[test]
+    fn nested_materialization_preserves_source_order_unknowns_defaults_and_float_bits() {
+        let mut db = SchemaDb::new();
+        db.register::<Child>();
+        db.register::<Payload>();
+        let source = json!({
+            "raw":{"keep":[2.0,-0.0]}, "child":{"signed":-0.0,"extra":"retained"},
+            "items":[{"amount":2.0},{}], "entries":{"first":{"amount":3.0}},
+            "optional":{"amount":4.0}, "unknown":["unchanged"]
+        });
+        let original = source.clone();
+        let complete = materialize(&db, &ValueType::Named("Payload".into()), &source);
+        assert_eq!(source, original, "materialization never edits its source");
+        assert_eq!(complete["child"]["amount"], 7);
+        assert_eq!(complete["child"]["extra"], "retained");
+        assert_eq!(complete["items"][0]["amount"], 2);
+        assert_eq!(complete["items"][1]["amount"], 7);
+        assert_eq!(complete["entries"]["first"]["amount"], 3);
+        assert_eq!(complete["optional"]["amount"], 4);
+        assert_eq!(complete["unknown"], source["unknown"]);
+        assert_eq!(complete["raw"], source["raw"]);
+        assert_eq!(
+            complete["child"]["signed"]
+                .as_f64()
+                .expect("float")
+                .to_bits(),
+            (-0.0f64).to_bits()
+        );
+        assert_eq!(
+            complete
+                .as_object()
+                .expect("object")
+                .keys()
+                .collect::<Vec<_>>(),
+            source
+                .as_object()
+                .expect("object")
+                .keys()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            materialize(
+                &db,
+                &ValueType::Option(Box::new(ValueType::Named("Child".into()))),
+                &Value::Null
+            ),
+            Value::Null
+        );
+        let keyed = materialize(
+            &db,
+            &ValueType::Keyed(Box::new(ValueType::Named("Child".into()))),
+            &json!([{"id":"s_a","amount":6.0}]),
+        );
+        assert_eq!(keyed[0]["id"], "s_a");
+        assert_eq!(keyed[0]["amount"], 6);
+        assert_eq!(materialize(&db, &ValueType::I64, &json!(-3.0)), json!(-3));
+        assert_eq!(
+            materialize(&db, &ValueType::Named("Missing".into()), &source),
+            source
+        );
     }
 }

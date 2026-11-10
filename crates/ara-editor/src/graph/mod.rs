@@ -58,6 +58,38 @@ struct Pin {
     direction: Direction,
     ty: String,
     connected: bool,
+    /// The input's default value, drawn on the pin row (see [`Inline`]).
+    inline: Option<Inline>,
+}
+/// An input's default value shown inside its node, as Unreal shows pin defaults: the
+/// constant the material's `node.add` generated for the input (named `…Input<n>`, feeding
+/// only it) is not drawn as a node of its own.
+struct Inline {
+    /// The constant node holding the value; edits go to it.
+    node: String,
+    text: String,
+    swatch: Option<Color>,
+}
+/// Whether `node`, used by `uses` edges, is a generated input default: a material constant
+/// named as `node.add` names them (`value_3Input0`) feeding at most one input.
+fn generated_default(node: &ara_graph::Node, uses: usize) -> bool {
+    node.kind == "material.literal"
+        && uses <= 1
+        && node
+            .payload
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|name| name.rsplit_once("Input"))
+            .is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+/// Whether node `id` of `graph` is a generated input default, drawn on its consumer's pin
+/// (see [`Inline`]); connecting over it or deleting its consumer removes it.
+pub fn is_default(graph: &Graph, id: &str) -> bool {
+    let uses = graph.edges.values().filter(|e| e.from.node == id).count();
+    graph
+        .nodes
+        .get(id)
+        .is_some_and(|node| generated_default(node, uses))
 }
 struct NodeView {
     id: String,
@@ -75,6 +107,14 @@ impl NodeView {
     fn pins_top(&self) -> f32 {
         HEADER + if self.look.value.is_some() { VALUE } else { 0. } + PAD
     }
+}
+/// A state machine arrow on screen: its ends, unit normal, and how far it sits off the
+/// centre line (a reverse pair splits apart).
+struct ArrowLine {
+    start: [f32; 2],
+    end: [f32; 2],
+    normal: [f32; 2],
+    shift: f32,
 }
 struct Wire {
     id: String,
@@ -111,6 +151,8 @@ pub struct Theme {
     pub chart: [Color; 6],
     /// Drop shadow under cards (alpha carries the strength).
     pub shadow: Color,
+    /// The ring around selected nodes (Unreal's orange).
+    pub select: Color,
 }
 impl Theme {
     fn accent(&self, accent: Accent) -> Color {
@@ -164,6 +206,8 @@ pub struct Canvas {
     wires: Vec<Wire>,
     labels: Labels,
     errors: BTreeMap<String, String>,
+    /// Generated input defaults drawn inline on their consumer's pin, not as nodes.
+    defaults: BTreeSet<String>,
     drag: Option<interaction::Drag>,
     pointer: [f32; 2],
 }
@@ -185,6 +229,7 @@ impl Canvas {
             wires: Vec::new(),
             labels: Labels::default(),
             errors: BTreeMap::new(),
+            defaults: BTreeSet::new(),
             drag: None,
             pointer: [0.; 2],
         };
@@ -242,20 +287,59 @@ impl Canvas {
     }
     /// Semantic node/port geometry for agents, including culled nodes and annotations.
     pub fn report(&self, rect: Box2) -> serde_json::Value {
-        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"inline":pin.inline.as_ref().map(|i|serde_json::json!({"node":i.node,"value":i.text})),"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
     }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();
         self.index.clear();
         self.wires.clear();
+        let mut uses = BTreeMap::<&str, usize>::new();
+        for edge in self.graph.edges.values() {
+            *uses.entry(edge.from.node.as_str()).or_default() += 1;
+        }
+        self.defaults = self
+            .graph
+            .nodes
+            .iter()
+            .filter(|(id, node)| {
+                generated_default(node, uses.get(id.as_str()).copied().unwrap_or(0))
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut inline = BTreeMap::new();
+        for edge in self.graph.edges.values() {
+            let Some(node) = self
+                .graph
+                .nodes
+                .get(&edge.from.node)
+                .filter(|_| self.defaults.contains(&edge.from.node))
+            else {
+                continue;
+            };
+            let look = style::look(&self.graph, &edge.from.node, node);
+            let value = look.value.unwrap_or_default();
+            self.labels.prepare(&value, text);
+            inline.insert(
+                (edge.to.node.clone(), edge.to.port.clone()),
+                Inline {
+                    node: edge.from.node.clone(),
+                    text: value,
+                    swatch: look.swatch,
+                },
+            );
+        }
         let connected = self
             .graph
             .edges
             .values()
+            .filter(|edge| !self.defaults.contains(&edge.from.node))
             .flat_map(|edge| [&edge.from, &edge.to])
             .map(|endpoint| (endpoint.node.as_str(), endpoint.port.as_str()))
             .collect::<BTreeSet<_>>();
         for (id, node) in &self.graph.nodes {
+            if self.defaults.contains(id) {
+                continue;
+            }
             let look = style::look(&self.graph, id, node);
             // Unplaced nodes (text-authored) are laid out below, once heights are known.
             let position = self
@@ -274,6 +358,7 @@ impl Canvas {
                     direction: port.direction,
                     ty: port.ty.clone(),
                     connected: connected.contains(&(id.as_str(), name.as_str())),
+                    inline: inline.remove(&(id.clone(), name.clone())),
                 })
                 .collect::<Vec<_>>();
             let inputs = ports
@@ -316,6 +401,9 @@ impl Canvas {
         self.layout_unplaced();
         let transitions = self.graph.header.payload.get("transitions");
         for (id, edge) in &self.graph.edges {
+            if self.defaults.contains(&edge.from.node) {
+                continue;
+            }
             let label = transitions
                 .and_then(|t| t.get(id))
                 .and_then(serde_json::Value::as_str)
@@ -345,8 +433,14 @@ impl Canvas {
         for group in self.graph.editor.groups.values() {
             self.labels.prepare(&group.label, text);
         }
-        self.selection
-            .retain(|id| self.graph.nodes.contains_key(id));
+        // Picks that still exist stay picked: nodes, wires, comments and groups.
+        let editor = &self.graph.editor;
+        self.selection.retain(|id| {
+            self.graph.nodes.contains_key(id)
+                || self.graph.edges.contains_key(id)
+                || editor.groups.contains_key(id)
+                || editor.comments.contains_key(id)
+        });
         self.previews
             .retain(|id, _| self.graph.nodes.contains_key(id));
     }
@@ -533,6 +627,160 @@ impl Canvas {
     pub fn node_ids(&self) -> Vec<String> {
         self.nodes.iter().map(|n| n.id.clone()).collect()
     }
+    /// Whether `id` is a generated input default drawn on its consumer's pin.
+    pub fn is_default(&self, id: &str) -> bool {
+        self.defaults.contains(id)
+    }
+    /// The inline default on `node`'s input `port`: its constant node and its text.
+    pub fn inline(&self, node: &str, port: &str) -> Option<(&str, &str)> {
+        let view = self.nodes.get(*self.index.get(node)?)?;
+        let inline = view
+            .ports
+            .iter()
+            .find(|p| p.name == port)?
+            .inline
+            .as_ref()?;
+        Some((inline.node.as_str(), inline.text.as_str()))
+    }
+    /// The inline input value under a screen point: its constant node, its text and the
+    /// value box (to edit it in place).
+    pub fn inline_at(&self, p: [f32; 2], rect: Box2) -> Option<(&str, &str, Box2)> {
+        self.inline_boxes(rect)
+            .find(|(_, _, b)| b.contains(p[0], p[1]))
+    }
+    /// Every inline input value, topmost node first: its constant node, its text and its
+    /// value box on screen.
+    pub fn inline_boxes(&self, rect: Box2) -> impl Iterator<Item = (&str, &str, Box2)> {
+        self.nodes
+            .iter()
+            .rev()
+            .filter(|node| node.look.shape == Shape::Pins)
+            .flat_map(move |node| {
+                let r = self.node_rect(node, rect);
+                node.ports
+                    .iter()
+                    .filter(|pin| pin.direction == Direction::Input)
+                    .enumerate()
+                    .filter_map(move |(row, pin)| {
+                        let inline = pin.inline.as_ref()?;
+                        let y =
+                            r.y + (node.pins_top() + (row as f32 + 0.5) * ROW) * self.camera.zoom;
+                        let b = self.inline_box(pin, inline, r.x, y);
+                        Some((inline.node.as_str(), inline.text.as_str(), b))
+                    })
+            })
+    }
+    /// The value box of an input's inline default, right of its label, for the pin row
+    /// centred at `y` on a node whose left edge is `x` (screen).
+    fn inline_box(&self, pin: &Pin, inline: &Inline, x: f32, y: f32) -> Box2 {
+        let z = self.camera.zoom;
+        let small = z * paint::SMALL;
+        let left = x + 12. * z + self.labels.width(&pin.label) * small + 6. * z;
+        let chip = if inline.swatch.is_some() { 14. } else { 0. };
+        Box2 {
+            x: left,
+            y: y - 8. * z,
+            w: self.labels.width(&inline.text) * small + (12. + chip) * z,
+            h: 16. * z,
+        }
+    }
+    /// A transition arrow between state boxes `ra` and `rb` (screen); `None` for a
+    /// self-transition. `pairs` holds every (from, to) node pair with an arrow.
+    fn arrow_line(
+        &self,
+        wire: &Wire,
+        ra: Box2,
+        rb: Box2,
+        pairs: &BTreeSet<(&str, &str)>,
+    ) -> Option<ArrowLine> {
+        if wire.from.node == wire.to.node {
+            return None;
+        }
+        let z = self.camera.zoom;
+        let (ca, cb) = (paint::centre(ra), paint::centre(rb));
+        let length = (cb[0] - ca[0]).hypot(cb[1] - ca[1]).max(1e-3);
+        let d = [(cb[0] - ca[0]) / length, (cb[1] - ca[1]) / length];
+        let n = [-d[1], d[0]];
+        let shift = if pairs.contains(&(wire.to.node.as_str(), wire.from.node.as_str())) {
+            6. * z.max(0.6)
+        } else {
+            0.
+        };
+        let oa = [ca[0] + n[0] * shift, ca[1] + n[1] * shift];
+        let ob = [cb[0] + n[0] * shift, cb[1] + n[1] * shift];
+        let start = paint::edge_point(ra, oa, d, 3.);
+        let end = paint::edge_point(rb, ob, [-d[0], -d[1]], 4.);
+        Some(ArrowLine {
+            start,
+            end,
+            normal: n,
+            shift,
+        })
+    }
+    /// The state machine transition arrow under a screen point (its edge id), for picking
+    /// it; a self-transition answers over its loop.
+    pub fn arrow_at(&self, p: [f32; 2], rect: Box2) -> Option<String> {
+        let pairs = self
+            .wires
+            .iter()
+            .map(|w| (w.from.node.as_str(), w.to.node.as_str()))
+            .collect::<BTreeSet<_>>();
+        let z = self.camera.zoom;
+        self.wires
+            .iter()
+            .filter(|w| {
+                self.index
+                    .get(&w.from.node)
+                    .is_some_and(|i| self.nodes[*i].look.shape == Shape::State)
+            })
+            .find(|wire| {
+                let (Some(a), Some(b)) = (
+                    self.index.get(&wire.from.node).map(|i| &self.nodes[*i]),
+                    self.index.get(&wire.to.node).map(|i| &self.nodes[*i]),
+                ) else {
+                    return false;
+                };
+                let (ra, rb) = (self.node_rect(a, rect), self.node_rect(b, rect));
+                match self.arrow_line(wire, ra, rb, &pairs) {
+                    Some(ArrowLine { start, end, .. }) => {
+                        let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+                        let t = (((p[0] - start[0]) * dx + (p[1] - start[1]) * dy)
+                            / (dx * dx + dy * dy).max(1e-3))
+                        .clamp(0., 1.);
+                        let near = [start[0] + dx * t, start[1] + dy * t];
+                        (p[0] - near[0]).hypot(p[1] - near[1]) <= 6.
+                    }
+                    // The loop over the top edge.
+                    None => (Box2 {
+                        x: ra.x + ra.w * 0.5 - 24. * z,
+                        y: ra.y - 30. * z,
+                        w: 48. * z,
+                        h: 30. * z,
+                    })
+                    .contains(p[0], p[1]),
+                }
+            })
+            .map(|w| w.id.clone())
+    }
+    /// A group's box around its nodes on screen, and its title band (where it is dragged
+    /// and picked); `None` when none of its nodes is shown.
+    fn group_rect(&self, group: &ara_graph::Group, rect: Box2) -> Option<(Box2, Box2)> {
+        let z = self.camera.zoom;
+        let b = self
+            .nodes
+            .iter()
+            .filter(|n| group.nodes.contains(&n.id))
+            .map(|n| self.node_rect(n, rect))
+            .reduce(paint::union)?;
+        let (pad, head) = (16. * z, 34. * z);
+        let whole = Box2 {
+            x: b.x - pad,
+            y: b.y - pad - head,
+            w: b.w + pad * 2.,
+            h: b.h + pad * 2. + head,
+        };
+        Some((whole, Box2 { h: head, ..whole }))
+    }
     fn node_rect(&self, node: &NodeView, rect: Box2) -> Box2 {
         let position = if let Some(interaction::Drag::Nodes {
             positions, start, ..
@@ -585,14 +833,14 @@ impl Canvas {
             r.y + (node.pins_top() + (index as f32 + 0.5) * ROW) * self.camera.zoom,
         ])
     }
-    /// The minimap's screen rectangle, when the graph does not fit the view.
+    /// The minimap's screen rectangle, when a graph with nodes does not fit the view.
     fn minimap(&self, rect: Box2) -> Option<Box2> {
         let bounds = self.bounds();
         let a = self.screen([bounds.x, bounds.y], rect);
         let b = self.screen([bounds.x + bounds.w, bounds.y + bounds.h], rect);
         let fits =
             a[0] >= rect.x && a[1] >= rect.y && b[0] <= rect.x + rect.w && b[1] <= rect.y + rect.h;
-        (!fits && rect.w > 360. && rect.h > 240.).then_some(Box2 {
+        (!fits && !self.nodes.is_empty() && rect.w > 360. && rect.h > 240.).then_some(Box2 {
             x: rect.x + rect.w - 156.,
             y: rect.y + rect.h - 108.,
             w: 144.,

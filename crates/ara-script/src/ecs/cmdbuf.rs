@@ -70,6 +70,32 @@ pub(crate) struct ScriptCatalog {
 }
 
 impl ScriptCatalog {
+    /// Checks that JSON undo bytes satisfy the same schema used for restoration.
+    /// Native supplements can contain unchecked gameplay values between commands.
+    pub fn validate_json_preimage(&self, index: u32, bytes: &[u8]) -> Result<(), String> {
+        let name = self
+            .names
+            .get(index as usize)
+            .and_then(Option::as_deref)
+            .ok_or_else(|| "component has no JSON codec".to_owned())?;
+        let json = self
+            .json
+            .as_ref()
+            .expect("JSON catalog entries have a registry");
+        let value = serde_json::from_slice(bytes).map_err(|e| format!("invalid JSON: {e}"))?;
+        let mut problems = Vec::new();
+        ara_schema::Validator::new(json.schema(), &mut problems).value(
+            &ara_schema::ValueType::Named(name.to_owned()),
+            None,
+            &value,
+            name,
+        );
+        match problems.into_iter().find(Diagnostic::is_error) {
+            Some(problem) => Err(problem.message),
+            None => Ok(()),
+        }
+    }
+
     pub fn read(&self, world: &World, entity: Entity, index: u32) -> Option<Vec<u8>> {
         let &(id, size) = self.components.get(index as usize)?;
         match self.names.get(index as usize).and_then(Option::as_deref) {
@@ -108,6 +134,24 @@ impl ScriptCatalog {
                 },
             ),
         }
+    }
+
+    /// Writes an already-decoded engine value through the normal simulation codec.
+    /// The caller checks presence when this replaces an existing component.
+    pub fn write_json(
+        &self,
+        world: &mut World,
+        entity: Entity,
+        index: u32,
+        value: &serde_json::Value,
+    ) -> bool {
+        self.components
+            .get(index as usize)
+            .zip(self.names.get(index as usize).and_then(Option::as_deref))
+            .zip(self.json.as_ref())
+            .is_some_and(|((&(id, _), name), json)| {
+                json.write_component(world, entity, name, id, value).is_ok()
+            })
     }
 }
 

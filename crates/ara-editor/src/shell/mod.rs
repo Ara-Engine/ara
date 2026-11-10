@@ -5,8 +5,8 @@
 //! floating surface in and [`Shell::leave`] swaps it back, so panels need not
 //! know which OS window hosts them.
 pub(crate) mod asset_import;
-mod asset_ops;
-mod assets;
+pub(crate) mod asset_ops;
+pub(crate) mod assets;
 mod assets_favourites;
 mod axis;
 pub(crate) mod build;
@@ -21,19 +21,19 @@ mod confirm;
 mod cursors;
 mod dialog;
 mod dock_drag;
-mod drag;
+pub(crate) mod drag;
 #[path = "quality_tests/geometry.rs"]
 pub(crate) mod feedback_geometry;
 mod feedback_quality;
 pub(crate) mod icons;
 mod imports;
-mod input;
+pub(crate) mod input;
 mod keyboard;
 mod menu;
 mod monkey_support;
 mod motion;
 mod notices;
-mod ops;
+pub(crate) mod ops;
 mod polish;
 #[cfg(test)]
 mod quality_tests;
@@ -50,8 +50,8 @@ pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
 mod agents_connect;
-mod agents_panel;
-mod animation_panel;
+pub(crate) mod agents_panel;
+pub(crate) mod animation_panel;
 mod assets_panel;
 mod assets_tree;
 mod file_drag;
@@ -60,22 +60,22 @@ mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
-mod hierarchy_actions;
+pub(crate) mod hierarchy_actions;
 mod hierarchy_filters;
 mod history_panel;
-mod import_batch;
-mod import_panel;
+pub(crate) mod import_batch;
+pub(crate) mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
 mod inspector_fields;
-mod inspector_panel;
+pub(crate) mod inspector_panel;
 mod inspector_sections;
-mod lighting;
+pub(crate) mod lighting;
 mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
-mod names;
+pub(crate) mod names;
 pub(crate) use names::is_texture;
 mod mesh_paint_panel;
 mod probes;
@@ -97,7 +97,7 @@ pub mod prefab_ops;
 mod profiler_panel;
 pub(crate) mod profiler_targets;
 pub(crate) mod reachability;
-mod vfx_panel;
+pub(crate) mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
     Ui,

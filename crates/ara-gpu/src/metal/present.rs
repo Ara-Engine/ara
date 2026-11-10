@@ -47,6 +47,9 @@ pub struct Presenter {
     /// no compositor shows (its presented handlers wait on Core Animation flushes).
     queued: Option<Arc<Queued>>,
     skipped: u64,
+    /// The longest `display` waits for a free drawable or the previous copy before
+    /// skipping the frame ([`PRESENT_WAIT`] unless set with [`Self::set_wait`]).
+    wait: Duration,
 }
 
 /// Drawables committed for presentation that the compositor has not shown or dropped
@@ -136,6 +139,7 @@ impl Presenter {
             frames_in_flight: false,
             queued: composited.then(Arc::default),
             skipped: 0,
+            wait: PRESENT_WAIT,
         };
         presenter.resize(size)?;
         Ok(presenter)
@@ -156,6 +160,13 @@ impl Presenter {
     pub fn surface_format(&self) -> vk::SurfaceFormatKHR {
         SURFACE
     }
+    /// How long `display` may wait for a free drawable or the previous copy before it
+    /// skips the frame. A UI thread that must stay responsive sets this near zero and
+    /// simply presents again next pass; the default is [`PRESENT_WAIT`].
+    pub fn set_wait(&mut self, wait: Duration) {
+        self.wait = wait;
+    }
+
     /// Wait for vertical blank when presenting (the default), or present as soon as a
     /// copy completes. iOS always syncs to the display.
     pub fn set_vsync(&mut self, vsync: bool) {
@@ -228,11 +239,11 @@ impl Presenter {
         // PRESENT_WAIT, then skip the frame rather than block or fail the host; a copy
         // still running past it skips too. Readbacks (tests) need the drawable.
         let limit = self.layer.maximumDrawableCount().saturating_sub(1);
-        let ready = (!frames_in_flight || self.transfer.pending_done_within(gpu, PRESENT_WAIT))
+        let ready = (!frames_in_flight || self.transfer.pending_done_within(gpu, self.wait))
             && self
                 .queued
                 .as_ref()
-                .is_none_or(|queued| queued.wait_below(limit, PRESENT_WAIT));
+                .is_none_or(|queued| queued.wait_below(limit, self.wait));
         let Some(drawable) = ready.then(|| self.layer.nextDrawable()).flatten() else {
             if readback.is_some() {
                 return Err(nil("CAMetalLayer nextDrawable"));
@@ -270,10 +281,18 @@ impl Presenter {
             cmd.presentDrawable(ProtocolObject::from_ref(&*drawable));
             Ok(())
         };
-        if frames_in_flight {
+        let done = if frames_in_flight {
             self.transfer.submit(gpu, record)
         } else {
             self.transfer.run(Some(gpu), record)
+        };
+        // A layer inside a window shows its drawable only once Core Animation commits.
+        // Hosts that render frames back to back may not reach the run loop's implicit
+        // commit between them; without it no drawable is shown and the pool runs dry,
+        // so every next present waits PRESENT_WAIT. Commit here.
+        if self.queued.is_some() {
+            objc2_quartz_core::CATransaction::flush();
         }
+        done
     }
 }

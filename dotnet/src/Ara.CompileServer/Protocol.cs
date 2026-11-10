@@ -9,7 +9,7 @@ public enum MessageKind : byte
 {
     /// <summary>Host → server: protocol version, host process id, EnC availability, runtime EnC capabilities.</summary>
     Hello = 1,
-    /// <summary>Host → server: compile a module folder (after the modules it references), send its first image, then watch it.</summary>
+    /// <summary>Host → server: register a captured published image, or compile the first image, then watch the module.</summary>
     Watch = 2,
     /// <summary>Host → server: recompile a module hot (Debug IL, EnC) or cold (optimized).</summary>
     SetHeat = 3,
@@ -63,7 +63,7 @@ public readonly record struct CompileTiming(uint DetectUs, uint ParseUs, uint Ge
 public static class Protocol
 {
     /// <summary>Bumped on any incompatible change.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>Writes one framed message.</summary>
     public static void Send(Stream s, MessageKind kind, ReadOnlySpan<byte> payload)

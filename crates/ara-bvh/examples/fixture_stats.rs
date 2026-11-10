@@ -113,11 +113,18 @@ fn main() {
             b.as_chunks::<16>()
                 .0
                 .iter()
-                .map(|c| std::array::from_fn(|k| u32::from_le_bytes([c[k * 4], c[k * 4 + 1], c[k * 4 + 2], c[k * 4 + 3]])))
+                .map(|c| {
+                    std::array::from_fn(|k| {
+                        u32::from_le_bytes([c[k * 4], c[k * 4 + 1], c[k * 4 + 2], c[k * 4 + 3]])
+                    })
+                })
                 .collect(),
         )
     };
-    match (words(&format!("nodes_{set}.bin")), words(&format!("tris_{set}.bin"))) {
+    match (
+        words(&format!("nodes_{set}.bin")),
+        words(&format!("tris_{set}.bin")),
+    ) {
         (Some(nodes), Some(triangles)) => {
             let lab = Blas {
                 nodes,
@@ -131,6 +138,9 @@ fn main() {
                 ours / theirs
             );
         }
-        _ => println!("CPU traversal of {} rays: {ours:.1} ms ({hits} hits)", all.len()),
+        _ => println!(
+            "CPU traversal of {} rays: {ours:.1} ms ({hits} hits)",
+            all.len()
+        ),
     }
 }
