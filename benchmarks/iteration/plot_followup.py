@@ -62,3 +62,25 @@ fig.text(.08, .045, "Mac · CoreCLR 10.0.14 · four processes ABBA, 20 batches/i
 fig.subplots_adjust(left=.15, right=.98, bottom=.23, top=.81)
 fig.savefig(args.output / "source-hash-allocations.png", dpi=200)
 plt.close(fig)
+
+packet = json.loads((root / "sdk_hash_allocations_mac_2026-11-10.json").read_text())
+fig, ax = plt.subplots(figsize=(10.5, 6.1))
+for arm, offset in [("baseline", -.2), ("candidate", .2)]:
+    values = [statistics.median(s["allocatedBytes"] for row in packet["processes"] if row["profile"] == profile and row["arm"] == arm for s in row["raw"]["samples"]) for profile in ["sdk", "65536", "1048576"]]
+    positions = [i + offset for i in range(3)]
+    ax.bar(positions, values, width=.35, color=colors[arm], label=arm.title(), zorder=3)
+    for x, value in zip(positions, values):
+        ax.text(x, value * 1.2, f"{value:,.0f}", ha="center", fontsize=10)
+ax.set_yscale("log")
+ax.set_ylim(1000, 2e7)
+ax.set_xticks(range(3), ["Actual SDK\n4 assemblies", "4 × 64 KiB files", "4 × 1 MiB files"])
+ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:,.0f}"))
+ax.set_ylabel("Allocated bytes per four-file set · logarithmic scale")
+ax.grid(axis="y", alpha=.17, zorder=0)
+ax.legend(frameon=False, loc="upper left")
+fig.suptitle("SDK fingerprints: stream every byte", x=.08, ha="left", fontsize=18, weight="bold")
+ax.set_title("Direct production HashFile vs former Hash(ReadAllBytes) · per-thread counters", loc="left", fontsize=10, pad=16)
+fig.text(.08, .045, "Mac · CoreCLR 10.0.14 · 12 fresh processes, ABBA per set, 4 warmups + 20 measured sets/process\nAll digest vectors match; each file is fully read. Result arrays and strings are counted.\nAllocation evidence only: no admitted compiler, Play latency, peak-RSS or p95 claim.", fontsize=9, color="#53667a")
+fig.subplots_adjust(left=.16, right=.98, bottom=.23, top=.81)
+fig.savefig(args.output / "sdk-hash-allocations.png", dpi=200)
+plt.close(fig)

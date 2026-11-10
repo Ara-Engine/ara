@@ -11,6 +11,29 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(server);
+if (args.Length > 1 && args[1] == "--sdk-files")
+{
+    var compiler = assembly.GetType("Ara.CompileServer.ProjectCompiler", throwOnError: true)!;
+    var baseline = compiler.GetMethod("Hash", BindingFlags.NonPublic | BindingFlags.Static)!.CreateDelegate<Func<byte[], string>>();
+    var streamed = compiler.GetMethod("HashFile", BindingFlags.NonPublic | BindingFlags.Static)?.CreateDelegate<Func<string, string>>();
+    Func<string, string> hashFile = streamed ?? (path => baseline(File.ReadAllBytes(path)));
+    var files = JsonSerializer.Deserialize<string[]>(File.ReadAllText(args[2]))!;
+    var expected = files.Select(path => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))).ToArray();
+    for (var warmup = 0; warmup < 4; warmup++)
+        foreach (var file in files) _ = hashFile(file);
+    var samples = new List<object>();
+    for (var sample = 0; sample < 20; sample++)
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var values = files.Select(hashFile).ToArray();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (!values.SequenceEqual(expected)) throw new Exception("SDK digest mismatch");
+        samples.Add(new { allocatedBytes = allocated, hashes = values });
+    }
+    Console.WriteLine(JsonSerializer.Serialize(new { runtime = System.Environment.Version.ToString(), server,
+        serverHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(server))), streamed = streamed is not null, files, samples }));
+    return;
+}
 var type = assembly.GetType("Ara.Hosting.PublishedSnapshot", throwOnError: true)!;
 var hash = type.GetMethod("TextHash", BindingFlags.NonPublic | BindingFlags.Static)!.CreateDelegate<Func<string, string>>();
 var inputs = new Dictionary<string, string> {

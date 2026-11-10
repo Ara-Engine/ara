@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)../../../target/iteration-perf/source-hash-probe</ArtifactsPath>
+  </PropertyGroup>
+</Project>

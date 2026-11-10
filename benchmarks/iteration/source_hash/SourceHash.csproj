@@ -6,6 +6,5 @@
     <Nullable>enable</Nullable>
     <TieredCompilation>false</TieredCompilation>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <ArtifactsPath>$(MSBuildThisFileDirectory)../../../target/iteration-perf/source-hash-probe</ArtifactsPath>
   </PropertyGroup>
 </Project>
