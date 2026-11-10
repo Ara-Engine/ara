@@ -20,6 +20,7 @@ struct TopLevel {
     device TextureEntry* storage_images;
     device BufferEntry* accelerations;
     device SamplerEntry* samplers;
+    device SamplerEntry* comparison_samplers;
 };
 "#;
 

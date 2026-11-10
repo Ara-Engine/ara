@@ -1,12 +1,10 @@
 //! Metal Shader Converter binding ABI, verified against the 4.0.3 converter headers
 //! (`metal_irconverter_runtime.h`, `ir_raytracing.h`) and its reflection output.
 //!
-//! Ara converts every stage with one explicit global root signature that mirrors the
-//! Vulkan set-0 layout (`cooked::BINDING_LAYOUT`). Root constants come first, then
-//! one 64-bit table address per descriptor table, then the static-sampler table the
-//! converter appends, so the top-level argument buffer layout is identical for every
-//! pipeline. No cooked stage needs converter draw parameters (bind points 4 and 5);
-//! the pipeline loader rejects one that does.
+//! Root constants occupy 32 bytes, followed by image, buffer, storage-image, AS
+//! and regular-sampler table addresses. The comparison table appends at byte 72.
+//! Existing converter artifacts end at the regular-sampler pointer (byte 64);
+//! their prefix stays compatible. Draw-parameter bind points 4/5 remain reserved.
 
 /// `kIRArgumentBufferBindPoint`: argument-table buffer slot of the top-level buffer.
 pub const ARGUMENT_BUFFER_BIND_POINT: usize = 2;
@@ -26,7 +24,7 @@ pub const BUFFERS: u32 = 4_096;
 pub const STORAGE_IMAGES: u32 = 128;
 /// Acceleration-structure table capacity (`RaytracingAccelerationStructure[16] : t0, space4`).
 pub const ACCELERATIONS: u32 = 16;
-/// Static samplers of the root signature (`SamplerState s0..s2 : space0`).
+/// Capacity of both sampler tables (normal space0, comparison space5).
 pub const SAMPLERS: u32 = crate::sampler::SAMPLER_CAPACITY;
 
 /// One converter descriptor-table entry (`IRDescriptorTableEntry`): a GPU address for
@@ -91,8 +89,10 @@ pub struct TopLevel {
     pub storage_images: u64,
     /// Root parameter 4: acceleration-structure table address.
     pub accelerations: u64,
-    /// The static samplers' table, which the converter places after the parameters.
+    /// Root parameter 5: regular samplers, preserving the legacy byte-64 pointer.
     pub samplers: u64,
+    /// Root parameter 6: comparison samplers (DXIL s0 space5).
+    pub comparison_samplers: u64,
 }
 
 #[cfg(test)]
@@ -101,12 +101,12 @@ mod tests {
     #[test]
     fn layouts_match_the_converter_encoding() {
         assert_eq!(ENTRY_BYTES, 24);
-        // The 4.0.3 reflection of every cooked stage: 32 constant bytes, then five
-        // 8-byte tables at 32..=64.
-        assert_eq!(std::mem::size_of::<TopLevel>(), 72);
+        // Preserve the v3 five-table prefix, then append the comparison pointer.
+        assert_eq!(std::mem::size_of::<TopLevel>(), 80);
         assert_eq!(std::mem::offset_of!(TopLevel, textures), 32);
         assert_eq!(std::mem::offset_of!(TopLevel, accelerations), 56);
         assert_eq!(std::mem::offset_of!(TopLevel, samplers), 64);
+        assert_eq!(std::mem::offset_of!(TopLevel, comparison_samplers), 72);
         assert_eq!(
             TableEntry::buffer(64, u64::MAX).metadata,
             u64::from(u32::MAX)
