@@ -1,12 +1,9 @@
-//! Metal 4 pipeline states. Engine pipelines come only from cooked, hashed
-//! Metal Shader Converter metallibs (`CookedStage::metal`); the backend never compiles
-//! shader source. The raster state mirrors the Vulkan backend: 48-byte vertex ABI,
-//! no culling, counter-clockwise front faces, reversed-Z `>=` depth, premultiplied
-//! alpha on attachment zero.
+//! Metal4 pipeline states from cooked, hashed metallibs. Native compute,
+//! vertex/fragment and vertex-only depth pipelines share the portable raster state.
 use super::abi::{STAGE_IN_ATTRIBUTE_START, VERTEX_BUFFER_BIND_POINT};
 use super::cache::Compiler;
 use super::native::{nil, ns_error, raw_format};
-use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
+use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_compatible};
 use crate::{GpuError, Result};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -23,6 +20,7 @@ pub(super) enum NativePipeline {
         colors: Vec<MTLPixelFormat>,
         depth_format: Option<MTLPixelFormat>,
         vertex_stride: u32,
+        raster: crate::raster::RasterState,
     },
     Compute {
         state: Retained<ProtocolObject<dyn MTLComputePipelineState>>,
@@ -90,7 +88,7 @@ pub(super) fn load(
     stage: &CookedStage,
     dir: &Path,
 ) -> Result<LoadedStage> {
-    if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
+    if cooked.version != 1 || !binding_layout_compatible(&cooked.binding_layout_hash) {
         return Err(GpuError::Contract(
             "Cooked layout/schema mismatch; recook shaders".into(),
         ));
@@ -134,12 +132,15 @@ pub(super) fn depth_only(
     library: &ProtocolObject<dyn MTLLibrary>,
     entry: &str,
     colors: &[MTLPixelFormat],
+    samples: crate::texture::SampleCount,
 ) -> Result<Retained<ProtocolObject<dyn MTLRenderPipelineState>>> {
     let function = MTL4LibraryFunctionDescriptor::new();
     function.setName(Some(&NSString::from_str(entry)));
     function.setLibrary(Some(library));
     let descriptor = MTL4RenderPipelineDescriptor::new();
     descriptor.setVertexFunctionDescriptor(Some(&function));
+    // SAFETY: one and four are valid native raster sample counts.
+    unsafe { descriptor.setRasterSampleCount(samples.count() as usize) };
     descriptor.setInputPrimitiveTopology(MTLPrimitiveTopologyClass::Triangle);
     let attachments = descriptor.colorAttachments();
     for (index, pixel) in colors.iter().enumerate() {
@@ -161,6 +162,7 @@ pub(super) fn build(
     state: &RenderState,
     threads: Option<[u32; 3]>,
 ) -> Result<NativePipeline> {
+    state.validate()?;
     let function = |library: &ProtocolObject<dyn MTLLibrary>, name: &str| {
         let descriptor = MTL4LibraryFunctionDescriptor::new();
         descriptor.setName(Some(&NSString::from_str(name)));
@@ -197,12 +199,23 @@ pub(super) fn build(
             device,
             compiler,
             &function(vertex, vertex_name),
-            &function(fragment, fragment_name),
+            Some(&function(fragment, fragment_name)),
             state,
         ),
+        [(Stage::Vertex, vertex, vertex_name)]
+            if state.color_formats.is_empty() && state.depth_format.is_some() =>
+        {
+            render(
+                device,
+                compiler,
+                &function(vertex, vertex_name),
+                None,
+                state,
+            )
+        }
         _ => Err(GpuError::Contract(
-            "Metal backend supports compute and vertex/fragment pipelines; mesh/task \
-             stages need the mesh tier"
+            "Metal backend supports compute, vertex/fragment and vertex-only depth pipelines; \
+             mesh/task stages need the mesh tier"
                 .into(),
         )),
     }
@@ -212,12 +225,14 @@ fn render(
     device: &ProtocolObject<dyn MTLDevice>,
     compiler: &Compiler,
     vertex: &MTL4LibraryFunctionDescriptor,
-    fragment: &MTL4LibraryFunctionDescriptor,
+    fragment: Option<&MTL4LibraryFunctionDescriptor>,
     state: &RenderState,
 ) -> Result<NativePipeline> {
     let descriptor = MTL4RenderPipelineDescriptor::new();
     descriptor.setVertexFunctionDescriptor(Some(vertex));
-    descriptor.setFragmentFunctionDescriptor(Some(fragment));
+    descriptor.setFragmentFunctionDescriptor(fragment.map(|f| &**f));
+    // SAFETY: the portable sample enum permits only native counts one and four.
+    unsafe { descriptor.setRasterSampleCount(state.raster.samples.count() as usize) };
     descriptor.setInputPrimitiveTopology(MTLPrimitiveTopologyClass::Triangle);
     let colors = state
         .color_formats
@@ -230,7 +245,17 @@ fn render(
         // by the cook, and indices beyond the array would raise before writing.
         let attachment = unsafe { attachments.objectAtIndexedSubscript(index) };
         attachment.setPixelFormat(*pixel);
-        if state.blend && index == 0 {
+        if let Some(blend) = state.raster.blends.get(index) {
+            if let Some(blend) = blend {
+                attachment.setBlendingState(MTL4BlendState::Enabled);
+                attachment.setSourceRGBBlendFactor(blend_factor(blend.color.source));
+                attachment.setDestinationRGBBlendFactor(blend_factor(blend.color.destination));
+                attachment.setRgbBlendOperation(blend_op(blend.color.operation));
+                attachment.setSourceAlphaBlendFactor(blend_factor(blend.alpha.source));
+                attachment.setDestinationAlphaBlendFactor(blend_factor(blend.alpha.destination));
+                attachment.setAlphaBlendOperation(blend_op(blend.alpha.operation));
+            }
+        } else if state.blend && index == 0 {
             attachment.setBlendingState(MTL4BlendState::Enabled);
             attachment.setSourceRGBBlendFactor(MTLBlendFactor::One);
             attachment.setDestinationRGBBlendFactor(MTLBlendFactor::OneMinusSourceAlpha);
@@ -240,7 +265,53 @@ fn render(
             attachment.setAlphaBlendOperation(MTLBlendOperation::Add);
         }
     }
-    if state.vertex_stride != 0 {
+    if !state.raster.vertex_layouts.is_empty() {
+        use crate::raster::{VertexFormat as F, VertexStep};
+        let layout = MTLVertexDescriptor::vertexDescriptor();
+        for (binding, stream) in state.raster.vertex_layouts.iter().enumerate() {
+            // SAFETY: validation limits streams to the argument table's reserved vertex slots.
+            let target = unsafe {
+                layout
+                    .layouts()
+                    .objectAtIndexedSubscript(VERTEX_BUFFER_BIND_POINT + binding)
+            };
+            // SAFETY: stride is nonzero, four-byte aligned and within the portable maximum.
+            unsafe {
+                target.setStride(stream.stride as usize);
+                target.setStepRate(1);
+            }
+            target.setStepFunction(if stream.step == VertexStep::Instance {
+                MTLVertexStepFunction::PerInstance
+            } else {
+                MTLVertexStepFunction::PerVertex
+            });
+            for a in &stream.attributes {
+                // SAFETY: portable locations 0..16 map to valid converter attributes 11..27.
+                let attr = unsafe {
+                    layout
+                        .attributes()
+                        .objectAtIndexedSubscript(STAGE_IN_ATTRIBUTE_START + a.location as usize)
+                };
+                attr.setFormat(match a.format {
+                    F::Float32 => MTLVertexFormat::Float,
+                    F::Float32x2 => MTLVertexFormat::Float2,
+                    F::Float32x3 => MTLVertexFormat::Float3,
+                    F::Float32x4 => MTLVertexFormat::Float4,
+                    F::Uint32 => MTLVertexFormat::UInt,
+                    F::Uint32x2 => MTLVertexFormat::UInt2,
+                    F::Uint32x3 => MTLVertexFormat::UInt3,
+                    F::Uint32x4 => MTLVertexFormat::UInt4,
+                    F::Unorm8x4 => MTLVertexFormat::UChar4Normalized,
+                });
+                // SAFETY: attribute fits inside its checked stream stride.
+                unsafe {
+                    attr.setOffset(a.offset as usize);
+                    attr.setBufferIndex(VERTEX_BUFFER_BIND_POINT + binding);
+                }
+            }
+        }
+        descriptor.setVertexDescriptor(Some(&layout));
+    } else if state.vertex_stride != 0 {
         let layout = MTLVertexDescriptor::vertexDescriptor();
         for (index, (format, offset)) in [
             (MTLVertexFormat::Float3, 0),
@@ -282,7 +353,7 @@ fn render(
         Some(_) => {
             let stencil = MTLDepthStencilDescriptor::new();
             stencil.setDepthCompareFunction(if state.depth_test {
-                MTLCompareFunction::GreaterEqual
+                super::native::compare(state.raster.depth_compare)
             } else {
                 MTLCompareFunction::Always
             });
@@ -301,5 +372,32 @@ fn render(
         colors,
         depth_format,
         vertex_stride: state.vertex_stride,
+        raster: state.raster.clone(),
     })
+}
+
+fn blend_factor(f: crate::raster::BlendFactor) -> MTLBlendFactor {
+    use crate::raster::BlendFactor as F;
+    match f {
+        F::Zero => MTLBlendFactor::Zero,
+        F::One => MTLBlendFactor::One,
+        F::SrcColor => MTLBlendFactor::SourceColor,
+        F::OneMinusSrcColor => MTLBlendFactor::OneMinusSourceColor,
+        F::DstColor => MTLBlendFactor::DestinationColor,
+        F::OneMinusDstColor => MTLBlendFactor::OneMinusDestinationColor,
+        F::SrcAlpha => MTLBlendFactor::SourceAlpha,
+        F::OneMinusSrcAlpha => MTLBlendFactor::OneMinusSourceAlpha,
+        F::DstAlpha => MTLBlendFactor::DestinationAlpha,
+        F::OneMinusDstAlpha => MTLBlendFactor::OneMinusDestinationAlpha,
+    }
+}
+fn blend_op(o: crate::raster::BlendOp) -> MTLBlendOperation {
+    use crate::raster::BlendOp as O;
+    match o {
+        O::Add => MTLBlendOperation::Add,
+        O::Subtract => MTLBlendOperation::Subtract,
+        O::ReverseSubtract => MTLBlendOperation::ReverseSubtract,
+        O::Min => MTLBlendOperation::Min,
+        O::Max => MTLBlendOperation::Max,
+    }
 }

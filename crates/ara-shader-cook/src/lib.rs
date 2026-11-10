@@ -4,6 +4,8 @@
 mod dependency;
 pub use dependency::write_index as write_dependency_index;
 mod identity;
+#[cfg(target_os = "macos")]
+mod macos_dxil;
 pub mod metal;
 pub mod variant;
 use anyhow::{Context, Result, ensure};
@@ -284,6 +286,9 @@ impl Compiler<'_> {
                 ("spirv", "spv", "sm_6_6+spirv_1_6"),
                 ("dxil", "dxil", "sm_6_6"),
             ] {
+                // This SDK's Mac Slang cannot load DXC as a shared downstream
+                // compiler. Its generated HLSL still compiles with the SDK CLI.
+                let hlsl = cfg!(target_os = "macos") && target == "dxil";
                 let mut cmd = Command::new(&tools.slangc);
                 cmd.arg(source_root.join(&pipeline.source)).args([
                     "-entry",
@@ -291,7 +296,7 @@ impl Compiler<'_> {
                     "-stage",
                     stage.slang_name(),
                     "-target",
-                    target,
+                    if hlsl { "hlsl" } else { target },
                     "-profile",
                     profile,
                     "-O2",
@@ -309,8 +314,18 @@ impl Compiler<'_> {
                 cmd.arg("-reflection-json")
                     .arg(artifacts.join(format!("{entry}.{target}.json")))
                     .arg("-o")
-                    .arg(artifacts.join(format!("{entry}.{suffix}")));
+                    .arg(artifacts.join(format!("{entry}.{}", if hlsl { "hlsl" } else { suffix })));
                 run(&mut cmd)?;
+                #[cfg(target_os = "macos")]
+                if hlsl {
+                    macos_dxil::compile(
+                        tools,
+                        entry,
+                        *stage,
+                        &artifacts.join(format!("{entry}.hlsl")),
+                        &artifacts.join(format!("{entry}.dxil")),
+                    )?;
+                }
                 if target == "spirv" {
                     run(Command::new(&tools.spirv_val)
                         .args(["--target-env", "vulkan1.3"])

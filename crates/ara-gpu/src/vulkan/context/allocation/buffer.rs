@@ -2,15 +2,26 @@ use super::super::buffer_memory::{BufferMemory, MemoryKey};
 use super::*;
 use ash::vk::TaggedStructure;
 
-pub(in crate::vulkan::context) fn buffer(
+pub(crate) struct BufferRequest {
+    pub size: u64,
+    pub usage: vk::BufferUsageFlags,
+    pub host: bool,
+    pub preferred: vk::MemoryPropertyFlags,
+}
+pub(crate) fn pooled_buffer(
     device: &ash::Device,
     memory_properties: &vk::PhysicalDeviceMemoryProperties,
     pool: &mut BufferMemory,
-    size: u64,
-    usage: vk::BufferUsageFlags,
-    host: bool,
-    preferred: vk::MemoryPropertyFlags,
+    mut blocks: Option<&mut super::super::memory_blocks::MemoryBlocks>,
+    request: BufferRequest,
 ) -> Result<BufferAllocation> {
+    let BufferRequest {
+        size,
+        usage,
+        host,
+        preferred,
+    } = request;
+    let mut suballocation = None;
     // SAFETY: Allocations satisfy queried requirements; resources are retained
     // until device idle in Drop. Exclusive ownership is managed in render.rs.
     unsafe {
@@ -59,25 +70,51 @@ pub(in crate::vulkan::context) fn buffer(
             if memory_key.is_none() {
                 allocation = allocation.push(&mut dedicated_info);
             }
-            memory = match memory_key.and_then(|key| pool.take(key)) {
-                Some(memory) => memory,
-                None => device.allocate_memory(&allocation, None)?,
-            };
-            device.bind_buffer_memory(handle, memory, 0)?;
+            if !host
+                && dedicated.requires_dedicated_allocation == vk::FALSE
+                && let Some(blocks) = blocks.as_deref_mut()
+            {
+                let slice = blocks.allocate(
+                    device,
+                    super::super::memory_blocks::Key {
+                        memory_type: memory_type_index,
+                        address: key.device_address,
+                        class: super::super::memory_blocks::Class::Buffer,
+                    },
+                    requirements,
+                )?;
+                memory = slice.memory;
+                suballocation = Some(slice);
+            } else {
+                memory = match memory_key.and_then(|key| pool.take(key)) {
+                    Some(memory) => memory,
+                    None => device.allocate_memory(&allocation, None)?,
+                };
+            }
+            device.bind_buffer_memory(handle, memory, suballocation.map_or(0, |s| s.offset))?;
             Ok(BufferAllocation {
                 handle,
                 memory,
+                suballocation,
                 size,
                 host,
                 usage,
-                memory_key,
+                memory_key: if suballocation.is_some() {
+                    None
+                } else {
+                    memory_key
+                },
             })
         })();
         let buffer = match result {
             Ok(buffer) => buffer,
             Err(error) => {
                 device.destroy_buffer(handle, None);
-                if memory != vk::DeviceMemory::null() {
+                if let Some(slice) = suballocation {
+                    blocks
+                        .expect("pooled allocation has an owner")
+                        .release(slice);
+                } else if memory != vk::DeviceMemory::null() {
                     device.free_memory(memory, None);
                 }
                 return Err(error);

@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
-  "compiler": "2026.17-25-gc7954ebd1",
-  "key": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
+  "compiler": "2026.18.3-2-g49110474e",
+  "key": "34245264cdb1b458faaf730dd3c036ca49775ee0c8ec4219cebc20cab220be54",
   "stages": [
     {
-      "dxil": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.dxil",
+      "dxil": "34245264cdb1b458faaf730dd3c036ca49775ee0c8ec4219cebc20cab220be54/triangle_ranges/rangeProbe.dxil",
       "dxil_hash": "1e90b762c385b744a89085a216a870706dd420fd7be334862313ac2867411e74",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.metallib",
-        "metallib_hash": "8a68de83ab8378d4d379b6ed345df201415420db612545c26f7393a66c8727a7",
-        "reflection": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "metallib": "34245264cdb1b458faaf730dd3c036ca49775ee0c8ec4219cebc20cab220be54/triangle_ranges/rangeProbe.metallib",
+        "metallib_hash": "3f6275ad6bd13a373d71af73e7bc1a5e3a8d16c21f8ac5b07c4ff171326e983d",
+        "reflection": "34245264cdb1b458faaf730dd3c036ca49775ee0c8ec4219cebc20cab220be54/triangle_ranges/rangeProbe.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "rangeProbe",
-      "spirv": "b2f377800cddb409b7dedbc925fa4eb9dbd60c9180572ed1feedea6b731cb90a/triangle_ranges/rangeProbe.spv",
+      "spirv": "34245264cdb1b458faaf730dd3c036ca49775ee0c8ec4219cebc20cab220be54/triangle_ranges/rangeProbe.spv",
       "spirv_entry": "main",
       "spirv_hash": "85dee2dce28d44d1c4692a6b2733d7f634f32a70bea08f80a01c36a291848b15",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

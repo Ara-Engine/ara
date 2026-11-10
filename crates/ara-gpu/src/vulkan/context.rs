@@ -5,8 +5,10 @@ mod descriptors;
 #[cfg(test)]
 mod diagnostics_tests;
 mod environment;
+pub(crate) mod memory_blocks;
 mod presentation;
 mod priority;
+mod queues;
 mod resources;
 pub use resources::image_barrier;
 pub(crate) use resources::{BufferAllocation, ImageAllocation};
@@ -246,6 +248,7 @@ pub struct Gpu {
     pub compute_pool: vk::CommandPool,
     buffers: Vec<BufferAllocation>,
     buffer_memory: buffer_memory::BufferMemory,
+    pub(crate) memory_blocks: memory_blocks::MemoryBlocks,
     images: Vec<ImageAllocation>,
     structures: Vec<vk::AccelerationStructureKHR>,
 }
@@ -267,6 +270,8 @@ pub struct NativeDevice {
     pub mesh: ash::ext::mesh_shader::Device,
     /// Immutable device, driver and capability provenance.
     pub info: DeviceInfo,
+    /// Actual native capabilities of the selected graphics and compute families.
+    pub(super) queue_flags: [vk::QueueFlags; 2],
     /// Stable callback state, retained through instance teardown.
     pub validation: Box<Validation>,
     /// Queried acceleration-build scratch alignment.
@@ -332,7 +337,20 @@ impl Gpu {
 
     /// A startup-only blocking submit; frame work uses submit2 with timelines.
     pub fn immediate(&self, record: impl FnOnce(vk::CommandBuffer)) -> Result<()> {
-        let cmd = self.commands(false)?;
+        self.immediate_on(false, record)
+    }
+    pub(crate) fn immediate_on(
+        &self,
+        compute: bool,
+        record: impl FnOnce(vk::CommandBuffer),
+    ) -> Result<()> {
+        let queue = if compute { self.compute } else { self.graphics };
+        let pool = if compute {
+            self.compute_pool
+        } else {
+            self.graphics_pool
+        };
+        let cmd = self.commands(compute)?;
         // SAFETY: This command buffer is fresh and has no submitted use.
         unsafe {
             self.begin(cmd)?;
@@ -343,12 +361,12 @@ impl Gpu {
             self.device.end_command_buffer(cmd)?;
             let buffers = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
             self.device.queue_submit2(
-                self.graphics,
+                queue,
                 &[vk::SubmitInfo2::default().command_buffer_infos(&buffers)],
                 vk::Fence::null(),
             )?;
-            self.measure_host_wait(|| self.device.queue_wait_idle(self.graphics))?;
-            self.device.free_command_buffers(self.graphics_pool, &[cmd]);
+            self.measure_host_wait(|| self.device.queue_wait_idle(queue))?;
+            self.device.free_command_buffers(pool, &[cmd]);
         }
         Ok(())
     }
@@ -385,12 +403,22 @@ impl Drop for Gpu {
                 if let Some(storage) = image.storage_view {
                     self.device.destroy_image_view(storage, None);
                 }
+                if let Some(view) = image.attachment_view {
+                    self.device.destroy_image_view(view, None);
+                }
                 self.device.destroy_image(image.handle, None);
-                self.device.free_memory(image.memory, None);
+                if image.suballocation.is_none() {
+                    self.device.free_memory(image.memory, None);
+                }
             }
             for buffer in &self.buffers {
                 self.device.destroy_buffer(buffer.handle, None);
-                self.device.free_memory(buffer.memory, None);
+                if buffer.suballocation.is_none() {
+                    self.device.free_memory(buffer.memory, None);
+                }
+            }
+            for memory in self.memory_blocks.drain() {
+                self.shared.device.free_memory(memory, None);
             }
             for memory in self.buffer_memory.drain() {
                 self.shared.device.free_memory(memory, None);

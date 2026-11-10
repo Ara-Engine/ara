@@ -7,7 +7,6 @@ use ara_shader_cook::{
 use std::path::Path;
 
 #[test]
-#[cfg_attr(target_os = "macos", ignore = "PC is the only shader cook host")]
 fn permutations_have_distinct_artifacts_and_never_mutate_baseline_before_promotion() -> Result<()> {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-shader-cook/variants");
     std::fs::create_dir_all(&base)?;
