@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+ara-components = { workspace = true }
 ara-gpu = { path = "../ara-gpu" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-runtime = { path = "../ara-runtime" }
@@ -25,9 +26,9 @@ ara-vfx = { path = "../ara-vfx" }
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
 # Renderlab v0.1.3 (ebfc21b) merged with Ara-Engine/renderlab#2 (256 mesh-material
 # groups per frame instead of 64) and #6 (emitter prewarm, bursts, spawn shapes, forces,
-# a bounce plane, curves, flipbooks and aligned sprites); pinned to that branch until
-# both land on Renderlab's main.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "b44e9388baf2edbc3681b8b1682f5402e2e498c7" }
+# a bounce plane, curves, flipbooks and aligned sprites) and t3/tlas-limit (the
+# adapter's TLAS instance limit); pinned to that branch until they land on main.
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "33e5e578587714bfbefea3bbd022fa3bd5c94948" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }

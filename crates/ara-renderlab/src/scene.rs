@@ -86,6 +86,8 @@ pub(crate) struct Scene {
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
+    /// Triangles of the largest mesh uploaded so far (`largest_triangles`).
+    largest: usize,
 }
 
 /// Renderlab's standard program with a `glow` parameter (cd/m²) that the surface
@@ -342,6 +344,12 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 }
 
 impl Scene {
+    /// Triangles of the largest mesh this scene has uploaded (cut meshes and static
+    /// batches included). Renderlab's non-RT shadows size their ids by it.
+    pub fn largest_triangles(&self) -> usize {
+        self.largest
+    }
+
     /// Makes Renderlab's objects equal `frame.draws` followed by `static_draws`
     /// (draws the bridge derives itself, such as foliage). `static_key` names the
     /// content of `static_draws`: while it is unchanged, draws already placed are not
@@ -511,6 +519,7 @@ impl Scene {
                 members.len(),
                 first.label
             );
+            self.largest = self.largest.max(indices.len() / 3);
             let (mesh, tangents) = upload(engine, &label, &vertices, &indices, wanted, gaps)?;
             let material_slot = fnv(material, &[u8::from(tangents)]);
             let material_id = self.material(engine, first, material_slot, tangents, gaps)?;
@@ -657,7 +666,8 @@ impl Scene {
         let wanted = normal_mapped(draw);
         let (mut source, mut indices) = triangles(draw)?;
         if let Some(c) = cut(draw) {
-            let id = cut_mesh(engine, &source, &indices, &c, wanted, gaps)?;
+            let (id, triangles) = cut_mesh(engine, &source, &indices, &c, wanted, gaps)?;
+            self.largest = self.largest.max(triangles);
             self.meshes.insert(key, (Shared { id, users: 1 }, false));
             return Ok((id, false));
         }
@@ -665,6 +675,7 @@ impl Scene {
             split_handedness(source.to_mut(), indices.to_mut());
         }
         let label = format!("`{}`", draw.label);
+        self.largest = self.largest.max(indices.len() / 3);
         let (id, tangents) = upload(engine, &label, &source, &indices, wanted, gaps)?;
         self.meshes.insert(key, (Shared { id, users: 1 }, tangents));
         Ok((id, tangents))
@@ -907,9 +918,14 @@ fn upload(
     })
 }
 
+/// Contour cells a mesh's cut may visit in all: its uv area times the cells per uv unit,
+/// squared. Bounds the cut's triangles on meshes whose uvs tile many times (fences).
+const CUT_CELLS: f64 = 65_536.;
+
 /// Uploads `source` cut to its material's alpha (`Cut`): Renderlab keeps the triangles
 /// where the mask passes, with new edges along the contour. Cut meshes carry no
-/// tangents, so a normal map on them is dropped (reported).
+/// tangents, so a normal map on them is dropped (reported). Returns the mesh and its
+/// triangle count.
 fn cut_mesh(
     engine: &mut Engine,
     source: &[ModelVertex],
@@ -917,7 +933,7 @@ fn cut_mesh(
     c: &Cut<'_>,
     normal_mapped: bool,
     gaps: &mut Gaps,
-) -> Result<MeshId> {
+) -> Result<(MeshId, usize)> {
     let decoded = ara_runtime_render::decode_texture(&c.texture.ktx2)?;
     let [width, height] = decoded.size;
     let mask = AlphaMask::from_rgba8(width, height, &decoded.rgba);
@@ -927,16 +943,35 @@ fn cut_mesh(
         indices,
     };
     // About eight texels per contour cell, within the 32 to 128 cells per uv unit that
-    // foliage cards take.
-    let cells = (width.max(height) / 8).clamp(32, 128);
-    let cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    // foliage cards take, and coarser where the uvs cover many units (`CUT_CELLS`).
+    let uv_area: f64 = indices
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter_map(|t| {
+            let [a, b, c] = t.map(|i| source.get(i as usize).map(|v| v.uv));
+            let ([ax, ay], [bx, by], [cx, cy]) = (a?, b?, c?);
+            Some(0.5 * f64::from(((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)).abs()))
+        })
+        .sum();
+    let fine = (width.max(height) / 8).clamp(32, 128);
+    let bounded = (CUT_CELLS / uv_area.max(1e-6)).sqrt().clamp(4., 128.) as u32;
+    let mut cells = fine.min(bounded);
+    // Dense meshes split along every cell line: coarser cells until the cut holds at
+    // most four times its source triangles (and at least 65,536 are always allowed).
+    let allowed = (indices.len() / 3 * 4).max(65_536);
+    let mut cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    while cut.indices.len() / 3 > allowed && cells > 4 {
+        cells = (cells / 2).max(4);
+        cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    }
     if normal_mapped {
         gaps.unsupported(
             "normal maps on alpha-cut meshes",
             "cut cards and foliage shade with their vertex normals",
         );
     }
-    Ok(engine.create_mesh(&cut.data())?)
+    Ok((engine.create_mesh(&cut.data())?, cut.indices.len() / 3))
 }
 
 /// Uploads one skinned primitive with its own pose (`joints` plus the identity joint).
