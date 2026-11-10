@@ -9,7 +9,8 @@ use ara_runtime::{
 };
 use ara_runtime_render::{ExternalView, fidelity::EnvironmentMap};
 use renderlab::engine::{
-    Camera, Exposure, Light, PostSettings, ReflectionSettings, Settings, Sun, Tonemapper, Vec3,
+    Camera, DepthOfField, Exposure, Light, PostSettings, ReflectionSettings, Settings, Sun,
+    Tonemapper, Vec3,
 };
 use std::{borrow::Cow, f32::consts::PI};
 
@@ -250,9 +251,25 @@ pub(crate) fn settings(
     if !frame.look.fog_volumes.is_empty() {
         gaps.unsupported("local fog volumes", "they are not drawn");
     }
-    if look.lens.depth_of_field.is_some() {
-        gaps.unsupported("depth of field", "the image is sharp at every depth");
-    }
+    // Depth of field: Ara's lens is a full-frame camera whose focal length follows the
+    // vertical field of view on a 24 mm sensor, as Renderlab's physical lens takes it.
+    let depth_of_field = look.lens.depth_of_field.zip(frame.camera).map(|(dof, camera)| {
+        if dof.near != 1. || dof.far != 1. {
+            gaps.unsupported(
+                "separate near and far depth-of-field strengths",
+                "both sides blur physically",
+            );
+        }
+        let focal = (12. / (camera.fov.to_radians() * 0.5).tan()).clamp(1., 1000.);
+        DepthOfField {
+            focus_distance_m: dof.focus_distance.max(focal / 1000. + 0.01).min(1e7),
+            focal_length_mm: focal,
+            f_number: dof.aperture.clamp(0.5, 64.),
+            sensor_height_mm: 24.,
+            // Ara's largest radius is about 2% of the render height.
+            max_radius_px: (0.02 * view.size[1] as f32).clamp(1., 32.),
+        }
+    });
     if look.lut.is_some() {
         gaps.unsupported("colour lookup tables", "the grade is not applied");
     }
@@ -278,6 +295,7 @@ pub(crate) fn settings(
             bloom: look.bloom.clamp(0., 1.),
             motion_blur: look.lens.motion_blur > 0.,
             tonemapper: Tonemapper::Filmic,
+            depth_of_field,
             // The grade itself is baked into the colour lookup table (`grade`).
             lut_strength: if crate::grade::lut_needed(look) {
                 1.
