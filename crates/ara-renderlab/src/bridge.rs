@@ -424,7 +424,12 @@ impl Bridge {
 /// than 45 degrees, or more than 20 metres.
 fn jumped(last: ([f32; 3], [f32; 3]), now: ([f32; 3], [f32; 3])) -> bool {
     let dot: f32 = last.1.iter().zip(now.1).map(|(a, b)| a * b).sum();
-    let moved: f32 = last.0.iter().zip(now.0).map(|(a, b)| (a - b) * (a - b)).sum();
+    let moved: f32 = last
+        .0
+        .iter()
+        .zip(now.0)
+        .map(|(a, b)| (a - b) * (a - b))
+        .sum();
     dot < std::f32::consts::FRAC_1_SQRT_2 || moved > 20. * 20.
 }
 
