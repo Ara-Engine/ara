@@ -464,32 +464,29 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
     assert!(rt.state().local.profiler_hide_compare);
     // Two floating windows: focusing the first brings it to the front.
     rt.update(|s| {
-        for (id, panel) in [("float-a", "console"), ("float-b", "problems")] {
-            s.editor.state.floating.push(ara_ui::docking::Floating {
-                id: id.into(),
-                rect: [40, 40, 400, 300],
-                root: ara_ui::docking::DockNode::Area {
-                    id: format!("{id}-area"),
-                    tabs: vec![panel.into()],
-                    active: 0,
-                },
-            });
+        for panel in ["console", "problems"] {
+            s.act(
+                "editor.layout.move",
+                json!({"panel": panel, "slot": "float", "rect": [40.0, 40.0, 400.0, 300.0]}),
+            );
         }
     });
+    let order = |rt: &Runtime<Studio>| -> Vec<String> {
+        rt.state()
+            .editor
+            .state
+            .floating
+            .iter()
+            .map(|f| f.id.clone())
+            .collect()
+    };
+    let first = order(&rt).first().cloned().expect("two floating windows");
     run(
         &mut rt,
         "window.focus_window",
-        Target::Window("float-a".into()),
+        Target::Window(first.clone()),
     );
-    let order: Vec<_> = rt
-        .state()
-        .editor
-        .state
-        .floating
-        .iter()
-        .map(|f| f.id.clone())
-        .collect();
-    assert_eq!(order, ["float-b", "float-a"]);
+    assert_eq!(order(&rt).last(), Some(&first), "in front");
     // Commands not built yet say why instead of failing.
     run(&mut rt, "file.save_as", Target::None);
     assert!(
@@ -1208,6 +1205,65 @@ fn the_palette_finds_settings() {
             .is_some_and(|v| v.query == "Camera speed" && v.scope == crate::settings::Scope::User),
         "{view:?}"
     );
+}
+
+#[test]
+fn a_splitter_drag_is_kept_in_the_layout_without_a_failure() {
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    let ratio = |rt: &Runtime<Studio>| match &rt.state().editor.state.layout {
+        ara_ui::docking::DockNode::Split { ratio, .. } => *ratio,
+        _ => panic!("the default layout splits at its root"),
+    };
+    let before = ratio(&rt);
+    // The host reports the splits' rects; the drag reads them.
+    let keys = super::dock::rect_keys(&rt.state().editor.state.layout);
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let hit = rt.find("splitter/split/").expect("the root splitter");
+    let (x, y) = (hit.center().x, hit.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_move(x + 60.0, y + 60.0);
+    rt.frame(FRAME);
+    rt.pointer_up(x + 60.0, y + 60.0);
+    settle(&mut rt);
+    // The authority keeps the new ratio (a later sync leaves it), and writes the file.
+    let after = ratio(&rt);
+    assert!((after - before).abs() > 0.01, "{before} -> {after}");
+    rt.update(|s| {
+        s.act("editor.focus", json!({"panel": "hierarchy"}));
+    });
+    assert!(
+        (ratio(&rt) - after).abs() < 1e-4,
+        "kept across the next action"
+    );
+    let file = root.join(".ara/editor-layout.json");
+    let written = (0..200).any(|_| {
+        std::thread::sleep(Duration::from_millis(10));
+        std::fs::read_to_string(&file).is_ok_and(|text| {
+            text.contains(&format!("{after}")) || text.contains(&format!("{:.3}", after))
+        })
+    });
+    assert!(written, "{} holds the new ratio {after}", file.display());
+    // Nothing failed on the way: no error reached the status bar or the Console.
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    settle(&mut rt);
+    let errors: Vec<_> = rt
+        .state()
+        .logs
+        .iter()
+        .filter(|r| r.severity == ara_diag::Severity::Error)
+        .map(|r| r.message.clone())
+        .collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(rt.find("status/log").is_none());
 }
 
 #[test]
