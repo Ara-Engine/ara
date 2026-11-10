@@ -926,6 +926,28 @@ fn the_startup_scene_is_set_from_build_or_a_scene_asset() {
 }
 
 #[test]
+fn component_headers_say_what_the_component_is() {
+    let mut rt = open();
+    settle(&mut rt);
+    for component in ["Transform", "MeshRenderer"] {
+        let key = format!("component/{component}/about");
+        assert!(rt.find(&key).is_some(), "{key}");
+    }
+    let doc = rt
+        .state()
+        .editor
+        .host
+        .store()
+        .schema()
+        .get("MeshRenderer")
+        .map(|t| t.doc.clone());
+    assert!(
+        doc.is_some_and(|d| !d.trim().is_empty()),
+        "the schema documents it"
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
