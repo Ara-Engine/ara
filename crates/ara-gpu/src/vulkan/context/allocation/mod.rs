@@ -33,7 +33,7 @@ impl ImageDesc {
             format,
             mip_levels,
             usage,
-            aspect: if format == vk::Format::D32_SFLOAT {
+            aspect: if matches!(format, vk::Format::D32_SFLOAT | vk::Format::D16_UNORM) {
                 vk::ImageAspectFlags::DEPTH
             } else {
                 vk::ImageAspectFlags::COLOR
