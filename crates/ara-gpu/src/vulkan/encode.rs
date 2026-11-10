@@ -35,7 +35,11 @@ impl VulkanDevice {
                             src_stage = vk::PipelineStageFlags2::NONE;
                             src_access = vk::AccessFlags2::NONE;
                         }
-                        (self.family(h.from), self.family(h.to))
+                        if self.family(h.from) == self.family(h.to) {
+                            (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED)
+                        } else {
+                            (self.family(h.from), self.family(h.to))
+                        }
                     } else {
                         (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED)
                     };

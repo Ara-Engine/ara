@@ -71,7 +71,7 @@ pub use vulkan::external;
 pub enum Queue {
     /// Raster, transfer and presentation work.
     Graphics,
-    /// Dedicated compute family, independent of graphics.
+    /// Compute work; may share a native family or queue with graphics.
     Compute,
 }
 impl Queue {
@@ -259,7 +259,7 @@ pub struct Barrier {
 
 /// Backend-neutral resource, recording and lifetime surface, shared with Metal.
 pub trait Device {
-    /// Queue capabilities for graphics and dedicated compute.
+    /// Queue capabilities for graphics and logical compute.
     fn queues(&self) -> [descriptors::QueueInfo; 2];
     /// Allocate a typed buffer.
     fn create_buffer(&mut self, desc: &descriptors::BufferDesc) -> Result<Buffer>;

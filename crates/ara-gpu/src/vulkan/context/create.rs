@@ -110,18 +110,7 @@ impl Gpu {
                 "Vulkan 1.3 required"
             );
             let families = instance.get_physical_device_queue_family_properties(physical);
-            let graphics_family = families
-                .iter()
-                .position(|f| f.queue_flags.contains(vk::QueueFlags::GRAPHICS))
-                .context("No graphics queue")? as u32;
-            let compute_family = families
-                .iter()
-                .position(|f| {
-                    f.queue_flags.contains(vk::QueueFlags::COMPUTE)
-                        && !f.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                })
-                .context("A dedicated compute-only family is required")?
-                as u32;
+            let (graphics_family, compute_family) = super::queues::select(&families)?;
             ensure!(
                 families[graphics_family as usize].timestamp_valid_bits > 0
                     && families[compute_family as usize].timestamp_valid_bits > 0,
@@ -326,19 +315,28 @@ impl Gpu {
                     if high {
                         graphics = graphics.push(&mut priority);
                     }
-                    let queues = [
-                        graphics,
-                        vk::DeviceQueueCreateInfo::default()
-                            .queue_family_index(compute_family)
-                            .queue_priorities(&priorities[..1]),
-                    ];
+                    let mut queues = vec![graphics];
+                    if compute_family != graphics_family {
+                        queues.push(
+                            vk::DeviceQueueCreateInfo::default()
+                                .queue_family_index(compute_family)
+                                .queue_priorities(&priorities[..1]),
+                        );
+                    }
                     instance.create_device(physical, &device_info.queue_create_infos(&queues), None)
                 })?;
             guard.device = Some(device.clone());
             let graphics = device.get_device_queue(graphics_family, 0);
             let scene_graphics =
                 device.get_device_queue(graphics_family, (graphics_count - 1) as u32);
-            let compute = device.get_device_queue(compute_family, 0);
+            let compute = device.get_device_queue(
+                compute_family,
+                if compute_family == graphics_family {
+                    (graphics_count - 1) as u32
+                } else {
+                    0
+                },
+            );
             let graphics_pool = device.create_command_pool(
                 &vk::CommandPoolCreateInfo::default()
                     .queue_family_index(graphics_family)
@@ -456,7 +454,7 @@ impl Gpu {
                 },
             };
             eprintln!(
-                "{}; graphics family {graphics_family}; compute-only family {compute_family}; graphics priority {}",
+                "{}; graphics family {graphics_family}; compute family {compute_family}; graphics priority {}",
                 info.name, info.graphics_global_priority
             );
             guard.disarm();
