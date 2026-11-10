@@ -163,3 +163,19 @@ pub(super) fn level_bytes(info: &FormatInfo, size: [u32; 2], level: u32) -> (u64
     let row = u64::from(width.div_ceil(info.block)) * u64::from(info.block_bytes);
     (row, row * u64::from(height.div_ceil(info.block)))
 }
+
+/// Metal comparison shared by raster and samplers.
+pub(super) fn compare(op: crate::sampler::CompareOp) -> objc2_metal::MTLCompareFunction {
+    use crate::sampler::CompareOp as C;
+    use objc2_metal::MTLCompareFunction as M;
+    match op {
+        C::Never => M::Never,
+        C::Less => M::Less,
+        C::Equal => M::Equal,
+        C::LessEqual => M::LessEqual,
+        C::Greater => M::Greater,
+        C::NotEqual => M::NotEqual,
+        C::GreaterEqual => M::GreaterEqual,
+        C::Always => M::Always,
+    }
+}
