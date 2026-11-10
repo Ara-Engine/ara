@@ -139,6 +139,48 @@ fn dragging_the_x_arrow_moves_along_x_in_one_undo_step() {
 }
 
 #[test]
+fn a_move_with_surface_or_vertex_snapping_asks_the_host_instead_of_stepping() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.act(
+            "editor.settings.set",
+            json!({"key": "viewport.surfaceSnap", "value": true}),
+        )
+    });
+    settle(&mut rt);
+    let (tip, dir) = x_arrow(&rt);
+    rt.pointer_move(tip[0], tip[1]);
+    rt.frame(FRAME);
+    rt.pointer_down(tip[0], tip[1]);
+    rt.pointer_move(tip[0] + dir[0] * 40.0, tip[1] + dir[1] * 40.0);
+    rt.frame(FRAME);
+    let request = rt
+        .state()
+        .local
+        .snap
+        .expect("the host is asked to snap the move");
+    assert!(!request.vertex, "onto a surface");
+    // Held V makes it vertex to vertex.
+    rt.touch(|s| s.local.vertex_key = true);
+    rt.pointer_move(tip[0] + dir[0] * 50.0, tip[1] + dir[1] * 50.0);
+    rt.frame(FRAME);
+    assert!(rt.state().local.snap.is_some_and(|r| r.vertex));
+    // Until the Scene presents this scene, the host has no geometry to snap to.
+    let scene = crate::app::viewport::SceneView::default();
+    let view = rt.state().editor.view().unwrap();
+    let capture =
+        super::snapping::Snap::capture(&rt.state().editor, &view, &scene, &|_| None, &request);
+    assert!(capture.is_none(), "it waits for presented geometry");
+    rt.pointer_up(tip[0] + dir[0] * 50.0, tip[1] + dir[1] * 50.0);
+    rt.frame(FRAME);
+    assert_eq!(
+        position(&rt, "e_box")[0].as_f64().unwrap(),
+        0.0,
+        "no grid move meanwhile"
+    );
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);
