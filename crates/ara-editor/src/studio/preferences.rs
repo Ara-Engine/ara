@@ -427,11 +427,29 @@ fn control(s: &Studio, def: &Def, now: &Value) -> El<Studio> {
                 Size::Sm,
                 format!("settings/{key}/text"),
                 None,
-                "",
+                // Empty means the default behaviour the description names.
+                "Default",
                 &shown,
                 move |f| f.on_submit(move |s: &mut Studio, t| set(s, key, Some(json!(t)))),
             )
             .w(240.0)
+        }
+        // Kept elsewhere: what it holds now (the row's Reset clears it).
+        Kind::List => {
+            let names: Vec<&str> = now
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            text(match names.is_empty() {
+                true => "Default".to_owned(),
+                false => names.join(", "),
+            })
+            .text_size(12.0)
+            .color(c.muted_foreground.0)
+            .wrap(1)
+            .tooltip(def.description)
         }
         Kind::Map | Kind::Colors { .. } => {
             let count = match now {

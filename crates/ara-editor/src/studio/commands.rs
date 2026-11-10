@@ -2089,7 +2089,10 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
             .is_some_and(|id| crate::prefab::instance(e.host.store(), &e.state.doc, id).is_some())
     };
     match id {
-        "lighting.probe.recapture" => record("ReflectionProbe"),
+        "lighting.probe.recapture" | "lighting.probe.refresh" | "lighting.probe.copy" => {
+            record("ReflectionProbe")
+        }
+        "view.camera.pilot" => record("Camera"),
         "lighting.probe.cancel" => super::lighting::capturing(s),
         "lighting.inspect" => [
             "Light",
