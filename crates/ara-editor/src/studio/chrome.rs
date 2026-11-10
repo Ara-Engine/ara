@@ -1041,6 +1041,8 @@ enum Run {
     Select(String),
     /// Open this scene document.
     Scene(String),
+    /// Open Settings at this setting (its scope, searched by its label).
+    Setting(&'static crate::settings::Def),
 }
 
 /// A fuzzy match of `query` in `title`: letters in order, rewarding runs and word starts.
@@ -1163,6 +1165,22 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         all.sort_by_key(|e| std::cmp::Reverse(e.0));
         return all.into_iter().take(14).map(|(_, e)| e).collect();
     }
+    // Settings, by label (VS Code's and Unity's search reach them too).
+    for def in crate::settings::DEFS {
+        if let Some(sc) = score(query, def.label) {
+            all.push((
+                sc,
+                Entry {
+                    group: "Settings",
+                    icon: Some(icons::SETTINGS_2),
+                    title: def.label.to_owned(),
+                    detail: format!("{} · {}", def.category, def.description),
+                    keys: None,
+                    run: Run::Setting(def),
+                },
+            ));
+        }
+    }
     for (id, entity) in s.resolved.iter() {
         let name = entity
             .record
@@ -1184,7 +1202,27 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         }
     }
     all.sort_by_key(|e| std::cmp::Reverse(e.0));
-    all.into_iter().take(14).map(|(_, e)| e).collect()
+    // Best first, at most 8 of a kind (so settings and entities still show beside many
+    // commands), each group together where its best result ranks.
+    let mut taken: std::collections::BTreeMap<&'static str, usize> = Default::default();
+    let mut best: Vec<Entry> = all
+        .into_iter()
+        .map(|(_, e)| e)
+        .filter(|e| {
+            let n = taken.entry(e.group).or_default();
+            *n += 1;
+            *n <= 8
+        })
+        .take(14)
+        .collect();
+    let mut order: Vec<&'static str> = Vec::new();
+    for entry in &best {
+        if !order.contains(&entry.group) {
+            order.push(entry.group);
+        }
+    }
+    best.sort_by_key(|e| order.iter().position(|g| *g == e.group));
+    best
 }
 
 fn run(s: &mut Studio) {
@@ -1210,6 +1248,12 @@ fn run(s: &mut Studio) {
                 s.act("editor.scene.open", serde_json::json!({"scene": doc}));
                 s.resolve();
                 s.act("editor.focus", serde_json::json!({"panel": "scene"}));
+            }
+            Run::Setting(def) => {
+                super::preferences::open(s, def.scope);
+                if let Some(view) = s.local.settings.as_mut() {
+                    view.query = def.label.to_owned();
+                }
             }
         }
     }

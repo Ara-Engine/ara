@@ -1197,6 +1197,20 @@ fn empty_hierarchy_space_the_profiler_and_the_status_bar_have_menus() {
 }
 
 #[test]
+fn the_palette_finds_settings() {
+    let mut rt = open();
+    rt.update(|s| s.local.palette = Some(("camera speed".into(), 0)));
+    settle(&mut rt);
+    press(&mut rt, "palette/0");
+    let view = rt.state().local.settings.clone();
+    assert!(
+        view.as_ref()
+            .is_some_and(|v| v.query == "Camera speed" && v.scope == crate::settings::Scope::User),
+        "{view:?}"
+    );
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2687,6 +2701,20 @@ fn captures() {
             rt.frame(FRAME);
         }
         let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        // A search reaches settings too.
+        rt.update(|s| s.local.palette = Some(("camera".into(), 0)));
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-palette-search.png",
+            if light { "light" } else { "dark" }
+        );
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
