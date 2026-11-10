@@ -303,6 +303,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .min_w(0.0)
         .child(band(icons::HAMMER, selected.as_deref().unwrap_or("Build")))
         .child(actions)
+        .child(start_row(s))
         .child(band(icons::ACTIVITY, "Status"))
         .child(status);
     row().grow(1.0).min_h(0.0).child(left).child(right)
@@ -374,5 +375,74 @@ fn package_row(
                 });
             }),
             can,
+        ))
+}
+
+/// The scene the project starts with (`ara.project.json`'s main), as written there.
+pub(super) fn main_scene(s: &Studio) -> Option<String> {
+    let workspace = s.editor.host.store().workspace();
+    let settings = workspace
+        .doc("pj_project")?
+        .record("p_settings")?
+        .get("settings")?;
+    settings.get("main")?.as_str().map(str::to_owned)
+}
+
+/// Starts the project with scene document `doc`: one undoable `project.setMain`.
+pub(super) fn set_main(s: &mut Studio, doc: &str) -> ara_ui::Result<()> {
+    let workspace = s.editor.host.store().workspace();
+    let path = workspace
+        .path_of(doc)
+        .ok_or("That scene is not in the project")?;
+    let reference = format!("@{}#{doc}", workspace.reference_path(path));
+    s.editor.apply_to(
+        "pj_project",
+        vec![serde_json::json!({"cmd": "project.setMain", "args": {"scene": reference}})],
+        "Set the startup scene",
+    )?;
+    Ok(())
+}
+
+/// What the build starts with, and the way to make it the scene open now.
+fn start_row(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let main = main_scene(s);
+    let workspace = s.editor.host.store().workspace();
+    let open = workspace
+        .path_of(&s.editor.state.doc)
+        .map(|p| workspace.reference_path(p).to_owned());
+    let already = match (&main, &open) {
+        (Some(main), Some(open)) => main == open || open.ends_with(main.as_str()),
+        _ => false,
+    };
+    row()
+        .key("build/start")
+        .pad_x(12.0)
+        .pad_y(8.0)
+        .gap(8.0)
+        .align(Align::Center)
+        .child(icon(icons::PLAY).size(13.0).color(c.muted_foreground.0))
+        .child(
+            text("Starts with")
+                .text_size(12.0)
+                .color(c.muted_foreground.0),
+        )
+        .child(
+            text(main.unwrap_or_else(|| "no scene set".to_owned()))
+                .text_size(12.0)
+                .family(mono())
+                .color(c.foreground.0)
+                .grow(1.0)
+                .min_w(0.0),
+        )
+        .child(enabled(
+            button(l, Tone::Ghost, Size::Sm, None, "Use open scene")
+                .key("build/start/use-open")
+                .tooltip("Start the project with the scene open now")
+                .on_press(|s: &mut Studio| {
+                    super::commands::run(s, "build.main_scene", &crate::catalog::Target::None)
+                }),
+            !already,
         ))
 }

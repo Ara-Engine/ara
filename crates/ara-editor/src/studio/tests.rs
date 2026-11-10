@@ -900,6 +900,32 @@ fn a_hovered_hierarchy_row_offers_its_eye_and_lock() {
 }
 
 #[test]
+fn the_startup_scene_is_set_from_build_or_a_scene_asset() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let main = |rt: &Runtime<Studio>| super::build_page::main_scene(rt.state());
+    let first = main(&rt).expect("the project starts with a scene");
+    let original = rt.state().editor.state.doc.clone();
+    let storage = {
+        let workspace = rt.state().editor.host.store().workspace();
+        workspace.path_of(&original).unwrap().to_owned()
+    };
+    // A new scene, open now, becomes the one the build starts with.
+    rt.update(|s| super::commands::run(s, "file.new_scene", &Target::None));
+    settle(&mut rt);
+    assert_ne!(rt.state().editor.state.doc, original);
+    rt.update(|s| super::commands::run(s, "build.main_scene", &Target::None));
+    let second = main(&rt).unwrap();
+    assert_ne!(second, first);
+    // A scene asset's menu puts the first back, as one undoable change.
+    rt.update(|s| super::commands::run(s, "assets.set_main", &Target::Asset(storage.clone())));
+    assert_eq!(main(&rt).as_deref(), Some(first.as_str()));
+    rt.update(|s| super::commands::run(s, "edit.undo", &Target::None));
+    assert_eq!(main(&rt), Some(second));
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
