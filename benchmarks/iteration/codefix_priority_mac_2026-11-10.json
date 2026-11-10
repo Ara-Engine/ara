@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-10",
+  "scope": "Controlled starvation diagnosis, not a throughput benchmark. The original untraced full-campaign timeout cannot be uniquely attributed; this experiment reproduces its symptom and isolates the helper scheduling policy.",
+  "platform": "macOS arm64, MacBook Pro M5, AC power, .NET SDK 10.0.203 / CoreCLR 10.0.7",
+  "baseline_source": "b20e0e136 (Program.cs still backgrounds --fix at entry)",
+  "candidate_change": "Only --fix retains the inherited launch budget; no deadline changes. BSD nice remains inherited.",
+  "fixture": "ara-play-host source_fixes::code_fixes_use_prepared_source_ops_and_round_trip_offline_history, instrumentation+gpu profiling features, native test nice 10",
+  "load": "60 owned foreground Python PBKDF2 CPU workers (four per available core); same settings in both trials, sequential; workers terminated/reaped after each trial. This intentionally exceeds ordinary load.",
+  "observed_baseline_child_cpu_seconds_at_90s": 0.18,
+  "baseline_child_state_at_90s": "RN (runnable)",
+  "trials": [
+    {
+      "label": "oversubscribed-low",
+      "load_workers": 60,
+      "test_nice": 10,
+      "exit": 101,
+      "seconds": 90.37830162499449,
+      "events": [
+        {
+          "seconds": 0.3111866249819286,
+          "text": "test code_fixes_use_prepared_source_ops_and_round_trip_offline_history ... [DEBUG-fix-latency] host prepare-begin"
+        },
+        {
+          "seconds": 6.489930374984397,
+          "text": "[DEBUG-fix-latency] host inventory-done"
+        },
+        {
+          "seconds": 6.494188832992222,
+          "text": "[DEBUG-fix-latency] tool --fix begin"
+        },
+        {
+          "seconds": 6.510151958005736,
+          "text": "[DEBUG-fix-latency] tool --fix spawned pid=86014"
+        },
+        {
+          "seconds": 6.510187250009039,
+          "text": "[DEBUG-fix-latency] tool --fix stdin-closed"
+        }
+      ]
+    },
+    {
+      "label": "oversubscribed-fixed",
+      "load_workers": 60,
+      "test_nice": 10,
+      "exit": 0,
+      "seconds": 29.917851458012592,
+      "events": [
+        {
+          "seconds": 0.2843918750004377,
+          "text": "test code_fixes_use_prepared_source_ops_and_round_trip_offline_history ... [DEBUG-fix-latency] host prepare-begin"
+        },
+        {
+          "seconds": 21.936947250011144,
+          "text": "[DEBUG-fix-latency] host inventory-done"
+        },
+        {
+          "seconds": 21.942577333014924,
+          "text": "[DEBUG-fix-latency] tool --fix begin"
+        },
+        {
+          "seconds": 21.95866475001094,
+          "text": "[DEBUG-fix-latency] tool --fix spawned pid=87781"
+        },
+        {
+          "seconds": 21.958705249999184,
+          "text": "[DEBUG-fix-latency] tool --fix stdin-closed"
+        },
+        {
+          "seconds": 29.76989841699833,
+          "text": "[DEBUG-fix-latency] tool --fix exited exit status: 0"
+        },
+        {
+          "seconds": 29.776806208014023,
+          "text": "[DEBUG-fix-latency] host prepared-received"
+        },
+        {
+          "seconds": 29.77972195800976,
+          "text": "[DEBUG-fix-latency] host revalidated-received"
+        },
+        {
+          "seconds": 29.780944291997002,
+          "text": "[DEBUG-fix-latency] host apply-returned"
+        }
+      ]
+    }
+  ],
+  "other_checks": "15-worker cases and I/O-load cases passed before this change; source-fix host materialization took milliseconds. Temporary trace instrumentation removed after diagnosis.",
+  "limits": "One severe-load trial per policy, no confidence interval or steady-state speedup claim. Inventory retained its background policy and its variable duration is reported separately."
+}

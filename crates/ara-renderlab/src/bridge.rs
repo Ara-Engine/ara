@@ -4,10 +4,13 @@
 //! a CPU copy (a readback there, an upload here). Either crossing is timed.
 use crate::{
     ActivePath, Options, PathChoice,
+    decals::Decals,
+    environment,
     gaps::Gaps,
-    lighting::{self, Metering},
-    scene::Scene,
+    lighting::{self, Metering, SkySource},
+    scene::{MAX_GROUPS, Scene},
     shared::SharedHandoff,
+    terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
 use ara_gpu::{
@@ -15,8 +18,8 @@ use ara_gpu::{
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::engine::{
-    Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, RenderPath, Sky, Sun,
-    headless_adapter,
+    AtmosphereMedium, Background, Capabilities, Engine, EngineDescriptor, EnvironmentId,
+    ExperimentalRayQuery, Light, Limits, RenderPath, Sky, Sun, headless_adapter,
 };
 use std::time::{Duration, Instant};
 
@@ -41,6 +44,8 @@ struct Applied {
     sun: Option<Sun>,
     lights: Vec<Light>,
     sky: Option<Sky>,
+    /// The prepared sky map in use and the content key it was prepared from.
+    sky_map: Option<(u64, EnvironmentId)>,
 }
 
 pub(crate) struct Bridge {
@@ -50,10 +55,14 @@ pub(crate) struct Bridge {
     engine: Engine,
     path: ActivePath,
     scene: Scene,
+    terrain: Terrain,
+    decals: Decals,
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
     max_reflection_roughness: Option<f32>,
+    /// A sky image lights the scene as a constant of its mean radiance (`Options`).
+    constant_sky: bool,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
     /// Frames until the shared route next reads a frame back for the meter.
@@ -62,6 +71,19 @@ pub(crate) struct Bridge {
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
+    /// The last frame's eye and view direction, to notice a view that jumps.
+    last_view: Option<([f32; 3], [f32; 3])>,
+    /// The sky being prepared off the frame loop, if any.
+    sky_job: Option<SkyJob>,
+    /// Replaced sky maps waiting for the next sky change to be removed.
+    stale_maps: Vec<EnvironmentId>,
+}
+
+/// One sky image being prepared for `Sky::Map` on a worker thread.
+struct SkyJob {
+    /// Content key of the image (`environment::key`).
+    key: u64,
+    worker: std::thread::JoinHandle<Result<renderlab::engine::PreparedEnvironment>>,
 }
 
 impl Bridge {
@@ -102,6 +124,11 @@ impl Bridge {
                 pipeline_cache: options.pipeline_cache.clone(),
                 // Renderlab defaults to none: ground textures smear at grazing angles.
                 texture_anisotropy: 16,
+                // Objects per mesh-material pair: scattered foliage shares one pair.
+                limits: Limits {
+                    max_instances: 65_536,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
@@ -121,15 +148,21 @@ impl Bridge {
             engine,
             path,
             scene: Scene::default(),
+            terrain: Terrain::default(),
+            decals: Decals::default(),
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
             max_reflection_roughness: options.max_reflection_roughness,
+            constant_sky: options.constant_sky,
             cpu_copy: options.cpu_copy_handoff,
             meter_wait: 0,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
+            last_view: None,
+            sky_job: None,
+            stale_maps: Vec::new(),
         })
     }
 
@@ -149,7 +182,21 @@ impl Bridge {
         let frame = view.frame;
         self.report_unsupported(view);
         self.engine.resize(view.size[0], view.size[1])?;
-        self.scene.sync(&mut self.engine, frame, &mut self.gaps)?;
+        // Terrain tiles take at most half the mesh-material groups; entity draws and
+        // foliage share the rest.
+        let tiles = self
+            .terrain
+            .sync(&mut self.engine, view, MAX_GROUPS / 2, &mut self.gaps)?;
+        let (foliage, foliage_key) = self.terrain.foliage();
+        self.scene.sync(
+            &mut self.engine,
+            frame,
+            foliage,
+            foliage_key,
+            tiles,
+            &mut self.gaps,
+        )?;
+        self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &self.metering);
         self.engine.set_settings(lighting::settings(
@@ -158,11 +205,7 @@ impl Bridge {
             self.max_reflection_roughness,
             &mut self.gaps,
         ))?;
-        let sky = lighting::sky(view, &mut self.gaps);
-        if self.applied.sky != Some(sky) {
-            self.engine.set_sky(sky)?;
-            self.applied.sky = Some(sky);
-        }
+        self.apply_sky(view)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
@@ -174,6 +217,13 @@ impl Bridge {
             self.applied.lights = lights;
         }
 
+        // A view that jumps (a camera cut, a teleport) shares nothing with the history
+        // Renderlab accumulated: it starts over, as before a capture.
+        if let Some(camera) = frame.camera {
+            let view = (camera.position, camera.forward);
+            self.cut |= self.last_view.is_some_and(|last| jumped(last, view));
+            self.last_view = Some(view);
+        }
         if std::mem::take(&mut self.cut) {
             self.engine.cut();
         }
@@ -293,15 +343,14 @@ impl Bridge {
     fn report_unsupported(&mut self, view: &ExternalView<'_>) {
         let frame = view.frame;
         if frame.terrain.is_some() {
-            self.gaps
-                .unsupported("terrain and foliage", "the landscape is not drawn");
+            self.gaps.unsupported(
+                "terrain and foliage levels of detail and foliage wind",
+                "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
+            );
         }
         if !frame.effects.is_empty() {
             self.gaps
                 .unsupported("VFX graph effects", "particles are not drawn");
-        }
-        if !frame.decals.is_empty() {
-            self.gaps.unsupported("decals", "they are not projected");
         }
         if !frame.look.volumes.is_empty() {
             self.gaps.unsupported(
@@ -329,6 +378,78 @@ impl Bridge {
         }
     }
 
+    /// Sets the frame's sky when it changed. An environment map or gradient sky is
+    /// prepared once per content (`environment`) on a worker thread, a few hundred
+    /// milliseconds of filtering: the frame loop keeps the sky it has (a constant of
+    /// the image's mean before the first one) until the new one is ready. A capture or
+    /// a cut waits for it, so stills never show a sky in transition.
+    fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
+        let mut replaced = None;
+        let sky = match lighting::sky(view, &mut self.gaps) {
+            SkySource::Atmosphere => Sky::Atmosphere(AtmosphereMedium::default()),
+            SkySource::Map { size, pixels } if self.constant_sky => {
+                Sky::Uniform(environment::mean_radiance(size, &pixels))
+            }
+            SkySource::Map { size, pixels } => {
+                let key = environment::key(size, &pixels);
+                loop {
+                    // Take over a finished preparation (any, when waiting).
+                    if let Some(job) = self
+                        .sky_job
+                        .take_if(|job| self.cut || job.worker.is_finished())
+                    {
+                        let prepared = job
+                            .worker
+                            .join()
+                            .map_err(|_| anyhow!("the sky preparation thread panicked"))??;
+                        let map = self.engine.create_environment(&prepared)?;
+                        let previous = self.applied.sky_map.replace((job.key, map));
+                        // Two maps can finish between sky changes: all but the last go.
+                        if let Some(stale) = replaced.replace(previous.map(|(_, map)| map)) {
+                            self.stale_maps.extend(stale);
+                        }
+                    }
+                    let current = self.applied.sky_map.map(|(applied, _)| applied);
+                    if current == Some(key) || self.sky_job.is_some() {
+                        break;
+                    }
+                    let (owned, wait) = (pixels.to_vec(), self.cut);
+                    let worker = std::thread::Builder::new()
+                        .name("renderlab-sky".into())
+                        .spawn(move || environment::prepare(size, &owned))
+                        .context("sky preparation thread")?;
+                    self.sky_job = Some(SkyJob { key, worker });
+                    if !wait {
+                        break;
+                    }
+                }
+                match self.applied.sky_map {
+                    Some((_, map)) => Sky::Map {
+                        map,
+                        rotation_y: 0.,
+                        intensity: 1.,
+                        background: Background::Sky,
+                    },
+                    None => Sky::Uniform(environment::mean_radiance(size, &pixels)),
+                }
+            }
+        };
+        if self.applied.sky != Some(sky) {
+            self.engine.set_sky(sky)?;
+            self.applied.sky = Some(sky);
+        }
+        // Renderlab keeps the selected map alive until the sky changes: old ones go
+        // only after the new sky is set.
+        for map in replaced
+            .flatten()
+            .into_iter()
+            .chain(self.stale_maps.drain(..))
+        {
+            self.engine.remove_environment(map)?;
+        }
+        Ok(())
+    }
+
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(target) = self.target.take() {
             // The import hands its slots back on this device before the image goes.
@@ -341,6 +462,19 @@ impl Bridge {
         }
         Ok(())
     }
+}
+
+/// Whether the view moved further in one frame than a continuous camera does: more
+/// than 45 degrees, or more than 20 metres.
+fn jumped(last: ([f32; 3], [f32; 3]), now: ([f32; 3], [f32; 3])) -> bool {
+    let dot: f32 = last.1.iter().zip(now.1).map(|(a, b)| a * b).sum();
+    let moved: f32 = last
+        .0
+        .iter()
+        .zip(now.0)
+        .map(|(a, b)| (a - b) * (a - b))
+        .sum();
+    dot < std::f32::consts::FRAC_1_SQRT_2 || moved > 20. * 20.
 }
 
 /// Brings a new target image to `CopySource`, where the shared copy expects it.
