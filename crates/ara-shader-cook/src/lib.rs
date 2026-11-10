@@ -6,6 +6,8 @@ pub use dependency::write_index as write_dependency_index;
 mod identity;
 #[cfg(target_os = "macos")]
 mod macos_dxil;
+#[cfg(target_os = "macos")]
+pub use macos_dxil::dxc_command;
 pub mod metal;
 pub mod variant;
 use anyhow::{Context, Result, ensure};

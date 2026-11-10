@@ -245,8 +245,8 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
     )
 }
 
-/// macOS: each stage's DXIL beside its SPIR-V, through HLSL and the Vulkan SDK's `dxc`
-/// (this SDK's Slang cannot load DXC itself), side by side as the SPIR-V compiles are.
+/// macOS: each stage's DXIL beside its SPIR-V, through HLSL and the engine cook's `dxc`
+/// command (this SDK's Slang cannot load DXC itself), side by side as the SPIR-V compiles are.
 #[cfg(target_os = "macos")]
 fn metal_dxil(
     folder: &Path,
@@ -262,11 +262,6 @@ fn metal_dxil(
         .slangc
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("locating Slang ({}): {e}", tools.slangc.display()))?;
-    let dxc = slangc
-        .parent()
-        .map(|bin| bin.join("dxc"))
-        .filter(|dxc| dxc.is_file())
-        .ok_or_else(|| anyhow::anyhow!("macOS previews need the Vulkan SDK's dxc beside slangc"))?;
     let hlsl = stages
         .iter()
         .map(|&(entry, stage)| {
@@ -300,27 +295,11 @@ fn metal_dxil(
     let dxil = stages
         .iter()
         .map(|&(entry, stage)| {
-            spawn(
-                Command::new(&dxc)
-                    .arg(folder.join(format!("{entry}.hlsl")))
-                    .args([
-                        "-E",
-                        entry,
-                        "-T",
-                        if stage == Stage::Vertex {
-                            "vs_6_6"
-                        } else {
-                            "ps_6_6"
-                        },
-                        "-O2",
-                        "-Zpc",
-                        "-enable-16bit-types",
-                        "-HV",
-                        "2021",
-                        "-Fo",
-                    ])
-                    .arg(folder.join(format!("{entry}.dxil"))),
-            )
+            let hlsl = folder.join(format!("{entry}.hlsl"));
+            let dxil = folder.join(format!("{entry}.dxil"));
+            spawn(&mut ara_shader_cook::dxc_command(
+                tools, entry, stage, &hlsl, &dxil,
+            )?)
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     for child in dxil {
