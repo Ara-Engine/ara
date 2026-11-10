@@ -49,7 +49,33 @@ pub struct Page {
     /// The Material page shows its source (the material as DSL text) instead of the graph:
     /// the text being edited, unapplied.
     pub source: Option<String>,
+    /// The Material page's in-node previews ([`previews`]).
+    previews: Previews,
 }
+
+/// In-node previews (Shader Graph style): each operation node's value rendered on its own
+/// worker (`asset_tools::node_preview`), uploaded into the page layer's image slots as
+/// renders land. Until a node's render lands its tile says so; one that fails keeps a
+/// compact body.
+#[derive(Default)]
+struct Previews {
+    /// Requests for the shown material and their failures.
+    nodes: crate::asset_tools::node_preview::NodePreviews,
+    /// The render worker, started with the first preview.
+    queue: Option<crate::asset_tools::thumbnails::Thumbnails>,
+    /// Each rendered preview key's image slot.
+    slots: std::collections::HashMap<String, usize>,
+    /// The next slot to fill (they cycle).
+    next: usize,
+    /// Images landed since the layer last drew, by image id.
+    uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
+    /// The last render failure reported, so a cause shared by every node is said once.
+    reported: Option<String>,
+}
+
+/// Image slots for in-node previews: twice the most a graph derives, so a revision's new
+/// renders don't evict the ones still shown.
+const PREVIEW_SLOTS: usize = 2 * crate::asset_tools::node_preview::MAX;
 
 impl Page {
     /// The graph the canvas shows (its last loaded revision).
@@ -62,6 +88,11 @@ impl Page {
             .as_ref()
             .map(|g| g.canvas.selection.clone())
             .unwrap_or_default()
+    }
+    /// How many nodes show a rendered in-node preview (tests).
+    #[cfg(test)]
+    pub(super) fn previewed(&self) -> usize {
+        self.shown.as_ref().map_or(0, |g| g.canvas.previews.len())
     }
     /// Picks `id` alone on the canvas (a transition from the Details' list).
     pub(super) fn pick(&mut self, id: String) {
@@ -208,6 +239,124 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
     page.dirty = true;
 }
 
+/// Keeps the Material page's in-node previews current: derives them when the material
+/// changes, asks the worker for those not rendered, and takes the renders that landed.
+/// Whether the canvas changed (it needs drawing).
+pub(super) fn previews(s: &mut Studio) -> bool {
+    use crate::asset_tools::{node_preview, thumbnails};
+    let root = s.editor.host.root().to_owned();
+    let revision = s.editor.host.store().revision();
+    let page = &mut s.graph;
+    let (Some(shown), Some(text)) = (page.shown.as_mut(), page.text.as_mut()) else {
+        return false;
+    };
+    if shown.domain != "material" {
+        return false;
+    }
+    let p = &mut page.previews;
+    let pixels = (2.0 * crate::graph::PREVIEW) as u32;
+    let identity = (shown.doc.clone(), revision);
+    if p.nodes.revision.as_ref() != Some(&identity) {
+        p.nodes.revision = Some(identity);
+        p.nodes.requests.clear();
+        if let Ok(material) = ara_material::Material::from_graph(shown.canvas.graph()) {
+            let nodes: Vec<String> = shown
+                .canvas
+                .preview_nodes()
+                .take(node_preview::MAX)
+                .map(str::to_owned)
+                .collect();
+            for node in nodes {
+                if let Some((derived, shot)) = node_preview::derive(&material, &node) {
+                    let key = thumbnails::Thumbnails::material_key(&derived, shot, pixels);
+                    p.nodes.requests.insert(node, (key, derived, shot));
+                }
+            }
+        }
+    }
+    let mut changed = false;
+    let mut failures = Vec::new();
+    // Renders that landed take a slot (the oldest is reused) and upload on the next draw.
+    if let Some(queue) = p.queue.as_mut() {
+        for done in queue.poll() {
+            match done {
+                thumbnails::Done::Image(thumb) => {
+                    let slot = match p.slots.get(&thumb.key) {
+                        Some(slot) => *slot,
+                        None => {
+                            let slot = p.next % PREVIEW_SLOTS;
+                            p.next += 1;
+                            p.slots.retain(|_, s| *s != slot);
+                            p.slots.insert(thumb.key.clone(), slot);
+                            slot
+                        }
+                    };
+                    p.uploads.push((
+                        thumbnails::image_id(slot),
+                        ara_ui_render::gpu::Image {
+                            width: thumb.image.width(),
+                            height: thumb.image.height(),
+                            rgba: thumb.image.into_raw(),
+                        },
+                    ));
+                    changed = true;
+                }
+                thumbnails::Done::Failed(key, _, error) => {
+                    // Said once per cause (a missing toolchain fails them all alike).
+                    if p.reported.as_deref() != Some(error.as_str()) {
+                        failures.push(format!("In-node previews can't render: {error}"));
+                        p.reported = Some(error);
+                    }
+                    p.nodes.failed.insert(key);
+                    changed = true;
+                }
+                thumbnails::Done::Pending(_) => {}
+            }
+        }
+    }
+    // Tiles for nodes with a render shown or on its way; the rest keep a compact body.
+    let previewed = p
+        .nodes
+        .requests
+        .iter()
+        .filter(|(_, (key, ..))| !p.nodes.failed.contains(key))
+        .map(|(node, _)| node.clone())
+        .collect();
+    shown.canvas.set_previewed(previewed, text);
+    let path = s
+        .editor
+        .host
+        .store()
+        .workspace()
+        .path_of(&shown.doc)
+        .unwrap_or("material")
+        .to_owned();
+    for (node, (key, derived, shot)) in &p.nodes.requests {
+        if p.nodes.failed.contains(key) {
+            continue;
+        }
+        match p.slots.get(key) {
+            Some(slot) => {
+                let id = thumbnails::image_id(*slot);
+                if shown.canvas.previews.insert(node.clone(), id) != Some(id) {
+                    changed = true;
+                }
+            }
+            None => p
+                .queue
+                .get_or_insert_with(|| thumbnails::Thumbnails::new(&root))
+                .request_material(&path, key, derived, *shot, pixels),
+        }
+    }
+    if changed {
+        page.dirty = true;
+    }
+    for failure in failures {
+        s.editor.report_failure(&*anyhow::anyhow!(failure));
+    }
+    changed
+}
+
 /// Draws the canvas into the page's layer. `extent` is in physical pixels.
 /// # Safety
 /// `layer` is the graph page's live native layer (`present::Target`).
@@ -232,6 +381,9 @@ pub(super) unsafe fn draw(
     };
     if std::mem::take(&mut shown.fresh) {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
+    }
+    for (id, image) in page.previews.uploads.drain(..) {
+        target.image(id, image)?;
     }
     let mut list = DisplayList::default();
     shown.canvas.paint(&mut list, rect, theme);

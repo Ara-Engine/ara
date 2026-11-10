@@ -666,6 +666,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
+            rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
                 let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();

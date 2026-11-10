@@ -42,6 +42,13 @@ impl Layer {
         })
     }
 
+    /// Uploads image `id` (an in-node preview), drawn wherever the list names it.
+    pub fn image(&mut self, id: u32, image: ara_ui_render::gpu::Image) -> Result<()> {
+        self.paint
+            .image(id, image)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+    }
+
     /// Whether the last frame left the GPU (else skip this pass and draw on a later one).
     pub fn ready(&self) -> Result<bool> {
         self.ui
