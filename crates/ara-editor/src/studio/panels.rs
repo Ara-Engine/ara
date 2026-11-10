@@ -715,7 +715,14 @@ pub(super) fn drop_keys(s: &Studio) -> Vec<String> {
     let Some(browser) = s.assets.as_ref() else {
         return Vec::new();
     };
-    let mut keys = vec!["assets/tree/".to_owned()];
+    let mut keys = vec!["assets/tree/".to_owned(), "hierarchy/rows".to_owned()];
+    // The Hierarchy's rows (those on screen report a rect) and the Inspector's asset fields.
+    keys.extend(s.resolved.keys().map(|id| format!("row/{id}")));
+    keys.extend(
+        super::inspector::asset_fields(s)
+            .into_iter()
+            .map(|p| format!("field/{p}")),
+    );
     for folder in folders(browser) {
         keys.push(format!("asset/{folder}"));
         keys.push(format!("asset/{folder}/"));
@@ -1356,16 +1363,22 @@ fn tile(
                             s.resolve();
                         }
                     }
+                    // A press picks it; the Inspector turns to it on release, unless it was
+                    // dragged (as in Unity: dragging an asset onto an entity's field keeps
+                    // that entity in the Inspector).
                     PointerPhase::Down => {
                         s.act("editor.workspace", json!({"asset": path}));
-                        s.local.inspect_asset = !folder;
                     }
-                    // Anything drags onto a folder (moving it there); models and prefabs
-                    // drag into the Scene too.
+                    // Anything drags onto a folder (moving it there) or an Inspector field
+                    // that takes it; models and prefabs drag into the Scene or onto the
+                    // Hierarchy (under the row they land on) too.
                     PointerPhase::Move if e.travel().x.abs() + e.travel().y.abs() >= 4.0 => {
                         s.local.asset_drag = Some((path.clone(), name.clone(), (e.at.x, e.at.y)));
                     }
                     PointerPhase::Up => {
+                        if s.local.asset_drag.is_none() {
+                            s.local.inspect_asset = !folder;
+                        }
                         if let Some((path, _, at)) = s.local.asset_drag.take() {
                             let own = path.trim_end_matches('/');
                             match folder_at(s, at) {
@@ -1373,8 +1386,14 @@ fn tile(
                                     super::asset_ops::move_to(s, &path, &folder)
                                 }
                                 Some(_) => {}
-                                None if placeable => place(s, &path, at),
-                                None => {}
+                                None => match (hierarchy_at(s, at), field_at(s, at)) {
+                                    (Some(parent), _) if placeable => {
+                                        place_under(s, &path, parent.as_deref())
+                                    }
+                                    (_, Some(field)) => assign(s, &path, &field),
+                                    _ if placeable => place(s, &path, at),
+                                    _ => {}
+                                },
                             }
                         }
                     }
@@ -2189,6 +2208,82 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
         )
         .children(doc.map(|_| why))
         .children(go)
+}
+
+/// Where a drop on the Hierarchy lands: under the row's entity, or at the scene's root on
+/// its empty space (`Some(None)`); `None` off the Hierarchy.
+fn hierarchy_at(s: &Studio, at: (f32, f32)) -> Option<Option<String>> {
+    let inside =
+        |r: &stillkit::Rect| at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom;
+    let list = s.local.rects.get("hierarchy/rows").filter(|r| inside(r))?;
+    let row = s.local.rects.iter().find_map(|(key, r)| {
+        let id = key.strip_prefix("row/").filter(|id| !id.contains('/'))?;
+        (inside(r) && inside(list)).then(|| id.to_owned())
+    });
+    Some(row)
+}
+
+/// The Inspector asset field under `at`, by path.
+fn field_at(s: &Studio, at: (f32, f32)) -> Option<String> {
+    s.local.rects.iter().find_map(|(key, r)| {
+        let path = key.strip_prefix("field/")?;
+        (at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom)
+            .then(|| path.to_owned())
+    })
+}
+
+/// The asset at storage `path` and its reference.
+fn dropped(s: &Studio, path: &str) -> Option<(Asset, String)> {
+    let asset = s
+        .assets
+        .as_ref()?
+        .items
+        .iter()
+        .find(|a| a.path == path)
+        .cloned()?;
+    let reference = asset.current_reference(s.editor.host.store().workspace())?;
+    Some((asset, reference))
+}
+
+/// Places the model or prefab at storage `path` in the scene under `parent` (the root
+/// when `None`), as a drop on the Hierarchy does in Unity.
+fn place_under(s: &mut Studio, path: &str, parent: Option<&str>) {
+    let Some((asset, reference)) = dropped(s, path) else {
+        return;
+    };
+    let mut args = match asset.kind.as_str() {
+        "prefab" => json!({"prefab": reference}),
+        _ => json!({"mesh": reference}),
+    };
+    if let Some(parent) = parent {
+        args["parent"] = json!(parent);
+    }
+    let cmd = if asset.kind == "prefab" {
+        "prefab.instantiate"
+    } else {
+        "editor.mesh.instantiate"
+    };
+    s.apply(vec![json!({"cmd": cmd, "args": args})], "Place asset");
+}
+
+/// Assigns the asset at storage `path` to Inspector field `field` on every inspected
+/// entity, when the field takes that kind of asset (dropped on it).
+fn assign(s: &mut Studio, path: &str, field: &str) {
+    let Some(f) = super::inspector::field_of(s, field) else {
+        return;
+    };
+    let crate::inspector::Widget::Asset { kind } = &f.widget else {
+        return;
+    };
+    let Some((asset, reference)) = dropped(s, path) else {
+        return;
+    };
+    if f.read_only || !asset.fits(kind.as_deref(), field) {
+        super::note(s, format!("{} doesn't take {}", f.label, asset.name()));
+        return;
+    }
+    let commands = crate::inspector::edit_commands(s.inspected(), field, &json!(reference));
+    s.apply(commands, "Assign asset");
 }
 
 /// Places the model or prefab at storage `path` where the pointer let go: on the ground
