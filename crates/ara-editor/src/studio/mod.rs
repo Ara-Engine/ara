@@ -648,6 +648,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.touch(|s| std::mem::take(&mut s.play.release)) {
             rt.update(|s| s.local.game_captured = false);
         }
+        // The Profiler's player: its targets, its frames while it records.
+        let profiler_shown =
+            rt.find("profiler/record").is_some() || rt.find("profiler/stop").is_some();
+        if rt.touch(|s| profiler::poll(s, profiler_shown)) {
+            rt.update(|_| {});
+        }
         // C#: a reload in Play, module discovery for the IDE.
         if rt.touch(scripts::poll) {
             rt.update(|_| {});

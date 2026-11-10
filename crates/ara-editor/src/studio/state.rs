@@ -324,6 +324,15 @@ pub struct Local {
     pub profiling: bool,
     /// The Profiler's picked frame (its id), or None for the newest.
     pub profile_frame: Option<u64>,
+    /// What the Profiler records: a running Play player, or (None) the editor itself.
+    pub(crate) profiler_target: Option<crate::play_profiling::Scope>,
+    /// The player request in flight and what it asked.
+    pub(crate) profiler_ticket:
+        Option<(crate::play_profiling::Ticket, crate::play_profiling::Action)>,
+    /// When the players to profile were last listed, and the player's frames last read.
+    pub profiler_polled: Option<(std::time::Instant, std::time::Instant)>,
+    /// The picked player records (its last status said so).
+    pub profiler_player_recording: bool,
     /// The Lighting panel's filter.
     pub lighting_query: String,
     /// The Lighting panel's open menu ("add" or "presets").

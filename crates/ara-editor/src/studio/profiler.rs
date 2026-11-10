@@ -21,12 +21,214 @@ const DEPTH: f32 = 15.0;
 /// Scopes shorter than this share of the frame are left out of the lanes.
 const MIN_SHARE: f64 = 0.002;
 
+/// Asks the player being profiled for `action` (start, stop, a snapshot of its frames).
+fn request(s: &mut Studio, action: crate::play_profiling::Action) -> ara_ui::Result<()> {
+    let target = s
+        .local
+        .profiler_target
+        .clone()
+        .ok_or("Pick a Play player to profile")?;
+    let session = s.editor.session.clone();
+    let backend = s
+        .editor
+        .play_profiling
+        .as_mut()
+        .ok_or("Player profiling is not available in this editor")?;
+    let ticket = backend
+        .request(crate::play_profiling::Request {
+            session,
+            target,
+            action,
+            why: Some("Editor Profiler".into()),
+        })
+        .map_err(|d| {
+            d.first()
+                .map_or("The player refused".to_owned(), |d| d.message.clone())
+        })?;
+    s.local.profiler_ticket = Some((ticket, action));
+    Ok(())
+}
+
+/// Starts or stops recording what the Profiler profiles: the editor (`profile.start`), or
+/// the picked player.
+pub(super) fn toggle_record(s: &mut Studio) {
+    use crate::play_profiling::Action;
+    let result = match (&s.local.profiler_target, s.local.profiler_player_recording) {
+        (None, _) if s.local.profiling => s
+            .editor
+            .action("profile.stop", json!({}))
+            .map(drop)
+            .map_err(Into::into),
+        (None, _) => {
+            s.local.profile_frame = None;
+            s.editor
+                .action("profile.start", json!({}))
+                .map(drop)
+                .map_err(Into::into)
+        }
+        (Some(_), true) => request(s, Action::Stop),
+        (Some(_), false) => {
+            s.local.profile_frame = None;
+            request(s, Action::Start)
+        }
+    };
+    if let Err(error) = result {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+    }
+}
+
+/// Follows player profiling while the Profiler shows (`visible`): lists the players once a
+/// second, reads a recording player's frames four times a second, and takes each answer;
+/// whether the panel changed.
+pub(super) fn poll(s: &mut Studio, visible: bool) -> bool {
+    use std::time::{Duration, Instant};
+    let mut changed = false;
+    if let Some((ticket, _)) = s.local.profiler_ticket
+        && let Some(status) = s
+            .editor
+            .play_profiling
+            .as_mut()
+            .and_then(|b| b.poll(ticket))
+        && status.finished
+    {
+        s.local.profiler_ticket = None;
+        s.local.profiler_player_recording = status.recording;
+        if let Some(profile) = status.profile {
+            s.profile = std::sync::Arc::new(profile);
+        }
+        if let Some(d) = status.diagnostics.first().filter(|_| {
+            matches!(
+                status.outcome,
+                Some(
+                    crate::play_profiling::Outcome::Failed
+                        | crate::play_profiling::Outcome::Refused
+                )
+            )
+        }) {
+            s.editor.report_failure(&*anyhow::anyhow!("{}", d.message));
+        }
+        changed = true;
+    }
+    if !visible && !s.local.profiler_player_recording {
+        return changed;
+    }
+    let now = Instant::now();
+    let (listed, read) = s
+        .local
+        .profiler_polled
+        .unwrap_or((now - Duration::from_secs(2), now));
+    let mut polled = (listed, read);
+    if now.duration_since(listed) >= Duration::from_secs(1)
+        && let Some(backend) = s.editor.play_profiling.as_mut()
+    {
+        let before = backend.targets().len();
+        let _ = backend.refresh_targets();
+        changed |= backend.targets().len() != before;
+        polled.0 = now;
+        // A player that left (Play stopped) is no longer the target.
+        if let Some(target) = &s.local.profiler_target
+            && !backend.targets().iter().any(|r| &r.target == target)
+        {
+            s.local.profiler_target = None;
+            s.local.profiler_player_recording = false;
+            changed = true;
+        }
+    }
+    if s.local.profiler_player_recording
+        && s.local.profiler_ticket.is_none()
+        && now.duration_since(read) >= Duration::from_millis(250)
+    {
+        let _ = request(s, crate::play_profiling::Action::Snapshot);
+        polled.1 = now;
+    }
+    s.local.profiler_polled = Some(polled);
+    changed
+}
+
+/// What the Profiler records, to pick from: the editor, or a running player.
+fn target_menu(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    const KEY: &str = "profiler/target";
+    let open = s.local.select.as_deref() == Some(KEY);
+    let rows: Vec<crate::play_profiling::Row> = s
+        .editor
+        .play_profiling
+        .as_ref()
+        .map(|b| b.targets().to_vec())
+        .unwrap_or_default();
+    let title = match &s.local.profiler_target {
+        None => "Editor".to_owned(),
+        Some(target) => rows
+            .iter()
+            .find(|r| &r.target == target)
+            .map_or_else(|| format!("Player {}", target.player), |r| r.name.clone()),
+    };
+    let mut trigger = select(l, Size::Sm, KEY, &title)
+        .w(190.0)
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some(KEY) {
+                true => None,
+                false => Some(KEY.into()),
+            }
+        });
+    if open {
+        let mut items = vec![
+            menu_check(
+                l,
+                &format!("{KEY}/editor"),
+                "Editor",
+                s.local.profiler_target.is_none(),
+            )
+            .on_press(|s: &mut Studio| {
+                s.local.select = None;
+                s.local.profiler_target = None;
+                s.local.profile_frame = None;
+                s.profile = std::sync::Arc::new(s.editor.host.profiler().profile().clone());
+            }),
+        ];
+        if rows.is_empty() {
+            items.push(
+                row().pad_x(8.0).h(26.0).align(Align::Center).child(
+                    text("Start Play to profile the game")
+                        .text_size(11.5)
+                        .color(l.c.muted_foreground.0),
+                ),
+            );
+        }
+        for r in rows {
+            let on = s.local.profiler_target.as_ref() == Some(&r.target);
+            let target = r.target.clone();
+            items.push(enabled(
+                menu_check(l, &format!("{KEY}/{}", r.target.player), &r.name, on)
+                    .tooltip(r.reason.clone().unwrap_or_else(|| r.target.label()))
+                    .on_press(move |s: &mut Studio| {
+                        s.local.select = None;
+                        s.local.profiler_target = Some(target.clone());
+                        s.local.profiler_player_recording = false;
+                        s.local.profile_frame = None;
+                    }),
+                r.available,
+            ));
+        }
+        trigger = trigger.overlay(
+            stillkit::el::menu(menu_panel(l, items).min_w(220.0))
+                .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    trigger
+}
+
 /// The panel.
 pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let profile = &*s.profile;
-    let recording = s.local.profiling;
+    // Recording: the editor's own capture, or the picked player's.
+    let recording = match s.local.profiler_target {
+        None => s.local.profiling,
+        Some(_) => s.local.profiler_player_recording,
+    };
     let frame = s
         .local
         .profile_frame
@@ -37,10 +239,11 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .pad_x(6.0)
         .gap(8.0)
         .align(Align::Center)
+        .child(target_menu(s))
         .child(if recording {
             button(l, Tone::Danger, Size::Sm, Some(icons::CIRCLE_STOP), "Stop")
                 .key("profiler/stop")
-                .on_press(|s: &mut Studio| s.act("profile.stop", json!({})))
+                .on_press(toggle_record)
         } else {
             button(
                 l,
@@ -50,10 +253,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 "Record",
             )
             .key("profiler/record")
-            .on_press(|s: &mut Studio| {
-                s.local.profile_frame = None;
-                s.act("profile.start", json!({}))
-            })
+            .on_press(toggle_record)
         })
         .child(
             text(format!(

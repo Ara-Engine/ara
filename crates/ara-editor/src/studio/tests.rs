@@ -1089,6 +1089,30 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn the_profiler_picks_the_editor_or_a_player_and_records_it() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.profiler", &crate::catalog::Target::None));
+    settle(&mut rt);
+    press(&mut rt, "profiler/target");
+    assert!(
+        rt.find("profiler/target/editor").is_some(),
+        "the editor is a target"
+    );
+    rt.update(|s| s.local.select = None);
+    settle(&mut rt);
+    press(&mut rt, "profiler/record");
+    assert!(
+        rt.touch(|s| s.editor.host.profiler().is_recording()),
+        "the editor records"
+    );
+    rt.update(|s| s.local.profiling = true);
+    settle(&mut rt);
+    press(&mut rt, "profiler/stop");
+    assert!(!rt.touch(|s| s.editor.host.profiler().is_recording()));
+    rt.update(|s| assert!(!super::profiler::poll(s, true) || s.local.profiler_target.is_none()));
+}
+
+#[test]
 fn mesh_paint_sets_its_brush_and_sends_scene_presses_to_the_host() {
     use crate::catalog::Target;
     use crate::paint::PaintTool;

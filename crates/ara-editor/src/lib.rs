@@ -30,6 +30,7 @@ pub mod paint;
 pub(crate) mod painter;
 mod persist;
 pub(crate) mod play_controls;
+pub(crate) mod play_profiling;
 pub mod prefab;
 mod probe_capture;
 mod script_assets;
