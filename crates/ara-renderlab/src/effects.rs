@@ -262,6 +262,34 @@ fn curve<T: Copy>(keys: &[T], gaps: &mut Gaps, what: &'static str) -> Vec<T> {
         .collect()
 }
 
+/// A curve as the linear keys Renderlab's emitters take: its own when every segment is
+/// straight, else [`MAX_CURVE_KEYS`] samples of it across the particle's life.
+fn linear_keys(curve: &ara_vfx::Curve) -> Vec<Key> {
+    if curve
+        .keys
+        .iter()
+        .all(|k| k.interpolation == ara_vfx::ara_curve::Interpolation::Linear)
+    {
+        return curve
+            .keys
+            .iter()
+            .map(|k| Key {
+                t: k.time,
+                value: k.value,
+            })
+            .collect();
+    }
+    (0..MAX_CURVE_KEYS)
+        .map(|i| {
+            let t = i as f32 / (MAX_CURVE_KEYS - 1) as f32;
+            Key {
+                t,
+                value: curve.evaluate(t),
+            }
+        })
+        .collect()
+}
+
 /// Renderlab's emitter for one Ara emitter placed by `view`, or `None` when it spawns
 /// nothing Renderlab can draw (no rate or burst, or no lifetime).
 fn map(emitter: &Emitter, seed: u32, view: &EffectView, gaps: &mut Gaps) -> Option<Mapped> {
@@ -387,7 +415,8 @@ fn map(emitter: &Emitter, seed: u32, view: &EffectView, gaps: &mut Gaps) -> Opti
                 ];
             }
             Module::ColorOverLife { keys } => colour_keys = keys.clone(),
-            Module::SizeOverLife { keys } => size_keys = keys.clone(),
+            // Renderlab takes linear keys: a curve's own when straight, else samples of it.
+            Module::SizeOverLife { curve } => size_keys = linear_keys(curve),
             Module::PlaneCollision {
                 normal,
                 offset,
@@ -657,11 +686,7 @@ mod tests {
                     item(
                         "shrink",
                         Module::SizeOverLife {
-                            keys: vec![
-                                Key { t: 0., value: 0.18 },
-                                Key { t: 0.4, value: 0.3 },
-                                Key { t: 1., value: 0.02 },
-                            ],
+                            curve: ara_vfx::Curve::linear(&[(0., 0.18), (0.4, 0.3), (1., 0.02)]),
                         },
                     ),
                 ],

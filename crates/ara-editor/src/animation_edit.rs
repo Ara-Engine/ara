@@ -89,6 +89,7 @@ pub(crate) fn edit(editor: &mut Editor, doc: &str, kind: &str) -> ara_ui::Result
                     duration: 4800,
                     exit_tick: None,
                     conditions: Vec::new(),
+                    blend: None,
                 });
             }
         }
@@ -132,6 +133,7 @@ pub(crate) fn connect(
             duration: 4800,
             exit_tick: None,
             conditions: Vec::new(),
+            blend: None,
         });
     } else if let (Some(from), Some(target)) = (
         source.payload["pose"].as_str(),

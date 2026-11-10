@@ -91,15 +91,8 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                             },
                         ]
                     }
-                    Module::SizeOverLife { keys } => {
-                        *keys = vec![
-                            Key { t: 0., value: 0.24 },
-                            Key {
-                                t: 0.35,
-                                value: 0.34,
-                            },
-                            Key { t: 1., value: 0.08 },
-                        ]
+                    Module::SizeOverLife { curve } => {
+                        *curve = ara_curve::Curve::linear(&[(0., 0.24), (0.35, 0.34), (1., 0.08)])
                     }
                     _ => {}
                 }
@@ -155,8 +148,8 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                         *frequency = 1.2;
                         *strength = 0.35;
                     }
-                    Module::SizeOverLife { keys } => {
-                        *keys = vec![Key { t: 0., value: 0.25 }, Key { t: 1., value: 1. }]
+                    Module::SizeOverLife { curve } => {
+                        *curve = ara_curve::Curve::linear(&[(0., 0.25), (1., 1.)])
                     }
                     Module::ColorOverLife { keys } => {
                         *keys = vec![
@@ -347,8 +340,8 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
             }
             for m in &mut e.stacks.update {
                 match &mut m.module {
-                    Module::SizeOverLife { keys } => {
-                        *keys = vec![Key { t: 0., value: 0.45 }, Key { t: 1., value: 1.5 }]
+                    Module::SizeOverLife { curve } => {
+                        *curve = ara_curve::Curve::linear(&[(0., 0.45), (1., 1.5)])
                     }
                     Module::ColorOverLife { keys } => {
                         *keys = vec![
