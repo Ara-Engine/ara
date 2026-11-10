@@ -174,6 +174,15 @@ fn check(path: PathChoice, name: &str) {
         .map(|t| t.pass.as_str())
         .collect();
     assert!(timed.contains(&"External.Handoff.Wall"), "{timed:?}");
+    // With GPU timestamps, Renderlab's own passes are listed beside its frame span.
+    let span = capture
+        .metadata
+        .timings
+        .iter()
+        .find(|t| t.pass == "External.Frame.Gpu");
+    if span.is_some_and(|t| t.milliseconds > 0.) {
+        assert!(timed.contains(&"External.Pass.Shading"), "{timed:?}");
+    }
 
     // Live presents: the box moves right, and the image arrives on Ara's device.
     let right = frame(2.);

@@ -47,6 +47,7 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 
 | Feature | On the Renderlab path today | What it would take | Blocks deleting `ara-render`? |
 |---|---|---|---|
+| Frame cost | On Showcase at 1080p (RTX 4070 SUPER): 22.5 ms (RT) and 43.5 ms (non-RT) against 3.0 ms for `ara-render` at Epic | Renderlab's own work, not the bridge's: its GI cache re-lights around posed skinned meshes (fixed there, awaiting a release), non-RT glossy reflections (about 18 ms) and non-RT GI (about 16 ms) | Yes |
 | More than 64 mesh-material groups | Draws past the 64th group are left out (`ARA_RENDERLAB_LIMIT`) | Raise Renderlab's `TRACED_DRAWS` (a renderer change), or merge static draws per material in the bridge | Yes: real levels exceed it |
 | Terrain and foliage | Not drawn | Feed landscape tiles and foliage instances as meshes; foliage cards through Renderlab's `cutout` | Yes |
 | Environment-map (HDRI) and gradient skies | A constant sky of the map's mean radiance | Prefilter the map at load into Renderlab's `PreparedEnvironment` (its cook does this offline) and use `Sky::Map` | Yes |
@@ -72,6 +73,11 @@ Reflection probes are not a gap: Renderlab traces reflections on both paths. Its
 glossy band can leave bright speckles on glossy surfaces at v0.1.2 (a renderer
 defect); `Options::max_reflection_roughness` (`ARA_RENDERLAB_REFLECTION_ROUGHNESS`
 in the player) limits tracing, 0.05 keeping mirrors only.
+
+Captures list Renderlab's own passes as `External.Pass.*` beside `External.Frame.Gpu`;
+the rest of that span is its GI cache. Renderlab's profile of Showcase found no bridge
+cost: anisotropy, the constant sky, RGBA8 textures and the bridge's settings each move
+the frame by less than noise.
 
 ## Test
 

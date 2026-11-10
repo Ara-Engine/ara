@@ -11,7 +11,7 @@ mod captures;
 mod composite;
 mod emitters;
 mod external;
-pub use external::{ExternalFrame, ExternalRenderer, ExternalView};
+pub use external::{EXTERNAL_PASSES, ExternalFrame, ExternalRenderer, ExternalView};
 pub mod fidelity;
 pub mod geometry;
 mod gi;
@@ -171,6 +171,8 @@ pub struct Presenter {
     external: Option<Box<dyn ExternalRenderer>>,
     /// Draw count the external path last resolved content for (its environment map).
     external_draws: Option<usize>,
+    /// The external renderer's own pass timings for its last frame (`ExternalFrame::passes`).
+    external_passes: [(&'static str, f64); EXTERNAL_PASSES],
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -279,6 +281,7 @@ impl Presenter {
             profile_completed: std::collections::VecDeque::new(),
             external: None,
             external_draws: None,
+            external_passes: [("", 0.); EXTERNAL_PASSES],
         }
     }
 
