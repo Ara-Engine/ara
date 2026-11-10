@@ -1809,14 +1809,14 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
     }
     if let Some(doc) = doc {
         out = out.child(
-            text(doc.summary())
+            super::style::prose(&doc.summary())
                 .text_size(11.5)
                 .wrap(3)
                 .color(c.muted_foreground.0),
         );
         if let Some(cause) = doc.causes.first() {
             out = out.child(
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(2)
                     .color(c.muted_foreground.0),
@@ -2121,13 +2121,13 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
     if open && let Some(doc) = doc {
         message = message
             .child(
-                text(format!("{}: {}", doc.title, doc.summary()))
+                super::style::prose(&format!("{}: {}", doc.title, doc.summary()))
                     .text_size(11.5)
                     .wrap(4)
                     .color(c.muted_foreground.0),
             )
             .children(doc.causes.first().map(|cause| {
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(3)
                     .color(c.muted_foreground.0)
