@@ -11,6 +11,7 @@ pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;
 pub mod raster;
+pub mod rendering;
 pub mod sampler;
 pub mod shared;
 pub mod sync;

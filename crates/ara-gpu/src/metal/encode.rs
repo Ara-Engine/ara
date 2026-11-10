@@ -19,7 +19,7 @@ use super::native::nil;
 use super::pipeline::NativePipeline;
 use super::scratch::{Chunk, Scratch};
 use crate::attachments::{self, Load, Ops};
-use crate::commands::{Attachment, Command, CommandList};
+use crate::commands::{Command, CommandList};
 use crate::{Access, GpuError, Pipeline, Queue, Result};
 use ash::vk;
 use objc2::rc::Retained;
@@ -227,20 +227,15 @@ impl MetalDevice {
                         );
                 }
             }
-            Command::BeginRendering {
-                colors,
-                depth,
-                size,
-            }
-            | Command::BeginRenderingResolved {
-                colors,
-                depth,
-                size,
-                ..
-            } => {
-                if command.resolves().is_some_and(|r| r.len() != colors.len()) {
+            Command::BeginRendering { size, .. }
+            | Command::BeginRenderingResolved { size, .. }
+            | Command::BeginRenderingSubresources { size, .. } => {
+                let colors = command
+                    .color_attachments()
+                    .expect("render scope has colors");
+                if colors.len() > 8 || command.resolve_count().is_some_and(|n| n != colors.len()) {
                     return Err(GpuError::Contract(
-                        "Resolve target count differs from colors".into(),
+                        "Invalid color/resolve target count".into(),
                     ));
                 }
                 if queue != Queue::Graphics
@@ -253,9 +248,9 @@ impl MetalDevice {
                 let encoder = self.begin_rendering(
                     rec,
                     colors,
-                    depth.as_ref(),
+                    command.depth_attachment(),
                     *size,
-                    command.resolves().unwrap_or(&[]),
+                    command.resolve_targets(),
                 )?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
@@ -740,17 +735,18 @@ impl MetalDevice {
     fn begin_rendering(
         &self,
         rec: &mut Recording,
-        colors: &[Attachment],
-        depth: Option<&Attachment>,
+        colors: impl ExactSizeIterator<Item = crate::rendering::RenderAttachment> + Clone,
+        depth: Option<crate::rendering::RenderAttachment>,
         size: [u32; 2],
-        resolves: &[Option<crate::Image>],
+        mut resolves: impl Iterator<Item = Option<crate::rendering::RenderTarget>>,
     ) -> Result<Retained<ProtocolObject<dyn MTL4RenderCommandEncoder>>> {
         if colors.len() > 8 {
             return Err(GpuError::Contract("Too many color attachments".into()));
         }
         let mut samples = None;
-        for attachment in colors.iter().chain(depth) {
-            let image = &self.images.get(attachment.image)?.raw;
+        for attachment in colors.clone().chain(depth) {
+            let image = &self.images.get(attachment.target.image)?.raw;
+            attachment.target.extent(image.shape, image.size)?;
             if image.shape.dimension != crate::texture::TextureDimension::D2 {
                 return Err(GpuError::Contract(
                     "Rendering requires 2D attachments".into(),
@@ -767,7 +763,7 @@ impl MetalDevice {
         pass.setRenderTargetHeight(size[1] as usize);
         // A pass without attachments (fragments that only write buffers, such as the
         // geometry renderer's atomic shadow-depth raster) takes its sample count here.
-        if colors.is_empty() && depth.is_none() {
+        if colors.len() == 0 && depth.is_none() {
             // SAFETY: One sample is a count every Metal device supports.
             unsafe { pass.setDefaultRasterSampleCount(1) };
         }
@@ -775,10 +771,15 @@ impl MetalDevice {
             .scopes
             .next()
             .expect("attachments::ops lists every rendering scope of the list");
-        for (index, (attachment, ops)) in colors.iter().zip(&ops).enumerate() {
-            let image = self.images.get(attachment.image)?;
+        for (index, (attachment, ops)) in colors.clone().zip(&ops).enumerate() {
+            let image = self.images.get(attachment.target.image)?;
             if image.raw.info.depth
-                || image.raw.size != size
+                || attachment
+                    .target
+                    .extent(image.raw.shape, image.raw.size)?
+                    .iter()
+                    .zip(size)
+                    .any(|(limit, n)| n > *limit)
                 || !image
                     .raw
                     .usage
@@ -789,22 +790,26 @@ impl MetalDevice {
             // SAFETY: Metal supports eight color attachments; more fails validation.
             let color = unsafe { pass.colorAttachments().objectAtIndexedSubscript(index) };
             color.setTexture(Some(&image.raw.texture));
+            color.setLevel(attachment.target.mip as usize);
+            color.setSlice(attachment.target.layer as usize);
             let (load, store) = actions(*ops);
             color.setLoadAction(load);
             color.setStoreAction(store);
-            if let Some(target) = resolves.get(index).copied().flatten() {
-                let target = &self.images.get(target)?.raw;
+            if let Some(resolve) = resolves.next().flatten() {
+                let target = &self.images.get(resolve.image)?.raw;
                 if image.raw.shape.samples != crate::texture::SampleCount::Four
                     || target.shape.samples != crate::texture::SampleCount::One
-                    || image.raw.size != target.size
+                    || attachment.target.extent(image.raw.shape, image.raw.size)?
+                        != resolve.extent(target.shape, target.size)?
                     || image.raw.info.pixel != target.info.pixel
                     || target.shape.dimension != crate::texture::TextureDimension::D2
-                    || image.raw.shape.layers != target.shape.layers
                     || !target.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 {
                     return Err(GpuError::Contract("Invalid in-pass color resolve".into()));
                 }
                 color.setResolveTexture(Some(&target.texture));
+                color.setResolveLevel(resolve.mip as usize);
+                color.setResolveSlice(resolve.layer as usize);
                 color.setStoreAction(if ops.store {
                     MTLStoreAction::StoreAndMultisampleResolve
                 } else {
@@ -821,9 +826,14 @@ impl MetalDevice {
             }
         }
         if let Some(attachment) = depth {
-            let image = self.images.get(attachment.image)?;
+            let image = self.images.get(attachment.target.image)?;
             if !image.raw.info.depth
-                || image.raw.size != size
+                || attachment
+                    .target
+                    .extent(image.raw.shape, image.raw.size)?
+                    .iter()
+                    .zip(size)
+                    .any(|(limit, n)| n > *limit)
                 || !image
                     .raw
                     .usage
@@ -833,6 +843,8 @@ impl MetalDevice {
             }
             let target = pass.depthAttachment();
             target.setTexture(Some(&image.raw.texture));
+            target.setLevel(attachment.target.mip as usize);
+            target.setSlice(attachment.target.layer as usize);
             let (load, store) = actions(ops[colors.len()]);
             target.setLoadAction(load);
             target.setStoreAction(store);
@@ -844,9 +856,11 @@ impl MetalDevice {
             .cmd
             .renderCommandEncoderWithDescriptor(&pass)
             .ok_or_else(|| nil("render encoder"))?;
-        let pixel = |a: &Attachment| self.images.get(a.image).map(|i| i.raw.info.pixel);
+        let pixel = |a: crate::rendering::RenderAttachment| {
+            self.images.get(a.target.image).map(|i| i.raw.info.pixel)
+        };
         rec.formats = (
-            colors.iter().map(pixel).collect::<Result<_>>()?,
+            colors.clone().map(pixel).collect::<Result<_>>()?,
             depth.map(pixel).transpose()?,
         );
         if let Some((after, before)) = rec.take_wait(RENDER_STAGES) {

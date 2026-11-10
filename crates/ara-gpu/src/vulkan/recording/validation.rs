@@ -63,6 +63,11 @@ impl VulkanDevice {
                         ));
                     }
                 }
+                Command::BeginRenderingSubresources { .. } => {
+                    return Err(GpuError::Contract(
+                        "Raster subresource recording awaits Vulkan implementation".into(),
+                    ));
+                }
                 Command::BeginRendering {
                     colors,
                     depth,

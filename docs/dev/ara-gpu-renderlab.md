@@ -130,9 +130,12 @@ The test is ignored only on macOS. Exercise a physical shared-family device too;
 selection tests alone cannot prove its queue submission/ownership path. Re-cook
 shaders on the canonical host; never merge generated cooked artifacts.
 
-The [migration design](../design/renderlab-on-ara-gpu.md) also identifies raster
-attachment mip/layer selection as required work before moving Renderlab's shadow
-passes. Shader views already select subresources; render attachments do not yet.
+`Command::BeginRenderingSubresources` selects one 2D mip/array slice per color,
+depth and resolve output through `RenderAttachment` / `RenderTarget`. Metal native
+clear/draw/resolve tests prove sibling contents remain unchanged and invalid ranges
+are rejected. Load/store analysis tracks mip/layer discard ranges. The new command
+explicitly returns a contract error on Vulkan until its PC owner implements it;
+legacy rendering commands continue to work. See the [migration design](../design/renderlab-on-ara-gpu.md).
 
 Decision override: D36 supersedes S1's dedicated compute-family assumption.
 No other locked decision is overridden.
