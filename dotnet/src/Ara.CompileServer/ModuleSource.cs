@@ -59,7 +59,9 @@ internal static class ModuleSource
                 }
                 var equal = 0;
                 while (equal < comparable && actual[equal] == expected[equal]) equal++;
-                changed = new StringBuilder(Math.Max(count, 16));
+                // The matched prefix is already known to be part of the new text.
+                // Reserve it with this block instead of growing through a spare block.
+                changed = new StringBuilder(Math.Max(matched + count, 16));
                 changed.Append(previous.AsSpan(0, matched + equal));
                 changed.Append(actual[equal..]);
             }

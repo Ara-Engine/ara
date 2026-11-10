@@ -11,6 +11,11 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(server);
+if (args.Length > 1 && args[1] == "--project-sources")
+{
+    SourceCaptureProbe.Run(assembly, Path.GetFullPath(args[2]));
+    return;
+}
 if (args.Length > 1 && args[1] == "--sdk-files")
 {
     var compiler = assembly.GetType("Ara.CompileServer.ProjectCompiler", throwOnError: true)!;
