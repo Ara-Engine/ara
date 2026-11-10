@@ -370,6 +370,10 @@ pub struct Local {
     /// Each agent client's mark, by client and whether for the light scheme.
     pub(crate) agent_logos:
         std::collections::BTreeMap<(ara_agents::Client, bool), std::sync::Arc<stillkit::Image>>,
+    /// The Profiler's scopes as a call tree (Unity's Hierarchy view) rather than a flat list.
+    pub profiler_tree: bool,
+    /// Call-tree rows open in the Profiler, by their path of scope names (`a/b/c`).
+    pub profiler_open: std::collections::BTreeSet<String>,
     /// The Profiler hides the baseline comparison (Profiler › Compare off).
     pub profiler_hide_compare: bool,
     /// Opened in the background (`--background`): fields are not given keyboard focus (on
