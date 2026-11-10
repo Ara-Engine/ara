@@ -209,6 +209,8 @@ impl std::fmt::Debug for Previews {
 pub struct Local {
     /// The keyboard bindings in force (`commands::refresh_keys`).
     pub(crate) bindings: super::commands::Bindings,
+    /// The submenu open beside the open menu, by its title (Unity's cascading menus).
+    pub submenu: Option<&'static str>,
     /// The open title-bar menu, by its name.
     pub menu: Option<&'static str>,
     /// The command palette: open, query, highlighted result.
