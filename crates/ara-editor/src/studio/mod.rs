@@ -8,6 +8,7 @@
 //! `editor.*` actions and content through `cmd.apply`, exactly what agents call over MCP, so
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
+mod about;
 mod agents;
 mod animator;
 mod asset_create;
@@ -153,12 +154,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let Some(mut renderer) = renderer else {
         return Ok(());
     };
+    let device = serde_json::to_string(renderer.gpu().info()).unwrap_or_default();
     rt.update(|s| {
         s.local.scene = state::SceneStatus {
             ready: true,
             message: String::new(),
             fps: None,
         };
+        s.local.device = device;
     });
     let mut view = rt.touch(|s| s.editor.view())?;
     let mut scene_view = SceneView::default();

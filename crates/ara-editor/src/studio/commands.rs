@@ -945,6 +945,17 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             Ok(())
         }
         // Inspector fields (their right-click menu).
+        "field.why" => match target {
+            Target::Field(path) => match super::inspector::field_of(s, path) {
+                Some(field) => {
+                    let why = super::inspector::why(s, &field);
+                    super::note(s, format!("{}: {why}", field.label));
+                    Ok(())
+                }
+                None => Err("That field is not on the selection".into()),
+            },
+            _ => Err("Choose a field".into()),
+        },
         "field.copy" | "field.copy_path" | "field.paste" | "field.reset" => {
             let Target::Field(path) = target else {
                 e.report_failure(&*anyhow::anyhow!("Choose a field"));
@@ -1024,6 +1035,49 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 }
             }
             Ok(())
+        }
+        // Saved Hierarchy filters (`hierarchy.filters`, name to query); a saved one is named
+        // by its query unless a name is given.
+        "hierarchy.filter.save" | "hierarchy.filter.remove" => {
+            let mut filters = e
+                .state
+                .settings
+                .get("hierarchy.filters")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let query = s.local.hierarchy_query.trim().to_owned();
+            let name = match target {
+                Target::Text(name) => name.trim().to_owned(),
+                _ => query.clone(),
+            };
+            match (id, name.is_empty()) {
+                (_, true) => Err("Type a Hierarchy filter first".into()),
+                ("hierarchy.filter.save", false) => {
+                    filters.insert(name, json!(query));
+                    set(e, "hierarchy.filters", Value::Object(filters))
+                }
+                _ => match filters.remove(&name) {
+                    Some(_) => set(e, "hierarchy.filters", Value::Object(filters)),
+                    None => Err("That filter is no longer saved".into()),
+                },
+            }
+        }
+        "hierarchy.filter.apply" => {
+            let name = match target {
+                Target::Text(name) => name.clone(),
+                _ => String::new(),
+            };
+            match super::hierarchy::saved_filters(s)
+                .into_iter()
+                .find(|(n, _)| *n == name)
+            {
+                Some((_, query)) => {
+                    s.local.hierarchy_query = query;
+                    Ok(())
+                }
+                None => Err("Choose a saved Hierarchy filter".into()),
+            }
         }
         // Hierarchy filters: Unity's search syntax in the Hierarchy's field.
         id if id.starts_with("hierarchy.filter.")
@@ -1445,6 +1499,39 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             _ => Err("Choose an emitter".into()),
         },
+        // Save Layout As: named first, then saved under that name.
+        "help.about" | "help.system" => {
+            s.local.about = Some(match id {
+                "help.about" => super::about::Page::About,
+                _ => super::about::Page::System,
+            });
+            Ok(())
+        }
+        "layout.save" => match target {
+            Target::Text(name) => act(e, "editor.layout.save", json!({"name": name})),
+            _ => {
+                s.local.prompt = Some(super::state::Prompt {
+                    title: "Save layout as",
+                    text: String::new(),
+                    then: "layout.save",
+                });
+                s.local.focus = Some("prompt/field");
+                Ok(())
+            }
+        },
+        // Builds as agents and menus name them.
+        "build.profile.select" => match target {
+            Target::Text(name) => set(e, crate::build::PROFILE_SETTING, json!(name)),
+            _ => Err("Choose a build profile".into()),
+        },
+        "build.package.reveal" => s.builder.reveal_package(target, false),
+        "build.destination" => {
+            let start = e.host.root().join("builds");
+            match stillkit::dialog::pick_folder("Build into", Some(&start)) {
+                Some(folder) => super::build_page::build_into(s, folder),
+                None => Ok(()),
+            }
+        }
         "tools.cs.reload" => super::scripts::reload(s),
         "tools.cs.solution" => super::scripts::solution(s),
         "component.new_script" => {
