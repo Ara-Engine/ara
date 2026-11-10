@@ -148,10 +148,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let search = search(
         l,
         "hierarchy/search",
-        "Filter: name, or t:Light",
+        // Short enough for a narrow panel; the syntax is in its tooltip and label.
+        "Filter",
         &query,
         None,
-        |f| f.on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into()),
+        |f| {
+            f.label("Filter by name, or by component: t:Light")
+                .tooltip("Filter by name, or by component: t:Light")
+                .on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into())
+        },
         |s: &mut Studio| s.local.hierarchy_query.clear(),
     );
     let all = rows(s, &query);
@@ -169,7 +174,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             l,
             icons::SEARCH,
             "No entities match",
-            "Search looks at entity names.",
+            "The filter looks at names, or at components with t:Light.",
             None,
         )
     } else {
