@@ -7,6 +7,7 @@
 //! itself (foliage) are placed once per content key and then left alone.
 use crate::{
     batch::{self, Fate, Group},
+    cutout,
     gaps::Gaps,
     texture,
 };
@@ -18,14 +19,13 @@ use ara_runtime::{
 use renderlab::{
     asset::{TangentBasis, TextureRole},
     engine::{
-        AlphaMask, Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId,
-        Primitive, ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value,
-        Vertex,
+        Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Primitive,
+        ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value, Vertex,
     },
 };
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
 };
 
 /// Mesh-material groups Renderlab draws in one frame.
@@ -84,31 +84,73 @@ pub(crate) struct Scene {
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
     palette: Vec<Mat4>,
-    /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
-    emissive: Option<Option<ProgramId>>,
+    /// The emissive programs once tried, without and with an emissive map:
+    /// `Some(None)` when Renderlab rejected one.
+    emissive: [Option<Option<ProgramId>>; 2],
+    /// Mean linear colour of each emissive map packed so far, by its content key.
+    glow_means: HashMap<u64, [f32; 3]>,
     /// Triangles of the largest mesh uploaded so far (`largest_triangles`).
     largest: usize,
 }
 
+/// Where a material's textures carry its emissive map (`texture::with_glow`): red in
+/// the metallic-roughness texture's red, green in its alpha, blue in the base colour's
+/// alpha. As (host channel, emissive channel) per texture.
+const GLOW_IN_DATA: [(usize, usize); 2] = [(0, 0), (3, 1)];
+const GLOW_IN_BASE: [(usize, usize); 1] = [(3, 2)];
+/// The base-colour alpha of an opaque emissive material, which Renderlab's opaque
+/// shading never reads. Renderlab shades a reflection ray's hit with the reflecting
+/// surface's program and the hit's material, so an emissive surface's reflections
+/// would show every object glowing with its `glow`; the emissive programs glow only on
+/// a material that carries this mark.
+const GLOW_MARK: f32 = 0.737;
+
 /// Renderlab's standard program with a `glow` parameter (cd/m²) that the surface
-/// both shows and, through the `emission` hook, sends into global illumination.
-/// None when the standard program no longer ends the way this edit expects.
-fn emissive_source() -> Option<String> {
+/// both shows and, through the `emission` hook, sends into global illumination. With
+/// `mapped`, the glow is multiplied by the emissive map packed into the material's
+/// textures. The map is read in `surface`, for the pixels the camera sees. Global
+/// illumination calls `emission` at its own hits, where a texture lookup does not
+/// return the material's texels, so it gets `bounce`, the glow averaged over the map,
+/// as a second parameter. None when the standard program no longer has the shape
+/// these edits expect.
+fn emissive_source(mapped: bool) -> Option<String> {
+    const FIELDS: &str = "alpha:f32 };";
+    const BUILT: &str = "decal_mr.x,alpha);";
     const RETURN: &str = "    return exposed;";
-    const GLOW: &str = "max(params.glow,vec3<f32>(0.0))";
+    let map = if mapped {
+        "*vec3<f32>(mr.r,mr.a,sampled.a)*vec3<f32>(mr.r,mr.a,sampled.a)"
+    } else {
+        ""
+    };
     let standard = renderlab::STANDARD_PROGRAM;
-    (standard.matches(RETURN).count() == 1 && !standard.contains("struct Parameters")).then(|| {
+    let fits = [FIELDS, BUILT, RETURN]
+        .iter()
+        .all(|edit| standard.matches(edit).count() == 1)
+        && !standard.contains("struct Parameters");
+    // `everywhere` lifts the mark for see-through materials, whose alpha is coverage.
+    fits.then(|| {
         format!(
-            "struct Parameters {{ glow:vec3<f32>, unused:f32 }};\n\
-             const DEFAULT_PARAMETERS:Parameters = Parameters(vec3<f32>(0.0),0.0);\n\
+            "struct Parameters {{ glow:vec3<f32>, everywhere:f32, bounce:vec3<f32>, spare:f32 }};\n\
+             const DEFAULT_PARAMETERS:Parameters = \
+             Parameters(vec3<f32>(0.0),0.0,vec3<f32>(0.0),0.0);\n\
+             fn ara_glows(input:SurfaceInput) -> bool {{ return params.everywhere>0.5 || \
+             abs(input.material.base_color.a-{GLOW_MARK})<0.002; }}\n\
              {}\n\
-             fn emission(s:Surface, input:SurfaceInput) -> vec3<f32> {{ return {GLOW}; }}\n",
-            standard.replace(
-                RETURN,
-                &format!(
-                    "    return min(exposed+exposed_product({GLOW},vec3<f32>(1.0)),vec3<f32>(65504.0));"
-                ),
-            )
+             fn emission(s:Surface, input:SurfaceInput) -> vec3<f32> {{ return \
+             select(vec3<f32>(0.0),max(params.bounce,vec3<f32>(0.0)),ara_glows(input)); }}\n",
+            standard
+                .replace(FIELDS, "alpha:f32, glow:vec3<f32> };")
+                .replace(
+                    BUILT,
+                    &format!(
+                        "decal_mr.x,alpha,select(vec3<f32>(0.0),\
+                         max(params.glow,vec3<f32>(0.0)){map},ara_glows(input)));"
+                    ),
+                )
+                .replace(
+                    RETURN,
+                    "    return min(exposed+exposed_product(s.glow,vec3<f32>(1.0)),vec3<f32>(65504.0));",
+                )
         )
     })
 }
@@ -131,43 +173,37 @@ fn normal_mapped(draw: &Draw) -> bool {
     source(draw).is_some_and(|(m, _)| m.normal_texture.is_some())
 }
 
-/// How a draw's geometry is cut to its material's alpha: the base-colour map's alpha
-/// times `opacity`, kept where it reaches `cutoff`. Masked materials cut at their cutoff;
-/// blended ones whose alpha lives in the map (opacity maps) cut at half coverage.
+/// How a masked draw's geometry is cut to its material's alpha: the base-colour map's
+/// alpha times `opacity`, kept where it reaches `cutoff`.
 struct Cut<'a> {
     texture: &'a ModelTexture,
     opacity: f32,
     cutoff: f32,
 }
 
-/// The cut a draw's material asks for; None for opaque materials and uniform glass.
+/// The cut a draw's material asks for: an alpha mask over a base-colour map. None for
+/// opaque materials and for blended ones, which are see-through instead.
 fn cut(draw: &Draw) -> Option<Cut<'_>> {
     let (m, textures) = source(draw)?;
-    let texture = textures.get(m.base_color_texture?)?;
-    let opacity = m.base_color[3] * draw.color[3];
-    match m.alpha_mode {
-        1 => Some(Cut {
-            texture,
-            opacity,
-            cutoff: m.alpha_cutoff,
-        }),
-        2 if opacity >= 1. => Some(Cut {
-            texture,
-            opacity,
-            cutoff: 0.5,
-        }),
-        _ => None,
-    }
+    (m.alpha_mode == 1).then_some(())?;
+    Some(Cut {
+        texture: textures.get(m.base_color_texture?)?,
+        opacity: m.base_color[3] * draw.color[3],
+        cutoff: m.alpha_cutoff,
+    })
+}
+
+/// Whether a material blends: by an alpha factor below one, or by its base-colour
+/// map's alpha (an opacity map). Renderlab's transparent pass takes both as coverage.
+fn blends(m: &ModelMaterial, opacity: f32) -> bool {
+    m.alpha_mode == 2 && (opacity < 1. || m.base_color_texture.is_some())
 }
 
 /// Whether the draw can be seen through (as `Scene::material` decides): such draws
 /// sort per object and never join a static batch.
 fn see_through(draw: &Draw) -> bool {
     match source(draw) {
-        Some((m, _)) => {
-            m.transmission_factor > 0.
-                || (m.alpha_mode == 2 && m.base_color[3] * draw.color[3] < 1.)
-        }
+        Some((m, _)) => m.transmission_factor > 0. || blends(m, m.base_color[3] * draw.color[3]),
         None => draw.color[3] < 1.,
     }
 }
@@ -665,16 +701,27 @@ impl Scene {
         }
         let wanted = normal_mapped(draw);
         let (mut source, mut indices) = triangles(draw)?;
-        if let Some(c) = cut(draw) {
-            let (id, triangles) = cut_mesh(engine, &source, &indices, &c, wanted, gaps)?;
-            self.largest = self.largest.max(triangles);
-            self.meshes.insert(key, (Shared { id, users: 1 }, false));
-            return Ok((id, false));
+        let label = format!("`{}`", draw.label);
+        // A mask that hides nothing is no cut: the mesh uploads as it is, below.
+        if let Some(c) = cut(draw)
+            && let Some(cut) = cut_mesh(engine, &label, &source, &indices, &c, wanted, gaps)?
+        {
+            self.largest = self.largest.max(cut.triangles);
+            self.meshes.insert(
+                key,
+                (
+                    Shared {
+                        id: cut.id,
+                        users: 1,
+                    },
+                    cut.tangents,
+                ),
+            );
+            return Ok((cut.id, cut.tangents));
         }
         if wanted {
             split_handedness(source.to_mut(), indices.to_mut());
         }
-        let label = format!("`{}`", draw.label);
         self.largest = self.largest.max(indices.len() / 3);
         let (id, tangents) = upload(engine, &label, &source, &indices, wanted, gaps)?;
         self.meshes.insert(key, (Shared { id, users: 1 }, tangents));
@@ -712,7 +759,10 @@ impl Scene {
             Geometry::Shape { .. } => draw.emissive,
             Geometry::Model { .. } => scaled(draw.emissive_factor.unwrap_or([0.; 3])),
         };
-        let mut emissive_map = false;
+        // The emissive map, with the base-colour and metallic-roughness textures that
+        // will carry it, and whether it has texture coordinates of its own.
+        let mut emissive_map = None;
+        let mut own_coordinates = false;
         // Shapes blend through their colour alpha.
         let mut blend = draw.color[3] < 1.;
         if let Some((m, textures)) = source(draw) {
@@ -728,13 +778,15 @@ impl Scene {
             desc.normal_scale = m.normal_scale;
             let factor = draw.emissive_factor.unwrap_or(m.emissive);
             glow = scaled(factor);
-            // An emissive map glows uniformly at its mean colour: Renderlab materials
-            // have no slot for a fourth map yet.
-            if let Some(texture) = m.emissive_texture.and_then(|i| textures.get(i)) {
-                emissive_map = true;
-                let mean =
-                    texture::mean_linear(&ara_runtime_render::decode_texture(&texture.ktx2)?.rgba);
-                glow = std::array::from_fn(|i| glow[i] * mean[i]);
+            if let Some(map) = m.emissive_texture.and_then(|index| textures.get(index)) {
+                let host = |slot: Option<usize>| slot.and_then(|index| textures.get(index));
+                let (base, data) = (
+                    host(m.base_color_texture),
+                    host(m.metallic_roughness_texture),
+                );
+                own_coordinates = (base.is_some() && m.emissive_uv != m.base_color_uv)
+                    || (data.is_some() && m.emissive_uv != m.metallic_roughness_uv);
+                emissive_map = Some((map, base, data));
             }
             let mut bind = |slot: Option<usize>, role: TextureRole| -> Result<Option<TextureRef>> {
                 let Some(texture) = slot.and_then(|index| textures.get(index)) else {
@@ -759,20 +811,11 @@ impl Scene {
                     "occlusion comes from traced GI only",
                 );
             }
-            // A uniform alpha below one is see-through; alpha that lives only in the
-            // base-colour map (masks, opacity maps) needs cutouts Renderlab makes from
-            // geometry, so those draw opaque.
-            // Masks and opacity maps are cut into the geometry (`cut`); the material
-            // itself is then opaque.
-            let mapped = m.alpha_mode != 0 && m.base_color_texture.is_some();
-            blend = m.alpha_mode == 2 && desc.base_color[3] < 1.;
-            if mapped && !blend {
-                if m.alpha_mode == 2 {
-                    gaps.unsupported(
-                        "partial coverage from opacity maps",
-                        "they are cut where coverage reaches half, without blending",
-                    );
-                }
+            // A blended material is see-through, by its alpha factor and its base-colour
+            // map's alpha (`blends`). An alpha mask is cut into the geometry (`cut`);
+            // the material itself is then opaque.
+            blend = blends(m, desc.base_color[3]);
+            if m.alpha_mode == 1 && m.base_color_texture.is_some() {
                 desc.base_color[3] = 1.;
             }
             // glTF transmission belongs to the dielectric part only: a metal does not
@@ -810,19 +853,6 @@ impl Scene {
             }
         }
         let glow = glow.map(|c| if c.is_finite() { c.max(0.) } else { 0. });
-        if glow.iter().any(|c| *c > 0.) {
-            if emissive_map {
-                gaps.unsupported(
-                    "emissive maps",
-                    "the surface glows uniformly at the map's mean colour",
-                );
-            }
-            if let Some(program) = self.emissive_program(engine, gaps) {
-                parameters = [("glow", Value::Vec3(glow))];
-                desc.program = Some(program);
-                desc.parameters = &parameters;
-            }
-        }
         if blend && desc.transparency.is_none() {
             desc.transparency = Some(Transparency {
                 opacity: 1.,
@@ -830,20 +860,74 @@ impl Scene {
                 thickness: 0.,
             });
         }
+        if glow.iter().any(|c| *c > 0.) {
+            // The map rides in channels only an opaque material leaves unused, sampled
+            // with the textures that carry it.
+            let opaque = desc.transparency.is_none();
+            let packable = opaque && !own_coordinates;
+            // Only this material glows, by its mark (`GLOW_MARK`).
+            let everywhere = Value::F32(if opaque { 0. } else { 1. });
+            if opaque {
+                desc.base_color[3] = GLOW_MARK;
+            }
+            match emissive_map {
+                Some(_) if !packable => gaps.unsupported(
+                    "emissive maps on see-through materials or with their own texture coordinates",
+                    "those materials do not emit or glow",
+                ),
+                Some((map, base, data)) => {
+                    if let Some(program) = self.emissive_program(engine, true, gaps) {
+                        let (base, data, mean) = self.glow_textures(engine, map, base, data)?;
+                        desc.base_color_texture = Some(base);
+                        desc.metallic_roughness_texture = Some(data);
+                        let bounce = std::array::from_fn(|i| glow[i] * mean[i]);
+                        parameters = [
+                            ("glow", Value::Vec3(glow)),
+                            ("bounce", Value::Vec3(bounce)),
+                            ("everywhere", everywhere),
+                        ];
+                        desc.program = Some(program);
+                        desc.parameters = &parameters;
+                    }
+                }
+                None => {
+                    if let Some(program) = self.emissive_program(engine, false, gaps) {
+                        parameters = [
+                            ("glow", Value::Vec3(glow)),
+                            ("bounce", Value::Vec3(glow)),
+                            ("everywhere", everywhere),
+                        ];
+                        desc.program = Some(program);
+                        desc.parameters = &parameters;
+                    }
+                }
+            }
+        }
         let id = engine.create_material(&desc)?;
         self.materials.insert(key, Shared { id, users: 1 });
         Ok(id)
     }
 
-    /// The program emissive materials shade with, composed on first use; None (and
-    /// one report) when Renderlab rejects it.
-    fn emissive_program(&mut self, engine: &mut Engine, gaps: &mut Gaps) -> Option<ProgramId> {
-        if self.emissive.is_none() {
-            let created = emissive_source()
+    /// The program emissive materials shade with (`mapped`: with an emissive map),
+    /// composed on first use; None (and one report) when Renderlab rejects it.
+    fn emissive_program(
+        &mut self,
+        engine: &mut Engine,
+        mapped: bool,
+        gaps: &mut Gaps,
+    ) -> Option<ProgramId> {
+        let slot = usize::from(mapped);
+        if self.emissive[slot].is_none() {
+            let name = if mapped {
+                "ara-standard-emissive-map"
+            } else {
+                "ara-standard-emissive"
+            };
+            let created = emissive_source(mapped)
                 .ok_or_else(|| "its standard program changed shape".to_owned())
                 .and_then(|source| {
                     engine
-                        .create_program("ara-standard-emissive", &source)
+                        .create_program(name, &source)
                         .map_err(|error| error.to_string())
                 });
             if let Err(error) = &created {
@@ -852,9 +936,65 @@ impl Scene {
                     &format!("they do not emit or glow ({error})"),
                 );
             }
-            self.emissive = Some(created.ok());
+            self.emissive[slot] = Some(created.ok());
         }
-        self.emissive.flatten()
+        self.emissive[slot].flatten()
+    }
+
+    /// The base-colour and metallic-roughness textures of a material with emissive
+    /// map `glow`: its own (`base`, `data`) or white, each carrying part of the map
+    /// (`GLOW_IN_BASE`, `GLOW_IN_DATA`), and the map's mean linear colour. Uploaded
+    /// once per combination.
+    fn glow_textures(
+        &mut self,
+        engine: &mut Engine,
+        glow: &ModelTexture,
+        base: Option<&ModelTexture>,
+        data: Option<&ModelTexture>,
+    ) -> Result<(TextureRef, TextureRef, [f32; 3])> {
+        let glow_key = fnv(FNV, &glow.ktx2);
+        let key = |host: Option<&ModelTexture>, tag: u8| {
+            let host = host.map_or(0, |host| fnv(FNV, &host.ktx2));
+            (fnv(glow_key, &host.to_le_bytes()), tag)
+        };
+        let (base_key, data_key) = (key(base, 3), key(data, 4));
+        let known = self.glow_means.contains_key(&glow_key)
+            && self.textures.contains_key(&base_key)
+            && self.textures.contains_key(&data_key);
+        if !known {
+            let decoded = ara_runtime_render::decode_texture(&glow.ktx2)?;
+            self.glow_means
+                .insert(glow_key, texture::mean_linear(&decoded.rgba));
+            for (key, host, role, channels) in [
+                (
+                    base_key,
+                    base.map(|host| &host.ktx2[..]),
+                    TextureRole::BaseColorSrgb,
+                    &GLOW_IN_BASE[..],
+                ),
+                (
+                    data_key,
+                    data.map(|host| &host.ktx2[..]),
+                    TextureRole::MetallicRoughnessLinear,
+                    &GLOW_IN_DATA[..],
+                ),
+            ] {
+                if let Entry::Vacant(slot) = self.textures.entry(key) {
+                    let glow = (decoded.size, decoded.rgba.as_slice());
+                    let packed = texture::with_glow(host, glow, role, channels)?;
+                    slot.insert(engine.create_texture(packed)?);
+                }
+            }
+        }
+        let bound = |texture: TextureId| TextureRef {
+            texture,
+            sampler: Sampler::default(),
+        };
+        Ok((
+            bound(self.textures[&base_key]),
+            bound(self.textures[&data_key]),
+            self.glow_means[&glow_key],
+        ))
     }
 
     /// The Renderlab texture of one cooked Ara texture in `role`, uploaded once.
@@ -922,25 +1062,43 @@ fn upload(
 /// squared. Bounds the cut's triangles on meshes whose uvs tile many times (fences).
 const CUT_CELLS: f64 = 65_536.;
 
+/// A mesh uploaded cut to its mask.
+struct CutMesh {
+    id: MeshId,
+    triangles: usize,
+    /// It carries tangent frames (`cutout::tangents`): its material may sample a normal map.
+    tangents: bool,
+}
+
 /// Uploads `source` cut to its material's alpha (`Cut`): Renderlab keeps the triangles
-/// where the mask passes, with new edges along the contour. Cut meshes carry no
-/// tangents, so a normal map on them is dropped (reported). Returns the mesh and its
-/// triangle count.
+/// where the mask passes, with new edges along the contour. A normal-mapped material
+/// gets tangent frames derived from the cut mesh's own uv mapping; where those cannot
+/// be derived the normal map is dropped, reported under `label`. None when the mask
+/// hides nothing: the caller uploads the mesh as it is.
 fn cut_mesh(
     engine: &mut Engine,
+    label: &str,
     source: &[ModelVertex],
     indices: &[u32],
     c: &Cut<'_>,
     normal_mapped: bool,
     gaps: &mut Gaps,
-) -> Result<(MeshId, usize)> {
+) -> Result<Option<CutMesh>> {
     let decoded = ara_runtime_render::decode_texture(&c.texture.ktx2)?;
     let [width, height] = decoded.size;
-    let mask = AlphaMask::from_rgba8(width, height, &decoded.rgba);
     let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
+    if cutout::hides_nothing(&decoded.rgba, &vertices, c.opacity, c.cutoff) {
+        return Ok(None);
+    }
     let data = MeshData {
         vertices: &vertices,
         indices,
+    };
+    // The mask at the grid's scale (`cutout::coverage`), then Renderlab's cut.
+    let cut_at = |cells: u32| {
+        let texels_per_cell = width.max(height) / cells.max(1);
+        let mask = cutout::coverage(decoded.size, &decoded.rgba, texels_per_cell);
+        renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)
     };
     // About eight texels per contour cell, within the 32 to 128 cells per uv unit that
     // foliage cards take, and coarser where the uvs cover many units (`CUT_CELLS`).
@@ -960,18 +1118,39 @@ fn cut_mesh(
     // Dense meshes split along every cell line: coarser cells until the cut holds at
     // most four times its source triangles (and at least 65,536 are always allowed).
     let allowed = (indices.len() / 3 * 4).max(65_536);
-    let mut cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    let mut cut = cut_at(cells)?;
     while cut.indices.len() / 3 > allowed && cells > 4 {
         cells = (cells / 2).max(4);
-        cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+        cut = cut_at(cells)?;
     }
-    if normal_mapped {
-        gaps.unsupported(
-            "normal maps on alpha-cut meshes",
-            "cut cards and foliage shade with their vertex normals",
-        );
-    }
-    Ok((engine.create_mesh(&cut.data())?, cut.indices.len() / 3))
+    let triangles = cut.indices.len() / 3;
+    let frames = normal_mapped
+        .then(|| cutout::tangents(&cut.vertices, &cut.indices))
+        .flatten();
+    let uploaded = frames
+        .as_ref()
+        .map(|frames| engine.create_mesh_with_tangents(&cut.data(), frames));
+    let (id, tangents) = match uploaded {
+        Some(Ok(id)) => (id, true),
+        rejected => {
+            if normal_mapped {
+                let why = match rejected {
+                    Some(Err(error)) => error.to_string(),
+                    _ => "its uv mapping gives no consistent tangents".to_owned(),
+                };
+                gaps.unsupported(
+                    "normal maps on alpha-cut meshes without derivable tangents",
+                    &format!("{label} shades with its vertex normals ({why})"),
+                );
+            }
+            (engine.create_mesh(&cut.data())?, false)
+        }
+    };
+    Ok(Some(CutMesh {
+        id,
+        triangles,
+        tangents,
+    }))
 }
 
 /// Uploads one skinned primitive with its own pose (`joints` plus the identity joint).
@@ -1026,9 +1205,17 @@ mod tests {
 
     #[test]
     fn emissive_program_extends_the_pinned_standard_program() {
-        let source = emissive_source().expect("the standard program ends as expected");
-        assert!(source.contains("fn emission(") && source.contains("params.glow"));
-        assert!(!source.contains("    return exposed;"));
+        for mapped in [false, true] {
+            let source = emissive_source(mapped).expect("the standard program ends as expected");
+            assert!(source.contains("fn emission(") && source.contains("params.glow"));
+            assert!(!source.contains("    return exposed;"));
+            // Only the mapped program reads the map from the material's textures.
+            assert_eq!(source.contains("mr.r,mr.a,sampled.a"), mapped);
+            // Global illumination gets the averaged glow, never a texture lookup, and
+            // both glow only on the marked material.
+            assert!(source.contains("max(params.bounce,vec3<f32>(0.0)),ara_glows(input))"));
+            assert!(source.contains("base_color.a-0.737)<0.002"));
+        }
     }
 
     #[test]

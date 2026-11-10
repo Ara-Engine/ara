@@ -18,6 +18,8 @@ mod atmosphere;
 #[cfg(not(target_vendor = "apple"))]
 mod batch;
 #[cfg(not(target_vendor = "apple"))]
+mod cutout;
+#[cfg(not(target_vendor = "apple"))]
 mod decals;
 #[cfg(not(target_vendor = "apple"))]
 mod effects;
