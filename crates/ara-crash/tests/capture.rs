@@ -1,22 +1,17 @@
 #![allow(clippy::unwrap_used)]
 use ara_crash::{CrashKind, CrashReport, CrashSettings, UploadConsent};
+#[path = "../src/test_paths.rs"]
+mod test_paths;
 
 fn isolated_directory() -> tempfile::TempDir {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("target/crash-ipc");
-    std::fs::create_dir_all(&root).unwrap();
-    tempfile::tempdir_in(std::path::absolute(root).unwrap()).unwrap()
+    test_paths::directory()
 }
 
 #[cfg(feature = "symbols")]
 #[test]
 fn monitor_becomes_ready_with_a_long_temp_directory() {
     let dir = isolated_directory();
-    let temp = dir.path().join("long-temp-".repeat(12));
+    let temp = dir.path().join("long-temp-".repeat(18));
     std::fs::create_dir_all(&temp).unwrap();
     assert!(temp.to_str().unwrap().len() > 160);
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_ara-crash"));

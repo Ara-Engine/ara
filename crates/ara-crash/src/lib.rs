@@ -8,6 +8,8 @@ mod report;
 mod snapshot;
 #[cfg(feature = "symbols")]
 pub mod symbols;
+#[cfg(test)]
+mod test_paths;
 #[cfg(feature = "explain")]
 pub mod why;
 
