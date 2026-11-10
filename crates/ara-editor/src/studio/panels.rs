@@ -1789,9 +1789,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     &fix.title,
                 )
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) =
-                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                    {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
                         s.editor
                             .report_failure(&std::io::Error::other(error.to_string()));
                     }
@@ -2037,9 +2035,7 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
                     &fix.title,
                 )
                 .on_press(move |s: &mut Studio| {
-                    if let Err(error) =
-                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
-                    {
+                    if let Err(error) = crate::fixes::apply_fix(&mut s.editor, &diagnostic, i) {
                         s.editor
                             .report_failure(&std::io::Error::other(error.to_string()));
                     }

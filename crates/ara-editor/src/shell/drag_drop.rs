@@ -6,8 +6,7 @@ use ara_ui::{
 };
 #[path = "drag_drop_commit.rs"]
 mod commit;
-#[path = "drag_drop_hierarchy.rs"]
-pub(crate) mod hierarchy;
+pub(crate) use crate::hierarchy_actions::reparent as hierarchy;
 #[path = "drag_drop_material.rs"]
 mod material;
 #[path = "drag_drop_paint.rs"]

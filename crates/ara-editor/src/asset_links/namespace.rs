@@ -1,5 +1,5 @@
 //! Every dependency graph node is a physical browser key; references remain logical.
-use super::*;
+use crate::{assets, authored};
 pub(crate) fn document<'a>(
     workspace: &'a ara_doc::Workspace,
     asset: &assets::Asset,
@@ -26,7 +26,7 @@ pub(crate) fn dependency(
         .and_then(|id| workspace.index().path_of(id))
         .or(parts.path)?;
     Some(
-        ops::authored::existing_storage(files, logical)
+        authored::existing_storage(files, logical)
             .map_or_else(|| workspace.storage_path(logical), str::to_owned),
     )
 }
@@ -34,6 +34,7 @@ pub(crate) fn dependency(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assets;
     use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope};
     #[test]
     fn project_and_authored_documents_with_identical_logical_names_keep_distinct_nodes() {
