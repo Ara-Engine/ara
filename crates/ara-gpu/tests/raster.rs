@@ -234,14 +234,12 @@ fn depth_comparisons_and_four_sample_color_resolve() {
         } else {
             [0, 0, 0, 255]
         };
+        let pixels = gpu.read(read).unwrap();
+        let mismatch = pixels.as_chunks::<4>().0.iter().position(|p| *p != expected);
         assert!(
-            gpu.read(read)
-                .unwrap()
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| *p == expected),
-            "{compare:?}"
+            mismatch.is_none(),
+            "{compare:?}: incoming={incoming}, bias={bias}, slope={slope}, gradient={gradient}, expected={expected:?}, first mismatch={:?}",
+            mismatch.map(|i| (i, &pixels[i * 4..i * 4 + 4]))
         );
     }
 }
