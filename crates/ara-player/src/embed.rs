@@ -158,6 +158,7 @@ impl Embedded {
             }
             None => Presenter::new(size, Vec::new(), cache),
         };
+        crate::renderer::install(&mut presenter, cache);
         presenter.set_quality(quality);
         presenter.set_render_options(options);
         // An editor Game view: sharp at the panel's size within a 1440p frame's cost.

@@ -38,7 +38,8 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - Lumen parity round 2;
 - virtualized geometry and VSM;
 - the physics performance pass;
-- the diagnostics bus and `ara why`.
+- the diagnostics bus and `ara why`;
+- Renderlab as an optional external renderer behind the presenter (`ara-renderlab`, D35; `ara-player --renderer renderlab`).
 
 Run `ara init` in a scratch dir to try the CLI and MCP.
 
