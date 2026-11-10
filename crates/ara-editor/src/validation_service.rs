@@ -1,11 +1,8 @@
 //! Read-only validation jobs over one loaded-authoring revision.
-#[path = "snapshot.rs"]
 mod snapshot;
 #[cfg(test)]
-#[path = "tests.rs"]
 #[allow(clippy::unwrap_used)]
 mod tests;
-#[path = "worker.rs"]
 mod worker;
 use ara_diag::{Diagnostic, codes};
 use ara_host::{Cx, Method, Service, parse};

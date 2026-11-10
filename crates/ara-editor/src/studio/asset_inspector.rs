@@ -10,7 +10,7 @@ use stillkit::el::{Align, Axis, El, Side, col, el, icon, image, menu, row, text}
 
 use super::Studio;
 use super::style::ROW;
-use crate::shell::import_batch::{self, Change};
+use crate::import_edit::{self, Change};
 
 /// The asset inspector for `path`.
 pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
@@ -245,7 +245,7 @@ fn settings_rows(
             "MeshSettings",
         ),
     };
-    let defaults = import_batch::inherited_defaults(&s.editor, &settings.importer, defaults)?;
+    let defaults = import_edit::inherited_defaults(&s.editor, &settings.importer, defaults)?;
     let db = s.editor.host.store().schema();
     let metadata = db.get(schema).and_then(|ty| match &ty.shape {
         ara_schema::Shape::Struct { fields, .. } => Some(fields),
@@ -281,7 +281,7 @@ fn settings_rows(
             desc.map(|d| crate::inspector::widget(db, d))
         {
             let nullable = desc.is_some_and(|d| matches!(&d.ty, ara_schema::ValueType::Option(_)));
-            let choices = import_batch::enum_values(options, nullable);
+            let choices = import_edit::enum_values(options, nullable);
             let current = choices
                 .iter()
                 .find(|(v, _)| *v == value)
@@ -367,7 +367,7 @@ fn set(s: &mut Studio, doc: &str, field: &str, value: Value) {
         value,
     };
     if let Err(error) =
-        import_batch::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
+        import_edit::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
     {
         s.editor.report_failure(&*error);
     }
