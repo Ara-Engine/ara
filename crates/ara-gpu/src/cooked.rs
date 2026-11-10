@@ -242,6 +242,9 @@ pub struct RenderState {
     pub depth_write: bool,
     /// Premultiplied alpha blending.
     pub blend: bool,
+    /// Explicit native raster and vertex-input state; absent preserves old cooked files.
+    #[serde(default)]
+    pub raster: crate::raster::RasterState,
 }
 /// Runtime pipeline manifest, content-addressed by the cook.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,12 +1,10 @@
 # ara-gpu
 
-Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad101a32f024d87cdec2`, matching S1.
-
+Owns the native GPU boundary.
 ## Public API
 
-- `VulkanDevice::new_raster` creates a raster-only logical device: no ray-query/AS
-  extensions, features or acceleration descriptor capacity, even on an RT GPU.
-  `new` retains optional RT. Windowed devices request KHR/EXT HIGH; denial retries MEDIUM.
+- `new_raster` omits RT features/descriptors; `new` enables optional RT.
+  Windowed Vulkan devices request KHR/EXT HIGH; denial retries MEDIUM.
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
 - `Command::FillBuffer` repeats a u32 pattern over aligned ranges (zero clears).
@@ -41,6 +39,10 @@ Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad10
   barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
 - `Barrier`, `Access`, `Handoff`, `TimelinePoint`: graph synchronization; `after: Undefined` discards, so `attachments::ops` skips the scope's store and colour load.
   `TRANSIENT_ATTACHMENT` images are attachment-only: Metal memoryless, Vulkan lazily allocated.
+- `RenderState::raster` adds depth compare/bias, cull/winding, per-target blend,
+  sample count and explicit vertex layouts. `DrawVertexBuffers` binds up to eight
+  streams, including per-instance records. `ResolveImage` resolves backed 4x color
+  targets outside rendering; both images need transfer use and attachment usage.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
   `TriangleRange` selects checked aligned byte ranges in shared vertex/index
   allocations; indices remain local to the range. Multiple BLAS builds and their
@@ -69,11 +71,7 @@ A full storage heap waits (bounded) for retired storage images' last use, then c
 material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 reserves three default samplers: material repeat (up to 16x anisotropic where the
 device allows; native materials sample it with gradients), environment U repeat/V clamp
-and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy changes
-mip blending for every read through the material sampler, explicit LODs and gradients
-alike (NVIDIA blends over the first half of each LOD step only, reaching the coarser
-mip at .5): readers that need exact trilinear blend two levels themselves or use
-another sampler. `sampler(&SamplerDesc)` caches immutable descriptions in 64 slots
+and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy affects explicit LODs too; exact trilinear readers use another sampler. `sampler(&SamplerDesc)` caches immutable descriptions in 64 slots
 (defaults occupy 0..3): nearest/linear filters, Repeat/MirrorRepeat/ClampToEdge,
 optional comparison, and up to 16x anisotropy. New shaders use a runtime sampler
 array at Vulkan binding 2 / DXIL s0 space0. Converter table address stays at byte
@@ -139,8 +137,7 @@ Adopt ready pipeline handles on the owner and retire normally. Keep the last pre
 
 ## Verification
 
-Optional `tracy` enables literal `cpu_scope!` zones for submission, recording and timeline waits; the
-executable starts the client (`ara-player --features tracy`), zones are no-ops without it, default builds erase them.
+Optional `tracy` zones need an executable client (`ara-player --features tracy`).
 
 Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.

@@ -245,6 +245,36 @@ impl VulkanDevice {
                     );
                     device.cmd_draw_indexed(cmd, d.index_count, 1, d.first_index, 0, 0);
                 }
+                Command::DrawVertexBuffers {
+                    vertices,
+                    indices,
+                    first_index,
+                    index_count,
+                    vertex_offset,
+                    instances,
+                    first_instance,
+                } => {
+                    let buffers: Vec<_> = vertices
+                        .iter()
+                        .map(|b| self.buffers.get(b.buffer).map(|b| b.raw.handle))
+                        .collect::<Result<_>>()?;
+                    let offsets: Vec<_> = vertices.iter().map(|b| b.offset).collect();
+                    device.cmd_bind_vertex_buffers(cmd, 0, &buffers, &offsets);
+                    device.cmd_bind_index_buffer(
+                        cmd,
+                        self.buffers.get(*indices)?.raw.handle,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_draw_indexed(
+                        cmd,
+                        *index_count,
+                        *instances,
+                        *first_index,
+                        *vertex_offset,
+                        *first_instance,
+                    );
+                }
                 Command::DrawIndirect { arguments, offset } => device.cmd_draw_indirect(
                     cmd,
                     self.buffers.get(*arguments)?.raw.handle,
@@ -459,6 +489,31 @@ impl VulkanDevice {
                             .dst_access_mask(
                                 vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE,
                             )]),
+                    );
+                }
+                Command::ResolveImage {
+                    source,
+                    destination,
+                } => {
+                    let a = self.images.get(*source)?.raw;
+                    let b = self.images.get(*destination)?.raw;
+                    let sub = vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .layer_count(1);
+                    device.cmd_resolve_image(
+                        cmd,
+                        a.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        b.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[vk::ImageResolve::default()
+                            .src_subresource(sub)
+                            .dst_subresource(sub)
+                            .extent(vk::Extent3D {
+                                width: a.width,
+                                height: a.height,
+                                depth: 1,
+                            })],
                     );
                 }
                 Command::CopyImage {

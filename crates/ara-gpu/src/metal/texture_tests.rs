@@ -65,7 +65,10 @@ fn volumes_and_arrays_roundtrip_mips_and_checked_regions() {
         });
         let p = gpu.submit(rec.finish(), &[]).unwrap();
         gpu.wait(p).unwrap();
-        assert_eq!(gpu.read(readback).unwrap(), bytemuck::cast_slice::<u32,u8>(&data));
+        assert_eq!(
+            gpu.read(readback).unwrap(),
+            bytemuck::cast_slice::<u32, u8>(&data)
+        );
         let region = ImageRegion {
             mip: 1,
             origin: [1, 1, if shape.depth > 1 { 1 } else { 0 }],

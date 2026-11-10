@@ -15,7 +15,8 @@ pub const VERTEX_BUFFER_BIND_POINT: usize = 6;
 /// `kIRStageInAttributeStartIndex`: first vertex-descriptor attribute index.
 pub const STAGE_IN_ATTRIBUTE_START: usize = 11;
 /// Buffer slots each argument table reserves (up to and including vertex stream zero).
-pub const ARGUMENT_TABLE_BUFFERS: usize = VERTEX_BUFFER_BIND_POINT + 1;
+pub const ARGUMENT_TABLE_BUFFERS: usize =
+    VERTEX_BUFFER_BIND_POINT + crate::raster::MAX_VERTEX_BUFFERS;
 
 /// Sampled-image table capacity (`Texture2D[] : register(t0, space1)`).
 pub const TEXTURES: u32 = 65_536;
