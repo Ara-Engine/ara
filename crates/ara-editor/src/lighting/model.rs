@@ -26,7 +26,7 @@ pub(crate) struct Row {
     pub priority: Option<f32>,
 }
 
-pub(super) fn pose(matrix: glam::Mat4) -> Option<(Vec3, glam::Quat, Vec3)> {
+pub(crate) fn pose(matrix: glam::Mat4) -> Option<(Vec3, glam::Quat, Vec3)> {
     let determinant = matrix.determinant();
     if !matrix.is_finite() || !determinant.is_finite() || determinant.abs() < 1e-12 {
         return None;
@@ -159,7 +159,7 @@ pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
                     light.get("kind").and_then(Value::as_str).unwrap_or("point"),
                     light
                         .get("intensity")
-                        .map_or("schema default".into(), panels::display)
+                        .map_or("schema default".into(), crate::shell::panels::display)
                 ),
                 None,
                 "lightbulb",
@@ -191,7 +191,7 @@ pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
     result
 }
 
-pub(super) fn blended(
+pub(crate) fn blended(
     entities: &Resolved,
     editor: &Editor,
 ) -> Option<ara_components::post::PostValues> {

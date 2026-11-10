@@ -1587,7 +1587,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "lighting.probe.cancel" => super::lighting::cancel(s),
         "lighting.preset.manual" | "lighting.preset.interior" => {
-            use crate::shell::lighting::authoring::Preset;
+            use crate::lighting::authoring::Preset;
             let preset = match id {
                 "lighting.preset.manual" => Preset::ManualExposure,
                 _ => Preset::Interior,

@@ -10,7 +10,7 @@ use stillkit::el::{Align, Axis, El, Justify, Side, col, el, icon, menu, row, tex
 use stillkit::icons::Icon;
 
 use super::Studio;
-use crate::shell::lighting::authoring::{self, Create, Preset};
+use crate::lighting::authoring::{self, Create, Preset};
 
 /// What Add offers, in order.
 const ADD: [(Create, &str, Icon); 6] = [
@@ -27,7 +27,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let query = s.local.lighting_query.to_lowercase();
-    let rows = crate::shell::lighting::model::rows(&s.resolved, &s.editor, query.trim());
+    let rows = crate::lighting::model::rows(&s.resolved, &s.editor, query.trim());
     let volumes = !s.editor.state.selection.is_empty()
         && s.editor.state.selection.iter().all(|id| {
             s.resolved
