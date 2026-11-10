@@ -27,9 +27,11 @@ Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad10
   makes Metal lists untimed; Vulkan keeps timing. Tests cover ordering, overlap, wrap.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
-- `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
-  `UploadImage`/`ReadImage` copy every resident level, finest first, without padding
-  between levels. Barriers span the chain; copy validation checks block footprints.
+- `create_texture(&TextureDesc)` adds volumes, arrays, mip chains on all uses and
+  explicit sample counts. `UploadImageRegion`, `ReadImageRegion`, `CopyImageRegion`
+  use checked texel rectangles/mips/layers. Whole transfers visit mips finest first.
+  `sampled_view`/`storage_view` publish immutable mip/layer views; graph reachability
+  and retirement follow the parent image. Storage views expose one mip.
 - `Handle<T>`: arena/device identity plus a 64-bit generation. Shader `HeapIndex`
   identities are separate. An expired CPU handle never aliases a replacement.
 - `Recorder` / `CommandList`: owned portable commands; no borrowed ECS state.
@@ -142,16 +144,9 @@ executable starts the client (`ara-player --features tracy`), zones are no-ops w
 
 Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
 `clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
-GPU tests need Vulkan 1.3, validation layers, a dedicated compute family and
-process-local `VK_IMPLICIT_LAYER_PATH` pointing at an empty directory on this PC.
-They verify malformed-copy rejection, stale handles, real BLAS/TLAS lifetime and (triangle-range probe)
-pooled geometry, overflow/alignment rejection and real rays hitting three instances of two shared BLASes.
-The sampled-heap probe reads 257 nonuniform slots on GPU, publishes an unused slot
-before completion, and checks native mip interpolation. Explicit offline fixture
-updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
-`ara-shader-cook crates/ara-gpu/tests/shaders/pipelines.json crates/ara-gpu/tests/cooked`.
-`tests/external.rs` (Windows) exports a ring on one device, imports it on a second,
-cycles every slot through a resize and checks pixels and validation on both.
+Vulkan GPU tests run on the PC with validation; Vulkan changes made on the Mac
+remain unverified until that run. Metal gaps tests use native transfers and MSL
+probes (converter download needs Apple sign-in).
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
 Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): static BLAS/TLAS built on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.

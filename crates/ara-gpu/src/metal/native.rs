@@ -156,14 +156,6 @@ pub(super) fn texture_usage(usage: vk::ImageUsageFlags) -> MTLTextureUsage {
     metal
 }
 
-/// Bytes of one tightly packed mip level.
-pub(super) fn level_bytes(info: &FormatInfo, size: [u32; 2], level: u32) -> (u64, u64) {
-    let width = (size[0] >> level).max(1);
-    let height = (size[1] >> level).max(1);
-    let row = u64::from(width.div_ceil(info.block)) * u64::from(info.block_bytes);
-    (row, row * u64::from(height.div_ceil(info.block)))
-}
-
 /// Metal comparison shared by raster and samplers.
 pub(super) fn compare(op: crate::sampler::CompareOp) -> objc2_metal::MTLCompareFunction {
     use crate::sampler::CompareOp as C;

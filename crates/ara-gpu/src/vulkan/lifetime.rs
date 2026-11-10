@@ -1,6 +1,10 @@
 use super::*;
 
 impl Device for VulkanDevice {
+    fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        VulkanDevice::create_texture(self, desc)
+    }
+
     fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
         VulkanDevice::sampler(self, desc)
     }
@@ -146,6 +150,7 @@ impl Device for VulkanDevice {
                         self.context.destroy_structure(a.raw.handle, a.raw.backing);
                     }
                     Retired::Image(i) => {
+                        self.retire_views(i.raw.handle);
                         self.heap.retire_image(i.raw.view, i.heap);
                         self.context.detach_image(i.raw);
                         self.disposal
@@ -204,6 +209,9 @@ impl Drop for VulkanDevice {
             }
             for pool in self.query_cache.drain() {
                 self.context.device.destroy_query_pool(pool.handle, None);
+            }
+            for view in self.views.drain(..) {
+                self.context.device.destroy_image_view(view.native, None);
             }
             self.heap.destroy(&self.context);
             for semaphore in self.timelines {

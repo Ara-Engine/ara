@@ -60,8 +60,11 @@ mod serialized;
 mod tables;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod texture_tests;
 mod timestamps;
 mod transfer;
+mod views;
 mod worker;
 
 pub use completion::Completion;
@@ -166,6 +169,7 @@ pub struct MetalDevice {
     /// (`wait_for`), one entry per event.
     device_waits: [Vec<EventWait>; 2],
     retired: Vec<Retired>,
+    views: Vec<views::View>,
     pending: Vec<Pending>,
     info: vulkan::DeviceInfo,
     /// Distinguishes this device's completions from another device's.
@@ -289,6 +293,7 @@ impl MetalDevice {
             batch: Vec::new(),
             device_waits: Default::default(),
             retired: Vec::new(),
+            views: Vec::new(),
             pending: Vec::new(),
             info,
             identity: {
@@ -404,6 +409,19 @@ impl MetalDevice {
         usage: vk::ImageUsageFlags,
     ) -> Result<Image> {
         let raw = native::pool(|| resources::image(&self.device, size, format, mip_levels, usage))?;
+        self.adopt_image(raw)
+    }
+    /// Allocate a volume, array, mip chain or multisampled texture.
+    pub fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        let raw = native::pool(|| {
+            resources::image_shaped(
+                &self.device,
+                desc.image.size,
+                desc.image.format.vk(),
+                desc.image.vk_usage(),
+                desc.shape,
+            )
+        })?;
         self.adopt_image(raw)
     }
     /// Make a created texture resident and give it an arena identity.
@@ -859,6 +877,10 @@ impl MetalDevice {
 }
 
 impl Device for MetalDevice {
+    fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        MetalDevice::create_texture(self, desc)
+    }
+
     fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
         MetalDevice::sampler(self, desc)
     }
@@ -996,6 +1018,7 @@ impl MetalDevice {
                     self.residency_dirty = true;
                 }
                 Retired::Image(i) => {
+                    self.retire_views(i.raw.texture.gpuResourceID().to_raw());
                     if let Some(slot) = i.heap {
                         self.tables.textures.release(slot);
                     }

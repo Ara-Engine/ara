@@ -117,6 +117,39 @@ pub enum Command {
         /// Destination image.
         destination: Image,
     },
+    /// Upload a tightly packed rectangular range of one mip and selected layers.
+    UploadImageRegion {
+        /// Transfer source buffer.
+        source: Buffer,
+        /// Transfer destination texture.
+        destination: Image,
+        /// Byte offset, aligned to four and the texel block size.
+        buffer_offset: u64,
+        /// Texture subresource and rectangle.
+        region: crate::texture::ImageRegion,
+    },
+    /// Read a tightly packed rectangular range of one mip and selected layers.
+    ReadImageRegion {
+        /// Transfer source texture.
+        source: Image,
+        /// Transfer destination buffer.
+        destination: Buffer,
+        /// Byte offset, aligned to four and the texel block size.
+        buffer_offset: u64,
+        /// Texture subresource and rectangle.
+        region: crate::texture::ImageRegion,
+    },
+    /// Copy equal-sized regions between compatible single-sample textures.
+    CopyImageRegion {
+        /// Transfer source texture.
+        source: Image,
+        /// Transfer destination texture.
+        destination: Image,
+        /// Source subresource and rectangle.
+        from: crate::texture::ImageRegion,
+        /// Destination subresource and rectangle.
+        to: crate::texture::ImageRegion,
+    },
     /// Copy a whole tightly packed buffer prefix, used for device-local uploads.
     CopyBuffer {
         /// Transfer source allocation.

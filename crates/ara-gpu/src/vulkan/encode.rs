@@ -72,7 +72,7 @@ impl VulkanDevice {
                                 vk::ImageSubresourceRange::default()
                                     .aspect_mask(i.raw.aspect)
                                     .level_count(i.raw.mip_levels)
-                                    .layer_count(1),
+                                    .layer_count(i.raw.shape.layers),
                             );
                             device.cmd_pipeline_barrier2(
                                 cmd,
@@ -281,6 +281,85 @@ impl VulkanDevice {
                     device.cmd_draw_indexed(cmd, *count, *instances, *first_index, 0, 0);
                 }
                 Command::EndRendering => device.cmd_end_rendering(cmd),
+                Command::UploadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let image = self.images.get(*destination)?.raw;
+                    let buffer = self.buffers.get(*source)?.raw;
+                    let region = super::image_copy::buffer_region(
+                        image,
+                        *region,
+                        *buffer_offset,
+                        buffer.size,
+                    )?;
+                    device.cmd_copy_buffer_to_image(
+                        cmd,
+                        buffer.handle,
+                        image.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[region],
+                    );
+                }
+                Command::ReadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let image = self.images.get(*source)?.raw;
+                    let buffer = self.buffers.get(*destination)?.raw;
+                    let region = super::image_copy::buffer_region(
+                        image,
+                        *region,
+                        *buffer_offset,
+                        buffer.size,
+                    )?;
+                    device.cmd_copy_image_to_buffer(
+                        cmd,
+                        image.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        buffer.handle,
+                        &[region],
+                    );
+                }
+                Command::CopyImageRegion {
+                    source,
+                    destination,
+                    from,
+                    to,
+                } => {
+                    let a = self.images.get(*source)?.raw;
+                    let b = self.images.get(*destination)?.raw;
+                    let region = vk::ImageCopy::default()
+                        .src_subresource(super::image_copy::subresource(a, *from)?)
+                        .dst_subresource(super::image_copy::subresource(b, *to)?)
+                        .src_offset(vk::Offset3D {
+                            x: from.origin[0] as i32,
+                            y: from.origin[1] as i32,
+                            z: from.origin[2] as i32,
+                        })
+                        .dst_offset(vk::Offset3D {
+                            x: to.origin[0] as i32,
+                            y: to.origin[1] as i32,
+                            z: to.origin[2] as i32,
+                        })
+                        .extent(vk::Extent3D {
+                            width: from.extent[0],
+                            height: from.extent[1],
+                            depth: from.extent[2],
+                        });
+                    device.cmd_copy_image(
+                        cmd,
+                        a.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        b.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[region],
+                    );
+                }
                 Command::UploadImage {
                     source,
                     destination,

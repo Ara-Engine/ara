@@ -25,6 +25,7 @@ pub(crate) struct ImageAllocation {
     pub width: u32,
     pub height: u32,
     pub mip_levels: u32,
+    pub shape: crate::texture::ImageShape,
     pub format: vk::Format,
     pub aspect: vk::ImageAspectFlags,
     pub usage: vk::ImageUsageFlags,
@@ -133,6 +134,10 @@ impl Gpu {
             &self.memory,
             super::allocation::ImageDesc {
                 size: [width, height],
+                shape: crate::texture::ImageShape {
+                    mip_levels,
+                    ..Default::default()
+                },
                 format,
                 mip_levels,
                 usage,

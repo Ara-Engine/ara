@@ -12,6 +12,7 @@ pub mod descriptors;
 pub mod metal;
 pub mod sampler;
 pub mod shared;
+pub mod texture;
 mod transfers;
 #[cfg(feature = "fidelity-lab")]
 pub mod tunables;
@@ -263,6 +264,8 @@ pub trait Device {
     fn create_buffer(&mut self, desc: &descriptors::BufferDesc) -> Result<Buffer>;
     /// Allocate a typed image.
     fn create_image(&mut self, desc: &descriptors::ImageDesc) -> Result<Image>;
+    /// Allocate a texture with explicit depth, layers, mip and sample counts.
+    fn create_texture(&mut self, desc: &texture::TextureDesc) -> Result<Image>;
     /// Allocate static triangle/instance acceleration storage.
     fn create_acceleration_structure(
         &mut self,
