@@ -76,15 +76,16 @@ pub fn tones(l: &Look) -> Tones {
 }
 
 /// A drag track for a number in `range` beside its field, as Unreal's sliders: a press
-/// or drag sets the value at the pointer through `set`. `log` spreads a wide range (a
-/// brush radius from millimetres to metres) evenly by magnitude.
+/// or drag sets the value at the pointer through `set`, whose flag is true on the
+/// release (so an undoable setting commits once). `log` spreads a wide range (a brush
+/// radius from millimetres to metres) evenly by magnitude.
 pub fn slider<S: 'static>(
     l: &Look,
     key: String,
     value: f32,
     (min, max): (f32, f32),
     log: bool,
-    set: impl Fn(&mut S, f32) + 'static,
+    set: impl Fn(&mut S, f32, bool) + 'static,
 ) -> El<S> {
     let log = log && min > 0.0 && max > min;
     let along = match log {
@@ -104,13 +105,21 @@ pub fn slider<S: 'static>(
         .cursor(stillkit::Cursor::ResizeHorizontal)
         .on_pointer(move |s: &mut S, e: &stillkit::el::PointerEvent, _| {
             use stillkit::el::PointerPhase;
-            if !matches!(e.phase, PointerPhase::Down | PointerPhase::Move) || e.size.0 <= 0.0 {
+            if !matches!(
+                e.phase,
+                PointerPhase::Down | PointerPhase::Move | PointerPhase::Up
+            ) || e.size.0 <= 0.0
+            {
                 return false;
             }
             if e.phase == PointerPhase::Move && e.button != stillkit::Button::Left {
                 return false;
             }
-            set(s, at((e.local.x / e.size.0).clamp(0.0, 1.0)));
+            set(
+                s,
+                at((e.local.x / e.size.0).clamp(0.0, 1.0)),
+                e.phase == PointerPhase::Up,
+            );
             true
         })
         .child(

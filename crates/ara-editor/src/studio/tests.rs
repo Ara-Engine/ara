@@ -884,6 +884,145 @@ fn agent_clients_connect_or_show_their_manual_steps() {
 }
 
 #[test]
+fn a_hovered_hierarchy_row_offers_its_eye_and_lock() {
+    let mut rt = open();
+    settle(&mut rt);
+    let row = rt.find("row/e_lamp").unwrap();
+    rt.pointer_move(row.center().x, row.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.hierarchy_hover.as_deref(), Some("e_lamp"));
+    // Elsewhere: no row stays hovered.
+    let inspector = rt.find("component/Transform").unwrap();
+    rt.pointer_move(inspector.center().x, inspector.center().y);
+    settle(&mut rt);
+    super::hierarchy::unhover(&mut rt);
+    assert!(rt.state().local.hierarchy_hover.is_none());
+}
+
+#[test]
+fn the_startup_scene_is_set_from_build_or_a_scene_asset() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let main = |rt: &Runtime<Studio>| super::build_page::main_scene(rt.state());
+    let first = main(&rt).expect("the project starts with a scene");
+    let original = rt.state().editor.state.doc.clone();
+    let storage = {
+        let workspace = rt.state().editor.host.store().workspace();
+        workspace.path_of(&original).unwrap().to_owned()
+    };
+    // A new scene, open now, becomes the one the build starts with.
+    rt.update(|s| super::commands::run(s, "file.new_scene", &Target::None));
+    settle(&mut rt);
+    assert_ne!(rt.state().editor.state.doc, original);
+    rt.update(|s| super::commands::run(s, "build.main_scene", &Target::None));
+    let second = main(&rt).unwrap();
+    assert_ne!(second, first);
+    // A scene asset's menu puts the first back, as one undoable change.
+    rt.update(|s| super::commands::run(s, "assets.set_main", &Target::Asset(storage.clone())));
+    assert_eq!(main(&rt).as_deref(), Some(first.as_str()));
+    rt.update(|s| super::commands::run(s, "edit.undo", &Target::None));
+    assert_eq!(main(&rt), Some(second));
+}
+
+#[test]
+fn component_headers_say_what_the_component_is() {
+    let mut rt = open();
+    settle(&mut rt);
+    for component in ["Transform", "MeshRenderer"] {
+        let key = format!("component/{component}/about");
+        assert!(rt.find(&key).is_some(), "{key}");
+    }
+    let doc = rt
+        .state()
+        .editor
+        .host
+        .store()
+        .schema()
+        .get("MeshRenderer")
+        .map(|t| t.doc.clone());
+    assert!(
+        doc.is_some_and(|d| !d.trim().is_empty()),
+        "the schema documents it"
+    );
+}
+
+#[test]
+fn a_new_material_opens_docked_beside_the_scene() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| super::asset_create::create(s, "material"));
+    settle(&mut rt);
+    let state = &rt.state().editor.state;
+    let floating = state
+        .floating
+        .iter()
+        .any(|f| super::dock::window_title(&f.root).contains("Material"));
+    assert!(!floating, "a new material's page docks, not floats");
+    assert!(crate::state::panel_visible(state, "material"));
+}
+
+#[test]
+fn the_status_bar_shows_the_newest_problem_and_opens_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.local.console_open = None;
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("status/log").is_some(),
+        "the newest warning or error shows"
+    );
+    press(&mut rt, "status/log");
+    assert_eq!(
+        rt.state().local.console_open,
+        Some(5),
+        "the error, in the Console"
+    );
+    assert!(crate::state::panel_visible(
+        &rt.state().editor.state,
+        "console"
+    ));
+}
+
+#[test]
+fn a_settings_slider_previews_while_dragged_and_commits_once() {
+    let mut rt = open();
+    rt.update(|s| {
+        super::commands::run(s, "edit.preferences", &crate::catalog::Target::None);
+        if let Some(v) = s.local.settings.as_mut() {
+            v.query = "camera speed".into();
+        }
+    });
+    settle(&mut rt);
+    let key = "settings/viewport.cameraSpeed/track";
+    let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
+    let speed = |rt: &Runtime<Studio>| {
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get("viewport.cameraSpeed")
+            .and_then(Value::as_f64)
+    };
+    let before = speed(&rt);
+    let y = r.center().y;
+    rt.pointer_move(r.left + 2.0, y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.left + 2.0, y);
+    rt.pointer_move(r.left + r.width() * 0.5, y);
+    rt.frame(FRAME);
+    assert!(rt.state().local.setting_drag.is_some(), "previewing");
+    assert_eq!(speed(&rt), before, "nothing committed mid-drag");
+    rt.pointer_up(r.left + r.width() * 0.5, y);
+    settle(&mut rt);
+    assert!(rt.state().local.setting_drag.is_none());
+    let after = speed(&rt).unwrap();
+    assert!(after > 15.0 && after < 35.0, "about halfway: {after}");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2142,6 +2281,7 @@ fn captures() {
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         rt.update(found_clients);
         rt.update(sample_logs);
+
         for panel in [
             "assets",
             "console",
@@ -2153,6 +2293,9 @@ fn captures() {
             "mesh-paint",
             "game",
             "build",
+            "material",
+            "vfx",
+            "animation",
         ] {
             rt.update(|s| {
                 super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
@@ -2168,6 +2311,21 @@ fn captures() {
             )
             .unwrap();
         }
+        // A hovered Hierarchy row, its eye and lock offered.
+        let lamp = rt.find("row/e_lamp").unwrap();
+        rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-hierarchy-hover.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
         let row = rt.find("row/e_box").unwrap();
         rt.right_click(row.center().x, row.center().y);
         for _ in 0..30 {

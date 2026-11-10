@@ -224,13 +224,6 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                             .text_size(11.0)
                             .color(c.muted_foreground.0)
                             .tooltip("The renderer's capture of this probe")
-                    }))
-                    .children(r.priority.map(|p| {
-                        text(format!("{p:.0}"))
-                            .text_size(11.0)
-                            .family(mono())
-                            .color(c.muted_foreground.0)
-                            .tooltip("Priority")
                     })),
             );
         }

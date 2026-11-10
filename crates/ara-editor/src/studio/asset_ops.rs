@@ -129,13 +129,7 @@ pub(super) fn open(s: &mut Studio, a: &Asset) {
         .and_then(|p| workspace.find(p))
         .map(|id| id.to_string());
     match (page, doc) {
-        (Some(page), Some(doc)) => {
-            s.act(
-                "editor.workspace",
-                json!({"resource": doc, "asset": a.path}),
-            );
-            super::commands::run(s, &format!("window.{page}"), &Target::None);
-        }
+        (Some(_), Some(doc)) => super::commands::open_resource(s, &doc, &a.path),
         _ => {
             if let Err(error) = crate::system::open_external(&s.editor.host.root().join(&a.path)) {
                 s.editor.report_failure(&*error);

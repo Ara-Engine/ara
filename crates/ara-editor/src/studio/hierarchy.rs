@@ -179,13 +179,17 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         let (hidden, locked) = (s.editor.state.hidden.clone(), s.editor.state.locked.clone());
         let rename = s.local.rename.clone();
         let drop = s.local.row_drag.as_ref().and_then(|d| d.target.clone());
+        let hovered = s.local.hierarchy_hover.clone();
         virtual_list("hierarchy/rows", rows.len(), ROW, move |range| {
             range
                 .map(|i| {
                     row_el(
                         l,
                         (&built, i),
-                        selection.contains(&built[i].id),
+                        (
+                            selection.contains(&built[i].id),
+                            hovered.as_ref() == Some(&built[i].id),
+                        ),
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
                         rename.as_ref(),
@@ -360,7 +364,7 @@ fn filter_menu(s: &Studio) -> El<Studio> {
 fn row_el(
     l: &ara_kit::look::Look,
     (rows, at): (&std::sync::Arc<Vec<Row>>, usize),
-    selected: bool,
+    (selected, hovered): (bool, bool),
     hidden: bool,
     locked: bool,
     rename: Option<&(String, String)>,
@@ -464,7 +468,12 @@ fn row_el(
             .cascade_ink()
             .label(label)
             .tooltip(label)
-            .opacity(if on { 1.0 } else { 0.0 })
+            // Shown while set, and on the row under the pointer; faint there when unset.
+            .opacity(match (on, hovered) {
+                (true, _) => 1.0,
+                (false, true) => 0.55,
+                (false, false) => 0.0,
+            })
             .hovered(move |e| e.opacity(1.0).color(ink))
             .on_press(move |s: &mut Studio| s.act(method, json!({"entity": id, "enabled": !on})))
             .child(icon(glyph).size(13.0))
@@ -511,6 +520,12 @@ fn row_el(
         .on_pointer({
             let rows = rows.clone();
             move |s: &mut Studio, e, tx| {
+                if e.phase == PointerPhase::Hover {
+                    if s.local.hierarchy_hover.as_ref() != Some(&pid) {
+                        s.local.hierarchy_hover = Some(pid.clone());
+                    }
+                    return true;
+                }
                 if e.button != stillkit::Button::Left {
                     return false;
                 }
@@ -694,5 +709,19 @@ fn drop_rows(s: &mut Studio, source: &str, target: &str, place: ara_ui::drag_dro
         Ok(commands) if !commands.is_empty() => s.apply(commands, "Move in hierarchy"),
         Ok(_) => {}
         Err(reason) => s.editor.report_failure(&std::io::Error::other(reason)),
+    }
+}
+
+/// Forgets the hovered Hierarchy row once the pointer has left it (rows learn they are
+/// hovered, never that the pointer left); the host runs it every pass.
+pub(super) fn unhover(rt: &mut stillkit::el::Runtime<Studio>) {
+    let Some(id) = rt.state().local.hierarchy_hover.clone() else {
+        return;
+    };
+    let still = rt
+        .presented(&format!("row/{id}"))
+        .is_some_and(|shown| shown.state == stillkit::interact::State::Hover);
+    if !still {
+        rt.update(|s| s.local.hierarchy_hover = None);
     }
 }

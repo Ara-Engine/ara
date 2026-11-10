@@ -447,6 +447,7 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
                 .weight(600)
                 .grow(1.0),
         )
+        .children(about(s, component))
         .child(component_menu(s, component));
     let mut out = col().child(head);
     if !folded {
@@ -460,6 +461,32 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
         out = out.child(body);
     }
     out
+}
+
+/// What a component is, from its schema doc, on hover over an ⓘ in its header (Unity's
+/// help button); `None` for a component the schema does not know.
+fn about(s: &Studio, component: &str) -> Option<El<Studio>> {
+    let schema = s.editor.host.store().schema();
+    let doc = schema
+        .get(component)?
+        .doc
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!doc.is_empty()).then(|| {
+        el().key(format!("component/{component}/about"))
+            .size(18.0)
+            .align(Align::Center)
+            .justify(stillkit::el::Justify::Center)
+            .label(format!("About {}", spaced(component)))
+            .description(doc.clone())
+            .tooltip(doc)
+            .child(
+                icon(icons::INFO)
+                    .size(12.0)
+                    .color(s.look.c.muted_foreground.0),
+            )
+    })
 }
 
 pub(super) fn component_icon(component: &str) -> stillkit::icons::Icon {
