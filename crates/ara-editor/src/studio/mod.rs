@@ -226,6 +226,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             if pump(&mut rt, &mut surface, started, Some(&mut game))? {
                 break;
             }
+            std::thread::sleep(Duration::from_millis(8));
             continue;
         }
         // While profiling records, every pass is a frame (the Profiler panel reads them).
