@@ -1405,9 +1405,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
         // The OS window, the dock and saved layouts.
-        "window.minimize" | "window.maximize_window" => {
+        "window.minimize" | "window.maximize_window" | "view.fullscreen" => {
             s.local.window = Some(match id {
                 "window.minimize" => super::state::WindowRequest::Minimize,
+                "view.fullscreen" => super::state::WindowRequest::Fullscreen,
                 _ => super::state::WindowRequest::Maximize,
             });
             Ok(())
