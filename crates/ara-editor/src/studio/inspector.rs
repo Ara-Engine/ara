@@ -1070,7 +1070,7 @@ fn field_menu(
             if let Some(entity) = s.inspected().first().cloned() {
                 s.local.copy = Some(format!(
                     "{}/{copy_path}",
-                    crate::shell::commands::table::reference(&s.editor, &entity)
+                    super::commands::reference(&s.editor, &entity)
                 ));
             }
         }),

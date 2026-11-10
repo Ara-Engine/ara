@@ -1,18 +1,87 @@
 //! The registry commands the studio runs, by id. Titles, icons, shortcuts and menus come
-//! from the one registry (`shell::commands`), so the studio's menus, palette and keys match
-//! the classic editor's and MCP's `editor.commands`; each runs through the same helpers
-//! (`editor.*` actions, `cmd.apply`). Ids not ported yet show as unavailable with that
-//! reason instead of doing nothing.
+//! from the catalogue (`crate::catalog`), so the studio's menus, palette and keys match
+//! MCP's `editor.commands`; each runs through `editor.*` actions or `cmd.apply`, and a
+//! command a C# extension registered runs in the extension host.
 use serde_json::json;
 
 use super::Studio;
-use crate::shell::commands::Target;
-use crate::shell::commands::table::{act, apply, play, play_params, select, set, view};
+use crate::Editor;
+use crate::catalog::Target;
+use crate::shell::commands::table::play_params;
+use serde_json::Value;
 
-/// Why a registry command can't run in the studio yet, or `None` when it can.
-pub(super) fn missing(id: &str) -> Option<&'static str> {
-    (!ported(id))
-        .then_some("Not in the studio yet: run the editor with --legacy-ui for this command")
+/// What running a command gives back: done, or why not.
+type R = ara_ui::Result<()>;
+
+/// Runs editor action `method`.
+fn act(e: &mut Editor, method: &str, params: Value) -> R {
+    e.action(method, params)?;
+    Ok(())
+}
+
+/// Applies authoring `commands` as one undo step, `why` naming it; nothing to apply is
+/// fine.
+fn apply(e: &mut Editor, commands: Vec<Value>, why: &str) -> R {
+    if !commands.is_empty() {
+        e.apply(commands, why, None)?;
+    }
+    Ok(())
+}
+
+/// Sets user setting `key`.
+fn set(e: &mut Editor, key: &str, value: Value) -> R {
+    act(
+        e,
+        "editor.settings.set",
+        json!({"key": key, "value": value}),
+    )
+}
+
+/// Changes the view state (`editor.view`: view mode, gizmos, Play's state).
+fn view(e: &mut Editor, params: Value) -> R {
+    act(e, "editor.view", params)
+}
+
+/// Selects `entities`.
+fn select(e: &mut Editor, entities: Vec<String>) -> R {
+    act(e, "editor.select", json!({"entities": entities}))
+}
+
+/// Runs a `play.*` action on the running world (any but `play.start` names it).
+fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
+    if method != "play.start"
+        && let Some(world) = &e.play_world
+    {
+        params["world"] = json!(world);
+    }
+    act(e, method, params)
+}
+
+/// `roots` and everything under them, roots first.
+fn with_descendants(resolved: &ara_doc::prefab::Resolved, roots: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = roots.to_vec();
+    let mut i = 0;
+    while i < out.len() {
+        let parent = out[i].clone();
+        let children: Vec<String> = resolved
+            .iter()
+            .filter(|(id, x)| x.parent.as_deref() == Some(parent.as_str()) && !out.contains(id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        out.extend(children);
+        i += 1;
+    }
+    out
+}
+
+/// A `@scene#entity` reference to `entity` in the open scene, as agents and fields use.
+pub(super) fn reference(e: &Editor, entity: &str) -> String {
+    let workspace = e.host.store().workspace();
+    let path = workspace
+        .path_of(&e.state.doc)
+        .map(|path| workspace.reference_path(path))
+        .unwrap_or("");
+    format!("@{path}#{entity}")
 }
 
 /// A registry shortcut as this platform writes it: the first chord, with ⌘ ⇧ ⌥ on macOS
@@ -45,63 +114,9 @@ pub(super) fn shortcut(keys: &str) -> Option<String> {
     Some(glyphs.into_iter().collect::<String>() + key)
 }
 
-/// Whether the studio runs `id`.
+/// Whether the editor runs `id` (it is in the catalogue).
 pub(super) fn ported(id: &str) -> bool {
-    super::create::item(id).is_some()
-        || super::asset_ops::COMMANDS.contains(&id)
-        || id.strip_prefix("assets.create.").is_some_and(|kind| {
-            super::asset_create::KINDS
-                .iter()
-                .any(|(k, _, _)| *k == kind)
-        })
-        || matches!(
-            id,
-            "file.save"
-                | "file.save_all"
-                | "edit.undo"
-                | "edit.redo"
-                | "edit.duplicate"
-                | "edit.delete"
-                | "edit.rename"
-                | "create.at_cursor"
-                | "edit.preferences"
-                | "layout.default"
-                | "layout.level_design"
-                | "layout.materials"
-                | "layout.animation"
-                | "layout.profiling"
-                | "layout.laptop"
-                | "layout.reset"
-                | "window.hierarchy"
-                | "window.inspector"
-                | "window.assets"
-                | "window.console"
-                | "window.problems"
-                | "window.agents"
-                | "window.history"
-                | "edit.project_settings"
-                | "edit.select_all"
-                | "edit.deselect"
-                | "edit.palette"
-                | "view.frame"
-                | "view.frame_all"
-                | "view.tool.move"
-                | "view.tool.rotate"
-                | "view.tool.scale"
-                | "view.tool.universal"
-                | "view.space"
-                | "view.pivot"
-                | "snap.toggle"
-                | "view.theme.dark"
-                | "view.theme.light"
-                | "view.reduce_motion"
-                | "play.start"
-                | "play.pause"
-                | "play.step"
-                | "play.stop"
-                | "view.camera.perspective"
-                | "view.camera.default"
-        )
+    crate::catalog::get(id).is_some()
 }
 
 /// Runs registry command `id` on `target`; failures are reported like any editor failure.
@@ -113,6 +128,30 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             .any(|(k, _, _)| *k == kind)
     {
         super::asset_create::create(s, kind);
+        return;
+    }
+    // A command a C# extension registered runs in the extension host.
+    if crate::catalog::get(id).is_none()
+        && let Some(command) = s.editor.extensions.commands.iter().find(|c| c.id == id)
+    {
+        let result = if command.enabled {
+            s.editor
+                .action("editor.command", json!({"id": id, "target": target}))
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        } else {
+            Err(format!(
+                "{}: {}",
+                command.title,
+                command
+                    .disabled_reason
+                    .as_deref()
+                    .unwrap_or("disabled until the C# extensions reload")
+            ))
+        };
+        if let Err(error) = result {
+            s.editor.report_failure(&*anyhow::anyhow!(error));
+        }
         return;
     }
     if super::asset_ops::COMMANDS.contains(&id) {
@@ -291,8 +330,164 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             "editor.camera",
             json!({"projection": if e.state.camera.projection == crate::state::CameraProjection::Perspective { "orthographic" } else { "perspective" }}),
         ),
+        "select.children" => {
+            let parents = target.entities(&e.state);
+            let kids = s
+                .resolved
+                .iter()
+                .filter(|(_, x)| x.parent.as_ref().is_some_and(|p| parents.contains(p)))
+                .map(|(id, _)| id.clone())
+                .collect();
+            select(e, kids)
+        }
+        "select.parent" => match target
+            .entity(&e.state)
+            .and_then(|id| s.resolved.get(id))
+            .and_then(|x| x.parent.clone())
+        {
+            Some(parent) => select(e, vec![parent]),
+            None => Err("The selection has no parent".into()),
+        },
+        "edit.hide"
+        | "edit.unhide_selected"
+        | "edit.hide_descendants"
+        | "edit.unhide_descendants" => {
+            let roots = target.entities(&e.state);
+            let branches = id.ends_with("_descendants");
+            let hide = match id {
+                "edit.hide" => !roots.first().is_some_and(|r| e.state.hidden.contains(r)),
+                "edit.unhide_selected" | "edit.unhide_descendants" => false,
+                _ => true,
+            };
+            let entities = if branches {
+                with_descendants(&s.resolved, &roots)
+            } else {
+                roots
+            };
+            entities.iter().try_for_each(|entity| {
+                act(
+                    e,
+                    "editor.visibility",
+                    json!({"entity": entity, "enabled": hide}),
+                )
+            })
+        }
+        "edit.unhide_all" => {
+            s.local.isolated = None;
+            e.state.hidden.clone().iter().try_for_each(|entity| {
+                act(
+                    e,
+                    "editor.visibility",
+                    json!({"entity": entity, "enabled": false}),
+                )
+            })
+        }
+        "edit.lock" | "edit.lock_descendants" | "edit.unlock_descendants" => {
+            let roots = target.entities(&e.state);
+            let lock = match id {
+                "edit.lock" => !roots.first().is_some_and(|r| e.state.locked.contains(r)),
+                "edit.lock_descendants" => true,
+                _ => false,
+            };
+            let entities = if id == "edit.lock" {
+                roots
+            } else {
+                with_descendants(&s.resolved, &roots)
+            };
+            entities.iter().try_for_each(|entity| {
+                act(e, "editor.lock", json!({"entity": entity, "enabled": lock}))
+            })
+        }
+        "view.isolate" => match s.local.isolated.take() {
+            // Again: show what isolating hid.
+            Some(hid) => hid.iter().try_for_each(|entity| {
+                act(
+                    e,
+                    "editor.visibility",
+                    json!({"entity": entity, "enabled": false}),
+                )
+            }),
+            None => {
+                let keep = with_descendants(&s.resolved, &target.entities(&e.state));
+                // The selection's ancestors stay visible too, so it shows in place.
+                let mut shown: std::collections::BTreeSet<String> = keep.into_iter().collect();
+                for id in shown.clone() {
+                    let mut at = s.resolved.get(&id).and_then(|x| x.parent.clone());
+                    while let Some(parent) = at {
+                        at = s.resolved.get(&parent).and_then(|x| x.parent.clone());
+                        shown.insert(parent);
+                    }
+                }
+                let hide: Vec<String> = s
+                    .resolved
+                    .keys()
+                    .filter(|id| !shown.contains(*id) && !e.state.hidden.contains(*id))
+                    .cloned()
+                    .collect();
+                let result = hide.iter().try_for_each(|entity| {
+                    act(
+                        e,
+                        "editor.visibility",
+                        json!({"entity": entity, "enabled": true}),
+                    )
+                });
+                s.local.isolated = Some(hide);
+                result
+            }
+        },
+        "edit.copy_reference" => match target.entity(&e.state) {
+            Some(entity) => {
+                s.local.copy = Some(reference(e, entity));
+                Ok(())
+            }
+            None => Err("Select an entity".into()),
+        },
+        "hierarchy.reveal" => {
+            // Open every collapsed ancestor; the selection stays as it is.
+            let mut open = Vec::new();
+            for id in target.entities(&e.state) {
+                let mut at = s.resolved.get(&id).and_then(|x| x.parent.clone());
+                while let Some(parent) = at {
+                    at = s.resolved.get(&parent).and_then(|x| x.parent.clone());
+                    if e.state.collapsed.contains(&parent) {
+                        open.push(parent);
+                    }
+                }
+            }
+            open.iter().try_for_each(|entity| {
+                act(
+                    e,
+                    "editor.collapse",
+                    json!({"entity": entity, "enabled": false}),
+                )
+            })
+        }
+        "prefab.open" => {
+            let instance = target.entity(&e.state).and_then(|entity| {
+                crate::shell::prefab_ops::instance(e.host.store(), &e.state.doc, entity)
+            });
+            match instance {
+                Some(found) => act(e, "editor.scene.open", json!({"scene": found.prefab_doc})),
+                None => Err("Not a prefab instance".into()),
+            }
+        }
+        "prefab.revert_all" | "prefab.unpack" => match target.entity(&e.state) {
+            Some(entity) => {
+                let (cmd, why) = if id == "prefab.unpack" {
+                    ("editor.prefab.unpack", "Unpack prefab")
+                } else {
+                    ("prefab.override.revert", "Revert overrides")
+                };
+                apply(
+                    e,
+                    vec![json!({"cmd": cmd, "args": {"entity": entity}})],
+                    why,
+                )
+            }
+            None => Err("Select a prefab instance".into()),
+        },
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
-        _ => Err(format!("{id}: {}", missing(id).unwrap_or("unknown command")).into()),
+        _ => Err(format!("{id}: unknown command").into()),
     };
     if result.is_ok() && id.starts_with("create.") {
         s.resolve();
@@ -303,8 +498,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
 }
 
 /// The registry spec of `id`, for titles, icons and shortcuts.
-pub(super) fn spec(id: &str) -> Option<&'static crate::shell::commands::Spec> {
-    crate::shell::commands::get(id)
+pub(super) fn spec(id: &str) -> Option<&'static crate::catalog::Command> {
+    crate::catalog::get(id)
 }
 
 /// The studio's keyboard map: the registry's default chords for the commands it runs.
@@ -323,6 +518,8 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (false, true, 0x41) => "create.at_cursor",
         (true, false, 0xBC) => "edit.preferences",
         (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
+        (false, false, 0x48) => "edit.hide",
+        (false, true, 0x48) => "view.isolate",
         (false, false, 0x46) => "view.frame",
         (false, false, 0x24) => "view.frame_all",
         (false, false, 0x57) => "view.tool.move",

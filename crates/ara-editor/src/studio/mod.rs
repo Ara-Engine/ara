@@ -191,7 +191,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
     if let Some(panel) = &options.panel {
         let id = format!("window.{panel}");
-        rt.update(|s| commands::run(s, &id, &crate::shell::commands::Target::None));
+        rt.update(|s| commands::run(s, &id, &crate::catalog::Target::None));
     }
     rt.update(|s| {
         let store = s.editor.host.store();
@@ -457,7 +457,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 };
                 rt.update(|s| {
-                    use crate::shell::commands::{Target, menus::Context};
+                    use crate::catalog::{Target, menus::Context};
                     match (&entity, pick.context) {
                         // A right click keeps a selection it lands in.
                         (Some(e), Some(_)) if s.editor.state.selection.contains(e) => {}

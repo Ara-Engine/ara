@@ -668,6 +668,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("view.frame"),
             C("select.children"),
+            C("select.parent"),
+            C("view.isolate"),
             C("edit.hide"),
             C("edit.lock"),
             Sub(

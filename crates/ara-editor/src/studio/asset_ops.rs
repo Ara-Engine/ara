@@ -7,8 +7,8 @@
 use serde_json::json;
 
 use super::Studio;
+use crate::catalog::Target;
 use crate::shell::assets::Asset;
-use crate::shell::commands::Target;
 
 /// The `assets.*` commands the studio runs.
 pub(super) const COMMANDS: [&str; 9] = [

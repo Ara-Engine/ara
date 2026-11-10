@@ -116,7 +116,7 @@ fn resource(s: &mut Studio, domain: &str, stem: &str, extension: &str) -> anyhow
         super::commands::run(
             s,
             &format!("window.{domain}"),
-            &crate::shell::commands::Target::None,
+            &crate::catalog::Target::None,
         );
     }
     show(s, &path, extension);

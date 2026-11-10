@@ -15,7 +15,7 @@ use stillkit::el::{Align, Axis, El, Handled, Justify, Overlay, col, el, icon, po
 use stillkit::icons::Icon;
 
 use super::Studio;
-use crate::shell::commands::Target;
+use crate::catalog::Target;
 
 /// A browser category.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -410,6 +410,32 @@ fn the_hierarchy_filters_by_component_type_and_name() {
 }
 
 #[test]
+fn isolate_hides_the_rest_and_runs_again_to_show_it() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| s.select(vec!["e_lamp".into()], false));
+    rt.update(|s| super::commands::run(s, "view.isolate", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let hidden = rt.state().editor.state.hidden.clone();
+    assert!(
+        hidden.contains("e_box") && !hidden.contains("e_lamp"),
+        "{hidden:?}"
+    );
+    rt.update(|s| super::commands::run(s, "view.isolate", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert!(rt.state().editor.state.hidden.is_empty(), "shown again");
+    // Copy Reference gives the entity's @scene#id.
+    rt.update(|s| super::commands::run(s, "edit.copy_reference", &crate::catalog::Target::None));
+    assert!(
+        rt.state()
+            .local
+            .copy
+            .as_deref()
+            .is_some_and(|r| r.ends_with("#e_lamp"))
+    );
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
@@ -478,11 +504,7 @@ fn captures() {
             "assets", "console", "problems", "agents", "history", "lighting", "profiler",
         ] {
             rt.update(|s| {
-                super::commands::run(
-                    s,
-                    &format!("window.{panel}"),
-                    &crate::shell::commands::Target::None,
-                )
+                super::commands::run(s, &format!("window.{panel}"), &crate::catalog::Target::None)
             });
             for _ in 0..30 {
                 rt.frame(FRAME);
@@ -521,9 +543,7 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.create = None);
-        rt.update(|s| {
-            super::commands::run(s, "edit.preferences", &crate::shell::commands::Target::None)
-        });
+        rt.update(|s| super::commands::run(s, "edit.preferences", &crate::catalog::Target::None));
         settle(&mut rt);
         for _ in 0..30 {
             rt.frame(FRAME);
@@ -535,9 +555,7 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.settings = None);
-        rt.update(|s| {
-            super::commands::run(s, "edit.palette", &crate::shell::commands::Target::None)
-        });
+        rt.update(|s| super::commands::run(s, "edit.palette", &crate::catalog::Target::None));
         settle(&mut rt);
         for _ in 0..30 {
             rt.frame(FRAME);
@@ -784,9 +802,7 @@ fn a_fields_menu_copies_its_path() {
 #[test]
 fn preferences_toggle_a_setting_and_reset_it() {
     let mut rt = open();
-    rt.update(|s| {
-        super::commands::run(s, "edit.preferences", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "edit.preferences", &crate::catalog::Target::None));
     settle(&mut rt);
     assert!(rt.find("settings").is_some(), "the window opens");
     let def = crate::settings::DEFS
@@ -841,20 +857,14 @@ fn preferences_toggle_a_setting_and_reset_it() {
 fn window_menu_layouts_and_panels() {
     let mut rt = open();
     let before = format!("{:?}", rt.state().editor.state.layout);
-    rt.update(|s| {
-        super::commands::run(
-            s,
-            "layout.level_design",
-            &crate::shell::commands::Target::None,
-        )
-    });
+    rt.update(|s| super::commands::run(s, "layout.level_design", &crate::catalog::Target::None));
     settle(&mut rt);
     assert_ne!(
         format!("{:?}", rt.state().editor.state.layout),
         before,
         "the preset applies"
     );
-    rt.update(|s| super::commands::run(s, "window.history", &crate::shell::commands::Target::None));
+    rt.update(|s| super::commands::run(s, "window.history", &crate::catalog::Target::None));
     settle(&mut rt);
     assert!(rt.find("tab/history").is_some(), "History opens as a tab");
 }
@@ -972,9 +982,7 @@ fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
         }
         doc
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.animation", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
     rt.update(|s| super::graph::sync(s, "animation"));
     settle(&mut rt);
     let controller = |rt: &Runtime<Studio>| {
@@ -1059,9 +1067,7 @@ fn right_clicking_the_material_graph_adds_a_node_where_it_was_clicked() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     rt.touch(|s| super::graph::sync(s, "material"));
     settle(&mut rt);
     let before = super::graph::node_ids(rt.state()).len();
@@ -1117,9 +1123,7 @@ fn material_inputs_show_their_defaults_inline_and_edit_in_place() {
             )
             .unwrap();
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     rt.touch(|s| super::graph::sync(s, "material"));
     settle(&mut rt);
     let values = super::graph::inline_values(rt.state());
@@ -1179,9 +1183,7 @@ fn c_wraps_the_selection_in_a_comment_that_is_titled_and_removed_alone() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     rt.touch(|s| super::graph::sync(s, "material"));
     settle(&mut rt);
     let nodes = super::graph::node_ids(rt.state());
@@ -1251,9 +1253,7 @@ fn command_d_duplicates_a_node_with_its_own_inline_defaults() {
             )
             .unwrap();
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     rt.update(|s| super::graph::sync(s, "material"));
     settle(&mut rt);
     let before = super::graph::node_ids(rt.state());
@@ -1322,9 +1322,7 @@ fn parameters_are_added_by_type_and_renamed_in_details() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
     });
-    rt.update(|s| {
-        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
-    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     rt.update(|s| super::graph::sync(s, "material"));
     settle(&mut rt);
     let material = |rt: &Runtime<Studio>| {
@@ -1384,7 +1382,7 @@ fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
             .to_owned();
         s.act("editor.workspace", json!({"resource": doc}));
     });
-    rt.update(|s| super::commands::run(s, "window.vfx", &crate::shell::commands::Target::None));
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
     settle(&mut rt);
     assert!(
         rt.find("vfx/selection").is_some(),
