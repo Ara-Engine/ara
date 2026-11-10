@@ -35,6 +35,8 @@ mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
 #[cfg(not(target_vendor = "apple"))]
+mod splat;
+#[cfg(not(target_vendor = "apple"))]
 mod terrain;
 #[cfg(not(target_vendor = "apple"))]
 mod texture;
