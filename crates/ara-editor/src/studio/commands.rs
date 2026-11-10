@@ -240,7 +240,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "create.group" => {
             let selected = target.entities(&e.state);
-            match crate::shell::hierarchy_actions::group(e, &s.resolved, &selected) {
+            match crate::hierarchy_actions::group(e, &s.resolved, &selected) {
                 Ok(parent) => select(e, vec![parent]),
                 Err(error) => Err(error),
             }
