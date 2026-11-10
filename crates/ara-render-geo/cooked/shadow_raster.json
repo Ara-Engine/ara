@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1",
+  "key": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8",
   "stages": [
     {
-      "dxil": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowFragment.dxil",
+      "dxil": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowFragment.dxil",
       "dxil_hash": "b749e14221e796fd93670a5bdc19d445a692f3d4cb3eacdfbc4250a7e0ed9054",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowFragment.metallib",
+        "metallib": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowFragment.metallib",
         "metallib_hash": "d9840e188150b3cc145829b1ca89eca37f6f5ca67d3f1e8eda8e09260d99d3c9",
-        "reflection": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "shadowFragment",
-      "spirv": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowFragment.spv",
+      "spirv": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "21d1f245652a3c63d05e7a48f3ce88ad429434083dbed6ec788c93b822b178ab",
       "stage": "fragment"
     },
     {
-      "dxil": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowVertex.dxil",
+      "dxil": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowVertex.dxil",
       "dxil_hash": "bbd8894f02859c85ed3ffe4a829ca9f18cc95b1baa12e2a74043ee15c6b2fffa",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowVertex.metallib",
+        "metallib": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowVertex.metallib",
         "metallib_hash": "e4810a11d8c6244766a1ffb83037e19d9bcfa5985d3061f242ea68b38ab8ed56",
-        "reflection": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "shadowVertex",
-      "spirv": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/shadow_raster/shadowVertex.spv",
+      "spirv": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/shadow_raster/shadowVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "f89c1493328990a386fad160ff5ca7b38c1637e6d9375145fdcd1efccb42d7a6",
       "stage": "vertex"
@@ -42,6 +42,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

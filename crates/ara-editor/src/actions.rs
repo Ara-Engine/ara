@@ -1090,8 +1090,14 @@ impl EditorService {
             }
             "editor.layout" => {
                 let p: EditorLayout = parse(params)?;
-                if p.window.is_some() && p.ratio.is_none() {
-                    return Err(vec![crate::invalid("window requires a splitter ratio")]);
+                let front = p.front.unwrap_or(false);
+                if p.window.is_some() && p.ratio.is_none() && !front {
+                    return Err(vec![crate::invalid(
+                        "window requires a splitter ratio or front",
+                    )]);
+                }
+                if p.window.is_none() && front {
+                    return Err(vec![crate::invalid("front needs a floating window")]);
                 }
                 let mut dock = state.dock().map_err(ui_error)?;
                 if let Some(ratio) = p.ratio {
@@ -1128,6 +1134,16 @@ impl EditorService {
                     dock.expand_panel(&panel);
                 }
                 state.set_dock(&dock);
+                // In front: last in the floating list draws on top.
+                if front && let Some(window) = p.window.as_deref() {
+                    let at = state
+                        .floating
+                        .iter()
+                        .position(|f| f.id == window)
+                        .ok_or_else(|| vec![crate::invalid("no floating window with that id")])?;
+                    let raised = state.floating.remove(at);
+                    state.floating.push(raised);
+                }
             }
             "editor.paint" => {
                 let p: EditorPaint = parse(params)?;

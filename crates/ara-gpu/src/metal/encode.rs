@@ -10,13 +10,16 @@
 //! wait on all earlier queue work, which keeps Vulkan's cross-submission barrier
 //! semantics conservative. Each draw and dispatch binds a fresh top-level argument
 //! buffer (root constants plus table addresses) through the argument table.
+mod barriers;
+mod transfers;
+
 use super::MetalDevice;
 use super::abi::{ARGUMENT_BUFFER_BIND_POINT, VERTEX_BUFFER_BIND_POINT};
-use super::native::{level_bytes, nil};
+use super::native::nil;
 use super::pipeline::NativePipeline;
 use super::scratch::{Chunk, Scratch};
 use crate::attachments::{self, Load, Ops};
-use crate::commands::{Attachment, Command, CommandList};
+use crate::commands::{Command, CommandList};
 use crate::{Access, GpuError, Pipeline, Queue, Result};
 use ash::vk;
 use objc2::rc::Retained;
@@ -104,6 +107,7 @@ struct Recording<'a> {
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
     formats: (Vec<MTLPixelFormat>, Option<MTLPixelFormat>),
+    samples: crate::texture::SampleCount,
     /// Timestamp heap and the list's first slot, laid out as in [`super::timestamps`];
     /// none for an untimed list.
     heap: Option<(&'a ProtocolObject<dyn MTL4CounterHeap>, usize)>,
@@ -166,6 +170,7 @@ impl MetalDevice {
             bound: None,
             root: [0; 8],
             formats: (Vec::new(), None),
+            samples: crate::texture::SampleCount::One,
             heap,
             stamp: None,
             aliases: Vec::new(),
@@ -193,28 +198,8 @@ impl MetalDevice {
 
     fn encode_one(&mut self, rec: &mut Recording, queue: Queue, command: &Command) -> Result<()> {
         match command {
-            Command::Barrier(barrier) => {
-                if matches!(rec.active, Active::Render(_)) {
-                    return Err(GpuError::Contract(
-                        "Barriers must be outside rendering scopes".into(),
-                    ));
-                }
-                // A discard orders nothing; `attachments::ops` already consumed it.
-                if barrier.after == Access::Undefined {
-                    return Ok(());
-                }
-                // Order later work in this encoder, and in any encoder opened next.
-                if let Active::Compute(encoder) = &rec.active {
-                    encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
-                        COMPUTE_STAGES,
-                        COMPUTE_STAGES,
-                        MTL4VisibilityOptions::Device,
-                    );
-                }
-                let (after, before) = (stages(barrier.before), stages(barrier.after));
-                if !after.is_empty() && !before.is_empty() {
-                    rec.wait = (rec.wait.0 | after, rec.wait.1 | before);
-                }
+            Command::Barrier(_) | Command::Barriers(_) => {
+                self.encode_barriers(rec, command.barriers())?
             }
             Command::Pipeline(pipeline) => {
                 self.pipelines.get(*pipeline)?;
@@ -242,11 +227,17 @@ impl MetalDevice {
                         );
                 }
             }
-            Command::BeginRendering {
-                colors,
-                depth,
-                size,
-            } => {
+            Command::BeginRendering { size, .. }
+            | Command::BeginRenderingResolved { size, .. }
+            | Command::BeginRenderingSubresources { size, .. } => {
+                let colors = command
+                    .color_attachments()
+                    .expect("render scope has colors");
+                if colors.len() > 8 || command.resolve_count().is_some_and(|n| n != colors.len()) {
+                    return Err(GpuError::Contract(
+                        "Invalid color/resolve target count".into(),
+                    ));
+                }
                 if queue != Queue::Graphics
                     || size.contains(&0)
                     || matches!(rec.active, Active::Render(_))
@@ -254,7 +245,13 @@ impl MetalDevice {
                     return Err(GpuError::Contract("Invalid rendering scope".into()));
                 }
                 rec.end();
-                let encoder = self.begin_rendering(rec, colors, depth.as_ref(), *size)?;
+                let encoder = self.begin_rendering(
+                    rec,
+                    colors,
+                    command.depth_attachment(),
+                    *size,
+                    command.resolve_targets(),
+                )?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
                 rec.stamp = None;
@@ -268,6 +265,9 @@ impl MetalDevice {
                 depth,
             } => self.clear_depth(rec, *origin, *size, *depth)?,
             Command::Draw(draw) => {
+                if rec.pipeline.is_some_and(|p| self.pipelines.get(p).is_ok_and(|p| matches!(p,NativePipeline::Render{raster,..} if !raster.vertex_layouts.is_empty()))) {
+                    return Err(GpuError::Contract("Explicit vertex layouts require DrawVertexBuffers".into()));
+                }
                 let indices = &self.buffers.get(draw.indices)?.raw;
                 let vertices = &self.buffers.get(draw.vertices)?.raw;
                 let first = u64::from(draw.first_index) * 4;
@@ -297,6 +297,79 @@ impl MetalDevice {
                             index_address,
                             (end - first) as usize,
                         );
+                }
+            }
+            Command::DrawVertexBuffers {
+                vertices,
+                indices,
+                first_index,
+                index_count,
+                vertex_offset,
+                instances,
+                first_instance,
+            } => {
+                let handle = rec
+                    .pipeline
+                    .ok_or_else(|| GpuError::Contract("Draw without pipeline".into()))?;
+                let NativePipeline::Render { raster, .. } = self.pipelines.get(handle)? else {
+                    return Err(GpuError::Contract(
+                        "Vertex draw needs raster pipeline".into(),
+                    ));
+                };
+                let layouts = &raster.vertex_layouts;
+                if layouts.is_empty()
+                    || layouts.len() != vertices.len()
+                    || *index_count == 0
+                    || *instances == 0
+                {
+                    return Err(GpuError::Contract(
+                        "Vertex stream count or draw count mismatch".into(),
+                    ));
+                }
+                for (binding, layout) in vertices.iter().zip(layouts) {
+                    let raw = &self.buffers.get(binding.buffer)?.raw;
+                    let records = if layout.step == crate::raster::VertexStep::Instance {
+                        u64::from(*first_instance) + u64::from(*instances)
+                    } else {
+                        1
+                    };
+                    let length = records * u64::from(layout.stride);
+                    if !binding.offset.is_multiple_of(4)
+                        || binding
+                            .offset
+                            .checked_add(length)
+                            .is_none_or(|end| end > raw.size)
+                        || !raw.usage.contains(vk::BufferUsageFlags::VERTEX_BUFFER)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid vertex stream range or usage".into(),
+                        ));
+                    }
+                }
+                let raw = &self.buffers.get(*indices)?.raw;
+                let first = u64::from(*first_index) * 4;
+                let length = u64::from(*index_count) * 4;
+                if first + length > raw.size
+                    || !raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
+                {
+                    return Err(GpuError::Contract("Invalid index range".into()));
+                }
+                let address = raw.buffer.gpuAddress() + first;
+                self.bind_render(rec, DrawKind::Indexed)?;
+                for (i, binding) in vertices.iter().enumerate() {
+                    let raw = &self.buffers.get(binding.buffer)?.raw;
+                    // SAFETY: checked resident vertex stream range; argument-table bindings are snapshotted by the draw.
+                    unsafe {
+                        self.table.setAddress_atIndex(
+                            raw.buffer.gpuAddress() + binding.offset,
+                            VERTEX_BUFFER_BIND_POINT + i,
+                        );
+                    }
+                }
+                // SAFETY: index and vertex streams are resident and retained; counts and instance stream ranges are checked.
+                unsafe {
+                    rec.render()?.drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferLength_instanceCount_baseVertex_baseInstance(
+                    MTLPrimitiveType::Triangle,*index_count as usize,MTLIndexType::UInt32,address,length as usize,*instances as usize,*vertex_offset as isize,*first_instance as usize);
                 }
             }
             Command::DrawIndirect { arguments, offset } => {
@@ -391,23 +464,80 @@ impl MetalDevice {
                 *destination_offset,
                 *size,
             )?,
+            Command::FillBuffer {
+                destination,
+                offset,
+                size,
+                value,
+            } => {
+                let target = &self.buffers.get(*destination)?.raw;
+                crate::transfers::validate_fill(*offset, *size, target.size)?;
+                if !target.usage.contains(vk::BufferUsageFlags::TRANSFER_DST) {
+                    return Err(GpuError::Contract(
+                        "Fill requires transfer destination usage".into(),
+                    ));
+                }
+                let buffer = target.buffer.clone();
+                let word = value.to_le_bytes();
+                if word.iter().all(|b| *b == word[0]) {
+                    // SAFETY: the aligned range is in bounds and the resident buffer is retained.
+                    unsafe {
+                        rec.compute(self)?.fillBuffer_range_value(
+                            &buffer,
+                            objc2_foundation::NSRange::new(*offset as usize, *size as usize),
+                            word[0],
+                        );
+                    }
+                } else {
+                    let bytes: Vec<u8> = word
+                        .into_iter()
+                        .cycle()
+                        .take((*size).min(256 * 1024) as usize)
+                        .collect();
+                    let (chunk, at) = rec.scratch.write(
+                        &mut self.scratch,
+                        &self.device,
+                        &mut *rec.created,
+                        &bytes,
+                    )?;
+                    let encoder = rec.compute(self)?;
+                    let mut written = 0;
+                    while written < *size {
+                        let count = (*size - written).min(bytes.len() as u64);
+                        // SAFETY: both ranges are in bounds; the scratch chunk remains resident until completion.
+                        unsafe {
+                            encoder.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
+                                &chunk,
+                                at as usize,
+                                &buffer,
+                                (*offset + written) as usize,
+                                count as usize,
+                            );
+                        }
+                        written += count;
+                    }
+                }
+            }
             Command::UpdateBuffer {
                 destination,
                 offset,
                 bytes,
             } => {
-                if bytes.is_empty()
-                    || bytes.len() > 65_536
-                    || !bytes.len().is_multiple_of(4)
-                    || !offset.is_multiple_of(4)
-                {
+                if bytes.is_empty() || !bytes.len().is_multiple_of(4) || !offset.is_multiple_of(4) {
                     return Err(GpuError::Contract("Invalid ordered buffer update".into()));
                 }
                 let (chunk, at) =
                     rec.scratch
                         .write(&mut self.scratch, &self.device, &mut *rec.created, bytes)?;
                 let target = self.buffers.get(*destination)?;
-                if offset + bytes.len() as u64 > target.raw.size {
+                if offset
+                    .checked_add(bytes.len() as u64)
+                    .is_none_or(|end| end > target.raw.size)
+                    || !target
+                        .raw
+                        .usage
+                        .contains(vk::BufferUsageFlags::TRANSFER_DST)
+                {
                     return Err(GpuError::Contract("Update exceeds buffer".into()));
                 }
                 let encoder = rec.compute(self)?;
@@ -432,6 +562,63 @@ impl MetalDevice {
                     MTL4VisibilityOptions::Device,
                 );
             }
+            Command::UploadImageRegion {
+                source,
+                destination,
+                buffer_offset,
+                region,
+            } => self.copy_image_region_buffer(
+                rec,
+                *source,
+                *destination,
+                *buffer_offset,
+                *region,
+                true,
+            )?,
+            Command::ReadImageRegion {
+                source,
+                destination,
+                buffer_offset,
+                region,
+            } => self.copy_image_region_buffer(
+                rec,
+                *destination,
+                *source,
+                *buffer_offset,
+                *region,
+                false,
+            )?,
+            Command::CopyImageRegion {
+                source,
+                destination,
+                from,
+                to,
+            } => {
+                let a = &self.images.get(*source)?.raw;
+                let b = &self.images.get(*destination)?.raw;
+                a.shape
+                    .region(a.size, *from, a.info.block, u64::from(a.info.block_bytes))?;
+                b.shape
+                    .region(b.size, *to, b.info.block, u64::from(b.info.block_bytes))?;
+                if source == destination
+                    || a.info.pixel != b.info.pixel
+                    || from.extent != to.extent
+                    || from.layer_count != to.layer_count
+                    || !a.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !b.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                {
+                    return Err(GpuError::Contract("Invalid image region copy".into()));
+                }
+                let encoder = rec.compute(self)?;
+                for layer in 0..from.layer_count {
+                    // SAFETY: validated regions of distinct compatible resident textures.
+                    unsafe {
+                        encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
+                        &a.texture,(from.base_layer+layer) as usize,from.mip as usize,origin(from.origin),extent(from.extent),
+                        &b.texture,(to.base_layer+layer) as usize,to.mip as usize,origin(to.origin));
+                    }
+                }
+            }
             Command::UploadImage {
                 source,
                 destination,
@@ -440,12 +627,65 @@ impl MetalDevice {
                 source,
                 destination,
             } => self.copy_image_buffer(rec, *destination, *source, false)?,
+            Command::ResolveImage {
+                source,
+                destination,
+            } => {
+                if matches!(rec.active, Active::Render(_)) {
+                    return Err(GpuError::Contract(
+                        "Resolve must be outside rendering".into(),
+                    ));
+                }
+                let a = &self.images.get(*source)?.raw;
+                let b = &self.images.get(*destination)?.raw;
+                if a.shape.samples != crate::texture::SampleCount::Four
+                    || b.shape.samples != crate::texture::SampleCount::One
+                    || a.size != b.size
+                    || a.info.pixel != b.info.pixel
+                    || a.info.depth
+                    || a.shape.layers != 1
+                    || b.shape.layers != 1
+                    || !a.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !b.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                    || !b.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                {
+                    return Err(GpuError::Contract("Invalid color resolve".into()));
+                }
+                rec.end();
+                let pass = MTL4RenderPassDescriptor::new();
+                // SAFETY: attachment zero is in the fixed color attachment array.
+                let attachment = unsafe { pass.colorAttachments().objectAtIndexedSubscript(0) };
+                attachment.setTexture(Some(&a.texture));
+                attachment.setResolveTexture(Some(&b.texture));
+                attachment.setLoadAction(MTLLoadAction::Load);
+                attachment.setStoreAction(MTLStoreAction::StoreAndMultisampleResolve);
+                let encoder = rec
+                    .cmd
+                    .renderCommandEncoderWithDescriptor(&pass)
+                    .ok_or_else(|| nil("resolve encoder"))?;
+                encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
+                    MTLStages::All,
+                    MTLStages::Fragment,
+                    MTL4VisibilityOptions::Device,
+                );
+                encoder.endEncoding();
+                rec.wait = (MTLStages::All, RENDER_STAGES.union(COMPUTE_STAGES));
+            }
             Command::CopyImage {
                 source,
                 destination,
             } => {
                 let (from, to) = (self.images.get(*source)?, self.images.get(*destination)?);
                 if source == destination
+                    || from.raw.info.depth
+                    || from.raw.shape.dimension != crate::texture::TextureDimension::D2
+                    || to.raw.shape.dimension != crate::texture::TextureDimension::D2
+                    || from.raw.shape.layers != 1
+                    || to.raw.shape.layers != 1
+                    || from.raw.shape.samples != crate::texture::SampleCount::One
+                    || to.raw.shape.samples != crate::texture::SampleCount::One
+                    || !from.raw.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !to.raw.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
                     || from.raw.size != to.raw.size
                     || from.raw.info.pixel != to.raw.info.pixel
                 {
@@ -475,6 +715,10 @@ impl MetalDevice {
                 rec.timestamp(2 + 2 * pass);
                 rec.cmd.popDebugGroup();
             }
+            Command::RefitAccelerationStructure(structure) => {
+                let encoder = rec.compute(self)?;
+                self.encode_as_refit(encoder, *structure)?;
+            }
             Command::BuildAccelerationStructure(structure) => {
                 let encoder = rec.compute(self)?;
                 self.encode_as_build(encoder, *structure)?;
@@ -491,16 +735,35 @@ impl MetalDevice {
     fn begin_rendering(
         &self,
         rec: &mut Recording,
-        colors: &[Attachment],
-        depth: Option<&Attachment>,
+        colors: impl ExactSizeIterator<Item = crate::rendering::RenderAttachment> + Clone,
+        depth: Option<crate::rendering::RenderAttachment>,
         size: [u32; 2],
+        mut resolves: impl Iterator<Item = Option<crate::rendering::RenderTarget>>,
     ) -> Result<Retained<ProtocolObject<dyn MTL4RenderCommandEncoder>>> {
+        if colors.len() > 8 {
+            return Err(GpuError::Contract("Too many color attachments".into()));
+        }
+        let mut samples = None;
+        for attachment in colors.clone().chain(depth) {
+            let image = &self.images.get(attachment.target.image)?.raw;
+            attachment.target.extent(image.shape, image.size)?;
+            if image.shape.dimension != crate::texture::TextureDimension::D2 {
+                return Err(GpuError::Contract(
+                    "Rendering requires 2D attachments".into(),
+                ));
+            }
+            if samples.is_some_and(|s| s != image.shape.samples) {
+                return Err(GpuError::Contract("Attachment sample counts differ".into()));
+            }
+            samples = Some(image.shape.samples);
+        }
+        rec.samples = samples.unwrap_or_default();
         let pass = MTL4RenderPassDescriptor::new();
         pass.setRenderTargetWidth(size[0] as usize);
         pass.setRenderTargetHeight(size[1] as usize);
         // A pass without attachments (fragments that only write buffers, such as the
         // geometry renderer's atomic shadow-depth raster) takes its sample count here.
-        if colors.is_empty() && depth.is_none() {
+        if colors.len() == 0 && depth.is_none() {
             // SAFETY: One sample is a count every Metal device supports.
             unsafe { pass.setDefaultRasterSampleCount(1) };
         }
@@ -508,17 +771,51 @@ impl MetalDevice {
             .scopes
             .next()
             .expect("attachments::ops lists every rendering scope of the list");
-        for (index, (attachment, ops)) in colors.iter().zip(&ops).enumerate() {
-            let image = self.images.get(attachment.image)?;
-            if image.raw.info.depth || image.raw.size != size {
+        for (index, (attachment, ops)) in colors.clone().zip(&ops).enumerate() {
+            let image = self.images.get(attachment.target.image)?;
+            if image.raw.info.depth
+                || attachment
+                    .target
+                    .extent(image.raw.shape, image.raw.size)?
+                    .iter()
+                    .zip(size)
+                    .any(|(limit, n)| n > *limit)
+                || !image
+                    .raw
+                    .usage
+                    .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            {
                 return Err(GpuError::Contract("Color attachment mismatch".into()));
             }
             // SAFETY: Metal supports eight color attachments; more fails validation.
             let color = unsafe { pass.colorAttachments().objectAtIndexedSubscript(index) };
             color.setTexture(Some(&image.raw.texture));
+            color.setLevel(attachment.target.mip as usize);
+            color.setSlice(attachment.target.layer as usize);
             let (load, store) = actions(*ops);
             color.setLoadAction(load);
             color.setStoreAction(store);
+            if let Some(resolve) = resolves.next().flatten() {
+                let target = &self.images.get(resolve.image)?.raw;
+                if image.raw.shape.samples != crate::texture::SampleCount::Four
+                    || target.shape.samples != crate::texture::SampleCount::One
+                    || attachment.target.extent(image.raw.shape, image.raw.size)?
+                        != resolve.extent(target.shape, target.size)?
+                    || image.raw.info.pixel != target.info.pixel
+                    || target.shape.dimension != crate::texture::TextureDimension::D2
+                    || !target.usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                {
+                    return Err(GpuError::Contract("Invalid in-pass color resolve".into()));
+                }
+                color.setResolveTexture(Some(&target.texture));
+                color.setResolveLevel(resolve.mip as usize);
+                color.setResolveSlice(resolve.layer as usize);
+                color.setStoreAction(if ops.store {
+                    MTLStoreAction::StoreAndMultisampleResolve
+                } else {
+                    MTLStoreAction::MultisampleResolve
+                });
+            }
             if let Some([r, g, b, a]) = attachment.clear {
                 color.setClearColor(MTLClearColor {
                     red: f64::from(r),
@@ -529,12 +826,25 @@ impl MetalDevice {
             }
         }
         if let Some(attachment) = depth {
-            let image = self.images.get(attachment.image)?;
-            if !image.raw.info.depth || image.raw.size != size {
+            let image = self.images.get(attachment.target.image)?;
+            if !image.raw.info.depth
+                || attachment
+                    .target
+                    .extent(image.raw.shape, image.raw.size)?
+                    .iter()
+                    .zip(size)
+                    .any(|(limit, n)| n > *limit)
+                || !image
+                    .raw
+                    .usage
+                    .contains(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            {
                 return Err(GpuError::Contract("Depth attachment mismatch".into()));
             }
             let target = pass.depthAttachment();
             target.setTexture(Some(&image.raw.texture));
+            target.setLevel(attachment.target.mip as usize);
+            target.setSlice(attachment.target.layer as usize);
             let (load, store) = actions(ops[colors.len()]);
             target.setLoadAction(load);
             target.setStoreAction(store);
@@ -546,9 +856,11 @@ impl MetalDevice {
             .cmd
             .renderCommandEncoderWithDescriptor(&pass)
             .ok_or_else(|| nil("render encoder"))?;
-        let pixel = |a: &Attachment| self.images.get(a.image).map(|i| i.raw.info.pixel);
+        let pixel = |a: crate::rendering::RenderAttachment| {
+            self.images.get(a.target.image).map(|i| i.raw.info.pixel)
+        };
         rec.formats = (
-            colors.iter().map(pixel).collect::<Result<_>>()?,
+            colors.clone().map(pixel).collect::<Result<_>>()?,
             depth.map(pixel).transpose()?,
         );
         if let Some((after, before)) = rec.take_wait(RENDER_STAGES) {
@@ -591,11 +903,13 @@ impl MetalDevice {
             self.clear = Some(super::clear::Clear::cooked(&self.device)?);
         }
         let clear = self.clear.as_mut().expect("clear pipeline loaded above");
-        let state = clear.pipeline(&self.compiler, &rec.formats.0)?;
+        let state = clear.pipeline(&self.compiler, &rec.formats.0, rec.samples)?;
         let depth_state = clear.depth.clone();
         let encoder = rec.render()?;
         encoder.setRenderPipelineState(&state);
         encoder.setDepthStencilState(Some(&depth_state));
+        encoder.setCullMode(MTLCullMode::None);
+        encoder.setDepthBias_slopeScale_clamp(0.0, 0.0, 0.0);
         let (viewport, scissor) = view(origin, size);
         encoder.setViewport(viewport);
         encoder.setScissorRect(scissor);
@@ -628,17 +942,24 @@ impl MetalDevice {
             colors,
             depth_format,
             vertex_stride,
+            raster,
         } = self.pipelines.get(handle)?
         else {
             return Err(GpuError::Contract("Draw with a compute pipeline".into()));
         };
         let encoder = rec.render()?;
-        if *colors != rec.formats.0 || *depth_format != rec.formats.1 {
+        if *colors != rec.formats.0
+            || *depth_format != rec.formats.1
+            || raster.samples != rec.samples
+        {
             return Err(GpuError::Contract(
                 "Pipeline and rendering attachment formats differ".into(),
             ));
         }
-        if kind != DrawKind::Fullscreen && (*vertex_stride != 0) != (kind == DrawKind::Indexed) {
+        if kind != DrawKind::Fullscreen
+            && (*vertex_stride != 0 || !raster.vertex_layouts.is_empty())
+                != (kind == DrawKind::Indexed)
+        {
             return Err(GpuError::Contract(
                 "Draw kind does not match the pipeline vertex input".into(),
             ));
@@ -646,6 +967,19 @@ impl MetalDevice {
         if rec.bound != Some(handle) {
             encoder.setRenderPipelineState(state);
             encoder.setDepthStencilState(depth.as_deref());
+            encoder.setCullMode(match raster.cull {
+                crate::raster::CullMode::None => MTLCullMode::None,
+                crate::raster::CullMode::Front => MTLCullMode::Front,
+                crate::raster::CullMode::Back => MTLCullMode::Back,
+            });
+            encoder.setFrontFacingWinding(
+                if raster.front_face == crate::raster::FrontFace::Clockwise {
+                    MTLWinding::Clockwise
+                } else {
+                    MTLWinding::CounterClockwise
+                },
+            );
+            encoder.setDepthBias_slopeScale_clamp(raster.depth_bias, raster.depth_bias_slope, 0.0);
             rec.bound = Some(handle);
         }
         self.bind_top_level(rec)
@@ -683,109 +1017,6 @@ impl MetalDevice {
         unsafe {
             self.table
                 .setAddress_atIndex(chunk.gpuAddress() + offset, ARGUMENT_BUFFER_BIND_POINT);
-        }
-        Ok(())
-    }
-
-    /// GPU address of an indirect argument record in an `INDIRECT_BUFFER` buffer.
-    fn indirect_address(&self, buffer: crate::Buffer, offset: u64, len: u64) -> Result<u64> {
-        let raw = &self.buffers.get(buffer)?.raw;
-        if !offset.is_multiple_of(4)
-            || offset.checked_add(len).is_none_or(|end| end > raw.size)
-            || !raw.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
-        {
-            return Err(GpuError::Contract("Indirect record exceeds buffer".into()));
-        }
-        Ok(raw.buffer.gpuAddress() + offset)
-    }
-
-    fn copy_buffer(
-        &self,
-        rec: &mut Recording,
-        source: crate::Buffer,
-        source_offset: u64,
-        destination: crate::Buffer,
-        destination_offset: u64,
-        size: u64,
-    ) -> Result<()> {
-        let (from, to) = (self.buffers.get(source)?, self.buffers.get(destination)?);
-        let fits =
-            |offset: u64, total: u64| offset.checked_add(size).is_some_and(|end| end <= total);
-        if source == destination
-            || size == 0
-            || !size.is_multiple_of(4)
-            || !source_offset.is_multiple_of(4)
-            || !destination_offset.is_multiple_of(4)
-            || !fits(source_offset, from.raw.size)
-            || !fits(destination_offset, to.raw.size)
-        {
-            return Err(GpuError::Contract("Invalid buffer copy".into()));
-        }
-        let (from, to) = (from.raw.buffer.clone(), to.raw.buffer.clone());
-        // SAFETY: both ranges were bounds-checked; the buffers are distinct and resident.
-        unsafe {
-            rec.compute(self)?
-                .copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
-                    &from,
-                    source_offset as usize,
-                    &to,
-                    destination_offset as usize,
-                    size as usize,
-                );
-        }
-        Ok(())
-    }
-
-    /// Tightly packed buffer <-> image copies of every level, finest first.
-    fn copy_image_buffer(
-        &self,
-        rec: &mut Recording,
-        buffer: crate::Buffer,
-        image: crate::Image,
-        upload: bool,
-    ) -> Result<()> {
-        let (raw_buffer, raw_image) =
-            (&self.buffers.get(buffer)?.raw, &self.images.get(image)?.raw);
-        let total: u64 = (0..raw_image.levels)
-            .map(|level| level_bytes(&raw_image.info, raw_image.size, level).1)
-            .sum();
-        if total > raw_buffer.size {
-            return Err(GpuError::Contract("Image copy exceeds buffer".into()));
-        }
-        // Depth32Float copies go through the depth plane explicitly.
-        let blit = if raw_image.info.depth {
-            MTLBlitOption::DepthFromDepthStencil
-        } else {
-            MTLBlitOption::None
-        };
-        let (buffer, texture) = (raw_buffer.buffer.clone(), raw_image.texture.clone());
-        let (info, size, levels) = (&raw_image.info, raw_image.size, raw_image.levels);
-        let mut offset = 0;
-        let encoder = rec.compute(self)?;
-        for level in 0..levels {
-            let (row, bytes) = level_bytes(info, size, level);
-            let extent = MTLSize {
-                width: (size[0] >> level).max(1) as usize,
-                height: (size[1] >> level).max(1) as usize,
-                depth: 1,
-            };
-            let origin = MTLOrigin { x: 0, y: 0, z: 0 };
-            // SAFETY: the packed level lies inside the buffer (checked total) and the
-            // region is the whole level of a resident texture.
-            unsafe {
-                if upload {
-                    encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin_options(
-                        &buffer, offset as usize, row as usize, bytes as usize, extent,
-                        &texture, 0, level as usize, origin, blit,
-                    );
-                } else {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                        &texture, 0, level as usize, origin, extent,
-                        &buffer, offset as usize, row as usize, bytes as usize, blit,
-                    );
-                }
-            }
-            offset += bytes;
         }
         Ok(())
     }
@@ -891,5 +1122,20 @@ impl Recording<'_> {
             Active::Render(encoder) => encoder.endEncoding(),
             Active::None => {}
         }
+    }
+}
+
+fn origin(v: [u32; 3]) -> MTLOrigin {
+    MTLOrigin {
+        x: v[0] as usize,
+        y: v[1] as usize,
+        z: v[2] as usize,
+    }
+}
+fn extent(v: [u32; 3]) -> MTLSize {
+    MTLSize {
+        width: v[0] as usize,
+        height: v[1] as usize,
+        depth: v[2] as usize,
     }
 }

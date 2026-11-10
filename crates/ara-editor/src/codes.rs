@@ -19,3 +19,7 @@ pub const BUILD: Code = Code(4505);
 pub const MISSING_SOURCE: Code = Code(4506);
 /// An older saved layout was reset to the current default.
 pub const LAYOUT_RESET: Code = Code(4507);
+
+/// Synthetic editor message used by headless Console/Problems verification.
+#[cfg(test)]
+pub const DIAGNOSTIC_SAMPLE: Code = Code(4508);

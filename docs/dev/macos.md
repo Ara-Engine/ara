@@ -56,10 +56,15 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 
 ## Shaders
 
-- **Windows is the canonical cook host.** Never commit `cooked/` artifacts produced
-  on a Mac. The Mac's `slangc` cannot load `dxc` for the mandatory DXIL target, and
-  its build differs from the Windows one, so the cook key would differ even though
-  the SPIR-V bytes are identical.
+- **Windows is the default cook host.** D37 permits an explicitly requested Mac
+  test-cohort refresh when every carried target is rebuilt. The Mac SDK's Slang
+  cannot load DXC downstream; the cooker emits HLSL and invokes the SDK's `dxc`
+  executable beside `slangc` for SM6.6 DXIL, then runs the converter normally.
+  The recipe, DXC executable and Slang/DXC libraries enter its distinct Mac key.
+  Do not claim the Windows key or publish a partial cohort as a complete refresh.
+  Converter4.0.3 can run from an expanded downloaded pkg without an admin install:
+  create the expansion's parent, use `pkgutil --expand-full`, and point
+  `ARA_METAL_SHADERCONVERTER` at its `Payload/usr/local/bin/metal-shaderconverter`.
 - Committed cooks are loaded unchanged: pipeline loading checks the schema, binding
   layout hash and per-artifact SHA-256, never the compiler key.
 - Metal needs `CookedStage::metal` (metallib + converter reflection). The cook adds it
@@ -68,9 +73,10 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
   (ARA6007) and the Metal backend refuses those pipelines with `ARA_GPU_CONTRACT`.
 - `crates/ara-shader-cook/metal/root-signature.json` is the one global root
   signature. It mirrors the Vulkan set-0 layout; the runtime side of the same
-  layout is `crates/ara-gpu/src/metal/abi.rs`. The converter appends the three
-  static samplers as a fifth table, so every stage's top-level argument buffer is
-  32 constant bytes plus five table addresses (72 bytes).
+  layout is `crates/ara-gpu/src/metal/abi.rs`. The v4 layout has regular and
+  comparison sampler tables at bytes 64 and 72: 32 constant bytes plus six table
+  addresses (80 bytes). New runtimes accept the old v3 72-byte prefix; new cooks
+  carry v4. Fresh converter cooks must verify both tables on Metal.
 
 ## Status
 

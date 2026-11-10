@@ -42,11 +42,14 @@ impl MetalDevice {
             ));
         }
         let size = [texture.width() as u32, texture.height() as u32];
+        let heap = texture.heap();
         self.adopt_image(NativeImage {
             texture,
+            heap,
             info,
             size,
             levels: 1,
+            shape: crate::texture::ImageShape::default(),
             usage,
             storage: None,
         })

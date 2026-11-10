@@ -1,10 +1,15 @@
 //! Keeps Renderlab's scene equal to the extracted frame's draws. Geometry and
 //! materials are shared by content key, objects follow their entity, and skinned
 //! primitives are posed on the GPU from the frame's palettes. Renderlab draws at
-//! most `TRACED_DRAWS` mesh-material groups per frame; draws beyond that are left
-//! out and reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives itself (foliage)
-//! are placed once per content key and then left alone.
-use crate::{gaps::Gaps, texture};
+//! most `TRACED_DRAWS` mesh-material groups per frame; past that, static groups merge
+//! into world-space batches per material (`batch`), and only what still does not fit
+//! is left out. Both are reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives
+//! itself (foliage) are placed once per content key and then left alone.
+use crate::{
+    batch::{self, Fate, Group},
+    gaps::Gaps,
+    texture,
+};
 use anyhow::{Context, Result};
 use ara_runtime::{
     extract::{Draw, Geometry, RenderFrame},
@@ -13,8 +18,9 @@ use ara_runtime::{
 use renderlab::{
     asset::{TangentBasis, TextureRole},
     engine::{
-        Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Primitive,
-        ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value, Vertex,
+        AlphaMask, Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId,
+        Primitive, ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value,
+        Vertex,
     },
 };
 use std::{
@@ -56,6 +62,15 @@ struct Object {
     skin: Option<(MeshId, usize)>,
 }
 
+/// One material's static batch: its members' triangles merged in world space.
+struct Batch {
+    /// The members' geometry and transforms the mesh was built from.
+    content: u64,
+    id: ObjectId,
+    mesh: MeshId,
+    material_slot: u64,
+}
+
 /// Renderlab handles for everything the frame draws.
 #[derive(Default)]
 pub(crate) struct Scene {
@@ -64,11 +79,15 @@ pub(crate) struct Scene {
     materials: HashMap<u64, Shared<MaterialId>>,
     textures: HashMap<(u64, u8), TextureId>,
     objects: HashMap<u64, Object>,
+    /// Static batches by material key (`batch`).
+    batches: HashMap<u64, Batch>,
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
     palette: Vec<Mat4>,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
+    /// Triangles of the largest mesh uploaded so far (`largest_triangles`).
+    largest: usize,
 }
 
 /// Renderlab's standard program with a `glow` parameter (cd/m²) that the surface
@@ -112,6 +131,47 @@ fn normal_mapped(draw: &Draw) -> bool {
     source(draw).is_some_and(|(m, _)| m.normal_texture.is_some())
 }
 
+/// How a draw's geometry is cut to its material's alpha: the base-colour map's alpha
+/// times `opacity`, kept where it reaches `cutoff`. Masked materials cut at their cutoff;
+/// blended ones whose alpha lives in the map (opacity maps) cut at half coverage.
+struct Cut<'a> {
+    texture: &'a ModelTexture,
+    opacity: f32,
+    cutoff: f32,
+}
+
+/// The cut a draw's material asks for; None for opaque materials and uniform glass.
+fn cut(draw: &Draw) -> Option<Cut<'_>> {
+    let (m, textures) = source(draw)?;
+    let texture = textures.get(m.base_color_texture?)?;
+    let opacity = m.base_color[3] * draw.color[3];
+    match m.alpha_mode {
+        1 => Some(Cut {
+            texture,
+            opacity,
+            cutoff: m.alpha_cutoff,
+        }),
+        2 if opacity >= 1. => Some(Cut {
+            texture,
+            opacity,
+            cutoff: 0.5,
+        }),
+        _ => None,
+    }
+}
+
+/// Whether the draw can be seen through (as `Scene::material` decides): such draws
+/// sort per object and never join a static batch.
+fn see_through(draw: &Draw) -> bool {
+    match source(draw) {
+        Some((m, _)) => {
+            m.transmission_factor > 0.
+                || (m.alpha_mode == 2 && m.base_color[3] * draw.color[3] < 1.)
+        }
+        None => draw.color[3] < 1.,
+    }
+}
+
 fn geometry_key(draw: &Draw) -> u64 {
     let hash = match &draw.geometry {
         Geometry::Shape { shape, size } => size.iter().fold(fnv(FNV, &[*shape as u8]), |h, v| {
@@ -122,7 +182,13 @@ fn geometry_key(draw: &Draw) -> u64 {
             &(*primitive as u64).to_le_bytes(),
         ),
     };
-    fnv(hash, &[u8::from(normal_mapped(draw))])
+    let hash = fnv(hash, &[u8::from(normal_mapped(draw))]);
+    // Cut geometry belongs to its mask as much as to its triangles: the material key
+    // names the mask's texture, opacity and cutoff.
+    match cut(draw) {
+        Some(_) => fnv(hash, &material_key(draw).to_le_bytes()),
+        None => hash,
+    }
 }
 
 fn material_key(draw: &Draw) -> u64 {
@@ -278,6 +344,12 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 }
 
 impl Scene {
+    /// Triangles of the largest mesh this scene has uploaded (cut meshes and static
+    /// batches included). Renderlab's non-RT shadows size their ids by it.
+    pub fn largest_triangles(&self) -> usize {
+        self.largest
+    }
+
     /// Makes Renderlab's objects equal `frame.draws` followed by `static_draws`
     /// (draws the bridge derives itself, such as foliage). `static_key` names the
     /// content of `static_draws`: while it is unchanged, draws already placed are not
@@ -294,9 +366,10 @@ impl Scene {
     ) -> Result<()> {
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
-        let mut live = HashSet::with_capacity(frame.draws.len() + static_draws.len());
-        let mut groups = HashSet::new();
-        let mut dropped = 0usize;
+        // Each draw's group, and the groups in order of first appearance.
+        let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
+        let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
+        let mut groups: Vec<Group> = Vec::new();
         let draws = frame
             .draws
             .iter()
@@ -315,15 +388,39 @@ impl Scene {
                 };
                 (mesh, material_key(draw))
             });
-            if !groups.contains(&(mesh, material)) {
-                if groups.len() >= budget {
+            let group = *index.entry((mesh, material)).or_insert_with(|| {
+                groups.push(Group {
+                    material,
+                    // Cut geometry comes from its own upload, so it never joins a batch.
+                    mergeable: matches!(mesh, MeshKey::Static(_))
+                        && !see_through(draw)
+                        && cut(draw).is_none(),
+                    objects: 0,
+                });
+                groups.len() - 1
+            });
+            groups[group].objects += 1;
+            keyed.push((draw, mesh, material, placed.is_some(), group));
+        }
+        let fates = batch::plan(&groups, budget);
+
+        let mut live = HashSet::with_capacity(keyed.len());
+        let mut merged: HashMap<u64, Vec<&Draw>> = HashMap::new();
+        let mut dropped = 0usize;
+        for (draw, mesh, material, placed, group) in keyed {
+            match fates[group] {
+                Fate::Dropped => {
                     dropped += 1;
                     continue;
                 }
-                groups.insert((mesh, material));
+                Fate::Merged => {
+                    merged.entry(material).or_default().push(draw);
+                    continue;
+                }
+                Fate::Own => {}
             }
             live.insert(draw.entity);
-            if placed.is_some() {
+            if placed {
                 continue;
             }
             if draw.paint.is_some() {
@@ -335,11 +432,21 @@ impl Scene {
             self.place(engine, frame, draw, mesh, material, gaps)?;
         }
         self.static_key = Some(static_key);
-        if dropped > 0 {
+        if !merged.is_empty() {
             gaps.limit(
                 "mesh-material groups per frame",
                 &format!(
-                    "{dropped} draws of this frame are not drawn (the limit is {MAX_GROUPS}, {reserved} of them terrain tiles)"
+                    "{} draws are merged into {} static batches to fit the limit of {MAX_GROUPS} ({reserved} of them terrain tiles); a batch whose members move is rebuilt",
+                    merged.values().map(Vec::len).sum::<usize>(),
+                    merged.len()
+                ),
+            );
+        }
+        if dropped > 0 {
+            gaps.limit(
+                "mesh-material groups after static batching",
+                &format!(
+                    "{dropped} draws of this frame are not drawn: more distinct materials than the limit of {MAX_GROUPS} ({reserved} of them terrain tiles)"
                 ),
             );
         }
@@ -352,7 +459,92 @@ impl Scene {
         for entity in gone {
             self.remove(engine, entity)?;
         }
+        self.sync_batches(engine, merged, gaps)
+    }
+
+    /// Makes the static batches equal `merged` (members by material key): a batch
+    /// whose members or their transforms changed is rebuilt, one no longer needed
+    /// is removed.
+    fn sync_batches(
+        &mut self,
+        engine: &mut Engine,
+        merged: HashMap<u64, Vec<&Draw>>,
+        gaps: &mut Gaps,
+    ) -> Result<()> {
+        let gone: Vec<u64> = self
+            .batches
+            .keys()
+            .filter(|material| !merged.contains_key(material))
+            .copied()
+            .collect();
+        for material in gone {
+            self.remove_batch(engine, material)?;
+        }
+        for (material, members) in merged {
+            let content = members
+                .iter()
+                .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
+                    let h = fnv(h, &geometry_key(draw).to_le_bytes());
+                    draw.world
+                        .to_cols_array()
+                        .iter()
+                        .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
+                });
+            if self
+                .batches
+                .get(&material)
+                .is_some_and(|b| b.content == content)
+            {
+                continue;
+            }
+            self.remove_batch(engine, material)?;
+            let first = members[0];
+            let wanted = normal_mapped(first);
+            let (mut vertices, mut indices) = (Vec::new(), Vec::new());
+            for draw in &members {
+                let (mut source, mut triangles) = triangles(draw)?;
+                if wanted {
+                    split_handedness(source.to_mut(), triangles.to_mut());
+                }
+                batch::append_world(
+                    &draw.world,
+                    &source,
+                    &triangles,
+                    &mut vertices,
+                    &mut indices,
+                );
+            }
+            let label = format!(
+                "a static batch of {} draws like `{}`",
+                members.len(),
+                first.label
+            );
+            self.largest = self.largest.max(indices.len() / 3);
+            let (mesh, tangents) = upload(engine, &label, &vertices, &indices, wanted, gaps)?;
+            let material_slot = fnv(material, &[u8::from(tangents)]);
+            let material_id = self.material(engine, first, material_slot, tangents, gaps)?;
+            let id = engine.spawn(mesh, material_id, Mat4::IDENTITY)?;
+            self.batches.insert(
+                material,
+                Batch {
+                    content,
+                    id,
+                    mesh,
+                    material_slot,
+                },
+            );
+        }
         Ok(())
+    }
+
+    /// Despawns a material's static batch and releases its mesh and its use of the material.
+    fn remove_batch(&mut self, engine: &mut Engine, material: u64) -> Result<()> {
+        let Some(batch) = self.batches.remove(&material) else {
+            return Ok(());
+        };
+        engine.despawn(batch.id)?;
+        engine.remove_mesh(batch.mesh)?;
+        self.release_material(engine, batch.material_slot)
     }
 
     /// Spawns, replaces or moves the object of one draw.
@@ -380,7 +572,7 @@ impl Scene {
                 }
                 (MeshKey::Skinned(_), joints) => {
                     let joints = joints.unwrap_or(0);
-                    let (id, tangents) = skinned_mesh(engine, draw, joints)?;
+                    let (id, tangents) = skinned_mesh(engine, draw, joints, gaps)?;
                     (id, Some((id, joints)), tangents)
                 }
             };
@@ -443,11 +635,16 @@ impl Scene {
             }
             (MeshKey::Skinned(_), None) => {}
         }
-        if let Some(shared) = self.materials.get_mut(&object.material_slot) {
+        self.release_material(engine, object.material_slot)
+    }
+
+    /// Drops one use of a shared material, removing it with its last user.
+    fn release_material(&mut self, engine: &mut Engine, slot: u64) -> Result<()> {
+        if let Some(shared) = self.materials.get_mut(&slot) {
             shared.users -= 1;
             if shared.users == 0 {
                 engine.remove_material(shared.id)?;
-                self.materials.remove(&object.material_slot);
+                self.materials.remove(&slot);
             }
         }
         Ok(())
@@ -468,34 +665,18 @@ impl Scene {
         }
         let wanted = normal_mapped(draw);
         let (mut source, mut indices) = triangles(draw)?;
+        if let Some(c) = cut(draw) {
+            let (id, triangles) = cut_mesh(engine, &source, &indices, &c, wanted, gaps)?;
+            self.largest = self.largest.max(triangles);
+            self.meshes.insert(key, (Shared { id, users: 1 }, false));
+            return Ok((id, false));
+        }
         if wanted {
             split_handedness(source.to_mut(), indices.to_mut());
         }
-        let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
-        let data = MeshData {
-            vertices: &vertices,
-            indices: &indices,
-        };
-        let frames = wanted.then(|| tangents(&source)).flatten();
-        let uploaded = frames
-            .as_ref()
-            .map(|frames| engine.create_mesh_with_tangents(&data, frames));
-        let (id, tangents) = match uploaded {
-            Some(Ok(id)) => (id, true),
-            rejected => {
-                if wanted {
-                    let why = match rejected {
-                        Some(Err(error)) => error.to_string(),
-                        _ => "a tangent is missing or lies along its normal".to_owned(),
-                    };
-                    gaps.unsupported(
-                        "normal maps on meshes without usable tangents",
-                        &format!("`{}` shades with its vertex normals ({why})", draw.label),
-                    );
-                }
-                (engine.create_mesh(&data)?, false)
-            }
-        };
+        let label = format!("`{}`", draw.label);
+        self.largest = self.largest.max(indices.len() / 3);
+        let (id, tangents) = upload(engine, &label, &source, &indices, wanted, gaps)?;
         self.meshes.insert(key, (Shared { id, users: 1 }, tangents));
         Ok((id, tangents))
     }
@@ -547,7 +728,14 @@ impl Scene {
             desc.normal_scale = m.normal_scale;
             let factor = draw.emissive_factor.unwrap_or(m.emissive);
             glow = scaled(factor);
-            emissive_map = m.emissive_texture.is_some();
+            // An emissive map glows uniformly at its mean colour: Renderlab materials
+            // have no slot for a fourth map yet.
+            if let Some(texture) = m.emissive_texture.and_then(|i| textures.get(i)) {
+                emissive_map = true;
+                let mean =
+                    texture::mean_linear(&ara_runtime_render::decode_texture(&texture.ktx2)?.rgba);
+                glow = std::array::from_fn(|i| glow[i] * mean[i]);
+            }
             let mut bind = |slot: Option<usize>, role: TextureRole| -> Result<Option<TextureRef>> {
                 let Some(texture) = slot.and_then(|index| textures.get(index)) else {
                     return Ok(None);
@@ -574,13 +762,17 @@ impl Scene {
             // A uniform alpha below one is see-through; alpha that lives only in the
             // base-colour map (masks, opacity maps) needs cutouts Renderlab makes from
             // geometry, so those draw opaque.
+            // Masks and opacity maps are cut into the geometry (`cut`); the material
+            // itself is then opaque.
             let mapped = m.alpha_mode != 0 && m.base_color_texture.is_some();
             blend = m.alpha_mode == 2 && desc.base_color[3] < 1.;
             if mapped && !blend {
-                gaps.unsupported(
-                    "alpha masks and opacity maps",
-                    "those materials draw opaque, without cutouts",
-                );
+                if m.alpha_mode == 2 {
+                    gaps.unsupported(
+                        "partial coverage from opacity maps",
+                        "they are cut where coverage reaches half, without blending",
+                    );
+                }
                 desc.base_color[3] = 1.;
             }
             // glTF transmission belongs to the dielectric part only: a metal does not
@@ -620,8 +812,12 @@ impl Scene {
         let glow = glow.map(|c| if c.is_finite() { c.max(0.) } else { 0. });
         if glow.iter().any(|c| *c > 0.) {
             if emissive_map {
-                gaps.unsupported("emissive maps", "the material does not emit or glow");
-            } else if let Some(program) = self.emissive_program(engine, gaps) {
+                gaps.unsupported(
+                    "emissive maps",
+                    "the surface glows uniformly at the map's mean colour",
+                );
+            }
+            if let Some(program) = self.emissive_program(engine, gaps) {
                 parameters = [("glow", Value::Vec3(glow))];
                 desc.program = Some(program);
                 desc.parameters = &parameters;
@@ -684,9 +880,115 @@ impl Scene {
     }
 }
 
+/// Uploads static triangles, with tangents when `wanted` (a normal-mapped material) and
+/// usable; otherwise without, reported under `label`. Returns the mesh and whether it
+/// carries tangents.
+fn upload(
+    engine: &mut Engine,
+    label: &str,
+    source: &[ModelVertex],
+    indices: &[u32],
+    wanted: bool,
+    gaps: &mut Gaps,
+) -> Result<(MeshId, bool)> {
+    let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
+    let data = MeshData {
+        vertices: &vertices,
+        indices,
+    };
+    let frames = wanted.then(|| tangents(source)).flatten();
+    let uploaded = frames
+        .as_ref()
+        .map(|frames| engine.create_mesh_with_tangents(&data, frames));
+    Ok(match uploaded {
+        Some(Ok(id)) => (id, true),
+        rejected => {
+            if wanted {
+                let why = match rejected {
+                    Some(Err(error)) => error.to_string(),
+                    _ => "a tangent is missing or lies along its normal".to_owned(),
+                };
+                gaps.unsupported(
+                    "normal maps on meshes without usable tangents",
+                    &format!("{label} shades with its vertex normals ({why})"),
+                );
+            }
+            (engine.create_mesh(&data)?, false)
+        }
+    })
+}
+
+/// Contour cells a mesh's cut may visit in all: its uv area times the cells per uv unit,
+/// squared. Bounds the cut's triangles on meshes whose uvs tile many times (fences).
+const CUT_CELLS: f64 = 65_536.;
+
+/// Uploads `source` cut to its material's alpha (`Cut`): Renderlab keeps the triangles
+/// where the mask passes, with new edges along the contour. Cut meshes carry no
+/// tangents, so a normal map on them is dropped (reported). Returns the mesh and its
+/// triangle count.
+fn cut_mesh(
+    engine: &mut Engine,
+    source: &[ModelVertex],
+    indices: &[u32],
+    c: &Cut<'_>,
+    normal_mapped: bool,
+    gaps: &mut Gaps,
+) -> Result<(MeshId, usize)> {
+    let decoded = ara_runtime_render::decode_texture(&c.texture.ktx2)?;
+    let [width, height] = decoded.size;
+    let mask = AlphaMask::from_rgba8(width, height, &decoded.rgba);
+    let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
+    let data = MeshData {
+        vertices: &vertices,
+        indices,
+    };
+    // About eight texels per contour cell, within the 32 to 128 cells per uv unit that
+    // foliage cards take, and coarser where the uvs cover many units (`CUT_CELLS`).
+    let uv_area: f64 = indices
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter_map(|t| {
+            let [a, b, c] = t.map(|i| source.get(i as usize).map(|v| v.uv));
+            let ([ax, ay], [bx, by], [cx, cy]) = (a?, b?, c?);
+            Some(0.5 * f64::from(((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)).abs()))
+        })
+        .sum();
+    let fine = (width.max(height) / 8).clamp(32, 128);
+    let bounded = (CUT_CELLS / uv_area.max(1e-6)).sqrt().clamp(4., 128.) as u32;
+    let mut cells = fine.min(bounded);
+    // Dense meshes split along every cell line: coarser cells until the cut holds at
+    // most four times its source triangles (at least 8,192). Foliage cards repeat by
+    // the thousand, and every triangle costs the non-RT shadow pass.
+    let allowed = (indices.len() / 3 * 4).max(8_192);
+    let mut cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    while cut.indices.len() / 3 > allowed && cells > 4 {
+        cells = (cells / 2).max(4);
+        cut = renderlab::engine::cutout(&data, &mask, c.opacity, c.cutoff, cells)?;
+    }
+    if normal_mapped {
+        gaps.unsupported(
+            "normal maps on alpha-cut meshes",
+            "cut cards and foliage shade with their vertex normals",
+        );
+    }
+    Ok((engine.create_mesh(&cut.data())?, cut.indices.len() / 3))
+}
+
 /// Uploads one skinned primitive with its own pose (`joints` plus the identity joint).
 /// Returns the mesh and whether it carries tangents.
-fn skinned_mesh(engine: &mut Engine, draw: &Draw, joints: usize) -> Result<(MeshId, bool)> {
+fn skinned_mesh(
+    engine: &mut Engine,
+    draw: &Draw,
+    joints: usize,
+    gaps: &mut Gaps,
+) -> Result<(MeshId, bool)> {
+    if cut(draw).is_some() {
+        gaps.unsupported(
+            "alpha masks on skinned meshes",
+            "those primitives draw opaque, without cutouts",
+        );
+    }
     let (mut source, mut indices) = triangles(draw)?;
     if normal_mapped(draw) {
         split_handedness(source.to_mut(), indices.to_mut());

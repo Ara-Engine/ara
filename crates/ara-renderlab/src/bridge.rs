@@ -5,6 +5,7 @@
 use crate::{
     ActivePath, Options, PathChoice,
     decals::Decals,
+    effects::Effects,
     environment,
     gaps::Gaps,
     lighting::{self, Metering, SkySource},
@@ -18,8 +19,8 @@ use ara_gpu::{
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::engine::{
-    AtmosphereMedium, Background, Capabilities, Engine, EngineDescriptor, EnvironmentId,
-    ExperimentalRayQuery, Light, Limits, RenderPath, Sky, Sun, headless_adapter,
+    Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery, Light,
+    Limits, RenderPath, Sky, Sun, headless_adapter,
 };
 use std::time::{Duration, Instant};
 
@@ -46,6 +47,8 @@ struct Applied {
     sky: Option<Sky>,
     /// The prepared sky map in use and the content key it was prepared from.
     sky_map: Option<(u64, EnvironmentId)>,
+    /// The colour grade baked into Renderlab's lookup table (`grade::key`).
+    grade: Option<u64>,
 }
 
 pub(crate) struct Bridge {
@@ -57,6 +60,7 @@ pub(crate) struct Bridge {
     scene: Scene,
     terrain: Terrain,
     decals: Decals,
+    effects: Effects,
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
@@ -150,6 +154,7 @@ impl Bridge {
             scene: Scene::default(),
             terrain: Terrain::default(),
             decals: Decals::default(),
+            effects: Effects::default(),
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
@@ -183,20 +188,34 @@ impl Bridge {
         self.report_unsupported(view);
         self.engine.resize(view.size[0], view.size[1])?;
         // Terrain tiles take at most half the mesh-material groups; entity draws and
-        // foliage share the rest.
-        let tiles = self
-            .terrain
-            .sync(&mut self.engine, view, MAX_GROUPS / 2, &mut self.gaps)?;
-        let (foliage, foliage_key) = self.terrain.foliage();
-        self.scene.sync(
-            &mut self.engine,
-            frame,
-            foliage,
-            foliage_key,
-            tiles,
-            &mut self.gaps,
-        )?;
+        // foliage share the rest. On the non-RT path foliage is capped by the largest
+        // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
+        // foliage is rebuilt for it before the frame renders.
+        let nonrt = self.path == ActivePath::NonRt;
+        for _ in 0..2 {
+            let known = self.scene.largest_triangles();
+            let (tiles, assumed) = self.terrain.sync(
+                &mut self.engine,
+                view,
+                MAX_GROUPS / 2,
+                nonrt.then_some(known),
+                &mut self.gaps,
+            )?;
+            let (foliage, foliage_key) = self.terrain.foliage();
+            self.scene.sync(
+                &mut self.engine,
+                frame,
+                foliage,
+                foliage_key,
+                tiles,
+                &mut self.gaps,
+            )?;
+            if !nonrt || self.scene.largest_triangles() <= assumed {
+                break;
+            }
+        }
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
+        self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &self.metering);
         self.engine.set_settings(lighting::settings(
@@ -205,13 +224,21 @@ impl Bridge {
             self.max_reflection_roughness,
             &mut self.gaps,
         ))?;
+        let grade = crate::grade::key(view.look);
+        if self.applied.grade != Some(grade) {
+            self.engine.set_colour_lut(crate::grade::lut(view.look))?;
+            self.applied.grade = Some(grade);
+        }
         self.apply_sky(view)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
             self.applied.sun = sun;
         }
-        let lights = lighting::lights(&frame.lights, &mut self.gaps);
+        let lights = lighting::lights(
+            frame.lights.iter().chain(self.effects.lights()),
+            &mut self.gaps,
+        );
         if self.applied.lights != lights {
             self.engine.set_lights(&lights)?;
             self.applied.lights = lights;
@@ -272,7 +299,7 @@ impl Bridge {
         } else {
             let read = self.engine.capture()?;
             if metered {
-                self.metering.observe(stops, &read.rgba8);
+                self.metering.observe(view.look, stops, &read.rgba8);
             }
             upload(gpu, target, &read.rgba8)?
         };
@@ -283,7 +310,7 @@ impl Bridge {
         if metered && target.shared.is_some() {
             if self.meter_wait == 0 {
                 let read = self.engine.capture()?;
-                let moved = self.metering.observe(stops, &read.rgba8);
+                let moved = self.metering.observe(view.look, stops, &read.rgba8);
                 self.meter_wait = if moved { 0 } else { 15 };
             } else {
                 self.meter_wait -= 1;
@@ -348,16 +375,6 @@ impl Bridge {
                 "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
             );
         }
-        if !frame.effects.is_empty() {
-            self.gaps
-                .unsupported("VFX graph effects", "particles are not drawn");
-        }
-        if !frame.look.volumes.is_empty() {
-            self.gaps.unsupported(
-                "post-process volume grading",
-                "only exposure, bloom and motion blur follow the blended look",
-            );
-        }
         if view.look.ev100.is_none() {
             self.gaps.unsupported(
                 "Ara's automatic exposure metering",
@@ -386,7 +403,7 @@ impl Bridge {
     fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
         let mut replaced = None;
         let sky = match lighting::sky(view, &mut self.gaps) {
-            SkySource::Atmosphere => Sky::Atmosphere(AtmosphereMedium::default()),
+            SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
             SkySource::Map { size, pixels } if self.constant_sky => {
                 Sky::Uniform(environment::mean_radiance(size, &pixels))
             }

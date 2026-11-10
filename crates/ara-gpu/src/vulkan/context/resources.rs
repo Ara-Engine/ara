@@ -8,6 +8,7 @@ use ash::vk;
 pub(crate) struct BufferAllocation {
     pub handle: vk::Buffer,
     pub memory: vk::DeviceMemory,
+    pub suballocation: Option<super::memory_blocks::Slice>,
     pub size: u64,
     pub host: bool,
     pub usage: vk::BufferUsageFlags,
@@ -18,13 +19,16 @@ pub(crate) struct BufferAllocation {
 pub(crate) struct ImageAllocation {
     pub handle: vk::Image,
     pub memory: vk::DeviceMemory,
+    pub suballocation: Option<super::memory_blocks::Slice>,
     pub view: vk::ImageView,
     /// A storage image whose format cannot be written in shaders (sRGB) is created
     /// mutable, with this UNORM alias view for storage (`storage_alias`).
     pub storage_view: Option<vk::ImageView>,
+    pub attachment_view: Option<vk::ImageView>,
     pub width: u32,
     pub height: u32,
     pub mip_levels: u32,
+    pub shape: crate::texture::ImageShape,
     pub format: vk::Format,
     pub aspect: vk::ImageAspectFlags,
     pub usage: vk::ImageUsageFlags,
@@ -57,14 +61,17 @@ impl Gpu {
         host: bool,
         preferred: vk::MemoryPropertyFlags,
     ) -> Result<BufferAllocation> {
-        let buffer = super::allocation::buffer(
+        let buffer = super::allocation::pooled_buffer(
             &self.shared.device,
             &self.shared.memory,
             &mut self.buffer_memory,
-            size,
-            usage,
-            host,
-            preferred,
+            Some(&mut self.memory_blocks),
+            super::allocation::BufferRequest {
+                size,
+                usage,
+                host,
+                preferred,
+            },
         )?;
         self.buffers.push(buffer);
         Ok(buffer)
@@ -128,16 +135,21 @@ impl Gpu {
         usage: vk::ImageUsageFlags,
         aspect: vk::ImageAspectFlags,
     ) -> Result<ImageAllocation> {
-        let image = super::allocation::image(
-            &self.device,
-            &self.memory,
-            super::allocation::ImageDesc {
-                size: [width, height],
-                format,
-                mip_levels,
-                usage,
-                aspect,
-            },
+        let mut desc =
+            super::allocation::ImageDesc::new([width, height], format, mip_levels, usage);
+        desc.aspect = aspect;
+        self.image_shaped(desc)
+    }
+    pub(crate) fn image_shaped(
+        &mut self,
+        desc: super::allocation::ImageDesc,
+    ) -> Result<ImageAllocation> {
+        self.validate_image(&desc)?;
+        let image = super::allocation::pooled_image(
+            &self.shared.device,
+            &self.shared.memory,
+            desc,
+            Some(&mut self.memory_blocks),
         )?;
         self.images.push(image);
         Ok(image)
@@ -222,6 +234,10 @@ impl Gpu {
             self.device.destroy_buffer(buffer.handle, None);
             // Only memory is reused: a new exclusive VkBuffer starts with fresh
             // queue ownership and cannot inherit the retired buffer's access state.
+        }
+        if let Some(slice) = buffer.suballocation {
+            self.memory_blocks.release(slice);
+            return None;
         }
         (!buffer
             .memory_key

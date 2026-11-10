@@ -498,12 +498,13 @@ internal sealed partial class ModuleSession
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
         if (cls is not null) escalation = cls.Escalation;
         p.Parse = p.Mark();
+        var docsChanged = escalation == Escalation.None && cls is not null && !cls.Additive && EditClassifier.DocsChanged(changes);
         (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, SourceText>)? reuse = null;
         if (escalation == Escalation.None && cls is not null)
         {
             // The generator reads declarations, attributes and doc comments only. Body edits keep
             // its output; for inserts and doc edits it runs, and any change in its output is L3.
-            if (cls.Additive || EditClassifier.DocsChanged(changes))
+            if (cls.Additive || docsChanged)
             {
                 var g = Generate(next, ct);
                 p.Generate = p.Mark();
@@ -518,7 +519,7 @@ internal sealed partial class ModuleSession
             nextState = nextState with { Final = final };
             // Declarations can change policy on another partial file. Accessor edits
             // can also synthesize backing fields; directives may alter declarations.
-            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !EditClassifier.DocsChanged(changes)
+            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !docsChanged
                 && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
                 && cls.Bodies.All(body => body.New is MethodDeclarationSyntax method && !method.Modifiers.Any(SyntaxKind.PartialKeyword))
                 && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true);

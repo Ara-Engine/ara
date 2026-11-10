@@ -309,3 +309,163 @@ fn an_hdr_environment_map_backs_and_lights_the_frame() {
         assert!((20..250).contains(&floor[1]), "{name}: floor {floor:?}");
     }
 }
+
+/// 600 boxes, each its own mesh, in four colours: 601 mesh-material groups, more than
+/// Renderlab's 256. Seen from above.
+fn crowd() -> RenderFrame {
+    let mut frame = frame(0.);
+    frame.draws.truncate(1);
+    frame.lights.clear();
+    let eye = Vec3::new(0., 15., 9.);
+    frame.camera = Some(CameraView {
+        position: eye.to_array(),
+        forward: (Vec3::ZERO - eye).normalize().to_array(),
+        fov: 50.,
+    });
+    const COLOURS: [[f32; 4]; 4] = [
+        [0.8, 0.05, 0.05, 1.],
+        [0.05, 0.7, 0.05, 1.],
+        [0.05, 0.1, 0.8, 1.],
+        [0.8, 0.7, 0.05, 1.],
+    ];
+    for i in 0..600u32 {
+        let at = Vec3::new(
+            (i % 25) as f32 * 0.6 - 7.2,
+            0.15,
+            (i / 25) as f32 * 0.6 - 6.9,
+        );
+        // A size of its own gives every box its own mesh.
+        let size = 0.3 + i as f32 * 1e-4;
+        frame.draws.push(shape(
+            10 + u64::from(i),
+            MeshShape::Box,
+            [size; 3],
+            at,
+            COLOURS[i as usize % 4],
+        ));
+    }
+    frame
+}
+
+/// The dominant channel of a saturated pixel (0 red, 1 green, 2 blue, 3 yellow); None
+/// for grey.
+fn hue(p: [u8; 4]) -> Option<usize> {
+    let [r, g, b, _] = p.map(i32::from);
+    if r.max(g).max(b) - r.min(g).min(b) < 40 {
+        return None;
+    }
+    Some(if r > 2 * b && g > 2 * b && (r - g).abs() * 3 < r.max(g) {
+        3
+    } else if r >= g && r >= b {
+        0
+    } else if g >= b {
+        1
+    } else {
+        2
+    })
+}
+
+/// Past the limit, static groups merge into batches instead of being left out: on
+/// each Renderlab path, every box shows its own colour at the centre of its top.
+#[test]
+fn more_groups_than_the_limit_all_draw() {
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("renderlab");
+    std::fs::create_dir_all(&out).unwrap();
+    let frame = crowd();
+    let request = CaptureRequest {
+        camera: ara_runtime_render::camera(&frame).unwrap(),
+        size: SIZE,
+        mode: ViewMode::Lit,
+        deterministic: true,
+        exposure: 1.,
+        settle_frames: 4,
+        tick: 0,
+        seed: 0,
+        marks: None,
+    };
+    let camera = frame.camera.unwrap();
+    let eye = Vec3::from(camera.position);
+    let view = glam34::camera::rh::view::look_to_mat4(eye, Vec3::from(camera.forward), Vec3::Y);
+    let projection = glam34::camera::rh::proj::opengl::perspective(
+        camera.fov.to_radians(),
+        SIZE[0] as f32 / SIZE[1] as f32,
+        0.1,
+        100.,
+    );
+    for (path, name) in [(PathChoice::HardwareRt, "rt"), (PathChoice::NonRt, "nonrt")] {
+        let renderlab = match Renderlab::new(&Options {
+            path,
+            pipeline_cache: Some(out.join("pipeline-cache")),
+            ..Default::default()
+        }) {
+            Ok(renderlab) => renderlab,
+            Err(error) => {
+                println!("skipping {name}: {error:#}");
+                continue;
+            }
+        };
+        let mut presenter = Presenter::new(SIZE, Vec::new(), out.join("gpu-cache"));
+        presenter
+            .set_external_renderer(Some(Box::new(renderlab)))
+            .unwrap();
+        let capture = presenter
+            .capture_with(&frame, &request, || Ok(Content::default()))
+            .unwrap();
+        capture
+            .image
+            .save(out.join(format!("crowd-{name}.png")))
+            .unwrap();
+        let mut wrong = Vec::new();
+        for (i, draw) in frame.draws[1..].iter().enumerate() {
+            let top = draw.world.transform_point3(Vec3::new(0., 0.15, 0.));
+            let ndc = projection.project_point3(view.transform_point3(top));
+            let x = ((ndc.x * 0.5 + 0.5) * SIZE[0] as f32) as u32;
+            let y = ((0.5 - ndc.y * 0.5) * SIZE[1] as f32) as u32;
+            let seen = hue(capture.image.get_pixel(x, y).0);
+            if seen != Some(i % 4) {
+                wrong.push((i, seen));
+            }
+        }
+        println!(
+            "{name}: {} of 600 boxes not shown in their colour",
+            wrong.len()
+        );
+        assert!(
+            wrong.is_empty(),
+            "{name}: boxes missing or miscoloured: {wrong:?}"
+        );
+
+        // Batched boxes that move or go rebuild their batch: lift red box 4 by a
+        // metre and remove red box 0.
+        let pixel = |at: Vec3| {
+            let ndc = projection.project_point3(view.transform_point3(at));
+            (
+                ((ndc.x * 0.5 + 0.5) * SIZE[0] as f32) as u32,
+                ((0.5 - ndc.y * 0.5) * SIZE[1] as f32) as u32,
+            )
+        };
+        let mut changed = crowd();
+        let lifted = changed.draws[5].world * Mat4::from_translation(Vec3::Y);
+        changed.draws[5].world = lifted;
+        let gone = changed.draws.remove(1).world;
+        let capture = presenter
+            .capture_with(&changed, &request, || Ok(Content::default()))
+            .unwrap();
+        capture
+            .image
+            .save(out.join(format!("crowd-{name}-changed.png")))
+            .unwrap();
+        let (x, y) = pixel(lifted.transform_point3(Vec3::new(0., 0.15, 0.)));
+        assert_eq!(
+            hue(capture.image.get_pixel(x, y).0),
+            Some(0),
+            "{name}: lifted box"
+        );
+        let (x, y) = pixel(gone.transform_point3(Vec3::new(0., 0.15, 0.)));
+        assert_ne!(
+            hue(capture.image.get_pixel(x, y).0),
+            Some(0),
+            "{name}: removed box"
+        );
+    }
+}
