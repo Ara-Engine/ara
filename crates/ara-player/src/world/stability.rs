@@ -35,18 +35,17 @@ pub(super) fn measure(
         let mut gpu = Vec::new();
         for _ in 0..=PAIRS {
             presenter.present_with(frame, &mut content)?;
-            gpu.push(
+            gpu.push(if presenter.external_renderer().is_some() {
+                // An external renderer reports its own GPU span per frame.
+                presenter.stats().gpu_ms
+            } else {
                 presenter
                     .pass_timings()
                     .iter()
                     .map(|t| t.milliseconds)
-                    .sum::<f64>(),
-            );
-            let image = presenter
-                .renderer_mut()
-                .context("raster renderer for live frames")?
-                .capture_completed(request)?
-                .image;
+                    .sum::<f64>()
+            });
+            let image = presenter.live_image(request).context("live frame")?;
             let luma: Vec<f32> = image
                 .pixels()
                 .map(|p| {

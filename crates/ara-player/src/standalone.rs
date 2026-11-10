@@ -193,6 +193,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         presenter2d: Presenter2d::new(&args.gpu_cache),
         presenter,
     };
+    crate::renderer::install(&mut presentation.presenter, &args.gpu_cache);
     let (window, presenter, presenter2d) = (
         &mut presentation.window,
         &mut presentation.presenter,
