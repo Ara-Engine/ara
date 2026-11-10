@@ -2,6 +2,7 @@
 use ara_asset::*;
 use serde_json::{Value, json};
 
+// Resolve the real texture policy, then hash it with a synthetic importer identity.
 fn input(policy: &ProjectImportSettings, source: Value, preset: Option<CookPreset>) -> ImportInput {
     let (settings, preset) = policy
         .resolved_settings("ara.texture", preset, &source)
@@ -11,7 +12,7 @@ fn input(policy: &ProjectImportSettings, source: Value, preset: Option<CookPrese
         thread_budget: 2,
         source_path: "image.png".into(),
         source: vec![1, 2, 3],
-        importer: "ara.texture".into(),
+        importer: "fixture.texture".into(),
         version: "fixture".into(),
         settings,
         target: TargetPlatform::Windows,

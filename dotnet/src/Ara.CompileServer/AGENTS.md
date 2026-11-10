@@ -39,7 +39,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
     queued, below normal priority, and are cancelled and requeued when a human edit arrives.
     A human save of the same module absorbs them (D20).
   - `CompilePriority` captures the launch budget before startup backgrounding in all
-    CLI modes. macOS uses reversible self-process background policy, preserving BSD
+    CLI modes; bounded one-shot `--fix` requests retain that budget. macOS uses
+    reversible self-process background policy, preserving BSD
     nice and inherited background state. Any active human retains the launch budget;
     failed scheduling hints are logged, and never repaired by forcing higher nice.
   - An image (L3) cascades to every dependent in dependency order: relink (same image and EnC
