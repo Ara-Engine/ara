@@ -208,3 +208,138 @@ fn ray_query_timing() {
 fn words(bytes: &[u8]) -> Vec<u32> {
     bytemuck::cast_slice(bytes).to_vec()
 }
+
+#[test]
+fn dynamic_blas_refits_and_4096_instance_tlas_rebuilds_change_ray_hits() {
+    use crate::acceleration::AccelerationOptions;
+    let mut gpu = MetalDevice::new(&[], std::env::temp_dir()).unwrap();
+    if !gpu.info().ray_tracing {
+        return;
+    }
+    let usage = vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+        | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    let positions = [[-1f32, -1., 0.], [1., -1., 0.], [0., 1., 0.]];
+    let vertices = gpu.create_buffer(36, usage, true).unwrap();
+    gpu.upload(vertices, bytemuck::cast_slice(&positions))
+        .unwrap();
+    let indices = gpu.create_buffer(12, usage, true).unwrap();
+    gpu.upload(indices, bytemuck::cast_slice(&[0u32, 1, 2]))
+        .unwrap();
+    let options = AccelerationOptions {
+        allow_update: true,
+        allow_compaction: true,
+        instance_capacity: 0,
+    };
+    let blas = gpu
+        .create_acceleration_with_options(
+            &AccelerationDesc::Triangles {
+                vertices,
+                vertex_count: 3,
+                vertex_stride: 12,
+                indices,
+                index_count: 3,
+            },
+            options,
+        )
+        .unwrap();
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BuildAccelerationStructure(blas));
+    let p = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(p).unwrap();
+    let original_size = gpu.acceleration_size(blas).unwrap();
+    let compact = gpu.compact_acceleration_structure(blas).unwrap();
+    assert!(gpu.acceleration_size(compact).unwrap() <= original_size);
+    Device::retire(&mut gpu, Resource::AccelerationStructure(blas)).unwrap();
+    let blas = compact;
+    let identity = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.];
+    let mut instances: Vec<_> = (0..4096)
+        .map(|i| AccelerationInstance {
+            geometry: blas,
+            transform: identity,
+            custom_index: i,
+            mask: if i == 0 { 255 } else { 0 },
+        })
+        .collect();
+    let tlas = gpu
+        .create_acceleration_with_options(
+            &AccelerationDesc::Instances(
+                instances
+                    .iter()
+                    .map(|i| AccelerationInstance {
+                        geometry: i.geometry,
+                        transform: i.transform,
+                        custom_index: i.custom_index,
+                        mask: i.mask,
+                    })
+                    .collect(),
+            ),
+            options,
+        )
+        .unwrap();
+    let slot = gpu.bind_acceleration_structure(tlas).unwrap();
+    let output = gpu
+        .create_buffer(4, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+        .unwrap();
+    let out = gpu.storage_buffer(output).unwrap();
+    let shader = gpu.msl_pipeline_from(
+        TRACE,
+        &[(Stage::Compute, "trace")],
+        &RenderState::default(),
+        Some([1, 1, 1]),
+    );
+    let barrier = |h, before, after| Barrier {
+        resource: Resource::AccelerationStructure(h),
+        before,
+        after,
+        handoff: None,
+    };
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([barrier(blas, Access::AsBuild, Access::AsInput)]);
+    rec.push(Command::BuildAccelerationStructure(tlas));
+    let p = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(p).unwrap();
+    let trace = |gpu: &mut MetalDevice| {
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.barriers([barrier(tlas, Access::AsBuild, Access::AsRead)]);
+        rec.push(Command::Pipeline(shader));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, out.index, 1, 1, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        let p = gpu.submit(rec.finish(), &[]).unwrap();
+        gpu.wait(p).unwrap();
+        u32::from_le_bytes(gpu.read(output).unwrap().try_into().unwrap())
+    };
+    assert_eq!(trace(&mut gpu), 1);
+    instances[0].transform[3] = 10.;
+    gpu.update_instances(tlas, &instances).unwrap();
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([barrier(tlas, Access::AsRead, Access::AsBuild)]);
+    rec.push(Command::BuildAccelerationStructure(tlas));
+    let p = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(p).unwrap();
+    assert_eq!(trace(&mut gpu), 0);
+    instances[0].transform = identity;
+    gpu.update_instances(tlas, &instances[..1]).unwrap();
+    // Count changes require rebuild; refits retain topology and instance count.
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::RefitAccelerationStructure(tlas));
+    assert!(gpu.submit(rec.finish(), &[]).is_err());
+    let moved = positions.map(|mut p| {
+        p[0] += 20.;
+        p
+    });
+    gpu.upload_ordered(vertices, 0, bytemuck::cast_slice(&moved))
+        .unwrap();
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.barriers([barrier(blas, Access::AsInput, Access::AsBuild)]);
+    rec.push(Command::RefitAccelerationStructure(blas));
+    rec.barriers([
+        barrier(blas, Access::AsBuild, Access::AsInput),
+        barrier(tlas, Access::AsRead, Access::AsBuild),
+    ]);
+    rec.push(Command::BuildAccelerationStructure(tlas));
+    let p = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(p).unwrap();
+    assert_eq!(trace(&mut gpu), 0);
+}

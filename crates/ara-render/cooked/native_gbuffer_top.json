@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
+  "key": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e",
   "stages": [
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryTopFragment.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryTopFragment.dxil",
       "dxil_hash": "1a223355352db5b4f2e1034dc1d0b5c713d80d851623d110568e6da5e74d79c5",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryTopFragment.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryTopFragment.metallib",
         "metallib_hash": "61e56581dbd3afc2d9d140dc7cd99edb2c54a82ef3bc774ac15b94fccc108a78",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryTopFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryTopFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "nativeGeometryTopFragment",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryTopFragment.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryTopFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "8d05fa42821c44b714906cb2586c62e420e64bc38505fc279e8c3bcb26ee8d14",
       "stage": "fragment"
     },
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryVertex.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryVertex.dxil",
       "dxil_hash": "bac22c88e6a71908abdd701c74cf7a138808675ef4f32804eccf7d93ea5e702e",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryVertex.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryVertex.metallib",
         "metallib_hash": "05055473cf32d0d6ea16009c70bee178487027bb6526624be58e90d1e7292cd4",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "nativeGeometryVertex",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_gbuffer_top/nativeGeometryVertex.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_gbuffer_top/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "0dd39af89ab1a347edff9b8779e8c57953fe7ce677cd4461f318e40e4d3f5695",
       "stage": "vertex"
@@ -49,6 +49,16 @@
     "depth_format": 126,
     "depth_test": true,
     "depth_write": true,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

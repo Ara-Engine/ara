@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
+  "key": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e",
   "stages": [
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativeForwardRefractFragment.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativeForwardRefractFragment.dxil",
       "dxil_hash": "ff6ed962824b059919a79a308f042b3b2409d25f8bf3b0b5c8a7cd7e773c6ba4",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativeForwardRefractFragment.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativeForwardRefractFragment.metallib",
         "metallib_hash": "8e44636912879c197033404a2c93da24168079b66bf7a98e994da9e6456987aa",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativeForwardRefractFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativeForwardRefractFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "nativeForwardRefractFragment",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativeForwardRefractFragment.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativeForwardRefractFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "314ab23314296d1f8712336184b1daa31e98d8e6361858c6b10244b1efaa6383",
       "stage": "fragment"
     },
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativePaintVertex.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativePaintVertex.dxil",
       "dxil_hash": "df9b5fdae1dc409c8c93a8b069364da9a0e7ffcc79d904d89ecf5da28be4a901",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativePaintVertex.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativePaintVertex.metallib",
         "metallib_hash": "27615f69fb1b2261d4eb1764e271ba6e61ad00146fc79e96ce15a94652b091b6",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativePaintVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativePaintVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "nativePaintVertex",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/native_forward_refract/nativePaintVertex.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/native_forward_refract/nativePaintVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "4cc707f2d875324a3b376b1793fb1edbe79280d7fdb00c214f575d131cae8415",
       "stage": "vertex"
@@ -46,6 +46,16 @@
     "depth_format": 126,
     "depth_test": true,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

@@ -1,3 +1,5 @@
+mod copy_queue;
+mod validation;
 use super::image_copy::copy_bytes;
 use super::*;
 use crate::commands::*;
@@ -75,6 +77,25 @@ impl VulkanDevice {
     /// Within a deferred frame this records a logical point; end the scope before
     /// host waits. Consecutive same-queue lists share a native submission.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
+        if self.validate_commands(&list)? {
+            self.prepare_render_views(&list)?;
+        }
+        let point = TimelinePoint {
+            queue: list.queue,
+            value: self.submitted[list.queue.index()] + 1,
+        };
+        let result = self.submit_staged(list, waits);
+        if result.is_err() {
+            self.cancel_staging(point);
+        }
+        result
+    }
+
+    fn submit_staged(
+        &mut self,
+        list: CommandList,
+        waits: &[TimelinePoint],
+    ) -> Result<TimelinePoint> {
         self.poll_shader_reload();
         crate::cpu_scope!("GPU.submit");
         // A synchronous helper's resolve used to finish its writes before the
@@ -109,9 +130,9 @@ impl VulkanDevice {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
             }
         }
-        self.validate_commands(&list)?;
         let queue = list.queue;
         self.prepare_submission(queue)?;
+        let staging = self.stage_updates(&list)?;
         let cmd = self.context.commands(queue == Queue::Compute)?;
         let mut guard = super::guard::Objects::new(&self.context.device);
         guard.push(super::guard::Object::Commands(
@@ -216,7 +237,14 @@ impl VulkanDevice {
             })
             .into_iter();
             for command in super::timestamps::commands(&list.commands) {
-                self.encode(cmd, queue, query, &mut timestamp, &mut scopes, command)?;
+                self.encode(
+                    cmd,
+                    queue,
+                    (query, &mut timestamp),
+                    &mut scopes,
+                    command,
+                    staging.get(&(command as *const Command)).copied(),
+                )?;
             }
         }
         // SAFETY: Query `required-1` is reserved for the submission's completed
@@ -296,7 +324,7 @@ impl VulkanDevice {
         // Conservative retention also covers resources reached indirectly through shader indices.
         for command in &list.commands {
             if let Command::BuildAccelerationStructure(h) = command {
-                self.accelerations.get_mut(*h)?.raw.built = true;
+                self.mark_as_built(*h, queue)?;
             }
         }
         {
@@ -322,13 +350,11 @@ impl VulkanDevice {
             points.push(point);
         }
         for command in &list.commands {
-            if let Command::Barrier(Barrier {
-                resource: Resource::Buffer(buffer),
-                handoff,
-                ..
-            }) = command
-            {
-                self.buffers.get_mut(*buffer)?.owner = handoff.map_or(queue, |h| h.to);
+            for dependency in command.barriers() {
+                if let Resource::Buffer(buffer) = dependency.barrier.resource {
+                    self.buffers.get_mut(buffer)?.owner =
+                        dependency.barrier.handoff.map_or(queue, |h| h.to);
+                }
             }
         }
         Ok(point)
@@ -415,367 +441,5 @@ impl VulkanDevice {
                 }
             })
             .collect())
-    }
-    fn validate_attachment_formats(
-        &self,
-        bound: Option<Pipeline>,
-        colors: &[vk::Format],
-        depth: Option<vk::Format>,
-    ) -> Result<()> {
-        let handle = bound.ok_or_else(|| GpuError::Contract("No bound pipeline".into()))?;
-        let pipeline = self.pipelines.get(handle)?;
-        if pipeline.colors != colors || pipeline.depth != depth {
-            return Err(GpuError::Contract(
-                "Pipeline and rendering attachment formats differ".into(),
-            ));
-        }
-        Ok(())
-    }
-    fn validate_commands(&self, list: &CommandList) -> Result<()> {
-        crate::cpu_scope!("GPU.validate_commands");
-        let mut rendering = false;
-        let mut pass = false;
-        let mut pipeline = None;
-        let mut bound = None;
-        let mut color_formats = Vec::new();
-        let mut depth_format = None;
-        let mut extent = [0u32; 2];
-        for c in &list.commands {
-            match c {
-                Command::Barrier(_) if rendering => {
-                    return Err(GpuError::Contract(
-                        "Barriers must be outside rendering scopes".into(),
-                    ));
-                }
-                Command::Barrier(b) => match b.resource {
-                    Resource::Buffer(h) => {
-                        self.buffers.get(h)?;
-                    }
-                    Resource::AccelerationStructure(h) => {
-                        self.accelerations.get(h)?;
-                    }
-                    Resource::Image(h) => {
-                        self.images.get(h)?;
-                    }
-                },
-                Command::BuildAccelerationStructure(h) => {
-                    if rendering {
-                        return Err(GpuError::Contract("AS build inside rendering scope".into()));
-                    }
-                    self.validate_as_build(*h)?;
-                }
-                Command::Pipeline(h) => {
-                    pipeline = Some(self.pipelines.get(*h)?.compute);
-                    bound = Some(*h);
-                    if list.queue == Queue::Compute && pipeline == Some(false) {
-                        return Err(GpuError::Contract(
-                            "Graphics pipeline on compute-only queue".into(),
-                        ));
-                    }
-                }
-                Command::BeginRendering {
-                    colors,
-                    depth,
-                    size,
-                } => {
-                    if rendering || list.queue != Queue::Graphics || size.contains(&0) {
-                        return Err(GpuError::Contract("Invalid rendering scope".into()));
-                    }
-                    for a in colors.iter().chain(depth.iter()) {
-                        let i = self.images.get(a.image)?;
-                        if size[0] > i.raw.width || size[1] > i.raw.height {
-                            return Err(GpuError::Contract("Attachment extent too small".into()));
-                        }
-                    }
-                    color_formats = colors
-                        .iter()
-                        .map(|a| self.images.get(a.image).map(|i| i.raw.format))
-                        .collect::<Result<Vec<_>>>()?;
-                    depth_format = depth
-                        .as_ref()
-                        .map(|a| self.images.get(a.image).map(|i| i.raw.format))
-                        .transpose()?;
-                    extent = *size;
-                    rendering = true;
-                }
-                Command::ClearDepth {
-                    origin,
-                    size,
-                    depth,
-                } => {
-                    let inside = (0..2).all(|i| {
-                        origin[i]
-                            .checked_add(size[i])
-                            .is_some_and(|end| end <= extent[i])
-                    });
-                    if !rendering
-                        || depth_format.is_none()
-                        || size.contains(&0)
-                        || !inside
-                        || !depth.is_finite()
-                    {
-                        return Err(GpuError::Contract(
-                            "Depth clear outside the rendering scope's depth attachment".into(),
-                        ));
-                    }
-                }
-                Command::EndRendering => {
-                    if !rendering {
-                        return Err(GpuError::Contract("No rendering scope".into()));
-                    }
-                    rendering = false;
-                }
-                Command::Draw(d) => {
-                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    let vertices = self.buffers.get(d.vertices)?;
-                    if !vertices
-                        .raw
-                        .usage
-                        .contains(vk::BufferUsageFlags::VERTEX_BUFFER)
-                    {
-                        return Err(GpuError::Contract("Vertex buffer usage missing".into()));
-                    }
-                    let i = self.buffers.get(d.indices)?;
-                    if !i.raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER) {
-                        return Err(GpuError::Contract("Index buffer usage missing".into()));
-                    }
-                    if !rendering
-                        || pipeline != Some(false)
-                        || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
-                        || (u64::from(d.first_index) + u64::from(d.index_count)) * 4 > i.raw.size
-                    {
-                        return Err(GpuError::Contract("Invalid indexed draw".into()));
-                    }
-                }
-                Command::DrawIndirect { arguments, offset }
-                | Command::DrawMeshTasksIndirect { arguments, offset } => {
-                    let mesh_draw = matches!(c, Command::DrawMeshTasksIndirect { .. });
-                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    let buffer = self.buffers.get(*arguments)?;
-                    if !rendering
-                        || pipeline != Some(false)
-                        || bound.is_none_or(|h| {
-                            self.pipelines
-                                .get(h)
-                                .is_ok_and(|p| p.vertex_stride != 0 || p.mesh != mesh_draw)
-                        })
-                        || offset % 4 != 0
-                        || offset
-                            .checked_add(if mesh_draw { 12 } else { 16 })
-                            .is_none_or(|end| end > buffer.raw.size)
-                        || !buffer
-                            .raw
-                            .usage
-                            .contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
-                    {
-                        return Err(GpuError::Contract("Invalid indirect draw".into()));
-                    }
-                }
-                Command::Fullscreen => {
-                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    if !rendering
-                        || pipeline != Some(false)
-                        || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
-                    {
-                        return Err(GpuError::Contract("Draw outside graphics scope".into()));
-                    }
-                }
-                Command::DrawIndexedProcedural {
-                    indices,
-                    first_index,
-                    count,
-                    instances,
-                } => {
-                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    let native = self
-                        .pipelines
-                        .get(bound.expect("attachment validation requires a bound pipeline"))?;
-                    let i = self.buffers.get(*indices)?;
-                    if !rendering
-                        || pipeline != Some(false)
-                        || native.vertex_stride != 0
-                        || native.mesh
-                        || *count == 0
-                        || *instances == 0
-                        || !i.raw.usage.contains(vk::BufferUsageFlags::INDEX_BUFFER)
-                        || (u64::from(*first_index) + u64::from(*count)) * 4 > i.raw.size
-                    {
-                        return Err(GpuError::Contract("Invalid indexed procedural draw".into()));
-                    }
-                }
-                Command::DrawProcedural {
-                    vertices,
-                    instances,
-                } => {
-                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    let native = self
-                        .pipelines
-                        .get(bound.expect("attachment validation requires a bound pipeline"))?;
-                    if !rendering
-                        || pipeline != Some(false)
-                        || native.vertex_stride != 0
-                        || native.mesh
-                        || *vertices == 0
-                        || *instances == 0
-                    {
-                        return Err(GpuError::Contract(
-                            "Invalid procedural graphics draw".into(),
-                        ));
-                    }
-                }
-                Command::Dispatch(_) => {
-                    if rendering || pipeline != Some(true) {
-                        return Err(GpuError::Contract("Dispatch outside compute scope".into()));
-                    }
-                }
-                Command::DispatchIndirect { arguments, offset } => {
-                    let buffer = self.buffers.get(*arguments)?.raw;
-                    if rendering
-                        || pipeline != Some(true)
-                        || offset % 4 != 0
-                        || offset.checked_add(12).is_none_or(|end| end > buffer.size)
-                        || !buffer.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
-                    {
-                        return Err(GpuError::Contract(
-                            "Invalid indirect dispatch scope, usage or range".into(),
-                        ));
-                    }
-                }
-                Command::UploadImage {
-                    source,
-                    destination,
-                } => {
-                    let b = self.buffers.get(*source)?.raw;
-                    let i = self.images.get(*destination)?.raw;
-                    if rendering
-                        || b.size < copy_bytes(i)?
-                        || !b.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
-                        || !i.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
-                    {
-                        return Err(GpuError::Contract("Invalid buffer-to-image copy".into()));
-                    }
-                }
-                Command::CopyBuffer {
-                    source,
-                    destination,
-                    size,
-                } => {
-                    let source = self.buffers.get(*source)?.raw;
-                    let dest = self.buffers.get(*destination)?.raw;
-                    if rendering
-                        || *size == 0
-                        || size % 4 != 0
-                        || *size > source.size
-                        || *size > dest.size
-                        || !source.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
-                        || !dest.usage.contains(vk::BufferUsageFlags::TRANSFER_DST)
-                        || source.handle == dest.handle
-                    {
-                        return Err(GpuError::Contract("Invalid buffer copy".into()));
-                    }
-                }
-                Command::CopyBufferRange {
-                    source,
-                    source_offset,
-                    destination,
-                    destination_offset,
-                    size,
-                } => {
-                    let source = self.buffers.get(*source)?.raw;
-                    let destination = self.buffers.get(*destination)?.raw;
-                    if rendering
-                        || *size == 0
-                        || size % 4 != 0
-                        || source_offset % 4 != 0
-                        || destination_offset % 4 != 0
-                        || source_offset
-                            .checked_add(*size)
-                            .is_none_or(|end| end > source.size)
-                        || destination_offset
-                            .checked_add(*size)
-                            .is_none_or(|end| end > destination.size)
-                        || !source.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
-                        || !destination
-                            .usage
-                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
-                        || source.handle == destination.handle
-                    {
-                        return Err(GpuError::Contract("Invalid buffer copy range".into()));
-                    }
-                }
-                Command::UpdateBuffer {
-                    destination,
-                    offset,
-                    bytes,
-                } => {
-                    let destination = self.buffers.get(*destination)?.raw;
-                    if rendering
-                        || bytes.is_empty()
-                        || bytes.len() > 65536
-                        || bytes.len() % 4 != 0
-                        || offset % 4 != 0
-                        || offset
-                            .checked_add(bytes.len() as u64)
-                            .is_none_or(|end| end > destination.size)
-                        || !destination
-                            .usage
-                            .contains(vk::BufferUsageFlags::TRANSFER_DST)
-                    {
-                        return Err(GpuError::Contract("Invalid buffer update".into()));
-                    }
-                }
-                Command::CopyImage {
-                    source,
-                    destination,
-                } => {
-                    let source = self.images.get(*source)?.raw;
-                    let destination = self.images.get(*destination)?.raw;
-                    if rendering
-                        || source.handle == destination.handle
-                        || source.format != destination.format
-                        || source.width != destination.width
-                        || source.height != destination.height
-                        || source.aspect != vk::ImageAspectFlags::COLOR
-                        || !source.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
-                        || !destination
-                            .usage
-                            .contains(vk::ImageUsageFlags::TRANSFER_DST)
-                    {
-                        return Err(GpuError::Contract("Invalid image copy".into()));
-                    }
-                }
-                Command::ReadImage {
-                    source,
-                    destination,
-                } => {
-                    let i = self.images.get(*source)?.raw;
-                    let b = self.buffers.get(*destination)?.raw;
-                    if rendering
-                        || b.size < copy_bytes(i)?
-                        || !b.usage.contains(vk::BufferUsageFlags::TRANSFER_DST)
-                        || !i.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
-                    {
-                        return Err(GpuError::Contract("Invalid image-to-buffer copy".into()));
-                    }
-                }
-                Command::BeginPass(_) => {
-                    if pass {
-                        return Err(GpuError::Contract("Nested measured pass".into()));
-                    }
-                    pass = true;
-                }
-                Command::EndPass => {
-                    if !pass {
-                        return Err(GpuError::Contract("No measured pass".into()));
-                    }
-                    pass = false;
-                }
-                _ => {}
-            }
-        }
-        if pass || rendering {
-            return Err(GpuError::Contract("Unclosed command scope".into()));
-        }
-        Ok(())
     }
 }

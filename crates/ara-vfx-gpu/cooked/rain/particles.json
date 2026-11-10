@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28",
+  "key": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e",
   "stages": [
     {
-      "dxil": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleFragment.dxil",
+      "dxil": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleFragment.dxil",
       "dxil_hash": "9d83e16d0729fa116fd3e9408de68baa92dd25e7f198e0d19041f6c16e0be604",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleFragment.metallib",
+        "metallib": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleFragment.metallib",
         "metallib_hash": "3878221f374996800f1181df6d2c1a13cf3794adf243121f6b6281782f78905f",
-        "reflection": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "particleFragment",
-      "spirv": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleFragment.spv",
+      "spirv": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "9e73c387a0f52c680d6ba73d12e1df8c448e071baf1815e7087d37f52a0315b8",
       "stage": "fragment"
     },
     {
-      "dxil": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleVertex.dxil",
+      "dxil": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleVertex.dxil",
       "dxil_hash": "72905b7dd0cf032700bc0a6515c2dfc0abc1d0895f6dc701b4c1732a249cec33",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleVertex.metallib",
+        "metallib": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleVertex.metallib",
         "metallib_hash": "02dfdc476b8e1f2ae9b006f542aa5b0863dbeea9cfb0642fbb577d2400ce9349",
-        "reflection": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "particleVertex",
-      "spirv": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/particles/particleVertex.spv",
+      "spirv": "9415355759c2eff1bb62eef3cdc1b53c03d952a83558ed481d75fbee8939aa2e/particles/particleVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "bcaa4eec32d1eba37792afab3bfa9b0c2053e36affd47fd1befd366ce718f464",
       "stage": "vertex"
@@ -45,6 +45,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

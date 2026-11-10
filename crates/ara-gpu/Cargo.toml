@@ -53,3 +53,6 @@ harness = false
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[dev-dependencies]
+ara-gpu-replay = { path = "../ara-gpu-replay" }

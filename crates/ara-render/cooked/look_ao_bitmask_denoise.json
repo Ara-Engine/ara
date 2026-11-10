@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81",
+  "key": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e",
   "stages": [
     {
-      "dxil": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.dxil",
+      "dxil": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.dxil",
       "dxil_hash": "cc16ced876cb540df58dc9a20a12dccb7738358c1213e42774a56194f6705e37",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metallib",
+        "metallib": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metallib",
         "metallib_hash": "f20512b5f7718fb587ea52032466f9ac7759146d9fa731de08c98853d87a909b",
-        "reflection": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "aoBitmaskDenoiseMain",
-      "spirv": "c56dbbc17c2dcb6c61fa654b5ab42430e631bb0396a5ba4338acd53cb6255f81/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.spv",
+      "spirv": "fc3d01724852a3803b2bc388604a07868a07a386fa4f84819a6226f176c6170e/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "b313182d2793ff0d0247f367eb4ebe7fab5ad073a0ef788ef260cf6b499888ee",
       "stage": "compute"
@@ -26,6 +26,16 @@
     "depth_format": null,
     "depth_test": false,
     "depth_write": false,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

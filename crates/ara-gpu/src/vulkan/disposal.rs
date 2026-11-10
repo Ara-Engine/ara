@@ -1,7 +1,8 @@
 //! Destruction of completed driver objects, off the frame thread.
+use super::context::memory_blocks::{MemoryBlocks, Slice};
 use super::{BufferAllocation, ImageAllocation, vk};
 use crate::{GpuError, Result};
-use std::sync::mpsc::{self, SyncSender, TrySendError};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread::JoinHandle;
 
 pub(super) enum Object {
@@ -9,9 +10,17 @@ pub(super) enum Object {
     Image(ImageAllocation),
     Pipeline(vk::Pipeline),
     Memory(vk::DeviceMemory),
+    Pool(MemoryBlocks),
 }
 
 impl Object {
+    fn suballocation(&self) -> Option<Slice> {
+        match self {
+            Self::Buffer(b) => b.suballocation,
+            Self::Image(i) => i.suballocation,
+            _ => None,
+        }
+    }
     pub(super) fn destroy(self, device: &ash::Device) {
         // SAFETY: The device owner admits only objects whose uses on both queue
         // timelines have completed, and joins this worker before device teardown.
@@ -19,18 +28,26 @@ impl Object {
             match self {
                 Self::Buffer(buffer) => {
                     device.destroy_buffer(buffer.handle, None);
-                    device.free_memory(buffer.memory, None);
+                    if buffer.suballocation.is_none() {
+                        device.free_memory(buffer.memory, None);
+                    }
                 }
                 Self::Image(image) => {
                     device.destroy_image_view(image.view, None);
                     if let Some(storage) = image.storage_view {
                         device.destroy_image_view(storage, None);
                     }
+                    if let Some(view) = image.attachment_view {
+                        device.destroy_image_view(view, None);
+                    }
                     device.destroy_image(image.handle, None);
-                    device.free_memory(image.memory, None);
+                    if image.suballocation.is_none() {
+                        device.free_memory(image.memory, None);
+                    }
                 }
                 Self::Pipeline(pipeline) => device.destroy_pipeline(pipeline, None),
                 Self::Memory(memory) => device.free_memory(memory, None),
+                Self::Pool(pool) => drop(pool),
             }
         }
     }
@@ -43,6 +60,7 @@ pub(super) struct Disposal {
     send: Option<SyncSender<Vec<Object>>>,
     worker: Option<JoinHandle<()>>,
     pending: Vec<Object>,
+    released: Receiver<Slice>,
 }
 
 impl Disposal {
@@ -52,6 +70,7 @@ impl Disposal {
 
     fn start(device: ash::Device, mut before_batch: impl FnMut() + Send + 'static) -> Result<Self> {
         let (send, receive) = mpsc::sync_channel::<Vec<Object>>(1);
+        let (release, released) = mpsc::channel();
         let worker_device = device.clone();
         let worker = std::thread::Builder::new()
             .name("ara-gpu-disposal".into())
@@ -60,7 +79,11 @@ impl Disposal {
                     before_batch();
                     crate::cpu_scope!("GPU.destroy_completed");
                     for object in objects {
+                        let slice = object.suballocation();
                         object.destroy(&worker_device);
+                        if let Some(slice) = slice {
+                            let _ = release.send(slice);
+                        }
                     }
                 }
             })
@@ -70,9 +93,13 @@ impl Disposal {
             send: Some(send),
             worker: Some(worker),
             pending: Vec::new(),
+            released,
         })
     }
 
+    pub fn released(&self) -> impl Iterator<Item = Slice> + '_ {
+        self.released.try_iter()
+    }
     pub fn push(&mut self, object: Object) {
         self.pending.push(object);
     }

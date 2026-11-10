@@ -3,7 +3,7 @@
 //! return to the pool only after the submission that wrote them completes, so the CPU
 //! never overwrites memory the GPU may still read.
 use super::native::nil;
-use crate::{GpuError, Result};
+use crate::Result;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_metal::{MTLBuffer, MTLDevice, MTLResourceOptions};
@@ -26,13 +26,18 @@ impl Pool {
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         created: &mut Vec<Chunk>,
+        size: u64,
     ) -> Result<Chunk> {
-        if let Some(chunk) = self.free.pop() {
-            return Ok(chunk);
+        if let Some(index) = self
+            .free
+            .iter()
+            .position(|chunk| chunk.length() as u64 >= size)
+        {
+            return Ok(self.free.swap_remove(index));
         }
         let chunk = device
             .newBufferWithLength_options(
-                CHUNK_BYTES as usize,
+                size.max(CHUNK_BYTES) as usize,
                 MTLResourceOptions::StorageModeShared,
             )
             .ok_or_else(|| nil("scratch chunk"))?;
@@ -63,14 +68,11 @@ impl Scratch {
         bytes: &[u8],
     ) -> Result<(Chunk, u64)> {
         let size = bytes.len() as u64;
-        if size > CHUNK_BYTES {
-            return Err(GpuError::Contract(format!(
-                "Scratch write of {size} bytes exceeds {CHUNK_BYTES}"
-            )));
-        }
         let aligned = self.offset.next_multiple_of(8);
-        if self.chunks.is_empty() || aligned + size > CHUNK_BYTES {
-            self.chunks.push(pool.take(device, created)?);
+        if self.chunks.is_empty()
+            || aligned + size > self.chunks.last().map_or(0, |c| c.length() as u64)
+        {
+            self.chunks.push(pool.take(device, created, size)?);
             self.offset = 0;
         }
         let offset = self.offset.next_multiple_of(8);
@@ -79,7 +81,7 @@ impl Scratch {
             .last()
             .expect("a chunk was just ensured")
             .clone();
-        // SAFETY: `offset + size <= CHUNK_BYTES` lies inside this shared chunk. The chunk
+        // SAFETY: `offset + size <= chunk.length()` lies inside this shared chunk. The chunk
         // belongs to this unsubmitted recording (fresh, or recycled after its previous
         // submission completed), so no GPU work reads these bytes.
         unsafe {
