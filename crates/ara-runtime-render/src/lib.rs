@@ -171,6 +171,11 @@ pub struct Presenter {
     external: Option<Box<dyn ExternalRenderer>>,
     /// Draw count the external path last resolved content for (its environment map).
     external_draws: Option<usize>,
+    /// Foliage geometry by rule asset from the content the external path last resolved.
+    external_foliage: std::collections::BTreeMap<String, Vec<ara_runtime::extract::Draw>>,
+    /// Terrain layer materials by reference from that same content.
+    external_terrain_materials:
+        std::collections::BTreeMap<String, Arc<ara_runtime::material::MaterialAsset>>,
     /// The external renderer's own pass timings for its last frame (`ExternalFrame::passes`).
     external_passes: [(&'static str, f64); EXTERNAL_PASSES],
 }
@@ -281,6 +286,8 @@ impl Presenter {
             profile_completed: std::collections::VecDeque::new(),
             external: None,
             external_draws: None,
+            external_foliage: Default::default(),
+            external_terrain_materials: Default::default(),
             external_passes: [("", 0.); EXTERNAL_PASSES],
         }
     }
