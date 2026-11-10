@@ -50,10 +50,10 @@ impl Shot {
 /// Generates and cooks a material's preview shader into the project cache, once per
 /// generated source (the cooked folder is named by its hash); returns that folder.
 ///
-/// Previews only run on Vulkan, so this is a SPIR-V-only cook with both stages
-/// compiled side by side (one compiler process each) instead of the engine cook's
-/// sequential SPIR-V and DXIL compiles: the compiler is most of a cold preview's
-/// latency. Cooks publish by renaming a private staging folder, so concurrent cooks of
+/// Previews run on this machine's GPU: SPIR-V for Vulkan, and on macOS a Metal stage
+/// too (Slang to HLSL, the Vulkan SDK's `dxc` to DXIL, Metal Shader Converter to a
+/// metallib, as the engine cook does there). Stages compile side by side (one compiler
+/// process each): the compiler is most of a cold preview's latency. Cooks publish by renaming a private staging folder, so concurrent cooks of
 /// one source (the page preview and an in-node preview) never see half a folder.
 pub(super) fn cook(
     root: &Path,
@@ -193,11 +193,18 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
     for child in validations {
         finish(child)?;
     }
+    #[cfg(target_os = "macos")]
+    metal_dxil(folder, &path, &tools, &stages, &spawn, &finish)?;
     let stages = stages
         .iter()
         .map(|&(entry, stage)| -> anyhow::Result<CookedStage> {
             let spirv = format!("{entry}.spv");
-            Ok(CookedStage {
+            let dxil = format!("{entry}.dxil");
+            let dxil_hash = match std::fs::read(folder.join(&dxil)) {
+                Ok(bytes) => format!("{:x}", sha2::Sha256::digest(bytes)),
+                Err(_) => String::new(),
+            };
+            let cooked = CookedStage {
                 source_entry: entry.into(),
                 spirv_entry: "main".into(),
                 stage,
@@ -206,11 +213,24 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
                     sha2::Sha256::digest(std::fs::read(folder.join(&spirv))?)
                 ),
                 spirv,
-                // Previews never leave Vulkan.
-                dxil: String::new(),
-                dxil_hash: String::new(),
+                dxil: if dxil_hash.is_empty() { String::new() } else { dxil },
+                dxil_hash,
                 metal: None,
-            })
+            };
+            // macOS also runs it on Metal: the DXIL through the converter.
+            #[cfg(target_os = "macos")]
+            let cooked = {
+                let converter = ara_shader_cook::metal::Converter::discover()?.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Material previews on macOS need Metal Shader Converter: set ARA_METAL_SHADERCONVERTER to its metal-shaderconverter (docs/dev/macos.md)"
+                    )
+                })?;
+                CookedStage {
+                    metal: Some(converter.convert(folder, &cooked)?),
+                    ..cooked
+                }
+            };
+            Ok(cooked)
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     ara_gpu::cooked::write_json(
@@ -227,6 +247,69 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
             },
         },
     )
+}
+
+/// macOS: each stage's DXIL beside its SPIR-V, through HLSL and the engine cook's `dxc`
+/// command (this SDK's Slang cannot load DXC itself), side by side as the SPIR-V compiles are.
+#[cfg(target_os = "macos")]
+fn metal_dxil(
+    folder: &Path,
+    source: &Path,
+    tools: &ara_shader_cook::Toolchain,
+    stages: &[(&str, ara_gpu::cooked::Stage)],
+    spawn: &dyn Fn(&mut std::process::Command) -> anyhow::Result<std::process::Child>,
+    finish: &dyn Fn(std::process::Child) -> anyhow::Result<String>,
+) -> anyhow::Result<()> {
+    use ara_gpu::cooked::Stage;
+    use std::process::Command;
+    let slangc = tools
+        .slangc
+        .canonicalize()
+        .map_err(|e| anyhow::anyhow!("locating Slang ({}): {e}", tools.slangc.display()))?;
+    let hlsl = stages
+        .iter()
+        .map(|&(entry, stage)| {
+            spawn(
+                Command::new(&slangc)
+                    .arg(source)
+                    .args([
+                        "-entry",
+                        entry,
+                        "-stage",
+                        if stage == Stage::Vertex {
+                            "vertex"
+                        } else {
+                            "fragment"
+                        },
+                        "-target",
+                        "hlsl",
+                        "-profile",
+                        "sm_6_6",
+                        "-O2",
+                        "-matrix-layout-column-major",
+                        "-o",
+                    ])
+                    .arg(folder.join(format!("{entry}.hlsl"))),
+            )
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for child in hlsl {
+        finish(child)?;
+    }
+    let dxil = stages
+        .iter()
+        .map(|&(entry, stage)| {
+            let hlsl = folder.join(format!("{entry}.hlsl"));
+            let dxil = folder.join(format!("{entry}.dxil"));
+            spawn(&mut ara_shader_cook::dxc_command(
+                tools, entry, stage, &hlsl, &dxil,
+            )?)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for child in dxil {
+        finish(child)?;
+    }
+    Ok(())
 }
 
 pub(super) fn capture(
@@ -511,7 +594,28 @@ mod tests {
         .expect("short texture reference uploads without a root-level copy");
     }
 
-    /// Needs slangc (`VULKAN_SDK`). The page preview and an in-node preview may cook
+    /// Needs the shader toolchain (and, on macOS, Metal Shader Converter): a material's
+    /// preview renders on this machine's GPU, its sphere tinted by the material.
+    #[test]
+    fn a_preview_renders_the_material_on_this_gpu() {
+        let root = crate::test_target()
+            .join("ara-editor/preview-render")
+            .join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&root);
+        let material = ara_material::dsl::parse(
+            "material Tint : surface budget 1 { param tint : ColorLinear = linear(0.8, 0.1, 0.05); output baseColor = tint; }",
+            "gr_tint",
+        )
+        .expect("material");
+        let image = capture(&root, &material, Shot::surface(false)).expect("rendered");
+        let centre = image.get_pixel(image.width() / 2, image.height() / 2).0;
+        assert!(
+            centre[0] > centre[2] + 20,
+            "a red sphere at the centre: {centre:?}"
+        );
+    }
+
+    /// Needs the shader toolchain. The page preview and an in-node preview may cook
     /// one source at the same time: both get the one published folder, whole.
     #[test]
     fn concurrent_cooks_of_one_source_publish_one_valid_folder() {

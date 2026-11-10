@@ -32,6 +32,7 @@ mod lighting;
 mod material_stats;
 mod mesh_paint;
 mod panels;
+mod portals;
 mod preferences;
 mod present;
 mod profiler;
@@ -111,6 +112,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     rt.frame(Duration::ZERO);
     rt.present(&mut surface, (0, 0))?;
     chrome_parts(&surface, &rt);
+    // Floating windows are native windows (one runtime; each shows its region).
+    rt.touch(|s| s.local.desktop.on = true);
+    let mut portals = portals::Portals::default();
     // In the background (automated captures, tests beside a person's work) the window
     // shows without activating or taking focus; otherwise it comes forward, active.
     if options.background {
@@ -155,7 +159,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 server.pump(&mut s.editor);
                 s.editor.tick();
             });
-            quit |= pump(&mut rt, &mut surface, started, None)?;
+            quit |= pump(&mut rt, &mut surface, &mut portals, started, None)?;
             Ok(!quit)
         },
     )
@@ -225,7 +229,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let mut pass = trace::Pass::begin();
         pass.phase("studio.events");
         let before_events = rt.state().editor.state.camera;
-        if pump(&mut rt, &mut surface, started, Some(&mut game))? {
+        if pump(
+            &mut rt,
+            &mut surface,
+            &mut portals,
+            started,
+            Some(&mut game),
+        )? {
             break;
         }
         hierarchy::unhover(&mut rt);
@@ -873,24 +883,12 @@ pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
 
-/// Whether the window is maximized (the drawn Restore button). Linux's stillkit surface
-/// does not report it yet, so there it reads as not maximized.
-fn maximized(surface: &Surface) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        let _ = surface;
-        false
-    }
-    #[cfg(not(target_os = "linux"))]
-    surface.is_maximized()
-}
-
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface) -> state::Frame {
     let s = surface.scale();
     state::Frame {
         inset: surface.system_controls().map_or(0.0, |r| r.right / s),
-        controls: (!cfg!(target_os = "macos")).then(|| maximized(surface)),
+        controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
     }
 }
 
@@ -915,10 +913,12 @@ fn chrome_parts(surface: &Surface, rt: &Runtime<Studio>) {
 /// Handles window events, runs a UI frame and presents it; whether the window closed.
 /// While the game has the keyboard and mouse (`game`, once the renderer runs), its events
 /// go to the player instead: Esc, leaving the window or a click outside the Game view give
-/// them back; F5 to F8 stay the editor's Play controls.
+/// them back; F5 to F8 stay the editor's Play controls. Floating windows' own windows
+/// (`portals`) send their input into the same runtime and show their regions of its frame.
 fn pump(
     rt: &mut Runtime<Studio>,
     surface: &mut Surface,
+    portals: &mut portals::Portals,
     started: Instant,
     mut game: Option<&mut game::Game>,
 ) -> anyhow::Result<bool> {
@@ -929,13 +929,21 @@ fn pump(
     match rt.touch(|s| s.local.window.take()) {
         Some(state::WindowRequest::Minimize) => surface.minimize(),
         Some(state::WindowRequest::Maximize) => surface.toggle_maximize(),
+        Some(state::WindowRequest::Fullscreen) => surface.toggle_fullscreen(),
         None => {}
     }
-    while let Some((id, event)) = next_event() {
-        if id != surface.id() {
+    portals.sync(rt, surface)?;
+    while let Some((id, mut event)) = next_event() {
+        let floating = portals.owns(id);
+        if id != surface.id() && !floating {
             continue;
         }
-        if rt.state().local.game_captured
+        portals.map(rt, surface, id, &mut event);
+        if floating && portals.window_event(rt, id, &event) {
+            continue;
+        }
+        if !floating
+            && rt.state().local.game_captured
             && let Some(game) = game.as_deref_mut()
         {
             let inside = |p: &stillkit::Pointer| {
@@ -1061,6 +1069,7 @@ fn pump(
             rt.present(surface, (0, 0))
         })?;
         chrome_parts(surface, rt);
+        portals.present(rt)?;
         // Layout feedback the view reads next time: where splits and the Scene view are.
         let mut keys = dock::rect_keys(&rt.state().editor.state.layout);
         keys.push("scene/view".into());
@@ -1100,6 +1109,9 @@ fn pump(
         });
     }
     rt.sync_text_input(surface);
-    surface.set_cursor(rt.cursor());
+    if !portals.set_cursor(rt) {
+        surface.set_cursor(rt.cursor());
+    }
+    portals.track(rt, surface);
     Ok(false)
 }

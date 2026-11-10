@@ -26,7 +26,13 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `profiler.rs`: Record/Stop (`profile.start`), a frame strip against the budget, the
   frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
   while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
-  Tool pages (Profiler, Material, VFX, Animation) dock in the centre: no floating windows yet.
+  Tool pages (Profiler, Material, VFX, Animation) dock in the centre.
+- `portals.rs`: floating windows as native windows. One runtime; each floating window lays
+  out in a band far right of the main window (`dock::region`) and its OS window presents
+  that region (`Runtime::present_region`), its input shifted by the region's origin. During
+  a tab drag pointers map by desktop point to the window under them (dock back, tear out).
+  Layout rects are then desktop frames (design px); system moves settle into `editor.window`.
+  Headless tests leave `Local::desktop.on` off: floats draw inside the main window.
 - `layer.rs`: a native layer with its own GPU UI adapter (`Layer::draw` of a display list);
   the Game view and the graph canvas each own one.
 - `graph.rs`: the Material and Animation pages: the shared node canvas
@@ -100,6 +106,9 @@ re-running the view; use `rt.update` (or settle) before finding what it should s
 
 ## Gaps
 
-The Windows Scene layer is PR #10. The material preview sphere needs slangc (the Vulkan
-SDK). Floating windows live inside the main window (OS windows need stillkit's
-multi-window runtime); Full Screen needs a stillkit window call.
+The Windows Scene layer is PR #10. Material previews on macOS cook a Metal stage
+(Slang to HLSL, the Vulkan SDK's dxc, Metal Shader Converter: set
+`ARA_METAL_SHADERCONVERTER`); the SDK is found under `~/VulkanSDK` without `VULKAN_SDK`.
+Native floating windows render at the main window's scale: on a monitor of another scale
+they are sized right but not re-rasterised. Linux reports no window frames, so moves there
+aren't kept.

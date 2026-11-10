@@ -11,6 +11,21 @@ pub(super) fn compile(
     hlsl: &Path,
     output: &Path,
 ) -> Result<()> {
+    run(&mut dxc_command(tools, entry, stage, hlsl, output)?)?;
+    std::fs::remove_file(hlsl)?;
+    Ok(())
+}
+
+/// The DXC command that compiles Slang's HLSL for `entry` to DXIL at `output`, with the
+/// flags the engine cook uses: the Vulkan SDK's `dxc` beside `slangc`. Other cooks that
+/// run their stages side by side (the editor's material previews) spawn it themselves.
+pub fn dxc_command(
+    tools: &Toolchain,
+    entry: &str,
+    stage: Stage,
+    hlsl: &Path,
+    output: &Path,
+) -> Result<Command> {
     let executable = tools.slangc.canonicalize().context("locating SDK Slang")?;
     let dxc = executable
         .parent()
@@ -28,7 +43,8 @@ pub(super) fn compile(
         Stage::Task => "as_6_6",
         Stage::Mesh => "ms_6_6",
     };
-    run(Command::new(dxc)
+    let mut command = Command::new(dxc);
+    command
         .arg(hlsl)
         .args([
             "-E",
@@ -42,7 +58,6 @@ pub(super) fn compile(
             "2021",
             "-Fo",
         ])
-        .arg(output))?;
-    std::fs::remove_file(hlsl)?;
-    Ok(())
+        .arg(output);
+    Ok(command)
 }
