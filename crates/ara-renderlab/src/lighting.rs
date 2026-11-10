@@ -3,6 +3,7 @@
 use crate::gaps::Gaps;
 use anyhow::Result;
 use ara_render_fidelity::ToneMapper;
+use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{
     components::LightKind,
     extract::{LightView, RenderFrame},
@@ -178,35 +179,59 @@ impl Metering {
         Self { stops: None }
     }
 
-    /// The stops to render the next frame with; `fallback` seeds the first.
-    pub fn stops(&self, fallback: f32) -> f32 {
-        self.stops.unwrap_or(fallback)
+    /// The stops to render the next frame with: the meter (`fallback` seeds the first)
+    /// plus the look's exposure compensation.
+    pub fn stops(&self, fallback: f32, look: &FrameEnvironment) -> f32 {
+        self.stops.unwrap_or(fallback) + look.compensation
     }
 
-    /// Feeds the frame rendered with `stops` (display-encoded RGBA8) back.
-    /// Returns whether the meter moved (false inside its dead band).
-    pub fn observe(&mut self, stops: f32, rgba8: &[u8]) -> bool {
+    /// Feeds the frame rendered with `stops` (display-encoded RGBA8) back, metering as
+    /// Ara's automatic exposure does: the log mean of the luminance between the look's
+    /// low and high percentiles, steered to middle grey before compensation and kept
+    /// within its EV100 limits. Returns whether the meter moved (false inside its dead
+    /// band).
+    pub fn observe(&mut self, look: &FrameEnvironment, stops: f32, rgba8: &[u8]) -> bool {
         // Every 37th pixel: a few thousand samples of a 1080p frame.
-        let (mut sum, mut count) = (0f64, 0u32);
-        for pixel in rgba8.as_chunks::<4>().0.iter().step_by(37) {
-            let linear = |v: u8| (f32::from(v) / 255.).powf(2.2);
-            let luminance =
-                0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2]);
-            sum += f64::from(luminance.max(1e-4).ln());
-            count += 1;
-        }
-        if count == 0 {
+        let mut samples: Vec<f32> = rgba8
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .step_by(37)
+            .map(|pixel| {
+                let linear = |v: u8| (f32::from(v) / 255.).powf(2.2);
+                (0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2]))
+                    .max(1e-4)
+                    .ln()
+            })
+            .collect();
+        if samples.is_empty() {
             return false;
         }
-        let mean = (sum / f64::from(count)).exp() as f32;
-        let error = (0.18 / mean).log2();
+        samples.sort_by(f32::total_cmp);
+        let limits = &look.auto_exposure;
+        let at =
+            |p: f32| ((samples.len() as f32 * p.clamp(0., 1.)) as usize).min(samples.len() - 1);
+        let (low, high) = (
+            at(limits.low_percentile),
+            at(limits.high_percentile).max(at(limits.low_percentile) + 1),
+        );
+        let trimmed = &samples[low..high.min(samples.len())];
+        let mean = (trimmed.iter().sum::<f32>() / trimmed.len().max(1) as f32).exp();
+        // Meter without the compensation the frame was rendered with.
+        let meter = stops - look.compensation;
+        let error = (0.18 / (mean / look.compensation.exp2())).log2();
         // A dead band keeps a settled image (and its temporal history) still.
         let step = if error.abs() < 0.15 {
             0.
         } else {
             (0.5 * error).clamp(-1., 1.)
         };
-        self.stops = Some((stops + step).clamp(-24., 8.));
+        let stops_at = |ev: f32| ara_render_fidelity::settings::exposure_from_ev100(ev, 0.).log2();
+        let (darkest, brightest) = (
+            stops_at(limits.maximum_ev100),
+            stops_at(limits.minimum_ev100),
+        );
+        self.stops = Some((meter + step).clamp(darkest.min(brightest), brightest.max(darkest)));
         step != 0.
     }
 }
@@ -230,7 +255,7 @@ pub(crate) fn exposure_stops(view: &ExternalView<'_>, metering: &Metering) -> (f
             view.look.manual_exposure(1.).max(1e-12).log2() + grey,
             false,
         ),
-        None => (metering.stops(fallback), true),
+        None => (metering.stops(fallback, view.look), true),
     }
 }
 
@@ -373,12 +398,22 @@ mod tests {
 
     #[test]
     fn metering_steers_toward_middle_grey_and_rests_in_its_dead_band() {
+        let mut look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
         let mut metering = Metering::new();
-        assert_eq!(metering.stops(-3.), -3.);
-        metering.observe(-3., &[255; 4 * 64]);
-        assert!(metering.stops(0.) < -3., "a white frame stops down");
+        assert_eq!(metering.stops(-3., &look), -3.);
+        metering.observe(&look, -3., &[255; 4 * 64]);
+        assert!(metering.stops(0., &look) < -3., "a white frame stops down");
         // sRGB 118 is about 18% linear: no change.
-        metering.observe(-5., &[118; 4 * 64]);
-        assert_eq!(metering.stops(0.), -5.);
+        metering.observe(&look, -5., &[118; 4 * 64]);
+        assert_eq!(metering.stops(0., &look), -5.);
+        // Compensation renders brighter, and the meter does not fight it.
+        look.compensation = 1.;
+        assert_eq!(metering.stops(0., &look), -4.);
+        metering.observe(&look, -4., &[160; 4 * 64]);
+        assert_eq!(metering.stops(0., &look), -4.);
+        // The EV100 limits bound the meter: EV100 5 is about -5.3 stops.
+        look.auto_exposure.maximum_ev100 = 5.;
+        metering.observe(&look, -4., &[255; 4 * 64]);
+        assert!(metering.stops(0., &look) - look.compensation >= -5.27 - 1e-3);
     }
 }
