@@ -47,6 +47,8 @@ struct Applied {
     sky: Option<Sky>,
     /// The prepared sky map in use and the content key it was prepared from.
     sky_map: Option<(u64, EnvironmentId)>,
+    /// The colour grade baked into Renderlab's lookup table (`grade::key`).
+    grade: Option<u64>,
 }
 
 pub(crate) struct Bridge {
@@ -222,6 +224,11 @@ impl Bridge {
             self.max_reflection_roughness,
             &mut self.gaps,
         ))?;
+        let grade = crate::grade::key(view.look);
+        if self.applied.grade != Some(grade) {
+            self.engine.set_colour_lut(crate::grade::lut(view.look))?;
+            self.applied.grade = Some(grade);
+        }
         self.apply_sky(view)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
@@ -292,7 +299,7 @@ impl Bridge {
         } else {
             let read = self.engine.capture()?;
             if metered {
-                self.metering.observe(stops, &read.rgba8);
+                self.metering.observe(view.look, stops, &read.rgba8);
             }
             upload(gpu, target, &read.rgba8)?
         };
@@ -303,7 +310,7 @@ impl Bridge {
         if metered && target.shared.is_some() {
             if self.meter_wait == 0 {
                 let read = self.engine.capture()?;
-                let moved = self.metering.observe(stops, &read.rgba8);
+                let moved = self.metering.observe(view.look, stops, &read.rgba8);
                 self.meter_wait = if moved { 0 } else { 15 };
             } else {
                 self.meter_wait -= 1;
@@ -366,12 +373,6 @@ impl Bridge {
             self.gaps.unsupported(
                 "terrain and foliage levels of detail and foliage wind",
                 "resident tiles draw at full resolution; foliage stands still at its nearest level of detail",
-            );
-        }
-        if !frame.look.volumes.is_empty() {
-            self.gaps.unsupported(
-                "post-process volume grading",
-                "only exposure, bloom and motion blur follow the blended look",
             );
         }
         if view.look.ev100.is_none() {

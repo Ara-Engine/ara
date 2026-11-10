@@ -45,6 +45,9 @@ pub enum Kind {
     Text,
     /// A string map edited on its own page (keyboard shortcuts).
     Map,
+    /// Names in order, kept by another window (the Inspector's Move Up and Move Down);
+    /// Settings shows them and resets them.
+    List,
     /// Up to `max` linear RGBA colours (`[[r, g, b, a], ...]`), edited from the colour
     /// picker; Settings shows them and resets them.
     Colors {
@@ -131,6 +134,15 @@ pub const COLOR_SWATCHES: usize = 48;
 pub const RECENT_COLORS: usize = 12;
 /// Every setting, grouped by category in display order.
 pub const DEFS: &[Def] = &[
+    def(
+        "inspector.componentOrder",
+        User,
+        "Inspector",
+        "Component order",
+        "The Inspector's component sections in this order, set by Move Up and Move Down on a component; the rest follow, Transform first. The scene's data is unchanged.",
+        Kind::List,
+        Lit::None,
+    ),
     def(
         "scripts.ide",
         User,
@@ -309,6 +321,15 @@ pub const DEFS: &[Def] = &[
         Lit::Empty,
     ),
     def(
+        "viewport.overlayPresets",
+        User,
+        "Viewport",
+        "Scene toolbar presets",
+        "Saved Scene toolbar layouts by name (each toolbar=dock pairs, ; apart), from the Overlays menu's Save Preset As.",
+        Kind::Map,
+        Lit::Empty,
+    ),
+    def(
         "viewport.cameraSpeed",
         User,
         "Viewport",
@@ -353,6 +374,58 @@ pub const DEFS: &[Def] = &[
             unit: "m",
         },
         Lit::N(0.),
+    ),
+    def(
+        "game.aspect",
+        User,
+        "Game",
+        "Aspect",
+        "The Game view's aspect ratio; Free fills the view.",
+        Kind::Choice(&[
+            ("free", "Free"),
+            ("16x9", "16:9"),
+            ("16x10", "16:10"),
+            ("21x9", "21:9"),
+            ("4x3", "4:3"),
+            ("9x16", "9:16 portrait"),
+        ]),
+        Lit::S("free"),
+    ),
+    def(
+        "game.maximizeOnPlay",
+        User,
+        "Game",
+        "Maximize on Play",
+        "The Game view fills the editor while Play runs.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "game.stats",
+        User,
+        "Game",
+        "Statistics",
+        "Frame rate and resolution over the Game view.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "console.clearOnPlay",
+        User,
+        "Console",
+        "Clear on Play",
+        "Empty the Console each time Play starts.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "console.errorPause",
+        User,
+        "Console",
+        "Error pause",
+        "Pause Play when an error is logged, as Unity's Error Pause does.",
+        Kind::Toggle,
+        Lit::B(false),
     ),
     def(
         "input.keymap",
@@ -849,6 +922,13 @@ pub fn valid(d: &Def, value: &Value) -> Result<(), String> {
             _ => Err(format!("{} must be a number from {min} to {max}", d.label)),
         },
         Kind::Text if value.is_string() => Ok(()),
+        Kind::List
+            if value
+                .as_array()
+                .is_some_and(|l| l.iter().all(Value::is_string)) =>
+        {
+            Ok(())
+        }
         Kind::Map
             if value
                 .as_object()

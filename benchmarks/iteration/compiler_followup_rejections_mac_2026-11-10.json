@@ -472,6 +472,146 @@
       ],
       "initial_idle_snapshot_sha256": "3f5565b8d0c81261feac1807c70921626589e3a17a88b4f50c1687d0806dedff",
       "note": "User-authorized opportunistic window after correctness/gate work. Initial build-presence snapshot had zero blockers; another editor cargo check began during baseline. No candidate/reverse process, retry, or accepted timings."
+    },
+    {
+      "name": "overnight-retained-window-02",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "dac962ab41357d05e06b0e1be18d717504d35086917ab2425cf6f2edff7e122f",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 448,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 92881,
+              "pcpu_diagnostic_only": 18.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo run -q -p ara-dev -- fmt",
+              "ps_cumulative_cpu": "0:00.07"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "original_cell_flag": false,
+          "timings_accepted": false,
+          "unaccepted_raw": {
+            "first_ms": 2927.6117919944227,
+            "all_ms": [
+              2927.6117919944227,
+              1433.8120000029448,
+              1472.5452499988023,
+              1522.2207499900833,
+              1527.9643329849932,
+              1542.3819590068888,
+              1520.3255420201458,
+              1595.8837079815567,
+              1663.0435830156785,
+              1622.5310419977177,
+              1638.8854169927072,
+              1637.5882910215296,
+              1667.6446670026053,
+              1640.3204160160385,
+              1647.7512500132434,
+              1585.2090000116732,
+              1606.3084579946008,
+              1581.4540830033366,
+              1583.374834008282,
+              1593.5311659995932,
+              1569.2012920044363,
+              1593.6428329732735,
+              1585.9290410007816,
+              1604.5286250009667,
+              1631.4314160263166
+            ],
+            "warmup_count": 5,
+            "p50_ms": 1600.2061664912617,
+            "p95_ms": 1663.0435830156785,
+            "peak_rss_bytes": 256557056,
+            "runtime": {
+              "version": "10.0.7",
+              "image": "/usr/local/share/dotnet/shared/Microsoft.NETCore.App/10.0.7/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "4b8b6715976ab0b626474dbe62d4afc1cd4cd80e9794975b28f63393237f8043"
+          },
+          "raw_report_sha256": "d95a14170cbf951e18b1aaa4eea14ad3f5841af922222b847b04c37bf0832759"
+        }
+      ],
+      "note": "Started at an observed build pause; foreign formatter/editor test work overlapped baseline. No candidate/reverse process or accepted timings. Raw campaign under target/script-overnight-20261110."
+    },
+    {
+      "name": "overnight-dependency-window-03",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "b2ee5b039bf468476e702e7ed420a5a0d46a9c89997503a796a0415d7f7f67cb",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 456,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 41156,
+              "pcpu_diagnostic_only": 0.0,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo test -q -p ara-editor --lib studio::tests::captures -- --ignored",
+              "ps_cumulative_cpu": "0:00.02"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "original_cell_flag": false,
+          "timings_accepted": false,
+          "unaccepted_raw": {
+            "first_ms": 4037.1864999760874,
+            "all_ms": [
+              4037.1864999760874,
+              2706.3997499935795,
+              2749.6109170024283,
+              2744.383791985456,
+              2743.1339169852436,
+              2779.234416986583,
+              2758.999790996313,
+              2755.6225420266856,
+              2713.9452080009505,
+              2762.056667008437,
+              2760.9664160117973,
+              2718.0837909982074,
+              3005.577790987445,
+              2931.8536249920726,
+              2969.122041016817,
+              2920.027582993498,
+              3031.672625016654,
+              2934.2520420032088,
+              2987.60241700802,
+              3004.3286670115776,
+              3006.966665998334,
+              3076.984041981632,
+              2802.465667016804,
+              2918.864749983186,
+              2768.121291999705
+            ],
+            "warmup_count": 5,
+            "p50_ms": 2919.446166488342,
+            "p95_ms": 3031.672625016654,
+            "peak_rss_bytes": 638304256,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329"
+          },
+          "raw_report_sha256": "81de1de8f568c93de1dc12c3cfae49e9b68941f70ce87649255fd42f393a84f5"
+        }
+      ],
+      "note": "Started at an observed build pause; foreign formatter/editor test work overlapped baseline. No candidate/reverse process or accepted timings. Raw campaign under target/script-overnight-20261110."
     }
   ]
 }

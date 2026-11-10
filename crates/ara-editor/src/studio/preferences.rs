@@ -168,7 +168,16 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         }
         body = body.child(setting_row(s, def));
     }
-    if shown.is_empty() {
+    // Keyboard shortcuts: the commands themselves, under the preset; a search finds
+    // commands too.
+    let keyboard = v.scope == Scope::User
+        && (v.category == Some("Keyboard shortcuts") || !v.query.trim().is_empty());
+    let commands = keyboard
+        .then(|| super::shortcuts::table(s, &v.query))
+        .flatten();
+    let nothing = shown.is_empty() && commands.is_none();
+    body = body.children(commands);
+    if nothing {
         body = body.child(empty(
             l,
             icons::SEARCH,
@@ -373,9 +382,19 @@ fn control(s: &Studio, def: &Def, now: &Value) -> El<Studio> {
             }
             trigger
         }
-        Kind::Number { min, max, unit, .. } => {
-            let shown = now
-                .as_f64()
+        Kind::Number {
+            min,
+            max,
+            step,
+            unit,
+        } => {
+            let dragged = s
+                .local
+                .setting_drag
+                .filter(|(k, _)| *k == key)
+                .map(|(_, v)| v);
+            let value = dragged.or_else(|| now.as_f64());
+            let shown = value
                 .map(|v| {
                     if v.fract() == 0.0 {
                         format!("{v:.0}")
@@ -384,10 +403,36 @@ fn control(s: &Studio, def: &Def, now: &Value) -> El<Studio> {
                     }
                 })
                 .unwrap_or_default();
+            // A slider where the range is a span a hand can drag (not 0 to a million).
+            let track = (max - min > 0.0 && max - min <= 1000.0).then(|| {
+                let round = move |v: f64| match step > 0.0 {
+                    true => ((v / step).round() * step).clamp(min, max),
+                    false => v.clamp(min, max),
+                };
+                super::style::slider(
+                    l,
+                    format!("settings/{key}/track"),
+                    value.unwrap_or(min) as f32,
+                    (min as f32, max as f32),
+                    false,
+                    move |s: &mut Studio, v, done| {
+                        let v = round(f64::from(v));
+                        match done {
+                            false => s.local.setting_drag = Some((key, v)),
+                            true => {
+                                s.local.setting_drag = None;
+                                set(s, key, Some(json!(v)));
+                            }
+                        }
+                    },
+                )
+                .w(110.0)
+            });
             row()
-                .w(140.0)
+                .w(if track.is_some() { 240.0 } else { 140.0 })
                 .gap(6.0)
                 .align(Align::Center)
+                .children(track)
                 .child(
                     field(
                         l,
@@ -418,11 +463,29 @@ fn control(s: &Studio, def: &Def, now: &Value) -> El<Studio> {
                 Size::Sm,
                 format!("settings/{key}/text"),
                 None,
-                "",
+                // Empty means the default behaviour the description names.
+                "Default",
                 &shown,
                 move |f| f.on_submit(move |s: &mut Studio, t| set(s, key, Some(json!(t)))),
             )
             .w(240.0)
+        }
+        // Kept elsewhere: what it holds now (the row's Reset clears it).
+        Kind::List => {
+            let names: Vec<&str> = now
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            text(match names.is_empty() {
+                true => "Default".to_owned(),
+                false => names.join(", "),
+            })
+            .text_size(12.0)
+            .color(c.muted_foreground.0)
+            .wrap(1)
+            .tooltip(def.description)
         }
         Kind::Map | Kind::Colors { .. } => {
             let count = match now {

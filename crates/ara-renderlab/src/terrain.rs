@@ -17,6 +17,7 @@ use ara_runtime_render::{
     terrain_mesh::{TerrainMeshes, TileMesh},
 };
 use glam34::{Mat4 as AraMat4, Quat, Vec3 as AraVec3};
+use renderlab::engine::ProgramId;
 use renderlab::{
     asset::{TextureRole, Wrap},
     engine::{
@@ -75,6 +76,10 @@ pub(crate) struct Terrain {
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
     foliage_key: u64,
+    /// The layer atlas and parameters, and the layers' key they were built for.
+    splat: Option<(u64, crate::splat::Splat)>,
+    /// The splat program once tried: `Some(None)` when Renderlab rejected it.
+    splat_program: Option<Option<ProgramId>>,
 }
 
 impl Terrain {
@@ -100,6 +105,25 @@ impl Terrain {
         coords.sort();
         coords.dedup();
         let layers = Layers::resolve(view, gaps);
+        // Layer maps: one atlas per set of layers, rebuilt (and every tile re-placed,
+        // as the tile keys carry the layers' key) when the layers change.
+        let program = match layers.colours {
+            Some(_) => crate::splat::program(&mut self.splat_program, engine, gaps),
+            None => None,
+        };
+        let stale = self
+            .splat
+            .as_ref()
+            .is_some_and(|(key, _)| *key != layers.key);
+        let old_atlas = if stale {
+            self.splat.take().map(|(_, s)| s.atlas)
+        } else {
+            None
+        };
+        if program.is_some() && self.splat.is_none() && !layers.maps.is_empty() {
+            self.splat = Some((layers.key, crate::splat::build(engine, &layers.maps, gaps)?));
+        }
+        let splat = program.zip(self.splat.as_ref().map(|(_, s)| s));
         let wanted: Vec<_> = coords
             .iter()
             .filter_map(|coord| {
@@ -131,8 +155,11 @@ impl Terrain {
         }
         for (key, mesh, tile) in wanted.iter().take(budget) {
             if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(*key) {
-                slot.insert(place(engine, mesh, &tile.weights, &layers)?);
+                slot.insert(place(engine, mesh, &tile.weights, &layers, splat)?);
             }
+        }
+        if let Some(atlas) = old_atlas {
+            engine.remove_texture(atlas)?;
         }
 
         // Foliage: rebuilt when the terrain generation, the resident tiles or the
@@ -266,17 +293,19 @@ impl Terrain {
     }
 }
 
-/// The terrain's splat layers as the bridge draws them.
-struct Layers {
+/// The terrain's splat layers as the bridge draws them, borrowed from the view.
+struct Layers<'a> {
     /// Linear base colour factor per splat channel; `None` without layer materials.
     colours: Option<[[f32; 3]; 4]>,
+    /// Each resolved layer's material and cooked base-colour map, for the splat atlas.
+    maps: Vec<(&'a ara_runtime::model::ModelMaterial, Option<&'a [u8]>)>,
     roughness: f32,
     /// Changes when the colours do, so tiles are placed again.
     key: u64,
 }
 
-impl Layers {
-    fn resolve(view: &ExternalView<'_>, gaps: &mut Gaps) -> Self {
+impl<'a> Layers<'a> {
+    fn resolve(view: &ExternalView<'a>, gaps: &mut Gaps) -> Self {
         let references = view
             .frame
             .terrain
@@ -286,14 +315,18 @@ impl Layers {
             // As Ara's default surface: white, half rough.
             return Self {
                 colours: None,
+                maps: Vec::new(),
                 roughness: 0.5,
                 key: 0,
             };
         }
-        gaps.unsupported(
-            "terrain layer maps",
-            "each layer shows its base colour factor, blended by the splat weights",
-        );
+        if references.len() > 4 {
+            gaps.unsupported(
+                "terrain layers past the fourth",
+                "the first four layers are drawn",
+            );
+        }
+        let mut maps = Vec::new();
         let mut colours = [[1.; 3]; 4];
         let (mut roughness, mut key) = (0., FNV);
         for (colour, reference) in colours.iter_mut().zip(references) {
@@ -301,8 +334,15 @@ impl Layers {
                 .terrain_materials
                 .get(&reference.0)
                 .map(|m| &m.material);
-            if let Some(material) = material {
+            if let Some(asset) = view.terrain_materials.get(&reference.0) {
+                let material = &asset.material;
                 colour.copy_from_slice(&material.base_color[..3]);
+                let map = material
+                    .base_color_texture
+                    .and_then(|i| asset.textures.get(i))
+                    .map(|t| &t.ktx2[..]);
+                maps.push((material, map));
+                key = fnv(key, &asset.digest.0);
             }
             roughness += material.map_or(0.5, |m| m.roughness) / references.len().min(4) as f32;
             for channel in colour {
@@ -311,6 +351,7 @@ impl Layers {
         }
         Self {
             colours: Some(colours),
+            maps,
             roughness: roughness.clamp(0.045, 1.),
             key,
         }
@@ -322,13 +363,51 @@ fn place(
     engine: &mut Engine,
     tile: &TileMesh,
     weights: &[[u8; 4]],
-    layers: &Layers,
+    layers: &Layers<'_>,
+    splat: Option<(ProgramId, &crate::splat::Splat)>,
 ) -> Result<Tile> {
     let vertices: Vec<Vertex> = tile.source.vertices.iter().map(scene::vertex).collect();
     let mesh = engine.create_mesh(&MeshData {
         vertices: &vertices,
         indices: &tile.source.indices,
     })?;
+    let fits = weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1];
+    let clamp = Sampler {
+        wrap_u: Wrap::Clamp,
+        wrap_v: Wrap::Clamp,
+        ..Default::default()
+    };
+    // Layer maps: the shared atlas, and this tile's weights (one texel per height
+    // sample) in the metallic-roughness slot the splat program reads them from.
+    if let Some((program, splat)) = splat.filter(|_| fits) {
+        let rgba = weights.iter().flatten().copied().collect();
+        let weights = engine.create_texture(texture::chain(
+            tile.texture.size,
+            rgba,
+            TextureRole::MetallicRoughnessLinear,
+        ))?;
+        let material = engine.create_material(&MaterialDesc {
+            double_sided: true,
+            base_color_texture: Some(TextureRef {
+                texture: splat.atlas,
+                sampler: clamp,
+            }),
+            metallic_roughness_texture: Some(TextureRef {
+                texture: weights,
+                sampler: clamp,
+            }),
+            program: Some(program),
+            parameters: &splat.parameters,
+            ..Default::default()
+        })?;
+        let object = engine.spawn(mesh, material, Mat4::IDENTITY)?;
+        return Ok(Tile {
+            object,
+            mesh,
+            material,
+            texture: Some(weights),
+        });
+    }
     // One texel per height sample, as the tile mesh's coordinates address them.
     let texture = match layers.colours {
         Some(colours) if weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1] => {

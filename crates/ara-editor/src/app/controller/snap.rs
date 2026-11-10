@@ -1,6 +1,6 @@
 //! Exact contact previews are transient; release and End use ordinary transform commands.
 use super::*;
-use ara_doc::prefab::Resolved;
+use crate::surface_drop::{offset, within};
 use glam::Mat4;
 use std::collections::BTreeMap;
 
@@ -15,27 +15,6 @@ pub(super) struct Drag {
     vertices: Vec<Vec3>,
     source_vertex: Option<Vec3>,
     target: Option<(String, Mat4)>,
-}
-
-fn within(entities: &Resolved, id: &str, roots: impl Fn(&str) -> bool) -> bool {
-    let mut at = Some(id);
-    for _ in 0..=entities.len() {
-        let Some(id) = at else {
-            return false;
-        };
-        if roots(id) {
-            return true;
-        }
-        at = entities.get(id).and_then(|entity| entity.parent.as_deref());
-    }
-    false
-}
-
-fn offset(editor: &Editor) -> f32 {
-    editor
-        .state
-        .number("viewport.surfaceOffset", 0.)
-        .clamp(-1_000_000., 1_000_000.) as f32
 }
 
 fn setting(editor: &Editor, key: &str) -> bool {
@@ -442,133 +421,13 @@ impl Controller {
         if shell.viewport().is_none() {
             return Err("Drop to Surface requires the hosting Scene view".into());
         }
-        if !scene.snap_ready(&editor.state.doc) {
-            return Err("Drop to Surface is waiting for this scene's geometry; the previous scene cannot be used".into());
-        }
-        let view = editor.view()?;
-        let gesture = crate::world::gesture::Gesture::begin_tool(
-            view.entities(),
-            &editor.state,
-            editor.host.store().revision(),
-            crate::state::Tool::Translate,
-        )?;
-        if editor.state.selection.iter().any(|id| {
-            !within(view.entities(), id, |root| {
-                gesture.initial.contains_key(root)
-            })
-        }) {
-            return Err("Every selected root must support a transform; no roots were moved".into());
-        }
-        let selected: BTreeSet<_> = view
-            .entities()
-            .keys()
-            .filter(|id| {
-                within(view.entities(), id, |root| {
-                    gesture.initial.contains_key(root)
-                })
-            })
-            .map(String::as_str)
-            .collect();
-        let all = scene.snap_vertices(|id| {
-            shell
-                .outlines
-                .channels
-                .target_of(id)
-                .is_some_and(|address| selected.contains(address))
-        });
-        let excluded: BTreeSet<_> = all.iter().map(|vertex| vertex.entity).collect();
-        let gap = offset(editor);
-        if !gap.is_finite() {
-            return Err("Drop to Surface offset must be finite".into());
-        }
-        let mut commands = Vec::new();
-        for id in gesture.initial.keys() {
-            let source: Vec<_> = all
-                .iter()
-                .filter(|vertex| {
-                    shell
-                        .outlines
-                        .channels
-                        .target_of(vertex.entity)
-                        .is_some_and(|address| within(view.entities(), address, |root| root == id))
-                })
-                .map(|vertex| vertex.position)
-                .collect();
-            let low = source.iter().copied().reduce(Vec3::min).ok_or(
-                "Every selected root must have presented mesh geometry for Drop to Surface",
-            )?;
-            let high = source
-                .iter()
-                .copied()
-                .reduce(Vec3::max)
-                .ok_or("Source geometry is unavailable")?;
-            let origin = Vec3::new(
-                (low.x + high.x) * 0.5,
-                high.y + 0.001,
-                (low.z + high.z) * 0.5,
-            );
-            let hit = scene
-                .ray_hit_excluding(origin, -Vec3::Y, &excluded)
-                .ok_or("Drop to Surface found no supporting mesh below a selected root")?;
-            let address = shell
-                .outlines
-                .channels
-                .target_of(hit.entity)
-                .filter(|address| view.entities().contains_key(*address))
-                .ok_or("Drop target was removed or is unsupported")?;
-            let normal = if hit.normal[1] < 0. {
-                -Vec3::from(hit.normal)
-            } else {
-                Vec3::from(hit.normal)
-            };
-            if normal.y < 0.0001 {
-                return Err("Drop to Surface cannot rest on a vertical surface".into());
-            }
-            let point = Vec3::from(hit.position);
-            let support = source
-                .iter()
-                .copied()
-                .min_by(|a, b| a.dot(normal).total_cmp(&b.dot(normal)))
-                .ok_or("Source support is unavailable")?;
-            let dy = (gap - (support - point).dot(normal)) / normal.y;
-            let delta = Vec3::Y * dy;
-            let contact = support + delta - normal * gap;
-            let verify = scene
-                .ray_hit_excluding(contact + Vec3::Y * 0.002, -Vec3::Y, &excluded)
-                .ok_or("Selected geometry does not contact the finite target surface")?;
-            if shell.outlines.channels.target_of(verify.entity) != Some(address)
-                || Vec3::from(verify.position).distance(contact) > 0.01
-            {
-                return Err(
-                    "Selected support falls outside the target mesh; no transforms were changed"
-                        .into(),
-                );
-            }
-            let entity = view.entities().get(id).ok_or("Selected root was deleted")?;
-            let parent = entity
-                .parent
-                .as_deref()
-                .map(|parent| crate::world::world_transform(view.entities(), parent))
-                .unwrap_or(Some(Mat4::IDENTITY))
-                .ok_or("Selected parent was deleted")?;
-            if !parent.is_finite() || parent.determinant().abs() < 1e-20 || !delta.is_finite() {
-                return Err("Drop to Surface encountered an invalid transform".into());
-            }
-            let start = crate::world::local_transform(&entity.record)
-                .w_axis
-                .truncate();
-            let position = start + parent.inverse().transform_vector3(delta);
-            if !position.is_finite() {
-                return Err("Drop to Surface position is not finite".into());
-            }
-            if position.distance_squared(start) > 1e-12 {
-                commands.push(json!({"cmd":"transform.set","args":{"entities":[id],"position":position.to_array()}}));
-            }
-        }
-        if commands.is_empty() {
+        let channels = &shell.outlines.channels;
+        let Some((commands, base)) =
+            crate::surface_drop::plan(editor, scene, |id| channels.target_of(id))?
+        else {
             return Ok(false);
-        }
-        editor.apply(commands, "Drop selection to surface", Some(gesture.base))?;
+        };
+        editor.apply(commands, "Drop selection to surface", Some(base))?;
         shell.rebuild(editor)?;
         Ok(true)
     }

@@ -55,7 +55,7 @@ pub struct Editor {
     /// Independent baseline trace for the compare view.
     pub profile_baseline: Option<std::sync::Arc<ara_profile::Profile>>,
     /// Owned asynchronous player-profiling adapter, attached by the Play owner.
-    pub(crate) play_profiling: Option<Box<dyn crate::shell::profiler_targets::backend::Backend>>,
+    pub(crate) play_profiling: Option<Box<dyn crate::play_profiling::Backend>>,
     /// Deferred capture jobs, consumed by the GPU/window owner.
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
@@ -75,7 +75,7 @@ pub struct Editor {
     pub(crate) review_revision: u64,
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
-    pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    pub(crate) queued_commands: Vec<(String, crate::catalog::Target)>,
     pub(crate) extensions: crate::extensions::Catalog,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,
@@ -218,9 +218,7 @@ impl Editor {
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
         let script_recovery = play.script_recovery();
-        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(
-            play.profiling(),
-        ));
+        let play_profiling = Some(crate::play_profiling::attach_play(play.profiling()));
         host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
@@ -231,7 +229,7 @@ impl Editor {
         host.register(Box::new(probes))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(
-            crate::shell::reachability::ValidationService::default(),
+            crate::validation_service::ValidationService::default(),
         ))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let session = host

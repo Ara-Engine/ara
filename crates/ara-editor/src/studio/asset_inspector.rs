@@ -10,7 +10,7 @@ use stillkit::el::{Align, Axis, El, Side, col, el, icon, image, menu, row, text}
 
 use super::Studio;
 use super::style::ROW;
-use crate::shell::import_batch::{self, Change};
+use crate::import_edit::{self, Change};
 
 /// The asset inspector for `path`.
 pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
@@ -122,7 +122,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
     }
     if let Some(asset) = asset
         && matches!(asset.kind.as_str(), "graph" | "animation")
-        && let Some(doc) = crate::shell::import_panel::namespace::document(workspace, asset)
+        && let Some(doc) = crate::asset_links::namespace::document(workspace, asset)
     {
         let id = doc.id.to_string();
         body = body.child(
@@ -135,7 +135,7 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
                     "Open editor",
                 )
                 .key("asset/open")
-                .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"resource": id}))),
+                .on_press(move |s: &mut Studio| super::commands::open_resource(s, &id, "")),
             ),
         );
     }
@@ -161,8 +161,11 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
             ),
         );
     }
+    if let Some(asset) = asset {
+        body = body.child(band(l, "Details")).children(details(s, asset));
+    }
     if let Some(browser) = &s.assets {
-        let (uses, used_by) = crate::shell::import_panel::links(browser, workspace, path);
+        let (uses, used_by) = crate::asset_links::links(browser, workspace, path);
         for (title, links) in [("Uses", uses), ("Used by", used_by)] {
             body = body.child(band(l, &format!("{title} · {}", links.len())));
             if links.is_empty() {
@@ -205,6 +208,91 @@ pub(super) fn view(s: &Studio, path: &str) -> El<Studio> {
         .child(body)
 }
 
+/// A file's size as people read it.
+pub(super) fn bytes(n: u64) -> String {
+    match n {
+        n if n >= 1 << 30 => format!("{:.1} GB", n as f64 / f64::from(1u32 << 30)),
+        n if n >= 1 << 20 => format!("{:.1} MB", n as f64 / f64::from(1u32 << 20)),
+        n if n >= 1 << 10 => format!("{:.1} KB", n as f64 / 1024.0),
+        n => format!("{n} bytes"),
+    }
+}
+
+/// What the asset is: its kind, size on disk and when it last changed; for an authored
+/// document (scene, prefab, graph…) how many entities or records it holds and which
+/// components they carry, most common first.
+fn details(s: &Studio, asset: &crate::assets::Asset) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let line = |label: &str, value: String| {
+        row()
+            .label(format!("{label}: {value}"))
+            .min_h(ROW + 2.0)
+            .pad_x(12.0)
+            .pad_y(2.0)
+            .gap(8.0)
+            .align(Align::Start)
+            .child(
+                text(label.to_owned())
+                    .text_size(12.0)
+                    .color(c.muted_foreground.0)
+                    .w(96.0)
+                    .min_w(96.0),
+            )
+            .child(
+                text(value)
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .wrap(2)
+                    .grow(1.0)
+                    .min_w(0.0),
+            )
+    };
+    let kind = asset
+        .document_kind
+        .as_deref()
+        .unwrap_or(asset.kind.as_str());
+    let mut out = vec![line("Kind", crate::names::sentence(kind))];
+    if let Ok(meta) = std::fs::metadata(s.editor.host.root().join(&asset.path)) {
+        out.push(line("Size", bytes(meta.len())));
+        if let Some(ago) = meta.modified().ok().and_then(|at| at.elapsed().ok()) {
+            out.push(line("Modified", crate::turns::ago(ago)));
+        }
+    }
+    let workspace = s.editor.host.store().workspace();
+    if let Some(doc) = crate::asset_links::namespace::document(workspace, asset) {
+        let records = doc.records();
+        let mut tally: std::collections::BTreeMap<&str, usize> = Default::default();
+        for record in records.values() {
+            for key in record.keys().filter(|k| ara_doc::is_component_key(k)) {
+                *tally.entry(key.as_str()).or_default() += 1;
+            }
+        }
+        let noun = if kind == "scene" || kind == "prefab" {
+            "Entities"
+        } else {
+            "Records"
+        };
+        out.push(line(noun, records.len().to_string()));
+        if !tally.is_empty() {
+            let mut common: Vec<_> = tally.into_iter().collect();
+            common.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let shown: Vec<String> = common
+                .iter()
+                .take(6)
+                .map(|(name, n)| format!("{} {n}", super::inspector::spaced(name)))
+                .collect();
+            let more = common.len().saturating_sub(6);
+            let mut summary = shown.join(" · ");
+            if more > 0 {
+                summary.push_str(&format!(" · {more} more"));
+            }
+            out.push(line("Components", summary));
+        }
+    }
+    out
+}
+
 /// A section heading, as component headers are.
 fn band(l: &ara_kit::look::Look, title: &str) -> El<Studio> {
     row()
@@ -220,6 +308,16 @@ fn band(l: &ara_kit::look::Look, title: &str) -> El<Studio> {
         )
 }
 
+/// Where an importer setting is written: one source's sidecar, or the project's defaults
+/// for an importer type (which every source not setting the field inherits).
+#[derive(Clone, Debug, PartialEq)]
+enum Scope {
+    /// The source's import sidecar document.
+    Source(String),
+    /// The project's defaults for this importer (`ara.texture`, `ara.gltf`…).
+    Project(String),
+}
+
 /// The importer's settings as rows: each field with its schema doc, a checkbox, a choice or
 /// a typed value. Values the sidecar leaves out show the project's inherited defaults.
 fn settings_rows(
@@ -227,25 +325,92 @@ fn settings_rows(
     doc: &str,
     record: &ara_doc::Record,
 ) -> ara_ui::Result<Vec<El<Studio>>> {
-    let l = &s.look;
-    let c = &l.c;
     let settings: ara_asset::ImportSettings =
         serde_json::from_value(Value::Object(record.clone()))?;
-    let (defaults, schema) = match settings.importer.as_str() {
-        "ara.texture" => (
-            ara_json::to_value(&ara_importers::TextureSettings::default())?,
-            "TextureSettings",
-        ),
-        "ara.audio" => (
-            ara_json::to_value(&ara_importers::audio::Settings::default())?,
-            "AudioImportSettings",
-        ),
-        _ => (
-            ara_json::to_value(&ara_importers::MeshSettings::default())?,
-            "MeshSettings",
-        ),
-    };
-    let defaults = import_batch::inherited_defaults(&s.editor, &settings.importer, defaults)?;
+    let empty = serde_json::Map::new();
+    field_rows(
+        s,
+        &settings.importer,
+        settings.settings.as_object().unwrap_or(&empty),
+        Scope::Source(doc.to_owned()),
+    )
+}
+
+/// The Import panel with no asset picked: the project's importer defaults (Unity's
+/// Presets for importers), one importer type at a time, each field inherited by every
+/// source that does not set it; Reset puts the type back to the built-in values.
+pub(super) fn defaults_view(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    const TYPES: [(&str, &str); 4] = [
+        ("ara.texture", "Textures"),
+        ("ara.gltf", "glTF"),
+        ("ara.fbx", "FBX"),
+        ("ara.audio", "Audio"),
+    ];
+    let importer = s.local.import_defaults;
+    let chosen = TYPES.iter().position(|(t, _)| *t == importer).unwrap_or(0);
+    let options: Vec<(&str, Option<stillkit::icons::Icon>, &str)> =
+        TYPES.iter().map(|(t, title)| (*t, None, *title)).collect();
+    let picker = segmented(l, &options, chosen, |i| {
+        move |s: &mut Studio| s.local.import_defaults = TYPES[i].0
+    });
+    let rows = field_rows(
+        s,
+        importer,
+        &serde_json::Map::new(),
+        Scope::Project(importer.to_owned()),
+    )
+    .unwrap_or_default();
+    let reset = importer.to_owned();
+    col()
+        .grow(1.0)
+        .min_h(0.0)
+        .scroll(Axis::Vertical)
+        .child(band(l, "Project import defaults"))
+        .child(
+            col()
+                .pad(10.0)
+                .gap(8.0)
+                .child(
+                    text("A source's own settings come first, then these, then the importer's built-in values. Sources that inherit a changed field reimport; each change is one undo step.")
+                        .text_size(11.5)
+                        .wrap(3)
+                        .color(c.muted_foreground.0),
+                )
+                .child(picker),
+        )
+        .children(rows)
+        .child(
+            row().pad(10.0).child(
+                button(l, Tone::Ghost, Size::Sm, Some(icons::ROTATE_CCW), "Reset to built-in defaults")
+                    .key("import/defaults/reset")
+                    .on_press(move |s: &mut Studio| {
+                        let change = Change::Reset(reset.clone());
+                        if let Err(error) = import_edit::apply_changes(
+                            &mut s.editor,
+                            vec![change],
+                            "Reset importer type defaults",
+                        ) {
+                            s.editor.report_failure(&*error);
+                        }
+                    }),
+            ),
+        )
+}
+
+/// One row per field of `importer`'s settings: `values` as set where `scope` writes, the
+/// project's inherited defaults (else the built-in values) for the rest.
+fn field_rows(
+    s: &Studio,
+    importer: &str,
+    values: &serde_json::Map<String, Value>,
+    scope: Scope,
+) -> ara_ui::Result<Vec<El<Studio>>> {
+    let l = &s.look;
+    let c = &l.c;
+    let (defaults, schema) = import_edit::settings(importer)?;
+    let defaults = import_edit::inherited_defaults(&s.editor, importer, defaults)?;
     let db = s.editor.host.store().schema();
     let metadata = db.get(schema).and_then(|ty| match &ty.shape {
         ara_schema::Shape::Struct { fields, .. } => Some(fields),
@@ -257,10 +422,10 @@ fn settings_rows(
     };
     for (key, default) in fields {
         // Encoding quality follows the project; FBX opacity maps are not a choice.
-        if key == "preset" || (settings.importer == "ara.fbx" && key == "opacityMaps") {
+        if key == "preset" || (importer == "ara.fbx" && key == "opacityMaps") {
             continue;
         }
-        let value = settings.settings.get(key).unwrap_or(default).clone();
+        let value = values.get(key).unwrap_or(default).clone();
         let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
         let help = desc.map(|f| f.doc.clone()).unwrap_or_default();
         let name = match key.as_str() {
@@ -268,10 +433,10 @@ fn settings_rows(
             "lodError" => "LOD error".to_owned(),
             "flipNormalY" => "Flip normal Y".to_owned(),
             "maxDimension" => "Max dimension".to_owned(),
-            _ => crate::shell::inspector_panel::sentence(key),
+            _ => crate::names::sentence(key),
         };
         let field_key = format!("asset/setting/{key}");
-        let (doc_id, setting) = (doc.to_owned(), key.clone());
+        let (doc_id, setting) = (scope.clone(), key.clone());
         let editor: El<Studio> = if let Some(on) = value.as_bool() {
             row().child(
                 checkbox(l, field_key, &name, on)
@@ -281,7 +446,7 @@ fn settings_rows(
             desc.map(|d| crate::inspector::widget(db, d))
         {
             let nullable = desc.is_some_and(|d| matches!(&d.ty, ara_schema::ValueType::Option(_)));
-            let choices = import_batch::enum_values(options, nullable);
+            let choices = import_edit::enum_values(options, nullable);
             let current = choices
                 .iter()
                 .find(|(v, _)| *v == value)
@@ -359,15 +524,22 @@ fn settings_rows(
     Ok(out)
 }
 
-/// Sets one importer setting (one undo step through `import.configure`).
-fn set(s: &mut Studio, doc: &str, field: &str, value: Value) {
-    let change = Change::Setting {
-        doc: doc.to_owned(),
-        field: field.to_owned(),
-        value,
+/// Sets one importer setting where `scope` writes (one undo step).
+fn set(s: &mut Studio, scope: &Scope, field: &str, value: Value) {
+    let change = match scope {
+        Scope::Source(doc) => Change::Setting {
+            doc: doc.clone(),
+            field: field.to_owned(),
+            value,
+        },
+        Scope::Project(importer) => Change::ProjectField {
+            importer: importer.clone(),
+            field: field.to_owned(),
+            value,
+        },
     };
     if let Err(error) =
-        import_batch::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
+        import_edit::apply_changes(&mut s.editor, vec![change], "Edit importer settings")
     {
         s.editor.report_failure(&*error);
     }

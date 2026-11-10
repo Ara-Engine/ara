@@ -23,7 +23,7 @@ fn shown(s: &Studio, f: &Field) -> String {
         (_, Some(reference)) => {
             let source = reference.trim_start_matches('@');
             let source = source.split('#').next().unwrap_or(source);
-            crate::shell::names::stem(source.rsplit('/').next().unwrap_or(source)).to_owned()
+            crate::names::stem(source.rsplit('/').next().unwrap_or(source)).to_owned()
         }
     }
 }
@@ -57,7 +57,7 @@ fn candidates(s: &Studio, f: &Field, query: &str) -> Vec<(Value, String, String)
                 .filter(|a| a.fits(kind.as_deref(), &f.path))
                 .filter_map(|a| {
                     let reference = a.current_reference(workspace)?;
-                    let title = crate::shell::names::stem(a.name()).to_owned();
+                    let title = crate::names::stem(a.name()).to_owned();
                     let folder = a.path.rsplit_once('/').map_or("", |(d, _)| d).to_owned();
                     matches(&title).then_some((json!(reference), title, folder))
                 })
@@ -157,9 +157,7 @@ fn picker(
         .scroll(Axis::Vertical);
     if found.len() == 1 {
         let what = match &f.widget {
-            Widget::Asset { kind } => {
-                crate::shell::assets::field_accepts(kind.as_deref(), &f.path).1
-            }
+            Widget::Asset { kind } => crate::assets::field_accepts(kind.as_deref(), &f.path).1,
             _ => "an entity",
         };
         list = list.child(
