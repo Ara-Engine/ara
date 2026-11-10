@@ -1112,6 +1112,25 @@ fn the_inspectors_debug_mode_shows_the_record() {
 }
 
 #[test]
+fn the_profiler_shows_scopes_under_their_callers() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    press(&mut rt, "profiler/tree");
+    let parent = "profiler/call/studio.scene";
+    let child = "profiler/call/studio.scene/scene.render";
+    assert!(rt.find(parent).is_some(), "a root scope");
+    assert!(rt.find(child).is_none(), "its callee waits until it opens");
+    press(&mut rt, parent);
+    assert!(rt.find(child).is_some(), "opened: what it called");
+    press(&mut rt, "profiler/flat");
+    assert!(rt.find(parent).is_none(), "the flat list again");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
@@ -2415,6 +2434,22 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // The Profiler's call tree, one scope open.
+        rt.update(|s| {
+            super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+            s.local.profiler_tree = true;
+            s.local.profiler_open.insert("studio.scene".into());
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-profiler-tree.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.profiler_tree = false);
         // The Inspector's Debug mode: the record itself.
         rt.update(|s| {
             s.act("editor.layout.show", json!({"panel": "inspector"}));
