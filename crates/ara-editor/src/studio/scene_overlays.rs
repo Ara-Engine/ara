@@ -754,6 +754,7 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
                 "Orthographic"
             };
             line()
+                .child(draw_mode_button(s, vertical))
                 .child(
                     labelled(l, icons::VIDEO, projection, vertical)
                         .key("scene/projection")
@@ -803,6 +804,152 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
             .child(settings_button(s, "camera", camera_panel)),
         _ => el(),
     }
+}
+
+/// The render debug switches the draw-mode menu offers: title, and how to read and
+/// flip it.
+type Switch = (
+    &'static str,
+    fn(&ara_render::RenderDebug) -> bool,
+    fn(&mut ara_render::RenderDebug),
+);
+const EFFECTS: [Switch; 9] = [
+    (
+        "Ambient occlusion",
+        |d| d.ambient_occlusion,
+        |d| d.ambient_occlusion = !d.ambient_occlusion,
+    ),
+    ("Shadows", |d| d.shadows, |d| d.shadows = !d.shadows),
+    (
+        "Soft shadows",
+        |d| d.soft_shadows,
+        |d| d.soft_shadows = !d.soft_shadows,
+    ),
+    (
+        "Screen reflections",
+        |d| d.screen_reflections,
+        |d| d.screen_reflections = !d.screen_reflections,
+    ),
+    (
+        "Reflection captures",
+        |d| d.reflection_captures,
+        |d| d.reflection_captures = !d.reflection_captures,
+    ),
+    (
+        "Global illumination",
+        |d| d.global_illumination,
+        |d| d.global_illumination = !d.global_illumination,
+    ),
+    ("Screen GI", |d| d.screen_gi, |d| d.screen_gi = !d.screen_gi),
+    (
+        "Volumetric fog",
+        |d| d.volumetric_fog,
+        |d| d.volumetric_fog = !d.volumetric_fog,
+    ),
+    (
+        "Temporal jitter",
+        |d| d.temporal_jitter,
+        |d| d.temporal_jitter = !d.temporal_jitter,
+    ),
+];
+
+/// Flips one render debug switch: the Scene view reads it each frame, a running Play
+/// gets it at once, and each Play start carries it.
+fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)) {
+    flip(&mut s.editor.state.render_debug);
+    if let Some(world) = s.editor.play_world.clone() {
+        let debug = s.editor.state.render_debug;
+        s.act(
+            "play.renderDebug",
+            json!({"world": world, "renderDebug": debug}),
+        );
+    }
+}
+
+/// Unity's draw mode menu: the current view mode, opening every mode by group and the
+/// effect switches.
+fn draw_mode_button(s: &Studio, vertical: bool) -> El<Studio> {
+    let l = &s.look;
+    let current = crate::app::viewport::VIEW_MODES
+        .iter()
+        .find(|(name, ..)| *name == s.editor.state.view_mode)
+        .map_or("Lit", |(_, title, ..)| *title);
+    let effects_off = EFFECTS
+        .iter()
+        .filter(|(_, on, _)| !on(&s.editor.state.render_debug))
+        .count();
+    let label = if effects_off > 0 {
+        format!("{current} · {effects_off} off")
+    } else {
+        current.to_owned()
+    };
+    let open = s.local.overlay_settings == Some("draw");
+    let mut button = labelled(l, icons::SUN, &label, vertical)
+        .key("scene/draw-mode")
+        .tooltip("Draw mode and effects")
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.overlay_settings = if s.local.overlay_settings == Some("draw") {
+                None
+            } else {
+                Some("draw")
+            }
+        });
+    if open {
+        button = button.overlay(
+            popover(
+                super::style::float(l, row())
+                    .key("scene/draw-mode/panel")
+                    .pad(8.0)
+                    .gap(12.0)
+                    .align(Align::Start)
+                    .children(draw_mode_items(s)),
+            )
+            .side(stillkit::el::Side::Bottom)
+            .align(Align::Start)
+            .offset(6.0)
+            .on_dismiss(|s: &mut Studio| s.local.overlay_settings = None),
+        );
+    }
+    button
+}
+
+/// The draw mode menu's two columns: Shading and Material modes; Lighting and
+/// Performance modes, then the effect switches.
+fn draw_mode_items(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let column = |groups: &[&str]| {
+        let mut out = col().w(190.0).gap(1.0);
+        for group in groups {
+            out = out.child(menu_heading(l, group));
+            for (name, title, _, _) in crate::app::viewport::VIEW_MODES
+                .iter()
+                .filter(|(.., heading, _)| heading == group)
+            {
+                let on = s.editor.state.view_mode == *name
+                    || (s.editor.state.view_mode.is_empty() && *name == "lit");
+                let name = *name;
+                out = out.child(
+                    menu_check(l, &format!("scene/draw-mode/{name}"), title, on).on_press(
+                        move |s: &mut Studio| {
+                            s.local.overlay_settings = None;
+                            s.act("editor.view", json!({"viewMode": name}));
+                        },
+                    ),
+                );
+            }
+        }
+        out
+    };
+    let mut second = column(&["Lighting", "Performance"]).child(menu_heading(l, "Effects"));
+    for (title, on, flip) in EFFECTS {
+        let checked = on(&s.editor.state.render_debug);
+        second = second.child(
+            menu_check(l, &format!("scene/effect/{title}"), title, checked)
+                .on_press(move |s: &mut Studio| flip_effect(s, flip)),
+        );
+    }
+    vec![column(&["Shading", "Material"]), second]
 }
 
 /// A chevron that opens overlay `id`'s settings panel.
@@ -1068,6 +1215,80 @@ fn camera_panel(s: &Studio) -> El<Studio> {
                 .pad_y(4.0),
         )
         .child(stillkit::el::grid(3).gap(2.0).children(qualities))
+        .children(bookmarks(s))
+}
+
+/// Saved views of the open scene (Unreal's bookmarks): recall one, delete one, or save
+/// the current view as the next `View N`.
+fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let mut out = vec![
+        row()
+            .pad_y(4.0)
+            .align(Align::Center)
+            .child(
+                text("Saved views")
+                    .text_size(12.0)
+                    .color(c.muted_foreground.0)
+                    .grow(1.0),
+            )
+            .child(
+                button(l, Tone::Ghost, Size::Sm, Some(icons::PLUS), "Save view")
+                    .key("scene/bookmark/save")
+                    .on_press(|s: &mut Studio| {
+                        s.act("editor.camera.bookmark", json!({"action": "save"}))
+                    }),
+            ),
+    ];
+    let saved = s.editor.state.camera_bookmarks.get(&s.editor.state.doc);
+    if saved.is_none_or(|b| b.is_empty()) {
+        out.push(
+            text("None yet: save the view you are looking at to come back to it.")
+                .text_size(11.5)
+                .wrap(2)
+                .color(c.muted_foreground.0),
+        );
+    }
+    for name in saved.into_iter().flat_map(|b| b.keys()) {
+        let (recall, delete, hover) = (name.clone(), name.clone(), c.hover_surface.0);
+        out.push(
+            row()
+                .key(format!("scene/bookmark/{name}"))
+                .h(26.0)
+                .pad_x(6.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .radius(super::style::RADIUS)
+                .label(name.clone())
+                .hovered(move |e| e.fill(hover))
+                .on_press(move |s: &mut Studio| {
+                    s.act(
+                        "editor.camera.bookmark",
+                        json!({"action": "recall", "name": recall}),
+                    )
+                })
+                .child(icon(icons::BOOKMARK).size(12.0).color(c.muted_foreground.0))
+                .child(
+                    text(name.clone())
+                        .text_size(12.0)
+                        .color(c.foreground.0)
+                        .grow(1.0),
+                )
+                .child(
+                    toggle(l, icons::X, "Delete", false)
+                        .size(20.0)
+                        .key(format!("scene/bookmark/{name}/delete"))
+                        .on_press(move |s: &mut Studio| {
+                            s.act(
+                                "editor.camera.bookmark",
+                                json!({"action": "delete", "name": delete}),
+                            )
+                        }),
+                ),
+        );
+    }
+    out
 }
 
 /// An overlay's surface: the panels' strip tone, nearly opaque, no border, so it reads

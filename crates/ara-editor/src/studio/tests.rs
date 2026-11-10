@@ -282,6 +282,74 @@ fn scene_overlays_move_to_another_edge_collapse_and_hide() {
 }
 
 #[test]
+fn the_draw_mode_menu_switches_view_modes_and_effects() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/draw-mode");
+    assert!(
+        rt.find("scene/draw-mode/overdraw").is_some(),
+        "every mode is offered"
+    );
+    press(&mut rt, "scene/draw-mode/wireframe");
+    assert_eq!(rt.state().editor.state.view_mode, "wireframe");
+    press(&mut rt, "scene/draw-mode");
+    press(&mut rt, "scene/effect/Shadows");
+    assert!(
+        !rt.state().editor.state.render_debug.shadows,
+        "Shadows turned off"
+    );
+}
+
+#[test]
+fn dragging_a_box_in_the_scene_selects_what_it_covers() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| s.select(Vec::new(), false));
+    let view = rt.find("scene/view").expect("the Scene view");
+    // The whole view: every visible, unlocked entity with an origin in front of the camera.
+    let (a, b) = (
+        (view.left + 2.0, view.top + 2.0),
+        (view.right - 2.0, view.bottom - 2.0),
+    );
+    rt.pointer_move(a.0, a.1);
+    rt.frame(FRAME);
+    rt.pointer_down(a.0, a.1);
+    for step in 1..=6 {
+        let t = step as f32 / 6.0;
+        rt.pointer_move(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+        rt.frame(FRAME);
+    }
+    assert!(
+        rt.state().local.marquee.is_some(),
+        "the box shows while dragging"
+    );
+    rt.pointer_up(b.0, b.1);
+    settle(&mut rt);
+    let selected = rt.state().editor.state.selection.clone();
+    assert!(selected.contains(&"e_box".to_owned()), "{selected:?}");
+    assert!(rt.state().local.marquee.is_none());
+}
+
+#[test]
+fn the_camera_overlay_saves_and_recalls_views() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/overlay/camera/settings");
+    press(&mut rt, "scene/bookmark/save");
+    let doc = rt.state().editor.state.doc.clone();
+    let saved: Vec<String> = rt.state().editor.state.camera_bookmarks[&doc]
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(saved.len(), 1, "{saved:?}");
+    let before = rt.state().editor.state.camera;
+    rt.update(|s| s.editor.state.camera.orbit([1.0, 0.3]));
+    assert_ne!(rt.state().editor.state.camera, before);
+    press(&mut rt, &format!("scene/bookmark/{}", saved[0]));
+    assert_eq!(rt.state().editor.state.camera, before, "recalled");
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();

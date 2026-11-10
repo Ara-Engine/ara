@@ -725,18 +725,10 @@ impl EditorService {
             "editor.view" => {
                 let p: EditorView = parse(params)?;
                 if let Some(mode) = p.view_mode {
-                    if !matches!(
-                        mode.as_str(),
-                        "lit"
-                            | "baseColor"
-                            | "normals"
-                            | "depth"
-                            | "roughnessMetal"
-                            | "entityIds"
-                            | "shadowCascades"
-                            | "wireframe"
-                            | "litWireframe"
-                    ) {
+                    if !crate::app::viewport::VIEW_MODES
+                        .iter()
+                        .any(|(name, ..)| *name == mode)
+                    {
                         return Err(vec![crate::invalid(format!("unknown view mode `{mode}`"))]);
                     }
                     state.view_mode = mode;

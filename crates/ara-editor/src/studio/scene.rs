@@ -101,7 +101,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 None => Handled::No,
             }
         })
-        .children(super::scene_overlays::layer(s));
+        .children(super::scene_overlays::layer(s))
+        .children(s.local.marquee.map(|(a, b, _)| {
+            let c = &l.c;
+            el().absolute(a[0].min(b[0]), a[1].min(b[1]))
+                .w((a[0] - b[0]).abs())
+                .h((a[1] - b[1]).abs())
+                .fill(c.primary.0.with_alpha(0.1))
+                .border(1.0, c.primary.0.with_alpha(0.7))
+        }));
     // Flying: the speed, which the wheel changes.
     if s.local.flying {
         let speed = s
@@ -221,6 +229,20 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         (PointerPhase::Move, Button::Left) if e.mods.alt => {
             camera.orbit([e.delta.x * 0.008, e.delta.y * 0.008])
         }
+        // A drag from empty space selects what its box covers (Shift adds).
+        (PointerPhase::Move, Button::Left)
+            if !e.mods.alt && e.travel().x.abs() + e.travel().y.abs() >= 4.0 =>
+        {
+            let start = [at[0] - e.travel().x, at[1] - e.travel().y];
+            s.local.marquee = Some((start, at, e.mods.shift));
+        }
+        (PointerPhase::Up, Button::Left) if s.local.marquee.is_some() => {
+            if let Some((from, to, additive)) = s.local.marquee.take() {
+                let ids = marquee_hits(s, from, to, e.size);
+                s.select(ids, additive);
+            }
+        }
+        (PointerPhase::Cancel, _) if s.local.marquee.is_some() => s.local.marquee = None,
         (PointerPhase::Up, Button::Left)
             if !e.mods.alt && e.travel().x.abs() + e.travel().y.abs() < 4.0 && e.size.0 > 0.0 =>
         {
@@ -235,6 +257,34 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         _ => return false,
     }
     true
+}
+
+/// The entities whose origins project inside the box from `a` to `b` (view px) of a view
+/// `size`, front to back; hidden and locked ones are left out, as clicks leave them.
+fn marquee_hits(s: &Studio, a: [f32; 2], b: [f32; 2], size: (f32, f32)) -> Vec<String> {
+    let rect = ara_ui::paint::Box2 {
+        x: 0.0,
+        y: 0.0,
+        w: size.0,
+        h: size.1,
+    };
+    let (x0, x1) = (a[0].min(b[0]), a[0].max(b[0]));
+    let (y0, y1) = (a[1].min(b[1]), a[1].max(b[1]));
+    let state = &s.editor.state;
+    let camera = state.camera;
+    let eye = camera.position();
+    let mut hits: Vec<(f32, String)> = crate::world::world_transforms(&s.resolved)
+        .into_iter()
+        .filter(|(id, _)| !state.hidden.contains(id) && !state.locked.contains(id))
+        .filter_map(|(id, m)| {
+            let origin = m.w_axis.truncate();
+            let [x, y] = crate::shell::overlay::project(&camera, rect, origin)?;
+            ((x0..=x1).contains(&x) && (y0..=y1).contains(&y))
+                .then(|| ((origin - eye).length(), id))
+        })
+        .collect();
+    hits.sort_by(|p, q| p.0.total_cmp(&q.0));
+    hits.into_iter().map(|(_, id)| id).collect()
 }
 
 /// The Orientation overlay: the axis gizmo, and the frame rate under it while frames run.

@@ -239,6 +239,9 @@ pub struct Local {
     pub overlay_popup: Option<&'static str>,
     /// A Scene overlay's settings panel, open.
     pub overlay_settings: Option<&'static str>,
+    /// A box being dragged in the Scene view to select what it covers: where it started
+    /// and where the pointer is (view px), and whether it adds to the selection.
+    pub marquee: Option<([f32; 2], [f32; 2], bool)>,
     /// The Scene tab's Overlays menu, open.
     pub overlays_menu: bool,
     /// The open reference picker (an asset or entity field): its path and the search typed.
