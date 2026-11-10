@@ -123,14 +123,24 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             .text_size(11.5)
             .color(c.muted_foreground.0),
         );
-    let mut tools = row().gap(2.0);
-    for (tool, id, title, glyph) in TOOLS {
-        tools = tools.child(
-            toggle_button(l, Size::Sm, glyph, title, on && p.tool == tool)
-                .key(format!("paint/tool/{}", tool.name()))
-                .on_press(run(id)),
-        );
-    }
+    // The tools by name as well as icon (each reads at a glance, as Unreal's do).
+    let keys: Vec<String> = TOOLS
+        .iter()
+        .map(|(t, ..)| format!("paint/tool/{}", t.name()))
+        .collect();
+    let options: Vec<(&str, Option<stillkit::icons::Icon>, &str)> = TOOLS
+        .iter()
+        .zip(&keys)
+        .map(|((_, _, title, _), key)| (key.as_str(), None, *title))
+        .collect();
+    let chosen = TOOLS
+        .iter()
+        .position(|(t, ..)| on && *t == p.tool)
+        .unwrap_or(usize::MAX);
+    let tools = segmented(l, &options, chosen, |i| {
+        let id = TOOLS[i].1;
+        move |s: &mut Studio| super::commands::run(s, id, &Target::None)
+    });
     let mut quick = row().gap(4.0);
     for (id, color) in [
         ("paint.color.white", [1.0, 1.0, 1.0, 1.0]),

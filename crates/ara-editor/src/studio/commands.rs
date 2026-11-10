@@ -1860,6 +1860,60 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
     }
 }
 
+/// Whether command `id` applies to `target` now, so a context menu lists only what does
+/// (a probe's capture for probes, a prefab's overrides for instances, Paste with something
+/// copied). Commands it does not know about always apply.
+pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
+    let e = &s.editor;
+    let record = |key: &str| {
+        target
+            .entity(&e.state)
+            .and_then(|id| s.resolved.get(id))
+            .is_some_and(|row| row.record.contains_key(key))
+    };
+    let instance = || {
+        target
+            .entity(&e.state)
+            .is_some_and(|id| crate::prefab::instance(e.host.store(), &e.state.doc, id).is_some())
+    };
+    match id {
+        "lighting.probe.recapture" => record("ReflectionProbe"),
+        "lighting.probe.cancel" => super::lighting::capturing(s),
+        "lighting.inspect" => [
+            "Light",
+            "ReflectionProbe",
+            "PostProcessVolume",
+            "HeightFog",
+            "FogVolume",
+            "Sky",
+        ]
+        .into_iter()
+        .any(record),
+        "prefab.open" | "prefab.revert_all" | "prefab.unpack" | "prefab.apply_all" => instance(),
+        "prefab.apply_override" | "prefab.revert_override" => match target {
+            Target::Field(path) => super::inspector::field_of(s, path)
+                .is_some_and(|f| f.provenance == crate::inspector::Provenance::Override),
+            _ => false,
+        },
+        "edit.paste" => s.local.entity_clipboard.is_some(),
+        "field.paste" => s.local.field_clipboard.is_some(),
+        "component.paste" => match target {
+            Target::Component(kind) => s
+                .local
+                .component_clipboard
+                .as_ref()
+                .is_some_and(|(copied, _)| copied == kind),
+            _ => s.local.component_clipboard.is_some(),
+        },
+        "assets.open_ide" => match target {
+            Target::Asset(path) => path.ends_with(".cs"),
+            _ => false,
+        },
+        "lighting.preset.manual" | "lighting.preset.interior" => record("PostProcessVolume"),
+        _ => true,
+    }
+}
+
 /// The registry spec of `id`, for titles, icons and shortcuts.
 pub(super) fn spec(id: &str) -> Option<&'static crate::catalog::Command> {
     crate::catalog::get(id)

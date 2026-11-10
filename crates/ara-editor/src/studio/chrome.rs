@@ -314,8 +314,14 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
     for item in items {
         match item {
             Item::Separator => out.push(Line::Separator),
-            // Only what the editor runs is listed.
-            Item::Command(id) if crate::catalog::get(id).is_some() => out.push(Line::Command(id)),
+            // Only what the editor runs; a context menu, only what applies to what was
+            // clicked (the menu bar keeps every entry).
+            Item::Command(id)
+                if crate::catalog::get(id).is_some()
+                    && (*target == Target::None || commands::applies(s, id, target)) =>
+            {
+                out.push(Line::Command(id))
+            }
             Item::Sub(title, sub) if depth < 2 => {
                 out.push(Line::Separator);
                 out.push(Line::Heading(title));

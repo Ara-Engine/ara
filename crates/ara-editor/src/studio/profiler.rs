@@ -420,10 +420,12 @@ fn lanes(s: &Studio, profile: &Profile, frame: &Frame, width: f32) -> El<Studio>
                         ms(span.self_ns)
                     ))
                     .children((w > 48.0).then(|| {
+                        // Within its bar: a long name ends early rather than running on.
                         text(label.clone())
                             .text_size(10.0)
                             .color(Rgba::new(0.0, 0.0, 0.0, 0.85))
                             .pad_x(4.0)
+                            .w(w)
                             .wrap(1)
                     })),
             );
