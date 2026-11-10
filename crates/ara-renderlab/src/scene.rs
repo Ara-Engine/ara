@@ -1,10 +1,15 @@
 //! Keeps Renderlab's scene equal to the extracted frame's draws. Geometry and
 //! materials are shared by content key, objects follow their entity, and skinned
 //! primitives are posed on the GPU from the frame's palettes. Renderlab draws at
-//! most `TRACED_DRAWS` mesh-material groups per frame; draws beyond that are left
-//! out and reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives itself (foliage)
-//! are placed once per content key and then left alone.
-use crate::{gaps::Gaps, texture};
+//! most `TRACED_DRAWS` mesh-material groups per frame; past that, static groups merge
+//! into world-space batches per material (`batch`), and only what still does not fit
+//! is left out. Both are reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives
+//! itself (foliage) are placed once per content key and then left alone.
+use crate::{
+    batch::{self, Fate, Group},
+    gaps::Gaps,
+    texture,
+};
 use anyhow::{Context, Result};
 use ara_runtime::{
     extract::{Draw, Geometry, RenderFrame},
@@ -56,6 +61,15 @@ struct Object {
     skin: Option<(MeshId, usize)>,
 }
 
+/// One material's static batch: its members' triangles merged in world space.
+struct Batch {
+    /// The members' geometry and transforms the mesh was built from.
+    content: u64,
+    id: ObjectId,
+    mesh: MeshId,
+    material_slot: u64,
+}
+
 /// Renderlab handles for everything the frame draws.
 #[derive(Default)]
 pub(crate) struct Scene {
@@ -64,6 +78,8 @@ pub(crate) struct Scene {
     materials: HashMap<u64, Shared<MaterialId>>,
     textures: HashMap<(u64, u8), TextureId>,
     objects: HashMap<u64, Object>,
+    /// Static batches by material key (`batch`).
+    batches: HashMap<u64, Batch>,
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
     palette: Vec<Mat4>,
@@ -110,6 +126,18 @@ fn source(draw: &Draw) -> Option<(&ModelMaterial, &[ModelTexture])> {
 /// Whether the draw's material samples a normal map (its mesh then needs tangents).
 fn normal_mapped(draw: &Draw) -> bool {
     source(draw).is_some_and(|(m, _)| m.normal_texture.is_some())
+}
+
+/// Whether the draw can be seen through (as `Scene::material` decides): such draws
+/// sort per object and never join a static batch.
+fn see_through(draw: &Draw) -> bool {
+    match source(draw) {
+        Some((m, _)) => {
+            m.transmission_factor > 0.
+                || (m.alpha_mode == 2 && m.base_color[3] * draw.color[3] < 1.)
+        }
+        None => draw.color[3] < 1.,
+    }
 }
 
 fn geometry_key(draw: &Draw) -> u64 {
@@ -294,9 +322,10 @@ impl Scene {
     ) -> Result<()> {
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
-        let mut live = HashSet::with_capacity(frame.draws.len() + static_draws.len());
-        let mut groups = HashSet::new();
-        let mut dropped = 0usize;
+        // Each draw's group, and the groups in order of first appearance.
+        let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
+        let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
+        let mut groups: Vec<Group> = Vec::new();
         let draws = frame
             .draws
             .iter()
@@ -315,15 +344,36 @@ impl Scene {
                 };
                 (mesh, material_key(draw))
             });
-            if !groups.contains(&(mesh, material)) {
-                if groups.len() >= budget {
+            let group = *index.entry((mesh, material)).or_insert_with(|| {
+                groups.push(Group {
+                    material,
+                    mergeable: matches!(mesh, MeshKey::Static(_)) && !see_through(draw),
+                    objects: 0,
+                });
+                groups.len() - 1
+            });
+            groups[group].objects += 1;
+            keyed.push((draw, mesh, material, placed.is_some(), group));
+        }
+        let fates = batch::plan(&groups, budget);
+
+        let mut live = HashSet::with_capacity(keyed.len());
+        let mut merged: HashMap<u64, Vec<&Draw>> = HashMap::new();
+        let mut dropped = 0usize;
+        for (draw, mesh, material, placed, group) in keyed {
+            match fates[group] {
+                Fate::Dropped => {
                     dropped += 1;
                     continue;
                 }
-                groups.insert((mesh, material));
+                Fate::Merged => {
+                    merged.entry(material).or_default().push(draw);
+                    continue;
+                }
+                Fate::Own => {}
             }
             live.insert(draw.entity);
-            if placed.is_some() {
+            if placed {
                 continue;
             }
             if draw.paint.is_some() {
@@ -335,11 +385,21 @@ impl Scene {
             self.place(engine, frame, draw, mesh, material, gaps)?;
         }
         self.static_key = Some(static_key);
-        if dropped > 0 {
+        if !merged.is_empty() {
             gaps.limit(
                 "mesh-material groups per frame",
                 &format!(
-                    "{dropped} draws of this frame are not drawn (the limit is {MAX_GROUPS}, {reserved} of them terrain tiles)"
+                    "{} draws are merged into {} static batches to fit the limit of {MAX_GROUPS} ({reserved} of them terrain tiles); a batch whose members move is rebuilt",
+                    merged.values().map(Vec::len).sum::<usize>(),
+                    merged.len()
+                ),
+            );
+        }
+        if dropped > 0 {
+            gaps.limit(
+                "mesh-material groups after static batching",
+                &format!(
+                    "{dropped} draws of this frame are not drawn: more distinct materials than the limit of {MAX_GROUPS} ({reserved} of them terrain tiles)"
                 ),
             );
         }
@@ -352,7 +412,91 @@ impl Scene {
         for entity in gone {
             self.remove(engine, entity)?;
         }
+        self.sync_batches(engine, merged, gaps)
+    }
+
+    /// Makes the static batches equal `merged` (members by material key): a batch
+    /// whose members or their transforms changed is rebuilt, one no longer needed
+    /// is removed.
+    fn sync_batches(
+        &mut self,
+        engine: &mut Engine,
+        merged: HashMap<u64, Vec<&Draw>>,
+        gaps: &mut Gaps,
+    ) -> Result<()> {
+        let gone: Vec<u64> = self
+            .batches
+            .keys()
+            .filter(|material| !merged.contains_key(material))
+            .copied()
+            .collect();
+        for material in gone {
+            self.remove_batch(engine, material)?;
+        }
+        for (material, members) in merged {
+            let content = members
+                .iter()
+                .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
+                    let h = fnv(h, &geometry_key(draw).to_le_bytes());
+                    draw.world
+                        .to_cols_array()
+                        .iter()
+                        .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
+                });
+            if self
+                .batches
+                .get(&material)
+                .is_some_and(|b| b.content == content)
+            {
+                continue;
+            }
+            self.remove_batch(engine, material)?;
+            let first = members[0];
+            let wanted = normal_mapped(first);
+            let (mut vertices, mut indices) = (Vec::new(), Vec::new());
+            for draw in &members {
+                let (mut source, mut triangles) = triangles(draw)?;
+                if wanted {
+                    split_handedness(source.to_mut(), triangles.to_mut());
+                }
+                batch::append_world(
+                    &draw.world,
+                    &source,
+                    &triangles,
+                    &mut vertices,
+                    &mut indices,
+                );
+            }
+            let label = format!(
+                "a static batch of {} draws like `{}`",
+                members.len(),
+                first.label
+            );
+            let (mesh, tangents) = upload(engine, &label, &vertices, &indices, wanted, gaps)?;
+            let material_slot = fnv(material, &[u8::from(tangents)]);
+            let material_id = self.material(engine, first, material_slot, tangents, gaps)?;
+            let id = engine.spawn(mesh, material_id, Mat4::IDENTITY)?;
+            self.batches.insert(
+                material,
+                Batch {
+                    content,
+                    id,
+                    mesh,
+                    material_slot,
+                },
+            );
+        }
         Ok(())
+    }
+
+    /// Despawns a material's static batch and releases its mesh and its use of the material.
+    fn remove_batch(&mut self, engine: &mut Engine, material: u64) -> Result<()> {
+        let Some(batch) = self.batches.remove(&material) else {
+            return Ok(());
+        };
+        engine.despawn(batch.id)?;
+        engine.remove_mesh(batch.mesh)?;
+        self.release_material(engine, batch.material_slot)
     }
 
     /// Spawns, replaces or moves the object of one draw.
@@ -443,11 +587,16 @@ impl Scene {
             }
             (MeshKey::Skinned(_), None) => {}
         }
-        if let Some(shared) = self.materials.get_mut(&object.material_slot) {
+        self.release_material(engine, object.material_slot)
+    }
+
+    /// Drops one use of a shared material, removing it with its last user.
+    fn release_material(&mut self, engine: &mut Engine, slot: u64) -> Result<()> {
+        if let Some(shared) = self.materials.get_mut(&slot) {
             shared.users -= 1;
             if shared.users == 0 {
                 engine.remove_material(shared.id)?;
-                self.materials.remove(&object.material_slot);
+                self.materials.remove(&slot);
             }
         }
         Ok(())
@@ -471,31 +620,8 @@ impl Scene {
         if wanted {
             split_handedness(source.to_mut(), indices.to_mut());
         }
-        let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
-        let data = MeshData {
-            vertices: &vertices,
-            indices: &indices,
-        };
-        let frames = wanted.then(|| tangents(&source)).flatten();
-        let uploaded = frames
-            .as_ref()
-            .map(|frames| engine.create_mesh_with_tangents(&data, frames));
-        let (id, tangents) = match uploaded {
-            Some(Ok(id)) => (id, true),
-            rejected => {
-                if wanted {
-                    let why = match rejected {
-                        Some(Err(error)) => error.to_string(),
-                        _ => "a tangent is missing or lies along its normal".to_owned(),
-                    };
-                    gaps.unsupported(
-                        "normal maps on meshes without usable tangents",
-                        &format!("`{}` shades with its vertex normals ({why})", draw.label),
-                    );
-                }
-                (engine.create_mesh(&data)?, false)
-            }
-        };
+        let label = format!("`{}`", draw.label);
+        let (id, tangents) = upload(engine, &label, &source, &indices, wanted, gaps)?;
         self.meshes.insert(key, (Shared { id, users: 1 }, tangents));
         Ok((id, tangents))
     }
@@ -682,6 +808,44 @@ impl Scene {
         self.textures.insert(key, id);
         Ok(id)
     }
+}
+
+/// Uploads static triangles, with tangents when `wanted` (a normal-mapped material) and
+/// usable; otherwise without, reported under `label`. Returns the mesh and whether it
+/// carries tangents.
+fn upload(
+    engine: &mut Engine,
+    label: &str,
+    source: &[ModelVertex],
+    indices: &[u32],
+    wanted: bool,
+    gaps: &mut Gaps,
+) -> Result<(MeshId, bool)> {
+    let vertices: Vec<Vertex> = source.iter().map(vertex).collect();
+    let data = MeshData {
+        vertices: &vertices,
+        indices,
+    };
+    let frames = wanted.then(|| tangents(source)).flatten();
+    let uploaded = frames
+        .as_ref()
+        .map(|frames| engine.create_mesh_with_tangents(&data, frames));
+    Ok(match uploaded {
+        Some(Ok(id)) => (id, true),
+        rejected => {
+            if wanted {
+                let why = match rejected {
+                    Some(Err(error)) => error.to_string(),
+                    _ => "a tangent is missing or lies along its normal".to_owned(),
+                };
+                gaps.unsupported(
+                    "normal maps on meshes without usable tangents",
+                    &format!("{label} shades with its vertex normals ({why})"),
+                );
+            }
+            (engine.create_mesh(&data)?, false)
+        }
+    })
 }
 
 /// Uploads one skinned primitive with its own pose (`joints` plus the identity joint).
