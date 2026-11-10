@@ -304,7 +304,10 @@ mod tests {
             }
         }
         for texel in prepared.diffuse_irradiance().texels() {
-            assert!((texel[0] - 2. * std::f32::consts::PI).abs() < 1e-2, "{texel:?}");
+            assert!(
+                (texel[0] - 2. * std::f32::consts::PI).abs() < 1e-2,
+                "{texel:?}"
+            );
         }
     }
 

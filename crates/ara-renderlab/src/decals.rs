@@ -181,7 +181,9 @@ impl Decals {
             }
             let mut id = fnv(FNV, &[kind as u8]);
             id = base.map_or(fnv(id, b"white"), |b| fnv(id, b));
-            id = cover.map_or(fnv(id, b"opaque"), |(b, c)| fnv(fnv(id, b), &c.to_le_bytes()));
+            id = cover.map_or(fnv(id, b"opaque"), |(b, c)| {
+                fnv(fnv(id, b), &c.to_le_bytes())
+            });
             let prepared = match self.textures.get(&id).or(used.get(&id)) {
                 Some(prepared) => prepared.clone(),
                 None => {
@@ -234,7 +236,11 @@ impl Decals {
             .and_then(|s| s.opacity_texture)
             .map(|(index, _, channel)| (index, channel));
         let textures = DecalTextures {
-            base_color: texture(m.base_color_texture, DecalTextureKind::BaseColorSrgb, coverage)?,
+            base_color: texture(
+                m.base_color_texture,
+                DecalTextureKind::BaseColorSrgb,
+                coverage,
+            )?,
             metallic_roughness: texture(
                 m.metallic_roughness_texture,
                 DecalTextureKind::MetallicRoughness,
@@ -291,11 +297,7 @@ mod tests {
             .iter()
             .flat_map(|v| [*v; 4])
             .collect();
-        let half = Pixels {
-            size: [4, 2],
-            rgba,
-        }
-        .halved();
+        let half = Pixels { size: [4, 2], rgba }.halved();
         assert_eq!(half.size, [2, 1]);
         assert_eq!(half.rgba, [[100u8; 4], [200; 4]].concat());
     }

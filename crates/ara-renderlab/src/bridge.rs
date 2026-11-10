@@ -9,8 +9,8 @@ use crate::{
     gaps::Gaps,
     lighting::{self, Metering, SkySource},
     scene::{MAX_GROUPS, Scene},
-    terrain::Terrain,
     shared::SharedHandoff,
+    terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
 use ara_gpu::{
