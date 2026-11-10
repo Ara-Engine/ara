@@ -2,7 +2,7 @@
 
 ## Large-edit correctness, independent of timing admission
 
-The current compiler at production source `04270033f` passes a warm-session versus fresh-one-shot matrix with **2,048 generated component/query sources plus a shared dependency**, across nine modules. Each consumer source exceeds the incremental text implementation's 2 KiB boundary and includes non-ASCII UTF-16. Cases cover initial compilation, a shared constant edit with unchanged consumers, edits to every consumer, renames/removal/addition, Release-to-Debug IL, compiler rejection/repair, and analyzer-policy rejection/repair.
+The current compiler at production source `04270033f` passes a warm-session versus fresh-one-shot matrix with **2,048 generated component/query sources plus a shared dependency**, across nine modules. Each consumer source exceeds the incremental text implementation's 2,048 UTF-16 code-unit boundary and includes non-ASCII UTF-16. Cases cover initial compilation, a shared constant edit with unchanged consumers, edits to every consumer, renames/removal/addition, Release-to-Debug IL, compiler rejection/repair, and analyzer-policy rejection/repair.
 
 All **18 responses**, **81 module pairs** and **71 newly emitted PE/PDB pairs** match exactly, with no diagnostic, fingerprint, MVID or PDB normalization. Caller-owned compile identity is the same in both arms. Schema checks independently require the exact component names and field types; lifecycle and error identities are checked. Failed modules keep their previous good PE/PDB bytes and return no schema/fingerprint. Every successful consumer also executes a controlled scalar constant-reading witness: **32,256 calls** return the exact expected float bits, including dependency changes and both repairs. A deliberately incorrect expected float bit pattern is rejected by the verifier.
 
@@ -109,3 +109,5 @@ python3 benchmarks/iteration/retained_gc.py --baseline /absolute/baseline/Ara.Co
 ```
 
 The checked-in portable controller and hook also passed a fresh four-process tiny quality run; every response had exactly one counter row and exact PE/PDB/schema parity. This is a diagnostic instrument, not part of the engine or a gameplay state store.
+
+The later opportunistic dependency attempt (`dependency-abba-window-03`) also remains rejected: its initial snapshot had no build blockers, but an editor `cargo check` started during baseline. The guard rejected that cell before starting candidate/reverse processes. Frozen inputs and power stayed stable; those raw durations are not new performance evidence. The existing rejection ledger binds this attempt and the initial readiness snapshot.

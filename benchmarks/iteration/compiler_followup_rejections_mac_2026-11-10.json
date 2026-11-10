@@ -401,6 +401,77 @@
           "timings_accepted": false
         }
       ]
+    },
+    {
+      "name": "dependency-abba-window-03",
+      "accepted": false,
+      "failure": "RuntimeError('rejected 0-baseline; raw durations unaccepted, no retry')",
+      "campaign_sha256": "bad50312b725dc44dd03870e08cfdeafd720d3d704392da1724182d5e27343d7",
+      "cells": [
+        {
+          "key": "0-baseline",
+          "exit": 0,
+          "observer_error_count": 956,
+          "first_error": {
+            "kind": "competing_tool",
+            "tool": {
+              "pid": 17982,
+              "pcpu_diagnostic_only": 16.2,
+              "comm": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo",
+              "argv": "/Users/islam/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin/cargo check -q -p ara-editor --all-targets",
+              "ps_cumulative_cpu": "0:00.10"
+            }
+          },
+          "stable_bundles": true,
+          "stable_scripts": true,
+          "stable_power": true,
+          "original_cell_flag": false,
+          "timings_accepted": false,
+          "unaccepted_raw": {
+            "first_ms": 3981.5127920010127,
+            "all_ms": [
+              3981.5127920010127,
+              2727.2421669913456,
+              2736.789874994429,
+              2755.72708301479,
+              2693.5177920095157,
+              2693.815667007584,
+              2913.621042011073,
+              3042.3358750122134,
+              2826.254625018919,
+              2785.5353329796344,
+              2705.3963330108672,
+              2920.9038330009207,
+              3067.7852499939036,
+              3229.0128329768777,
+              3319.828542007599,
+              3557.4174580106046,
+              3264.519249991281,
+              3211.5001660131384,
+              3248.5829170036595,
+              3188.4838749829214,
+              3033.1521249900106,
+              3024.02162499493,
+              3144.3913749826606,
+              3073.646707984153,
+              2987.5131669978146
+            ],
+            "warmup_count": 5,
+            "p50_ms": 3055.0605625030585,
+            "p95_ms": 3319.828542007599,
+            "peak_rss_bytes": 616562688,
+            "runtime": {
+              "version": "10.0.14",
+              "image": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/toolchains/dotnet/shared/Microsoft.NETCore.App/10.0.14/libcoreclr.dylib",
+              "error": null
+            },
+            "server_sha256": "cc2afaf1aa53e4a6e4ff19e73a3305bee958868248051426c4554565ffb92329"
+          },
+          "raw_report_sha256": "01bd1b763ba6b09e376c2f7e91eb7811fce62d120aa0810cf07c127946c19769"
+        }
+      ],
+      "initial_idle_snapshot_sha256": "3f5565b8d0c81261feac1807c70921626589e3a17a88b4f50c1687d0806dedff",
+      "note": "User-authorized opportunistic window after correctness/gate work. Initial build-presence snapshot had zero blockers; another editor cargo check began during baseline. No candidate/reverse process, retry, or accepted timings."
     }
   ]
 }
