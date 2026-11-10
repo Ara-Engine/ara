@@ -1,7 +1,7 @@
 use super::Context;
 use crate::{
     GpuError, Result,
-    cooked::{CookedPipeline, Stage, binding_layout_hash, legacy_preview_layout_hash},
+    cooked::{CookedPipeline, Stage, binding_layout_compatible, legacy_preview_layout_hash},
 };
 use ash::vk::{self, TaggedStructure};
 use sha2::{Digest, Sha256};
@@ -14,6 +14,7 @@ pub(super) struct NativePipeline {
     pub colors: Vec<vk::Format>,
     pub depth: Option<vk::Format>,
     pub vertex_stride: u32,
+    pub raster: crate::raster::RasterState,
 }
 
 pub(super) fn create(
@@ -88,8 +89,9 @@ pub(super) fn create_inner(
                 (Stage::Vertex, "previewVertex") | (Stage::Fragment, "previewFragment")
             )
         });
+    cooked.state.validate()?;
     if cooked.version != 1
-        || (cooked.binding_layout_hash != binding_layout_hash()
+        || (!binding_layout_compatible(&cooked.binding_layout_hash)
             && !(legacy_preview && cooked.binding_layout_hash == legacy_preview_layout_hash()))
     {
         return Err(GpuError::Contract(
@@ -171,27 +173,62 @@ pub(super) fn create_inner(
                 )
             } else {
                 let state = &cooked.state;
-                let bindings = [vk::VertexInputBindingDescription {
-                    binding: 0,
-                    stride: state.vertex_stride,
-                    input_rate: vk::VertexInputRate::VERTEX,
-                }];
-                let attributes = [
-                    (0, vk::Format::R32G32B32_SFLOAT, 0),
-                    (1, vk::Format::R32G32B32_SFLOAT, 12),
-                    (2, vk::Format::R32G32_SFLOAT, 24),
-                    (3, vk::Format::R32G32B32A32_SFLOAT, 32),
-                ]
-                .map(|(location, format, offset)| {
-                    vk::VertexInputAttributeDescription {
-                        location,
+                let explicit = &state.raster.vertex_layouts;
+                let bindings: Vec<_> = if explicit.is_empty() {
+                    vec![vk::VertexInputBindingDescription {
                         binding: 0,
-                        format,
-                        offset,
-                    }
-                });
+                        stride: state.vertex_stride,
+                        input_rate: vk::VertexInputRate::VERTEX,
+                    }]
+                } else {
+                    explicit
+                        .iter()
+                        .enumerate()
+                        .map(|(i, b)| vk::VertexInputBindingDescription {
+                            binding: i as u32,
+                            stride: b.stride,
+                            input_rate: if b.step == crate::raster::VertexStep::Instance {
+                                vk::VertexInputRate::INSTANCE
+                            } else {
+                                vk::VertexInputRate::VERTEX
+                            },
+                        })
+                        .collect()
+                };
+                let attributes: Vec<_> = if explicit.is_empty() {
+                    [
+                        (0, vk::Format::R32G32B32_SFLOAT, 0),
+                        (1, vk::Format::R32G32B32_SFLOAT, 12),
+                        (2, vk::Format::R32G32_SFLOAT, 24),
+                        (3, vk::Format::R32G32B32A32_SFLOAT, 32),
+                    ]
+                    .map(
+                        |(location, format, offset)| vk::VertexInputAttributeDescription {
+                            location,
+                            binding: 0,
+                            format,
+                            offset,
+                        },
+                    )
+                    .to_vec()
+                } else {
+                    explicit
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(i, b)| {
+                            b.attributes
+                                .iter()
+                                .map(move |a| vk::VertexInputAttributeDescription {
+                                    location: a.location,
+                                    binding: i as u32,
+                                    format: a.format.vk(),
+                                    offset: a.offset,
+                                })
+                        })
+                        .collect()
+                };
                 let mut input = vk::PipelineVertexInputStateCreateInfo::default();
-                if state.vertex_stride != 0 {
+                if state.vertex_stride != 0 || !explicit.is_empty() {
                     input = input
                         .vertex_binding_descriptions(&bindings)
                         .vertex_attribute_descriptions(&attributes);
@@ -203,21 +240,36 @@ pub(super) fn create_inner(
                     .scissor_count(1);
                 let raster = vk::PipelineRasterizationStateCreateInfo::default()
                     .polygon_mode(vk::PolygonMode::FILL)
-                    .cull_mode(vk::CullModeFlags::NONE)
-                    .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+                    .cull_mode(match state.raster.cull {
+                        crate::raster::CullMode::None => vk::CullModeFlags::NONE,
+                        crate::raster::CullMode::Front => vk::CullModeFlags::FRONT,
+                        crate::raster::CullMode::Back => vk::CullModeFlags::BACK,
+                    })
+                    .front_face(
+                        if state.raster.front_face == crate::raster::FrontFace::Clockwise {
+                            vk::FrontFace::CLOCKWISE
+                        } else {
+                            vk::FrontFace::COUNTER_CLOCKWISE
+                        },
+                    )
+                    .depth_bias_enable(
+                        state.raster.depth_bias != 0.0 || state.raster.depth_bias_slope != 0.0,
+                    )
+                    .depth_bias_constant_factor(state.raster.depth_bias)
+                    .depth_bias_slope_factor(state.raster.depth_bias_slope)
                     .line_width(1.);
                 let samples = vk::PipelineMultisampleStateCreateInfo::default()
-                    .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+                    .rasterization_samples(state.raster.samples.vk());
                 let depth = vk::PipelineDepthStencilStateCreateInfo::default()
                     .depth_test_enable(state.depth_test)
                     .depth_write_enable(state.depth_write)
-                    .depth_compare_op(vk::CompareOp::GREATER_OR_EQUAL);
+                    .depth_compare_op(state.raster.depth_compare.vk());
                 let attachments = state
                     .color_formats
                     .iter()
                     .enumerate()
                     .map(|(i, _)| {
-                        vk::PipelineColorBlendAttachmentState::default()
+                        let base = vk::PipelineColorBlendAttachmentState::default()
                             .color_write_mask(vk::ColorComponentFlags::RGBA)
                             .blend_enable(state.blend && i == 0)
                             .src_color_blend_factor(vk::BlendFactor::ONE)
@@ -225,7 +277,19 @@ pub(super) fn create_inner(
                             .color_blend_op(vk::BlendOp::ADD)
                             .src_alpha_blend_factor(vk::BlendFactor::ONE)
                             .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-                            .alpha_blend_op(vk::BlendOp::ADD)
+                            .alpha_blend_op(vk::BlendOp::ADD);
+                        match state.raster.blends.get(i) {
+                            Some(Some(b)) => base
+                                .blend_enable(true)
+                                .src_color_blend_factor(blend_factor(b.color.source))
+                                .dst_color_blend_factor(blend_factor(b.color.destination))
+                                .color_blend_op(blend_op(b.color.operation))
+                                .src_alpha_blend_factor(blend_factor(b.alpha.source))
+                                .dst_alpha_blend_factor(blend_factor(b.alpha.destination))
+                                .alpha_blend_op(blend_op(b.alpha.operation)),
+                            Some(None) => base.blend_enable(false),
+                            None => base,
+                        }
                     })
                     .collect::<Vec<_>>();
                 let blend =
@@ -287,6 +351,7 @@ pub(super) fn create_inner(
                 .collect(),
             depth: cooked.state.depth_format.map(vk::Format::from_raw),
             vertex_stride: cooked.state.vertex_stride,
+            raster: cooked.state.raster.clone(),
         })
     })();
     // SAFETY: Pipelines retain compiled shader state; modules are not needed after creation.
@@ -308,4 +373,30 @@ pub(super) fn create_inner(
         );
     }
     result
+}
+
+fn blend_factor(f: crate::raster::BlendFactor) -> vk::BlendFactor {
+    use crate::raster::BlendFactor as F;
+    match f {
+        F::Zero => vk::BlendFactor::ZERO,
+        F::One => vk::BlendFactor::ONE,
+        F::SrcColor => vk::BlendFactor::SRC_COLOR,
+        F::OneMinusSrcColor => vk::BlendFactor::ONE_MINUS_SRC_COLOR,
+        F::DstColor => vk::BlendFactor::DST_COLOR,
+        F::OneMinusDstColor => vk::BlendFactor::ONE_MINUS_DST_COLOR,
+        F::SrcAlpha => vk::BlendFactor::SRC_ALPHA,
+        F::OneMinusSrcAlpha => vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        F::DstAlpha => vk::BlendFactor::DST_ALPHA,
+        F::OneMinusDstAlpha => vk::BlendFactor::ONE_MINUS_DST_ALPHA,
+    }
+}
+fn blend_op(o: crate::raster::BlendOp) -> vk::BlendOp {
+    use crate::raster::BlendOp as O;
+    match o {
+        O::Add => vk::BlendOp::ADD,
+        O::Subtract => vk::BlendOp::SUBTRACT,
+        O::ReverseSubtract => vk::BlendOp::REVERSE_SUBTRACT,
+        O::Min => vk::BlendOp::MIN,
+        O::Max => vk::BlendOp::MAX,
+    }
 }

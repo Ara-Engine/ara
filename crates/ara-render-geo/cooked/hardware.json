@@ -1,36 +1,36 @@
 {
-  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "binding_layout_hash": "6e98ce4dd92c90451e22a5910212ac13d2bf64f9bcdd45125309cefdfd97339e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1",
+  "key": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8",
   "stages": [
     {
-      "dxil": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareFragment.dxil",
+      "dxil": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareFragment.dxil",
       "dxil_hash": "be09e5298a66f828ae0d8509b5f352bb453fc7163d423a426680605d7a504281",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareFragment.metallib",
+        "metallib": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareFragment.metallib",
         "metallib_hash": "6951986d9798489aa214f38822f6b753816346a42fede2a5c977f3bbc5787140",
-        "reflection": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareFragment.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareFragment.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "hardwareFragment",
-      "spirv": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareFragment.spv",
+      "spirv": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "7fcf933f802b07b309cb49f6c1ce01ec70d5bf0f7f59a0df5d4c5c0ffcc69216",
       "stage": "fragment"
     },
     {
-      "dxil": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareVertex.dxil",
+      "dxil": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareVertex.dxil",
       "dxil_hash": "829dc6a811944763f8aea75a43c17ff67d9b530aef094cfcb9f6b4995bc9e681",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareVertex.metallib",
+        "metallib": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareVertex.metallib",
         "metallib_hash": "e3f0122d30792fd7d20b7c035d2ac4b6b76fcbf95806d8775ba9c6721525640c",
-        "reflection": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareVertex.metal.json",
-        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+        "reflection": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareVertex.metal.json",
+        "root_signature_hash": "68bd1b3ae9ee9588b7e4bb9086abd7aad52da0a91c80746b14195dba00617be1"
       },
       "source_entry": "hardwareVertex",
-      "spirv": "4221b14a71692086f003b361b1fdfb9c60ed50ca3b4159f2ac05478737a9f8c1/hardware/hardwareVertex.spv",
+      "spirv": "d7e684293be211632b84ad4ebcd91d29bd2a6b9efc1837f637c5bfe43df4aad8/hardware/hardwareVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "197f602e2e71c3c5377492bafdd7f55222f7cbf11e41e37bd8c381b86b20740a",
       "stage": "vertex"
@@ -42,6 +42,16 @@
     "depth_format": 126,
     "depth_test": true,
     "depth_write": true,
+    "raster": {
+      "blends": [],
+      "cull": "none",
+      "depth_bias": 0.0,
+      "depth_bias_slope": 0.0,
+      "depth_compare": "greaterEqual",
+      "front_face": "counterClockwise",
+      "samples": "One",
+      "vertex_layouts": []
+    },
     "vertex_stride": 0
   },
   "version": 1

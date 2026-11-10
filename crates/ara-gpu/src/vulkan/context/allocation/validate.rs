@@ -13,9 +13,20 @@ pub(crate) fn validate_image(
         format,
         mip_levels,
         usage,
+        shape,
         ..
     } = *desc;
     let [width, height] = size;
+    shape.validate(size)?;
+    if shape.dimension == crate::texture::TextureDimension::D3
+        && usage.intersects(
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    {
+        return Err(GpuError::Contract(
+            "3D textures expose sampled/storage views, not raster attachments".into(),
+        ));
+    }
     crate::attachments::validate_usage(usage)?;
     if matches!(
         format,
@@ -35,21 +46,10 @@ pub(crate) fn validate_image(
         || width > max_dimension
         || height > max_dimension
         || mip_levels == 0
-        || mip_levels > width.max(height).ilog2() + 1
+        || mip_levels > width.max(height).max(shape.depth).ilog2() + 1
     {
         return Err(GpuError::Contract(
             "Image extent or mip count exceeds device limits".into(),
-        ));
-    }
-    if mip_levels > 1
-        && usage.intersects(
-            vk::ImageUsageFlags::STORAGE
-                | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-        )
-    {
-        return Err(GpuError::Contract(
-            "Mip chains are sampled textures, not storage or attachment images".into(),
         ));
     }
     // SAFETY: Capability query is read-only and validates this format/usage combination.
@@ -57,7 +57,11 @@ pub(crate) fn validate_image(
         instance.get_physical_device_image_format_properties(
             physical,
             format,
-            vk::ImageType::TYPE_2D,
+            if shape.dimension == crate::texture::TextureDimension::D3 {
+                vk::ImageType::TYPE_3D
+            } else {
+                vk::ImageType::TYPE_2D
+            },
             vk::ImageTiling::OPTIMAL,
             usage,
             // An sRGB storage image is created mutable with extended usage: its
@@ -75,6 +79,9 @@ pub(crate) fn validate_image(
     if mip_levels > caps.max_mip_levels
         || width > caps.max_extent.width
         || height > caps.max_extent.height
+        || shape.depth > caps.max_extent.depth
+        || shape.layers > caps.max_array_layers
+        || !caps.sample_counts.contains(shape.samples.vk())
     {
         return Err(GpuError::Contract(
             "Image shape exceeds format-specific limits".into(),

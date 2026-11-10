@@ -1102,6 +1102,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-diag",
+ "ara-gpu-replay",
  "ara-json",
  "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
@@ -1121,6 +1122,15 @@ dependencies = [
  "thiserror 2.0.21",
  "tracy-client",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ara-gpu-replay"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "half",
+ "naga",
 ]
 
 [[package]]

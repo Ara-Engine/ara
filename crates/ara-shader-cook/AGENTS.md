@@ -40,8 +40,13 @@ the last good cook after compiler failure. It runs the real Slang/DXIL tools.
 No runtime compilation, no Slang Metal target. Optional Metal lane (`src/metal.rs`):
 when Metal Shader Converter is found (`ARA_METAL_SHADERCONVERTER`, `PATH`, Apple's
 default install), each stage's DXIL becomes `<entry>.metallib` + `<entry>.metal.json`
-under its key with the fixed `metal/root-signature.json`; stages refresh when the
+under its key with `metal/root-signature.json`: regular sampler arrays use s0
+space0 (Vulkan binding 2), comparison arrays s0 space5 (binding 6). New cooks emit
+v4; the runtime accepts existing v3 table prefixes. Stages refresh when the
 converter version, root signature or metallib hash changes. Without it the cook
 succeeds and warns `ARA_GPU_METAL_COOK_SKIPPED` (ARA6007) once per process.
-Windows is the canonical cook host: never commit cooked artifacts made on a Mac
-(the Mac's Slang can't load dxc for DXIL; `tests/incremental.rs` is ignored there).
+Windows is the default cook host. D37 permits explicitly requested complete Mac
+test-cohort refreshes. On macOS, Slang emits HLSL and the SDK's adjacent `dxc`
+compiles SM6.6 DXIL; its executable/libraries and the Mac recipe enter the key.
+The SDK-backed incremental test runs on Mac too. Every carried target must be
+rebuilt before publishing a complete refresh; native verification remains required.

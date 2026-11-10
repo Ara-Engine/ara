@@ -92,6 +92,7 @@ fn main() -> Result<()> {
                     depth_test: name != "sky",
                     depth_write,
                     blend: false,
+                    ..Default::default()
                 },
                 defines: BTreeMap::new(),
             },

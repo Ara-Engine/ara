@@ -27,14 +27,18 @@ mod queries;
 mod query_tests;
 mod recording;
 mod reload;
+mod render_targets;
 pub use reload::ShaderStatus;
 mod queue_gate;
 pub use queue_gate::QueueGate;
+mod barriers;
+mod staging;
 mod submission;
 mod surface;
 pub use submission::SubmissionStats;
 pub(crate) mod timestamps;
 mod ui_readback;
+mod views;
 pub(crate) mod waits;
 pub use waits::HostWaitStats;
 
@@ -88,9 +92,11 @@ pub struct VulkanDevice {
     #[cfg(test)]
     fail_batch: bool,
     retired: Vec<Retired>,
+    views: Vec<views::View>,
     cache: vk::PipelineCache,
     cache_path: PathBuf,
     pending: Vec<recording::Pending>,
+    staging: Vec<staging::Chunk>,
     query_cache: queries::Cache,
     #[cfg(test)]
     query_pool_creations: usize,
@@ -236,9 +242,11 @@ impl VulkanDevice {
             #[cfg(test)]
             fail_batch: false,
             retired: Vec::new(),
+            views: Vec::new(),
             cache,
             cache_path,
             pending: Vec::new(),
+            staging: Vec::new(),
             query_cache: queries::Cache::default(),
             #[cfg(test)]
             query_pool_creations: 0,
@@ -349,6 +357,24 @@ impl VulkanDevice {
             owner: Queue::Graphics,
         })
     }
+    /// Allocate a volume, array, mip chain or multisampled texture.
+    pub fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        let mut native = context::allocation::ImageDesc::new(
+            desc.image.size,
+            desc.image.format.vk(),
+            desc.shape.mip_levels,
+            desc.vk_usage(),
+        );
+        native.shape = desc.shape;
+        self.context.validate_image(&native)?;
+        let raw = self.context.image_shaped(native)?;
+        self.images.insert(Owned {
+            raw,
+            last: [0; 2],
+            heap: None,
+            owner: Queue::Graphics,
+        })
+    }
     /// Write a coherent buffer after every preceding use has completed.
     #[track_caller]
     pub fn upload(&self, buffer: Buffer, bytes: &[u8]) -> Result<()> {
@@ -389,6 +415,10 @@ impl VulkanDevice {
             return Err(GpuError::Contract("Readback still in flight".into()));
         }
         Ok(self.context.read(b.raw)?)
+    }
+    /// Publish or reuse an immutable sampler. Slots are stable for this device's lifetime.
+    pub fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        self.heap.sampler(&self.context, desc)
     }
     /// Publish a sampled image into a fresh immutable descriptor slot.
     pub fn sampled_image(&mut self, image: Image, depth: bool) -> Result<HeapIndex> {
@@ -449,7 +479,10 @@ impl VulkanDevice {
         let mut last = [0u64; 2];
         for retired in &self.retired {
             if let Retired::Image(image) = retired
-                && self.heap.has_storage(image.raw.view)
+                && (self
+                    .heap
+                    .has_storage(image.raw.storage_view.unwrap_or(image.raw.view))
+                    || self.has_storage_views(image.raw.handle))
             {
                 for (q, value) in retired.last().into_iter().enumerate() {
                     last[q] = last[q].max(value.min(self.flushed[q]));
@@ -506,7 +539,14 @@ impl VulkanDevice {
     }
     /// Native image view for native integrations.
     pub fn image_view(&self, image: Image) -> Result<vk::ImageView> {
-        Ok(self.images.get(image)?.raw.view)
+        let raw = self.images.get(image)?.raw;
+        let view = raw.attachment_view.unwrap_or(raw.view);
+        if view == vk::ImageView::null() {
+            return Err(GpuError::Contract(
+                "Transfer-only image has no native view".into(),
+            ));
+        }
+        Ok(view)
     }
     /// Native mip-zero extent, including render-size ID targets under upscaling.
     pub fn image_extent(&self, image: Image) -> Result<[u32; 2]> {

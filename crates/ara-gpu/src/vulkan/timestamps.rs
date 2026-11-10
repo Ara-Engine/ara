@@ -252,7 +252,7 @@ pub(crate) fn commands(commands: &[Command]) -> impl Iterator<Item = &Command> {
         if matches!(iter.peek(), Some(Command::BeginPass(_))) {
             begin = iter.next();
         }
-        if begin.is_some() && !matches!(iter.peek(), Some(Command::Barrier(_))) {
+        if begin.is_some() && !iter.peek().is_some_and(|c| c.is_barrier()) {
             return begin.take();
         }
         iter.next()

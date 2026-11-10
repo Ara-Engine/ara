@@ -27,12 +27,17 @@ pub struct Draw {
 pub enum Command {
     /// Explicit graph dependency.
     Barrier(Barrier),
+    /// A simultaneous batch of resource dependencies, lowered in one native call.
+    Barriers(Vec<crate::sync::ResourceBarrier>),
     /// Bind cooked pipeline and the global descriptor heap.
     Pipeline(Pipeline),
     /// Update eight root words.
     Constants(RootConstants),
     /// Construct a static BLAS/TLAS using its preallocated aligned scratch.
     BuildAccelerationStructure(AccelerationStructure),
+    /// Refit a previously built, update-enabled structure, preserving topology/count.
+    /// Order modified inputs before AsBuild, then transition the structure to AsRead.
+    RefitAccelerationStructure(AccelerationStructure),
     /// Dispatch compute workgroups.
     Dispatch([u32; 3]),
     /// Dispatch using three U32 workgroup counts at an aligned buffer offset.
@@ -49,6 +54,28 @@ pub enum Command {
         /// Optional reversed-Z depth output.
         depth: Option<Attachment>,
         /// Render extent.
+        size: [u32; 2],
+    },
+    /// Render and resolve color attachments in the same pass, including transient MSAA.
+    BeginRenderingResolved {
+        /// Multisampled color outputs.
+        colors: Vec<Attachment>,
+        /// One optional single-sample resolve target per color output.
+        resolves: Vec<Option<Image>>,
+        /// Optional multisampled depth output.
+        depth: Option<Attachment>,
+        /// Render extent.
+        size: [u32; 2],
+    },
+    /// Render into selected 2D mips/array slices, with optional in-pass color resolves.
+    BeginRenderingSubresources {
+        /// Selected color outputs.
+        colors: Vec<crate::rendering::RenderAttachment>,
+        /// Selected depth output.
+        depth: Option<crate::rendering::RenderAttachment>,
+        /// Empty for no resolves, otherwise one optional target per color output.
+        resolves: Vec<Option<crate::rendering::RenderTarget>>,
+        /// Nonzero raster extent, bounded by each selected mip.
         size: [u32; 2],
     },
     /// Dynamic viewport and scissor; used for atlas quadrants.
@@ -70,6 +97,23 @@ pub enum Command {
     },
     /// Indexed mesh draw.
     Draw(Draw),
+    /// Indexed instanced draw with explicit vertex-buffer bindings.
+    DrawVertexBuffers {
+        /// Streams in pipeline layout order.
+        vertices: Vec<crate::raster::VertexBinding>,
+        /// U32 index buffer.
+        indices: Buffer,
+        /// First U32 index.
+        first_index: u32,
+        /// Nonzero index count per instance.
+        index_count: u32,
+        /// Signed offset added to each fetched index.
+        vertex_offset: i32,
+        /// Nonzero instance count.
+        instances: u32,
+        /// First instance record and shader instance identity.
+        first_instance: u32,
+    },
     /// One GPU-generated non-indexed instanced draw (four u32 argument words).
     /// Vertex data is fetched from declared shader storage by SV_VertexID.
     DrawIndirect {
@@ -110,12 +154,45 @@ pub enum Command {
     },
     /// End dynamic rendering.
     EndRendering,
-    /// Buffer-to-image upload with tightly packed pixels.
+    /// Whole-image upload; packed mip pixels, with depth mips aligned to four bytes.
     UploadImage {
         /// Staging buffer.
         source: Buffer,
         /// Destination image.
         destination: Image,
+    },
+    /// Upload a tightly packed rectangular range of one mip and selected layers.
+    UploadImageRegion {
+        /// Transfer source buffer.
+        source: Buffer,
+        /// Transfer destination texture.
+        destination: Image,
+        /// Byte offset aligned to the texel block size (also four bytes for depth).
+        buffer_offset: u64,
+        /// Texture subresource and rectangle.
+        region: crate::texture::ImageRegion,
+    },
+    /// Read a tightly packed rectangular range of one mip and selected layers.
+    ReadImageRegion {
+        /// Transfer source texture.
+        source: Image,
+        /// Transfer destination buffer.
+        destination: Buffer,
+        /// Byte offset aligned to the texel block size (also four bytes for depth).
+        buffer_offset: u64,
+        /// Texture subresource and rectangle.
+        region: crate::texture::ImageRegion,
+    },
+    /// Copy equal-sized regions between compatible single-sample textures.
+    CopyImageRegion {
+        /// Transfer source texture.
+        source: Image,
+        /// Transfer destination texture.
+        destination: Image,
+        /// Source subresource and rectangle.
+        from: crate::texture::ImageRegion,
+        /// Destination subresource and rectangle.
+        to: crate::texture::ImageRegion,
     },
     /// Copy a whole tightly packed buffer prefix, used for device-local uploads.
     CopyBuffer {
@@ -139,7 +216,19 @@ pub enum Command {
         /// Nonzero byte count, divisible by four.
         size: u64,
     },
-    /// An ordered update of at most 64 KiB of four-byte-aligned constants.
+    /// Fill an aligned buffer range with a repeated 32-bit pattern, outside rendering.
+    /// Use zero for a clear. Graph barriers order this transfer against other uses.
+    FillBuffer {
+        /// Transfer destination.
+        destination: Buffer,
+        /// Four-byte-aligned offset.
+        offset: u64,
+        /// Nonzero byte count divisible by four.
+        size: u64,
+        /// Repeated little-endian word.
+        value: u32,
+    },
+    /// An ordered update of four-byte-aligned data, with no 64 KiB limit.
     /// Full buffer dependencies surround the update; it is valid outside rendering.
     UpdateBuffer {
         /// Transfer destination, retained until completion.
@@ -149,6 +238,14 @@ pub enum Command {
         /// Nonempty, four-byte-aligned data copied during command recording.
         bytes: Vec<u8>,
     },
+    /// Resolve mip zero of a backed multisample color attachment to one sample.
+    /// Source/destination use transfer layouts; transient attachments need in-pass resolves.
+    ResolveImage {
+        /// Multisampled transfer source.
+        source: Image,
+        /// Equally sized single-sample transfer destination.
+        destination: Image,
+    },
     /// Copy mip zero between distinct, equally sized and formatted color images.
     CopyImage {
         /// Completed transfer source.
@@ -156,7 +253,7 @@ pub enum Command {
         /// Transfer destination.
         destination: Image,
     },
-    /// Image-to-buffer readback with tightly packed pixels.
+    /// Whole-image readback; same layout as UploadImage. Depth mip padding is untouched.
     ReadImage {
         /// Copy source.
         source: Image,
@@ -191,8 +288,17 @@ impl Recorder {
     }
     /// Record explicit graph barriers.
     pub fn barriers(&mut self, barriers: impl IntoIterator<Item = Barrier>) {
-        self.commands
-            .extend(barriers.into_iter().map(Command::Barrier));
+        self.barrier_ranges(barriers.into_iter().map(Into::into));
+    }
+    /// Record one simultaneous batch with explicit byte or mip/layer ranges.
+    pub fn barrier_ranges(
+        &mut self,
+        barriers: impl IntoIterator<Item = crate::sync::ResourceBarrier>,
+    ) {
+        let batch: Vec<_> = barriers.into_iter().collect();
+        if !batch.is_empty() {
+            self.commands.push(Command::Barriers(batch));
+        }
     }
     /// Finish recording; resources are validated before native submission.
     pub fn finish(self) -> CommandList {
@@ -230,5 +336,28 @@ impl TimestampSpan {
     /// Elapsed device time; overlapping passes are counted only once.
     pub fn milliseconds(self) -> f64 {
         self.end_ms - self.start_ms
+    }
+}
+
+impl Command {
+    pub(crate) fn resolves(&self) -> Option<&[Option<Image>]> {
+        match self {
+            Self::BeginRenderingResolved { resolves, .. } => Some(resolves),
+            _ => None,
+        }
+    }
+    pub(crate) fn barriers(&self) -> impl Iterator<Item = crate::sync::ResourceBarrier> + '_ {
+        let single = match self {
+            Self::Barrier(b) => Some((*b).into()),
+            _ => None,
+        };
+        let batch = match self {
+            Self::Barriers(b) => b.as_slice(),
+            _ => &[],
+        };
+        single.into_iter().chain(batch.iter().copied())
+    }
+    pub(crate) fn is_barrier(&self) -> bool {
+        matches!(self, Self::Barrier(_) | Self::Barriers(_))
     }
 }

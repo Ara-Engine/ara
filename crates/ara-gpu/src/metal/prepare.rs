@@ -29,6 +29,7 @@ unsafe impl Send for Prepared {}
 fn allocate(
     device: &ProtocolObject<dyn MTLDevice>,
     request: ResourcePreparation,
+    memory: &mut super::memory::Pool,
 ) -> Result<Prepared> {
     let mut buffers = Vec::with_capacity(request.buffers.len());
     for buffer in request.buffers {
@@ -37,7 +38,13 @@ fn allocate(
                 "Initial data requires a host-visible buffer".into(),
             ));
         }
-        let raw = resources::buffer(device, buffer.size, buffer.usage, buffer.host)?;
+        let raw = resources::buffer_pooled(
+            device,
+            buffer.size,
+            buffer.usage,
+            buffer.host,
+            Some(&mut *memory),
+        )?;
         let data = buffer.data.load()?;
         if !data.is_empty() {
             resources::write(&raw, 0, &data)?;
@@ -47,7 +54,19 @@ fn allocate(
     let images = request
         .images
         .into_iter()
-        .map(|i| resources::image(device, i.size, i.format, i.mip_levels, i.usage))
+        .map(|i| {
+            resources::image_pooled(
+                device,
+                i.size,
+                i.format,
+                i.usage,
+                crate::texture::ImageShape {
+                    mip_levels: i.mip_levels,
+                    ..Default::default()
+                },
+                Some(&mut *memory),
+            )
+        })
         .collect::<Result<_>>()?;
     Ok(Prepared { buffers, images })
 }
@@ -68,9 +87,14 @@ impl MetalDevice {
     ) -> Result<Option<PreparationId>> {
         if self.resource_worker.is_none() {
             let device = self.device.clone();
+            let mut memory = super::memory::Pool::default();
             self.resource_worker = Some(Worker::new(
                 "ara-metal-resources",
-                move |request: ResourcePreparation| pool(|| allocate(&device, request)),
+                move |request: ResourcePreparation| {
+                    let result = pool(|| allocate(&device, request, &mut memory));
+                    memory.release_ownership();
+                    result
+                },
             )?);
         }
         self.resource_worker
