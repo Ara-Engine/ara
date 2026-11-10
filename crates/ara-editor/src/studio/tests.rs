@@ -500,6 +500,55 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
 }
 
 #[test]
+fn history_pages_assets_search_restores_and_render_debug_opens() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str| {
+        rt.update(|s| super::commands::run(s, id, &Target::None));
+        settle(rt);
+    };
+    // More changes than one page: Older shows the rest, Newer comes back.
+    rt.update(|s| {
+        for i in 0..super::agents::HISTORY_PAGE {
+            let x = i as f64;
+            s.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_lamp","path":"Transform.position","value":[x,0,0]}})], "Nudge");
+        }
+        s.act("editor.layout.show", json!({"panel": "history"}));
+    });
+    settle(&mut rt);
+    assert!(rt.find("history/older").is_some() && rt.find("history/newer").is_none());
+    // (The button sits below the page's rows, out of view; the command is the same.)
+    run(&mut rt, "history.older");
+    assert_eq!(rt.state().local.history_page, 1);
+    assert!(rt.find("history/newer").is_some() && rt.find("history/older").is_none());
+    press(&mut rt, "history/newer");
+    assert_eq!(rt.state().local.history_page, 0);
+    // A cleared Assets search comes back.
+    rt.update(|s| {
+        s.act("editor.workspace", json!({"assetQuery": "crate"}));
+        s.local.assets_cleared_query = Some("crate".into());
+        s.act("editor.workspace", json!({"assetQuery": ""}));
+    });
+    run(&mut rt, "assets.search.restore");
+    assert_eq!(
+        rt.state()
+            .editor
+            .state
+            .searches
+            .get("assets")
+            .map(String::as_str),
+        Some("crate")
+    );
+    // Rendering Debug opens the Scene's draw-mode menu.
+    run(&mut rt, "window.render_debug");
+    assert_eq!(rt.state().local.overlay_settings, Some("draw"));
+    // Copy Probe State needs the renderer's report first, and says so.
+    run(&mut rt, "lighting.probe.copy");
+    assert!(rt.state().local.copy.is_none());
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();

@@ -382,6 +382,12 @@ pub struct Local {
     pub history_open: Option<String>,
     /// The History search: transactions whose description or author match.
     pub history_search: String,
+    /// Which page of the History list shows, newest first (History › Older and Newer).
+    pub history_page: usize,
+    /// The last Assets search cleared this session (Restore Removed Assets Search).
+    pub assets_cleared_query: Option<String>,
+    /// The renderer's latest reflection probe report (Lighting › Refresh Probe Status).
+    pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).

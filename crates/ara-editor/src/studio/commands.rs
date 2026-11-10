@@ -1641,6 +1641,46 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             super::lighting::recapture(s, entity)
         }
         "lighting.probe.cancel" => super::lighting::cancel(s),
+        "lighting.probe.refresh" => super::lighting::refresh_probes(s),
+        "lighting.probe.copy" => match target.entity(&s.editor.state).map(str::to_owned) {
+            Some(entity) => super::lighting::copy_probe(s, &entity),
+            None => Err("Select a reflection probe".into()),
+        },
+        // History pages through older changes, 300 at a time.
+        "history.older" => {
+            let total = s.editor.host.store().history().len();
+            match (s.local.history_page + 1) * super::agents::HISTORY_PAGE < total {
+                true => {
+                    s.local.history_page += 1;
+                    Ok(())
+                }
+                false => Err("These are the oldest changes".into()),
+            }
+        }
+        "history.newer" => match s.local.history_page {
+            0 => Err("These are the newest changes".into()),
+            _ => {
+                s.local.history_page -= 1;
+                Ok(())
+            }
+        },
+        "assets.search.restore" => match s.local.assets_cleared_query.take() {
+            Some(query) => act(
+                &mut s.editor,
+                "editor.workspace",
+                json!({"assetQuery": query}),
+            ),
+            None => Err("No Assets search was cleared this session".into()),
+        },
+        // Rendering Debug: the Scene's draw-mode menu, whose switches turn effects off.
+        "window.render_debug" => {
+            s.local.overlay_settings = Some("draw");
+            act(
+                &mut s.editor,
+                "editor.layout.show",
+                json!({"panel": "scene"}),
+            )
+        }
         "lighting.preset.manual" | "lighting.preset.interior" => {
             use crate::lighting::authoring::Preset;
             let preset = match id {

@@ -337,6 +337,18 @@ fn op_line(s: &Studio, op: &ara_doc::Op) -> (Rgba, String) {
 /// The History panel (Unreal's Transaction History, Unity's Undo History): every
 /// transaction newest first, searched by what or who; a click opens what it changed, a
 /// right-click its menu; your own steps undo back to any one of them.
+/// How many changes one History page lists.
+pub(super) const HISTORY_PAGE: usize = 300;
+
+/// A History list end's way to the next page of changes.
+fn page_button(s: &Studio, key: &str, label: &str, command: &'static str) -> El<Studio> {
+    button(&s.look, Tone::Ghost, Size::Sm, None, label)
+        .key(key)
+        .on_press(move |s: &mut Studio| {
+            super::commands::run(s, command, &crate::catalog::Target::None)
+        })
+}
+
 pub(super) fn history(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
@@ -368,8 +380,16 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
                     "Search changes",
                     &s.local.history_search,
                     None,
-                    |f| f.on_input(|s: &mut Studio, t| s.local.history_search = t.to_owned()),
-                    |s: &mut Studio| s.local.history_search.clear(),
+                    |f| {
+                        f.on_input(|s: &mut Studio, t| {
+                            s.local.history_search = t.to_owned();
+                            s.local.history_page = 0;
+                        })
+                    },
+                    |s: &mut Studio| {
+                        s.local.history_search.clear();
+                        s.local.history_page = 0;
+                    },
                 )
                 .grow(1.0),
             ),
@@ -397,6 +417,16 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
     let query = s.local.history_search.trim().to_lowercase();
     let mut list = col().pad(4.0).gap(1.0);
     let mut shown = 0;
+    let skip = s.local.history_page * HISTORY_PAGE;
+    let mut more = false;
+    if s.local.history_page > 0 {
+        list = list.child(page_button(
+            s,
+            "history/newer",
+            "Newer changes",
+            "history.newer",
+        ));
+    }
     for txn in history.iter().rev() {
         let undone = store.reverted_by(&txn.id).is_some();
         let revert = txn.reverts.is_some();
@@ -417,7 +447,11 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             continue;
         }
         shown += 1;
-        if shown > 300 {
+        if shown <= skip {
+            continue;
+        }
+        if shown > skip + HISTORY_PAGE {
+            more = true;
             break;
         }
         let when = s
@@ -544,6 +578,14 @@ pub(super) fn history(s: &Studio) -> El<Studio> {
             );
             list = list.child(diff);
         }
+    }
+    if more {
+        list = list.child(page_button(
+            s,
+            "history/older",
+            "Older changes",
+            "history.older",
+        ));
     }
     if shown == 0 {
         list = list.child(
