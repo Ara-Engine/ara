@@ -421,6 +421,8 @@ pub struct Local {
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.
     pub flying: bool,
+    /// The Hierarchy row under the pointer: its eye and lock show (Unity's).
+    pub hierarchy_hover: Option<String>,
     /// The command Settings › Keyboard shortcuts is recording a chord for.
     pub recording_shortcut: Option<&'static str>,
     /// A middle-button pan or an Alt+left orbit is under way.
