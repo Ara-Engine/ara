@@ -202,6 +202,14 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .grow(1.0)
         .pad_x(4.0)
+        // Empty space: create at the root (rows have their own menu).
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Hierarchy,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
     };
     // The scene's root: its name and what it holds (Unity's scene header row).
     let workspace = s.editor.host.store().workspace();

@@ -1145,6 +1145,58 @@ fn problems_list_files_with_errors_first() {
 }
 
 #[test]
+fn a_console_rows_menu_copies_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        sample_logs(s);
+        s.local.console_open = None;
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    let row = rt.find("console/row/4").unwrap();
+    rt.right_click(row.center().x, row.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.console_open, Some(4), "its details open");
+    press(&mut rt, "cmd/console.copy");
+    let copied = rt.state().local.copy.clone().unwrap_or_default();
+    assert!(copied.starts_with("ARA3302: Light Sun"), "{copied}");
+}
+
+#[test]
+fn empty_hierarchy_space_the_profiler_and_the_status_bar_have_menus() {
+    use crate::catalog::menus::Context;
+    let mut rt = open();
+    settle(&mut rt);
+    let kind = |rt: &Runtime<Studio>| rt.state().local.context.as_ref().map(|c| c.0);
+    let right_click = |rt: &mut Runtime<Studio>, x: f32, y: f32| {
+        rt.update(|s| s.local.context = None);
+        settle(rt);
+        rt.right_click(x, y);
+        settle(rt);
+    };
+    // Below the last row: the Hierarchy's own menu; on a row, the entity's.
+    let post = rt.find("row/e_post").unwrap();
+    right_click(&mut rt, post.center().x, post.bottom + 60.0);
+    assert_eq!(kind(&rt), Some(Context::Hierarchy));
+    right_click(&mut rt, post.center().x, post.center().y);
+    assert_eq!(kind(&rt), Some(Context::Entity));
+    let status = rt.find("status").unwrap();
+    right_click(&mut rt, status.left + 300.0, status.center().y);
+    assert_eq!(kind(&rt), Some(Context::Status));
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    let strip = rt
+        .find("profiler/track")
+        .or_else(|| rt.find("profiler/calls"))
+        .unwrap();
+    right_click(&mut rt, strip.center().x, strip.center().y);
+    assert_eq!(kind(&rt), Some(Context::Profiler));
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();

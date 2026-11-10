@@ -291,6 +291,14 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .map_or(640.0, |r| r.width());
     col()
         .grow(1.0)
+        // Its menu: Record, Freeze, Set Baseline, Compare.
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Profiler,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
         .child(toolbar)
         .child(strip(s, profile, frame.id))
         .child(

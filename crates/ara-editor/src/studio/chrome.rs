@@ -989,6 +989,14 @@ fn status_bar(s: &Studio) -> El<Studio> {
     };
     let bar = row()
         .key("status")
+        // Its menu: the windows the status bar reports on.
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Status,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
         .h(22.0)
         .pad_x(10.0)
         .gap(14.0)

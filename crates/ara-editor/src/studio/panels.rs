@@ -1900,6 +1900,18 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Stu
                 Some(seq)
             }
         })
+        // Its menu (Copy, Collapse, Clear…), the message open in the details.
+        .on_context_menu({
+            let line = format!("{}: {}", r.code, r.message);
+            move |s: &mut Studio, x, y| {
+                s.local.console_open = Some(seq);
+                s.local.context = Some((
+                    crate::catalog::menus::Context::Console,
+                    crate::catalog::Target::Text(line.clone()),
+                    (x, y),
+                ));
+            }
+        })
         .child(severity_glyph(l, r.severity))
         .child(
             col()
