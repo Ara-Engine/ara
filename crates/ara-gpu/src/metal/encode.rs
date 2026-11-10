@@ -12,7 +12,7 @@
 //! buffer (root constants plus table addresses) through the argument table.
 use super::MetalDevice;
 use super::abi::{ARGUMENT_BUFFER_BIND_POINT, VERTEX_BUFFER_BIND_POINT};
-use super::native::{level_bytes, nil};
+use super::native::nil;
 use super::pipeline::NativePipeline;
 use super::scratch::{Chunk, Scratch};
 use crate::attachments::{self, Load, Ops};
@@ -489,6 +489,63 @@ impl MetalDevice {
                     MTL4VisibilityOptions::Device,
                 );
             }
+            Command::UploadImageRegion {
+                source,
+                destination,
+                buffer_offset,
+                region,
+            } => self.copy_image_region_buffer(
+                rec,
+                *source,
+                *destination,
+                *buffer_offset,
+                *region,
+                true,
+            )?,
+            Command::ReadImageRegion {
+                source,
+                destination,
+                buffer_offset,
+                region,
+            } => self.copy_image_region_buffer(
+                rec,
+                *destination,
+                *source,
+                *buffer_offset,
+                *region,
+                false,
+            )?,
+            Command::CopyImageRegion {
+                source,
+                destination,
+                from,
+                to,
+            } => {
+                let a = &self.images.get(*source)?.raw;
+                let b = &self.images.get(*destination)?.raw;
+                a.shape
+                    .region(a.size, *from, a.info.block, u64::from(a.info.block_bytes))?;
+                b.shape
+                    .region(b.size, *to, b.info.block, u64::from(b.info.block_bytes))?;
+                if source == destination
+                    || a.info.pixel != b.info.pixel
+                    || from.extent != to.extent
+                    || from.layer_count != to.layer_count
+                    || !a.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    || !b.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                {
+                    return Err(GpuError::Contract("Invalid image region copy".into()));
+                }
+                let encoder = rec.compute(self)?;
+                for layer in 0..from.layer_count {
+                    // SAFETY: validated regions of distinct compatible resident textures.
+                    unsafe {
+                        encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
+                        &a.texture,(from.base_layer+layer) as usize,from.mip as usize,origin(from.origin),extent(from.extent),
+                        &b.texture,(to.base_layer+layer) as usize,to.mip as usize,origin(to.origin));
+                    }
+                }
+            }
             Command::UploadImage {
                 source,
                 destination,
@@ -801,48 +858,80 @@ impl MetalDevice {
         image: crate::Image,
         upload: bool,
     ) -> Result<()> {
-        let (raw_buffer, raw_image) =
-            (&self.buffers.get(buffer)?.raw, &self.images.get(image)?.raw);
-        let total: u64 = (0..raw_image.levels)
-            .map(|level| level_bytes(&raw_image.info, raw_image.size, level).1)
-            .sum();
-        if total > raw_buffer.size {
-            return Err(GpuError::Contract("Image copy exceeds buffer".into()));
+        let raw = &self.images.get(image)?.raw;
+        let mut offset = 0;
+        for mip in 0..raw.levels {
+            let region = crate::texture::ImageRegion {
+                mip,
+                origin: [0; 3],
+                extent: raw.shape.extent(raw.size, mip),
+                base_layer: 0,
+                layer_count: raw.shape.layers,
+            };
+            let (_, bytes) = raw.shape.region(
+                raw.size,
+                region,
+                raw.info.block,
+                u64::from(raw.info.block_bytes),
+            )?;
+            self.copy_image_region_buffer(rec, buffer, image, offset, region, upload)?;
+            offset += bytes;
         }
-        // Depth32Float copies go through the depth plane explicitly.
-        let blit = if raw_image.info.depth {
+        Ok(())
+    }
+
+    fn copy_image_region_buffer(
+        &self,
+        rec: &mut Recording,
+        buffer: crate::Buffer,
+        image: crate::Image,
+        offset: u64,
+        region: crate::texture::ImageRegion,
+        upload: bool,
+    ) -> Result<()> {
+        let b = &self.buffers.get(buffer)?.raw;
+        let i = &self.images.get(image)?.raw;
+        let (row, total) =
+            i.shape
+                .region(i.size, region, i.info.block, u64::from(i.info.block_bytes))?;
+        if !offset.is_multiple_of(4)
+            || !offset.is_multiple_of(u64::from(i.info.block_bytes))
+            || offset.checked_add(total).is_none_or(|end| end > b.size)
+            || !b.usage.contains(if upload {
+                vk::BufferUsageFlags::TRANSFER_SRC
+            } else {
+                vk::BufferUsageFlags::TRANSFER_DST
+            })
+            || !i.usage.contains(if upload {
+                vk::ImageUsageFlags::TRANSFER_DST
+            } else {
+                vk::ImageUsageFlags::TRANSFER_SRC
+            })
+        {
+            return Err(GpuError::Contract(
+                "Invalid buffer/texture copy usage, offset or capacity".into(),
+            ));
+        }
+        let plane = row * u64::from(region.extent[1].div_ceil(i.info.block));
+        let per_layer = plane * u64::from(region.extent[2]);
+        let option = if i.info.depth {
             MTLBlitOption::DepthFromDepthStencil
         } else {
             MTLBlitOption::None
         };
-        let (buffer, texture) = (raw_buffer.buffer.clone(), raw_image.texture.clone());
-        let (info, size, levels) = (&raw_image.info, raw_image.size, raw_image.levels);
-        let mut offset = 0;
         let encoder = rec.compute(self)?;
-        for level in 0..levels {
-            let (row, bytes) = level_bytes(info, size, level);
-            let extent = MTLSize {
-                width: (size[0] >> level).max(1) as usize,
-                height: (size[1] >> level).max(1) as usize,
-                depth: 1,
-            };
-            let origin = MTLOrigin { x: 0, y: 0, z: 0 };
-            // SAFETY: the packed level lies inside the buffer (checked total) and the
-            // region is the whole level of a resident texture.
+        for layer in 0..region.layer_count {
+            let at = offset + u64::from(layer) * per_layer;
+            // SAFETY: validated footprint and native subresources; buffers and textures stay resident.
             unsafe {
                 if upload {
                     encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin_options(
-                        &buffer, offset as usize, row as usize, bytes as usize, extent,
-                        &texture, 0, level as usize, origin, blit,
-                    );
+                        &b.buffer,at as usize,row as usize,plane as usize,extent(region.extent),&i.texture,(region.base_layer+layer) as usize,region.mip as usize,origin(region.origin),option);
                 } else {
                     encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                        &texture, 0, level as usize, origin, extent,
-                        &buffer, offset as usize, row as usize, bytes as usize, blit,
-                    );
+                        &i.texture,(region.base_layer+layer) as usize,region.mip as usize,origin(region.origin),extent(region.extent),&b.buffer,at as usize,row as usize,plane as usize,option);
                 }
             }
-            offset += bytes;
         }
         Ok(())
     }
@@ -948,5 +1037,20 @@ impl Recording<'_> {
             Active::Render(encoder) => encoder.endEncoding(),
             Active::None => {}
         }
+    }
+}
+
+fn origin(v: [u32; 3]) -> MTLOrigin {
+    MTLOrigin {
+        x: v[0] as usize,
+        y: v[1] as usize,
+        z: v[2] as usize,
+    }
+}
+fn extent(v: [u32; 3]) -> MTLSize {
+    MTLSize {
+        width: v[0] as usize,
+        height: v[1] as usize,
+        depth: v[2] as usize,
     }
 }

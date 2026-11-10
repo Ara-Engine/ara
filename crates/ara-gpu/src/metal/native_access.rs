@@ -47,6 +47,7 @@ impl MetalDevice {
             info,
             size,
             levels: 1,
+            shape: crate::texture::ImageShape::default(),
             usage,
             storage: None,
         })

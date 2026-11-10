@@ -1,7 +1,7 @@
 //! Shared byte footprints and regions for native mip uploads/readbacks.
 use super::*;
 
-fn block(format: vk::Format) -> Result<(u32, u64)> {
+pub(super) fn block(format: vk::Format) -> Result<(u32, u64)> {
     Ok(match format {
         vk::Format::BC7_UNORM_BLOCK
         | vk::Format::BC7_SRGB_BLOCK
@@ -34,7 +34,8 @@ pub(super) fn copy_bytes(image: ImageAllocation) -> Result<u64> {
                 [image.width, image.height].map(|v| (v >> mip).max(1)),
                 block,
                 bytes,
-            )
+            ) * u64::from((image.shape.depth >> mip).max(1))
+                * u64::from(image.shape.layers)
         })
         .sum())
 }
@@ -62,12 +63,12 @@ fn region(image: ImageAllocation, mip: u32, offset: u64) -> vk::BufferImageCopy 
             vk::ImageSubresourceLayers::default()
                 .aspect_mask(image.aspect)
                 .mip_level(mip)
-                .layer_count(1),
+                .layer_count(image.shape.layers),
         )
         .image_extent(vk::Extent3D {
             width,
             height,
-            depth: 1,
+            depth: (image.shape.depth >> mip).max(1),
         })
 }
 
@@ -81,7 +82,57 @@ pub(super) fn copy_regions(image: ImageAllocation) -> Result<CopyRegions> {
     for mip in 0..image.mip_levels {
         let [width, height] = [image.width, image.height].map(|v| (v >> mip).max(1));
         regions.push(region(image, mip, offset));
-        offset += level_bytes([width, height], block, bytes);
+        offset += level_bytes([width, height], block, bytes)
+            * u64::from((image.shape.depth >> mip).max(1))
+            * u64::from(image.shape.layers);
     }
     Ok(CopyRegions::Mips(regions))
+}
+
+pub(super) fn subresource(
+    image: ImageAllocation,
+    r: crate::texture::ImageRegion,
+) -> Result<vk::ImageSubresourceLayers> {
+    let (block, bytes) = block(image.format)?;
+    image
+        .shape
+        .region([image.width, image.height], r, block, bytes)?;
+    Ok(vk::ImageSubresourceLayers::default()
+        .aspect_mask(image.aspect)
+        .mip_level(r.mip)
+        .base_array_layer(r.base_layer)
+        .layer_count(r.layer_count))
+}
+pub(super) fn buffer_region(
+    image: ImageAllocation,
+    r: crate::texture::ImageRegion,
+    offset: u64,
+    capacity: u64,
+) -> Result<vk::BufferImageCopy> {
+    let layers = subresource(image, r)?;
+    let (block, bytes) = block(image.format)?;
+    let (_, total) = image
+        .shape
+        .region([image.width, image.height], r, block, bytes)?;
+    if !offset.is_multiple_of(4)
+        || !offset.is_multiple_of(bytes)
+        || offset.checked_add(total).is_none_or(|end| end > capacity)
+    {
+        return Err(GpuError::Contract(
+            "Image copy exceeds buffer or has unaligned offset".into(),
+        ));
+    }
+    Ok(vk::BufferImageCopy::default()
+        .buffer_offset(offset)
+        .image_subresource(layers)
+        .image_offset(vk::Offset3D {
+            x: r.origin[0] as i32,
+            y: r.origin[1] as i32,
+            z: r.origin[2] as i32,
+        })
+        .image_extent(vk::Extent3D {
+            width: r.extent[0],
+            height: r.extent[1],
+            depth: r.extent[2],
+        }))
 }

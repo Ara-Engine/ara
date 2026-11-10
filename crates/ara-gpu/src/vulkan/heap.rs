@@ -391,6 +391,38 @@ impl Heap {
         self.storage.push((image, view, index));
         Ok(index)
     }
+    pub fn view(&mut self, gpu: &Context, view: vk::ImageView, storage: bool) -> Result<HeapIndex> {
+        if !storage {
+            return self.image(gpu, view, false);
+        }
+        let index = self
+            .free_storage
+            .pop()
+            .ok_or_else(|| GpuError::Contract("Storage-image heap exhausted".into()))?;
+        let info = [vk::DescriptorImageInfo::default()
+            .image_view(view)
+            .image_layout(vk::ImageLayout::GENERAL)];
+        // SAFETY: fresh slot and view retained with the parent allocation.
+        unsafe {
+            gpu.device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::default()
+                    .dst_set(self.set)
+                    .dst_binding(3)
+                    .dst_array_element(index)
+                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .image_info(&info)],
+                &[],
+            );
+        }
+        Ok(HeapIndex { index })
+    }
+    pub fn retire_view(&mut self, slot: HeapIndex, storage: bool) {
+        if storage {
+            self.free_storage.push(slot.index);
+        } else {
+            self.free_images.push(slot.index);
+        }
+    }
     pub fn acceleration(
         &mut self,
         gpu: &Context,

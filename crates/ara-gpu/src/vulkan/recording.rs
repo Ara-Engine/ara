@@ -665,6 +665,63 @@ impl VulkanDevice {
                         ));
                     }
                 }
+                Command::UploadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let b = self.buffers.get(*source)?.raw;
+                    let i = self.images.get(*destination)?.raw;
+                    let _ = super::image_copy::buffer_region(i, *region, *buffer_offset, b.size)?;
+                    if rendering
+                        || !b.usage.contains(vk::BufferUsageFlags::TRANSFER_SRC)
+                        || !i.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid image upload usage or scope".into(),
+                        ));
+                    }
+                }
+                Command::ReadImageRegion {
+                    source,
+                    destination,
+                    buffer_offset,
+                    region,
+                } => {
+                    let b = self.buffers.get(*destination)?.raw;
+                    let i = self.images.get(*source)?.raw;
+                    let _ = super::image_copy::buffer_region(i, *region, *buffer_offset, b.size)?;
+                    if rendering
+                        || !b.usage.contains(vk::BufferUsageFlags::TRANSFER_DST)
+                        || !i.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid image readback usage or scope".into(),
+                        ));
+                    }
+                }
+                Command::CopyImageRegion {
+                    source,
+                    destination,
+                    from,
+                    to,
+                } => {
+                    let a = self.images.get(*source)?.raw;
+                    let b = self.images.get(*destination)?.raw;
+                    let _ = super::image_copy::subresource(a, *from)?;
+                    let _ = super::image_copy::subresource(b, *to)?;
+                    if rendering
+                        || source == destination
+                        || a.format != b.format
+                        || from.extent != to.extent
+                        || from.layer_count != to.layer_count
+                        || !a.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                        || !b.usage.contains(vk::ImageUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract("Invalid image region copy".into()));
+                    }
+                }
                 Command::UploadImage {
                     source,
                     destination,

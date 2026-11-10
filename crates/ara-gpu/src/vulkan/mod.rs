@@ -36,6 +36,7 @@ mod surface;
 pub use submission::SubmissionStats;
 pub(crate) mod timestamps;
 mod ui_readback;
+mod views;
 pub(crate) mod waits;
 pub use waits::HostWaitStats;
 
@@ -89,6 +90,7 @@ pub struct VulkanDevice {
     #[cfg(test)]
     fail_batch: bool,
     retired: Vec<Retired>,
+    views: Vec<views::View>,
     cache: vk::PipelineCache,
     cache_path: PathBuf,
     pending: Vec<recording::Pending>,
@@ -238,6 +240,7 @@ impl VulkanDevice {
             #[cfg(test)]
             fail_batch: false,
             retired: Vec::new(),
+            views: Vec::new(),
             cache,
             cache_path,
             pending: Vec::new(),
@@ -345,6 +348,25 @@ impl VulkanDevice {
         let raw = self
             .context
             .image(width, height, format, mip_levels, usage, aspect)?;
+        self.images.insert(Owned {
+            raw,
+            last: [0; 2],
+            heap: None,
+            owner: Queue::Graphics,
+        })
+    }
+    /// Allocate a volume, array, mip chain or multisampled texture.
+    pub fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        let mut native = context::allocation::ImageDesc::new(
+            desc.image.size,
+            desc.image.format.vk(),
+            desc.shape.mip_levels,
+            desc.image.vk_usage(),
+        );
+        native.shape = desc.shape;
+        self.context.validate_image(&native)?;
+        let raw = self.context.allocator().image(native)?;
+        self.context.track_image(raw);
         self.images.insert(Owned {
             raw,
             last: [0; 2],

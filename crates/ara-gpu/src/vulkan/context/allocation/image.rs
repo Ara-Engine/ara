@@ -13,6 +13,7 @@ pub(crate) fn image(
         mip_levels,
         usage,
         aspect,
+        shape,
     } = desc;
     let alias = usage
         .contains(vk::ImageUsageFlags::STORAGE)
@@ -28,16 +29,20 @@ pub(crate) fn image(
         }
         let handle = device.create_image(
             &info
-                .image_type(vk::ImageType::TYPE_2D)
+                .image_type(if shape.dimension == crate::texture::TextureDimension::D3 {
+                    vk::ImageType::TYPE_3D
+                } else {
+                    vk::ImageType::TYPE_2D
+                })
                 .format(format)
                 .extent(vk::Extent3D {
                     width,
                     height,
-                    depth: 1,
+                    depth: shape.depth,
                 })
                 .mip_levels(mip_levels)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
+                .array_layers(shape.layers)
+                .samples(shape.samples.vk())
                 .tiling(vk::ImageTiling::OPTIMAL)
                 .usage(usage)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE),
@@ -80,9 +85,19 @@ pub(crate) fn image(
                 .usage(usage & !vk::ImageUsageFlags::STORAGE);
             let mut view_info = vk::ImageViewCreateInfo::default()
                 .image(handle)
-                .view_type(vk::ImageViewType::TYPE_2D)
+                .view_type(if shape.dimension == crate::texture::TextureDimension::D3 {
+                    vk::ImageViewType::TYPE_3D
+                } else if shape.layers > 1 {
+                    vk::ImageViewType::TYPE_2D_ARRAY
+                } else {
+                    vk::ImageViewType::TYPE_2D
+                })
                 .format(format)
-                .subresource_range(range(aspect).level_count(mip_levels));
+                .subresource_range(
+                    range(aspect)
+                        .level_count(mip_levels)
+                        .layer_count(shape.layers),
+                );
             if alias.is_some() {
                 view_info = view_info.push(&mut own);
             }
@@ -94,9 +109,19 @@ pub(crate) fn image(
                     device.create_image_view(
                         &vk::ImageViewCreateInfo::default()
                             .image(handle)
-                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .view_type(if shape.dimension == crate::texture::TextureDimension::D3 {
+                                vk::ImageViewType::TYPE_3D
+                            } else if shape.layers > 1 {
+                                vk::ImageViewType::TYPE_2D_ARRAY
+                            } else {
+                                vk::ImageViewType::TYPE_2D
+                            })
                             .format(alias)
-                            .subresource_range(range(aspect).level_count(mip_levels))
+                            .subresource_range(
+                                range(aspect)
+                                    .level_count(mip_levels)
+                                    .layer_count(shape.layers),
+                            )
                             .push(&mut storage),
                         None,
                     )?,
@@ -110,6 +135,7 @@ pub(crate) fn image(
                 width,
                 height,
                 mip_levels,
+                shape,
                 format,
                 aspect,
                 usage,

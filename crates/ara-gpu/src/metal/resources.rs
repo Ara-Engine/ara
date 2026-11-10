@@ -22,6 +22,7 @@ pub(super) struct NativeImage {
     pub info: FormatInfo,
     pub size: [u32; 2],
     pub levels: u32,
+    pub shape: crate::texture::ImageShape,
     pub usage: vk::ImageUsageFlags,
     /// Storage-image table slot; sampled slots live on the owning record.
     pub storage: Option<crate::HeapIndex>,
@@ -76,9 +77,31 @@ pub(super) fn image(
     levels: u32,
     usage: vk::ImageUsageFlags,
 ) -> Result<NativeImage> {
+    image_shaped(
+        device,
+        size,
+        format_id,
+        usage,
+        crate::texture::ImageShape {
+            mip_levels: levels,
+            ..Default::default()
+        },
+    )
+}
+
+pub(super) fn image_shaped(
+    device: &ProtocolObject<dyn MTLDevice>,
+    size: [u32; 2],
+    format_id: vk::Format,
+    usage: vk::ImageUsageFlags,
+    shape: crate::texture::ImageShape,
+) -> Result<NativeImage> {
+    use crate::texture::{SampleCount, TextureDimension};
+    shape.validate(size)?;
+    let levels = shape.mip_levels;
     let info = format(format_id)?;
     let [width, height] = size;
-    let full = 32 - width.max(height).max(1).leading_zeros();
+    let full = 32 - width.max(height).max(shape.depth).max(1).leading_zeros();
     // Like Vulkan, an extent past the reported `max_image_dimension` is an error here
     // rather than whatever the driver does with it.
     let largest = super::info::MAX_IMAGE_DIMENSION;
@@ -116,6 +139,25 @@ pub(super) fn image(
     };
     // SAFETY: `levels` was checked against the full mip chain of this extent.
     unsafe { descriptor.setMipmapLevelCount(levels as usize) };
+    let kind = match (shape.dimension, shape.samples, shape.layers > 1) {
+        (TextureDimension::D3, _, _) => MTLTextureType::Type3D,
+        (_, SampleCount::Four, false) => MTLTextureType::Type2DMultisample,
+        (_, SampleCount::Four, true) => MTLTextureType::Type2DMultisampleArray,
+        (_, _, true) => MTLTextureType::Type2DArray,
+        _ => MTLTextureType::Type2D,
+    };
+    if !device.supportsTextureSampleCount(shape.samples.count() as usize) {
+        return Err(GpuError::Contract(
+            "Unsupported texture sample count".into(),
+        ));
+    }
+    // SAFETY: the validated shape has positive depth/layers and compatible mip/sample counts.
+    unsafe {
+        descriptor.setTextureType(kind);
+        descriptor.setDepth(shape.depth as usize);
+        descriptor.setArrayLength(shape.layers as usize);
+        descriptor.setSampleCount(shape.samples.count() as usize);
+    }
     descriptor.setUsage(texture_usage(usage));
     crate::attachments::validate_usage(usage)?;
     // Transient attachments live in tile memory only, with no backing allocation.
@@ -134,6 +176,7 @@ pub(super) fn image(
         info,
         size,
         levels,
+        shape,
         usage,
         storage: None,
     })

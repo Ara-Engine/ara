@@ -8,13 +8,14 @@ mod image;
 mod upload;
 mod validate;
 pub(super) use buffer::buffer;
-pub(crate) use image::image;
+pub(crate) use image::{image, storage_alias};
 pub(crate) use upload::upload;
 pub(crate) use validate::validate_image;
 
 #[derive(Clone, Copy)]
 pub(crate) struct ImageDesc {
     pub size: [u32; 2],
+    pub shape: crate::texture::ImageShape,
     pub format: vk::Format,
     pub mip_levels: u32,
     pub usage: vk::ImageUsageFlags,
@@ -30,6 +31,10 @@ impl ImageDesc {
     ) -> Self {
         Self {
             size,
+            shape: crate::texture::ImageShape {
+                mip_levels,
+                ..Default::default()
+            },
             format,
             mip_levels,
             usage,
