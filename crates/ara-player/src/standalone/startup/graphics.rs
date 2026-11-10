@@ -16,7 +16,8 @@ impl Graphics {
     ) -> Result<Self> {
         Self::spawn(move || {
             ara_gpu::cpu_scope!("Player.presenter_warmup_worker");
-            let mut presenter = Presenter::with_device(size, cache, gpu);
+            let mut presenter = Presenter::with_device(size, cache.clone(), gpu);
+            crate::renderer::install(&mut presenter, &cache);
             presenter.set_probe_gi(false);
             presenter.set_render_options(options);
             presenter.set_quality(quality);

@@ -824,6 +824,90 @@ impl ImportedSurface {
         Ok(())
     }
 
+    /// Copies a slot the producer published into `destination` and hands the slot
+    /// straight back, in one waited submission: for an owner that keeps its own copy
+    /// and never holds the slot (a renderer on another device of this process).
+    /// `destination` is a whole RGBA8 image of the surface's size on this device that
+    /// rests in `TRANSFER_SRC_OPTIMAL` (an engine image in `CopySource`), and it is
+    /// left there. The slot ends as [`Self::exchange`] releases it.
+    /// # Safety
+    /// The producer published `slot` (its release happened before) and this device
+    /// has not acquired it; this device's work on `destination` completed; this
+    /// thread owns the queue.
+    pub unsafe fn copy_out(&mut self, slot: u32, destination: vk::Image) -> Result<()> {
+        if slot as usize >= SLOTS || self.owned[slot as usize] {
+            return Err(GpuError::Contract(format!(
+                "slot {slot} is outside 0..{SLOTS} or already acquired by this device"
+            )));
+        }
+        let image = self.slots[slot as usize].image;
+        let (family, size) = (self.family, self.size);
+        let write = (
+            vk::PipelineStageFlags2::COPY,
+            vk::AccessFlags2::TRANSFER_WRITE,
+        );
+        // SAFETY: Caller contract; the slot's barriers are the protocol's acquire and
+        // release, and `destination` returns to its resting layout.
+        unsafe {
+            self.commands.run(|device, command| {
+                let barriers = |list: &[vk::ImageMemoryBarrier2<'_>]| {
+                    device.cmd_pipeline_barrier2(
+                        command,
+                        &vk::DependencyInfo::default().image_memory_barriers(list),
+                    );
+                };
+                barriers(&[
+                    // Matches the producer's release, transition included.
+                    barrier(
+                        image,
+                        (vk::ImageLayout::TRANSFER_DST_OPTIMAL, SRC),
+                        (vk::QUEUE_FAMILY_EXTERNAL, family),
+                        NONE,
+                        COPY_READ,
+                    ),
+                    barrier(
+                        destination,
+                        (SRC, vk::ImageLayout::TRANSFER_DST_OPTIMAL),
+                        same(),
+                        ALL,
+                        write,
+                    ),
+                ]);
+                device.cmd_copy_image(
+                    command,
+                    image,
+                    SRC,
+                    destination,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[vk::ImageCopy::default()
+                        .src_subresource(layers())
+                        .dst_subresource(layers())
+                        .extent(vk::Extent3D {
+                            width: size[0],
+                            height: size[1],
+                            depth: 1,
+                        })],
+                );
+                barriers(&[
+                    barrier(
+                        image,
+                        (SRC, SRC),
+                        (family, vk::QUEUE_FAMILY_EXTERNAL),
+                        COPY_READ,
+                        NONE,
+                    ),
+                    barrier(
+                        destination,
+                        (vk::ImageLayout::TRANSFER_DST_OPTIMAL, SRC),
+                        same(),
+                        write,
+                        ALL,
+                    ),
+                ]);
+            })
+        }
+    }
+
     /// Reads an owned slot back as tightly packed RGBA8 rows (tests, screenshots).
     /// # Safety
     /// This thread owns the graphics queue.

@@ -36,6 +36,7 @@ ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-json.workspace = true
 ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
 ara-render = { path = "../ara-render" }
+ara-renderlab = { path = "../ara-renderlab" }
 ara-render-fidelity = { path = "../ara-render-fidelity", optional = true }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
@@ -54,7 +55,7 @@ ara-ui = { path = "../ara-ui" }
 ara-ui-text = { path = "../ara-ui-text" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-diag = { path = "../ara-diag" }
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 ciborium.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
