@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -123,17 +124,50 @@ internal static class EditClassifier
     }
 
     /// <summary>
-    /// True if any doc comment changed. Doc comments are trivia (invisible to the member
+    /// True if any doc comment or its attachment changed. Doc comments are trivia (invisible to the member
     /// diff) but the generator turns them into schema docs, so the compile server checks
     /// the generator's output before such an edit takes L1.
     /// </summary>
     internal static bool DocsChanged(IReadOnlyList<FileChange> changes) =>
-        changes.Any(c => c.Old is null || c.New is null || Docs(c.Old) != Docs(c.New));
+        changes.Any(c => c.Old is null || c.New is null || !Docs(c.Old).SequenceEqual(Docs(c.New)));
 
-    static string Docs(SyntaxTree tree) =>
-        string.Concat(tree.GetRoot().DescendantTrivia(descendIntoTrivia: false)
-            .Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
-            .Select(t => t.ToString()));
+    static IEnumerable<(string Text, string Attachment)> Docs(SyntaxTree tree)
+    {
+        var root = tree.GetRoot();
+        if (!root.HasStructuredTrivia) yield break;
+        // Child slots stay stable when an earlier body changes length. Walk once,
+        // skipping doc-free subtrees, without retaining a node-to-slot dictionary.
+        var path = new StringBuilder();
+        var pending = new Stack<(ChildSyntaxList.Enumerator Children, int Slot, int Length)>();
+        pending.Push((root.ChildNodesAndTokens().GetEnumerator(), 0, 0));
+        while (pending.TryPop(out var frame))
+        {
+            if (!frame.Children.MoveNext()) continue;
+            var child = frame.Children.Current;
+            pending.Push((frame.Children, frame.Slot + 1, frame.Length));
+            path.Length = frame.Length;
+            path.Append('/').Append(frame.Slot);
+            if (child.AsNode() is { } node)
+            {
+                if (node.HasStructuredTrivia)
+                    pending.Push((node.ChildNodesAndTokens().GetEnumerator(), 0, path.Length));
+                continue;
+            }
+            var token = child.AsToken();
+            var length = path.Length;
+            for (var side = 0; side < 2; side++)
+            {
+                var trivia = side == 0 ? token.LeadingTrivia : token.TrailingTrivia;
+                for (var i = 0; i < trivia.Count; i++)
+                    if (trivia[i].IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || trivia[i].IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+                    {
+                        path.Append(side == 0 ? 'L' : 'T').Append(i);
+                        yield return (trivia[i].ToString(), path.ToString());
+                        path.Length = length;
+                    }
+            }
+        }
+    }
 
     /// <summary>
     /// Maps the classification to Roslyn semantic edits: Update of each changed body's method,
