@@ -1089,6 +1089,41 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn lighting_recaptures_probes_and_applies_look_presets() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
+    let probe = rt.state().editor.state.selection[0].clone();
+    assert!(
+        rt.state().resolved[&probe]
+            .record
+            .contains_key("ReflectionProbe")
+    );
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
+    press(&mut rt, "lighting/probe/recapture");
+    rt.update(|s| {
+        s.poll_logs();
+    });
+    // Queued for the renderer, or (no renderer here) refused with its reason.
+    let s = rt.state();
+    let queued = super::lighting::capturing(s);
+    let refused = s
+        .logs
+        .iter()
+        .any(|r| r.severity == ara_diag::Severity::Error);
+    assert!(queued || refused, "the recapture ran or said why not");
+    // A look preset appends override groups to the selected volume.
+    let before = rt.state().resolved["e_post"].record["PostProcessVolume"].clone();
+    rt.update(|s| s.select(vec!["e_post".into()], false));
+    rt.update(|s| super::commands::run(s, "lighting.preset.manual", &Target::None));
+    assert_ne!(
+        rt.state().resolved["e_post"].record["PostProcessVolume"],
+        before
+    );
+}
+
+#[test]
 fn history_searches_opens_changes_and_undoes_back_to_a_step() {
     let mut rt = open();
     let mut ids = Vec::new();

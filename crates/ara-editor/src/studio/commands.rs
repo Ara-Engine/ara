@@ -1577,6 +1577,29 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 None => Ok(()),
             }
         }
+        // Lighting: reflection probe captures, and the volumes' look presets.
+        "lighting.probe.recapture" => {
+            let entity = match target {
+                Target::Entity(entity) => Some(entity.as_str()),
+                _ => None,
+            };
+            super::lighting::recapture(s, entity)
+        }
+        "lighting.probe.cancel" => super::lighting::cancel(s),
+        "lighting.preset.manual" | "lighting.preset.interior" => {
+            use crate::shell::lighting::authoring::Preset;
+            let preset = match id {
+                "lighting.preset.manual" => Preset::ManualExposure,
+                _ => Preset::Interior,
+            };
+            super::lighting::apply_preset(s, preset);
+            Ok(())
+        }
+        "lighting.inspect" => match target.entity(&e.state).map(str::to_owned) {
+            Some(entity) => select(e, vec![entity])
+                .and_then(|()| act(e, "editor.focus", json!({"panel": "inspector"}))),
+            None => Err("Choose a lighting entity".into()),
+        },
         "tools.cs.reload" => super::scripts::reload(s),
         "tools.cs.solution" => super::scripts::solution(s),
         "component.new_script" => {
