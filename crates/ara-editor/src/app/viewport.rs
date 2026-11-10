@@ -1099,28 +1099,101 @@ impl SceneView {
 }
 
 /// Viewport View Mode names (the `editor.view` protocol) to renderer debug views.
+/// Every Scene view mode: its `editor.view` name, its title, the group menus list it
+/// under, and what the renderer draws. `editor.view` accepts exactly these names.
+pub(crate) const VIEW_MODES: [(&str, &str, &str, ViewMode); 19] = [
+    ("lit", "Lit", "Shading", ViewMode::Lit),
+    ("baseColor", "Unlit", "Shading", ViewMode::Albedo),
+    ("wireframe", "Wireframe", "Shading", ViewMode::Wireframe),
+    (
+        "litWireframe",
+        "Lit wireframe",
+        "Shading",
+        ViewMode::LitWireframe,
+    ),
+    ("normals", "Normals", "Material", ViewMode::Normals),
+    (
+        "roughnessMetal",
+        "Roughness and metal",
+        "Material",
+        ViewMode::RoughnessMetal,
+    ),
+    ("depth", "Depth", "Material", ViewMode::Depth),
+    (
+        "vertexColor",
+        "Vertex colour",
+        "Material",
+        ViewMode::VertexColor,
+    ),
+    (
+        "vertexColorRed",
+        "Vertex colour: red",
+        "Material",
+        ViewMode::VertexColorRed,
+    ),
+    (
+        "vertexColorGreen",
+        "Vertex colour: green",
+        "Material",
+        ViewMode::VertexColorGreen,
+    ),
+    (
+        "vertexColorBlue",
+        "Vertex colour: blue",
+        "Material",
+        ViewMode::VertexColorBlue,
+    ),
+    (
+        "vertexColorAlpha",
+        "Vertex colour: alpha",
+        "Material",
+        ViewMode::VertexColorAlpha,
+    ),
+    (
+        "gi_diffuse",
+        "Indirect diffuse (GI)",
+        "Lighting",
+        ViewMode::GiDiffuse,
+    ),
+    (
+        "shadowCascades",
+        "Shadow cascades",
+        "Lighting",
+        ViewMode::ShadowCascades,
+    ),
+    (
+        "shadowPenumbra",
+        "Shadow penumbra",
+        "Lighting",
+        ViewMode::ShadowPenumbra,
+    ),
+    (
+        "lightComplexity",
+        "Light complexity",
+        "Lighting",
+        ViewMode::LightComplexity,
+    ),
+    ("overdraw", "Overdraw", "Performance", ViewMode::Overdraw),
+    (
+        "decalCoverage",
+        "Decal coverage",
+        "Performance",
+        ViewMode::DecalCoverage,
+    ),
+    (
+        "entityIds",
+        "Entity IDs",
+        "Performance",
+        ViewMode::EntityIds,
+    ),
+];
+
+/// The renderer's mode for view mode `name` (Lit for an unknown one).
 fn view_mode(name: &str) -> ViewMode {
-    match name {
-        "baseColor" => ViewMode::Albedo,
-        "normals" => ViewMode::Normals,
-        "depth" => ViewMode::Depth,
-        "roughnessMetal" => ViewMode::RoughnessMetal,
-        "entityIds" => ViewMode::EntityIds,
-        "shadowCascades" => ViewMode::ShadowCascades,
-        "wireframe" => ViewMode::Wireframe,
-        "litWireframe" => ViewMode::LitWireframe,
-        "gi_diffuse" => ViewMode::GiDiffuse,
-        "overdraw" => ViewMode::Overdraw,
-        "vertexColor" => ViewMode::VertexColor,
-        "vertexColorRed" => ViewMode::VertexColorRed,
-        "vertexColorGreen" => ViewMode::VertexColorGreen,
-        "vertexColorBlue" => ViewMode::VertexColorBlue,
-        "vertexColorAlpha" => ViewMode::VertexColorAlpha,
-        "decalCoverage" => ViewMode::DecalCoverage,
-        "lightComplexity" => ViewMode::LightComplexity,
-        "shadowPenumbra" => ViewMode::ShadowPenumbra,
-        _ => ViewMode::Lit,
-    }
+    VIEW_MODES
+        .iter()
+        .find(|(n, ..)| *n == name)
+        .map_or(ViewMode::Lit, |(.., mode)| *mode)
 }
 fn lit_fidelity(editor: &Editor) -> bool {
     editor.state.quality && matches!(view_mode(&editor.state.view_mode), ViewMode::Lit)
