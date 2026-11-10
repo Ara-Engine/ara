@@ -58,11 +58,9 @@ impl HiddenWindow {
     }
     fn resize(&self, size: [u32; 2]) -> Result<()> {
         // SAFETY: live owner-thread HWND; NOMOVE | NOZORDER | NOACTIVATE, no show flag.
-        ensure!(
-            unsafe { SetWindowPos(self.0.get(), 0, 0, 0, size[0] as i32, size[1] as i32, 0x16) }
-                != 0,
-            "SetWindowPos failed"
-        );
+        let resized =
+            unsafe { SetWindowPos(self.0.get(), 0, 0, 0, size[0] as i32, size[1] as i32, 0x16) };
+        ensure!(resized != 0, "SetWindowPos failed");
         Ok(())
     }
 }
@@ -106,10 +104,8 @@ fn child_hwnd_presents_and_resizes_without_activation() -> Result<()> {
                 present.request_resize(size)?;
             } else if present.extent() != size {
                 // SAFETY: same live owners and exclusive queue access.
-                ensure!(
-                    unsafe { present.resize_to(&device, size)? },
-                    "Resize did not retire"
-                );
+                let resized = unsafe { present.resize_to(&device, size)? };
+                ensure!(resized, "Resize did not retire");
             }
             ui.resize(size.map(|v| v as f32))
                 .map_err(|e| anyhow::anyhow!("{e}"))?;

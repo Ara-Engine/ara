@@ -90,6 +90,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
+    // Windows child HWND viewports require a DirectComposition UI surface.
+    #[cfg(windows)]
+    stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
     let scale = surface.scale();
