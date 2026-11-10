@@ -57,12 +57,55 @@ public static class Docs
     static string Tag(string? xml, string tag, string? name)
     {
         if (xml is null) return "";
+        if (tag == "summary" && PlainSummary(xml) is { } summary) return summary;
         XElement root;
         try { root = XElement.Parse(xml.Trim().StartsWith("<member", StringComparison.Ordinal) ? xml : "<member>" + xml + "</member>"); }
         catch { return ""; }
         var el = root.Elements(tag).FirstOrDefault(e => name is null || (string?)e.Attribute("name") == name);
         return el is null ? "" : Collapse(Text(el));
     }
+
+    /// <summary>Recognizes only one plain ASCII summary; every other XML shape uses the full parser.</summary>
+    static string? PlainSummary(string xml)
+    {
+        int at;
+        if (xml.StartsWith("<member>", StringComparison.Ordinal)) at = "<member>".Length;
+        else if (xml.StartsWith("<member name=\"", StringComparison.Ordinal))
+        {
+            at = "<member name=\"".Length;
+            var end = xml.IndexOf("\">", at, StringComparison.Ordinal);
+            if (end < 0) return null;
+            for (var i = at; i < end; i++)
+                if (!PlainCharacter(xml[i], whitespace: false) || xml[i] == '"') return null;
+            at = end + 2;
+        }
+        else return null;
+
+        if (!Read("<summary>")) return null;
+        var start = at;
+        while (at < xml.Length && PlainCharacter(xml[at], whitespace: true)) at++;
+        var length = at - start;
+        if (!Read("</summary>") || !Read("</member>")) return null;
+        SkipWhitespace();
+        return at == xml.Length ? Collapse(xml.Substring(start, length)) : null;
+
+        bool Read(string token)
+        {
+            SkipWhitespace();
+            if (xml.Length - at < token.Length || string.CompareOrdinal(xml, at, token, 0, token.Length) != 0) return false;
+            at += token.Length;
+            return true;
+        }
+
+        void SkipWhitespace()
+        {
+            while (at < xml.Length && (xml[at] == ' ' || xml[at] == '\t' || xml[at] == '\r' || xml[at] == '\n')) at++;
+        }
+    }
+
+    static bool PlainCharacter(char value, bool whitespace) =>
+        (value >= ' ' && value <= '~' && value != '<' && value != '>' && value != '&') ||
+        (whitespace && (value == '\t' || value == '\r' || value == '\n'));
 
     static string Text(XElement e)
     {

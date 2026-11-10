@@ -17,6 +17,7 @@ use ara_runtime_render::{
     terrain_mesh::{TerrainMeshes, TileMesh},
 };
 use glam34::{Mat4 as AraMat4, Quat, Vec3 as AraVec3};
+use renderlab::engine::ProgramId;
 use renderlab::{
     asset::{TextureRole, Wrap},
     engine::{
@@ -28,6 +29,27 @@ use std::collections::{HashMap, HashSet};
 
 /// Foliage part draws kept at most: each is one Renderlab object.
 const MAX_FOLIAGE_DRAWS: usize = 60_000;
+/// Foliage triangles the non-RT path draws at most (`Terrain::sync`).
+const NONRT_FOLIAGE_TRIANGLES: usize = 2_000_000;
+
+/// Triangles a draw's mesh holds (shapes: a few hundred at most).
+fn triangles_of(draw: &Draw) -> usize {
+    match &draw.geometry {
+        ara_runtime::extract::Geometry::Model { model, primitive } => model
+            .primitives
+            .get(*primitive)
+            .map_or(0, |p| p.indices.len() / 3),
+        ara_runtime::extract::Geometry::Shape { .. } => 1024,
+    }
+}
+
+/// Instances Renderlab's non-RT virtual shadows can address: they pack an instance and a
+/// triangle of the largest mesh into one 32-bit id, so the largest mesh (doubled, for the
+/// level-of-detail triangles Renderlab appends) leaves the rest of the bits to instances.
+fn packed_instances(largest_triangles: usize) -> usize {
+    let bits = usize::BITS - (largest_triangles.max(1) * 2).leading_zeros();
+    (1usize << 32u32.saturating_sub(bits).min(31)).saturating_sub(2)
+}
 /// Marks foliage render identities apart from entity and terrain-tile identities.
 const FOLIAGE_ENTITY: u64 = 0x7f01_0000_0000_0000;
 const FNV: u64 = 0xcbf2_9ce4_8422_2325;
@@ -56,27 +78,54 @@ pub(crate) struct Terrain {
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
     foliage_key: u64,
+    /// The layer atlas and parameters, and the layers' key they were built for.
+    splat: Option<(u64, crate::splat::Splat)>,
+    /// The splat program once tried: `Some(None)` when Renderlab rejected it.
+    splat_program: Option<Option<ProgramId>>,
 }
 
 impl Terrain {
     /// Places the frame's resident tiles, at most `budget` (each is one of Renderlab's
     /// mesh-material groups), and rebuilds the foliage draws when their inputs
-    /// changed. Returns the number of tiles placed.
+    /// changed. With `packed_ids` (the non-RT path: the largest mesh the scene has
+    /// uploaded), foliage also stays within the instances its shadows can address
+    /// (`packed_instances`). Returns the number of tiles placed and the largest mesh
+    /// the foliage cap assumed.
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         view: &ExternalView<'_>,
         budget: usize,
+        packed_ids: Option<usize>,
         gaps: &mut Gaps,
-    ) -> Result<usize> {
+    ) -> Result<(usize, usize)> {
         let Some(terrain) = view.frame.terrain.as_ref() else {
             self.clear(engine)?;
-            return Ok(0);
+            return Ok((0, 0));
         };
         let mut coords = terrain.tiles.clone();
         coords.sort();
         coords.dedup();
         let layers = Layers::resolve(view, gaps);
+        // Layer maps: one atlas per set of layers, rebuilt (and every tile re-placed,
+        // as the tile keys carry the layers' key) when the layers change.
+        let program = match layers.colours {
+            Some(_) => crate::splat::program(&mut self.splat_program, engine, gaps),
+            None => None,
+        };
+        let stale = self
+            .splat
+            .as_ref()
+            .is_some_and(|(key, _)| *key != layers.key);
+        let old_atlas = if stale {
+            self.splat.take().map(|(_, s)| s.atlas)
+        } else {
+            None
+        };
+        if program.is_some() && self.splat.is_none() && !layers.maps.is_empty() {
+            self.splat = Some((layers.key, crate::splat::build(engine, &layers.maps, gaps)?));
+        }
+        let splat = program.zip(self.splat.as_ref().map(|(_, s)| s));
         let wanted: Vec<_> = coords
             .iter()
             .filter_map(|coord| {
@@ -108,8 +157,11 @@ impl Terrain {
         }
         for (key, mesh, tile) in wanted.iter().take(budget) {
             if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(*key) {
-                slot.insert(place(engine, mesh, &tile.weights, &layers)?);
+                slot.insert(place(engine, mesh, &tile.weights, &layers, splat)?);
             }
+        }
+        if let Some(atlas) = old_atlas {
+            engine.remove_texture(atlas)?;
         }
 
         // Foliage: rebuilt when the terrain generation, the resident tiles or the
@@ -127,11 +179,41 @@ impl Terrain {
                 key = fnv(key, &part.entity.to_le_bytes());
             }
         }
+        let largest = packed_ids.map_or(0, |uploaded| {
+            wanted
+                .iter()
+                .map(|(_, mesh, _)| mesh.source.indices.len() / 3)
+                .chain(view.frame.draws.iter().map(triangles_of))
+                .chain(view.foliage_parts.values().flatten().map(triangles_of))
+                .fold(uploaded, usize::max)
+        });
+        let cap = if packed_ids.is_some() {
+            packed_instances(largest)
+                .saturating_sub(view.frame.draws.len() + budget)
+                .min(MAX_FOLIAGE_DRAWS)
+        } else {
+            MAX_FOLIAGE_DRAWS
+        };
+        // Renderlab's non-RT shadows slow sharply with caster triangles (Outpost's ten
+        // million foliage triangles outlive a GPU's hang timer): foliage stays within a
+        // triangle budget there.
+        let triangles = packed_ids.map(|_| NONRT_FOLIAGE_TRIANGLES);
+        key = fnv(
+            fnv(key, &cap.to_le_bytes()),
+            &view.foliage_percent.to_le_bytes(),
+        );
+        key = fnv(key, &triangles.unwrap_or(0).to_le_bytes());
         if key != self.foliage_key {
             self.foliage_key = key;
-            self.rebuild_foliage(view, &coords.iter().map(|c| (c.x, c.z)).collect(), gaps);
+            self.rebuild_foliage(
+                view,
+                &coords.iter().map(|c| (c.x, c.z)).collect(),
+                cap,
+                triangles,
+                gaps,
+            );
         }
-        Ok(self.tiles.len())
+        Ok((self.tiles.len(), largest))
     }
 
     /// The foliage draws and the key of what they were built from.
@@ -154,6 +236,8 @@ impl Terrain {
         &mut self,
         view: &ExternalView<'_>,
         resident: &HashSet<(i32, i32)>,
+        cap: usize,
+        budget: Option<usize>,
         gaps: &mut Gaps,
     ) {
         self.foliage.clear();
@@ -163,7 +247,13 @@ impl Terrain {
         let data = &terrain.data;
         let (origin, width) = (data.header.origin, data.header.tile_width());
         let (mut unresolved, mut over) = (0usize, 0usize);
+        let mut used = 0usize;
         for instance in &data.foliage {
+            // The user's foliage density, selected as Ara's renderer selects it.
+            let identity = u64::from(instance.identity[0]) | u64::from(instance.identity[1]) << 32;
+            if identity % 100 >= u64::from(view.foliage_percent.min(100)) {
+                continue;
+            }
             let [x, y, z, scale] = instance.position_scale;
             let coord = (
                 ((x - origin[0]) / width).floor() as i32,
@@ -187,7 +277,8 @@ impl Terrain {
                 AraVec3::new(x, y, z),
             );
             for (index, part) in parts.iter().enumerate() {
-                if self.foliage.len() == MAX_FOLIAGE_DRAWS {
+                let cost = triangles_of(part);
+                if self.foliage.len() == cap || budget.is_some_and(|b| used + cost > b) {
                     over += 1;
                     continue;
                 }
@@ -197,6 +288,7 @@ impl Terrain {
                     fnv(entity, &rule.to_le_bytes()),
                     &(index as u32).to_le_bytes(),
                 );
+                used += cost;
                 self.foliage.push(Draw {
                     entity: FOLIAGE_ENTITY | (entity & 0x0000_ffff_ffff_ffff),
                     world: placed * part.world,
@@ -213,23 +305,28 @@ impl Terrain {
         if over > 0 {
             gaps.limit(
                 "foliage draws the bridge keeps",
-                &format!("{over} foliage parts beyond {MAX_FOLIAGE_DRAWS} are not drawn"),
+                &format!(
+                    "{over} foliage parts are not drawn: at most {cap} parts ({MAX_FOLIAGE_DRAWS} on the RT path; fewer on the non-RT path, whose shadows pack instance and triangle into 32 bits){}",
+                    budget.map_or(String::new(), |b| format!(" and {b} triangles on the non-RT path, whose shadows slow sharply with caster triangles"))
+                ),
             );
         }
     }
 }
 
-/// The terrain's splat layers as the bridge draws them.
-struct Layers {
+/// The terrain's splat layers as the bridge draws them, borrowed from the view.
+struct Layers<'a> {
     /// Linear base colour factor per splat channel; `None` without layer materials.
     colours: Option<[[f32; 3]; 4]>,
+    /// Each resolved layer's material and cooked base-colour map, for the splat atlas.
+    maps: Vec<(&'a ara_runtime::model::ModelMaterial, Option<&'a [u8]>)>,
     roughness: f32,
     /// Changes when the colours do, so tiles are placed again.
     key: u64,
 }
 
-impl Layers {
-    fn resolve(view: &ExternalView<'_>, gaps: &mut Gaps) -> Self {
+impl<'a> Layers<'a> {
+    fn resolve(view: &ExternalView<'a>, gaps: &mut Gaps) -> Self {
         let references = view
             .frame
             .terrain
@@ -239,14 +336,18 @@ impl Layers {
             // As Ara's default surface: white, half rough.
             return Self {
                 colours: None,
+                maps: Vec::new(),
                 roughness: 0.5,
                 key: 0,
             };
         }
-        gaps.unsupported(
-            "terrain layer maps",
-            "each layer shows its base colour factor, blended by the splat weights",
-        );
+        if references.len() > 4 {
+            gaps.unsupported(
+                "terrain layers past the fourth",
+                "the first four layers are drawn",
+            );
+        }
+        let mut maps = Vec::new();
         let mut colours = [[1.; 3]; 4];
         let (mut roughness, mut key) = (0., FNV);
         for (colour, reference) in colours.iter_mut().zip(references) {
@@ -254,8 +355,15 @@ impl Layers {
                 .terrain_materials
                 .get(&reference.0)
                 .map(|m| &m.material);
-            if let Some(material) = material {
+            if let Some(asset) = view.terrain_materials.get(&reference.0) {
+                let material = &asset.material;
                 colour.copy_from_slice(&material.base_color[..3]);
+                let map = material
+                    .base_color_texture
+                    .and_then(|i| asset.textures.get(i))
+                    .map(|t| &t.ktx2[..]);
+                maps.push((material, map));
+                key = fnv(key, &asset.digest.0);
             }
             roughness += material.map_or(0.5, |m| m.roughness) / references.len().min(4) as f32;
             for channel in colour {
@@ -264,6 +372,7 @@ impl Layers {
         }
         Self {
             colours: Some(colours),
+            maps,
             roughness: roughness.clamp(0.045, 1.),
             key,
         }
@@ -275,13 +384,51 @@ fn place(
     engine: &mut Engine,
     tile: &TileMesh,
     weights: &[[u8; 4]],
-    layers: &Layers,
+    layers: &Layers<'_>,
+    splat: Option<(ProgramId, &crate::splat::Splat)>,
 ) -> Result<Tile> {
     let vertices: Vec<Vertex> = tile.source.vertices.iter().map(scene::vertex).collect();
     let mesh = engine.create_mesh(&MeshData {
         vertices: &vertices,
         indices: &tile.source.indices,
     })?;
+    let fits = weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1];
+    let clamp = Sampler {
+        wrap_u: Wrap::Clamp,
+        wrap_v: Wrap::Clamp,
+        ..Default::default()
+    };
+    // Layer maps: the shared atlas, and this tile's weights (one texel per height
+    // sample) in the metallic-roughness slot the splat program reads them from.
+    if let Some((program, splat)) = splat.filter(|_| fits) {
+        let rgba = weights.iter().flatten().copied().collect();
+        let weights = engine.create_texture(texture::chain(
+            tile.texture.size,
+            rgba,
+            TextureRole::MetallicRoughnessLinear,
+        ))?;
+        let material = engine.create_material(&MaterialDesc {
+            double_sided: true,
+            base_color_texture: Some(TextureRef {
+                texture: splat.atlas,
+                sampler: clamp,
+            }),
+            metallic_roughness_texture: Some(TextureRef {
+                texture: weights,
+                sampler: clamp,
+            }),
+            program: Some(program),
+            parameters: &splat.parameters,
+            ..Default::default()
+        })?;
+        let object = engine.spawn(mesh, material, Mat4::IDENTITY)?;
+        return Ok(Tile {
+            object,
+            mesh,
+            material,
+            texture: Some(weights),
+        });
+    }
     // One texel per height sample, as the tile mesh's coordinates address them.
     let texture = match layers.colours {
         Some(colours) if weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1] => {
@@ -339,4 +486,16 @@ fn release(engine: &mut Engine, tile: Tile) -> Result<()> {
         engine.remove_texture(texture)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packed_ids_leave_the_bits_the_largest_mesh_does_not_need() {
+        // 32,768 triangles, doubled: 17 bits, so 15 bits of instances.
+        assert_eq!(packed_instances(32_768), (1 << 15) - 2);
+        assert_eq!(packed_instances(1), (1 << 30) - 2);
+    }
 }

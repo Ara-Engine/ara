@@ -38,6 +38,10 @@ pub struct ExternalView<'a> {
     /// The host turned rendering effects off or asked for a diagnostic view
     /// (`Presenter::set_debug`); an external renderer that cannot honour that says so.
     pub debug_switches: bool,
+    /// Share of foliage instances to draw, 0 to 100, from the user's graphics tier: an
+    /// instance draws when its identity (`identity[0] | identity[1] << 32`) modulo 100 is
+    /// below it, as Ara's renderer selects them.
+    pub foliage_percent: u32,
 }
 
 /// A completed frame from an external renderer.
@@ -125,6 +129,7 @@ impl Presenter {
                 exposure: self.debug.exposure,
                 ..Default::default()
             };
+        let foliage_percent = self.user_content_budget().1;
         let gpu = self
             .renderer
             .as_mut()
@@ -141,6 +146,7 @@ impl Presenter {
                 foliage_parts: &self.external_foliage,
                 terrain_materials: &self.external_terrain_materials,
                 debug_switches,
+                foliage_percent,
             },
         )?;
         let publication_ms =
