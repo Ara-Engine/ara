@@ -32,6 +32,7 @@ mod lighting;
 mod material_stats;
 mod panels;
 mod preferences;
+mod present;
 mod profiler;
 mod references;
 mod running;
@@ -47,7 +48,6 @@ mod vfx;
 
 use std::time::{Duration, Instant};
 
-use anyhow::Context as _;
 use stillkit::el::{Runtime, SystemClipboard};
 use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
 use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
@@ -384,7 +384,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
             if composite && renderer.presentation_ready() {
-                let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
+                let layer = present::target(surface.native_layer(SCENE_LAYER)?)?;
                 let scale = rt.scale();
                 let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
@@ -502,7 +502,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let game_layer =
             match game_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
                 Some(r) => Some((
-                    metal_layer(surface.native_layer(game::GAME_LAYER)?)?,
+                    present::target(surface.native_layer(game::GAME_LAYER)?)?,
                     [r.width() as u32, r.height() as u32],
                 )),
                 None => None,
@@ -552,7 +552,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
             if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
-                let layer = metal_layer(surface.native_layer(name)?)?;
+                let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.
                 let drawn = rt.touch(|s| unsafe {
@@ -678,21 +678,6 @@ fn present_extensions() -> Vec<std::ffi::CString> {
         .iter()
         .filter_map(|n| std::ffi::CString::new(*n).ok())
         .collect()
-}
-
-/// The Scene view's `CAMetalLayer`.
-fn metal_layer(
-    handle: stillkit::NativeHandle,
-) -> anyhow::Result<std::ptr::NonNull<std::ffi::c_void>> {
-    match handle {
-        stillkit::NativeHandle::Metal(layer) => {
-            std::ptr::NonNull::new(layer).context("the Scene layer is null")
-        }
-        #[allow(unreachable_patterns)]
-        _ => anyhow::bail!(
-            "the studio's Scene view presents on macOS today; Windows and Linux use --legacy-ui until the Vulkan layer path lands"
-        ),
-    }
 }
 
 /// W, A, S, D, Q and E as virtual keys: the fly keys while the right button is held.

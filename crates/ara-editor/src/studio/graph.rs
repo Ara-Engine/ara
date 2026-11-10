@@ -7,8 +7,6 @@
 //! inline, typed where they show; C wraps the selection in a comment box; ⌘D duplicates it;
 //! Delete removes it. Every edit is a command on the document (one undo step per gesture),
 //! the same ones agents send.
-use std::ffi::c_void;
-use std::ptr::NonNull;
 
 use ara_kit::icons;
 use ara_kit::ui::*;
@@ -209,12 +207,12 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
 
 /// Draws the canvas into the page's layer. `extent` is in physical pixels.
 /// # Safety
-/// `layer` is the live `CAMetalLayer` of the graph page.
+/// `layer` is the graph page's live native layer (`present::Target`).
 pub(super) unsafe fn draw(
     s: &mut Studio,
     target: &mut super::layer::Layer,
     renderer: &ara_render::Renderer,
-    layer: NonNull<c_void>,
+    layer: super::present::Target,
     extent: [u32; 2],
     scale: f32,
 ) -> anyhow::Result<()> {
