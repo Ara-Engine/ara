@@ -519,11 +519,15 @@ internal sealed partial class ModuleSession
             nextState = nextState with { Final = final };
             // Declarations can change policy on another partial file. Accessor edits
             // can also synthesize backing fields; directives may alter declarations.
-            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !docsChanged
-                && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
+            var stable = !_diagnosticReferencesChanged && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
                 && cls.Bodies.All(body => body.New is MethodDeclarationSyntax method && !method.Modifiers.Any(SyntaxKind.PartialKeyword))
                 && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true);
-            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : [.. nextState.Trees.Values];
+            var ordinaryBodies = stable && !cls.Additive && cls.Bodies.Count > 0 && !docsChanged;
+            // An additive edit on a module whose analysis was clean can only change results in the files it
+            // touches and the files that spell its new names (AdditiveAnalysisScope); null means the whole module.
+            var scoped = stable && cls.Additive && s.AnalyzerClean
+                ? AdditiveAnalysisScope.Trees(cls.Inserts, changed, nextState.Trees.Values) : null;
+            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : scoped ?? [.. nextState.Trees.Values];
             if (cls.Bodies.Count == 0 && !cls.Additive)
             {
                 var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, out var triviaClean, ct, module: true);
@@ -543,7 +547,7 @@ internal sealed partial class ModuleSession
             }
             p.Emit = p.Mark();
             var bodies = ordinaryBodies && s.AnalyzerClean ? cls.Bodies.Select(body => (MethodDeclarationSyntax)body.New).ToArray() : null;
-            var problems = Problems(final, [], errors, analyze, out var clean, ct, module: !ordinaryBodies, bodies: bodies);
+            var problems = Problems(final, [], errors, analyze, out var clean, ct, module: !ordinaryBodies && scoped is null, bodies: bodies);
             p.Analyze = p.Mark();
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
@@ -558,7 +562,7 @@ internal sealed partial class ModuleSession
                     ValidatedInputs = true,
                     Timing = p,
                     Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces,
-                        AnalyzerClean = clean && (!ordinaryBodies || s.AnalyzerClean) },
+                        AnalyzerClean = clean && (!(ordinaryBodies || scoped is not null) || s.AnalyzerClean) },
                 };
             }
             escalation = Escalation.EmitFailed;
