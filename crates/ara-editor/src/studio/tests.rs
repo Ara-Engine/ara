@@ -1089,6 +1089,36 @@ fn scene_overlays_that_do_not_fit_collapse_to_icons_until_there_is_room() {
 }
 
 #[test]
+fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    let tab = rt.find("tab/console").unwrap();
+    rt.right_click(tab.center().x, tab.center().y);
+    settle(&mut rt);
+    assert!(
+        rt.find("cmd/window.maximize").is_some(),
+        "the tab's menu opens"
+    );
+    press(&mut rt, "cmd/window.add_tab/Import");
+    settle(&mut rt);
+    let area = |rt: &Runtime<Studio>, panel: &str| super::dock::area_holding(rt.state(), panel);
+    assert_eq!(
+        area(&rt, "import"),
+        area(&rt, "console"),
+        "added beside Console"
+    );
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "import"})));
+    settle(&mut rt);
+    press(&mut rt, "tab/import/close");
+    assert!(area(&rt, "import").is_none(), "closed from its ×");
+    assert!(
+        rt.find("tab/scene/close").is_none(),
+        "the Scene view has none"
+    );
+}
+
+#[test]
 fn tabs_drag_into_another_area_or_split_one_off_its_edge() {
     let mut rt = open();
     settle(&mut rt);

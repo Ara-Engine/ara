@@ -358,6 +358,32 @@ fn split_at<'a>(node: &'a mut DockNode, path: &[u8]) -> Option<&'a mut DockNode>
     }
 }
 
+/// Every panel a dock area can hold, in the Window menu's order.
+pub(super) const PANELS: [&str; 17] = [
+    "scene",
+    "game",
+    "hierarchy",
+    "inspector",
+    "assets",
+    "console",
+    "problems",
+    "agents",
+    "history",
+    "material",
+    "vfx",
+    "animation",
+    "profiler",
+    "lighting",
+    "build",
+    "import",
+    "settings",
+];
+
+/// The id of the area whose tabs hold `panel`, in the main window's layout.
+pub(super) fn area_holding(s: &Studio, panel: &str) -> Option<String> {
+    area_of(&s.editor.state.layout, panel)
+}
+
 /// A panel's title and icon.
 pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
     match id {
@@ -451,12 +477,31 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                     }
                     true
                 })
+                .on_context_menu({
+                    let tab = tab.clone();
+                    move |s: &mut Studio, x, y| {
+                        use crate::catalog::{Target, menus::Context};
+                        s.local.context = Some((Context::Tab, Target::Panel(tab.clone()), (x, y)));
+                    }
+                })
                 .child(icon(glyph).size(12.0))
                 .child(
                     text(title)
                         .text_size(style::TEXT)
                         .weight(if on { 600 } else { 500 }),
                 );
+            // The open tab closes from its ×, as Unreal's do (the Scene view stays).
+            if on && tab != "scene" {
+                let close = crate::catalog::Target::Panel(tab.clone());
+                tab_el = tab_el.child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close tab")
+                        .size(16.0)
+                        .key(format!("tab/{tab}/close"))
+                        .on_press(move |s: &mut Studio| {
+                            super::commands::run(s, "window.close_panel", &close)
+                        }),
+                );
+            }
             tab_el = if on {
                 // Square off the bottom corners so the tab runs into the body.
                 tab_el.child(

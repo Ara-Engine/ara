@@ -424,6 +424,24 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
         }
         // The studio has no floating windows yet.
         Dynamic::Windows => Vec::new(),
+        // Panels not open yet, to open as a tab beside the clicked one.
+        Dynamic::AddTab => {
+            let Target::Panel(beside) = target else {
+                return Vec::new();
+            };
+            super::dock::PANELS
+                .iter()
+                .filter(|p| !crate::state::panel_visible(&e.state, p))
+                .map(|p| {
+                    let (title, _) = super::dock::panel_title(p);
+                    entry(
+                        title.to_owned(),
+                        Target::Text(format!("{p}@{beside}")),
+                        None,
+                    )
+                })
+                .collect()
+        }
     }
 }
 

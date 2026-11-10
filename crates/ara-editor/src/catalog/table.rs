@@ -2610,4 +2610,11 @@ pub(crate) const COMMANDS: &[Command] = &[
         keys: "",
         summary: "Remove a saved Scene toolbar preset (target: its name).",
     },
+    Command {
+        id: "window.add_tab",
+        title: "Add Tab",
+        icon: "plus",
+        keys: "",
+        summary: "Open a panel as a tab beside another (target: panel@beside).",
+    },
 ];

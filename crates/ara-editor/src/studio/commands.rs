@@ -852,6 +852,28 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             };
             view(e, json!({"maximized": next}))
         }
+        // Add Tab: `panel@beside` opens `panel` as a tab in the area holding `beside`.
+        "window.add_tab" => match target {
+            Target::Text(text) => match text
+                .split_once('@')
+                .and_then(|(panel, beside)| Some((panel, super::dock::area_holding(s, beside)?)))
+            {
+                // Shown first (a closed panel is in no area), then moved beside.
+                Some((panel, area)) => {
+                    act(&mut s.editor, "editor.layout.show", json!({"panel": panel}))
+                        .and_then(|()| {
+                            act(
+                                &mut s.editor,
+                                "editor.layout",
+                                json!({"panel": panel, "area": area, "index": u32::MAX}),
+                            )
+                        })
+                        .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
+                }
+                None => Err("Choose a panel to add beside an open tab".into()),
+            },
+            _ => Err("Choose a panel to add".into()),
+        },
         "window.close_panel" => {
             let panel = match target {
                 Target::Panel(panel) => panel.clone(),
