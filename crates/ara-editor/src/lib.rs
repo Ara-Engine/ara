@@ -31,6 +31,7 @@ mod interaction;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;
 pub mod inspector;
+pub(crate) mod keys;
 pub(crate) mod lighting;
 mod loading;
 pub(crate) mod names;

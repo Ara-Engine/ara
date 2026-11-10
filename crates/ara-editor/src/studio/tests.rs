@@ -392,6 +392,147 @@ fn the_inspector_locks_searches_and_copies_component_values() {
     press(&mut rt, "component/MeshRenderer/more");
     press(&mut rt, "component/MeshRenderer/reset");
     assert_ne!(roughness(&rt), json!(0.9), "reset to its default");
+    // Move Up puts the renderer above Transform, and the order is saved.
+    let top = |rt: &Runtime<Studio>, c: &str| rt.find(&format!("component/{c}")).expect(c).top;
+    assert!(top(&rt, "Transform") < top(&rt, "MeshRenderer"));
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/up");
+    settle(&mut rt);
+    assert!(top(&rt, "MeshRenderer") < top(&rt, "Transform"), "moved up");
+    let saved = rt
+        .state()
+        .editor
+        .state
+        .settings
+        .get("inspector.componentOrder")
+        .cloned();
+    assert!(
+        saved
+            .as_ref()
+            .and_then(Value::as_str)
+            .is_some_and(|o| o.starts_with("MeshRenderer,Transform")),
+        "{saved:?}"
+    );
+    press(&mut rt, "component/MeshRenderer/more");
+    press(&mut rt, "component/MeshRenderer/down");
+    settle(&mut rt);
+    assert!(
+        top(&rt, "Transform") < top(&rt, "MeshRenderer"),
+        "and back down"
+    );
+    rt.update(|s| {
+        s.act(
+            "editor.settings.set",
+            json!({"key": "inspector.componentOrder", "reset": true}),
+        )
+    });
+}
+
+#[test]
+fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    settle(&mut rt);
+    let run = |rt: &mut Runtime<Studio>, id: &str, target: Target| {
+        rt.update(|s| super::commands::run(s, id, &target));
+        settle(rt);
+    };
+    // Why? asks about the selection, then shows the diagnostic service's answer.
+    run(&mut rt, "tools.why", Target::None);
+    let asked = rt.state().local.prompt.as_ref().map(|p| p.text.clone());
+    assert_eq!(asked.as_deref(), Some("e_box not visible"));
+    press(&mut rt, "prompt/ok");
+    let answer = rt.state().local.why.clone();
+    assert!(
+        answer.as_ref().is_some_and(|(_, lines)| !lines.is_empty()),
+        "{answer:?}"
+    );
+    press(&mut rt, "why/close");
+    assert!(rt.state().local.why.is_none());
+    // Set Baseline needs frames; Compare then hides and shows the comparison.
+    run(&mut rt, "profiler.compare", Target::None);
+    assert!(
+        !rt.state().local.profiler_hide_compare,
+        "no baseline to compare with"
+    );
+    rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
+    run(&mut rt, "profiler.baseline", Target::None);
+    assert!(rt.state().editor.profile_baseline.is_some());
+    run(&mut rt, "profiler.compare", Target::None);
+    assert!(rt.state().local.profiler_hide_compare);
+    // Two floating windows: focusing the first brings it to the front.
+    rt.update(|s| {
+        for (id, panel) in [("float-a", "console"), ("float-b", "problems")] {
+            s.editor.state.floating.push(ara_ui::docking::Floating {
+                id: id.into(),
+                rect: [40, 40, 400, 300],
+                root: ara_ui::docking::DockNode::Area {
+                    id: format!("{id}-area"),
+                    tabs: vec![panel.into()],
+                    active: 0,
+                },
+            });
+        }
+    });
+    run(
+        &mut rt,
+        "window.focus_window",
+        Target::Window("float-a".into()),
+    );
+    let order: Vec<_> = rt
+        .state()
+        .editor
+        .state
+        .floating
+        .iter()
+        .map(|f| f.id.clone())
+        .collect();
+    assert_eq!(order, ["float-b", "float-a"]);
+    // Commands not built yet say why instead of failing.
+    run(&mut rt, "file.save_as", Target::None);
+    assert!(
+        rt.state()
+            .local
+            .note
+            .as_ref()
+            .is_some_and(|(n, _)| n.starts_with("Save As"))
+    );
+}
+
+#[test]
+fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
+    use stillkit::el::{KeyCode, Modifiers};
+    let mut rt = open();
+    settle(&mut rt);
+    let all = rt.state().resolved.len();
+    let selected = |rt: &Runtime<Studio>| rt.state().editor.state.selection.len();
+    // Set in memory, as a settings edit leaves them, so the test profile stays default.
+    let set = |rt: &mut Runtime<Studio>, key: &str, value: Value| {
+        rt.update(|s| {
+            s.editor.state.settings.insert(key.into(), value);
+            s.editor.state.selection.clear();
+        });
+    };
+    rt.key_with(KeyCode::of('A').0, Modifiers::CTRL);
+    assert_eq!(selected(&rt), all, "Ara: Ctrl+A selects all");
+    // Blender's preset: A selects all, Ctrl+A does not.
+    set(&mut rt, "input.keymap", json!("blender"));
+    rt.key_with(KeyCode::of('A').0, Modifiers::CTRL);
+    assert_eq!(selected(&rt), 0);
+    rt.key(KeyCode::of('A').0);
+    assert_eq!(selected(&rt), all, "Blender: A selects all");
+    // The person's own binding wins over the preset, and the menus say so.
+    set(
+        &mut rt,
+        "input.shortcuts",
+        json!({"edit.select_all": "Ctrl+Shift+L"}),
+    );
+    rt.key_with(KeyCode::of('L').0, Modifiers::CTRL | Modifiers::SHIFT);
+    assert_eq!(selected(&rt), all, "rebound");
+    assert_eq!(
+        super::commands::keys_of(rt.state(), "edit.select_all"),
+        super::commands::shortcut("Ctrl+Shift+L")
+    );
 }
 
 #[test]
@@ -672,6 +813,31 @@ fn the_play_menu_sets_mode_clients_network_and_start_paused() {
     assert_eq!(crate::play_controls::network_profile(&s.editor, 2), "clean");
     assert_eq!(s.editor.state.settings["play.startPaused"], json!(true));
     assert!(s.local.play_menu, "settings keep the menu open");
+}
+
+#[test]
+fn import_defaults_set_and_reset_the_projects_importer_values() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "import"})));
+    settle(&mut rt);
+    let mipmaps = |rt: &Runtime<Studio>| {
+        crate::import_edit::inherited_defaults(
+            &rt.state().editor,
+            "ara.texture",
+            crate::import_edit::settings("ara.texture").unwrap().0,
+        )
+        .unwrap()["mipmaps"]
+            .clone()
+    };
+    let before = mipmaps(&rt);
+    assert!(
+        rt.find("import/defaults/reset").is_some(),
+        "the project's defaults show"
+    );
+    press(&mut rt, "asset/setting/mipmaps");
+    assert_ne!(mipmaps(&rt), before, "the texture default changed");
+    press(&mut rt, "import/defaults/reset");
+    assert_eq!(mipmaps(&rt), before, "reset to built-in");
 }
 
 #[test]

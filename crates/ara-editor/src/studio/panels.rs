@@ -28,13 +28,8 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         // Import settings live in the asset inspector; the Import tab shows the same.
         "import" => match s.editor.state.asset_path.as_deref() {
             Some(path) => super::asset_inspector::view(s, path),
-            None => empty(
-                &s.look,
-                icons::DOWNLOAD,
-                "Pick an asset",
-                "Its importer settings, actions and dependencies show here and in the Inspector.",
-                None,
-            ),
+            // No asset picked: the project's importer defaults.
+            None => super::asset_inspector::defaults_view(s),
         },
         "settings" => col().grow(1.0).justify(Justify::Center).child(empty(
             &s.look,

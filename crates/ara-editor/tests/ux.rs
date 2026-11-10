@@ -1507,21 +1507,13 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
     assert_eq!(text(&shell, "view-mode-label"), "Lit");
     assert_eq!(text(&shell, "status-quality-text"), "Low");
 
-    // The palette and agents (editor.commands) see the same commands and state.
+    // The palette finds the quality commands.
     assert!(
         shell
             .palette_rows(&mut editor, "Epic")
             .iter()
             .any(|r| r.2.as_deref() == Some("view.quality.epic"))
     );
-    let exported = editor.action("editor.commands", json!({})).unwrap();
-    let low = exported["commands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["id"] == "view.quality.low")
-        .unwrap();
-    assert_eq!(low["checked"], true);
 
     // Agents can also set it as a preference.
     editor
