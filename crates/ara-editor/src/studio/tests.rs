@@ -2514,6 +2514,21 @@ fn captures() {
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
         )
         .unwrap();
+        // A Hierarchy search, its match marked in each name.
+        rt.update(|s| s.local.hierarchy_query = "o".into());
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!(
+            "{}-hierarchy-search.png",
+            if light { "light" } else { "dark" }
+        );
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.hierarchy_query.clear());
         // The Profiler's call tree, one scope open.
         rt.update(|s| {
             super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
