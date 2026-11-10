@@ -23,21 +23,37 @@ pub(super) struct Compositor {
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
+    #[cfg(windows)]
+    scene_stall: Option<(std::time::Instant, bool)>,
 }
 
 impl Compositor {
-    /// Release the Scene images before the renderer recycles or resizes them.
+    /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
+    /// A persistent stall skips Scene passes and logs once while events keep pumping.
     #[cfg(windows)]
     pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
-        let timeout = std::time::Duration::from_millis(1);
-        if !self.ui.wait_previous_for(timeout)? {
-            return Ok(false);
-        }
+        let started = std::time::Instant::now();
+        let budget = std::time::Duration::from_millis(1);
+        let mut ready = self.ui.wait_previous_for(budget)?;
         // A bounded present can return with its blit still reading the UI target.
-        self.present.as_mut().map_or(Ok(true), |(present, _)| {
+        if ready && let Some((present, _)) = &mut self.present {
             // SAFETY: this compositor retains the presentation and its creating device.
-            unsafe { present.settled(renderer.gpu(), timeout) }
-        })
+            ready = unsafe {
+                present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))?
+            };
+        }
+        if ready {
+            self.scene_stall = None;
+        } else {
+            let (since, reported) = self.scene_stall.get_or_insert((started, false));
+            if !*reported && since.elapsed() >= std::time::Duration::from_millis(250) {
+                eprintln!(
+                    "Scene GPU read is still pending; skipping Scene passes while pumping events"
+                );
+                *reported = true;
+            }
+        }
+        Ok(ready)
     }
 
     /// An adapter on the renderer's GPU, themed for `light`.
@@ -60,6 +76,8 @@ impl Compositor {
             sheet: sheet(light)?,
             light,
             present: None,
+            #[cfg(windows)]
+            scene_stall: None,
         })
     }
 
@@ -312,10 +330,15 @@ mod tests {
                 TextMode::Raster,
             )
             .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let started = std::time::Instant::now();
         assert!(
             !compositor.scene_ready(&renderer)?,
             "a pending external read must prevent recycling and resize"
         );
+        assert!(started.elapsed() < std::time::Duration::from_millis(50));
+        compositor.scene_stall = Some((started - std::time::Duration::from_secs(1), false));
+        assert!(!compositor.scene_ready(&renderer)?);
+        assert!(compositor.scene_stall.is_some_and(|(_, reported)| reported));
         gate.open()?;
         compositor.ui.wait_previous()?;
         assert!(compositor.scene_ready(&renderer)?);
