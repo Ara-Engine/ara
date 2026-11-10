@@ -451,7 +451,7 @@ impl Shell {
         out.push_str(&format!("<button id='{id}' class='ghost' style='padding-left:6px;padding-right:4px' label='{}' description='{}' action='Dispatch'>{}{words}{}</button>",escape(if text.is_empty(){description}else{text}),escape(description),icons::icon(id,icon),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
     }
 }
-pub(super) fn display(v: &Value) -> String {
+pub(crate) fn display(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
         Value::Null => String::new(),

@@ -2,7 +2,7 @@
 //! shows as an icon and badge; the full file name is in the tooltip and Inspector),
 //! fitted to tile captions on at most two lines, breaking at `_`, `-`, `.`, spaces or
 //! camelCase humps, with an ellipsis when even two lines are not enough.
-use super::assets::Asset;
+use crate::assets::Asset;
 use ara_ui_text::{Text, TextSystem};
 use std::collections::HashMap;
 

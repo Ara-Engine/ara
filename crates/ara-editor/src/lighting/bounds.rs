@@ -82,7 +82,7 @@ pub(crate) fn from_entity(
 }
 
 #[cfg(test)]
-pub(super) fn selected(
+pub(crate) fn selected(
     entities: &Resolved,
     selection: &[String],
     hidden: &BTreeSet<String>,
