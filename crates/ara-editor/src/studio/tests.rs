@@ -758,6 +758,85 @@ fn an_assets_details_say_what_it_is_and_holds() {
     assert!(has("Components: Transform 4"), "most common first");
 }
 
+/// A few messages as a session might have them, for the Console and Problems captures.
+fn sample_logs(s: &mut Studio) {
+    use ara_diag::Severity;
+    let row = |seq: u64,
+               severity: Severity,
+               code: &str,
+               message: &str,
+               origin: &str,
+               source: Option<&str>,
+               count: u64| {
+        let diagnostic = match severity {
+            Severity::Error => ara_diag::Diagnostic::error(ara_diag::Code(seq as u16), message),
+            Severity::Warning => ara_diag::Diagnostic::warning(ara_diag::Code(seq as u16), message),
+            _ => ara_diag::Diagnostic::info(ara_diag::Code(seq as u16), message),
+        };
+        super::state::LogRow {
+            seq,
+            severity,
+            code: code.into(),
+            message: message.into(),
+            origin: origin.into(),
+            at: seq * 1_000,
+            source: source.map(str::to_owned),
+            count,
+            diagnostic: std::sync::Arc::new(diagnostic),
+        }
+    };
+    s.logs = vec![
+        row(
+            1,
+            Severity::Info,
+            "ARA0001",
+            "Project opened: 4 entities in levels/main.scene",
+            "engine",
+            None,
+            1,
+        ),
+        row(
+            2,
+            Severity::Info,
+            "ARA0911",
+            "C# modules compiled in 1.8 s",
+            "scripts",
+            None,
+            1,
+        ),
+        row(
+            3,
+            Severity::Warning,
+            "ARA2104",
+            "Texture rocks_albedo.png is 4096×4096 without mipmaps; it streams slowly",
+            "import",
+            Some("content/art/rocks_albedo.png"),
+            1,
+        ),
+        row(
+            4,
+            Severity::Warning,
+            "ARA3302",
+            "Light Sun casts shadows past its cascade range",
+            "render",
+            None,
+            12,
+        ),
+        row(
+            5,
+            Severity::Error,
+            "ARA0912",
+            "PlayerControl.Update threw NullReferenceException at PlayerControl.cs:42",
+            "scripts",
+            Some("content/scripts/PlayerControl.cs"),
+            1,
+        ),
+    ];
+    s.local.log_seen = 5;
+    // The error open in the details pane, as after a click.
+    s.local.console_open = Some(5);
+}
+
 /// Agent clients as a probe might find them (no client's CLI runs in tests).
 fn found_clients(s: &mut Studio) {
     use ara_agents::{Client, Setup};
@@ -2062,6 +2141,7 @@ fn captures() {
         }
         rt.update(|s| s.profile = std::sync::Arc::new(sample_profile()));
         rt.update(found_clients);
+        rt.update(sample_logs);
         for panel in [
             "assets",
             "console",
