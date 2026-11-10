@@ -97,3 +97,14 @@ Causes:
 
 Fixes:
 - Rearrange panels if desired and save the layout from Window > Layouts.
+
+## ARA4508 editor::DIAGNOSTIC_SAMPLE: Editor diagnostic sample
+owner: ara-editor
+
+A synthetic message used by the editor's headless Console and Problems tests and panel captures. It does not report a runtime project failure.
+
+Causes:
+- A verification fixture populated the editor's diagnostic rows.
+
+Fixes:
+- No project action is needed; this code appears only in verification fixtures.

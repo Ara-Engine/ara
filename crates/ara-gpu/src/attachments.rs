@@ -9,8 +9,8 @@
 //!   discard earlier in the list) loads nothing when the scope does not clear it;
 //! - a transient attachment (`TRANSIENT_ATTACHMENT` usage: Metal memoryless, Vulkan
 //!   lazily allocated memory) keeps contents only within one scope.
-use crate::commands::{Attachment, Command};
-use crate::{Access, Barrier, GpuError, Image, Resource, Result, vk};
+use crate::commands::Command;
+use crate::{Access, GpuError, Image, Resource, Result, vk};
 
 /// What a scope does with an attachment's earlier contents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,34 +34,43 @@ pub(crate) struct Ops {
 /// Operations for each attachment (colours in order, then depth) of each rendering
 /// scope in `commands`, in scope order. `transient` tells transient images apart.
 pub(crate) fn ops(commands: &[Command], transient: impl Fn(Image) -> bool) -> Vec<Vec<Ops>> {
-    // Images whose contents are undefined at this point of the list.
-    let mut undefined = Vec::<Image>::new();
-    let mut scopes = Vec::new();
-    for (index, command) in commands.iter().enumerate() {
-        match command {
-            Command::Barrier(Barrier {
-                resource: Resource::Image(image),
-                before,
-                after,
-                ..
-            }) => {
-                undefined.retain(|i| i != image);
-                if *before == Access::Undefined || *after == Access::Undefined {
-                    undefined.push(*image);
+    use crate::rendering::RenderTarget;
+    let mut states = Vec::<(RenderTarget, bool)>::new();
+    for c in commands {
+        if let Some(colors) = c.color_attachments() {
+            for a in colors.chain(c.depth_attachment()) {
+                if !states.iter().any(|(t, _)| *t == a.target) {
+                    states.push((a.target, false));
                 }
             }
-            Command::BeginRendering { colors, depth, .. } => {
-                let discarded = discarded_after(&commands[index + 1..]);
-                let attachments = colors
-                    .iter()
-                    .map(|a| (a, false))
-                    .chain(depth.iter().map(|a| (a, true)));
-                let op = |(a, depth): (&Attachment, bool)| {
-                    let transient = transient(a.image);
-                    let dead_after = transient || discarded.contains(&a.image);
-                    // Depth contents decide which fragments write the other attachments.
-                    let dead_before =
-                        transient || undefined.contains(&a.image) || (dead_after && !depth);
+        }
+        for target in c.resolve_targets().flatten() {
+            if !states.iter().any(|(t, _)| *t == target) {
+                states.push((target, false));
+            }
+        }
+    }
+    let mut scopes = Vec::new();
+    for (index, command) in commands.iter().enumerate() {
+        for b in command.barriers() {
+            for (target, undefined) in &mut states {
+                if covers(b, *target) {
+                    *undefined = b.barrier.before == Access::Undefined
+                        || b.barrier.after == Access::Undefined;
+                }
+            }
+        }
+        if let Some(colors) = command.color_attachments() {
+            let count = colors.len();
+            let discarded = discarded_after(&commands[index + 1..]);
+            let ops = colors
+                .chain(command.depth_attachment())
+                .enumerate()
+                .map(|(i, a)| {
+                    let transient = transient(a.target.image);
+                    let dead_after = transient || discarded.iter().any(|b| covers(*b, a.target));
+                    let undefined = states.iter().any(|(t, u)| *t == a.target && *u);
+                    let dead_before = transient || undefined || (dead_after && i < count);
                     Ops {
                         load: match (a.clear, dead_before) {
                             (Some(_), _) => Load::Clear,
@@ -70,37 +79,58 @@ pub(crate) fn ops(commands: &[Command], transient: impl Fn(Image) -> bool) -> Ve
                         },
                         store: !dead_after,
                     }
-                };
-                scopes.push(attachments.map(op).collect());
-                // The scope writes its attachments: their contents are defined now.
-                undefined.retain(|i| !colors.iter().chain(depth).any(|a| a.image == *i));
+                })
+                .collect();
+            scopes.push(ops);
+            for a in command
+                .color_attachments()
+                .into_iter()
+                .flatten()
+                .chain(command.depth_attachment())
+            {
+                for (target, undefined) in &mut states {
+                    if *target == a.target {
+                        *undefined = false;
+                    }
+                }
             }
-            _ => {}
+            for resolved in command.resolve_targets().flatten() {
+                for (target, undefined) in &mut states {
+                    if *target == resolved {
+                        *undefined = false;
+                    }
+                }
+            }
         }
     }
     scopes
 }
-
-/// Images discarded right after the scope that `rest` continues: by barriers between
-/// its `EndRendering` and the next command that does GPU work.
-fn discarded_after(rest: &[Command]) -> Vec<Image> {
+fn covers(b: crate::sync::ResourceBarrier, t: crate::rendering::RenderTarget) -> bool {
+    if b.barrier.resource != Resource::Image(t.image) {
+        return false;
+    }
+    match b.range {
+        crate::sync::BarrierRange::Whole => true,
+        crate::sync::BarrierRange::Image {
+            base_mip,
+            mip_count,
+            base_layer,
+            layer_count,
+        } => {
+            (base_mip..base_mip.saturating_add(mip_count)).contains(&t.mip)
+                && (base_layer..base_layer.saturating_add(layer_count)).contains(&t.layer)
+        }
+        _ => false,
+    }
+}
+/// Discard ranges immediately following this scope, before the next GPU operation.
+fn discarded_after(rest: &[Command]) -> Vec<crate::sync::ResourceBarrier> {
     rest.iter()
         .skip_while(|c| !matches!(c, Command::EndRendering))
         .skip(1)
-        .take_while(|c| {
-            matches!(
-                c,
-                Command::Barrier(_) | Command::BeginPass(_) | Command::EndPass
-            )
-        })
-        .filter_map(|c| match c {
-            Command::Barrier(Barrier {
-                resource: Resource::Image(image),
-                after: Access::Undefined,
-                ..
-            }) => Some(*image),
-            _ => None,
-        })
+        .take_while(|c| c.is_barrier() || matches!(c, Command::BeginPass(_) | Command::EndPass))
+        .flat_map(|c| c.barriers())
+        .filter(|b| b.barrier.after == Access::Undefined)
         .collect()
 }
 
@@ -122,7 +152,59 @@ pub(crate) fn validate_usage(usage: vk::ImageUsageFlags) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Barrier, commands::Attachment};
 
+    #[test]
+    fn a_layer_discard_preserves_sibling_contents() {
+        use crate::{
+            rendering::{RenderAttachment, RenderTarget},
+            sync::{BarrierRange, ResourceBarrier},
+        };
+        let [image] = images();
+        let target = |layer| RenderAttachment {
+            target: RenderTarget {
+                image,
+                mip: 1,
+                layer,
+            },
+            clear: None,
+        };
+        let commands = [
+            Command::BeginRenderingSubresources {
+                colors: vec![target(0), target(1)],
+                depth: None,
+                resolves: vec![],
+                size: [4, 4],
+            },
+            Command::EndRendering,
+            Command::Barriers(vec![ResourceBarrier {
+                barrier: Barrier {
+                    resource: Resource::Image(image),
+                    before: Access::Color,
+                    after: Access::Undefined,
+                    handoff: None,
+                },
+                range: BarrierRange::Image {
+                    base_mip: 1,
+                    mip_count: 1,
+                    base_layer: 1,
+                    layer_count: 1,
+                },
+            }]),
+            Command::BeginRenderingSubresources {
+                colors: vec![target(0), target(1)],
+                depth: None,
+                resolves: vec![],
+                size: [4, 4],
+            },
+            Command::EndRendering,
+        ];
+        let result = ops(&commands, |_| false);
+        assert!(result[0][0].store);
+        assert!(!result[0][1].store);
+        assert_eq!(result[1][0].load, Load::Keep);
+        assert_eq!(result[1][1].load, Load::DontCare);
+    }
     fn images<const N: usize>() -> [Image; N] {
         let mut arena = crate::arena::Arena::<crate::ImageKind, ()>::default();
         std::array::from_fn(|_| arena.insert(()).unwrap())

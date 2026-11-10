@@ -1,8 +1,9 @@
 use crate::Stage;
+use ara_curve::Curve;
 use ara_material::Domain;
 use serde::{Deserialize, Serialize};
 
-/// Scalar curve key, interpolated linearly with endpoint clamping.
+/// Scalar curve key, interpolated linearly with endpoint clamping (Renderlab's size keys).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Key {
@@ -160,8 +161,10 @@ pub enum Module {
     },
     /// Replace world diameter with a lifetime curve.
     SizeOverLife {
-        /// At least two keys, ordered by t.
-        keys: Vec<Key>,
+        /// Diameter (metres) over normalized lifetime: 2 to 16 keys within [0,1], never
+        /// below zero. Saved as `keys` (see [`life_keys`]).
+        #[serde(rename = "keys", with = "life_keys")]
+        curve: Curve,
     },
     /// Project out of a plane and reflect inward velocity.
     PlaneCollision {
@@ -230,6 +233,69 @@ pub enum Module {
         count: u32,
     },
 }
+/// A lifetime curve as effects save it: its keys as `{t, value}`, straight segments unless
+/// a key says otherwise (`interpolation`, `tangent`, `in_slope`, `out_slope`, as
+/// [`ara_curve::Key`] has them). Effects saved before curves read unchanged, and a
+/// straight curve saves exactly as they did. It always clamps outside [0, 1].
+pub mod life_keys {
+    use ara_curve::{Curve, Extrapolation, Interpolation, Key, Tangent};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// One saved key.
+    #[derive(Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Saved {
+        t: f32,
+        value: f32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        interpolation: Option<Interpolation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tangent: Option<Tangent>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        in_slope: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        out_slope: Option<f32>,
+    }
+
+    /// Saves `curve`'s keys (serde `with`).
+    pub fn serialize<S: Serializer>(curve: &Curve, s: S) -> Result<S::Ok, S::Error> {
+        let keys: Vec<Saved> = curve
+            .keys
+            .iter()
+            .map(|k| Saved {
+                t: k.time,
+                value: k.value,
+                interpolation: (k.interpolation != Interpolation::Linear)
+                    .then_some(k.interpolation),
+                tangent: (k.tangent != Tangent::Auto).then_some(k.tangent),
+                in_slope: (k.in_slope != 0.0).then_some(k.in_slope),
+                out_slope: (k.out_slope != 0.0).then_some(k.out_slope),
+            })
+            .collect();
+        keys.serialize(s)
+    }
+
+    /// Reads saved keys into a curve (serde `with`).
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Curve, D::Error> {
+        let keys = Vec::<Saved>::deserialize(d)?;
+        Ok(Curve {
+            keys: keys
+                .into_iter()
+                .map(|k| Key {
+                    time: k.t,
+                    value: k.value,
+                    in_slope: k.in_slope.unwrap_or(0.0),
+                    out_slope: k.out_slope.unwrap_or(0.0),
+                    tangent: k.tangent.unwrap_or_default(),
+                    interpolation: k.interpolation.unwrap_or(Interpolation::Linear),
+                })
+                .collect(),
+            before: Extrapolation::Clamp,
+            after: Extrapolation::Clamp,
+        })
+    }
+}
+
 impl Module {
     /// Whether a namespaced parameter has the exact type of a bindable setting.
     /// Geometry, curves, domains and event destinations remain authored structure.

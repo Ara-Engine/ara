@@ -1,6 +1,14 @@
 use super::*;
 
 impl Device for VulkanDevice {
+    fn create_texture(&mut self, desc: &crate::texture::TextureDesc) -> Result<Image> {
+        VulkanDevice::create_texture(self, desc)
+    }
+
+    fn sampler(&mut self, desc: &crate::sampler::SamplerDesc) -> Result<HeapIndex> {
+        VulkanDevice::sampler(self, desc)
+    }
+
     fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
         VulkanDevice::retire_pipeline(self, pipeline)
     }
@@ -13,7 +21,8 @@ impl Device for VulkanDevice {
     fn queues(&self) -> [descriptors::QueueInfo; 2] {
         [Queue::Graphics, Queue::Compute].map(|id| descriptors::QueueInfo {
             id,
-            dedicated: id == Queue::Compute,
+            dedicated: id == Queue::Compute
+                && self.context.info.compute_family != self.context.info.graphics_family,
             timestamps: descriptors::TimestampCaps {
                 valid_bits: self.context.info.timestamp_valid_bits[id.index()],
                 period_ns: self.context.info.timestamp_period_ns,
@@ -117,6 +126,14 @@ impl Device for VulkanDevice {
         if let Some(worker) = &mut self.pipeline_preparation {
             worker.drain(self.disposal.as_mut().expect("disposal worker alive"))?;
         }
+        for slice in self
+            .disposal
+            .as_ref()
+            .expect("disposal worker alive")
+            .released()
+        {
+            self.context.memory_blocks.release(slice);
+        }
         let done = self.completed()?;
         let mut index = 0;
         while index < self.retired.len() {
@@ -142,7 +159,10 @@ impl Device for VulkanDevice {
                         self.context.destroy_structure(a.raw.handle, a.raw.backing);
                     }
                     Retired::Image(i) => {
-                        self.heap.retire_image(i.raw.view, i.heap);
+                        self.retire_views(i.raw.handle);
+                        // Storage may use a separate mip-zero or UNORM alias view.
+                        self.heap
+                            .retire_image(i.raw.storage_view.unwrap_or(i.raw.view), i.heap);
                         self.context.detach_image(i.raw);
                         self.disposal
                             .as_mut()
@@ -153,6 +173,12 @@ impl Device for VulkanDevice {
             } else {
                 index += 1;
             }
+        }
+        for memory in self.context.memory_blocks.trim() {
+            self.disposal
+                .as_mut()
+                .expect("disposal worker alive")
+                .push(disposal::Object::Memory(memory));
         }
         self.disposal
             .as_mut()
@@ -200,6 +226,9 @@ impl Drop for VulkanDevice {
             }
             for pool in self.query_cache.drain() {
                 self.context.device.destroy_query_pool(pool.handle, None);
+            }
+            for view in self.views.drain(..) {
+                self.context.device.destroy_image_view(view.native, None);
             }
             self.heap.destroy(&self.context);
             for semaphore in self.timelines {

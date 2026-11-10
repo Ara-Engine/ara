@@ -343,7 +343,9 @@ fn mixer(s: &Studio, id: &str) -> Option<El<Studio>> {
             .size(18.0)
             .radius(4.0)
             .fill(stillkit::Rgba::new(r, g, b, 1.0))
-            .border(1.0, c.border.0)
+            // A hairline in the ink's tone: a white or black swatch keeps its edge in
+            // either theme.
+            .border(1.0, c.foreground.0.with_alpha(0.2))
             .label("Colour temperature")
             .tooltip("Colour temperature")
             .on_press({

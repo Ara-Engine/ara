@@ -4,7 +4,11 @@
 mod dependency;
 pub use dependency::write_index as write_dependency_index;
 mod identity;
-mod metal;
+#[cfg(target_os = "macos")]
+mod macos_dxil;
+#[cfg(target_os = "macos")]
+pub use macos_dxil::dxc_command;
+pub mod metal;
 pub mod variant;
 use anyhow::{Context, Result, ensure};
 use ara_gpu::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
@@ -56,6 +60,7 @@ impl Toolchain {
                             .join(&name)
                     })
                 })
+                .or_else(|| headless_sdk().map(|bin| bin.join(&name)))
                 .unwrap_or_else(|| PathBuf::from(name))
         };
         Self {
@@ -64,6 +69,22 @@ impl Toolchain {
         }
     }
 }
+/// On macOS without `VULKAN_SDK`: the newest SDK installed headless under
+/// `~/VulkanSDK/<version>` (docs/dev/macos.md), its `macOS/bin`.
+fn headless_sdk() -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    let home = PathBuf::from(std::env::var_os("HOME")?).join("VulkanSDK");
+    let mut versions: Vec<PathBuf> = std::fs::read_dir(home)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|e| e.path().join("macOS/bin")))
+        .filter(|bin| bin.join("slangc").is_file())
+        .collect();
+    versions.sort();
+    versions.pop()
+}
+
 fn run(command: &mut Command) -> Result<Vec<u8>> {
     #[cfg(windows)]
     {
@@ -267,6 +288,9 @@ impl Compiler<'_> {
                 ("spirv", "spv", "sm_6_6+spirv_1_6"),
                 ("dxil", "dxil", "sm_6_6"),
             ] {
+                // This SDK's Mac Slang cannot load DXC as a shared downstream
+                // compiler. Its generated HLSL still compiles with the SDK CLI.
+                let hlsl = cfg!(target_os = "macos") && target == "dxil";
                 let mut cmd = Command::new(&tools.slangc);
                 cmd.arg(source_root.join(&pipeline.source)).args([
                     "-entry",
@@ -274,7 +298,7 @@ impl Compiler<'_> {
                     "-stage",
                     stage.slang_name(),
                     "-target",
-                    target,
+                    if hlsl { "hlsl" } else { target },
                     "-profile",
                     profile,
                     "-O2",
@@ -292,8 +316,18 @@ impl Compiler<'_> {
                 cmd.arg("-reflection-json")
                     .arg(artifacts.join(format!("{entry}.{target}.json")))
                     .arg("-o")
-                    .arg(artifacts.join(format!("{entry}.{suffix}")));
+                    .arg(artifacts.join(format!("{entry}.{}", if hlsl { "hlsl" } else { suffix })));
                 run(&mut cmd)?;
+                #[cfg(target_os = "macos")]
+                if hlsl {
+                    macos_dxil::compile(
+                        tools,
+                        entry,
+                        *stage,
+                        &artifacts.join(format!("{entry}.hlsl")),
+                        &artifacts.join(format!("{entry}.dxil")),
+                    )?;
+                }
                 if target == "spirv" {
                     run(Command::new(&tools.spirv_val)
                         .args(["--target-env", "vulkan1.3"])

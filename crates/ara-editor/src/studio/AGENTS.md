@@ -26,7 +26,16 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `profiler.rs`: Record/Stop (`profile.start`), a frame strip against the budget, the
   frame's thread lanes, scopes by self time, GPU passes. Each loop pass is a profiled frame
   while recording (`trace::Pass::phase` scopes); `Studio::profile` is a copy refreshed 4 Hz.
-  Tool pages (Profiler, Material, VFX, Animation) dock in the centre: no floating windows yet.
+  Tool pages (Profiler, Material, VFX, Animation) dock in the centre.
+- `curve.rs`: the inline curve editor (`ara_curve::Curve`): plot, keys, the picked key's
+  handles, double-click to add; modes, time/value and shapes below. Drags edit
+  `Local::curve_drag` and commit once. Used by VFX Size over Life and Animator blends.
+- `portals.rs`: floating windows as native windows. One runtime; each floating window lays
+  out in a band far right of the main window (`dock::region`) and its OS window presents
+  that region (`Runtime::present_region`), its input shifted by the region's origin. During
+  a tab drag pointers map by desktop point to the window under them (dock back, tear out).
+  Layout rects are then desktop frames (design px); system moves settle into `editor.window`.
+  Headless tests leave `Local::desktop.on` off: floats draw inside the main window.
 - `layer.rs`: a native layer with its own GPU UI adapter (`Layer::draw` of a display list);
   the Game view and the graph canvas each own one.
 - `graph.rs`: the Material and Animation pages: the shared node canvas
@@ -47,8 +56,12 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.
 - `chrome.rs`: root view, title bar (menus from `crate::catalog::menus`, Play,
-  scene crumb, ⌘K launcher), status bar, palette, context menus.
-- `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters.
+  scene crumb, ⌘K launcher), status bar (newest warning/error), palette (commands,
+  settings, scenes, entities), context menus. `cascade` lays a menu and its open
+  submenu side by side in one menu overlay; the menu never moves under the pointer.
+- `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters. Every
+  layout change goes through the authority (`editor.layout`, `editor.window`), whose
+  commit writes `.ara/editor-layout.json`; never edit the window copy and leave it.
 - `scene.rs`: the Scene element and toolbar. RMB look + WASD fly (key-ups from the host),
   MMB pan, Alt+LMB orbit, wheel dolly, click to pick, right-click menu, Shift+A at pointer.
 - `gizmo.rs`: handle hover/drag mapped to an editor gesture; release commits one step.
@@ -67,8 +80,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   typed fixes via `fixes::apply_fix`); other panels say they are coming.
 - `preferences.rs`: Preferences / Project Settings generated from `crate::settings::DEFS`.
 - `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
-- `commands.rs`: which registry commands the studio runs (`ported`), `run`, keymap,
-  macOS shortcut glyphs. Menus hide (context) or disable (title) unported commands.
+- `commands.rs`: which registry commands the studio runs, `run`, `applies` (context
+  menus), the keymap in force (`Bindings`, from `catalog::keymap`), macOS glyphs.
+  `catalog::later` commands show dimmed with their reason. `shortcuts.rs` rebinds them.
 
 ## Rules
 
@@ -77,7 +91,8 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Copies set `local.copy`; the host writes it to the system clipboard.
 - Window-only state lives in `Local`; anything agents should see goes to `EditorState`.
 - Visual review: `cargo test -p ara-editor --lib studio::tests::captures -- --ignored`
-  writes both themes (panels, context menu, Create) to `target/studio-captures/`.
+  writes both themes (every panel and tool page, menus, the palette, Settings) to
+  `target/studio-captures/`, with the host's layout feedback applied.
 - Spacing: 3 px gutters, 26 px tab strips, 20 px tree and field rows, 24 px dense
   controls. Fields set `focus_ring(false)` where their well shows focus.
 - One flat look (D34): no lines and no elevation. `style::chosen` marks the chosen row,
@@ -94,5 +109,9 @@ re-running the view; use `rt.update` (or settle) before finding what it should s
 
 ## Gaps
 
-The Scene layer presents on macOS only (Windows needs the Vulkan HWND path). The material
-preview sphere needs slangc (the Vulkan SDK). Tool pages dock; no floating windows yet.
+The Windows Scene layer is PR #10. Material previews on macOS cook a Metal stage
+(Slang to HLSL, the Vulkan SDK's dxc, Metal Shader Converter: set
+`ARA_METAL_SHADERCONVERTER`); the SDK is found under `~/VulkanSDK` without `VULKAN_SDK`.
+Native floating windows render at the main window's scale: on a monitor of another scale
+they are sized right but not re-rasterised. Linux reports no window frames, so moves there
+aren't kept.

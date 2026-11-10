@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::vulkan) struct Raw {
     device: ash::Device,
+    blocks: context::memory_blocks::MemoryBlocks,
     buffers: Vec<BufferAllocation>,
     images: Vec<ImageAllocation>,
 }
@@ -14,6 +15,7 @@ impl Raw {
         crate::cpu_scope!("GPU.prepare_resources");
         let mut result = Box::new(Self {
             device: allocator.device.clone(),
+            blocks: context::memory_blocks::MemoryBlocks::small(),
             buffers: Vec::with_capacity(request.buffers.len()),
             images: Vec::with_capacity(request.images.len()),
         });
@@ -36,21 +38,18 @@ impl Raw {
                 } else {
                     vk::BufferUsageFlags::empty()
                 };
-            let raw = allocator.buffer(buffer.size, usage, buffer.host)?;
+            let raw =
+                allocator.buffer_pooled(buffer.size, usage, buffer.host, &mut result.blocks)?;
             result.buffers.push(raw);
             if !data.is_empty() {
                 allocation::upload(&allocator.device, raw, 0, &data)?;
             }
         }
         for image in request.images {
-            result
-                .images
-                .push(allocator.image(allocation::ImageDesc::new(
-                    image.size,
-                    image.format,
-                    image.mip_levels,
-                    image.usage,
-                ))?);
+            result.images.push(allocator.image_pooled(
+                allocation::ImageDesc::new(image.size, image.format, image.mip_levels, image.usage),
+                &mut result.blocks,
+            )?);
         }
         Ok(result)
     }
@@ -62,9 +61,11 @@ impl Raw {
         for buffer in self.buffers.drain(..) {
             disposal.push(disposal::Object::Buffer(buffer));
         }
+        disposal.push(disposal::Object::Pool(std::mem::take(&mut self.blocks)));
     }
 
     pub fn adopt(mut self, gpu: &mut VulkanDevice) -> Result<PreparedResources> {
+        gpu.context.memory_blocks.append(&mut self.blocks);
         let mut result = PreparedResources {
             buffers: Vec::with_capacity(self.buffers.len()),
             images: Vec::with_capacity(self.images.len()),

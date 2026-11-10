@@ -39,10 +39,110 @@ fn split_key(path: &[u8]) -> String {
     )
 }
 
-/// The windows floating over the main one (in-window, as Unreal's can): each a title bar
-/// that moves it, its panels' dock tree, and a corner that resizes it; tabs drag in and out
-/// as between any areas. Their rects are window design px, kept inside the window.
+/// Where native floating windows lay out: far right of the main window, one band each,
+/// so each shows only its own region (`Runtime::present_region`).
+const PORTAL_X: f32 = 100_000.0;
+/// The width of each floating window's band.
+const PORTAL_BAND: f32 = 20_000.0;
+/// A native floating window's title bar height (design px).
+pub(super) const PORTAL_BAR: f32 = 28.0;
+
+/// The region floating window `index` lays out in (main-window design px), sized as its
+/// native window's client area: what the host presents into that window.
+pub(super) fn region(s: &Studio, index: usize, id: &str, rect: [i32; 4]) -> stillkit::Rect {
+    let (w, h) = s
+        .local
+        .desktop
+        .sizes
+        .get(id)
+        .copied()
+        .unwrap_or((rect[2] as f32, (rect[3] as f32 - PORTAL_BAR).max(1.0)));
+    stillkit::Rect::new(PORTAL_X + index as f32 * PORTAL_BAND, 0.0, w, h)
+}
+
+/// The windows floating over the main one: native windows of their own when the host
+/// shows them so (`Local::desktop`), else drawn inside the main window.
 pub(super) fn floating(s: &Studio) -> Vec<El<Studio>> {
+    if s.local.desktop.on {
+        return native_floating(s);
+    }
+    inner_floating(s)
+}
+
+/// Native floating windows: each lays out in its own region, a title bar the system drags
+/// (`float/{id}/bar`, `float/{id}/close` are the host's chrome parts) above its panels' dock
+/// tree. The system moves and resizes them; the host reports both back to the layout.
+fn native_floating(s: &Studio) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let t = style::tones(l);
+    s.editor
+        .state
+        .floating
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let id = &f.id;
+            let r = region(s, i, id, f.rect);
+            let panels = tabs_of(&f.root);
+            let title = window_title(&f.root);
+            let mut bar = row()
+                .key(format!("float/{id}/bar"))
+                .h(PORTAL_BAR)
+                .pad_x(6.0)
+                .gap(6.0)
+                .align(Align::Center)
+                .fill(t.strip)
+                .label(format!("{title} window"))
+                .child(el().w(s.local.desktop.inset.max(0.0)))
+                .child(
+                    row().grow(1.0).justify(Justify::Center).child(
+                        text(title)
+                            .text_size(style::TEXT)
+                            .weight(500)
+                            .color(c.muted_foreground.0)
+                            .wrap(1),
+                    ),
+                );
+            // macOS draws its own close (the traffic lights, in the inset).
+            if !cfg!(target_os = "macos") {
+                bar = bar.child(
+                    icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close window")
+                        .size(20.0)
+                        .key(format!("float/{id}/close"))
+                        .on_press(move |s: &mut Studio| close_panels(s, &panels)),
+                );
+            } else {
+                bar = bar.child(el().w(s.local.desktop.inset.max(0.0)));
+            }
+            col()
+                .key(format!("float/{id}"))
+                .absolute(r.left, r.top)
+                .w(r.width())
+                .h(r.height())
+                .fill(t.gap)
+                .child(bar)
+                .child(
+                    node(s, &f.root, &mut vec![2 + i as u8])
+                        .grow(1.0)
+                        .min_h(0.0)
+                        .pad(3.0),
+                )
+        })
+        .collect()
+}
+
+/// Closes every panel of a floating window (its own window goes with the last).
+pub(super) fn close_panels(s: &mut Studio, panels: &[String]) {
+    for panel in panels {
+        s.act("editor.layout.close", json!({"panel": panel}));
+    }
+}
+
+/// The windows floating inside the main one (as Unreal's can): each a title bar that moves
+/// it, its panels' dock tree, and a corner that resizes it; tabs drag in and out as between
+/// any areas. Their rects are window design px, kept inside the window.
+fn inner_floating(s: &Studio) -> Vec<El<Studio>> {
     let l = &s.look;
     let c = &l.c;
     let (sw, sh) = s.size;
@@ -113,11 +213,7 @@ pub(super) fn floating(s: &Studio) -> Vec<El<Studio>> {
                     icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close window")
                         .size(18.0)
                         .key(format!("float/{id}/close"))
-                        .on_press(move |s: &mut Studio| {
-                            for panel in &close {
-                                s.act("editor.layout.close", json!({"panel": panel}));
-                            }
-                        }),
+                        .on_press(move |s: &mut Studio| close_panels(s, &close)),
                 );
             let grip = el()
                 .key(format!("float/{id}/resize"))
@@ -156,17 +252,12 @@ fn fit([x, y, w, h]: [f32; 4], (sw, sh): (f32, f32)) -> [f32; 4] {
     ]
 }
 
-/// Moves or resizes floating window `id` to `rect` (design px), saved with the layout.
+/// Moves or resizes floating window `id` to `rect` (design px), kept with the layout.
 pub(super) fn place_window(s: &mut Studio, id: &str, rect: [f32; 4]) {
-    let result = s.editor.state.dock().and_then(|mut dock| {
-        dock.set_rect(id, rect.map(|v| v.round() as i32))?;
-        s.editor.state.set_dock(&dock);
-        Ok(())
-    });
-    match result {
-        Ok(()) => s.act("editor.layout.save", json!({})),
-        Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
-    }
+    s.act(
+        "editor.window",
+        json!({"id": id, "rect": rect.map(f32::round)}),
+    );
 }
 
 /// A floating window's name: its panels' titles, as its tabs read.
@@ -176,7 +267,7 @@ pub(super) fn window_title(root: &DockNode) -> String {
 }
 
 /// Every panel in `node`, in order.
-fn tabs_of(node: &DockNode) -> Vec<String> {
+pub(super) fn tabs_of(node: &DockNode) -> Vec<String> {
     match node {
         DockNode::Area { tabs, .. } => tabs.clone(),
         DockNode::Split { first, second, .. } => {
@@ -317,6 +408,24 @@ pub(super) fn drop_at(s: &Studio, panel: &str, at: (f32, f32)) -> Option<(Drop, 
     }
 }
 
+/// A tab dropped over no area becomes a window of its own under the pointer: on the desktop
+/// (native windows: wherever the pointer left the editor's windows), else in the main one.
+fn tear_out(s: &mut Studio, panel: &str, at: (f32, f32)) {
+    let (x, y) = match (s.local.desktop.on, s.local.desktop.pointer) {
+        (true, Some(p)) => p,
+        (true, None) => (
+            s.local.desktop.origin.0 + at.0,
+            s.local.desktop.origin.1 + at.1,
+        ),
+        (false, _) => at,
+    };
+    let rect = [x - 60.0, y - 12.0, 480.0, 360.0].map(f32::round);
+    s.act(
+        "editor.layout.move",
+        json!({"panel": panel, "slot": "float", "rect": rect}),
+    );
+}
+
 /// Moves `panel` to `drop` (one layout change, saved like any other).
 fn place(s: &mut Studio, panel: &str, drop: Drop) {
     let params = match drop {
@@ -336,7 +445,6 @@ fn place(s: &mut Studio, panel: &str, drop: Drop) {
         }
     };
     s.act("editor.layout", params);
-    s.act("editor.layout.save", json!({}));
 }
 
 /// While a tab is dragged: where it would land, shaded, and its name at the pointer.
@@ -501,7 +609,15 @@ fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
                 }
                 PointerPhase::Up | PointerPhase::Cancel => {
                     s.local.drag = None;
-                    s.act("editor.layout.save", json!({}));
+                    // The ratio the drag left, kept by the authority (and the layout file).
+                    let ratio = match split_at(&mut s.editor.state.layout, &path) {
+                        Some(DockNode::Split { ratio, .. }) => Some(*ratio),
+                        _ => None,
+                    };
+                    if let Some(ratio) = ratio {
+                        let path: Vec<bool> = path.iter().map(|p| *p == 1).collect();
+                        s.act("editor.layout", json!({"path": path, "ratio": ratio}));
+                    }
                 }
                 PointerPhase::Hover => return false,
             }
@@ -593,11 +709,14 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
         .or(tabs.first())
         .cloned()
         .unwrap_or_default();
+    // One Tab stop per strip, on its open tab; Left and Right move along it.
     let strip = row()
         .h(style::STRIP)
         .pad_x(2.0)
         .gap(1.0)
         .align(Align::End)
+        .role(stillkit::Role::TabList)
+        .focus_group(stillkit::el::Orientation::Horizontal)
         .children(tabs.iter().enumerate().map(|(i, tab)| {
             let on = i == active;
             let (title, glyph) = panel_title(tab);
@@ -640,10 +759,11 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                             s.local.tab_drag = Some((panel.clone(), (e.at.x, e.at.y)));
                         }
                         PointerPhase::Up => {
-                            if let Some((panel, at)) = s.local.tab_drag.take()
-                                && let Some((drop, _)) = drop_at(s, &panel, at)
-                            {
-                                place(s, &panel, drop);
+                            if let Some((panel, at)) = s.local.tab_drag.take() {
+                                match drop_at(s, &panel, at) {
+                                    Some((drop, _)) => place(s, &panel, drop),
+                                    None => tear_out(s, &panel, at),
+                                }
                             }
                         }
                         PointerPhase::Cancel => s.local.tab_drag = None,

@@ -148,10 +148,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let search = search(
         l,
         "hierarchy/search",
-        "Filter: name, or t:Light",
+        // Short enough for a narrow panel; the syntax is in its tooltip and label.
+        "Filter",
         &query,
         None,
-        |f| f.on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into()),
+        |f| {
+            f.label("Filter by name, or by component: t:Light")
+                .tooltip("Filter by name, or by component: t:Light")
+                .on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into())
+        },
         |s: &mut Studio| s.local.hierarchy_query.clear(),
     );
     let all = rows(s, &query);
@@ -169,7 +174,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             l,
             icons::SEARCH,
             "No entities match",
-            "Search looks at entity names.",
+            "The filter looks at names, or at components with t:Light.",
             None,
         )
     } else {
@@ -180,6 +185,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         let rename = s.local.rename.clone();
         let drop = s.local.row_drag.as_ref().and_then(|d| d.target.clone());
         let hovered = s.local.hierarchy_hover.clone();
+        // The search's first name word (filters such as `t:light` are not names), to mark
+        // in each row's name as Unity does.
+        let needle = s
+            .local
+            .hierarchy_query
+            .split_whitespace()
+            .find(|t| !t.contains(':'))
+            .unwrap_or("")
+            .to_lowercase();
         virtual_list("hierarchy/rows", rows.len(), ROW, move |range| {
             range
                 .map(|i| {
@@ -192,7 +206,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                         ),
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
-                        rename.as_ref(),
+                        (rename.as_ref(), &needle),
                         drop.as_ref()
                             .filter(|(t, _)| *t == built[i].id)
                             .map(|(_, p)| *p),
@@ -202,6 +216,17 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .grow(1.0)
         .pad_x(4.0)
+        // One Tab stop for the whole tree, on its selected row: the rows' own arrows move
+        // through it (the WAI tree pattern), as Unity's and VS Code's trees do.
+        .focus_group(stillkit::el::Orientation::Vertical)
+        // Empty space: create at the root (rows have their own menu).
+        .on_context_menu(|s: &mut Studio, x, y| {
+            s.local.context = Some((
+                crate::catalog::menus::Context::Hierarchy,
+                crate::catalog::Target::None,
+                (x, y),
+            ));
+        })
     };
     // The scene's root: its name and what it holds (Unity's scene header row).
     let workspace = s.editor.host.store().workspace();
@@ -219,8 +244,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     } else {
         s.resolved.len().to_string()
     };
+    let storage = workspace.path_of(&s.editor.state.doc).map(str::to_owned);
     let root = row()
         .key("hierarchy/scene")
+        .on_context_menu(move |s: &mut Studio, x, y| {
+            let target = storage
+                .clone()
+                .map_or(crate::catalog::Target::None, crate::catalog::Target::Asset);
+            s.local.context = Some((crate::catalog::menus::Context::Scene, target, (x, y)));
+        })
         .h(22.0)
         .grow(1.0)
         .pad_x(8.0)
@@ -367,7 +399,7 @@ fn row_el(
     (selected, hovered): (bool, bool),
     hidden: bool,
     locked: bool,
-    rename: Option<&(String, String)>,
+    (rename, needle): (Option<&(String, String)>, &str),
     drop: Option<ara_ui::drag_drop::Placement>,
 ) -> El<Studio> {
     let r = &rows[at];
@@ -445,20 +477,49 @@ fn row_el(
                     }
                 })
         }
-        None => text(r.name.clone())
-            .text_size(12.0)
-            .grow(1.0)
-            .color(if hidden {
+        None => {
+            let tint = if hidden {
                 muted
             } else if r.prefab {
                 // Prefab instances read in the prefab colour, as Unity's do.
                 c.info_foreground.0
             } else {
                 ink
-            }),
+            };
+            // The search's match marked in the name (lowercase byte offsets match the
+            // name's only when lowering keeps lengths; otherwise it stays plain).
+            let at = (!needle.is_empty())
+                .then(|| r.name.to_lowercase())
+                .filter(|lower| lower.len() == r.name.len())
+                .and_then(|lower| lower.find(needle));
+            match at {
+                Some(at) => {
+                    // Three pieces side by side, each with its own ink (a row's ink
+                    // cascades over rich runs).
+                    let end = at + needle.len();
+                    let piece = |s: &str| text(s.to_owned()).text_size(12.0);
+                    row()
+                        .grow(1.0)
+                        .min_w(0.0)
+                        .child(piece(&r.name[..at]).color(tint))
+                        .child(
+                            piece(&r.name[at..end])
+                                .weight(700)
+                                .color(c.warning_foreground.0),
+                        )
+                        .child(piece(&r.name[end..]).color(tint))
+                }
+                None => text(r.name.clone()).text_size(12.0).grow(1.0).color(tint),
+            }
+        }
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
+        // Unset off the hovered row it isn't shown: a plain spacer, not a Tab stop on
+        // every row of the tree.
+        if !on && !hovered {
+            return el().size(18.0);
+        }
         el().key(key)
             .size(18.0)
             .align(Align::Center)

@@ -886,9 +886,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 _ => e.state.focus.clone(),
             };
             let (w, h) = s.size;
+            // On the desktop, over the main window's middle (its own window there).
+            let (ox, oy) = match s.local.desktop.on {
+                true => s.local.desktop.origin,
+                false => (0.0, 0.0),
+            };
             let rect = [
-                w * 0.25,
-                h * 0.2,
+                ox + w * 0.25,
+                oy + h * 0.2,
                 (w * 0.4).max(320.0),
                 (h * 0.5).max(240.0),
             ];
@@ -897,11 +902,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 "editor.layout.move",
                 json!({"panel": panel, "slot": "float", "rect": rect}),
             )
-            .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
         }
         // Gather: every floating window back inside the main window.
         "window.gather" => {
             let size = s.size;
+            // Native windows gather over the main window on the desktop.
+            let (ox, oy) = match s.local.desktop.on {
+                true => s.local.desktop.origin,
+                false => (0.0, 0.0),
+            };
             let windows: Vec<(String, [i32; 4])> = e
                 .state
                 .floating
@@ -911,8 +920,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             for (id, r) in windows {
                 let [x, y, w, h] = r.map(|v| v as f32);
                 let fitted = [
-                    x.clamp(0.0, (size.0 - w).max(0.0)),
-                    y.clamp(0.0, (size.1 - h).max(0.0)),
+                    x.clamp(ox, ox + (size.0 - w).max(0.0)),
+                    y.clamp(oy, oy + (size.1 - h).max(0.0)),
                     w,
                     h,
                 ];
@@ -928,15 +937,15 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             {
                 // Shown first (a closed panel is in no area), then moved beside.
                 Some((panel, area)) => {
-                    act(&mut s.editor, "editor.layout.show", json!({"panel": panel}))
-                        .and_then(|()| {
+                    act(&mut s.editor, "editor.layout.show", json!({"panel": panel})).and_then(
+                        |()| {
                             act(
                                 &mut s.editor,
                                 "editor.layout",
                                 json!({"panel": panel, "area": area, "index": u32::MAX}),
                             )
-                        })
-                        .and_then(|()| act(&mut s.editor, "editor.layout.save", json!({})))
+                        },
+                    )
                 }
                 None => Err("Choose a panel to add beside an open tab".into()),
             },
@@ -1406,9 +1415,10 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
         // The OS window, the dock and saved layouts.
-        "window.minimize" | "window.maximize_window" => {
+        "window.minimize" | "window.maximize_window" | "view.fullscreen" => {
             s.local.window = Some(match id {
                 "window.minimize" => super::state::WindowRequest::Minimize,
+                "view.fullscreen" => super::state::WindowRequest::Fullscreen,
                 _ => super::state::WindowRequest::Maximize,
             });
             Ok(())
@@ -1921,17 +1931,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         },
         // A floating window comes to the front (Window › Floating).
         "window.focus_window" => match target {
-            Target::Window(id) => {
-                let floating = &mut s.editor.state.floating;
-                match floating.iter().position(|f| &f.id == id) {
-                    Some(at) => {
-                        let window = floating.remove(at);
-                        floating.push(window);
-                        act(&mut s.editor, "editor.layout.save", json!({}))
-                    }
-                    None => Err("That window has closed".into()),
-                }
-            }
+            Target::Window(id) => match s.editor.state.floating.iter().any(|f| &f.id == id) {
+                true => act(
+                    &mut s.editor,
+                    "editor.layout",
+                    json!({"window": id, "front": true}),
+                ),
+                false => Err("That window has closed".into()),
+            },
             _ => Err("Choose a window".into()),
         },
         "agents.stop_following" => act(e, "editor.follow", json!({})),

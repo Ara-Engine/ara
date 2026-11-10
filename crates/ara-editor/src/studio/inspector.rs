@@ -78,8 +78,16 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .gap(3.0)
         .child(header(s))
         .children(prefab_bar(s))
-        .children(super::running::section(s))
-        .child(search_row(s));
+        .children(super::running::section(s));
+    // Debug: the record itself instead of its fields.
+    if let Some(raw) = raw_record(s) {
+        return col()
+            .grow(1.0)
+            .min_h(0.0)
+            .scroll(Axis::Vertical)
+            .child(page.child(raw).child(el().h(12.0)));
+    }
+    page = page.child(search_row(s));
     if order.is_empty() && !query.is_empty() {
         page = page.child(
             row().pad(10.0).child(
@@ -180,7 +188,75 @@ fn header(s: &Studio) -> El<Studio> {
                     .color(c.muted_foreground.0),
             );
     }
-    head.child(lock)
+    let raw = s.local.inspector_raw;
+    let debug = super::scene_overlays::toggle(
+        l,
+        icons::BRACES,
+        if raw {
+            "Back to the fields"
+        } else {
+            "Debug: the record as the scene resolves it"
+        },
+        raw,
+    )
+    .key("inspector/raw")
+    .on_press(|s: &mut Studio| s.local.inspector_raw = !s.local.inspector_raw);
+    head.child(debug).child(lock)
+}
+
+/// Unity's Inspector Debug mode: one entity's resolved record (prefab values included)
+/// as JSON, read-only, with Copy; `None` unless Debug is on for a single entity.
+fn raw_record(s: &Studio) -> Option<El<Studio>> {
+    if !s.local.inspector_raw {
+        return None;
+    }
+    let [id] = s.inspected() else {
+        return None;
+    };
+    let record = &s.resolved.get(id)?.record;
+    // The canonical writer's text, as files and agents read it (short arrays inline).
+    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
+    let shown = copy.trim_end().to_owned();
+    let l = &s.look;
+    let c = &l.c;
+    Some(
+        col()
+            .key("inspector/record")
+            .gap(4.0)
+            .child(
+                row()
+                    .gap(6.0)
+                    .align(Align::Center)
+                    .child(
+                        text("Resolved record, read-only; edits go through the fields")
+                            .text_size(11.0)
+                            .color(c.muted_foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(
+                        icon_button(l, Tone::Ghost, Size::Sm, icons::COPY, "Copy the record")
+                            .key("inspector/record/copy")
+                            .on_press(move |s: &mut Studio| {
+                                s.local.copy = Some(copy.clone());
+                                super::note(s, "Copied the record");
+                            }),
+                    ),
+            )
+            .child(
+                col()
+                    .pad(8.0)
+                    .radius(l.radius.sm)
+                    .fill(c.code_background.0)
+                    // A line each, indents kept (text runs collapse spaces and newlines).
+                    .children(shown.lines().map(|line| {
+                        let indent = line.len() - line.trim_start().len();
+                        text(format!("{}{}", "\u{a0}".repeat(indent), line.trim_start()))
+                            .text_size(11.0)
+                            .family(mono())
+                            .color(c.code_foreground.0)
+                    })),
+            ),
+    )
 }
 
 /// A prefab instance's bar (Unity's Prefab header): where it comes from, Open, and the
@@ -571,7 +647,9 @@ fn scrubbable(
     max: Option<f64>,
 ) -> El<Studio> {
     let step = if step > 0.0 { step } else { 0.01 };
+    // A drag handle: the field beside it is the keyboard's stop, as in Unity.
     label
+        .skip_tab()
         .cursor(Cursor::ResizeHorizontal)
         .on_pointer(move |s: &mut Studio, e, _| {
             match e.phase {
@@ -794,6 +872,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             number(
                 l,
                 &format!("field/{}", f.path),
+                &sentence(&f.label),
                 shown,
                 f.unit.as_deref(),
                 f.read_only,
@@ -860,6 +939,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                             number(
                                 l,
                                 &format!("field/{}/{axis}", f.path),
+                                // Announced by its field and axis ("Position X").
+                                &format!("{} {}", sentence(&f.label), axes[axis]),
                                 value,
                                 None,
                                 f.read_only,
@@ -1137,11 +1218,12 @@ fn parse_hex(text: &str) -> Option<[f32; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
 }
 
-/// A number box: the value to edit, its unit after it as a quiet label (not part of what
-/// you type, as in Unreal); a new value on Enter.
+/// A number box announced as `name`: the value to edit, its unit after it as a quiet label
+/// (not part of what you type, as in Unreal); a new value on Enter.
 fn number(
     l: &ara_kit::look::Look,
     key: &str,
+    name: &str,
     value: f64,
     unit: Option<&str>,
     read_only: bool,
@@ -1153,6 +1235,7 @@ fn number(
         .clone()
         .map(|u| text(u).text_size(10.5).color(l.c.muted_foreground.0));
     let mut f = text_input(key.to_owned())
+        .label(name.to_owned())
         .focus_ring(false)
         .grow(1.0)
         .value(shown.clone())

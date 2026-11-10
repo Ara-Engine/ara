@@ -298,6 +298,8 @@ pub(super) struct EditorLayout {
     pub window: Option<String>,
     /// Split fraction, constrained to 0.1 through 0.9.
     pub ratio: Option<f32>,
+    /// Bring floating window `window` in front of the others. Requires `window`.
+    pub front: Option<bool>,
 }
 /// Parameters of `editor.paint`: Mesh Paint's mode, tool, colours and brush.
 #[derive(Schema, Deserialize)]
