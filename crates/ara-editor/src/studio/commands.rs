@@ -252,25 +252,6 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         "layout.profiling" => act(e, "editor.layout.apply", json!({"name": "profiling"})),
         "layout.laptop" => act(e, "editor.layout.apply", json!({"name": "laptop"})),
         "layout.reset" => act(e, "editor.layout.reset", json!({})),
-        id if id.starts_with("window.")
-            && !matches!(id, "window.maximize" | "window.close_panel") =>
-        {
-            let panel = id.trim_start_matches("window.");
-            // Tool pages open floating in the legacy window; the studio draws no floating
-            // windows yet, so they dock in the centre beside the Scene.
-            act(e, "editor.layout.show", json!({"panel": panel}))
-                .and_then(|_| {
-                    if e.state.floating.iter().any(|f| holds(&f.root, panel)) {
-                        act(
-                            e,
-                            "editor.layout.move",
-                            json!({"panel": panel, "slot": "view"}),
-                        )?;
-                    }
-                    Ok(())
-                })
-                .and_then(|_| act(e, "editor.focus", json!({"panel": panel})))
-        }
         "edit.preferences" => {
             super::preferences::open(s, crate::settings::Scope::User);
             Ok(())
@@ -1253,6 +1234,279 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             act(e, "editor.workspace", json!({"folderOnly": !only}))
         }
         "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
+        // The OS window, the dock and saved layouts.
+        "window.minimize" | "window.maximize_window" => {
+            s.local.window = Some(match id {
+                "window.minimize" => super::state::WindowRequest::Minimize,
+                _ => super::state::WindowRequest::Maximize,
+            });
+            Ok(())
+        }
+        "window.show_panel" => match target {
+            Target::Panel(panel) => act(e, "editor.focus", json!({"panel": panel})),
+            _ => Err("Choose a panel".into()),
+        },
+        "window.next_document" => act(e, "editor.layout.next", json!({})),
+        id if id.starts_with("window.move.") => {
+            let slot = match id.trim_start_matches("window.move.") {
+                "center" => "view",
+                slot => slot,
+            };
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            act(
+                e,
+                "editor.layout.move",
+                json!({"panel": panel, "slot": slot}),
+            )
+        }
+        "layout.load" => match target {
+            Target::Text(name) => act(e, "editor.layout.apply", json!({"name": name})),
+            _ => Err("Choose a layout".into()),
+        },
+        // Scenes, entities and fields named by agents and the palette.
+        "file.open_scene" => match target {
+            Target::Doc(doc) => act(e, "editor.scene.open", json!({"scene": doc}))
+                .and_then(|()| act(e, "editor.focus", json!({"panel": "scene"}))),
+            _ => Err("Choose a scene".into()),
+        },
+        "edit.select_entity" => match target {
+            Target::Entity(entity) => {
+                select(e, vec![entity.clone()]).and_then(|()| act(e, "editor.frame", json!({})))
+            }
+            _ => Err("Choose an entity".into()),
+        },
+        // `Path=json`, or `Path#/pointer=json` inside a compound field.
+        "field.set" => {
+            let parsed = match target {
+                Target::Text(text) => text
+                    .split_once('=')
+                    .ok_or("Expected Path=value")
+                    .map_err(Into::into)
+                    .and_then(|(path, value)| {
+                        Ok((path.to_owned(), serde_json::from_str::<Value>(value)?))
+                    }),
+                _ => Err("Expected Path=value".into()),
+            };
+            parsed.map(|(path, value)| {
+                let field = path.split('#').next().unwrap_or(&path).to_owned();
+                if path.contains('#') {
+                    super::compound::commit_target(s, &path, value, &format!("Set {field}"));
+                } else {
+                    let commands =
+                        crate::inspector::edit_commands(&s.editor.state.selection, &path, &value);
+                    s.apply(commands, &format!("Set {field}"));
+                }
+            })
+        }
+        "snap.set" => match target {
+            Target::Text(text) => text
+                .split_once(':')
+                .ok_or("Expected kind:value, as move:0.25")
+                .map_err(Into::into)
+                .and_then(|(kind, value)| {
+                    let value: f32 = value.parse()?;
+                    let key = match kind {
+                        "move" => "moveSnap",
+                        "rotate" => "rotateSnap",
+                        _ => "scaleSnap",
+                    };
+                    let mut params = json!({"tool": e.state.tool, "snapping": true});
+                    params[key] = json!(value);
+                    act(e, "editor.tool", params)
+                }),
+            _ => Err("Choose an increment, as move:0.25".into()),
+        },
+        // The Scene camera, tools and gizmos.
+        "view.camera.fov.set" => match target {
+            Target::Text(text) => text
+                .trim()
+                .trim_end_matches('°')
+                .trim()
+                .parse::<f32>()
+                .map_err(|_| "The field of view needs a number of degrees".into())
+                .and_then(|degrees| act(e, "editor.camera", json!({"fovYDegrees": degrees}))),
+            _ => Err("Choose a field of view".into()),
+        },
+        "view.camera.bookmark.recall" => match target {
+            Target::Text(name) => act(
+                e,
+                "editor.camera.bookmark",
+                json!({"action": "recall", "name": name}),
+            ),
+            _ => {
+                s.local.overlay_settings = Some("camera");
+                Ok(())
+            }
+        },
+        "view.tool.select" => view(e, json!({"gizmos": false})),
+        "view.gizmos.type" => match target {
+            Target::Component(kind) => {
+                let mut types = e
+                    .state
+                    .settings
+                    .get("viewport.gizmoTypes")
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                if types.remove(kind).is_none_or(|v| v != "off") {
+                    types.insert(kind.clone(), json!("off"));
+                }
+                set(e, "viewport.gizmoTypes", Value::Object(types))
+            }
+            _ => Err("Choose a gizmo type in the Gizmos menu".into()),
+        },
+        "view.overlays.collapse" => match target {
+            Target::Panel(overlay) => {
+                super::scene_overlays::update(s, overlay, |d| d.collapsed = !d.collapsed);
+                Ok(())
+            }
+            _ => Err("Choose a Scene overlay".into()),
+        },
+        // Panels' own switches.
+        "console.errors" | "console.warnings" | "console.info" => {
+            let i = match id {
+                "console.errors" => 0,
+                "console.warnings" => 1,
+                _ => 2,
+            };
+            s.local.console[i] = !s.local.console[i];
+            Ok(())
+        }
+        "problems.errors" | "problems.warnings" => {
+            let i = usize::from(id == "problems.warnings");
+            s.local.problems[i] = !s.local.problems[i];
+            Ok(())
+        }
+        "problems.explain" => match target {
+            Target::Text(seq) => seq.parse::<u64>().map_err(Into::into).map(|seq| {
+                if !s.local.problems_open.remove(&seq) {
+                    s.local.problems_open.insert(seq);
+                }
+            }),
+            _ => Err("Choose a problem".into()),
+        },
+        "game.capture" | "game.release" => {
+            s.local.game_captured = id == "game.capture";
+            Ok(())
+        }
+        "vfx.restart" => {
+            s.vfx.restart();
+            Ok(())
+        }
+        "vfx.step" => {
+            e.state.preview_playing = false;
+            s.vfx.step();
+            Ok(())
+        }
+        "vfx.rate" => match target {
+            Target::Text(rate) => rate
+                .trim_end_matches('%')
+                .parse()
+                .map_err(|_| "Rates are percentages".into())
+                .map(|rate| s.vfx.set_rate(rate)),
+            _ => Err("Choose a rate".into()),
+        },
+        "vfx.emitter.collapse" | "vfx.emitter.hide" | "vfx.emitter.isolate" => match target {
+            Target::Text(name) => {
+                use super::vfx::Emitter;
+                let toggle = match id {
+                    "vfx.emitter.collapse" => Emitter::Collapse,
+                    "vfx.emitter.hide" => Emitter::Hide,
+                    _ => Emitter::Isolate,
+                };
+                s.vfx.emitter(name, toggle);
+                Ok(())
+            }
+            _ => Err("Choose an emitter".into()),
+        },
+        "component.add" => {
+            s.local.add_component = Some(Default::default());
+            s.local.focus = Some("inspector/add/search");
+            Ok(())
+        }
+        // Agents: look where one is, follow it, undo what a turn did.
+        "agents.view" | "agents.follow" => match target {
+            Target::Text(agent) if id == "agents.view" => {
+                act(e, "editor.follow", json!({"agent": agent}))
+                    .and_then(|()| act(e, "editor.follow", json!({})))
+            }
+            Target::Text(agent) if e.state.follow.as_ref() == Some(agent) => {
+                act(e, "editor.follow", json!({}))
+            }
+            Target::Text(agent) => act(e, "editor.follow", json!({"agent": agent})),
+            _ => Err("Choose an agent".into()),
+        },
+        "agents.stop_following" => act(e, "editor.follow", json!({})),
+        // A turn is one transaction, or several sharing a `gesture-turn:<group>|` label;
+        // newest first, so each revert applies on top of what came after it.
+        "agents.undo_turn" => match target {
+            Target::Text(turn) => {
+                let marker = format!("gesture-turn:{turn}|");
+                let store = e.host.store();
+                let txns: Vec<String> = store
+                    .history()
+                    .iter()
+                    .rev()
+                    .filter(|x| {
+                        x.id.0 == *turn
+                            || x.label.as_deref().is_some_and(|l| l.starts_with(&marker))
+                    })
+                    .filter(|x| store.reverted_by(&x.id).is_none())
+                    .map(|x| x.id.0.clone())
+                    .collect();
+                txns.iter()
+                    .try_for_each(|txn| act(e, "review.revert", json!({"txn": txn})))
+            }
+            _ => Err("Choose an agent turn".into()),
+        },
+        "history.copy" => match target {
+            Target::Text(txn) => {
+                let found = e.host.store().history().iter().find(|x| x.id.0 == *txn);
+                match found.map(serde_json::to_value) {
+                    Some(Ok(value)) => {
+                        s.local.copy = Some(ara_json::to_canonical_string(&value));
+                        Ok(())
+                    }
+                    Some(Err(error)) => Err(error.into()),
+                    None => Err("That transaction is not in this project's history".into()),
+                }
+            }
+            _ => Err("Choose a transaction".into()),
+        },
+        "help.search" => {
+            s.local.palette = Some((String::new(), 0));
+            Ok(())
+        }
+        "create.mesh" => act(e, "editor.focus", json!({"panel": "assets"})),
+        "tools.terminal" => crate::shell::ops::open_terminal(e.host.root()),
+        "tools.references" => match asset_of(e, target) {
+            Some(path) => {
+                s.local.inspect_asset = true;
+                act(e, "editor.workspace", json!({"asset": path}))
+            }
+            None => Err("Select an asset to see what it uses and what uses it".into()),
+        },
+        // Window › a panel (last, so the window.* commands above take theirs first).
+        id if id.starts_with("window.") => {
+            let panel = id.trim_start_matches("window.");
+            // Tool pages open floating in the legacy window; the studio draws no floating
+            // windows yet, so they dock in the centre beside the Scene.
+            act(e, "editor.layout.show", json!({"panel": panel}))
+                .and_then(|_| {
+                    if e.state.floating.iter().any(|f| holds(&f.root, panel)) {
+                        act(
+                            e,
+                            "editor.layout.move",
+                            json!({"panel": panel, "slot": "view"}),
+                        )?;
+                    }
+                    Ok(())
+                })
+                .and_then(|_| act(e, "editor.focus", json!({"panel": panel})))
+        }
         _ => Err(format!("{id}: unknown command").into()),
     };
     // Whatever changed the document shows at once, not on the host's next pass.
@@ -1312,6 +1566,9 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (false, false, 0x45) => "view.tool.rotate",
         (false, false, 0x52) => "view.tool.scale",
         (false, false, 0x54) => "view.tool.universal",
+        (false, false, 0x51) => "view.tool.select",
+        (false, false, 0x70) => "help.search",
+        (true, false, 0x09) => "window.next_document",
         (false, false, 0x74) => "play.start",
         (false, false, 0x75) => "play.pause",
         (false, false, 0x76) => "play.step",

@@ -339,6 +339,23 @@ pub struct Local {
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
     pub gizmo_hover: Option<crate::shell::overlay::Handle>,
+    /// A change to the OS window the host makes on its next pass.
+    pub window: Option<WindowRequest>,
+    /// Problems shown: errors, warnings.
+    pub problems: [bool; 2],
+    /// The Problems search: rows whose message, code or file match.
+    pub problems_search: String,
+    /// Problems rows opened to their explanation (Why?), by bus sequence number.
+    pub problems_open: std::collections::BTreeSet<u64>,
+}
+
+/// A change to the OS window (Window › Minimize, Maximize or Restore).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowRequest {
+    /// Minimize the window.
+    Minimize,
+    /// Maximize it, or restore it when it is.
+    Maximize,
 }
 
 /// The studio's runtime state.
@@ -383,6 +400,7 @@ impl Studio {
             frame: Frame::default(),
             local: Local {
                 console: [true; 3],
+                problems: [true; 2],
                 ..Local::default()
             },
             size,
