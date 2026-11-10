@@ -40,6 +40,7 @@ mod running;
 mod scene;
 mod scene_overlays;
 mod scripts;
+mod shortcuts;
 pub mod state;
 mod style;
 #[cfg(test)]

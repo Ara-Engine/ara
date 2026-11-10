@@ -168,7 +168,16 @@ pub fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         }
         body = body.child(setting_row(s, def));
     }
-    if shown.is_empty() {
+    // Keyboard shortcuts: the commands themselves, under the preset; a search finds
+    // commands too.
+    let keyboard = v.scope == Scope::User
+        && (v.category == Some("Keyboard shortcuts") || !v.query.trim().is_empty());
+    let commands = keyboard
+        .then(|| super::shortcuts::table(s, &v.query))
+        .flatten();
+    let nothing = shown.is_empty() && commands.is_none();
+    body = body.children(commands);
+    if nothing {
         body = body.child(empty(
             l,
             icons::SEARCH,
