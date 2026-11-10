@@ -249,6 +249,10 @@ pub struct Local {
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
     pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// Entities copied with Edit › Copy: each one's name and components.
+    pub entity_clipboard: Option<Vec<serde_json::Value>>,
+    /// A field value copied from the Inspector's field menu.
+    pub field_clipboard: Option<serde_json::Value>,
     /// The Build window's package format (an index into `build::package_formats`).
     pub package_format: usize,
     /// File › Exit asked to close the editor (documents are saved as it closes).
