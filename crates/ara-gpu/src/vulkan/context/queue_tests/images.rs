@@ -1,4 +1,6 @@
-//! A real storage-image handoff on the forced single-family device.
+//! A real storage-image handoff between the two queue classes: written through a
+//! storage view on `from`, released, acquired on the other queue and sampled there.
+//! Runs on the forced single-family device and on devices with a compute-only family.
 use crate::{
     Access, Barrier, Device, Handoff, Queue, Resource, RootConstants,
     commands::Command,
@@ -16,12 +18,21 @@ fn barrier(resource: Resource, before: Access, after: Access) -> Barrier {
         handoff: None,
     }
 }
-pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool) -> anyhow::Result<()> {
+/// Produces on `from` and consumes on the other queue. `deferred` batches both
+/// submissions behind one completion, which moves graphics to the scene queue.
+pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool, from: Queue) -> anyhow::Result<()> {
+    let to = match from {
+        Queue::Compute => Queue::Graphics,
+        Queue::Graphics => Queue::Compute,
+    };
+    let info = &gpu.context().info;
+    let shared = info.graphics_family == info.compute_family;
     if deferred {
         gpu.begin_deferred_completion()?;
+        // One family aliases both classes onto the scene queue; two families never do.
         anyhow::ensure!(
-            gpu.native_queue(Queue::Graphics) == gpu.native_queue(Queue::Compute),
-            "forced-family scene queues did not alias"
+            shared == (gpu.native_queue(Queue::Graphics) == gpu.native_queue(Queue::Compute)),
+            "deferred queues do not match the device's family layout"
         );
     }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/feature_cooked");
@@ -62,8 +73,8 @@ pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool) -> anyhow::Result<()> 
         gpu.create_buffer(bytes.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
     gpu.upload(staging, bytes)?;
     let output = gpu.create_readback_buffer(bytes.len() as u64)?;
-    let mut compute = gpu.begin(Queue::Compute);
-    compute.barriers([
+    let mut first = gpu.begin(from);
+    first.barriers([
         barrier(
             Resource::Buffer(staging),
             Access::HostWrite,
@@ -76,66 +87,66 @@ pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool) -> anyhow::Result<()> 
         ),
         barrier(Resource::Image(target), Access::Undefined, Access::Storage),
     ]);
-    compute.push(Command::UploadImage {
+    first.push(Command::UploadImage {
         source: staging,
         destination: source,
     });
-    compute.barriers([barrier(
+    first.barriers([barrier(
         Resource::Image(source),
         Access::CopyDestination,
         Access::ShaderRead,
     )]);
-    compute.push(Command::Pipeline(pipeline));
-    compute.push(Command::Constants(RootConstants {
+    first.push(Command::Pipeline(pipeline));
+    first.push(Command::Constants(RootConstants {
         words: [read.index, write.index, 0, 0, 0, 0, 0, 0],
     }));
-    compute.push(Command::Dispatch([2, 2, 2]));
+    first.push(Command::Dispatch([2, 2, 2]));
     let edge = Barrier {
         resource: Resource::Image(target),
         before: Access::Storage,
         after: Access::ShaderRead,
         handoff: Some(Handoff {
-            from: Queue::Compute,
-            to: Queue::Graphics,
+            from,
+            to,
             release: true,
         }),
     };
-    compute.barriers([edge]);
-    let produced = gpu.submit(compute.finish(), &[])?;
-    let mut graphics = gpu.begin(Queue::Graphics);
-    graphics.barriers([Barrier {
+    first.barriers([edge]);
+    let produced = gpu.submit(first.finish(), &[])?;
+    let mut second = gpu.begin(to);
+    second.barriers([Barrier {
         handoff: Some(Handoff {
-            from: Queue::Compute,
-            to: Queue::Graphics,
+            from,
+            to,
             release: false,
         }),
         ..edge
     }]);
-    graphics.barriers([barrier(
+    second.barriers([barrier(
         Resource::Image(consumer),
         Access::Undefined,
         Access::Storage,
     )]);
-    graphics.push(Command::Pipeline(pipeline));
-    graphics.push(Command::Constants(RootConstants {
+    second.push(Command::Pipeline(pipeline));
+    second.push(Command::Constants(RootConstants {
         words: [sampled.index, consumed.index, 0, 0, 0, 0, 0, 0],
     }));
-    graphics.push(Command::Dispatch([2, 2, 2]));
-    graphics.barriers([barrier(
+    second.push(Command::Dispatch([2, 2, 2]));
+    second.barriers([barrier(
         Resource::Image(consumer),
         Access::Storage,
         Access::CopySource,
     )]);
-    graphics.push(Command::ReadImage {
+    second.push(Command::ReadImage {
         source: consumer,
         destination: output,
     });
-    graphics.barriers([barrier(
+    second.barriers([barrier(
         Resource::Buffer(output),
         Access::CopyDestination,
         Access::HostRead,
     )]);
-    let point = gpu.submit(graphics.finish(), &[produced])?;
+    let point = gpu.submit(second.finish(), &[produced])?;
     if deferred {
         let mut completion = gpu.end_deferred_completion()?;
         gpu.wait_completion(&mut completion)?;
@@ -144,7 +155,7 @@ pub(super) fn run(gpu: &mut VulkanDevice, deferred: bool) -> anyhow::Result<()> 
     }
     anyhow::ensure!(
         gpu.read(output)? == bytes,
-        "shared-family storage image handoff read stale data"
+        "storage image handoff from {from:?} to {to:?} read stale data"
     );
     gpu.retire_pipeline(pipeline)?;
     for image in [source, target, consumer] {
