@@ -24,13 +24,9 @@ ara-vfx = { path = "../ara-vfx" }
 # Pinned: the engine builds against a frozen renderer while it is improved
 # behind `renderlab::engine`. Nothing outside this crate names a Renderlab type.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
-# Renderlab v0.1.3 (ebfc21b) merged with Ara-Engine/renderlab#2 (256 mesh-material
-# groups per frame instead of 64) and #6 (emitter prewarm, bursts, spawn shapes, forces,
-# a bounce plane, curves, flipbooks and aligned sprites), t3/tlas-limit (the adapter's
-# TLAS instance limit) and t3/debug-names-opt-in (no wgpu object names unless
-# WGPU_DEBUG=1: they crashed Ubuntu's Vulkan loader); pinned to that branch until
-# they land on main.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "2ae06a5b910ed17e46cb1900960eb5fdd4cf2397" }
+# Renderlab main: v0.1.3 plus 256 groups per frame (Ara-Engine/renderlab#2), the emitter
+# work (#6), wgpu object names opt-in (#12) and the adapter's TLAS limit (#13).
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "f820af99e585cb31d32189f7875501d77dadfec8" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
