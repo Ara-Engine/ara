@@ -55,7 +55,7 @@ and execution belong to the PC pass.
 
 ## Verification and remaining work
 
-With `CARGO_BUILD_JOBS=2`, the Mac passed:
+At the first checkpoint, with `CARGO_BUILD_JOBS=2`, the Mac passed:
 
 ```sh
 cargo fmt -p ara-gpu -p ara-shader-cook -- --check
@@ -69,8 +69,8 @@ cargo check -p ara-landscape --example cook
 The validated Metal library run passed 41 tests (four opt-in/helper tests ignored);
 all six portable gap probes passed. Dynamic acceleration tests pass on graphics
 and compute. The full suite also presents ten SDL frames and imports an IOSurface
-from another process. Shader cooker structural/dependency tests pass; its DXIL
-integration tests remain explicitly ignored on macOS.
+from another process. Shader cooker structural/dependency tests passed; DXIL integration was then
+ignored on macOS. The joint gate below enables those tests through the SDK CLI.
 
 The opt-in native allocation probes run through `ara-dev gpu`. The buffer-only
 fixture requested 552956640 bytes; separate allocations took 592412672, pooled heaps
@@ -128,9 +128,9 @@ Set `MTL_DEBUG_LAYER=0 MTL_SHADER_VALIDATION=0`; running Cargo inside the lease 
 include compilation load. The [WGSL replay report](renderlab-wgsl-replay.md) records
 separately guarded GPU pass costs.
 
-Windows is the canonical shader cook host and has Metal Shader Converter 4.0.3.
-Fresh v4 artifacts are being produced there, then verified on Metal; no Mac install
-is needed. Native MSL tests already cover regular and comparison tables. The direct
+Windows produced the fresh v4 artifacts with Metal Shader Converter4.0.3.
+The joint gate below also verifies a complete Mac test-cohort refresh through
+Slang HLSL and the SDK DXC CLI. Native MSL tests already cover regular and comparison tables. The direct
 Slang `CommittedGetIntersectionTriangleVertexPositions()` probe compiles for SPIR-V
 but is rejected for DXIL (including `sm_6_10`) by Slang 2026.18.3 with E36107,
 “unavailable features in entry point,” before the converter runs. The shared shader
@@ -255,3 +255,39 @@ passes 79 tests with API validation and shader validation disabled (18 ignored).
 `cargo clippy -p ara-gpu --all-targets -- -D warnings` and the 117-package formatting
 checkpoint pass. This fix changes Metal lowering; the Vulkan implementation remains
 with the PC verifier. It changes no locked decision or shader ABI.
+
+
+## Joint Vulkan/Metal gate and complete test-cohort refresh
+
+The coordinator's Linux gate on Radeon760M reported that `e8a836869` passes build,
+clippy, replay, storage-heap, shader-cook and RT tests with Khronos/synchronization
+validation. Its remaining slope-bias failure came from a stale fullscreen cook.
+Those are external Vulkan results for that head, not a Mac Vulkan run or proof of
+the subsequent head.
+
+The Mac recooked all five pipelines/seven stages in
+`crates/ara-gpu/tests/shaders/pipelines.json`: SPIR-V, DXIL, both Slang reflections,
+Converter4.0.3 metallibs and converter reflections. Nothing is missing. The fresh
+fullscreen SPIR-V reads root words0 and1 and multiplies the gradient by clip x.
+The downloaded Converter4.0.3 pkg runs from an expanded user-writable directory;
+no admin install or further Apple sign-in was required. Slang2026.18.3 cannot load
+DXC downstream on this Mac; its generated HLSL compiles through the SDK's DXC1.9
+CLI before normal conversion. Mac recipe/tool/library fingerprints produce a
+distinct cook key. D37 records the expressly requested exception to Windows-only
+cook publication. Windows remains the default host.
+
+Running without shader validation exposed another native dependency bug: a barrier
+encountered in an active transfer encoder was consumed there, but pass timestamping
+could move the shader consumer to a later encoder. The dependency now remains
+pending across that split while also ordering the current encoder. A focused
+16MiB-copy regression failed before the fix: only one of three sampled words had
+arrived. It passes after the fix; the unchanged WGSL post replay also recovers.
+Shader validation's serialization had hidden the race.
+
+The focused gate runs `ara-gpu`, `ara-gpu-replay` and `ara-shader-cook`, with
+`CARGO_BUILD_JOBS=2`, Metal API validation, and both shader-validation modes.
+The complete converter comparison-sampler test, cooked triangle-range/hit-position
+helper, slope-bias raster probe, attachment ranges, dynamic AS and post replay are
+included. Cooker incremental recovery and permutation tests now run on Mac rather
+than skipping DXIL. The all-targets `clippy -- -D warnings` and workspace formatter
+are required at this checkpoint. Native Vulkan must retest the resulting PR head.
