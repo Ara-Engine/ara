@@ -1459,7 +1459,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     last_dpi,
                 )?;
             }
-            if shell.poll_build(&mut editor) {
+            if shell.builder.poll_build(&mut editor) {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }

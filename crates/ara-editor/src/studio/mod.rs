@@ -13,6 +13,7 @@ mod animator;
 mod asset_create;
 mod asset_inspector;
 mod asset_ops;
+mod build_page;
 mod chrome;
 mod commands;
 mod components;
@@ -559,6 +560,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
         }
         // The VFX page's live preview: frames while it is on screen, paused otherwise.
+        // A running export: its stage, cooking progress and result.
+        if rt.touch(|s| s.builder.poll_build(&mut s.editor)) {
+            rt.update(|_| {});
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});

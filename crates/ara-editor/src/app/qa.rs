@@ -613,14 +613,15 @@ impl FirstHour {
                     if editor.state.playing.is_some() {
                         shell.run_command(editor, "play.stop", &Target::None)?;
                     }
-                    self.previous_build = shell.last_build.clone();
+                    self.previous_build = shell.builder.last_build.clone();
                     shell.run_command(editor, "build.current", &Target::None)?;
                     return Ok(false);
                 }
-                if shell.build.is_some() {
+                if shell.builder.job.is_some() {
                     return Ok(false);
                 }
                 let game = shell
+                    .builder
                     .last_build
                     .clone()
                     .filter(|game| Some(game) != self.previous_build.as_ref())
@@ -634,10 +635,11 @@ impl FirstHour {
                     shell.run_command(editor, "build.run", &Target::None)?;
                     return Ok(false);
                 }
-                if shell.run.is_some() {
+                if shell.builder.run.is_some() {
                     return Ok(false);
                 }
                 let capture = shell
+                    .builder
                     .last_run
                     .clone()
                     .ok_or("the build did not run; see Problems")?;

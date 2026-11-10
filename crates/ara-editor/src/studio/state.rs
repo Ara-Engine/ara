@@ -249,6 +249,8 @@ pub struct Local {
     pub inspector_search: String,
     /// A component's values copied from the Inspector: its type and its fields.
     pub component_clipboard: Option<(String, serde_json::Value)>,
+    /// The Build window's package format (an index into `build::package_formats`).
+    pub package_format: usize,
     /// File › Exit asked to close the editor (documents are saved as it closes).
     pub quit: bool,
     /// What Isolate Selection hid, to show again when it is run a second time.
@@ -355,6 +357,8 @@ pub struct Studio {
     pub graph: super::graph::Page,
     /// The VFX page's preview (`studio::vfx`).
     pub vfx: super::vfx::Page,
+    /// Builds: the running export, the last build and its packages (`studio::build_page`).
+    pub(crate) builder: crate::build::Builder,
 }
 
 impl Studio {
@@ -377,6 +381,7 @@ impl Studio {
             profile: Arc::default(),
             graph: Default::default(),
             vfx: Default::default(),
+            builder: Default::default(),
         };
         studio.resolve();
         studio

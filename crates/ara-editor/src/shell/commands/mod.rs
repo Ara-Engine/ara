@@ -224,8 +224,8 @@ impl Shell {
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {
-                running: self.build.is_some() || self.run.is_some(),
-                built: self.last_build.is_some(),
+                running: self.builder.job.is_some() || self.builder.run.is_some(),
+                built: self.builder.last_build.is_some(),
                 profile: self.browser.items.iter().any(|a| {
                     (a.path.starts_with("settings/builds/") || a.path.starts_with("presets/"))
                         && a.path.ends_with(".export.json")
