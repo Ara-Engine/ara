@@ -454,6 +454,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .cmp(&(a.kind == "folder"))
             .then_with(|| a.path.to_lowercase().cmp(&b.path.to_lowercase()))
     });
+    let footer = assets_footer(s, &folder, items.len());
     let body = if let Some(error) = &browser.error {
         empty(
             l,
@@ -534,7 +535,8 @@ fn assets(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         .child(toolbar)
         .children(import_strip(s))
-        .child(body);
+        .child(body)
+        .child(footer);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
@@ -575,6 +577,42 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     root
+}
+
+/// Under the contents, as Unity's Project window: the selected asset's path, or what the
+/// folder shows (`shown` items) and where it is.
+fn assets_footer(s: &Studio, folder: &str, shown: usize) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let (glyph, line) = match s.editor.state.asset_path.as_deref() {
+        Some(path) if !path.is_empty() => (icons::FILE, path.to_owned()),
+        _ => {
+            let place = if folder.is_empty() { "Project" } else { folder };
+            let items = match shown {
+                1 => "1 item".to_owned(),
+                n => format!("{n} items"),
+            };
+            (icons::FOLDER, format!("{place} · {items}"))
+        }
+    };
+    row()
+        .key("assets/footer")
+        .h(22.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .fill(super::style::tones(l).band)
+        .label(line.clone())
+        .child(icon(glyph).size(12.0).color(c.muted_foreground.0))
+        .child(
+            text(line)
+                .text_size(11.0)
+                .family(mono())
+                .wrap(1)
+                .color(c.muted_foreground.0)
+                .grow(1.0)
+                .min_w(0.0),
+        )
 }
 
 /// The Assets view menu (⋯): Import, what shows (every file, the folder only), thumbnails.

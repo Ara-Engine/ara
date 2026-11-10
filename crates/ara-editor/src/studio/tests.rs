@@ -1054,6 +1054,41 @@ fn the_scene_header_has_the_scenes_own_menu() {
 }
 
 #[test]
+fn the_assets_footer_names_the_selection_or_the_folder() {
+    let mut rt = open();
+    scan(&mut rt);
+    rt.update(|s| {
+        s.act("editor.layout.show", json!({"panel": "assets"}));
+        s.act(
+            "editor.workspace",
+            json!({"folder": ara_doc::AUTHORING_ROOT, "asset": ""}),
+        );
+    });
+    settle(&mut rt);
+    let footer = |rt: &Runtime<Studio>| {
+        rt.tree()
+            .into_iter()
+            .find(|shown| shown.key.as_deref() == Some("assets/footer"))
+            .and_then(|shown| shown.label.as_deref().map(str::to_owned))
+    };
+    let folder = footer(&rt).unwrap_or_default();
+    assert!(
+        folder.contains(" items") || folder.contains(" item"),
+        "{folder}"
+    );
+    let path = rt
+        .state()
+        .assets
+        .as_ref()
+        .and_then(|b| b.items.iter().find(|a| a.path.ends_with("main.scene")))
+        .map(|a| a.path.clone())
+        .unwrap();
+    rt.update(|s| s.act("editor.workspace", json!({"asset": path.clone()})));
+    settle(&mut rt);
+    assert_eq!(footer(&rt), Some(path), "the selected asset's path");
+}
+
+#[test]
 fn keymap_presets_and_rebinds_drive_the_studios_keys_and_labels() {
     use stillkit::el::{KeyCode, Modifiers};
     let mut rt = open();
