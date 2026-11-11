@@ -23,7 +23,7 @@ impl SceneView {
     }
 
     /// A visible target vertex within the logical-pixel acquisition radius.
-    pub(in crate::app) fn snap_vertex(
+    pub(crate) fn snap_vertex(
         &self,
         camera: &Camera,
         rect: Box2,
@@ -43,7 +43,7 @@ impl SceneView {
     }
 
     /// Acquire the source from selected mesh vertices, rejecting occluded back vertices.
-    pub(in crate::app) fn snap_source_vertex(
+    pub(crate) fn snap_source_vertex(
         &self,
         camera: &Camera,
         rect: Box2,
