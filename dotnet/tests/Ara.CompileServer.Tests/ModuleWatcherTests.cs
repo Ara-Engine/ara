@@ -3,16 +3,32 @@ using System.Diagnostics;
 
 namespace Ara.CompileServer.Tests;
 
+/// <summary>A fact that is reported as skipped, not passed, off macOS (the kqueue paths do not exist there).</summary>
+sealed class MacOnlyFactAttribute : FactAttribute
+{
+    public MacOnlyFactAttribute()
+    {
+        if (!OperatingSystem.IsMacOS()) Skip = "kqueue file watches exist only on macOS";
+    }
+}
+
 /// <summary>Source saves reach the compile server once each, fast on macOS (kqueue) and correctly for every kind of save.</summary>
 public sealed class ModuleWatcherTests : IDisposable
 {
     readonly string _directory = InstalledTools.Scratch("module-watcher");
     readonly BlockingCollection<(string[] Paths, long At)> _sets = [];
     readonly ModuleWatcher _watcher;
+    readonly ConcurrentQueue<string> _contents = new();
 
     public ModuleWatcherTests()
     {
-        _watcher = new ModuleWatcher((_, paths, _) => _sets.Add(([.. paths], Stopwatch.GetTimestamp())));
+        _watcher = new ModuleWatcher((_, paths, _) =>
+        {
+            // What a compile starting now would read.
+            foreach (var path in paths.Where(path => Path.GetFileName(path) == "A.cs" && File.Exists(path)))
+                try { _contents.Enqueue(File.ReadAllText(path)); } catch (IOException) { }
+            _sets.Add(([.. paths], Stopwatch.GetTimestamp()));
+        });
         File.WriteAllText(Path.Combine(_directory, "A.cs"), "class A { }");
         _watcher.Watch(0, _directory);
         Thread.Sleep(300); // the directory watcher starts asynchronously
@@ -43,10 +59,9 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(start > 0);
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void One_in_place_save_is_delivered_once_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var start = Stopwatch.GetTimestamp();
         File.WriteAllText(Path.Combine(_directory, "A.cs"), "class A { int x; }");
         Assert.NotNull(Next("A.cs"));
@@ -57,10 +72,9 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(extras.Count == 0, "extra sets: " + string.Join(" | ", extras));
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void In_place_saves_arrive_faster_than_the_directory_watcher_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var latencies = new List<double>();
         for (var i = 0; i < 20; i++)
         {
@@ -82,10 +96,9 @@ public sealed class ModuleWatcherTests : IDisposable
         File.Move(temp, path, overwrite: true);
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void One_atomic_save_is_delivered_once_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var start = Stopwatch.GetTimestamp();
         AtomicSave(Path.Combine(_directory, "A.cs"), "class A { int atomic; }");
         Assert.NotNull(Next("A.cs"));
@@ -96,10 +109,9 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(extras.Count == 0, "extra sets: " + string.Join(" | ", extras));
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void Atomic_saves_arrive_faster_than_the_directory_watcher_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var latencies = new List<double>();
         for (var i = 0; i < 20; i++)
         {
@@ -113,20 +125,18 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(latencies[latencies.Count / 2] < 8, $"median {latencies[latencies.Count / 2]:F1} ms");
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void A_new_file_is_delivered_once_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         File.WriteAllText(Path.Combine(_directory, "New.cs"), "class New { }");
         Assert.NotNull(Next("New.cs"));
         Thread.Sleep(400);
         Assert.False(_sets.TryTake(out var extra) && extra.Paths.Any(path => Path.GetFileName(path) == "New.cs"));
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void A_save_in_a_new_subfolder_is_delivered_fast_on_macOS()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var folder = Path.Combine(_directory, "Sub");
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, "S.cs");
@@ -138,6 +148,49 @@ public sealed class ModuleWatcherTests : IDisposable
         AtomicSave(path, "class S { int v; }");
         var set = Next("S.cs") ?? throw new Xunit.Sdk.XunitException("save not delivered");
         Assert.True(Stopwatch.GetElapsedTime(start, set.At).TotalMilliseconds < 9, "a save in a folder created after Watch took the slow path");
+    }
+
+    /// <summary>A save written in chunks ends with its final state reported, whatever was reported before it.</summary>
+    [MacOnlyFact]
+    public void A_save_written_in_chunks_ends_with_its_whole_file_reported()
+    {
+        _contents.Clear();
+        var path = Path.Combine(_directory, "A.cs");
+        const string First = "class A { int a; int b; ";
+        const string Whole = First + "int c; int d; }";
+        using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+        {
+            stream.Write(System.Text.Encoding.UTF8.GetBytes(First));
+            stream.Flush();
+            Thread.Sleep(20);
+            stream.Write(System.Text.Encoding.UTF8.GetBytes(Whole[First.Length..]));
+        }
+        var deadline = Stopwatch.GetTimestamp() + 3 * Stopwatch.Frequency;
+        while (!_contents.Contains(Whole) && Stopwatch.GetTimestamp() < deadline) Thread.Sleep(10);
+        Assert.Contains(Whole, _contents);
+        Thread.Sleep(300);
+        Assert.Equal(Whole, _contents.Last());
+    }
+
+    /// <summary>A save that ends with a shrinking truncate: the final state must be reported, not dropped as an echo.</summary>
+    [MacOnlyFact]
+    public void A_save_that_ends_with_a_shrinking_truncate_is_reported_in_its_final_state()
+    {
+        var path = Path.Combine(_directory, "A.cs");
+        File.WriteAllText(path, "class A { int a_long_field_that_makes_the_old_file_longer; }");
+        Assert.NotNull(Next("A.cs"));
+        Drain();
+        _contents.Clear();
+        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+        {
+            stream.Write("class A { int b; }"u8); // new text over the old bytes: the old tail is still there
+            stream.Flush();
+            Thread.Sleep(25);
+            stream.SetLength(18); // the shrinking truncate
+        }
+        var deadline = Stopwatch.GetTimestamp() + 3 * Stopwatch.Frequency;
+        while (!_contents.Contains("class A { int b; }") && Stopwatch.GetTimestamp() < deadline) Thread.Sleep(10);
+        Assert.Contains("class A { int b; }", _contents);
     }
 
     [Fact]
@@ -190,10 +243,9 @@ public sealed class VnodeEventsTests : IDisposable
         return path;
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void The_watch_budget_caps_the_descriptors_it_holds_and_releases_them_on_dispose()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var events = new VnodeEvents((_, _) => { }, maxFiles: 5);
         foreach (var i in Enumerable.Range(0, 20)) events.Add(0, Make($"F{i}.cs"));
         Assert.Equal(5, events.WatchedCount);
@@ -203,10 +255,9 @@ public sealed class VnodeEventsTests : IDisposable
         Assert.Equal(0, events.DescriptorCount);
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void Deleting_and_replacing_files_does_not_leak_descriptors()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
         using var events = new VnodeEvents((_, path) => seen.Add(path));
         for (var i = 0; i < 40; i++)
@@ -229,10 +280,9 @@ public sealed class VnodeEventsTests : IDisposable
         Assert.Equal(0, events.DescriptorCount);
     }
 
-    [Fact]
+    [MacOnlyFact]
     public void A_throwing_callback_does_not_end_the_watcher()
     {
-        if (!OperatingSystem.IsMacOS()) return;
         var calls = 0;
         using var events = new VnodeEvents((_, _) => { Interlocked.Increment(ref calls); throw new InvalidOperationException("boom"); });
         var path = Make("Throw.cs");
