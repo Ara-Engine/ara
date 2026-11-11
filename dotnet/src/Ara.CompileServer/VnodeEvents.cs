@@ -6,9 +6,9 @@ namespace Ara.CompileServer;
 /// <summary>
 /// macOS only (the caller checks; every libc import is reached through here): one kqueue vnode watch per source file. <c>FileSystemWatcher</c> there rides on FSEvents, which
 /// delivers an in-place save about 11 ms late (median, measured); a vnode event arrives in ~0.1 ms. Only in-place
-/// writes (truncate and write, as most editors save) are reported here. A file that is deleted or renamed away
-/// (an atomic save) just drops its watch: the directory watcher reports those, and re-arms the new file through
-/// <see cref="Add"/>, so a half-replaced file is never compiled early.
+/// writes (truncate and write, as most editors save) are reported here, and directory watches report entry changes so
+/// an atomic save (a temp file renamed over the source) is seen as fast. A file that is deleted or renamed away just
+/// drops its watch; whoever consumes the events re-arms the replacement through <see cref="Add"/>.
 /// </summary>
 internal sealed class VnodeEvents : IDisposable
 {
@@ -21,17 +21,23 @@ internal sealed class VnodeEvents : IDisposable
     const int OEvtOnly = 0x8000, OCloexec = 0x1000000;
 
     readonly Action<uint, string> _changed;
+    readonly Action<uint, string>? _directoryChanged;
     readonly int _queue;
-    readonly ConcurrentDictionary<int, (uint Slot, string Path)> _byDescriptor = new();
+    readonly ConcurrentDictionary<int, (uint Slot, string Path, bool Directory)> _byDescriptor = new();
     readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
     readonly Thread _thread;
     readonly int _maxFiles;
     volatile bool _stopped;
 
-    /// <summary><paramref name="changed"/> receives (slot, path) on the watcher thread for each in-place write.</summary>
-    internal VnodeEvents(Action<uint, string> changed, int maxFiles = DefaultMaxFiles)
+    /// <summary>
+    /// <paramref name="changed"/> receives (slot, path) on the watcher thread for each in-place write.
+    /// <paramref name="directoryChanged"/> receives (slot, directory) when entries of a watched directory were added,
+    /// removed or renamed (an atomic save replaces the file by renaming a temp file over it).
+    /// </summary>
+    internal VnodeEvents(Action<uint, string> changed, Action<uint, string>? directoryChanged = null, int maxFiles = DefaultMaxFiles)
     {
         _changed = changed;
+        _directoryChanged = directoryChanged;
         // Never take more than a quarter of the process's descriptor limit: the server also needs descriptors
         // for source reads, memory-mapped references, pipes and the other watchers.
         _maxFiles = Math.Min(maxFiles, (int)Math.Min(DescriptorLimit() / 4, int.MaxValue));
@@ -45,13 +51,19 @@ internal sealed class VnodeEvents : IDisposable
     internal bool Watching(string path) => _byPath.ContainsKey(path);
 
     /// <summary>Starts watching a file. Failures (a missing file, no descriptors left) leave it to the directory watcher.</summary>
-    internal void Add(uint slot, string path)
+    internal void Add(uint slot, string path) => Register(slot, path, directory: false);
+
+    /// <summary>Starts watching a directory's entries (adds, removes, renames); same failure behavior as <see cref="Add"/>.</summary>
+    internal void AddDirectory(uint slot, string path) => Register(slot, path, directory: true);
+
+    void Register(uint slot, string path, bool directory)
     {
         if (_stopped || _byPath.ContainsKey(path) || _byPath.Count >= _maxFiles) return;
         var fd = open(path, OEvtOnly | OCloexec);
         if (fd < 0) return;
-        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke };
-        _byDescriptor[fd] = (slot, path);
+        var flags = directory ? NoteWrite | NoteDelete | NoteRename | NoteRevoke : NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke;
+        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = flags };
+        _byDescriptor[fd] = (slot, path, directory);
         if (Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0 || !_byPath.TryAdd(path, fd))
         {
             _byDescriptor.TryRemove(fd, out _);
@@ -82,7 +94,11 @@ internal sealed class VnodeEvents : IDisposable
                 else
                 {
                     // A failing callback must not end the watcher thread (and with it every later fast save).
-                    try { _changed(entry.Slot, entry.Path); }
+                    try
+                    {
+                        if (!entry.Directory) _changed(entry.Slot, entry.Path);
+                        else _directoryChanged?.Invoke(entry.Slot, entry.Path);
+                    }
                     catch (Exception) { /* the directory watcher still reports the save */ }
                 }
             }

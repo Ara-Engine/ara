@@ -25,7 +25,10 @@ internal sealed class ModuleWatcher : IDisposable
     readonly CancellationTokenSource _stop = new();
     readonly Thread _pump;
     readonly VnodeEvents? _vnode;
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _vnodeWrites = new(StringComparer.Ordinal);
+    /// <summary>The last fast delivery per file and the file's stat at that moment (a late directory event is its echo while the stat still matches).</summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long At, long Mtime, long Length)> _deliveries = new(StringComparer.Ordinal);
+    /// <summary>Source files' last seen modification time and length, to find which file a directory event is about.</summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Mtime, long Length)> _known = new(StringComparer.Ordinal);
 
     /// <summary><paramref name="changed"/> receives (slot, paths, first event timestamp) on the pump thread.</summary>
     internal ModuleWatcher(Action<uint, IReadOnlyCollection<string>, long> changed)
@@ -33,7 +36,7 @@ internal sealed class ModuleWatcher : IDisposable
         _changed = changed;
         if (OperatingSystem.IsMacOS())
         {
-            try { _vnode = new VnodeEvents(OnVnode); }
+            try { _vnode = new VnodeEvents(OnVnode, OnDirectory); }
             catch (Exception) { /* no kqueue: the directory watcher alone, as on every other platform */ }
         }
         _pump = new Thread(Pump) { Name = "ara-watch", IsBackground = true };
@@ -52,10 +55,12 @@ internal sealed class ModuleWatcher : IDisposable
         static bool Relevant(string path) => IsSourceInput(path) || !Path.HasExtension(path);
         FileSystemEventHandler on = (_, e) =>
         {
-            if (!Relevant(e.FullPath) || (e.ChangeType is WatcherChangeTypes.Changed or WatcherChangeTypes.Created && IsVnodeDuplicate(e.FullPath))) return;
+            if (!Relevant(e.FullPath) || IsFastDuplicate(e.FullPath, e.ChangeType)) return;
             _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp()));
-            // A new or replaced source file needs a fresh vnode watch.
-            if (_vnode is not null && IsSourceInput(e.FullPath) && e.ChangeType != WatcherChangeTypes.Deleted) AddVnode(slot, e.FullPath);
+            if (_vnode is null || e.ChangeType == WatcherChangeTypes.Deleted) return;
+            // A new or replaced source file needs a fresh vnode watch, a new folder a directory watch.
+            if (IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
+            else if (e.ChangeType == WatcherChangeTypes.Created && Directory.Exists(e.FullPath) && !IsSkippedFolder(Path.GetFileName(e.FullPath))) AddVnodeDirectory(slot, e.FullPath);
         };
         w.Changed += on;
         w.Created += on;
@@ -64,32 +69,101 @@ internal sealed class ModuleWatcher : IDisposable
         {
             var t = Stopwatch.GetTimestamp();
             if (Relevant(e.OldFullPath)) _events.Add((slot, e.OldFullPath, t));
-            if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, t));
+            if (Relevant(e.FullPath) && !IsFastDuplicate(e.FullPath, e.ChangeType)) _events.Add((slot, e.FullPath, t));
             if (_vnode is not null && IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
         };
         w.EnableRaisingEvents = true;
         if (_vnode is not null)
-            foreach (var file in SourceFiles(dir)) AddVnode(slot, file);
+        {
+            foreach (var file in SourceFiles(dir))
+            {
+                if (Stat(file) is { } stat) _known[file] = stat;
+                AddVnode(slot, file);
+            }
+            AddVnodeDirectory(slot, dir);
+            foreach (var folder in SourceFolders(dir)) AddVnodeDirectory(slot, folder);
+        }
         lock (_watchers) _watchers.Add(w);
     }
 
     /// <summary>The file watch of an in-place write: queued at once, and remembered to drop the directory watcher's echo.</summary>
     void OnVnode(uint slot, string path)
     {
-        var now = Stopwatch.GetTimestamp();
-        _vnodeWrites[path] = now;
-        _events.Add((slot, path, now));
+        var stat = Stat(path);
+        Deliver(slot, path, stat ?? default);
     }
 
     /// <summary>
-    /// FSEvents reports one in-place write as <c>Changed</c> and often <c>Created</c> too. While the file's vnode watch is
-    /// alive it was not replaced (a delete or rename drops the watch), so such an event right after a vnode write is that write.
+    /// Entries of a watched folder changed. An atomic save (a temp file renamed over the source) and a new file look
+    /// like this: report the source files whose modification time or length differs from what was last seen. A file that
+    /// is missing is left to the directory watcher, so a delete-then-rename save is not compiled half done.
     /// </summary>
-    bool IsVnodeDuplicate(string path) =>
-        _vnode is not null && _vnode.Watching(path) && _vnodeWrites.TryGetValue(path, out var at)
-        && Stopwatch.GetElapsedTime(at).TotalMilliseconds < DuplicateWindowMs;
+    void OnDirectory(uint slot, string directory)
+    {
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(directory))
+            {
+                if (!IsSourceInput(path) || Stat(path) is not { } stat) continue;
+                if (_known.TryGetValue(path, out var known) && known == stat) continue;
+                Deliver(slot, path, stat);
+                AddVnode(slot, path); // the replacement is a new file: watch it
+            }
+        }
+        catch (IOException) { /* the folder went away; the directory watcher reports it */ }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    void Deliver(uint slot, string path, (long Mtime, long Length) stat)
+    {
+        var now = Stopwatch.GetTimestamp();
+        _known[path] = stat;
+        _deliveries[path] = (now, stat.Mtime, stat.Length);
+        _events.Add((slot, path, now));
+    }
+
+    static (long Mtime, long Length)? Stat(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? (file.LastWriteTimeUtc.Ticks, file.Length) : null;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// Is this directory-watcher event the echo of a save the fast watch already reported? FSEvents reports one save a
+    /// few events (<c>Changed</c>, often <c>Created</c>, <c>Renamed</c> for an atomic save) ~11 ms late. It is an echo when a
+    /// fast delivery for the file is under 100 ms old and either the file's vnode watch is alive (an in-place write; a delete or
+    /// rename would have dropped it) or the file still has the stat recorded at delivery (nothing changed since). A delete never is.
+    /// </summary>
+    bool IsFastDuplicate(string path, WatcherChangeTypes type)
+    {
+        if (_vnode is null || type == WatcherChangeTypes.Deleted || !_deliveries.TryGetValue(path, out var delivery)
+            || Stopwatch.GetElapsedTime(delivery.At).TotalMilliseconds >= DuplicateWindowMs) return false;
+        if (type is WatcherChangeTypes.Changed or WatcherChangeTypes.Created && _vnode.Watching(path)) return true;
+        return Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length;
+    }
 
     void AddVnode(uint slot, string path) => _vnode!.Add(slot, path);
+
+    void AddVnodeDirectory(uint slot, string path) => _vnode!.AddDirectory(slot, path);
+
+    static bool IsSkippedFolder(string name) => name is "bin" or "obj" || name.StartsWith('.');
+
+    /// <summary>Folders under a module folder, skipping build output and hidden folders.</summary>
+    static IEnumerable<string> SourceFolders(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(dir, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden })
+                .Where(path => !Path.GetRelativePath(dir, path).Split(Path.DirectorySeparatorChar).Any(IsSkippedFolder))
+                .ToArray();
+        }
+        catch (IOException) { return []; }
+    }
 
     /// <summary>Source inputs under a module folder, skipping build output and hidden folders.</summary>
     static IEnumerable<string> SourceFiles(string dir)
@@ -98,7 +172,7 @@ internal sealed class ModuleWatcher : IDisposable
         {
             return Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden })
                 .Where(path => IsSourceInput(path) && !Path.GetRelativePath(dir, path).Split(Path.DirectorySeparatorChar)
-                    .Any(part => part is "bin" or "obj" || part.StartsWith('.')))
+                    .Any(IsSkippedFolder))
                 .ToArray();
         }
         catch (IOException) { return []; }
