@@ -45,7 +45,11 @@ Renderlab renders on its own device (D35: for weeks, until its passes move onto
 `ara-gpu`). On Windows the frame crosses through a ring of images the two devices
 share (`shared.rs`): Renderlab's device exports them exactly as `ara-gpu`'s
 `ExportRing` does, wgpu copies the output into slot 0, and the presenter's device
-copies it out with `ImportedSurface::copy_out_image`. Elsewhere, or when the two
+copies it out with `ImportedSurface::copy_out_image`. A second ring carries the
+object-id image (`set_id`, copied in `publish`, read with `deliver_id` into
+`PresentedId` before the next publish). `ARA_RENDERLAB_SCENE_IDS=pattern` stages a
+synthetic pattern through `stage_pattern` until Renderlab's id texture exists.
+Elsewhere, or when the two
 devices are different adapters, the frame is read back and uploaded (the CPU copy,
 3.3 to 4.1 ms at 1080p); the bridge prints once why. `ARA_RENDERLAB_HANDOFF=copy`
 forces the copy. `PresentStats::external_handoff_ms` reports the cost either way.
