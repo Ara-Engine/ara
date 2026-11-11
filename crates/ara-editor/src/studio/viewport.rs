@@ -1070,9 +1070,16 @@ impl SceneView {
             .find(|(t, _)| *t == tag)
             .map(|(_, view)| *view)
     }
-    /// Whether the raster Scene draws selection outlines into its frames.
+    /// Whether the raster Scene draws selection outlines into its frames. Renderlab's image
+    /// has none in it, so while it is shown the outlines are the UI layer's, drawn from the
+    /// entity-ID image (`Overlay::Outline`).
     pub fn draws_outlines(&self) -> bool {
         self.raster.is_some()
+            && self
+                .renderlab
+                .as_ref()
+                .and_then(renderlab::RenderlabScene::image)
+                .is_none()
     }
     /// One more frame for an image-only change (new outlines): no new convergence.
     pub fn redraw(&mut self) {
