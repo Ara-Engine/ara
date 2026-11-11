@@ -16,6 +16,11 @@ const FRAME: Duration = Duration::from_millis(16);
 
 /// A studio over a project with one box at the origin, selected, with the move tool.
 fn open() -> Runtime<Studio> {
+    open_sized((1400, 900))
+}
+
+/// [`open`] in a window of `size` (logical px at scale 1).
+fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
@@ -57,9 +62,9 @@ fn open() -> Runtime<Studio> {
             json!({"tool": "translate", "snapping": false, "local": false}),
         )
         .unwrap();
-    let studio = Studio::new(editor, (1400.0, 900.0));
+    let studio = Studio::new(editor, (size.0 as f32, size.1 as f32));
     let theme = studio.look.theme.clone();
-    let mut rt = Runtime::new(studio, chrome::view, theme, (1400, 900), 1.0).unwrap();
+    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
     rt.frame(Duration::ZERO);
     rt
 }
@@ -1401,6 +1406,8 @@ fn the_assets_footer_names_the_selection_or_the_folder() {
         folder.contains(" items") || folder.contains(" item"),
         "{folder}"
     );
+    // The footer says the count (and the folder below the root), not "Project" again.
+    assert!(!folder.contains("Project"), "{folder}");
     let path = rt
         .state()
         .assets
@@ -3606,7 +3613,7 @@ fn a_fields_menu_copies_its_path() {
     let mut rt = open();
     let label = rt.find("field/Transform.position/0").unwrap();
     // The row's label column, left of the value cells.
-    rt.right_click(label.left - 120.0, label.center().y);
+    rt.right_click(label.left - 40.0, label.center().y);
     rt.frame(FRAME);
     let item = rt
         .find("field/Transform.position/path")
@@ -6951,5 +6958,220 @@ fn a_failed_import_is_in_the_problems_panel_after_an_unattended_open() {
     assert!(
         texts.iter().any(|t| t.contains("import worker failed")),
         "the Problems panel lists the failed import: {texts:?}"
+    );
+}
+
+/// The Assets toolbar at the widths of small windows: the path bar's root step and the search
+/// box sit side by side, never one over the other, and the search keeps a usable width where
+/// the panel has room for one.
+#[test]
+fn the_assets_path_bar_and_search_share_the_row_at_narrow_widths() {
+    for width in [960_u32, 720, 560, 480] {
+        let mut rt = open_sized((width, 600));
+        settle(&mut rt);
+        let search = rt.find("assets/search").expect("the search box shows");
+        let root = rt
+            .find("assets/crumb/root")
+            .expect("the path bar's root shows");
+        assert!(
+            root.right <= search.left + 0.5,
+            "{width}px: the path bar {root:?} runs under the search box {search:?}"
+        );
+        assert!(
+            width < 720 || search.width() >= 90.0,
+            "{width}px: the search box keeps a usable width, {search:?}"
+        );
+    }
+}
+
+/// The type filters are one row (never a wrapped grid), and "Project" is said once in the panel
+/// (the tree's root), not again by the path bar or the footer.
+#[test]
+fn assets_filters_are_one_row_and_project_is_said_once() {
+    for width in [1280_u32, 1000] {
+        let mut rt = open_sized((width, 720));
+        scan(&mut rt);
+        settle(&mut rt);
+        let tops: std::collections::BTreeSet<i32> = rt
+            .tree()
+            .into_iter()
+            .filter(|n| {
+                n.key
+                    .as_ref()
+                    .is_some_and(|k| k.to_string().starts_with("assets/filter/"))
+            })
+            .map(|n| n.rect.top as i32)
+            .collect();
+        assert_eq!(
+            tops.len(),
+            1,
+            "{width}px: the filters share one row, {tops:?}"
+        );
+        let said: Vec<String> = rt
+            .tree()
+            .into_iter()
+            .filter_map(|n| n.text.map(|t| t.to_string()))
+            .filter(|t| t.contains("Project"))
+            .collect();
+        assert_eq!(
+            said,
+            ["Project"],
+            "{width}px: the root is named once, by the tree"
+        );
+    }
+}
+
+/// The status bar's hint names the launcher chord the title bar's box shows, never the other
+/// platform's (it read "⌘K" on Windows).
+#[test]
+fn the_status_hint_and_the_launcher_box_use_the_same_platform_chord() {
+    let hint = super::chrome::idle_hint();
+    let chord = super::chrome::launcher_chord();
+    assert!(hint.ends_with(&format!("{chord} commands")), "{hint}");
+    if cfg!(target_os = "macos") {
+        assert!(hint.contains('⌘') && !hint.contains("Ctrl"), "{hint}");
+    } else {
+        assert!(hint.contains("Ctrl K") && !hint.contains('⌘'), "{hint}");
+    }
+}
+
+// The UI pass: title bar, panel tabs.
+
+#[test]
+fn the_title_bar_has_no_theme_button_and_no_rule_under_it() {
+    let mut rt = open();
+    settle(&mut rt);
+    assert!(rt.find("theme").is_none(), "the theme lives in Settings");
+    assert!(rt.find("launcher").is_some() && rt.find("menu/Window").is_some());
+    // No hairline between the bar and the panels: the pixel row under the bar is the
+    // bar's own surface.
+    let bar = rt
+        .find("title-bar")
+        .or_else(|| rt.find(ara_kit::ui::TITLE_BAR))
+        .expect("the bar");
+    let shot = rt.snap().unwrap();
+    let at = |x: u32, y: u32| {
+        let i = ((y * shot.width + x) * 4) as usize;
+        shot.pixels[i..i + 4].to_vec()
+    };
+    let (x, below) = (shot.width / 2, (bar.bottom * rt.scale()) as u32);
+    assert_eq!(at(x, below - 1), at(x, below), "one surface, no line");
+}
+
+#[test]
+fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
+    let mut rt = open();
+    settle(&mut rt);
+    for panel in ["hierarchy", "inspector", "scene", "game"] {
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
+        settle(&mut rt);
+        assert!(
+            rt.find(&format!("tab/{panel}/close")).is_none(),
+            "{panel} has no ×"
+        );
+    }
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    assert!(
+        rt.find("tab/console/close").is_some(),
+        "other panels keep their ×"
+    );
+    // Window › Hierarchy is checked while shown; pressing it hides the panel, and again shows it.
+    for (shown_after, key) in [
+        (false, "cmd/window.close_panel/Hierarchy"),
+        (true, "cmd/window.hierarchy/Hierarchy"),
+    ] {
+        press(&mut rt, "menu/Window");
+        press(&mut rt, key);
+        assert_eq!(
+            crate::state::panel_visible(&rt.state().editor.state, "hierarchy"),
+            shown_after
+        );
+        settle(&mut rt);
+    }
+}
+
+/// The left edge of the text `label` in the tree.
+fn text_left(rt: &Runtime<Studio>, label: &str) -> f32 {
+    rt.tree()
+        .into_iter()
+        .find(|n| n.text.as_deref() == Some(label))
+        .unwrap_or_else(|| panic!("{label} shows"))
+        .rect
+        .left
+}
+
+/// Siblings at one depth line up whatever their names are: a row whose name overflows used to
+/// squeeze its own (shrinkable) indent and icon slot, leaving the row whose name fit looking
+/// pushed right ("Bulkhead").
+#[test]
+fn hierarchy_siblings_at_one_depth_start_their_names_at_the_same_x() {
+    let mut rt = open_sized((1000, 630));
+    let long = "Outpost floor with a name much longer than the row";
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![
+                    json!({"cmd":"entity.create","args":{"id":"e_long","name":long,"components":{"Transform":{}}}}),
+                    json!({"cmd":"entity.create","args":{"id":"e_bulk","name":"Bulkhead","components":{"Transform":{}}}}),
+                ],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let bulk = text_left(&rt, "Bulkhead");
+    let lamp = text_left(&rt, "Lamp");
+    let overflowing = rt
+        .tree()
+        .into_iter()
+        .find(|n| {
+            n.text
+                .as_deref()
+                .is_some_and(|t| t.starts_with("Outpost floor"))
+        })
+        .expect("the long name shows (cut at the edge)")
+        .rect
+        .left;
+    assert_eq!(bulk, lamp, "Bulkhead lines up with Lamp");
+    assert_eq!(
+        overflowing, lamp,
+        "an overflowing name starts where the others do"
+    );
+}
+
+/// Names use the row's width and end only at its real edge (past the visibility and lock
+/// toggles a row only reserves room for while they are set or the pointer is on it).
+#[test]
+fn hierarchy_names_run_to_the_row_edge() {
+    let mut rt = open_sized((1000, 630));
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_long","name":"A very long entity name that has to be cut somewhere","components":{"Transform":{}}}})],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let row = rt.find("row/e_long").expect("the row");
+    let name = rt
+        .tree()
+        .into_iter()
+        .find(|n| {
+            n.text
+                .as_deref()
+                .is_some_and(|t| t.starts_with("A very long"))
+        })
+        .expect("the name")
+        .rect;
+    assert!(
+        row.right - name.right <= 8.0,
+        "the name ends {}px short of the row's edge: {name:?} in {row:?}",
+        row.right - name.right
     );
 }
