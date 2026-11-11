@@ -283,15 +283,14 @@ impl Presenter {
         // One device with hardware ray queries where the GPU has them, so the
         // ray-tracing opt-in can switch on without recreating it. Nothing traces
         // rays unless the options opt in. On Apple this is the Metal device.
-        let mut device = if let Some(gpu) = self.initial_device.take() {
+        let device = if let Some(gpu) = self.initial_device.take() {
             crate::PresentationDevice::from_device(gpu)
         } else {
             crate::PresentationDevice::open(&self.extensions, &self.cache)?
         };
-        let ptr = device.gpu_mut() as *mut ara_gpu::GpuDevice;
-        // SAFETY: `device` boxes the GpuDevice, so `ptr` stays valid when `device`
-        // is moved into `self`. `Drop` drops the renderer before the device.
-        let renderer = unsafe { Renderer::on_device(scene, [64, 64], ptr)? };
+        // The renderer keeps a lease, so moving `device` into `self` leaves the
+        // allocation in place. `Drop` still drops the renderer before the device.
+        let renderer = Renderer::on_device(scene, [64, 64], device.lease())?;
         self.device = Some(device);
         self.renderer = Some(renderer);
         Ok(())

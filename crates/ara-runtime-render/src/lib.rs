@@ -2,7 +2,7 @@
 //! [`RasterView`] consumes local shared geometry, compressed textures and moving
 //! instances; terrain and foliage enter the same G-buffer and authored look.
 //! [`Presenter`] owns a [`PresentationDevice`] and completed last-good output. The
-//! bootstrap renderer borrows that device. Experimental RT
+//! bootstrap renderer holds a lease on that device. Experimental RT
 //! is explicitly enabled through [`RenderOptions`], before device creation.
 #![warn(missing_docs)]
 
@@ -114,7 +114,7 @@ pub struct Presenter {
     published_quality: Option<QualityPreset>,
     failure: Option<String>,
     renderer: Option<Renderer>,
-    /// The device `renderer` borrows. External renderers draw on it too.
+    /// The device `renderer` holds a lease on. External renderers draw on it too.
     device: Option<PresentationDevice>,
     initial_device: Option<ara_gpu::GpuDevice>,
     effects: vfx::Effects,
