@@ -1,9 +1,13 @@
 //! The automatic-exposure meter's look at a frame, off the frame's critical path. A compute
 //! pass on Renderlab's own device reduces the engine's output to a log-luminance histogram
 //! (`BINS` bins); the histogram is copied to a staging buffer and mapped on a later frame,
-//! so no frame waits for the GPU or for a large readback. `Metering::observe` takes the
-//! histogram of the last frame to complete (`Readbacks::poll`), a few frames late, which the
-//! meter's own adaptation (Ara's rate of 2 per second) hides.
+//! so no frame waits for the GPU or for a large readback. The bridge polls at the start of
+//! each frame, when the previous one (which it waited for) and the pass queued behind it are
+//! done, and `Metering::observe` takes what finished: a reading is one frame old, as the
+//! blocking read's was, and a slower GPU only makes it later, which the meter's own
+//! adaptation (Ara's rate of 2 per second) hides. A pass that never finishes is reported
+//! and given up on (`STUCK_FRAMES`); its slot stays busy until it does.
+use crate::gaps::Gaps;
 use std::{
     collections::VecDeque,
     sync::{Arc, OnceLock},
@@ -16,8 +20,15 @@ pub(crate) const BINS: usize = 512;
 pub(crate) const LOG_DARKEST: f32 = -9.210_34;
 /// Pixels between samples on each axis: a quarter of the frame is binned.
 const STRIDE: u32 = 2;
-/// Readbacks in flight at once; a submit with all busy waits for the next frame.
+/// Readback slots made at start; usually one or two are in flight.
 const SLOTS: usize = 3;
+/// The most slots ever made, stuck ones included.
+const MAX_SLOTS: usize = 8;
+/// Frames a pass may stay in flight before it is called stuck (a pass finishes within the
+/// frame it follows, which the bridge waits for, so one or two is normal).
+const STUCK_FRAMES: u32 = 8;
+/// Consecutive refused submits before it is reported.
+const REFUSED_FRAMES: u32 = 60;
 
 /// The reduction: each invocation bins one sampled pixel's luminance (the output is sRGB, so
 /// the load decodes to linear light).
@@ -107,6 +118,10 @@ struct Pending {
     stops: f32,
     epoch: u32,
     mapped: Mapped,
+    /// `poll`s since the pass was queued: frames in flight.
+    age: u32,
+    /// Reported as stuck: later readings no longer wait for it.
+    stuck: bool,
 }
 
 struct Slot {
@@ -120,22 +135,35 @@ struct Pipeline {
     layout: wgpu::BindGroupLayout,
 }
 
-/// The histogram passes in flight on one device. Created empty; the pipeline and buffers
-/// are made on the first `submit`.
-#[derive(Default)]
+/// The histogram passes in flight on one device. The pipeline and the first `SLOTS` buffer
+/// pairs are made at construction, so the first metered frame pays for neither.
 pub(crate) struct Readbacks {
-    pipeline: Option<Pipeline>,
+    pipeline: Pipeline,
     slots: Vec<Slot>,
     /// Slot indices in submission order.
     flight: VecDeque<usize>,
     /// Bumped by `discard`: readings of an earlier epoch are dropped when they arrive.
     epoch: u32,
+    /// Consecutive `submit`s refused for want of a slot.
+    refused: u32,
 }
 
 impl Readbacks {
+    pub fn new(device: &wgpu::Device) -> Self {
+        Self {
+            pipeline: Pipeline::new(device),
+            slots: (0..SLOTS).map(|_| Slot::new(device)).collect(),
+            flight: VecDeque::new(),
+            epoch: 0,
+            refused: 0,
+        }
+    }
+
     /// Queues a histogram pass over `output` (display-encoded RGBA8, `TEXTURE_BINDING`) after
     /// the frame already submitted to `queue`, remembering the `meter` and `stops` it shows.
-    /// Returns false when every slot is still in flight (the meter waits for the next frame).
+    /// When every slot is in flight it makes another (a buffer with a map outstanding cannot
+    /// be reused), up to `MAX_SLOTS`; past that it returns false, and the caller tries again
+    /// next frame. A long run of refusals is reported once.
     pub fn submit(
         &mut self,
         device: &wgpu::Device,
@@ -143,17 +171,29 @@ impl Readbacks {
         output: &wgpu::Texture,
         meter: f32,
         stops: f32,
+        gaps: &mut Gaps,
     ) -> bool {
-        if self.pipeline.is_none() {
-            self.pipeline = Some(Pipeline::new(device));
-        }
-        if self.slots.is_empty() {
-            self.slots = (0..SLOTS).map(|_| Slot::new(device)).collect();
-        }
-        let Some(index) = self.slots.iter().position(|s| s.pending.is_none()) else {
-            return false;
+        let index = match self.slots.iter().position(|s| s.pending.is_none()) {
+            Some(index) => index,
+            None if self.slots.len() < MAX_SLOTS => {
+                self.slots.push(Slot::new(device));
+                self.slots.len() - 1
+            }
+            None => {
+                self.refused += 1;
+                if self.refused == REFUSED_FRAMES {
+                    gaps.fault(
+                        "exposure meter readbacks refused",
+                        &format!(
+                            "all {MAX_SLOTS} readback slots have been busy for {REFUSED_FRAMES} frames: the GPU is not finishing the meter's passes, and the meter keeps its last target"
+                        ),
+                    );
+                }
+                return false;
+            }
         };
-        let (Some(gpu), Some(slot)) = (&self.pipeline, self.slots.get_mut(index)) else {
+        self.refused = 0;
+        let (gpu, Some(slot)) = (&self.pipeline, self.slots.get_mut(index)) else {
             return false;
         };
         let view = output.create_view(&wgpu::TextureViewDescriptor::default());
@@ -193,47 +233,90 @@ impl Readbacks {
             stops,
             epoch: self.epoch,
             mapped,
+            age: 0,
+            stuck: false,
         });
         self.flight.push_back(index);
         true
     }
 
     /// The readings whose passes have finished since the last call, oldest first, without
-    /// waiting for any other. Readings of a `discard`ed epoch and failed maps are dropped.
-    pub fn poll(&mut self, device: &wgpu::Device) -> Vec<Reading> {
+    /// waiting for any other. Readings of a `discard`ed epoch, failed maps and readings more
+    /// than `STUCK_FRAMES` old are dropped. A pass still unfinished after `STUCK_FRAMES`
+    /// polls is reported once and no longer holds back the ones behind it; its slot stays
+    /// busy until its map completes, and `submit` makes others meanwhile.
+    pub fn poll(&mut self, device: &wgpu::Device, gaps: &mut Gaps) -> Vec<Reading> {
+        if self.flight.is_empty() {
+            return Vec::new();
+        }
         // Processes map callbacks; never waits.
-        let _ = device.poll(wgpu::PollType::Poll);
+        if let Err(error) = device.poll(wgpu::PollType::Poll) {
+            gaps.fault(
+                "exposure meter poll",
+                &format!("{error}: readings may stop arriving"),
+            );
+        }
         let mut readings = Vec::new();
-        while let Some(&index) = self.flight.front() {
+        let mut waiting = VecDeque::new();
+        // An older pass that is not finished (and not stuck) holds back the newer ones.
+        let mut held = false;
+        for index in std::mem::take(&mut self.flight) {
             let Some(slot) = self.slots.get_mut(index) else {
-                self.flight.pop_front();
                 continue;
             };
-            let Some(pending) = slot.pending.as_ref() else {
-                self.flight.pop_front();
+            let Some(pending) = slot.pending.as_mut() else {
                 continue;
             };
-            let Some(result) = pending.mapped.get() else {
-                break;
+            pending.age += 1;
+            let (meter, stops, epoch, age) =
+                (pending.meter, pending.stops, pending.epoch, pending.age);
+            let outcome = pending.mapped.get().map(|result| {
+                result
+                    .as_ref()
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            });
+            let Some(outcome) = outcome else {
+                if age > STUCK_FRAMES {
+                    if !pending.stuck {
+                        pending.stuck = true;
+                        gaps.fault(
+                            "exposure meter readback never completed",
+                            &format!(
+                                "a histogram pass has been in flight for {age} frames: later readings go ahead of it and its slot stays busy until it completes"
+                            ),
+                        );
+                    }
+                } else {
+                    held = true;
+                }
+                waiting.push_back(index);
+                continue;
             };
-            let histogram = result
-                .is_ok()
-                .then(|| slot.read())
-                .flatten()
-                .filter(|_| pending.epoch == self.epoch);
-            if let Some(histogram) = histogram {
-                readings.push(Reading {
-                    meter: pending.meter,
-                    stops: pending.stops,
-                    histogram,
-                });
+            if held {
+                waiting.push_back(index);
+                continue;
             }
-            if result.is_ok() {
-                slot.staging.unmap();
+            match outcome {
+                Ok(()) => {
+                    let fresh = epoch == self.epoch && age <= STUCK_FRAMES;
+                    if let Some(histogram) = slot.read().filter(|_| fresh) {
+                        readings.push(Reading {
+                            meter,
+                            stops,
+                            histogram,
+                        });
+                    }
+                    slot.staging.unmap();
+                }
+                Err(error) => gaps.fault(
+                    "exposure meter readback failed",
+                    &format!("{error}: that reading is dropped"),
+                ),
             }
             slot.pending = None;
-            self.flight.pop_front();
         }
+        self.flight = waiting;
         readings
     }
 
@@ -420,29 +503,119 @@ mod tests {
             },
             texture.size(),
         );
-        let mut readbacks = Readbacks::default();
-        assert!(readbacks.submit(&device, &queue, &texture, -2.5, -1.5));
-        // The pass may not have finished: polling never waits, and the reading arrives.
-        let started = std::time::Instant::now();
-        let mut readings = readbacks.poll(&device);
-        while readings.is_empty() {
-            assert!(
-                started.elapsed().as_secs() < 20,
-                "the reading never arrived"
-            );
-            std::thread::yield_now();
-            readings = readbacks.poll(&device);
-        }
+        let mut gaps = Gaps::default();
+        let mut readbacks = Readbacks::new(&device);
+        assert!(readbacks.submit(&device, &queue, &texture, -2.5, -1.5, &mut gaps));
+        // Polling never waits: right after the submit the reading may or may not be there.
+        let early = readbacks.poll(&device, &mut gaps);
+        // One frame on, the pass is done (the bridge waits for each frame, and the pass is
+        // queued right behind it) and the reading arrives.
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
+        let mut readings = early;
+        readings.extend(readbacks.poll(&device, &mut gaps));
+        assert_eq!(readings.len(), 1, "one reading, exactly once");
         let reading = &readings[0];
         assert_eq!((reading.meter, reading.stops), (-2.5, -1.5));
         let twin = histogram_of_rgba8(&rgba8, w as usize);
         assert_eq!(reading.histogram.iter().sum::<u32>(), 50 * 40);
         assert_eq!(reading.histogram, twin);
         // A reading of a frame submitted before a cut is dropped on arrival.
-        assert!(readbacks.submit(&device, &queue, &texture, 0., 0.));
+        assert!(readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
         readbacks.discard();
         let _ = device.poll(wgpu::PollType::wait_indefinitely());
-        assert!(readbacks.poll(&device).is_empty());
+        assert!(readbacks.poll(&device, &mut gaps).is_empty());
         assert!(readbacks.flight.is_empty(), "the slot is free again");
+    }
+
+    /// A device and a 4x4 texture to meter, or None without an adapter.
+    fn gpu() -> Option<(wgpu::Device, wgpu::Queue, wgpu::Texture)> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+        let adapter = block_on(instance.request_adapter(&Default::default())).ok()?;
+        let (device, queue) = block_on(adapter.request_device(&Default::default())).ok()?;
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("meter test"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        Some((device, queue, texture))
+    }
+
+    /// Marks `slot` as holding a pass whose map never completes.
+    fn jam(readbacks: &mut Readbacks, slot: usize) {
+        readbacks.slots[slot].pending = Some(Pending {
+            meter: 0.,
+            stops: 0.,
+            epoch: readbacks.epoch,
+            mapped: Arc::new(OnceLock::new()),
+            age: 0,
+            stuck: false,
+        });
+        readbacks.flight.push_back(slot);
+    }
+
+    /// A readback that never completes is counted, reported once, and no longer holds the
+    /// meter: past `STUCK_FRAMES` polls the next pass gets a new slot and its reading arrives.
+    #[test]
+    fn a_stuck_readback_is_reported_and_does_not_stop_the_meter() {
+        let Some((device, queue, texture)) = gpu() else {
+            eprintln!("no adapter: stuck readbacks were not checked");
+            return;
+        };
+        let (mut gaps, mut readbacks) = (Gaps::default(), Readbacks::new(&device));
+        // Every slot made at start is jammed.
+        for slot in 0..SLOTS {
+            jam(&mut readbacks, slot);
+        }
+        assert!(!gaps.reported("exposure meter readback never completed"));
+        for _ in 0..=STUCK_FRAMES {
+            assert!(readbacks.poll(&device, &mut gaps).is_empty());
+        }
+        assert!(gaps.reported("exposure meter readback never completed"));
+        // A new slot takes the next pass, and its reading is not held behind the jammed ones.
+        assert!(readbacks.submit(&device, &queue, &texture, 1., 2., &mut gaps));
+        assert_eq!(readbacks.slots.len(), SLOTS + 1);
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
+        let readings = readbacks.poll(&device, &mut gaps);
+        assert_eq!(
+            readings.len(),
+            1,
+            "the new slot's reading, not the jammed ones'"
+        );
+        assert_eq!((readings[0].meter, readings[0].stops), (1., 2.));
+    }
+
+    /// With every slot jammed up to the limit, a submit is refused (the bridge asks again
+    /// next frame), and a long run of refusals is reported once.
+    #[test]
+    fn refused_submits_are_reported_after_a_long_run() {
+        let Some((device, queue, texture)) = gpu() else {
+            eprintln!("no adapter: refused submits were not checked");
+            return;
+        };
+        let (mut gaps, mut readbacks) = (Gaps::default(), Readbacks::new(&device));
+        for slot in 0..MAX_SLOTS {
+            if slot >= readbacks.slots.len() {
+                readbacks.slots.push(Slot::new(&device));
+            }
+            jam(&mut readbacks, slot);
+        }
+        for _ in 0..REFUSED_FRAMES - 1 {
+            assert!(!readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
+        }
+        assert!(!gaps.reported("exposure meter readbacks refused"));
+        assert!(!readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
+        assert!(gaps.reported("exposure meter readbacks refused"));
     }
 }

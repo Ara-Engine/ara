@@ -276,6 +276,11 @@ impl Metering {
         }
     }
 
+    /// The pass `due` asked for was not queued: ask again next frame, not 16 frames on.
+    pub fn retry(&mut self) {
+        self.wait = 0;
+    }
+
     /// Feeds back the frame rendered with `stops` from `meter`, seen as the log-luminance
     /// `histogram` of the GPU's meter pass (`meter::Readbacks`), a few frames late: metering
     /// as Ara's automatic exposure does, the log mean of the luminance between the look's low
@@ -421,7 +426,13 @@ mod tests {
     /// What the GPU's meter pass reports for a flat grey frame whose display luminance is
     /// `grey`.
     fn frame(grey: f32) -> Vec<u32> {
-        let v = (grey.powf(1. / 2.2) * 255.).round() as u8;
+        // Display-encoded as the output is (sRGB), which the meter's histogram decodes.
+        let encoded = if grey <= 0.003_130_8 {
+            12.92 * grey
+        } else {
+            1.055 * grey.powf(1. / 2.4) - 0.055
+        };
+        let v = (encoded * 255.).round() as u8;
         crate::meter::histogram_of_rgba8(&[v, v, v, 255].repeat(64 * 64), 64)
     }
 
@@ -601,10 +612,26 @@ mod tests {
             }
         }
         assert!(
-            first_close.is_some_and(|f| f < 20),
-            "the snap took {first_close:?} frames"
+            // The first frame is a cut: its reading is applied LATE frames on, so the meter
+            // has snapped for the frame after that.
+            first_close.is_some_and(|f| f <= LATE + 1),
+            "the snap took {first_close:?} frames, more than LATE + 1"
         );
         assert!(worst_over < 0.35, "overshoot {worst_over}");
+    }
+
+    /// A pass the bridge could not queue is asked for again next frame, not 16 on.
+    #[test]
+    fn a_refused_pass_is_asked_for_again_next_frame() {
+        let mut meter = Metering::new();
+        meter.snapping = false;
+        meter.wait = 0;
+        assert!(meter.due());
+        assert!(!meter.due(), "queued: the next ask is 16 frames away");
+        meter.wait = 0;
+        assert!(meter.due());
+        meter.retry();
+        assert!(meter.due(), "refused: asked for again at once");
     }
 
     #[test]
