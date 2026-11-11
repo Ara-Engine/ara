@@ -84,16 +84,27 @@ if (args.Contains("--fix", StringComparer.Ordinal))
     }
     catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
 }
+StartupTrace.Describe();
+StartupTrace.Mark("main entered");
 // The host needs ~100 ms to send the first module; use it to warm Roslyn on another core.
 if (ModuleCompiler.ShouldWarmUp(System.Environment.ProcessorCount))
+{
+    StartupTrace.Mark("warm-up started");
     _ = ModuleCompiler.WarmUpAsync().ContinueWith(
-    warm => { if (warm.Result is { } failure) Console.Error.WriteLine($"[ara] compile warm-up failed (the first compile will be slower): {failure}"); },
-    TaskContinuationOptions.OnlyOnRanToCompletion);
+        warm =>
+        {
+            StartupTrace.Mark("warm-up finished");
+            if (warm.Result is { } failure) Console.Error.WriteLine($"[ara] compile warm-up failed (the first compile will be slower): {failure}");
+        },
+        TaskContinuationOptions.OnlyOnRanToCompletion);
+}
+else StartupTrace.Mark($"warm-up skipped ({System.Environment.ProcessorCount} cores)");
 var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
 var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 
 using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 pipe.Connect(TimeSpan.FromSeconds(30));
+StartupTrace.Mark("pipe connected");
 if (parent != 0) _ = Task.Run(() => WatchParent(parent));
 
 using var coordinator = new Coordinator(new PipeSink(pipe), new AnalyzerSet());
@@ -107,6 +118,7 @@ while (Protocol.Receive(pipe) is { } msg)
             if (version != Protocol.Version) throw new InvalidOperationException($"protocol {version}, server {Protocol.Version}");
             r.U32();
             var enc = r.Bool();
+            StartupTrace.Mark("hello");
             coordinator.Hello(enc, r.Str());
             break;
         case MessageKind.Watch:
@@ -114,7 +126,9 @@ while (Protocol.Receive(pipe) is { } msg)
             var initial = r.Remaining == 0 || r.Bool();
             var generation = r.Remaining == 0 ? 0 : r.U32();
             var published = r.Remaining > 0 && r.Bool() ? PublishedSnapshot.Read(r) : null;
+            StartupTrace.Mark("watch received");
             coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation, published);
+            StartupTrace.Mark("watch returned");
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());

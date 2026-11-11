@@ -36,7 +36,6 @@ mod pilot_verify;
 mod play_verify;
 mod prefab_verify;
 mod probe_verify;
-mod probes;
 mod profiler_verify;
 mod qa;
 mod reachability_verify;
@@ -350,7 +349,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         Some(unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? })
     };
     let mut scene_view = viewport::SceneView::default();
-    let mut probe_owner = probes::Owner::default();
+    let mut probe_owner = crate::studio::probes::Owner::default();
     let mut verification = options
         .verify
         .then(|| verify::Verification::new(&options.output));
@@ -2238,26 +2237,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Ok(task) = editor.captures.try_recv() {
                 let prepared =
                     capture::prepare(&task, &mut renderer, &mut gpu, &shell, &editor, &scene_view);
-                let completed = editor.completed.clone();
-                match prepared {
-                    Ok(work) => {
-                        std::thread::spawn(move || {
-                            let result = work
-                                .write()
-                                .map_err(|e| vec![crate::invalid(e.to_string())]);
-                            let _ = completed.send(crate::capture::CaptureCompletion {
-                                job: task.job,
-                                result,
-                            });
-                        });
-                    }
-                    Err(error) => {
-                        let _ = completed.send(crate::capture::CaptureCompletion {
-                            job: task.job,
-                            result: Err(vec![crate::invalid(error.to_string())]),
-                        });
-                    }
-                }
+                crate::capture::Work::finish(prepared, task.job, editor.completed.clone());
             }
             drop(profile_scope);
             if let Some(token) = profile_frame {

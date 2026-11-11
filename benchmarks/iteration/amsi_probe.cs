@@ -39,14 +39,19 @@ Console.WriteLine($"Defender real-time protection: {Defender()}");
 
 var rows = new List<(string Group, string Name, double[] Ms, string Note)>();
 
-// The variants are built on every OS so their construction can be checked without a scanner: each must differ from the image in
-// exactly the bytes it names (the timestamp aside), and have the image's length (the half image, half of it).
+// The variants are built on every OS so their construction can be checked without a scanner. Each variant is checked here: it
+// must have the image's length (the half image, half of it) and change no more bytes than the ranges it names plus the 4-byte
+// timestamp. A variant that fails the check would measure the wrong thing, so the probe stops.
 var variants = Variants(original);
-foreach (var (name, make) in variants)
+foreach (var (name, make, namedBytes) in variants)
 {
     var made = make(1);
-    var changed = Enumerable.Range(0, Math.Min(made.Length, original.Length)).Count(i => made[i] != original[i]);
-    Console.WriteLine($"  variant {name,-46} {made.Length,9:N0} bytes, {changed,9:N0} differ from the image");
+    var comparable = Math.Min(made.Length, original.Length);
+    var changed = Enumerable.Range(0, comparable).Count(i => made[i] != original[i]);
+    var expectedLength = name.StartsWith("first half", StringComparison.Ordinal) ? original.Length / 2 : original.Length;
+    var ok = made.Length == expectedLength && (name.StartsWith("random", StringComparison.Ordinal) || changed <= namedBytes + 4);
+    Console.WriteLine($"  variant {name,-46} {made.Length,9:N0} bytes, {changed,9:N0} differ from the image {(ok ? "" : "  <-- SELF-CHECK FAILED")}");
+    if (!ok) throw new InvalidOperationException($"variant '{name}' does not change what it says it changes");
 }
 
 // ---- A. the scan itself, by content
@@ -56,7 +61,7 @@ if (OperatingSystem.IsWindows())
     if (amsi is null) Console.WriteLine("AMSI is not available (no provider registered): the scan rows are skipped.");
     else
     {
-        foreach (var (name, make) in variants)
+        foreach (var (name, make, _) in variants)
         {
             var times = new List<double>();
             var results = new HashSet<int>();
@@ -171,8 +176,11 @@ static void StampUnique(byte[] image, int n)
     BitConverter.GetBytes(0x5A000000 + n * 7919).CopyTo(image, peOffset + 8);
 }
 
-/// <summary>Same-length variants of the image that blank out one kind of content at a time, each with a unique stamp.</summary>
-static List<(string Name, Func<int, byte[]> Make)> Variants(byte[] original)
+/// <summary>
+/// Variants of the image that blank out one kind of content at a time (plus the first half and random bytes), each with a unique
+/// stamp; the last element is how many bytes the variant is allowed to change besides the stamp.
+/// </summary>
+static List<(string Name, Func<int, byte[]> Make, long NamedBytes)> Variants(byte[] original)
 {
     using var pe = new PEReader(new MemoryStream(original));
     var metadata = pe.GetMetadataReader();
@@ -194,7 +202,7 @@ static List<(string Name, Func<int, byte[]> Make)> Variants(byte[] original)
     var blob = new[] { Heap(HeapIndex.Blob) };
     var whole = new[] { (headers.MetadataStartOffset, headers.MetadataSize) };
 
-    Func<int, byte[]> Zero(string _, IEnumerable<(int Offset, int Length)> ranges) => n =>
+    Func<int, byte[]> Zero(IEnumerable<(int Offset, int Length)> ranges) => n =>
     {
         var copy = (byte[])original.Clone();
         foreach (var (offset, length) in ranges) Array.Clear(copy, offset, Math.Min(length, copy.Length - offset));
@@ -203,13 +211,13 @@ static List<(string Name, Func<int, byte[]> Make)> Variants(byte[] original)
     };
     return
     [
-        ("as emitted", n => { var copy = (byte[])original.Clone(); StampUnique(copy, n); return copy; }),
-        ($"method bodies zeroed ({bodies.Sum(b => (long)b.Length):N0} bytes)", Zero("il", bodies)),
-        ($"string heaps zeroed ({strings.Sum(s => (long)s.Length):N0} bytes)", Zero("strings", strings)),
-        ($"blob heap zeroed ({blob.Sum(s => (long)s.Length):N0} bytes)", Zero("blob", blob)),
-        ($"all metadata zeroed ({whole.Sum(s => (long)s.Item2):N0} bytes)", Zero("metadata", whole)),
-        ("first half only", n => { var copy = original[..(original.Length / 2)]; StampUnique(copy, n); return copy; }),
-        ("random bytes, same length", n => { var copy = new byte[original.Length]; new Random(n).NextBytes(copy); return copy; }),
+        ("as emitted", n => { var copy = (byte[])original.Clone(); StampUnique(copy, n); return copy; }, 0),
+        ($"method bodies zeroed ({bodies.Sum(b => (long)b.Length):N0} bytes)", Zero(bodies), bodies.Sum(b => (long)b.Length)),
+        ($"string heaps zeroed ({strings.Sum(s => (long)s.Length):N0} bytes)", Zero(strings), strings.Sum(s => (long)s.Length)),
+        ($"blob heap zeroed ({blob.Sum(s => (long)s.Length):N0} bytes)", Zero(blob), blob.Sum(s => (long)s.Length)),
+        ($"all metadata zeroed ({whole.Sum(s => (long)s.Item2):N0} bytes)", Zero(whole), whole.Sum(s => (long)s.Item2)),
+        ("first half only", n => { var copy = original[..(original.Length / 2)]; StampUnique(copy, n); return copy; }, 0),
+        ("random bytes, same length", n => { var copy = new byte[original.Length]; new Random(n).NextBytes(copy); return copy; }, original.Length),
     ];
 }
 
