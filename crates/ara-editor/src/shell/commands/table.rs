@@ -602,7 +602,7 @@ fn build() -> Vec<Spec> {
             s.status_note = Some("All changes saved".into());
             Ok(())
         }),
-        later("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Documents save in place through the host journal; Save As needs a typed document-copy command."),
+        cmd("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Save the open scene under a new name inside the content folder, and open the copy.", |_, _, _| Ok(())).when(|_| Avail::Blocked("Save As is in the new editor; open it without --legacy-ui.".into())),
         cmd("file.save_all", "Save All", "save", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());

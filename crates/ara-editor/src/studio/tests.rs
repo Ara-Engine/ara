@@ -815,13 +815,13 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
     );
     assert_eq!(order(&rt).last(), Some(&first), "in front");
     // Commands not built yet say why instead of failing.
-    run(&mut rt, "file.save_as", Target::None);
+    run(&mut rt, "file.revert", Target::None);
     assert!(
         rt.state()
             .local
             .note
             .as_ref()
-            .is_some_and(|(n, _)| n.starts_with("Save As"))
+            .is_some_and(|(n, _)| n.starts_with("Revert"))
     );
 }
 
@@ -5217,4 +5217,32 @@ fn dragging_a_component_header_reorders_the_sections_without_folding() {
     // A plain click still folds.
     press(&mut rt, "component/Transform");
     assert!(rt.state().local.folded.contains("Transform"));
+}
+
+#[test]
+fn save_as_copies_the_open_scene_and_opens_the_copy() {
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    let content = root.join(ara_doc::AUTHORING_ROOT);
+    let original = rt.state().editor.state.doc.clone();
+    let outside = rt.touch(|s| super::asset_ops::save_as(s, &root.join("elsewhere")));
+    assert!(
+        outside.is_err_and(|e| e.to_string().contains("inside")),
+        "a place outside the content folder is refused"
+    );
+    rt.touch(|s| super::asset_ops::save_as(s, &content.join("levels").join("copy")))
+        .expect("queued");
+    let file = content.join("levels/copy.scene");
+    finish_file_jobs(&mut rt, &file);
+    settle(&mut rt);
+    let state = &rt.state().editor;
+    assert_ne!(state.state.doc, original, "the copy is open");
+    assert_eq!(
+        state.host.store().workspace().path_of(&state.state.doc),
+        Some(format!("{}/levels/copy.scene", ara_doc::AUTHORING_ROOT).as_str())
+    );
+    assert!(
+        rt.state().resolved.contains_key("e_box"),
+        "the copy keeps the scene's entities"
+    );
 }

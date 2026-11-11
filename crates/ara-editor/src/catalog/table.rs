@@ -2953,7 +2953,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         title: "Save As…",
         icon: "file",
         keys: "Ctrl+Shift+S",
-        summary: "Documents save in place through the host journal; Save As needs a typed document-copy command.",
+        summary: "Save the open scene under a new name inside the content folder, and open the copy.",
     },
     Command {
         id: "file.revert",
@@ -3282,7 +3282,6 @@ pub(crate) const COMMANDS: &[Command] = &[
 /// Commands the menus name whose feature is not built yet; each one's summary says what
 /// is missing, so menus show it dimmed with that reason rather than dropping it.
 pub(crate) const UNBUILT: &[&str] = &[
-    "file.save_as",
     "file.revert",
     "file.export_selection",
     "file.close_project",
