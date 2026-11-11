@@ -64,15 +64,11 @@ pub(crate) struct Bridge {
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
-    /// The simulation tick of the last frame the meter saw: its adaptation's clock.
-    meter_tick: Option<u64>,
     max_reflection_roughness: Option<f32>,
     /// A sky image lights the scene as a constant of its mean radiance (`Options`).
     constant_sky: bool,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
-    /// Frames until the shared route next reads a frame back for the meter.
-    meter_wait: u32,
     gpu_ms: Option<f64>,
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
@@ -160,11 +156,9 @@ impl Bridge {
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
-            meter_tick: None,
             max_reflection_roughness: options.max_reflection_roughness,
             constant_sky: options.constant_sky,
             cpu_copy: options.cpu_copy_handoff,
-            meter_wait: 0,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
@@ -220,14 +214,7 @@ impl Bridge {
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
-        let (stops, metered) = lighting::exposure_stops(view, &self.metering);
-        // Seconds of simulation since the meter last saw a frame (Ara's 60 Hz ticks).
-        let meter_seconds = |last: &mut Option<u64>| {
-            let tick = view.frame.tick;
-            let seconds = last.map_or(0., |l| tick.saturating_sub(l) as f32 / 60.);
-            *last = Some(tick);
-            seconds
-        };
+        let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         self.engine.set_settings(lighting::settings(
             view,
             stops,
@@ -312,28 +299,23 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture()?;
-            if let Some(meter) = metered {
-                let seconds = meter_seconds(&mut self.meter_tick);
-                self.metering
-                    .observe(view.look, meter, stops, &read.rgba8, seconds);
+            // Every frame is read back here, but metered only when the meter asks.
+            if let Some(meter) = metered
+                && self.metering.due()
+            {
+                self.metering.observe(view.look, meter, stops, &read.rgba8);
             }
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
 
-        // The shared route reads a frame back only for the meter: every frame while
-        // the meter is moving, then every 16th.
-        if let Some(meter) = metered.filter(|_| target.shared.is_some()) {
-            if self.meter_wait == 0 {
-                let read = self.engine.capture()?;
-                let seconds = meter_seconds(&mut self.meter_tick);
-                let moved = self
-                    .metering
-                    .observe(view.look, meter, stops, &read.rgba8, seconds);
-                self.meter_wait = if moved { 0 } else { 15 };
-            } else {
-                self.meter_wait -= 1;
-            }
+        // The shared route reads a frame back only for the meter, when it asks: every
+        // frame while it snaps, then every 16th (`Metering::due`).
+        if let Some(meter) = metered.filter(|_| target.shared.is_some())
+            && self.metering.due()
+        {
+            let read = self.engine.capture()?;
+            self.metering.observe(view.look, meter, stops, &read.rgba8);
         }
         Ok(ExternalFrame {
             image,
