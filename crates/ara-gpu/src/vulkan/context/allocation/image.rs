@@ -25,10 +25,22 @@ pub(crate) fn pooled_image(
     let mut list = vk::ImageFormatListCreateInfo::default().view_formats(&formats);
     // SAFETY: Memory/view match queried image requirements. Gpu owns all three.
     unsafe {
+        // A square layered image may be viewed as cubes (`ViewDimension::CubeArray`).
+        let cube = shape.dimension != crate::texture::TextureDimension::D3
+            && shape.samples == crate::texture::SampleCount::One
+            && width == height
+            && shape.layers >= 6;
+        let mut flags = if cube {
+            vk::ImageCreateFlags::CUBE_COMPATIBLE
+        } else {
+            vk::ImageCreateFlags::empty()
+        };
         let mut info = vk::ImageCreateInfo::default();
         if alias.is_some() {
-            info = info.flags(storage_alias_flags()).push(&mut list);
+            flags |= storage_alias_flags();
+            info = info.push(&mut list);
         }
+        info = info.flags(flags);
         let handle = device.create_image(
             &info
                 .image_type(if shape.dimension == crate::texture::TextureDimension::D3 {
