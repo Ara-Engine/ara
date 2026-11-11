@@ -33,8 +33,12 @@ pub(super) struct RenderlabScene {
     content: Option<(Revision, Content)>,
     /// The completed image, a copy the compositor can sample while the next frame renders.
     published: Option<PresentationImage>,
-    /// The Scene's object ids, rasterised from the frame beside the image.
+    /// The Scene's object ids, rasterised from the frame beside the image: what clicks
+    /// read, and what the overlays sample while the engine delivers none.
     ids: Ids,
+    /// The engine's own packed ids (`ExternalFrame::id`), when it delivers them: a copy the
+    /// compositor can sample while the next frame renders.
+    published_ids: Option<PresentationImage>,
 }
 
 impl RenderlabScene {
@@ -51,6 +55,7 @@ impl RenderlabScene {
             content: None,
             published: None,
             ids: Ids::default(),
+            published_ids: None,
         })
     }
 
@@ -89,13 +94,19 @@ impl RenderlabScene {
             },
         )?;
         PresentationImage::publish(&mut self.published, gpu, rendered.image, size)?;
+        if let Some(id) = rendered.id {
+            PresentationImage::publish(&mut self.published_ids, gpu, id, size)?;
+        }
         self.ids.update(gpu, frame, size)?;
         Ok(())
     }
 
     /// The packed id image for the same frame as [`Self::image`] (`IdSource::Packed`).
     pub(super) fn id_image(&self) -> Option<Image> {
-        self.ids.image()
+        self.published_ids
+            .as_ref()
+            .map(PresentationImage::output)
+            .or_else(|| self.ids.image())
     }
 
     /// The ids' channels and texels, for clicks, hover and the channel map.
@@ -124,6 +135,9 @@ impl RenderlabScene {
     /// Releases what the engine and the published image hold on `gpu`.
     pub(super) fn release(mut self, gpu: &mut GpuDevice) -> Result<()> {
         if let Some(image) = self.published.take() {
+            image.destroy(gpu)?;
+        }
+        if let Some(image) = self.published_ids.take() {
             image.destroy(gpu)?;
         }
         self.ids.release(gpu)?;

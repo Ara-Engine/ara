@@ -224,6 +224,7 @@ impl Bridge {
             .unwrap_or((None, [("", 0.); EXTERNAL_PASSES]));
         Ok(ExternalFrame {
             image,
+            id: None,
             gpu_ms,
             passes,
             // The frame was drawn on the presenter's device: nothing crossed.
