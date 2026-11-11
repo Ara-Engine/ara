@@ -211,6 +211,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
+    // Native layers placed on the last pass: one shown again presents at once (on Wayland
+    // a hidden layer loses its picture).
+    let mut placed: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    // The last native-layer failure reported, so a recurring one is said once.
+    let mut layer_failure: Option<String> = None;
     let mut scene_dirty = true;
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
@@ -243,6 +248,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 Some(&mut game),
             )? {
                 break;
+            }
+            // The authority keeps serving (protocol, imports, agents, Play) while the
+            // Scene's images are still being read; only GPU work waits.
+            let synced = rt.touch(|s| {
+                server.pump(&mut s.editor);
+                s.editor.tick();
+                s.editor.sync()
+            });
+            if synced {
+                rt.update(|_| {});
+                scene_dirty = true;
             }
             std::thread::sleep(Duration::from_millis(1));
             continue;
@@ -380,11 +396,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .find(|(n, _)| &**n == SCENE_LAYER)
             .map(|(_, r)| r);
         surface.place_native_layer(SCENE_LAYER, rect);
+        composite |= shown_again(&mut placed, SCENE_LAYER, rect.is_some());
         // A hidden (minimized) window shows no frames: render none. A covered one skips
         // presents on its own (the 1 ms present wait).
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         let shown = surface.is_visible();
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
         let shown = true;
         if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
             let actual = [rect.width() as u32, rect.height() as u32];
@@ -432,8 +449,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
-            if composite && renderer.presentation_ready() {
-                let layer = present::target(surface.native_layer(SCENE_LAYER)?)?;
+            let layer = (composite && renderer.presentation_ready())
+                .then(|| layer_target(&surface, SCENE_LAYER, &mut rt, &mut layer_failure))
+                .flatten();
+            if let Some(layer) = layer {
                 let scale = rt.scale();
                 let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
@@ -657,9 +676,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .find(|(n, _)| &**n == game::GAME_LAYER)
             .map(|(_, r)| r);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
-        #[cfg(any(windows, target_os = "macos"))]
+        if shown_again(&mut placed, game::GAME_LAYER, game_rect.is_some()) {
+            game.redraw();
+        }
+        #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         let visible = surface.is_visible();
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
         if let Some(r) = game_rect.filter(|r| r.width() >= 64.0 && r.height() >= 64.0) {
@@ -686,10 +708,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         let game_layer =
             match game_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
-                Some(r) => Some((
-                    present::target(surface.native_layer(game::GAME_LAYER)?)?,
-                    [r.width() as u32, r.height() as u32],
-                )),
+                Some(r) => layer_target(&surface, game::GAME_LAYER, &mut rt, &mut layer_failure)
+                    .map(|layer| (layer, [r.width() as u32, r.height() as u32])),
                 None => None,
             };
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
@@ -733,6 +753,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 .find(|(n, _)| &**n == name)
                 .map(|(_, r)| r);
             surface.place_native_layer(name, rect);
+            if shown_again(&mut placed, name, rect.is_some()) {
+                graph_extent = ("", [0, 0]);
+            }
             let Some(r) = rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) else {
                 continue;
             };
@@ -741,15 +764,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
+                && let Some(layer) = layer_target(&surface, name, &mut rt, &mut layer_failure)
             {
-                let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.
                 let drawn = rt.touch(|s| unsafe {
                     graph::draw(s, &mut graph_layer, &renderer, layer, extent, scale)
                 });
                 match drawn {
-                    Ok(()) => graph_extent = (name, extent),
+                    Ok(true) => graph_extent = (name, extent),
+                    Ok(false) => {}
                     Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
                 }
             }
@@ -874,6 +898,48 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         .destroy(&mut renderer)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
+}
+
+/// Records whether native layer `name` is placed this pass; true when it was not on the
+/// last one (shown again: present it now, since a Wayland layer loses its picture while
+/// hidden).
+fn shown_again(
+    placed: &mut std::collections::BTreeSet<&'static str>,
+    name: &'static str,
+    now: bool,
+) -> bool {
+    match now {
+        true => placed.insert(name),
+        false => {
+            placed.remove(name);
+            false
+        }
+    }
+}
+
+/// Native layer `name` to present into, or `None` when the platform can't give it now (a
+/// full compositor socket, say): that pass skips it, and the failure is reported once,
+/// never ending the editor.
+fn layer_target(
+    surface: &Surface,
+    name: &str,
+    rt: &mut Runtime<Studio>,
+    reported: &mut Option<String>,
+) -> Option<present::Target> {
+    match surface.native_layer(name).and_then(present::target) {
+        Ok(layer) => {
+            *reported = None;
+            Some(layer)
+        }
+        Err(error) => {
+            let said = format!("{error:#}");
+            if reported.as_deref() != Some(said.as_str()) {
+                rt.touch(|s| s.editor.report_failure(&*anyhow::anyhow!("{name}: {said}")));
+                *reported = Some(said);
+            }
+            None
+        }
+    }
 }
 
 /// Vulkan instance extensions a presentation surface needs (none on Metal).
@@ -1103,7 +1169,7 @@ fn pump(
                 rt.preedit(&text, at);
             }
             Event::SettingChanged => rt.set_reduced_motion(reduced_motion()),
-            #[cfg(any(windows, target_os = "macos"))]
+            #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
             Event::VisibilityChanged => rt.set_visible(surface.is_visible()),
             Event::Invoke(hit) => match surface.take_accessibility_action(hit) {
                 Some(action) => {

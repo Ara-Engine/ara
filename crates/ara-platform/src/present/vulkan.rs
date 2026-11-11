@@ -57,6 +57,9 @@ pub struct Present {
     native_size: Option<[u32; 2]>,
     pending_size: Option<[u32; 2]>,
     wait_ns: u64,
+    /// Whether the last display reached the presentation engine (a skipped or
+    /// recreating one did not).
+    presented: bool,
 }
 
 impl Present {
@@ -265,6 +268,7 @@ impl Present {
                 native_size: None,
                 pending_size: None,
                 wait_ns: PRESENT_WAIT_NS,
+                presented: false,
             })
         }
     }
@@ -670,6 +674,12 @@ impl Present {
         // SAFETY: Same completed CopySource image and native owner contract.
         unsafe { self.display_encoded(gpu, source, size, OutputMode::Sdr) }
     }
+    /// Whether the last [`Self::display`] reached the presentation engine; false when it
+    /// skipped (a stalled engine, a pending resize, an out-of-date swapchain), so the
+    /// caller presents again rather than counting the frame as shown.
+    pub fn presented(&self) -> bool {
+        self.presented
+    }
     /// Active display transfer and paper-white policy for the output pass.
     pub fn output_settings(&self) -> OutputSettings {
         self.output
@@ -691,6 +701,7 @@ impl Present {
         encoding: OutputMode,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Platform.display");
+        self.presented = false;
         ensure!(
             encoding == self.output.mode,
             "Presentation/output encoding mismatch"
@@ -746,6 +757,7 @@ impl Present {
             )?;
         }
         let mut result = self.present(gpu, index);
+        self.presented = result.is_ok();
         if self.native_size.is_some() && result.as_ref().is_err_and(is_out_of_date) {
             self.pending_size = self.native_size;
             result = Ok(());

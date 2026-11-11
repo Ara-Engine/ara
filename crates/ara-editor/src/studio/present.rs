@@ -111,6 +111,20 @@ pub(super) unsafe fn create(
     }
 }
 
+/// Whether `present`'s last display reached the screen (Vulkan skips one while the
+/// engine stalls or the swapchain is recreated; Metal's always lands).
+pub(super) fn landed(present: &ara_platform::Present) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = present;
+        true
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        present.presented()
+    }
+}
+
 /// Matches `present` to its layer's new size, `extent` physical pixels.
 pub(super) fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
     #[cfg(target_os = "macos")]

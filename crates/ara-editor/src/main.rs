@@ -169,6 +169,19 @@ fn main() -> ara_ui::Result<()> {
             None
         }
     };
+    // On Linux the studio needs a Wayland session (its native layers are Wayland
+    // subsurfaces); without one (X11, no compositor) the previous window, which runs on
+    // X11, opens instead.
+    if cfg!(target_os = "linux")
+        && !legacy
+        && !options.offscreen()
+        && std::env::var_os("WAYLAND_DISPLAY").is_none_or(|v| v.is_empty())
+    {
+        eprintln!(
+            "ara-editor: no Wayland session (WAYLAND_DISPLAY is unset), so the previous editor window opens; the new editor needs Wayland on Linux"
+        );
+        legacy = true;
+    }
     if legacy || options.offscreen() || options.frames.is_some() {
         return ara_editor::run(options);
     }

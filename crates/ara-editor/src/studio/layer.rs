@@ -74,7 +74,8 @@ impl Layer {
         Ok(true)
     }
 
-    /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels.
+    /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels; whether
+    /// it reached the screen (else draw it again on a later pass).
     /// # Safety
     /// `layer` is the live native layer this presents into (`present::Target`).
     pub unsafe fn draw(
@@ -85,7 +86,7 @@ impl Layer {
         scale: f32,
         list: &DisplayList,
         fonts: &[FontAsset],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.ui.set_dpi(scale)?;
         let size =
             [extent[0] as f32 / scale, extent[1] as f32 / scale].map(|v| v.round().max(1.0) as u32);
@@ -117,7 +118,7 @@ impl Layer {
             // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
             unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
         })?;
-        Ok(())
+        Ok(super::present::landed(present))
     }
 
     /// Waits for and releases the presentation; call before the renderer drops.
