@@ -20,6 +20,8 @@ pub(super) struct Compositor {
     ui: NativeUi,
     paint: UiRenderer,
     outlines: Outlines,
+    /// How the overlays read object ids (`ARA_SCENE_IDS`).
+    ids: overlay::IdMode,
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
@@ -74,6 +76,7 @@ impl Compositor {
             ui,
             paint,
             outlines: Outlines::default(),
+            ids: overlay::IdMode::from_env(),
             sheet: sheet(light)?,
             light,
             present: None,
@@ -155,7 +158,7 @@ impl Compositor {
         scene
             .attach(&mut self.ui, renderer, state.quality)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        self.outlines.in_scene = scene.draws_outlines();
+        self.outlines.in_scene = self.ids.outlines_in_scene(scene.draws_outlines());
         let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
         let rect = Box2 {
             x: 0.0,
@@ -183,7 +186,7 @@ impl Compositor {
             .upload(&mut self.paint, &mut self.ui)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         self.ui.set_dpi(scale)?;
-        self.ui.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+        self.ui.overlays(rect, self.ids.source(), overlays);
         let list = DisplayList {
             commands: vec![Draw::Image {
                 node: 1,

@@ -60,6 +60,10 @@ Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICE
 Raster IDs drive picking and hover through `world/channels.rs` (channel → entity; terrain is
 one object). A raster Scene draws selection outlines into its frames (`Outlines::in_scene`);
 overlays draw with the shown frame's camera and drag pose (`SceneView::shown_frame`).
+The overlays read ids through `gpu::IdSource` (`overlay::IdMode`, debug switch
+`ARA_SCENE_IDS`: unset = today; `direct` = ara-render ids with shader outlines, the control;
+`repacked` = the same ids repacked to Renderlab's packed RGBA8 form, Metal only): the two
+modes' Scene captures must match pixel for pixel.
 
 Panel authoring: asset_tools owns isolated import jobs, cached off-thread thumbnails
 (models, material spheres, VFX) and material node previews (`node_preview.rs`). authoring

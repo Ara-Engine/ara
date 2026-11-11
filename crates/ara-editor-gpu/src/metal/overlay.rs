@@ -1,12 +1,54 @@
 //! Scene overlays (grid, gizmo lines and quads, icons, hover, outline) as UI instances,
 //! with the same encoding as the Vulkan adapter (shader modes 2 and 5 to 8), clipped to
 //! the viewport rect.
-use super::{Draw, NativeUi};
-use crate::Overlay;
+use super::{Draw, NativeUi, Repack, Target};
+use crate::{IdSource, Overlay};
 use anyhow::{Context, Result};
+use ara_gpu::{Device, Resource, vk};
 use ara_ui_render::gpu::Instance;
 
 impl NativeUi {
+    /// The id image the overlays read: its slot, and whether it is packed. A repacked
+    /// source records this frame's repack pass and (re)creates its target.
+    fn id_image(&mut self) -> Result<Option<(u32, bool)>> {
+        Ok(match self.ids {
+            None => None,
+            Some(IdSource::Direct(id)) => self.slot(id).map(|slot| (slot, false)),
+            Some(IdSource::Packed(id)) => self.slot(id).map(|slot| (slot, true)),
+            Some(IdSource::Repacked(id)) => {
+                let Some(source) = self.external.get(&id) else {
+                    return Ok(None);
+                };
+                let (source, size) = (source.slot.index, source.size);
+                if self.packed.as_ref().is_none_or(|p| p.size != size) {
+                    let image = self.device.create_image(
+                        size[0],
+                        size[1],
+                        vk::Format::R8G8B8A8_UNORM,
+                        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+                    )?;
+                    let slot = self.device.sampled_image(image, false)?;
+                    if let Some(old) = self.packed.replace(Target { image, size, slot }) {
+                        Device::retire(&mut self.device, Resource::Image(old.image))?;
+                    }
+                }
+                let first = self.instances.len() as u32;
+                self.instances.push(Instance {
+                    rect: [0., 0., size[0] as f32, size[1] as f32],
+                    uv: [0., 0., 1., 1.],
+                    color: [1.; 4],
+                    params: [0.; 4],
+                });
+                self.repack = Some(Repack {
+                    first,
+                    source,
+                    size,
+                });
+                self.packed.as_ref().map(|p| (p.slot.index, true))
+            }
+        })
+    }
+
     pub(super) fn append_overlays(&mut self) -> Result<()> {
         let rect = self.overlay_rect;
         if rect.w <= 0. || rect.h <= 0. {
@@ -18,12 +60,16 @@ impl NativeUi {
             (rect.w * self.dpi) as u32,
             (rect.h * self.dpi) as u32,
         ];
-        // Outline and hover flags: bit 0 hover, the rest the group table's slot + 1.
+        // Outline and hover flags: bit 0 hover, bit 1 packed ids, the rest the group
+        // table's slot + 1.
         let groups = self
             .outline_groups
             .and_then(|id| self.slot(id))
-            .map_or(0., |slot| (slot + 1) as f32 * 2.);
-        let ids = self.outline_texture.and_then(|id| self.slot(id));
+            .map_or(0., |slot| (slot + 1) as f32 * 4.);
+        let id_image = self.id_image()?;
+        let ids = id_image.map(|(slot, _)| slot);
+        let is_packed = id_image.is_some_and(|(_, packed)| packed);
+        let packed = if is_packed { 2. } else { 0. };
         let blank = self.slot(0).context("blank UI texture")?;
         let start = self.draws.len();
         for overlay in &self.overlays {
@@ -44,11 +90,7 @@ impl NativeUi {
                     color,
                     axes,
                 } => {
-                    let texture = self
-                        .outline_texture
-                        .and_then(|id| self.external.get(&id))
-                        .map(|e| e.slot.index)
-                        .context("grid ID texture missing")?;
+                    let texture = ids.context("grid ID texture missing")?;
                     self.draws.push(draw(texture, 7, first));
                     self.instances.push(Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],
@@ -61,7 +103,7 @@ impl NativeUi {
                         rect: axes[0],
                         uv: axes[1],
                         color: [0.; 4],
-                        params: [0.; 4],
+                        params: [f32::from(is_packed), 0., 0., 0.],
                     });
                     continue;
                 }
@@ -120,7 +162,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [uv[0], uv[1], 0., groups + 1.],
+                        params: [uv[0], uv[1], 0., groups + packed + 1.],
                     };
                     (hover, 5, ids.context("hover texture missing")?)
                 }
@@ -129,7 +171,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [0., 0., *index as f32, groups],
+                        params: [0., 0., *index as f32, groups + packed],
                     };
                     (outline, 5, ids.context("outline texture missing")?)
                 }

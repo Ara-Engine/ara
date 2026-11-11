@@ -9,13 +9,14 @@
 mod overlay;
 mod shared;
 mod submit;
-use crate::Overlay;
+use crate::{IdSource, Overlay};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::metal::MetalDevice;
 use ara_gpu::{Buffer, Device, HeapIndex, Image, NativeImage, Pipeline, Resource, cooked, vk};
 use ara_platform::{Present, Window};
 use ara_ui::paint::Box2;
 use ara_ui_render::gpu::{Batch, Clip, Instance, TextureUpload, UiGpu, backdrop_band};
+use objc2_metal::MTLTexture;
 pub use shared::PlaySurface;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
@@ -47,6 +48,16 @@ struct External {
     texture: NativeImage,
     image: Image,
     slot: HeapIndex,
+    /// The texture's pixel size (the id image's, for `IdSource::Repacked`).
+    size: [u32; 2],
+}
+/// This frame's debug id repack (`IdSource::Repacked`): the instance covering `size`
+/// pixels, drawn into `NativeUi::packed` from the R32F id texture in slot `source`.
+#[derive(Clone, Copy)]
+struct Repack {
+    first: u32,
+    source: u32,
+    size: [u32; 2],
 }
 /// A texture copy waiting for the frame's submission.
 struct Upload {
@@ -124,8 +135,13 @@ pub struct NativeUi {
     dpi: f32,
     overlays: Vec<Overlay>,
     overlay_rect: Box2,
-    outline_texture: Option<u32>,
+    /// Where the overlays read object ids (`NativeUi::overlays`).
+    ids: Option<IdSource>,
     outline_groups: Option<u32>,
+    /// The packed copy of the id image `IdSource::Repacked` reads, at its size.
+    packed: Option<Target>,
+    /// The repack this frame draws before the UI.
+    repack: Option<Repack>,
 }
 
 impl NativeUi {
@@ -174,8 +190,10 @@ impl NativeUi {
             dpi: 1.,
             overlays: Vec::new(),
             overlay_rect: Box2::default(),
-            outline_texture: None,
+            ids: None,
             outline_groups: None,
+            packed: None,
+            repack: None,
         };
         ui.upload_inner(TextureUpload {
             id: 0,
@@ -202,10 +220,11 @@ impl NativeUi {
         self.dpi = dpi;
         Ok(())
     }
-    /// Replace grid, gizmo and selection overlays when their view/model changes.
-    pub fn overlays(&mut self, rect: Box2, texture: u32, overlays: Vec<Overlay>) {
+    /// Replace grid, gizmo and selection overlays when their view/model changes. `ids`
+    /// is the image the grid, hover and outlines read object ids from.
+    pub fn overlays(&mut self, rect: Box2, ids: IdSource, overlays: Vec<Overlay>) {
         self.overlay_rect = rect;
-        self.outline_texture = Some(texture);
+        self.ids = Some(ids);
         self.overlays = overlays;
     }
     /// Outline and hover by group instead of by channel (see the Vulkan adapter).
@@ -237,12 +256,14 @@ impl NativeUi {
         let usage = vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC;
         let image = self.device.adopt_texture(texture.clone(), usage)?;
         let slot = self.device.sampled_image(image, false)?;
+        let size = [texture.width() as u32, texture.height() as u32];
         if let Some(old) = self.external.insert(
             id,
             External {
                 texture,
                 image,
                 slot,
+                size,
             },
         ) {
             Device::retire(&mut self.device, Resource::Image(old.image))?;
@@ -466,6 +487,7 @@ impl UiGpu for NativeUi {
         self.masks.clear();
         self.draws.clear();
         self.backdrops.clear();
+        self.repack = None;
         let rounded = size.map(|v| (v as f32 * self.dpi).round().max(1.) as u32);
         // A pin within a pixel or so of the rounded size is the window's real extent.
         let near = self.dpi.ceil() as u32 + 1;

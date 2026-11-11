@@ -75,6 +75,7 @@ impl NativeUi {
         let target = self.target.as_ref().context("UI target")?;
         let (target_image, size, target_slot) = (target.image, target.size, target.slot.index);
         let scratch = self.scratch.as_ref().map(|s| s.image);
+        let repack = self.repack.zip(self.packed.as_ref().map(|p| p.image));
         let mut rec = self.device.begin(Queue::Graphics);
         // This frame's texture uploads first, ahead of everything that samples them.
         for upload in &self.pending {
@@ -106,6 +107,44 @@ impl NativeUi {
         } else {
             Access::Undefined
         };
+        // The debug id repack (`IdSource::Repacked`): the R32F ids rewritten as packed
+        // RGBA8, one texel per id texel, for the overlays below to read.
+        if let Some((pass, image)) = repack {
+            rec.push(transition(image, Access::Undefined, Access::Color));
+            rec.push(Command::BeginRendering {
+                colors: vec![Attachment {
+                    image,
+                    clear: Some([0.; 4]),
+                }],
+                depth: None,
+                size: pass.size,
+            });
+            rec.push(Command::Pipeline(self.pipeline));
+            // One full-target draw (the same root words as `draw_in`, at dpi 1: the
+            // instance is in physical pixels, mode 12, no clip masks).
+            rec.push(Command::Viewport {
+                origin: [0, 0],
+                size: pass.size,
+            });
+            rec.push(Command::Constants(RootConstants {
+                words: [
+                    instances.slot.index,
+                    masks.slot.index,
+                    pass.first,
+                    pass.source | 12 << 16,
+                    0,
+                    0,
+                    pass.size[0] | pass.size[1] << 16,
+                    1f32.to_bits(),
+                ],
+            }));
+            rec.push(Command::DrawProcedural {
+                vertices: 6,
+                instances: 1,
+            });
+            rec.push(Command::EndRendering);
+            rec.push(transition(image, Access::Color, Access::ShaderRead));
+        }
         rec.push(transition(target_image, before, Access::Color));
         rec.push(Command::BeginRendering {
             colors: vec![Attachment {
@@ -123,7 +162,8 @@ impl NativeUi {
                        count: u32,
                        texture: u32,
                        mode: u32,
-                       masks_at: [u32; 2]| {
+                       masks_at: [u32; 2],
+                       dpi: f32| {
             let [x, y, width, height] = clip;
             // Clips are clamped to the target, so the viewport stays inside it.
             let width = width.min(size[0].saturating_sub(x));
@@ -144,7 +184,7 @@ impl NativeUi {
                     masks_at[0] | masks_at[1] << 24,
                     x | y << 16,
                     width | height << 16,
-                    self.dpi.to_bits(),
+                    dpi.to_bits(),
                 ],
             }));
             rec.push(Command::DrawProcedural {
@@ -180,6 +220,7 @@ impl NativeUi {
                     target_slot,
                     draw.mode,
                     [0, 0],
+                    self.dpi,
                 );
                 rec.push(Command::EndRendering);
                 rec.push(transition(scratch, Access::Color, Access::ShaderRead));
@@ -202,6 +243,7 @@ impl NativeUi {
                 draw.texture,
                 draw.mode,
                 [draw.mask_offset, draw.mask_count],
+                self.dpi,
             );
         }
         rec.push(Command::EndRendering);
