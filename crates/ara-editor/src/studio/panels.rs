@@ -209,7 +209,7 @@ fn assets(s: &Studio) -> El<Studio> {
         .get("assets")
         .cloned()
         .unwrap_or_default();
-    let mut crumbs = row().gap(2.0).align(Align::Center).min_w(0.0).child(crumb(
+    let mut crumbs = row().gap(2.0).align(Align::Center).min_w(44.0).child(crumb(
         l,
         "Project",
         String::new(),
@@ -252,7 +252,9 @@ fn assets(s: &Studio) -> El<Studio> {
         },
     )
     .h(22.0)
-    .w(200.0);
+    .w(200.0)
+    // The breadcrumb gives way first: the search box keeps a usable width.
+    .min_w(96.0);
     let view = &s.local.assets_view;
     let nav = |glyph, label: &str, key: &str, on: bool, ahead: bool| {
         enabled(
@@ -1380,6 +1382,7 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
     row()
         .h(24.0)
         .pad_x(6.0)
+        .min_w(0.0)
         .align(Align::Center)
         .radius(l.radius.xs)
         .color(if current {
@@ -1394,6 +1397,8 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
         .child(
             text(label)
                 .text_size(12.0)
+                .wrap(1)
+                .min_w(0.0)
                 .weight(if current { 600 } else { 500 }),
         )
 }
