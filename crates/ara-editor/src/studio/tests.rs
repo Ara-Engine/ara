@@ -21,6 +21,15 @@ fn open() -> Runtime<Studio> {
 
 /// [`open`] in a window of `size` (logical px at scale 1).
 fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
+    let studio = open_studio(size);
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
+    rt.frame(Duration::ZERO);
+    rt
+}
+
+/// The studio [`open_sized`] shows: a project of four entities, one selected.
+fn open_studio(size: (u32, u32)) -> Studio {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
@@ -62,11 +71,7 @@ fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
             json!({"tool": "translate", "snapping": false, "local": false}),
         )
         .unwrap();
-    let studio = Studio::new(editor, (size.0 as f32, size.1 as f32));
-    let theme = studio.look.theme.clone();
-    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
-    rt.frame(Duration::ZERO);
-    rt
+    Studio::new(editor, (size.0 as f32, size.1 as f32))
 }
 
 /// A few frames, applying focus requests as the host does.
@@ -7614,4 +7619,48 @@ fn exit_asks_only_when_work_could_be_lost_and_a_tool_shutdown_never_asks() {
     press(&mut rt, "quit/discard");
     assert!(rt.state().local.quit && rt.state().local.scrub.is_none());
     assert_eq!(position(&rt, "e_box")[0].as_f64(), Some(0.0));
+}
+
+/// The shared placeholder for what the renderer does not provide yet shows its one line, in a
+/// tile that fills the space it is given. Also writes `target/studio-captures/pass3/unavailable.png`.
+#[test]
+fn the_unavailable_tile_says_what_is_missing() {
+    let studio = open_studio((320, 320));
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(
+        studio,
+        |s: &Studio| {
+            stillkit::el::col()
+                .size(320.0)
+                .fill(s.look.c.card.0)
+                .child(super::unavailable::tile(
+                    &s.look,
+                    "unavailable",
+                    "Material previews are not available yet.",
+                ))
+        },
+        theme,
+        (320, 320),
+        1.0,
+    )
+    .unwrap();
+    settle(&mut rt);
+    let tile = rt.find("unavailable").expect("the tile shows");
+    assert!(
+        tile.width() > 300.0 && tile.height() > 300.0,
+        "it fills its parent"
+    );
+    assert!(
+        rt.tree()
+            .iter()
+            .any(|n| n.text.as_deref() == Some("Material previews are not available yet.")),
+        "and says what is missing"
+    );
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures/pass3");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(
+        out.join("unavailable.png"),
+        ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+    )
+    .unwrap();
 }

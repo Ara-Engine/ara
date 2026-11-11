@@ -60,6 +60,7 @@ mod style;
 #[cfg(test)]
 mod tests;
 mod trace;
+mod unavailable;
 mod vfx;
 pub(crate) mod viewport;
 mod zoom;
