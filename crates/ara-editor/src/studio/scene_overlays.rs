@@ -1136,6 +1136,16 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
             line()
                 .child(draw_mode_button(s, vertical))
                 .child(
+                    toggle(
+                        l,
+                        icons::SQUARE,
+                        "2D mode",
+                        flag(s, "viewport.mode2d", false),
+                    )
+                    .key("scene/2d")
+                    .on_press(|s: &mut Studio| commands::run(s, "view.mode_2d", &Target::None)),
+                )
+                .child(
                     labelled(l, icons::VIDEO, projection, vertical)
                         .key("scene/projection")
                         .tooltip("Switch projection")

@@ -426,6 +426,28 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         ),
         "game.maximize_on_play" => flip_setting(e, "game.maximizeOnPlay", false),
         "game.stats" => flip_setting(e, "game.stats", false),
+        // 2D mode: head-on and orthographic (Unity's), back to the default angle and
+        // perspective when it ends.
+        "view.mode_2d" => {
+            let on = e
+                .state
+                .settings
+                .get("viewport.mode2d")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let (yaw, pitch, projection) = match on {
+                false => (0.0, 0.0, "orthographic"),
+                true => (0.6, 0.4, "perspective"),
+            };
+            set(e, "viewport.mode2d", json!(!on)).and_then(|_| {
+                let c = e.state.camera;
+                act(
+                    e,
+                    "editor.camera",
+                    json!({"target": c.target.to_array(), "yaw": yaw, "pitch": pitch, "distance": c.distance, "projection": projection}),
+                )
+            })
+        }
         "view.camera.perspective" => act(
             e,
             "editor.camera",
