@@ -826,12 +826,41 @@ fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
     out
 }
 
-/// Opens `file` at `line`: a script in the IDE, anything else where the system opens it.
+/// The file a stack frame names, when it may be opened: a relative path (no root, drive,
+/// UNC prefix or `..`, in either separator) that, canonicalised, lies inside the project
+/// `root`. Frames come from scripts, so anything else is shown as plain text and never
+/// handed to an opener.
+pub(super) fn frame_target(root: &std::path::Path, file: &str) -> Option<std::path::PathBuf> {
+    use std::path::{Component, Path};
+    let portable = file.replace('\\', "/");
+    let relative = Path::new(&portable);
+    let plain = !portable.starts_with('/')
+        && !portable.contains(':')
+        && relative
+            .components()
+            .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    if !plain {
+        return None;
+    }
+    let root = std::fs::canonicalize(root).ok()?;
+    let target = std::fs::canonicalize(root.join(relative)).ok()?;
+    target.starts_with(&root).then_some(target)
+}
+
+/// Opens `file` at `line`: a script in the IDE, anything else where the system opens it;
+/// only inside the project (`frame_target`).
 fn open_source(s: &mut Studio, file: &str, line: Option<u32>, column: Option<u32>) {
+    let Some(target) = frame_target(s.editor.host.root(), file) else {
+        s.editor.report_failure(&*anyhow::anyhow!(
+            "{file} is not a file in this project, so it was not opened"
+        ));
+        return;
+    };
+    let path = target.to_string_lossy().into_owned();
     if file.ends_with(".cs") {
         let at = line.map(|l| (l, column.unwrap_or(1)));
-        super::asset_ops::open_in_ide(s, file, at);
-    } else if let Err(error) = crate::system::open_external(&s.editor.host.root().join(file)) {
+        super::asset_ops::open_in_ide(s, &path, at);
+    } else if let Err(error) = crate::system::open_external(&target) {
         s.editor.report_failure(&*anyhow::anyhow!("{error}"));
     }
 }
@@ -885,7 +914,24 @@ fn stack(s: &Studio, d: &ara_diag::Diagnostic) -> Vec<El<Studio>> {
                         .w(0.0)
                         .grow(1.0),
                 );
-            if let (true, Some(file)) = (frame.link, frame.file) {
+            let root = s.editor.host.root();
+            if let Some(file) = frame
+                .file
+                .filter(|f| !frame.link || frame_target(root, f).is_none())
+            {
+                // A file outside the project (or not a source) reads, never opens.
+                let shown = match frame.line {
+                    Some(n) => format!("{file}:{n}"),
+                    None => file.to_owned(),
+                };
+                line = line.child(
+                    text(shown)
+                        .key(format!("console/detail/source/{}", frame.index))
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(c.muted_foreground.0),
+                );
+            } else if let (true, Some(file)) = (frame.link, frame.file) {
                 let shown = match frame.line {
                     Some(n) => format!("{}:{n}", file.rsplit(['/', '\\']).next().unwrap_or(file)),
                     None => file.to_owned(),

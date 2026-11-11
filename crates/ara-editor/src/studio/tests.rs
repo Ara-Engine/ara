@@ -4714,6 +4714,12 @@ fn a_prefab_dragged_onto_a_hierarchy_row_lands_under_that_entity() {
 #[test]
 fn a_script_fault_shows_its_stack_with_each_frame_s_source() {
     let mut rt = open();
+    // Frames link only to files that exist in the project.
+    let scripts = rt.state().editor.host.root().join("content/scripts");
+    std::fs::create_dir_all(&scripts).unwrap();
+    for name in ["PlayerControl.cs", "Targeting.cs"] {
+        std::fs::write(scripts.join(name), "class C {}").unwrap();
+    }
     let frame = |method: &str, file: Option<&str>, line: Option<u32>| json!({"method": method, "file": file, "line": line, "column": line.map(|_| 9)});
     let exception = json!({
         "schema": 1, "type": "System.InvalidOperationException", "message": "No target",
@@ -4928,5 +4934,178 @@ fn click_cost() {
         if !more && !rt.animating() {
             break;
         }
+    }
+}
+
+#[test]
+fn stack_frames_outside_the_project_never_open() {
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    std::fs::create_dir_all(root.join("content/scripts")).unwrap();
+    std::fs::write(root.join("content/scripts/Mover.cs"), "class Mover {}").unwrap();
+    // Outside the project, beside it: reachable only through `..`.
+    std::fs::write(root.with_extension("bat"), "echo").unwrap();
+    let outside = format!(
+        "../{}",
+        root.with_extension("bat")
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+    );
+    let absolute = root
+        .join("content/scripts/Mover.cs")
+        .to_string_lossy()
+        .into_owned();
+    for file in [
+        absolute.as_str(),
+        "/etc/passwd",
+        "C:\\Windows\\x.bat",
+        "\\\\host\\share\\x.exe",
+        outside.as_str(),
+        "content/scripts/../../../x.bat",
+        "content\\scripts\\..\\..\\x.bat",
+        "content/scripts/Missing.cs",
+    ] {
+        assert_eq!(
+            super::panels::frame_target(&root, file),
+            None,
+            "{file} is refused"
+        );
+    }
+    assert!(
+        super::panels::frame_target(&root, "content/scripts/Mover.cs").is_some(),
+        "a project file opens"
+    );
+    // In the Console: the refused frames read as text, the project file is a link.
+    let frame = |i: u32, file: &str| json!({"method": format!("M{i}()"), "file": file, "line": 3, "column": 1});
+    let exception = json!({"schema": 1, "type": "System.Exception", "message": "boom", "frames": [
+        frame(0, "C:\\Windows\\x.bat"),
+        frame(1, "\\\\host\\share\\x.exe"),
+        frame(2, &outside),
+        frame(3, "content/scripts/Mover.cs"),
+    ], "inners": [], "truncated": false});
+    let diagnostic = ara_diag::Diagnostic::error(ara_diag::codes::UNRESOLVED_REF, "Mover threw")
+        .data(json!({"exception": exception}));
+    let entry = json!({"seq": 4, "at": 0, "origin": "script", "diagnostic": serde_json::to_value(&diagnostic).unwrap()});
+    let row = super::state::LogRow::from_entry(&entry).expect("a bus record reads");
+    rt.update(|s| {
+        s.logs = vec![row];
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.local.console_open = Some(4);
+    });
+    settle(&mut rt);
+    for i in 0..3 {
+        assert!(
+            rt.find(&format!("console/detail/frame/{i}")).is_none(),
+            "frame {i} is no link"
+        );
+        assert!(
+            rt.find(&format!("console/detail/source/{i}")).is_some(),
+            "frame {i} reads as text"
+        );
+    }
+    assert!(
+        rt.find("console/detail/frame/3").is_some(),
+        "the project file links"
+    );
+    let _ = std::fs::remove_file(root.with_extension("bat"));
+}
+
+#[test]
+fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/cycle.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                "Showcase",
+            )
+            .unwrap();
+        s.act("editor.workspace", json!({"resource": doc.clone()}));
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    // Every previewed node shows the picture of its own current key, once renders land.
+    let settle_previews = |rt: &mut Runtime<Studio>| {
+        let started = std::time::Instant::now();
+        loop {
+            rt.touch(|s| super::graph::sync(s, "material"));
+            rt.touch(super::graph::previews);
+            if let Some(error) = rt.state().graph.preview_error() {
+                panic!("the previews can't render here: {error}");
+            }
+            let slots = rt.state().graph.preview_slots();
+            if !slots.is_empty()
+                && slots
+                    .iter()
+                    .all(|(_, _, shown, own)| own.is_some() && shown == own)
+            {
+                return slots;
+            }
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(120),
+                "previews never settled: {slots:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    // By key: a text edit gives the nodes new ids, but an unchanged node keeps its key.
+    let by_key = |slots: Vec<(String, String, Option<u32>, Option<u32>)>| {
+        slots
+            .into_iter()
+            .map(|(_, key, shown, _)| (key, shown))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let mut before = by_key(settle_previews(&mut rt));
+    // The `scale` constant (6) feeds three previewed nodes; the four others (uv, normal,
+    // view, rim) never change. Its value is edited in place, as the canvas does, so node
+    // ids stay; enough edits to go round every slot several times.
+    let scale_node = {
+        let graph = rt.state().graph.shown_graph().expect("the material shows");
+        graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.payload["name"] == "scale")
+            .map(|(id, _)| id.clone())
+            .unwrap_or_else(|| panic!("the scale constant: {:?}", graph.nodes))
+    };
+    for scale in 7..19 {
+        rt.touch(|s| {
+            s.editor
+                .apply_to(
+                    &doc,
+                    vec![json!({"cmd": "editor.material.value.set", "args": {"node": scale_node, "value": [scale as f64]}})],
+                    "Scale",
+                )
+                .unwrap();
+        });
+        let now = by_key(settle_previews(&mut rt));
+        let unchanged: Vec<_> = now
+            .iter()
+            .filter(|(key, _)| before.contains_key(*key))
+            .collect();
+        assert_eq!(
+            unchanged.len(),
+            4,
+            "scale {scale}: {now:?} before {before:?}"
+        );
+        for (key, shown) in unchanged {
+            assert_eq!(
+                before[key], *shown,
+                "scale {scale}: {key} keeps its own picture"
+            );
+        }
+        before = now;
     }
 }
