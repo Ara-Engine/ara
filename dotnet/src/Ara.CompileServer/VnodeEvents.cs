@@ -1,0 +1,213 @@
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+
+namespace Ara.CompileServer;
+
+/// <summary>
+/// macOS only (the caller checks; every libc import is reached through here): one kqueue vnode watch per source file. <c>FileSystemWatcher</c> there rides on FSEvents, which
+/// delivers an in-place save about 11 ms late (median, measured); a vnode event arrives in ~0.1 ms. Only in-place
+/// writes (truncate and write, as most editors save) are reported here, and directory watches report entry changes so
+/// an atomic save (a temp file renamed over the source) is seen as fast. A file that is deleted or renamed away just
+/// drops its watch; whoever consumes the events re-arms the replacement through <see cref="Add"/>.
+/// </summary>
+internal sealed class VnodeEvents : IDisposable
+{
+    /// <summary>One descriptor per watched file; beyond this the directory watcher alone covers the rest.</summary>
+    const int DefaultMaxFiles = 1024;
+    const int RlimitNofile = 8;
+    const short EvfiltVnode = -4;
+    const ushort EvAdd = 0x1, EvClear = 0x20;
+    const uint NoteDelete = 0x1, NoteWrite = 0x2, NoteExtend = 0x4, NoteRename = 0x20, NoteRevoke = 0x40;
+    const int OEvtOnly = 0x8000, OCloexec = 0x1000000;
+
+    readonly Action<uint, string> _changed;
+    readonly Action<uint, string>? _directoryChanged;
+    readonly int _queue;
+    readonly ConcurrentDictionary<int, (uint Slot, string Path, bool Directory, long Token)> _byDescriptor = new();
+    readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
+    readonly Thread _thread;
+    readonly int _maxFiles;
+    /// <summary>Slots only directories may take: one directory watch covers every atomic save in its folder, a file watch one file's in-place saves.</summary>
+    readonly int _directoryReserve;
+    int _held;
+    long _tokens;
+    volatile bool _stopped;
+
+    /// <summary>
+    /// <paramref name="changed"/> receives (slot, path) on the watcher thread for each in-place write.
+    /// <paramref name="directoryChanged"/> receives (slot, directory) when entries of a watched directory were added,
+    /// removed or renamed (an atomic save replaces the file by renaming a temp file over it).
+    /// </summary>
+    internal VnodeEvents(Action<uint, string> changed, Action<uint, string>? directoryChanged = null, int maxFiles = DefaultMaxFiles)
+    {
+        _changed = changed;
+        _directoryChanged = directoryChanged;
+        // Never take more than a quarter of the process's descriptor limit: the server also needs descriptors
+        // for source reads, memory-mapped references, pipes and the other watchers.
+        _maxFiles = Math.Min(maxFiles, (int)Math.Min(DescriptorLimit() / 4, int.MaxValue));
+        _directoryReserve = Math.Min(Math.Max(2, _maxFiles / 8), _maxFiles / 2);
+        _queue = kqueue();
+        if (_queue < 0) throw new InvalidOperationException("kqueue is unavailable");
+        _thread = new Thread(Pump) { Name = "ara-vnode", IsBackground = true };
+        _thread.Start();
+    }
+
+    /// <summary>True when <paramref name="path"/> is watched, so its in-place writes arrive from here first.</summary>
+    internal bool Watching(string path) => _byPath.ContainsKey(path);
+
+    /// <summary>Starts watching a file. Failures (a missing file, no descriptors left) leave it to the directory watcher.</summary>
+    internal void Add(uint slot, string path) => Register(slot, path, directory: false);
+
+    /// <summary>Starts watching a directory's entries (adds, removes, renames); same failure behavior as <see cref="Add"/>.</summary>
+    internal void AddDirectory(uint slot, string path) => Register(slot, path, directory: true);
+
+    void Register(uint slot, string path, bool directory)
+    {
+        if (_stopped || _byPath.ContainsKey(path)) return;
+        // Reserve a slot first so concurrent adds cannot overshoot the budget; files may not take the directories' reserve.
+        if (Interlocked.Increment(ref _held) > (directory ? _maxFiles : _maxFiles - _directoryReserve))
+        {
+            Interlocked.Decrement(ref _held);
+            return;
+        }
+        var fd = open(path, OEvtOnly | OCloexec);
+        if (fd < 0 || !_byPath.TryAdd(path, fd))
+        {
+            if (fd >= 0) _ = close(fd);
+            Interlocked.Decrement(ref _held);
+            return;
+        }
+        // Both maps are complete before the kernel can deliver the first event for this descriptor, so a delete or
+        // rename that lands right after registration finds (and removes) both entries.
+        // The kevent carries this registration's token back with every event: a descriptor number is reused as soon as it is
+        // closed, and an event still queued for the previous owner of the number must not act on its successor.
+        var token = Interlocked.Increment(ref _tokens);
+        _byDescriptor[fd] = (slot, path, directory, token);
+        var flags = directory ? NoteWrite | NoteDelete | NoteRename | NoteRevoke : NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke;
+        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = flags, UserData = (nint)token };
+        if (_stopped || Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0) Remove(fd);
+    }
+
+    /// <summary>
+    /// Watches <paramref name="path"/> again from scratch: a file replaced by a rename is a new inode, and the old
+    /// descriptor (if its delete event has not been processed yet) must not keep the path looking watched.
+    /// </summary>
+    internal void Replace(uint slot, string path)
+    {
+        RemovePath(path);
+        Add(slot, path);
+    }
+
+    /// <summary>Stops watching exactly <paramref name="path"/>.</summary>
+    internal void RemovePath(string path)
+    {
+        if (_byPath.TryGetValue(path, out var fd)) Remove(fd);
+    }
+
+    /// <summary>
+    /// Stops watching everything below the folder <paramref name="folder"/>. kqueue reports a rename or delete per vnode, so
+    /// when a folder goes the descriptors of its files and subfolders stay registered under paths that no longer exist
+    /// (holding budget, and blocking a new folder created under the old name) unless they are removed here.
+    /// </summary>
+    internal void RemoveUnder(string folder)
+    {
+        var prefix = folder.EndsWith('/') ? folder : folder + "/";
+        foreach (var (path, fd) in _byPath)
+            if (path.StartsWith(prefix, StringComparison.Ordinal)) Remove(fd);
+    }
+
+    void Remove(int fd)
+    {
+        if (!_byDescriptor.TryRemove(fd, out var entry)) return;
+        _byPath.TryRemove(new KeyValuePair<string, int>(entry.Path, fd));
+        _ = close(fd); // closing the descriptor removes its kqueue registration
+        Interlocked.Decrement(ref _held);
+    }
+
+    void Pump()
+    {
+        var events = new KEvent[16];
+        while (!_stopped)
+        {
+            // A timeout bounds shutdown; an idle watcher wakes four times a second.
+            var timeout = new TimeSpec { Seconds = 0, Nanoseconds = 250_000_000 };
+            var count = Wait(_queue, IntPtr.Zero, 0, events, events.Length, ref timeout);
+            for (var i = 0; i < count; i++)
+            {
+                var fd = (int)events[i].Ident;
+                if (!_byDescriptor.TryGetValue(fd, out var entry) || entry.Token != events[i].UserData) continue;
+                if ((events[i].FFlags & (NoteDelete | NoteRename | NoteRevoke)) != 0)
+                {
+                    if (entry.Directory) RemoveUnder(entry.Path);
+                    Remove(fd);
+                }
+                else
+                {
+                    // A failing callback must not end the watcher thread (and with it every later fast save).
+                    try
+                    {
+                        if (!entry.Directory) _changed(entry.Slot, entry.Path);
+                        else _directoryChanged?.Invoke(entry.Slot, entry.Path);
+                    }
+                    catch (Exception) { /* the directory watcher still reports the save */ }
+                }
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _stopped = true;
+        _thread.Join(1000);
+        foreach (var fd in _byDescriptor.Keys.ToArray()) Remove(fd);
+        _ = close(_queue);
+    }
+
+    /// <summary>The soft limit on open descriptors; a conservative 256 when it cannot be read.</summary>
+    static ulong DescriptorLimit()
+    {
+        var limit = new RLimit();
+        return getrlimit(RlimitNofile, ref limit) == 0 && limit.Current > 0 ? limit.Current : 256;
+    }
+
+    /// <summary>How many files and folders are watched right now (open descriptors held by this class).</summary>
+    internal int WatchedCount => _byPath.Count;
+
+    /// <summary>How many of them are folders.</summary>
+    internal int DirectoryCount => _byDescriptor.Values.Count(entry => entry.Directory);
+
+    /// <summary>Descriptors this instance still owns; equals <see cref="WatchedCount"/> unless one leaked.</summary>
+    internal int DescriptorCount => _byDescriptor.Count;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RLimit
+    {
+        public ulong Current;
+        public ulong Maximum;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct KEvent
+    {
+        public nuint Ident;
+        public short Filter;
+        public ushort Flags;
+        public uint FFlags;
+        public nint Data;
+        public nint UserData;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct TimeSpec
+    {
+        public long Seconds;
+        public long Nanoseconds;
+    }
+
+    [DllImport("libc")] static extern int kqueue();
+    [DllImport("libc", EntryPoint = "kevent")] static extern int Register(int queue, ref KEvent change, int changeCount, IntPtr events, int eventCount, IntPtr timeout);
+    [DllImport("libc", EntryPoint = "kevent")] static extern int Wait(int queue, IntPtr changes, int changeCount, [Out] KEvent[] events, int eventCount, ref TimeSpec timeout);
+    [DllImport("libc", SetLastError = true)] static extern int open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
+    [DllImport("libc")] static extern int close(int descriptor);
+    [DllImport("libc")] static extern int getrlimit(int resource, ref RLimit limit);
+}
