@@ -477,6 +477,10 @@ pub struct Local {
     /// The selection's rendered world bounds, which the host publishes while the Rect
     /// tool is on (`studio::rect_tool`).
     pub rect_bounds: Option<[glam::Vec3; 2]>,
+    /// An Inspector component header being dragged to reorder, and where it would land.
+    pub component_drag: Option<(String, Option<super::inspector::Slot>)>,
+    /// A component drag just dropped: that release's click on its header is no fold.
+    pub component_dropped: bool,
     /// The Rect tool's drag.
     pub rect_drag: Option<super::rect_tool::Drag>,
     /// The Rect tool's part under the pointer.

@@ -5172,3 +5172,49 @@ fn align_with_view_puts_the_selection_at_the_camera_facing_its_way() {
         "faces where the view looks"
     );
 }
+
+#[test]
+fn dragging_a_component_header_reorders_the_sections_without_folding() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.inspector", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let order = |rt: &Runtime<Studio>| -> Vec<String> {
+        let mut shown = vec!["Transform".to_owned(), "MeshRenderer".to_owned()];
+        super::inspector::sort_components(rt.state(), &mut shown);
+        shown
+    };
+    assert_eq!(order(&rt), ["Transform", "MeshRenderer"]);
+    let mesh = rt
+        .find("component/MeshRenderer")
+        .expect("the section shows");
+    let top = rt.find("component/Transform").unwrap();
+    rt.pointer_move(mesh.center().x, mesh.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(mesh.center().x, mesh.center().y);
+    rt.frame(FRAME);
+    // The host publishes the headers' rects while a component drags.
+    track(&mut rt, &["component/Transform", "component/MeshRenderer"]);
+    for step in 1..=6 {
+        let y = mesh.center().y + (top.top - mesh.center().y) * step as f32 / 6.0;
+        rt.pointer_move(mesh.center().x, y);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().local.component_drag,
+        Some((
+            "MeshRenderer".into(),
+            Some(super::inspector::Slot::Before("Transform".into()))
+        )),
+        "the slot follows the pointer"
+    );
+    rt.pointer_up(mesh.center().x, top.top);
+    settle(&mut rt);
+    assert_eq!(order(&rt), ["MeshRenderer", "Transform"]);
+    assert!(
+        rt.state().local.folded.is_empty(),
+        "the drop folded nothing"
+    );
+    // A plain click still folds.
+    press(&mut rt, "component/Transform");
+    assert!(rt.state().local.folded.contains("Transform"));
+}
