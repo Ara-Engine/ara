@@ -10,6 +10,7 @@
 //! draws the parts of its rule's model. What that leaves out against `ara-landscape`:
 //! distance levels of detail, the virtual texture, and wind. Tiles and foliage follow
 //! tile residency, so streaming still decides what exists.
+use crate::rl::Engine;
 use crate::{gaps::Gaps, scene, texture};
 use anyhow::Result;
 use ara_runtime::extract::Draw;
@@ -22,7 +23,7 @@ use renderlab::engine::ProgramId;
 use renderlab::{
     asset::{TangentBasis, TextureRole, Wrap},
     engine::{
-        Engine, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Sampler, TangentStream,
+        Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Sampler, TangentStream,
         TextureId, TextureRef, Vertex,
     },
 };

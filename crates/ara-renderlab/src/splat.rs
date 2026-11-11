@@ -15,12 +15,13 @@
 //!   the splat's tangent frame (+X, +Z for world X/Z coordinates).
 //!
 //! The detail distance is the user's graphics tier (`ExternalView::terrain_detail`).
+use crate::rl::Engine;
 use crate::{gaps::Gaps, texture};
 use anyhow::Result;
 use ara_runtime::model::ModelMaterial;
 use renderlab::{
     asset::TextureRole,
-    engine::{Engine, ProgramId, TextureId, Value},
+    engine::{ProgramId, TextureId, Value},
 };
 use std::{
     collections::{HashMap, HashSet},
