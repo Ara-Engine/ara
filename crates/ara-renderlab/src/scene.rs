@@ -1380,26 +1380,31 @@ mod tests {
         }
     }
 
-    /// A draw of a one-triangle model whose vertex colour alpha is `alpha`, with a BLEND
-    /// material over `leaf_map`.
-    fn blended_leaf(alpha: u8) -> Draw {
-        let vertex = ModelVertex {
-            color: [255, 255, 255, alpha],
-            ..Default::default()
-        };
-        let model = Model {
+    /// One model with a one-triangle primitive per entry of `alphas`, the vertex colour alpha
+    /// of that primitive, all on the same BLEND material (slot 0) over `leaf_map`.
+    fn leaf_model(alphas: &[u8]) -> Arc<Model> {
+        Arc::new(Model {
             asset: "leaf".into(),
-            digest: ara_asset::Digest::of(&[alpha]),
-            primitives: vec![Primitive {
-                vertices: vec![vertex; 3],
-                indices: vec![0, 1, 2],
-                lods: Vec::new(),
-                material: Some(0),
-                skin: None,
-                casts_shadows: true,
-                source_vertices: Vec::new(),
-                vertex_colors: alpha != 255,
-            }],
+            digest: ara_asset::Digest::of(alphas),
+            primitives: alphas
+                .iter()
+                .map(|&alpha| Primitive {
+                    vertices: vec![
+                        ModelVertex {
+                            color: [255, 255, 255, alpha],
+                            ..Default::default()
+                        };
+                        3
+                    ],
+                    indices: vec![0, 1, 2],
+                    lods: Vec::new(),
+                    material: Some(0),
+                    skin: None,
+                    casts_shadows: true,
+                    source_vertices: Vec::new(),
+                    vertex_colors: alpha != 255,
+                })
+                .collect(),
             nodes: BTreeMap::new(),
             node_names: BTreeMap::new(),
             materials: vec![ModelMaterial {
@@ -1410,14 +1415,18 @@ mod tests {
             textures: vec![leaf_map()],
             skins: Vec::new(),
             bounds: [[0.; 3]; 2],
-        };
+        })
+    }
+
+    /// A draw of primitive `primitive` of `model`.
+    fn leaf_draw(model: &Arc<Model>, primitive: usize) -> Draw {
         Draw {
             entity: 1,
             address: "e_1".into(),
             label: "leaf".into(),
             geometry: Geometry::Model {
-                model: Arc::new(model),
-                primitive: 0,
+                model: Arc::clone(model),
+                primitive,
             },
             world: glam34::Mat4::IDENTITY,
             color: [1.; 4],
@@ -1436,20 +1445,23 @@ mod tests {
     #[test]
     fn a_blend_primitive_fading_by_vertex_alpha_blends_and_is_not_cut() {
         let mut coverage = Coverage::default();
+        // One model, one material slot, two primitives: one with solid vertices, one fading.
+        let model = leaf_model(&[255, 100]);
         // Solid vertices over a there-or-not map: a cut-out in the opaque path.
-        let solid = blended_leaf(255);
+        let solid = leaf_draw(&model, 0);
         let (m, textures) = source(&solid).expect("a model material");
         assert!(!blends(&solid, m, textures, 1., &mut coverage));
         assert!(!see_through(&solid, &mut coverage));
         assert_eq!(cut(&solid, &mut coverage).map(|c| c.cutoff), Some(0.5));
         // The same map under vertices that fade: Renderlab's transparent pass
         // multiplies coverage by vertex alpha, so it blends and is not cut.
-        let faded = blended_leaf(100);
+        let faded = leaf_draw(&model, 1);
         let (m, textures) = source(&faded).expect("a model material");
         assert!(blends(&faded, m, textures, 1., &mut coverage));
         assert!(see_through(&faded, &mut coverage));
         assert!(cut(&faded, &mut coverage).is_none());
-        // Primitives sharing a blended material but not its fade get different materials.
+        // Primitives of one model sharing a material slot but not its fade get different
+        // materials: the two keys differ only by the fade, not by model or slot.
         assert_ne!(
             material_key(&solid, &mut coverage),
             material_key(&faded, &mut coverage)
