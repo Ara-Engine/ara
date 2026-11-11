@@ -706,6 +706,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let scale = rt.scale();
             // Input goes to the client Play's controls act on.
             game.client = rt.state().play.client;
+            game.zoom = game::zoom(rt.state());
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
