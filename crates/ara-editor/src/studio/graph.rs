@@ -65,8 +65,11 @@ struct Previews {
     queue: Option<crate::asset_tools::thumbnails::Thumbnails>,
     /// Each rendered preview key's image slot.
     slots: std::collections::HashMap<String, usize>,
-    /// The next slot to fill (they cycle).
+    /// The next slot to reuse when every slot holds a live key (they cycle).
     next: usize,
+    /// The shader toolchain as last seen, and when, while renders fail: a change (a
+    /// converter installed, say) clears the failures so they render again.
+    toolchain: Option<(String, std::time::Instant)>,
     /// Images landed since the layer last drew, by image id.
     uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
     /// The last render failure reported, so a cause shared by every node is said once.
@@ -97,6 +100,30 @@ impl Page {
     #[cfg(test)]
     pub(super) fn previewed(&self) -> usize {
         self.shown.as_ref().map_or(0, |g| g.canvas.previews.len())
+    }
+    /// Each previewed node's key and shown image against the image of the slot holding
+    /// that key: (node, key, shown, own). They differ while a render is on its way (tests).
+    #[cfg(test)]
+    pub(super) fn preview_slots(&self) -> Vec<(String, String, Option<u32>, Option<u32>)> {
+        let Some(shown) = self.shown.as_ref() else {
+            return Vec::new();
+        };
+        self.previews
+            .nodes
+            .requests
+            .iter()
+            .map(|(node, (key, ..))| {
+                (
+                    node.clone(),
+                    key.clone(),
+                    shown.canvas.previews.get(node).copied(),
+                    self.previews
+                        .slots
+                        .get(key)
+                        .map(|s| crate::asset_tools::thumbnails::image_id(*s)),
+                )
+            })
+            .collect()
     }
     /// Why the in-node previews couldn't render, once the worker said (tests).
     #[cfg(test)]
@@ -285,17 +312,79 @@ pub(super) fn previews(s: &mut Studio) -> bool {
     }
     let mut changed = false;
     let mut failures = Vec::new();
-    // Renders that landed take a slot (the oldest is reused) and upload on the next draw.
+    // A failure is retried once the toolchain it needed changes.
+    if !p.nodes.failed.is_empty() {
+        let due = p
+            .toolchain
+            .as_ref()
+            .is_none_or(|(_, at)| at.elapsed() >= std::time::Duration::from_secs(2));
+        if due {
+            let now = toolchain();
+            if p.toolchain.as_ref().is_some_and(|(was, _)| *was != now) {
+                for key in std::mem::take(&mut p.nodes.failed) {
+                    if let Some(queue) = p.queue.as_mut() {
+                        queue.invalidate(&key);
+                    }
+                }
+                p.reported = None;
+                changed = true;
+            }
+            p.toolchain = Some((now, std::time::Instant::now()));
+        }
+    }
+    // Keys the material no longer asks for give their slots back; asked again later, they
+    // render again.
+    let live: std::collections::BTreeSet<String> = p
+        .nodes
+        .requests
+        .values()
+        .map(|(key, ..)| key.clone())
+        .collect();
+    let queue = &mut p.queue;
+    p.slots.retain(|key, _| {
+        let keep = live.contains(key);
+        if !keep && let Some(queue) = queue.as_mut() {
+            queue.invalidate(key);
+        }
+        keep
+    });
+    // Renders that landed take a free slot (one no node shows first) and upload on the
+    // next draw; a render for a key no longer asked for is dropped.
     if let Some(queue) = p.queue.as_mut() {
         for done in queue.poll() {
             match done {
+                thumbnails::Done::Image(thumb) if !live.contains(&thumb.key) => {
+                    queue.invalidate(&thumb.key);
+                }
                 thumbnails::Done::Image(thumb) => {
                     let slot = match p.slots.get(&thumb.key) {
                         Some(slot) => *slot,
                         None => {
-                            let slot = p.next % PREVIEW_SLOTS;
-                            p.next += 1;
-                            p.slots.retain(|_, s| *s != slot);
+                            let used: std::collections::BTreeSet<usize> =
+                                p.slots.values().copied().collect();
+                            let showing: std::collections::BTreeSet<u32> =
+                                shown.canvas.previews.values().copied().collect();
+                            let free = (0..PREVIEW_SLOTS).filter(|s| !used.contains(s));
+                            let slot = free
+                                .clone()
+                                .find(|s| !showing.contains(&thumbnails::image_id(*s)))
+                                .or_else(|| free.clone().next())
+                                .unwrap_or_else(|| {
+                                    let slot = p.next % PREVIEW_SLOTS;
+                                    p.next += 1;
+                                    slot
+                                });
+                            // Whatever held the slot is evicted: its key may be asked
+                            // again, and no node keeps showing its picture.
+                            p.slots.retain(|key, s| {
+                                let evicted = *s == slot;
+                                if evicted {
+                                    queue.invalidate(key);
+                                }
+                                !evicted
+                            });
+                            let id = thumbnails::image_id(slot);
+                            shown.canvas.previews.retain(|_, shown| *shown != id);
                             p.slots.insert(thumb.key.clone(), slot);
                             slot
                         }
@@ -351,6 +440,8 @@ pub(super) fn previews(s: &mut Studio) -> bool {
                     changed = true;
                 }
             }
+            // Until its new render lands a node keeps its last picture, whose slot no
+            // live key holds: the eviction above drops it before the slot is reused.
             None => p
                 .queue
                 .get_or_insert_with(|| thumbnails::Thumbnails::new(&root))
@@ -364,6 +455,26 @@ pub(super) fn previews(s: &mut Studio) -> bool {
         s.editor.report_failure(&*anyhow::anyhow!(failure));
     }
     changed
+}
+
+/// What the in-node previews' shader toolchain is found from (`ara_shader_cook`'s
+/// discovery: its environment variables and install folders), to notice it changing.
+fn toolchain() -> String {
+    let converter = format!("metal-shaderconverter{}", std::env::consts::EXE_SUFFIX);
+    let installed: Vec<bool> = [
+        "/opt/metal-shaderconverter/bin",
+        "/usr/local/bin",
+        r"C:\Program Files\Metal Shader Converter\bin",
+    ]
+    .iter()
+    .map(|dir| std::path::Path::new(dir).join(&converter).is_file())
+    .collect();
+    format!(
+        "{:?} {:?} {:?} {installed:?}",
+        std::env::var_os("ARA_METAL_SHADERCONVERTER"),
+        std::env::var_os("VULKAN_SDK"),
+        std::env::var_os("PATH"),
+    )
 }
 
 /// Draws the canvas into the page's layer. `extent` is in physical pixels.
