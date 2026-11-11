@@ -2,8 +2,8 @@
 #[cfg(test)]
 use crate::world::EditWorldView;
 use crate::{Editor, gpu::NativeUi, overlay};
-use ara_frame::{capture::{CaptureRequest, ViewMode}};
-use ara_render::{Renderer};
+use ara_frame::capture::{CaptureRequest, ViewMode};
+use ara_render::Renderer;
 use glam::Vec3;
 #[cfg(test)]
 use serde_json::json;

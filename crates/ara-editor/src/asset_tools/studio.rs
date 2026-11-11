@@ -3,8 +3,11 @@
 //! sphere, framed tightly from a front-right 3/4 view, lit by soft studio softboxes
 //! and composited over one neutral backdrop, so the grid reads as a consistent set.
 //! Shots render at [`MASTER`] pixels; `thumbnails` resamples them per view.
-use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex}};
-use ara_render::{Renderer};
+use ara_frame::{
+    capture::{CaptureRequest, ViewMode},
+    scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex},
+};
+use ara_render::Renderer;
 use glam::Vec3;
 use image::{Rgba, RgbaImage};
 use std::{collections::BTreeMap, path::Path};

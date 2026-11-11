@@ -20,7 +20,7 @@ use ara_runtime::{
 };
 use ara_runtime_render::geometry::{Source, shape};
 use glam34::Vec3;
-use std::{collections::HashMap, mem::Discriminant};
+use std::{collections::HashMap, mem::Discriminant, time::Duration};
 
 /// Nearest depth in metres a triangle is drawn at: Renderlab's near plane.
 const NEAR: f32 = 0.05;
@@ -70,7 +70,9 @@ impl Ids {
             return Ok(());
         }
         self.entities = entities(frame);
-        self.texels = self.rasteriser.ids(frame, size);
+        self.texels = crate::studio::trace::time("scene ids rasterise", Duration::ZERO, || {
+            self.rasteriser.ids(frame, size)
+        });
         self.size = size;
         if self.target.as_ref().is_some_and(|t| t.size != size) {
             self.release(gpu)?;
@@ -78,10 +80,13 @@ impl Ids {
         if self.target.is_none() {
             self.target = Some(Target::new(gpu, size)?);
         }
-        self.target
+        let target = self
+            .target
             .as_mut()
-            .context("the id image was created above")?
-            .upload(gpu, &self.texels)?;
+            .context("the id image was created above")?;
+        crate::studio::trace::time("scene ids upload", Duration::ZERO, || {
+            target.upload(gpu, &self.texels)
+        })?;
         self.key = Some(key);
         Ok(())
     }
@@ -367,26 +372,31 @@ impl View {
     /// centre it covers. Nearer pixels have the larger third argument.
     fn draw(&self, a: Vec3, b: Vec3, c: Vec3, mut put: impl FnMut(usize, usize, f32)) {
         // Camera space looks down -z; clip the triangle to the near plane first.
-        let mut polygon = [a, b, c].map(|p| self.to_view(p)).to_vec();
-        polygon = clip_near(&polygon);
-        if polygon.len() < 3 {
+        let (polygon, count) = clip_near([a, b, c].map(|p| self.to_view(p)));
+        if count < 3 {
             return;
         }
-        let screen: Vec<[f32; 3]> = polygon
-            .iter()
-            .map(|p| {
-                let depth = -p.z;
-                [
-                    self.size[0] * 0.5 + self.focal[0] * p.x / depth,
-                    self.size[1] * 0.5 - self.focal[1] * p.y / depth,
-                    1. / depth,
-                ]
-            })
-            .collect();
+        let mut screen = [[0f32; 3]; 4];
+        for (out, p) in screen.iter_mut().zip(&polygon[..count]) {
+            let depth = -p.z;
+            *out = [
+                self.size[0] * 0.5 + self.focal[0] * p.x / depth,
+                self.size[1] * 0.5 - self.focal[1] * p.y / depth,
+                1. / depth,
+            ];
+        }
+        let screen = &screen[..count];
         if screen.iter().flatten().any(|n| !n.is_finite()) {
             return;
         }
-        for k in 1..screen.len() - 1 {
+        // Wholly off one side of the view: nothing to fill.
+        let off = |axis: usize, limit: f32| {
+            screen.iter().all(|p| p[axis] < 0.) || screen.iter().all(|p| p[axis] >= limit)
+        };
+        if off(0, self.size[0]) || off(1, self.size[1]) {
+            return;
+        }
+        for k in 1..count - 1 {
             self.fill(screen[0], screen[k], screen[k + 1], &mut put);
         }
     }
@@ -430,21 +440,29 @@ impl View {
     }
 }
 
-/// The part of a camera-space polygon at least [`NEAR`] metres in front of the eye.
-fn clip_near(polygon: &[Vec3]) -> Vec<Vec3> {
+/// The part of a camera-space triangle at least [`NEAR`] metres in front of the eye: up to
+/// four corners, and how many.
+fn clip_near(triangle: [Vec3; 3]) -> ([Vec3; 4], usize) {
     let inside = |p: &Vec3| -p.z >= NEAR;
-    let mut out = Vec::with_capacity(polygon.len() + 1);
-    for (i, p) in polygon.iter().enumerate() {
-        let q = &polygon[(i + 1) % polygon.len()];
+    let mut out = [Vec3::ZERO; 4];
+    if triangle.iter().all(inside) {
+        out[..3].copy_from_slice(&triangle);
+        return (out, 3);
+    }
+    let mut count = 0;
+    for (i, p) in triangle.iter().enumerate() {
+        let q = &triangle[(i + 1) % 3];
         if inside(p) {
-            out.push(*p);
+            out[count] = *p;
+            count += 1;
         }
         if inside(p) != inside(q) {
             let t = (-NEAR - p.z) / (q.z - p.z);
-            out.push(p.lerp(*q, t));
+            out[count] = p.lerp(*q, t);
+            count += 1;
         }
     }
-    out
+    (out, count)
 }
 
 #[cfg(test)]
