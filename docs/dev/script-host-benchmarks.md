@@ -54,3 +54,23 @@ processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-buil
 `target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
 each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
 mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
+
+## Windows image scan (AMSI) probe
+`ARA_DUMP_IMAGES=<folder>` makes the C# host also write every fresh module image there (`module-gN.dll`); then
+`dotnet run benchmarks/iteration/amsi_probe.cs -- --images <folder>` times, on the real image: the AMSI scan of the bytes
+(`AmsiScanBuffer`, the documented client call the runtime makes on an in-memory load) for the image as emitted and for variants with
+the method bodies, string heaps, blob heap or all metadata zeroed, the first half only, and random bytes (each with a unique PE
+timestamp so no result comes from a content cache); and loading by `LoadFromStream` (what the host does), by `LoadFromAssemblyPath` from
+the temp folder, `%LOCALAPPDATA%\Ara\amsi-probe` and the current folder, from a file written two seconds earlier, and the same bytes
+twice. It only measures: nothing is altered, skipped or worked around. The 188 KB Outpost image is 107 KB method bodies and 79 KB
+metadata (43 KB of it string heaps).
+
+## Where launch and compile time go (`--trace`)
+`dotnet run benchmarks/iteration/reload_timing.cs -- --trace` sets `ARA_TRACE=1` for the bench and the compile server. Both print
+`[ara-trace] <unix ms> ...` lines on stderr (kept as `run-*.trace.txt`): the bench's own steps (`main`, host start, first image
+loaded), the server's (process start, runtime, whether Roslyn's assemblies are ReadyToRun, `main` entered, pipe connected, hello,
+first `Watch`, first compile) each with JIT count and time, GC counts and pause, and CPU; and one line per unit of compile work
+with the same counters as deltas. The summary prints the launch timeline (median ms after the bench starts) and, per compile
+outcome (initial, L1, L2, L3), what the slowest 10% did that the rest did not: GC pauses over 5 ms, gen2 collections, JIT'd methods.
+On the Mac this showed an L3 compile spending 44 ms of its 122 ms in GC pause (about 10 gen0, 3 gen1 and 1 gen2 collection) and the
+initial compile 135 ms.
