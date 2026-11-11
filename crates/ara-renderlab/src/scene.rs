@@ -100,7 +100,13 @@ pub(crate) struct Scene {
 /// address is never reused while its entry lives; `prune` drops entries of freed maps.
 #[derive(Default)]
 struct Coverage {
-    known: HashMap<(usize, usize), (std::sync::Weak<[u8]>, cutout::Alpha)>,
+    known: HashMap<(usize, usize), Seen>,
+}
+
+/// One map `Coverage` has looked at: its bytes, held weakly, and its class.
+struct Seen {
+    bytes: std::sync::Weak<[u8]>,
+    class: cutout::Alpha,
 }
 
 impl Coverage {
@@ -112,14 +118,19 @@ impl Coverage {
             .entry(key)
             .or_insert_with(|| {
                 let class = ara_runtime_render::decode_texture(&texture.ktx2)
-                    .map_or(cutout::Alpha::Opaque, |decoded| cutout::alpha(&decoded.rgba));
-                (std::sync::Arc::downgrade(&texture.ktx2), class)
+                    .map_or(cutout::Alpha::Opaque, |decoded| {
+                        cutout::alpha(&decoded.rgba)
+                    });
+                Seen {
+                    bytes: std::sync::Arc::downgrade(&texture.ktx2),
+                    class,
+                }
             })
-            .1
+            .class
     }
 
     fn prune(&mut self) {
-        self.known.retain(|_, (bytes, _)| bytes.strong_count() > 0);
+        self.known.retain(|_, seen| seen.bytes.strong_count() > 0);
     }
 }
 

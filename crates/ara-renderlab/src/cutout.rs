@@ -151,7 +151,8 @@ mod tests {
 
     #[test]
     fn a_map_is_opaque_cut_out_or_partly_there_by_its_texels() {
-        let map = |alphas: &[u8]| -> Vec<u8> { alphas.iter().flat_map(|a| [9, 9, 9, *a]).collect() };
+        let map =
+            |alphas: &[u8]| -> Vec<u8> { alphas.iter().flat_map(|a| [9, 9, 9, *a]).collect() };
         // No alpha at all (a JPG under a BLEND material): opaque.
         assert_eq!(alpha(&map(&[255; 64])), Alpha::Opaque);
         // A leaf card: gone or there, with a soft edge on one texel in sixteen.
