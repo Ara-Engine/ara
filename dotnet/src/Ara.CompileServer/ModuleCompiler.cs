@@ -94,6 +94,25 @@ internal sealed class ModuleCompiler
     internal static GeneratorDriver Driver() =>
         CSharpGeneratorDriver.Create([new Ara.Generators.ModuleGenerator().AsSourceGenerator()], parseOptions: ParseOptions);
 
+    /// <summary>
+    /// Compiles a small component and system once, with the generator and a debug-IL emit, to load Roslyn's cold paths
+    /// (type loading, framework reference metadata, generator driver) while the server waits for its first module.
+    /// Failures are ignored: this only warms.
+    /// </summary>
+    internal static void WarmUp()
+    {
+        try
+        {
+            var compiler = new ModuleCompiler("Ara.Warmup", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
+            var source = Parse("Warmup.cs", "namespace Warmup;\n/// <summary>Warm.</summary>\n[Component] public partial struct Warm { /// <summary>V.</summary>\n public int V; }\n"
+                + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
+            var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
+            Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out _);
+            Emit(final);
+        }
+        catch (Exception) { /* a failed warm-up costs nothing */ }
+    }
+
     /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
     internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Errors) Emit(Compilation c, CancellationToken ct = default)
     {
