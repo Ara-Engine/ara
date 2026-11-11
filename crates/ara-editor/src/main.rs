@@ -37,6 +37,7 @@ fn main() -> ara_ui::Result<()> {
         background: std::env::var_os("ARA_EDITOR_BACKGROUND").is_some_and(|v| v == "1"),
         ..Default::default()
     };
+    let mut output_given = false;
     let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -67,7 +68,8 @@ fn main() -> ara_ui::Result<()> {
             }
             "--screenshot" => options.screenshot = true,
             "--output" => {
-                options.output = PathBuf::from(args.next().ok_or("--output needs a directory")?)
+                options.output = PathBuf::from(args.next().ok_or("--output needs a directory")?);
+                output_given = true;
             }
             "--help" | "-h" => {
                 println!(
@@ -78,6 +80,12 @@ fn main() -> ara_ui::Result<()> {
             _ if arg.starts_with('-') => return Err(format!("Unknown option {arg}").into()),
             _ => options.project = PathBuf::from(arg),
         }
+    }
+    // Without `--output`, captures, a bounded run's profile and its evidence go under the
+    // project's own `.ara/captures`, never into whatever directory the editor was started in
+    // (a checkout).
+    if !output_given {
+        options.output = options.project.join(".ara/captures");
     }
     // The editor's views are native layers (Wayland subsurfaces on Linux): where this
     // session can't host them (X11, no or a dead compositor, no wl_subcompositor), it says

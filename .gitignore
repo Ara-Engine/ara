@@ -8,6 +8,8 @@
 # Engine-local caches
 .sn/
 # Shader-cook reuse data and live reload signals; cooked manifests stay tracked.
+# Per-project output of the editor, players and tools (profiles, caches, captures): never tracked.
+.ara/
 .ara-pipeline-inputs.json
 .ara-compiler-identity.json
 .ara-shader-dependencies.json

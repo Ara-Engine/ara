@@ -45,6 +45,9 @@ fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
     // Open it as a fresh clone does: no local journal, so the build's agent edits are
     // plain content rather than an unreviewed overlay (agents cannot accept them).
     let _ = std::fs::remove_file(root.join(".ara/journal"));
+    // The logs below go in `.ara/samples`, which a project that has not been built by this
+    // tool before does not have yet.
+    std::fs::create_dir_all(root.join(".ara/samples"))?;
     let mut child = Command::new(tool("ara-editor", "ARA_EDITOR")?)
         .arg(root)
         .args([

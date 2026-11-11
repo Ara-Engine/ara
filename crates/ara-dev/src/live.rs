@@ -366,7 +366,7 @@ mod tests {
         ));
         assert!(rebuilds(
             App::Editor,
-            "crates/ara-editor/src/loading/loading.css"
+            "crates/ara-editor/src/open_project/open_project.css"
         ));
         assert!(!rebuilds(App::Editor, "crates/ara-editor/AGENTS.md"));
         assert!(!super::rebuilds(

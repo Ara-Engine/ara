@@ -10,7 +10,7 @@ publish.workspace = true
 default = []
 hotpatch = ["ara-hotpatch/runtime", "ara-editor/hotpatch"]
 tracy = ["ara-editor/tracy", "ara-gpu/tracy"]
-memory-profile = ["ara-editor/memory-profile"]
+memory-profile = ["ara-editor/memory-profile", "dep:ara-profile", "ara-profile/allocation"]
 
 [dependencies]
 ara-hotpatch = { path = ".." }
@@ -21,6 +21,8 @@ ara-texture-gpu = { path = "../../ara-texture-gpu" }
 ara-importers = { path = "../../ara-importers" }
 ara-ui = { path = "../../ara-ui" }
 ara-gpu = { path = "../../ara-gpu" }
+# The included editor `main.rs` names `ara_profile::CountingAllocator` under `memory-profile`.
+ara-profile = { path = "../../ara-profile", optional = true }
 
 [[bin]]
 name = "ara-editor-hotpatch"

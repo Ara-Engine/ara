@@ -94,8 +94,8 @@ Base: `81c0b8e9`, with the portability fixes on `t3/linux-node`.
 - A fresh-target `cargo test -p ara-schema` took **18.46 s** here (10 jobs) versus
   **44.09 s** on the PC (2 jobs). Download caches were warm; other work was active.
   This compares the intended offload settings, not isolated CPU performance.
-- RADV: all **32 Hub captures** passed; editor `--verify` passed on Wayland
-  (**7 s**) and X11 (**9 s**), with the dark/light captures visually inspected.
+- RADV: all **32 Hub captures** passed; the previous editor shell's `--verify` (removed in #53) passed on
+  Wayland (**7 s**) and X11 (**9 s**), with the dark/light captures visually inspected.
 - Fixed: Vulkan rejected every integrated GPU; Wayland verification required
   compositor-denied window placement; Hub had a Linux-only Clippy warning.
 
