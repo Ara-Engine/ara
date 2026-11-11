@@ -213,3 +213,114 @@ kernel void arrayProbe(constant TopLevel& t [[buffer(2)]]) {
     assert_eq!(gpu.descriptor_usage().sampled_images, 0);
     assert_eq!(gpu.descriptor_usage().storage_images, 0);
 }
+
+/// Two cubes over twelve layers of a square image: a cube-array view samples each face
+/// by direction and each cube by index, sharing the layers a 2D-array view names, and
+/// retires with its parent. A storage cube view, a non-square image and a layer count
+/// that is not whole cubes are refused.
+#[test]
+fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
+    use crate::sampler::SamplerDesc;
+    let mut gpu = MetalDevice::new_raster(&[], std::env::temp_dir()).unwrap();
+    assert!(gpu.info().cube_arrays);
+    let create = |gpu: &mut MetalDevice, size: [u32; 2]| {
+        gpu.create_texture(&TextureDesc {
+            image: ImageDesc {
+                size,
+                format: Format::R32Float,
+                sampled: true,
+                storage: true,
+                attachment: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+            shape: ImageShape {
+                layers: 12,
+                ..Default::default()
+            },
+        })
+        .unwrap()
+    };
+    let image = create(&mut gpu, [4, 4]);
+    let cubes = ImageViewDesc {
+        dimension: ViewDimension::CubeArray,
+        base_mip: 0,
+        mip_count: 1,
+        base_layer: 0,
+        layer_count: 12,
+    };
+    let slot = gpu.sampled_view(image, cubes).unwrap();
+    assert_eq!(gpu.sampled_view(image, cubes).unwrap(), slot);
+    assert!(gpu.storage_view(image, cubes).is_err());
+    assert!(
+        gpu.sampled_view(
+            image,
+            ImageViewDesc {
+                layer_count: 8,
+                ..cubes
+            }
+        )
+        .is_err()
+    );
+    let oblong = create(&mut gpu, [8, 4]);
+    assert!(gpu.sampled_view(oblong, cubes).is_err());
+    // Layer l holds l + 1 in every texel.
+    let texels: Vec<f32> = (0..12).flat_map(|layer| [layer as f32 + 1.; 16]).collect();
+    let input = gpu
+        .create_buffer(4 * 16 * 12, vk::BufferUsageFlags::TRANSFER_SRC, true)
+        .unwrap();
+    gpu.upload(input, bytemuck::cast_slice(&texels)).unwrap();
+    let output = gpu
+        .create_buffer(4 * 12, vk::BufferUsageFlags::STORAGE_BUFFER, true)
+        .unwrap();
+    let out = gpu.storage_buffer(output).unwrap();
+    let sampler = gpu.sampler(&SamplerDesc::default()).unwrap();
+    let shader = r#"
+struct CubeEntry { ulong unused; texturecube_array<float> image; ulong metadata; };
+kernel void cubeProbe(constant TopLevel& t [[buffer(2)]]) {
+    device CubeEntry* c = (device CubeEntry*)t.textures;
+    const float3 toward[6] = { float3(1,0,0), float3(-1,0,0), float3(0,1,0), float3(0,-1,0), float3(0,0,1), float3(0,0,-1) };
+    for (uint i = 0; i < 12; i++) {
+        float v = c[t.root[0]].image.sample(t.samplers[t.root[2]].state, toward[i % 6], i / 6, level(0)).x;
+        t.buffers[t.root[1]].data[i] = as_type<uint>(v);
+    }
+}
+"#;
+    let p = gpu.msl_pipeline_from(
+        shader,
+        &[(cooked::Stage::Compute, "cubeProbe")],
+        &cooked::RenderState::default(),
+        Some([1, 1, 1]),
+    );
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::UploadImageRegion {
+        source: input,
+        destination: image,
+        buffer_offset: 0,
+        region: ImageRegion {
+            mip: 0,
+            origin: [0; 3],
+            extent: [4, 4, 1],
+            base_layer: 0,
+            layer_count: 12,
+        },
+    });
+    rec.barriers([barrier(image, Access::CopyDestination, Access::ShaderRead)]);
+    rec.push(Command::Pipeline(p));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, out.index, sampler.index, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    let p = gpu.submit(rec.finish(), &[]).unwrap();
+    gpu.wait(p).unwrap();
+    let read: Vec<f32> = bytemuck::cast_slice::<u8, u32>(&gpu.read(output).unwrap())
+        .iter()
+        .map(|w| f32::from_bits(*w))
+        .collect();
+    assert_eq!(read, (1..=12).map(|v| v as f32).collect::<Vec<_>>());
+    for image in [image, oblong] {
+        Device::retire(&mut gpu, Resource::Image(image)).unwrap();
+    }
+    Device::collect(&mut gpu).unwrap();
+    assert_eq!(gpu.descriptor_usage().sampled_images, 0);
+}

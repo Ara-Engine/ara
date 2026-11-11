@@ -72,15 +72,15 @@ pub struct NativeUi {
     command: vk::CommandBuffer,
     fence: vk::Fence,
     /// UI reads handed back to the async Scene queue on Windows.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     completion: vk::Semaphore,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     completion_value: std::cell::Cell<u64>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     ordered_value: std::cell::Cell<u64>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     scene_handoff: std::cell::Cell<bool>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     scene_queue: vk::Queue,
     layout: vk::DescriptorSetLayout,
     descriptors: vk::DescriptorPool,
@@ -145,15 +145,15 @@ impl NativeUi {
             pool: vk::CommandPool::null(),
             command: vk::CommandBuffer::null(),
             fence: vk::Fence::null(),
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             completion: vk::Semaphore::null(),
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             completion_value: std::cell::Cell::new(0),
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             ordered_value: std::cell::Cell::new(0),
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             scene_handoff: std::cell::Cell::new(false),
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             scene_queue: gpu.scene_graphics,
             layout: vk::DescriptorSetLayout::null(),
             descriptors: vk::DescriptorPool::null(),
@@ -523,7 +523,7 @@ impl Drop for NativeUi {
         // SAFETY: Device outlives the adapter by constructor contract. Queue idle precedes every teardown.
         unsafe {
             let _ = device.queue_wait_idle(self.queue);
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             {
                 // A handoff submission also retains the completion semaphore.
                 if self.scene_handoff.get() && self.scene_queue != self.queue {
@@ -581,6 +581,22 @@ impl NativeUi {
     ) -> Result<Present> {
         // SAFETY: forwarded native-owner contract.
         unsafe { Present::from_hwnd(gpu, hwnd, size) }
+    }
+    /// Create a presentation into a studio Wayland subsurface at an explicit pixel size.
+    /// # Safety
+    /// `gpu` is this adapter's device; retain it, the `wl_display` and the subsurface's
+    /// `wl_surface` until retirement after queue idle. The device must enable Wayland
+    /// surface extensions.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn create_wayland_present(
+        &self,
+        gpu: &UiDevice,
+        display: std::ptr::NonNull<std::ffi::c_void>,
+        surface: std::ptr::NonNull<std::ffi::c_void>,
+        size: [u32; 2],
+    ) -> Result<Present> {
+        // SAFETY: forwarded native-owner contract.
+        unsafe { Present::from_wayland(gpu, display, surface, size) }
     }
     /// Present the last completed UI target.
     /// # Safety
