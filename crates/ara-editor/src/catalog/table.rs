@@ -168,10 +168,17 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Scale along an axis or uniformly.",
     },
     Command {
+        id: "view.tool.rect",
+        title: "Rect Tool",
+        icon: "scan",
+        keys: "T",
+        summary: "Resize and move by a rectangle round the selection, in the plane facing the view.",
+    },
+    Command {
         id: "view.tool.universal",
         title: "Universal Tool",
         icon: "transform",
-        keys: "T",
+        keys: "Y",
         summary: "Move, rotate or scale using the combined handles.",
     },
     Command {
@@ -2946,7 +2953,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         title: "Save As…",
         icon: "file",
         keys: "Ctrl+Shift+S",
-        summary: "Documents save in place through the host journal; Save As needs a typed document-copy command.",
+        summary: "Save the open scene under a new name inside the content folder, and open the copy.",
     },
     Command {
         id: "file.revert",
@@ -2992,10 +2999,10 @@ pub(crate) const COMMANDS: &[Command] = &[
     },
     Command {
         id: "transform.align_view",
-        title: "Align to View",
-        icon: "",
+        title: "Align with View",
+        icon: "video",
         keys: "",
-        summary: "Aligning rotation to the camera needs a view-matrix to Euler command.",
+        summary: "Move and turn the selection to the Scene camera's place and view.",
     },
     Command {
         id: "edit.transform.drop",
@@ -3275,12 +3282,10 @@ pub(crate) const COMMANDS: &[Command] = &[
 /// Commands the menus name whose feature is not built yet; each one's summary says what
 /// is missing, so menus show it dimmed with that reason rather than dropping it.
 pub(crate) const UNBUILT: &[&str] = &[
-    "file.save_as",
     "file.revert",
     "file.export_selection",
     "file.close_project",
     "select.layer",
-    "transform.align_view",
     "view.environment",
     "view.layout_quad",
     "create.cylinder",

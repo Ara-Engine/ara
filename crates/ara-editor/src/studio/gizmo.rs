@@ -151,7 +151,7 @@ pub(super) fn drive(s: &mut Studio, at: [f32; 2]) {
             let movement = Vec2::from(at) - Vec2::from(drag.start);
             let along = movement.dot(drag.vector) / drag.vector.length_squared().max(0.01);
             let amount = match gesture.tool {
-                Tool::Translate | Tool::Universal => along * drag.length,
+                Tool::Translate | Tool::Universal | Tool::Rect => along * drag.length,
                 Tool::Rotate => match drag.rotation {
                     Some((pivot, normal, start)) => {
                         overlay::plane_point(&camera, drag.rect, at, pivot, normal)
