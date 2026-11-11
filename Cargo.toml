@@ -32,8 +32,8 @@ accesskit = "0.25.1"
 anyhow = "1.0.103"
 # Native UI for the editor and Hub (D31): CPU-drawn, damage-only, idle-free. Pinned to
 # stillkit main, which has every stillkit PR Ara needs.
-stillkit = { git = "https://github.com/Snowy7/stillkit", rev = "cceec79f97702c056145091f5783cb00ed3f5fe1" }
-stillkit-kit = { git = "https://github.com/Snowy7/stillkit", rev = "cceec79f97702c056145091f5783cb00ed3f5fe1" }
+stillkit = { git = "https://github.com/Snowy7/stillkit", rev = "7a5f87e38bca3734151213074a27e50251e5df5c" }
+stillkit-kit = { git = "https://github.com/Snowy7/stillkit", rev = "7a5f87e38bca3734151213074a27e50251e5df5c" }
 ash = { git = "https://github.com/ash-rs/ash.git", rev = "f4c2ca3e4f6b998d5254ad101a32f024d87cdec2" }
 bevy_ecs = { version = "0.20.0", default-features = false }
 bevy_tasks = "0.20.0"
@@ -131,6 +131,6 @@ opt-level = 1
 # Deterministic transport clock patches: crates/ara-net/vendor/PATCHES.md.
 [patch.crates-io]
 # stillkit vendors its UI Automation adapter; Cargo applies only root patches.
-accesskit_windows = { git = "https://github.com/Snowy7/stillkit", rev = "cceec79f97702c056145091f5783cb00ed3f5fe1" }
+accesskit_windows = { git = "https://github.com/Snowy7/stillkit", rev = "7a5f87e38bca3734151213074a27e50251e5df5c" }
 lightyear_sync = { path = "crates/ara-net/vendor/lightyear_sync" }
 lightyear_transport = { path = "crates/ara-net/vendor/lightyear_transport" }

@@ -139,6 +139,37 @@ impl Present {
             Ok(present)
         }
     }
+    /// Create an SDR presentation for a live Wayland subsurface without SDL ownership,
+    /// at an explicit pixel size (Wayland surfaces take their size from the swapchain).
+    /// Acquiring or reusing an image waits at most one millisecond per wait.
+    /// # Safety
+    /// `display` is the live `wl_display *` and `surface` a `wl_surface *` on it, both
+    /// outliving the presentation. `gpu` must enable VK_KHR_surface and
+    /// VK_KHR_wayland_surface and outlive teardown.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn from_wayland(
+        gpu: &Gpu,
+        display: std::ptr::NonNull<std::ffi::c_void>,
+        surface: std::ptr::NonNull<std::ffi::c_void>,
+        size: [u32; 2],
+    ) -> Result<Self> {
+        ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
+        let loader = ash::khr::wayland_surface::Instance::load(&gpu._entry, &gpu.instance);
+        // SAFETY: live instance, display and surface, retained by the caller. Construction
+        // takes ownership of the Vulkan surface even if swapchain creation fails.
+        unsafe {
+            let surface = loader.create_wayland_surface(
+                &vk::WaylandSurfaceCreateInfoKHR::default()
+                    .display(display.as_ptr())
+                    .surface(surface.as_ptr()),
+                None,
+            )?;
+            let mut present = Self::from_surface(gpu, surface, size, OutputSettings::default())?;
+            present.native_size = Some(size);
+            present.wait_ns = 1_000_000;
+            Ok(present)
+        }
+    }
     /// Takes ownership of a newly created surface, including on construction failure.
     /// # Safety
     /// The surface belongs to `gpu` and its native window remains live.
@@ -281,9 +312,12 @@ impl Present {
     }
     /// Queue a native-layer resize for the next display call, which has the GPU
     /// context. Repeated requests coalesce; no raw device pointer is retained.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub fn request_resize(&mut self, size: [u32; 2]) -> Result<()> {
-        ensure!(self.native_size.is_some(), "Not a native HWND presentation");
+        ensure!(
+            self.native_size.is_some(),
+            "Not a native-layer presentation"
+        );
         ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
         self.pending_size = Some(size);
         Ok(())
