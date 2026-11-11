@@ -68,16 +68,18 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
-    // The editor's views are Wayland subsurfaces on Linux: without a Wayland session it
-    // can't show them, so it says what it needs instead of opening the project.
-    if cfg!(target_os = "linux")
-        && !options.headless
-        && std::env::var_os("WAYLAND_DISPLAY").is_none_or(|v| v.is_empty())
+    // The editor's views are native layers (Wayland subsurfaces on Linux): where this
+    // session can't host them (X11, no or a dead compositor, no wl_subcompositor), it says
+    // what it needs instead of opening the project.
+    if !options.headless
+        && let Err(why) = ara_editor::studio::can_host()
     {
-        return Err("ara-editor needs a Wayland session on Linux (WAYLAND_DISPLAY is not set): \
-             log in to a Wayland session (GNOME and KDE use one by default), or capture without \
-             a window with --headless"
-            .into());
+        return Err(format!(
+            "ara-editor can't show its views here: {why:#}. On Linux it needs a Wayland \
+             session whose compositor offers subsurfaces (GNOME and KDE do); --headless \
+             captures the scene without a window"
+        )
+        .into());
     }
     if !ara_editor::before_open_project(&options)? {
         return Ok(());

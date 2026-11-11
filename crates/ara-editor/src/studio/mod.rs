@@ -1020,6 +1020,15 @@ fn layer_target(
     }
 }
 
+/// Whether this session can show the studio's views (native layers) before anything opens:
+/// on Linux it connects to the Wayland compositor and checks for subsurfaces; elsewhere the
+/// platform always can. The error says what is missing.
+pub fn can_host() -> anyhow::Result<()> {
+    #[cfg(target_os = "linux")]
+    stillkit::platform::current::surface::native_layer_support()?;
+    Ok(())
+}
+
 /// Vulkan instance extensions a presentation surface needs (none on Metal).
 fn present_extensions() -> Vec<std::ffi::CString> {
     let names: &[&str] = if cfg!(target_os = "macos") {
