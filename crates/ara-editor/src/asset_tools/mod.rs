@@ -2,13 +2,8 @@
 //! (registered by `ara_play_host::open_project`); native importers run only in
 //! disposable workers.
 pub(crate) mod cooked_mesh;
-pub(crate) mod material_preview;
-pub(crate) mod node_preview;
 pub(crate) mod paths;
-mod studio;
 pub(crate) mod thumbnails;
-mod vfx_preview;
-pub(crate) mod vfx_stream;
 use ara_asset::{
     CacheBackend, Cancellation, FileCache, ImportSettings, JobEvent, ProcessWorker, SourceAsset,
     TargetPlatform,

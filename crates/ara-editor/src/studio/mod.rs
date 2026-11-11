@@ -113,14 +113,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // a Vulkan surface over Wayland subsurfaces on Linux.
     #[cfg(any(windows, target_os = "linux"))]
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
-    let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
+    let mut surface = Surface::new(Kind::App { min: MIN_WINDOW }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
     let platform = surface.scale();
     let (sw, sh) = stillkit::platform::current::host::screen_size();
     // A bounded run opens at the requested size in device pixels (`--size`); otherwise the
     // studio's own.
     let (want_w, want_h) = if options.bounded() {
-        (options.size[0] as f32, options.size[1] as f32)
+        // Never below the studio's minimum, as a person's window cannot be: a capture at a
+        // smaller `--size` is the minimum's, on every platform.
+        (
+            (options.size[0] as f32).max(MIN_WINDOW.0 as f32 * platform),
+            (options.size[1] as f32).max(MIN_WINDOW.1 as f32 * platform),
+        )
     } else {
         (1600.0 * platform, 1000.0 * platform)
     };
@@ -891,7 +896,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
-            rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
                 && let Some(layer) = layer_target(&surface, name, &mut rt, &mut layer_failure)
@@ -962,10 +966,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 rt.update(|_| {});
             }
         }
-        let vfx_visible = rt.find("vfx/preview").is_some();
-        if rt.touch(|s| vfx::update(s, vfx_visible)) {
-            rt.update(|_| {});
-        }
         pass.mark("game");
         pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
@@ -1032,7 +1032,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || composite
             // A job wakes the loop only while the Scene can render for it.
             || agent_work::needs_unpresented_render(&probe_owner, shown_extent)
-            || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
@@ -1291,6 +1290,11 @@ pub(super) fn click(s: &mut Studio, e: &stillkit::el::PointerEvent) -> bool {
 pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
 }
+
+/// The smallest window the studio opens or is resized to, in logical px (the window with its
+/// frame: Windows' client area is a little less, 1008x632). The title bar fits it at every zoom
+/// step (`the_title_bar_fits_the_window_at_every_zoom_step`); `--size` captures never go below it.
+pub(crate) const MIN_WINDOW: (u32, u32) = (1024, 640);
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
 fn frame(surface: &Surface, scale: f32) -> state::Frame {

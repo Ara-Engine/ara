@@ -83,6 +83,19 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
             "No camera in this scene",
             "Add one (Create › Camera) to see what Play will show.",
         ));
+    } else if !playing && !super::unavailable::game_preview_available() {
+        view = view.child(
+            col()
+                .absolute(0.0, 0.0)
+                .w_full()
+                .h_full()
+                .fill(super::style::tones(l).well)
+                .child(super::unavailable::tile(
+                    l,
+                    "game/preview-unavailable",
+                    "The Game preview is not available yet. Play still runs the game.",
+                )),
+        );
     } else if let Some(fault) = status.fault.as_deref().filter(|_| playing) {
         view = view.child(notice(icons::CIRCLE_ALERT, "Play stopped", fault));
     } else if playing && !status.live {

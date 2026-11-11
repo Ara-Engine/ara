@@ -25,7 +25,7 @@ this crate alone.
 - `texture.rs`: cooked KTX2 (BC7/BC5) to Renderlab's RGBA8 mip chains.
 - `lighting.rs`: camera, sun, sky source, local lights, exposure and display settings.
 - `sky.rs`: the frame's sky on either engine; a sky image prepared off the frame loop.
-- `rl.rs`: the mapping's `Engine`: wgpu's, or on Apple the backend's (`renderlab_metal`, Renderlab#3; the root manifest patches its ara-gpu to ours).
+- `rl.rs`: the mapping's `Engine`: wgpu's, or on Apple the backend's (the `backend-ara` feature of the same Renderlab revision; the root manifest patches its ara-gpu to ours).
 - `meter.rs` (on Apple: a readback on metered frames, binned by the pass's CPU twin): the exposure meter's look at a frame: a compute pass on Renderlab's device bins the output's log luminance (512 bins), mapped on a later frame so no frame waits for it. The bridge takes the readings at the start of each frame, when the previous frame's (which it waited for) is done, so a cut's snap lands one frame on, as it did with a blocking read; a pass stuck past 8 frames is reported and gets a new slot.
 - `environment.rs`: HDRI and gradient skies prepared for `Sky::Map` (CPU, once per sky, on a
   worker thread: 0.4 s for the gradient sky, 1.4 s for a 2k HDRI on twelve threads).

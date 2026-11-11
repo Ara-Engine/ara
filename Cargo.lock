@@ -949,14 +949,12 @@ dependencies = [
  "ara-runtime-render",
  "ara-schema",
  "ara-script",
- "ara-shader-cook",
  "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
  "ara-update",
  "ara-vfx",
- "ara-vfx-gpu",
  "ara-world",
  "blake3",
  "bytemuck",
@@ -1984,8 +1982,7 @@ dependencies = [
  "glam 0.30.10",
  "glam 0.34.1",
  "image",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81)",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d)",
+ "renderlab",
  "wgpu",
 ]
 
@@ -11462,22 +11459,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81#a0094f6a6e423cd8fb12aa133dcb0def94f2dd81"
-dependencies = [
- "ash 0.38.0+1.3.281",
- "glam 0.30.10",
- "naga",
- "pollster",
- "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81)",
- "sha2 0.10.9",
- "wgpu",
-]
-
-[[package]]
-name = "renderlab"
-version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d#b5d835fbe11dec60c167e9d646c79d13b214832d"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=69baaf100991a3f6d299d0785c76e2634220bf41#69baaf100991a3f6d299d0785c76e2634220bf41"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -11488,7 +11470,7 @@ dependencies = [
  "naga",
  "pollster",
  "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d)",
+ "renderlab-asset",
  "serde_json",
  "sha2 0.10.9",
  "wgpu",
@@ -11497,12 +11479,7 @@ dependencies = [
 [[package]]
 name = "renderlab-asset"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81#a0094f6a6e423cd8fb12aa133dcb0def94f2dd81"
-
-[[package]]
-name = "renderlab-asset"
-version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d#b5d835fbe11dec60c167e9d646c79d13b214832d"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=69baaf100991a3f6d299d0785c76e2634220bf41#69baaf100991a3f6d299d0785c76e2634220bf41"
 
 [[package]]
 name = "reqwest"
