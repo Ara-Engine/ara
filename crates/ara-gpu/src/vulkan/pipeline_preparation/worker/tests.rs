@@ -45,7 +45,13 @@ fn blocked_pipeline_compiler_does_not_wait_or_publish_and_cancellation_is_bounde
     let (entered, started) = channel();
     let mut gate = Some(gate);
     gpu.pipeline_preparation = Some(Worker::start(
-        move || Compiler::new(device, false, layout, path, Vec::new()),
+        move || {
+            let features = crate::vulkan::pipeline::ShaderFeatures {
+                mesh_shading: false,
+                fragment_barycentrics: false,
+            };
+            Compiler::new(device, features, layout, path, Vec::new())
+        },
         move || {
             assert_eq!(std::thread::current().name(), Some("ara-pipeline-compile"));
             if let Some(gate) = gate.take() {
