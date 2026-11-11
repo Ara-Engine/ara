@@ -454,9 +454,13 @@ mod tests {
         assert_eq!(log_mean(&vec![0; BINS], 0., 1.), None);
     }
 
-    /// The shader and its CPU twin bin the same frame the same way: a frame of flat blocks of
-    /// known greys (each far from a bin edge) through a real device lands in the same bins,
-    /// arrives without waiting, and a discard drops it.
+    /// The shader and its CPU twin bin the same frame the same way: a frame of flat stripes
+    /// (five greys and a pure green, whose luma weight a grey cannot tell from a wrong one)
+    /// through a real device lands in the same bins, arrives without waiting, and a discard
+    /// drops it. Every stripe matches exactly except the darkest: its sRGB code 4 sits a
+    /// quarter bin from a bin edge, and NVIDIA's hardware decode (RTX 4070 SUPER) puts it
+    /// one bin up where RADV matches the CPU formula exactly, so that stripe may sit in
+    /// either of its two bins.
     #[test]
     fn the_gpu_histogram_matches_its_cpu_twin_and_arrives_without_a_wait() {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -469,14 +473,21 @@ mod tests {
         };
         let (device, queue) =
             block_on(adapter.request_device(&Default::default())).expect("device");
-        // 100x80: five vertical stripes of different greys (and a width that is not a multiple
-        // of the workgroup or the stride, to cover the bounds check).
-        let (w, h) = (100u32, 80u32);
-        let greys = [4u8, 30, 90, 160, 250];
+        // 120x80: six vertical stripes of 20 columns (and a width that is not a multiple of
+        // the workgroup's 16 pixels at the stride, to cover the bounds check).
+        let (w, h) = (120u32, 80u32);
+        let stripes: [[u8; 3]; 6] = [
+            [4, 4, 4],
+            [30, 30, 30],
+            [90, 90, 90],
+            [160, 160, 160],
+            [250, 250, 250],
+            [0, 255, 0],
+        ];
         let rgba8: Vec<u8> = (0..w * h)
             .flat_map(|i| {
-                let g = greys[((i % w) / 20) as usize];
-                [g, g, g, 255]
+                let [r, g, b] = stripes[((i % w) / 20) as usize];
+                [r, g, b, 255]
             })
             .collect();
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -517,8 +528,20 @@ mod tests {
         let reading = &readings[0];
         assert_eq!((reading.meter, reading.stops), (-2.5, -1.5));
         let twin = histogram_of_rgba8(&rgba8, w as usize);
-        assert_eq!(reading.histogram.iter().sum::<u32>(), 50 * 40);
-        assert_eq!(reading.histogram, twin);
+        assert_eq!(reading.histogram.iter().sum::<u32>(), 60 * 40);
+        // The darkest stripe's two bins count together; every other bin matches exactly.
+        let darkest = twin.iter().position(|&n| n > 0).expect("a sampled pixel");
+        let together = |histogram: &[u32]| {
+            let mut bins = histogram.to_vec();
+            bins[darkest] += std::mem::take(&mut bins[darkest + 1]);
+            bins
+        };
+        assert_eq!(
+            together(&reading.histogram),
+            together(&twin),
+            "the GPU histogram differs from its CPU twin beyond the darkest stripe's one bin: {:?} against {twin:?}",
+            reading.histogram
+        );
         // A reading of a frame submitted before a cut is dropped on arrival.
         assert!(readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
         readbacks.discard();

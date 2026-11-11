@@ -941,7 +941,10 @@ impl Scene {
             // that is there-or-not, is cut into the geometry (`cut`); the material
             // itself is then opaque.
             blend = blends(draw, m, textures, desc.base_color[3], &mut self.coverage);
-            self.report_alpha_guesses(draw, m, textures, gaps);
+            // A material that blends is not cut or drawn opaque, so it guessed nothing.
+            if !blend {
+                self.report_alpha_guesses(draw, m, textures, gaps);
+            }
             if !blend && m.base_color_texture.is_some() {
                 desc.base_color[3] = 1.;
             }
@@ -1344,6 +1347,126 @@ fn skinned_mesh(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ara_asset_format::{TextureFormat, write_ktx2};
+    use ara_runtime::{model::Model, model::Primitive, model::TextureUsage};
+    use std::{collections::BTreeMap, sync::Arc};
+
+    /// One BC7 block of a solid colour (mode 6, all texels the same).
+    fn bc7_solid(rgba: [u8; 4]) -> [u8; 16] {
+        let parity = u128::from(rgba[3] & 1);
+        let mut bits = 1u128 << 6;
+        for (channel, value) in rgba.into_iter().enumerate() {
+            let endpoint = u128::from(value >> 1);
+            bits |= endpoint << (7 + 14 * channel) | endpoint << (14 + 14 * channel);
+        }
+        (bits | parity << 63 | parity << 64).to_le_bytes()
+    }
+
+    /// An 8x8 base-colour map whose left half is opaque and right half clear: a
+    /// there-or-not alpha (`cutout::Alpha::Binary`).
+    fn leaf_map() -> ModelTexture {
+        let blocks = [[20, 220, 20, 255], [20, 220, 20, 0]]
+            .repeat(2)
+            .into_iter()
+            .map(bc7_solid)
+            .collect::<Vec<_>>()
+            .concat();
+        ModelTexture {
+            name: "leaf".into(),
+            usage: TextureUsage::Color,
+            ktx2: write_ktx2(8, 8, TextureFormat::Bc7Srgb, &[blocks])
+                .expect("a valid KTX2 container")
+                .into(),
+        }
+    }
+
+    /// One model with a one-triangle primitive per entry of `alphas`, the vertex colour alpha
+    /// of that primitive, all on the same BLEND material (slot 0) over `leaf_map`.
+    fn leaf_model(alphas: &[u8]) -> Arc<Model> {
+        Arc::new(Model {
+            asset: "leaf".into(),
+            digest: ara_asset::Digest::of(alphas),
+            primitives: alphas
+                .iter()
+                .map(|&alpha| Primitive {
+                    vertices: vec![
+                        ModelVertex {
+                            color: [255, 255, 255, alpha],
+                            ..Default::default()
+                        };
+                        3
+                    ],
+                    indices: vec![0, 1, 2],
+                    lods: Vec::new(),
+                    material: Some(0),
+                    skin: None,
+                    casts_shadows: true,
+                    source_vertices: Vec::new(),
+                    vertex_colors: alpha != 255,
+                })
+                .collect(),
+            nodes: BTreeMap::new(),
+            node_names: BTreeMap::new(),
+            materials: vec![ModelMaterial {
+                alpha_mode: 2,
+                base_color_texture: Some(0),
+                ..Default::default()
+            }],
+            textures: vec![leaf_map()],
+            skins: Vec::new(),
+            bounds: [[0.; 3]; 2],
+        })
+    }
+
+    /// A draw of primitive `primitive` of `model`.
+    fn leaf_draw(model: &Arc<Model>, primitive: usize) -> Draw {
+        Draw {
+            entity: 1,
+            address: "e_1".into(),
+            label: "leaf".into(),
+            geometry: Geometry::Model {
+                model: Arc::clone(model),
+                primitive,
+            },
+            world: glam34::Mat4::IDENTITY,
+            color: [1.; 4],
+            roughness: 0.6,
+            metallic: 0.,
+            emissive: [0.; 3],
+            emissive_factor: None,
+            material: None,
+            skin: None,
+            casts_shadows: true,
+            receives_decals: true,
+            paint: None,
+        }
+    }
+
+    #[test]
+    fn a_blend_primitive_fading_by_vertex_alpha_blends_and_is_not_cut() {
+        let mut coverage = Coverage::default();
+        // One model, one material slot, two primitives: one with solid vertices, one fading.
+        let model = leaf_model(&[255, 100]);
+        // Solid vertices over a there-or-not map: a cut-out in the opaque path.
+        let solid = leaf_draw(&model, 0);
+        let (m, textures) = source(&solid).expect("a model material");
+        assert!(!blends(&solid, m, textures, 1., &mut coverage));
+        assert!(!see_through(&solid, &mut coverage));
+        assert_eq!(cut(&solid, &mut coverage).map(|c| c.cutoff), Some(0.5));
+        // The same map under vertices that fade: Renderlab's transparent pass
+        // multiplies coverage by vertex alpha, so it blends and is not cut.
+        let faded = leaf_draw(&model, 1);
+        let (m, textures) = source(&faded).expect("a model material");
+        assert!(blends(&faded, m, textures, 1., &mut coverage));
+        assert!(see_through(&faded, &mut coverage));
+        assert!(cut(&faded, &mut coverage).is_none());
+        // Primitives of one model sharing a material slot but not its fade get different
+        // materials: the two keys differ only by the fade, not by model or slot.
+        assert_ne!(
+            material_key(&solid, &mut coverage),
+            material_key(&faded, &mut coverage)
+        );
+    }
 
     #[test]
     fn influences_keep_the_four_strongest_and_rigid_vertices_bind_identity() {
