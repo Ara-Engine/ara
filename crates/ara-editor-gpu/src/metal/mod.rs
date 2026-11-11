@@ -126,6 +126,17 @@ pub struct NativeUi {
     overlay_rect: Box2,
     outline_texture: Option<u32>,
     outline_groups: Option<u32>,
+    /// How `outline_texture` encodes ids (`set_id_encoding`).
+    id_encoding: crate::IdEncoding,
+    /// Debug: the external image whose ids are repacked into `packed` every frame, and
+    /// read from there as a packed id image (`repack_ids`).
+    repack: Option<u32>,
+    /// The repack's RGBA8 target, as big as the source id image, and whether it holds a
+    /// completed frame (it rests in ShaderRead).
+    packed: Option<Target>,
+    packed_ready: bool,
+    /// This frame's repack draw record in `instances`.
+    pack_instance: Option<u32>,
 }
 
 impl NativeUi {
@@ -176,6 +187,11 @@ impl NativeUi {
             overlay_rect: Box2::default(),
             outline_texture: None,
             outline_groups: None,
+            id_encoding: crate::IdEncoding::default(),
+            repack: None,
+            packed: None,
+            packed_ready: false,
+            pack_instance: None,
         };
         ui.upload_inner(TextureUpload {
             id: 0,
@@ -207,6 +223,17 @@ impl NativeUi {
         self.overlay_rect = rect;
         self.outline_texture = Some(texture);
         self.overlays = overlays;
+    }
+    /// How the texture passed to [`Self::overlays`] encodes entity ids.
+    pub fn set_id_encoding(&mut self, encoding: crate::IdEncoding) {
+        self.id_encoding = encoding;
+    }
+    /// Debug switch: with `Some(id)`, every frame first repacks external image `id` (the
+    /// renderer's float id channel) into an RGBA8 packed id image on the GPU, and the
+    /// overlays read that instead (as [`crate::IdEncoding::Packed`]); the packed path then
+    /// runs without a renderer that delivers one. `None` reads the overlay texture as given.
+    pub fn repack_ids(&mut self, source: Option<u32>) {
+        self.repack = source;
     }
     /// Outline and hover by group instead of by channel (see the Vulkan adapter).
     pub fn outline_groups(&mut self, table: Option<u32>) {
@@ -447,6 +474,37 @@ impl NativeUi {
             Device::retire(&mut self.device, Resource::Image(old.image))?;
         }
         Ok(slot.index)
+    }
+    /// Makes the repack target as big as the source id image.
+    fn ensure_packed(&mut self, source: u32) -> Result<()> {
+        let Some(external) = self.external.get(&source) else {
+            return Ok(());
+        };
+        let size = self.device.image_extent(external.image)?;
+        if self.packed.as_ref().is_some_and(|t| t.size == size) {
+            return Ok(());
+        }
+        let image = self.device.create_image(
+            size[0],
+            size[1],
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+        )?;
+        let slot = self.device.sampled_image(image, false)?;
+        if let Some(old) = self.packed.replace(Target { image, size, slot }) {
+            Device::retire(&mut self.device, Resource::Image(old.image))?;
+        }
+        self.packed_ready = false;
+        Ok(())
+    }
+    /// The id texture the overlays read this frame: its bindless slot and encoding. The
+    /// repack's target when the debug switch is on and it exists.
+    fn id_input(&self) -> Option<(u32, crate::IdEncoding)> {
+        if let Some(packed) = self.repack.and_then(|_| self.packed.as_ref()) {
+            return Some((packed.slot.index, crate::IdEncoding::Packed));
+        }
+        let id = self.outline_texture?;
+        Some((self.slot(id)?, self.id_encoding))
     }
     /// The bindless slot of UI texture `id`, external or uploaded.
     fn slot(&self, id: u32) -> Option<u32> {

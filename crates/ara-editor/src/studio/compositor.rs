@@ -20,6 +20,8 @@ pub(super) struct Compositor {
     ui: NativeUi,
     paint: UiRenderer,
     outlines: Outlines,
+    /// Which id texture the overlays read (`ids`).
+    ids: super::ids::IdSource,
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
@@ -74,6 +76,7 @@ impl Compositor {
             ui,
             paint,
             outlines: Outlines::default(),
+            ids: super::ids::IdSource::from_environment(),
             sheet: sheet(light)?,
             light,
             present: None,
@@ -118,16 +121,12 @@ impl Compositor {
             .map(str::to_owned))
     }
 
-    /// Draws the Scene's image on screen and the overlays for `state` at `extent` physical
-    /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
-    /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
-    /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
-    /// to the renderer and `scene` redraws. False when nothing reached the screen (the last
-    /// frame is still on the GPU, or the present was skipped): call again on a later pass.
-    /// # Safety
-    /// `layer` is the Scene view's live native layer (`present::Target`).
+    /// Everything of a frame before it is presented: the Scene's image and the overlays for
+    /// `state` at `extent` physical pixels (`scale` per logical px), drawn into the UI target.
+    /// `hover` is the pointer's place in the Scene view (0 to 1 each way), for the id sources
+    /// whose hover is an overlay. False when the last frame is still on the GPU.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn frame(
+    fn compose(
         &mut self,
         renderer: &mut ara_render::Renderer,
         scene: &mut crate::studio::viewport::SceneView,
@@ -136,9 +135,9 @@ impl Compositor {
         changed: &std::collections::BTreeMap<u64, &str>,
         gizmo: GizmoState,
         revision: u64,
-        layer: super::present::Target,
         extent: [u32; 2],
         scale: f32,
+        hover: Option<[f32; 2]>,
     ) -> Result<bool> {
         if !self
             .ui
@@ -155,7 +154,9 @@ impl Compositor {
         scene
             .attach(&mut self.ui, renderer, state.quality)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        self.outlines.in_scene = scene.draws_outlines();
+        // Where the ids come from decides who draws the selection outlines.
+        self.ids.apply(&mut self.ui);
+        self.outlines.in_scene = scene.draws_outlines() && self.ids.renderer_draws_outlines();
         let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
         let rect = Box2 {
             x: 0.0,
@@ -175,6 +176,21 @@ impl Compositor {
             &self.sheet,
         )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let mut overlays = overlays;
+        if self.ids.overlays_hover()
+            && let Some(uv) = hover
+            && let Some(tint) = self.sheet.color_token("--info-foreground")
+        {
+            overlays.push(ara_editor_gpu::Overlay::Hover {
+                uv,
+                color: [
+                    tint.0 as f32 / 255.,
+                    tint.1 as f32 / 255.,
+                    tint.2 as f32 / 255.,
+                    0.55,
+                ],
+            });
+        }
         if let Some(outlines) = self.outlines.take_scene_outlines() {
             renderer.set_outlines(outlines);
             scene.redraw();
@@ -210,6 +226,37 @@ impl Compositor {
                 .render(&mut self.ui, &list, &[], size, TextMode::Raster)
         })
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(true)
+    }
+
+    /// Draws the Scene's image on screen and the overlays for `state` at `extent` physical
+    /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
+    /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
+    /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
+    /// to the renderer and `scene` redraws. False when nothing reached the screen (the last
+    /// frame is still on the GPU, or the present was skipped): call again on a later pass.
+    /// # Safety
+    /// `layer` is the Scene view's live native layer (`present::Target`).
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn frame(
+        &mut self,
+        renderer: &mut ara_render::Renderer,
+        scene: &mut crate::studio::viewport::SceneView,
+        view: &DocumentView,
+        state: &EditorState,
+        changed: &std::collections::BTreeMap<u64, &str>,
+        gizmo: GizmoState,
+        revision: u64,
+        layer: super::present::Target,
+        extent: [u32; 2],
+        scale: f32,
+        hover: Option<[f32; 2]>,
+    ) -> Result<bool> {
+        if !self.compose(
+            renderer, scene, view, state, changed, gizmo, revision, extent, scale, hover,
+        )? {
+            return Ok(false);
+        }
         let present = match self.present.take() {
             Some((mut present, was)) => {
                 if was != extent {

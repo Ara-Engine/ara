@@ -101,6 +101,54 @@ impl NativeUi {
                 Access::ShaderRead,
             ));
         }
+        // Debug repack: the renderer's float ids into the packed RGBA8 image the overlays
+        // then read (see `repack_ids`). One draw of mode 12 into its own target, which
+        // rests in ShaderRead for the main pass below.
+        if let (Some(first), Some(packed), Some(source)) = (
+            self.pack_instance,
+            self.packed.as_ref(),
+            self.repack.and_then(|id| self.external.get(&id)),
+        ) {
+            let (image, extent) = (packed.image, packed.size);
+            let before = if self.packed_ready {
+                Access::ShaderRead
+            } else {
+                Access::Undefined
+            };
+            rec.push(transition(image, before, Access::Color));
+            rec.push(Command::BeginRendering {
+                colors: vec![Attachment {
+                    image,
+                    clear: Some([0.; 4]),
+                }],
+                depth: None,
+                size: extent,
+            });
+            rec.push(Command::Pipeline(self.pipeline));
+            rec.push(Command::Viewport {
+                origin: [0, 0],
+                size: extent,
+            });
+            rec.push(Command::Constants(RootConstants {
+                words: [
+                    instances.slot.index,
+                    masks.slot.index,
+                    first,
+                    source.slot.index | 12 << 16,
+                    0,
+                    0,
+                    extent[0] | extent[1] << 16,
+                    1f32.to_bits(),
+                ],
+            }));
+            rec.push(Command::DrawProcedural {
+                vertices: 6,
+                instances: 1,
+            });
+            rec.push(Command::EndRendering);
+            rec.push(transition(image, Access::Color, Access::ShaderRead));
+            self.packed_ready = true;
+        }
         let before = if self.target_ready {
             Access::CopySource
         } else {

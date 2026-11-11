@@ -23,7 +23,28 @@ impl NativeUi {
             .outline_groups
             .and_then(|id| self.slot(id))
             .map_or(0., |slot| (slot + 1) as f32 * 2.);
-        let ids = self.outline_texture.and_then(|id| self.slot(id));
+        // One id texture for outline, hover and the grid: the renderer's, or the debug
+        // repack's packed copy of it.
+        if let Some(source) = self.repack {
+            self.ensure_packed(source)?;
+        }
+        let (ids, packed) = match self.id_input() {
+            Some((slot, encoding)) => (Some(slot), encoding == crate::IdEncoding::Packed),
+            None => (None, false),
+        };
+        let flag = if packed { crate::PACKED_FLAG } else { 0. };
+        // The repack draw: one full-target record, drawn before the frame's draws.
+        self.pack_instance = None;
+        if let Some(packed) = self.repack.and_then(|_| self.packed.as_ref()) {
+            let size = packed.size;
+            self.pack_instance = Some(self.instances.len() as u32);
+            self.instances.push(Instance {
+                rect: [0., 0., size[0] as f32, size[1] as f32],
+                uv: [0., 0., 1., 1.],
+                color: [1.; 4],
+                params: [0.; 4],
+            });
+        }
         let blank = self.slot(0).context("blank UI texture")?;
         let start = self.draws.len();
         for overlay in &self.overlays {
@@ -44,11 +65,7 @@ impl NativeUi {
                     color,
                     axes,
                 } => {
-                    let texture = self
-                        .outline_texture
-                        .and_then(|id| self.external.get(&id))
-                        .map(|e| e.slot.index)
-                        .context("grid ID texture missing")?;
+                    let texture = ids.context("grid ID texture missing")?;
                     self.draws.push(draw(texture, 7, first));
                     self.instances.push(Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],
@@ -61,7 +78,8 @@ impl NativeUi {
                         rect: axes[0],
                         uv: axes[1],
                         color: [0.; 4],
-                        params: [0.; 4],
+                        // The id texture's encoding (shader mode 7 reads axes.parameters.x).
+                        params: [flag.min(1.), 0., 0., 0.],
                     });
                     continue;
                 }
@@ -120,7 +138,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [uv[0], uv[1], 0., groups + 1.],
+                        params: [uv[0], uv[1], 0., groups + 1. + flag],
                     };
                     (hover, 5, ids.context("hover texture missing")?)
                 }
@@ -129,7 +147,7 @@ impl NativeUi {
                         rect: [rect.x, rect.y, rect.w, rect.h],
                         uv: [0., 0., 1., 1.],
                         color: *color,
-                        params: [0., 0., *index as f32, groups],
+                        params: [0., 0., *index as f32, groups + flag],
                     };
                     (outline, 5, ids.context("outline texture missing")?)
                 }

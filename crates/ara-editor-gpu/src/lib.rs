@@ -14,6 +14,28 @@ pub use metal::{NativeUi, PlaySurface, UiDevice, open_presentation, ui_device};
 #[cfg(not(target_os = "macos"))]
 pub use vulkan::{NativeUi, PlaySurface, UiDevice, open_presentation, ui_device};
 
+/// How the id texture the overlays read encodes entity ids. Outlines, hover and the grid's
+/// occlusion read ids through one fetch (`idAt` in `ui_body.slang`) for either encoding.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IdEncoding {
+    /// ara-render's own id channel: a float texel (R32F), the compact channel index + 1,
+    /// 0 for nothing.
+    #[default]
+    Float,
+    /// A packed id image: RGBA8 UNORM (not sRGB), one texel per output pixel, the 32-bit id
+    /// little-endian across R, G, B, A (R = bits 0 to 7). 0 is nothing; [`NO_ID_HIT`] is a
+    /// hit without an id (it hides the grid, it never outlines). The id is the same compact
+    /// channel index + 1 as the float encoding's.
+    Packed,
+}
+
+/// A packed id texel meaning "something is here, but nothing selectable".
+pub const NO_ID_HIT: u32 = u32::MAX;
+
+/// The overlay instance flag bit that marks a [`IdEncoding::Packed`] id texture (an outline
+/// or hover draw's `parameters.w`; the grid's axes record `parameters.x` is 1 instead).
+pub(crate) const PACKED_FLAG: f32 = (1u32 << 20) as f32;
+
 /// Editor-only overlays rendered through the same instance ABI and clip target.
 pub enum Overlay {
     /// Antialiased line segment in logical pixels.

@@ -29,6 +29,7 @@ mod game;
 mod game_preview;
 mod gizmo;
 mod graph;
+mod ids;
 pub mod headless;
 mod hierarchy;
 mod inspector;
@@ -561,6 +562,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 .flatten();
             if let Some(layer) = layer {
                 let scale = rt.scale();
+                // Rows and the view learn they are hovered, never that the pointer left: hover
+                // shows only while the runtime says the Scene view is the one under it.
+                let pointer_in_scene = rt
+                    .presented("scene/view")
+                    .is_some_and(|shown| shown.state == stillkit::interact::State::Hover);
                 let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
                     // so a lagging frame carries its gizmos and grid with it.
@@ -575,6 +581,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         };
                     }
                     let changed = s.editor.agent_tints();
+                    // The pointer in the Scene view, 0 to 1 each way (the ids' hover overlay).
+                    let hover = s
+                        .local
+                        .scene_pointer
+                        .as_ref()
+                        .filter(|_| pointer_in_scene)
+                        .filter(|p| p.size.0 > 0.0 && p.size.1 > 0.0)
+                        .map(|p| [p.at[0] / p.size.0, p.at[1] / p.size.1])
+                        .filter(|uv| (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]));
                     // SAFETY: the layer is the Scene view's own, alive while the window is.
                     let done = unsafe {
                         compositor.frame(
@@ -588,6 +603,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                             layer,
                             extent,
                             scale,
+                            hover,
                         )
                     };
                     drop(changed);
