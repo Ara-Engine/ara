@@ -474,6 +474,13 @@ pub struct Local {
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
     pub gizmo_hover: Option<crate::overlay::Handle>,
+    /// The selection's rendered world bounds, which the host publishes while the Rect
+    /// tool is on (`studio::rect_tool`).
+    pub rect_bounds: Option<[glam::Vec3; 2]>,
+    /// The Rect tool's drag.
+    pub rect_drag: Option<super::rect_tool::Drag>,
+    /// The Rect tool's part under the pointer.
+    pub rect_hover: Option<super::rect_tool::Grip>,
     /// A change to the OS window the host makes on its next pass.
     pub window: Option<WindowRequest>,
     /// Problems shown: errors, warnings.

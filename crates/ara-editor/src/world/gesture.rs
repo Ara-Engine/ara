@@ -84,11 +84,14 @@ impl Gesture {
             "select an entity with a Transform first"
         );
         pivot /= count;
-        let snap = state.snapping.then_some(match tool {
-            Tool::Translate | Tool::Universal => state.move_snap,
-            Tool::Rotate => state.rotate_snap,
-            Tool::Scale => state.scale_snap,
-        });
+        // The Rect tool sets whole poses (`map_world`); increments don't apply.
+        let snap = match tool {
+            Tool::Translate | Tool::Universal => Some(state.move_snap),
+            Tool::Rotate => Some(state.rotate_snap),
+            Tool::Scale => Some(state.scale_snap),
+            Tool::Rect => None,
+        }
+        .filter(|_| state.snapping);
         let axes = if state.local {
             state
                 .selection
@@ -132,7 +135,7 @@ impl Gesture {
             let world = parent * (*start);
             let world_position = world.transform_point3(Vec3::ZERO);
             let next = match self.tool {
-                Tool::Translate | Tool::Universal => {
+                Tool::Translate | Tool::Universal | Tool::Rect => {
                     let movement = self.axes * delta;
                     let p = parent.inverse().transform_point3(world_position + movement);
                     Mat4::from_scale_rotation_translation(scale, rotation, p)
@@ -199,6 +202,24 @@ impl Gesture {
             {
                 *current = *start;
                 current.w_axis += parent.inverse().transform_vector3(delta).extend(0.);
+            }
+        }
+        true
+    }
+    /// Applies the world-space map `map` to every root's pose at pointer-down (the Rect
+    /// tool's resize and move). A non-finite map leaves the preview as it was.
+    pub fn map_world(&mut self, map: Mat4) -> bool {
+        if !map.is_finite() {
+            return false;
+        }
+        for (id, start) in &self.initial {
+            let (Some(current), Some(parent)) = (self.current.get_mut(id), self.parents.get(id))
+            else {
+                continue;
+            };
+            let next = parent.inverse() * map * *parent * *start;
+            if next.is_finite() {
+                *current = next;
             }
         }
         true

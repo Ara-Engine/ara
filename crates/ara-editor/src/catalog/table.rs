@@ -168,10 +168,17 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Scale along an axis or uniformly.",
     },
     Command {
+        id: "view.tool.rect",
+        title: "Rect Tool",
+        icon: "scan",
+        keys: "T",
+        summary: "Resize and move by a rectangle round the selection, in the plane facing the view.",
+    },
+    Command {
         id: "view.tool.universal",
         title: "Universal Tool",
         icon: "transform",
-        keys: "T",
+        keys: "Y",
         summary: "Move, rotate or scale using the combined handles.",
     },
     Command {

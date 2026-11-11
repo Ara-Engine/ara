@@ -322,11 +322,16 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "view.frame" => act(e, "editor.frame", json!({})),
         "view.frame_all" => act(e, "editor.frame", json!({"all": true})),
-        "view.tool.move" | "view.tool.rotate" | "view.tool.scale" | "view.tool.universal" => {
+        "view.tool.move"
+        | "view.tool.rotate"
+        | "view.tool.scale"
+        | "view.tool.rect"
+        | "view.tool.universal" => {
             let tool = match id {
                 "view.tool.move" => "translate",
                 "view.tool.rotate" => "rotate",
                 "view.tool.scale" => "scale",
+                "view.tool.rect" => "rect",
                 _ => "universal",
             };
             view(e, json!({"gizmos": true}))

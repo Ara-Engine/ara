@@ -37,6 +37,7 @@ mod portals;
 mod preferences;
 mod present;
 mod profiler;
+mod rect_tool;
 mod references;
 mod running;
 mod scene;
@@ -200,6 +201,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut shown_tag = u64::MAX;
     // The running drag's snap source, captured at its first snapped move.
     let mut snap: Option<snapping::Snap> = None;
+    // The selection the Rect tool's bounds were last read for.
+    let mut rect_for: Option<Vec<String>> = None;
     // The graph canvas's size when last drawn.
     let mut graph_extent = ("", [0, 0]);
     // A composite is owed (something changed) but has not presented yet.
@@ -351,6 +354,31 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             )
         }) {
             scene_dirty = true;
+        }
+        // The Rect tool's bounds: the selection's presented geometry (selected parents take
+        // their children's), read again when the scene or the selection changes.
+        let wanted = rt.touch(|s| {
+            let st = &s.editor.state;
+            (st.tool == crate::state::Tool::Rect
+                && !st.hide_gizmos
+                && !st.selection.is_empty()
+                && s.local.rect_drag.is_none())
+            .then(|| st.selection.clone())
+        });
+        match wanted {
+            Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
+                let channels = compositor.channels(&renderer, &view, revision);
+                let entities = view.entities();
+                let bounds = scene_view.bounds_where(channels, |address| {
+                    crate::world::bounds::selected(entities, address, &selection)
+                });
+                rect_for = Some(selection);
+                if rt.state().local.rect_bounds != bounds {
+                    rt.update(|s| s.local.rect_bounds = bounds);
+                }
+            }
+            Some(_) => {}
+            None => rect_for = None,
         }
         pass.mark("scene sync");
         pass.phase("studio.scene");
