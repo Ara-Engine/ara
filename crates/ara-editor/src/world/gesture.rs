@@ -84,7 +84,7 @@ impl Gesture {
             "select an entity with a Transform first"
         );
         pivot /= count;
-        // The Rect tool sets whole poses (`map_world`); increments don't apply.
+        // The Rect tool sets whole poses (`rect_resize`); increments don't apply.
         let snap = match tool {
             Tool::Translate | Tool::Universal => Some(state.move_snap),
             Tool::Rotate => Some(state.rotate_snap),
@@ -206,35 +206,48 @@ impl Gesture {
         }
         true
     }
-    /// Applies the world-space map `map` (the Rect tool's resize and move) to every root's
-    /// pose at pointer-down as a pose it can keep: the root's position goes through the
-    /// map and each of its own axes scales by how far the map stretches that axis, its
-    /// rotation untouched. A rotated root therefore never shears, and the preview is the
-    /// exact TRS the commit writes. A non-finite map leaves the preview as it was.
-    pub fn map_world(&mut self, map: Mat4) -> bool {
-        if !map.is_finite() {
+    /// The Rect tool's resize and move of every root from its pose at pointer-down: its
+    /// position goes through the world map `map`; for each rect axis in `axes` that the drag
+    /// scaled by `scale` (≠ 1), only the root's own axis closest to it scales by that much,
+    /// and its rotation is kept. In a rectangle drawn in the root's own frame that is
+    /// exactly the rectangle's change; in a world rectangle over mixed rotations no axis the
+    /// drag didn't scale grows. The preview is the exact TRS the commit writes, and an
+    /// identity map leaves every pose untouched. A non-finite map changes nothing.
+    pub fn rect_resize(&mut self, map: Mat4, axes: [Vec3; 2], scale: glam::Vec2) -> bool {
+        if !map.is_finite() || !scale.is_finite() {
             return false;
         }
+        let still = map.abs_diff_eq(Mat4::IDENTITY, 1e-6);
         for (id, start) in &self.initial {
             let (Some(current), Some(parent)) = (self.current.get_mut(id), self.parents.get(id))
             else {
                 continue;
             };
-            let (scale, rotation, position) = (*parent * *start).to_scale_rotation_translation();
-            let stretch = Vec3::new(
-                map.transform_vector3(rotation * Vec3::X).length(),
-                map.transform_vector3(rotation * Vec3::Y).length(),
-                map.transform_vector3(rotation * Vec3::Z).length(),
-            );
+            if still {
+                *current = *start;
+                continue;
+            }
+            let (size, rotation, position) = (*parent * *start).to_scale_rotation_translation();
+            let own = [rotation * Vec3::X, rotation * Vec3::Y, rotation * Vec3::Z];
+            let mut stretch = Vec3::ONE;
+            for (axis, by) in axes.iter().zip([scale.x, scale.y]) {
+                if (by - 1.0).abs() <= 1e-6 {
+                    continue;
+                }
+                let closest = (0..3)
+                    .max_by(|&a, &b| own[a].dot(*axis).abs().total_cmp(&own[b].dot(*axis).abs()))
+                    .unwrap_or(0);
+                stretch[closest] *= by;
+            }
             let world = Mat4::from_scale_rotation_translation(
-                scale * stretch,
+                size * stretch,
                 rotation,
                 map.transform_point3(position),
             );
             // Kept as the TRS `commands` will write, so what shows is what commits.
-            let (scale, rotation, position) =
+            let (size, rotation, position) =
                 (parent.inverse() * world).to_scale_rotation_translation();
-            let next = Mat4::from_scale_rotation_translation(scale, rotation, position);
+            let next = Mat4::from_scale_rotation_translation(size, rotation, position);
             if next.is_finite() {
                 *current = next;
             }
