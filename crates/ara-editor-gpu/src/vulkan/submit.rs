@@ -43,18 +43,29 @@ impl NativeUi {
     fn finish(&self) -> Result<()> {
         ara_gpu::cpu_scope!("UI.finish");
         let device = &self.memory.device;
+        #[cfg(windows)]
+        let value = self
+            .completion_value
+            .get()
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("UI completion timeline exhausted"))?;
         // SAFETY: This main thread serializes queue use; fence completion owns command-buffer reuse.
         unsafe {
             device.end_command_buffer(self.command)?;
             device.reset_fences(&[self.fence])?;
-            device.queue_submit2(
-                self.queue,
-                &[vk::SubmitInfo2::default().command_buffer_infos(&[
-                    vk::CommandBufferSubmitInfo::default().command_buffer(self.command),
-                ])],
-                self.fence,
-            )?;
+            let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(self.command)];
+            let submit = vk::SubmitInfo2::default().command_buffer_infos(&commands);
+            #[cfg(windows)]
+            let signals = [vk::SemaphoreSubmitInfo::default()
+                .semaphore(self.completion)
+                .value(value)
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+            #[cfg(windows)]
+            let submit = submit.signal_semaphore_infos(&signals);
+            device.queue_submit2(self.queue, &[submit], self.fence)?;
         }
+        #[cfg(windows)]
+        self.completion_value.set(value);
         self.in_flight.set(true);
         if !self.deferred {
             // Bounded: a queue stalled behind a window's presentation (minimized,
@@ -84,6 +95,37 @@ impl NativeUi {
     /// Metal's counterpart orders the renderer's next work after this adapter's;
     /// one shared queue already does here.
     pub fn order_before(&self, _gpu: &mut ara_gpu::GpuDevice) {}
+    /// Hand completed UI reads back to the engine's asynchronous Scene queue.
+    /// A CPU fence permits retirement; this semaphore supplies the cross-queue
+    /// memory dependency before the renderer rewrites a retained image.
+    #[cfg(windows)]
+    pub fn order_before_scene(&self, gpu: &UiDevice) -> Result<()> {
+        ensure!(
+            gpu.device.handle() == self.memory.device.handle(),
+            "Scene handoff uses another device"
+        );
+        let value = self.completion_value.get();
+        if value == self.ordered_value.get() {
+            return Ok(());
+        }
+        let waits = [vk::SemaphoreSubmitInfo::default()
+            .semaphore(self.completion)
+            .value(value)
+            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+        // Teardown drains this queue even if a failed submit accepted partial work.
+        self.scene_handoff.set(true);
+        // SAFETY: the constructor's owner-thread contract serializes both queues.
+        // This adapter retains the semaphore until both queues are idle at teardown.
+        unsafe {
+            gpu.device.queue_submit2(
+                self.scene_queue,
+                &[vk::SubmitInfo2::default().wait_semaphore_infos(&waits)],
+                vk::Fence::null(),
+            )?;
+        }
+        self.ordered_value.set(value);
+        Ok(())
+    }
     /// `wait_previous`, waiting at most `timeout`: false while the last submission is
     /// still running (a stalled present path), so an event pump can skip this frame.
     pub fn wait_previous_for(&self, timeout: std::time::Duration) -> Result<bool> {
