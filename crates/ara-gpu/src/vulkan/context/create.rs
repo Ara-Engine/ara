@@ -184,6 +184,12 @@ impl Gpu {
             let mut mesh_features = vk::PhysicalDeviceMeshShaderFeaturesEXT::default();
             let mut barycentric_features =
                 vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default();
+            // Optional: robustImageAccess2, from VK_KHR_robustness2 or its EXT original
+            // (one feature structure); queried only where one is offered.
+            let robustness2_extension = [ash::khr::robustness2::NAME, ash::ext::robustness2::NAME]
+                .into_iter()
+                .find(|name| has_extension(name));
+            let mut robustness2 = vk::PhysicalDeviceRobustness2FeaturesKHR::default();
             let mut supported = vk::PhysicalDeviceFeatures2::default()
                 .push(&mut v11)
                 .push(&mut v12)
@@ -192,6 +198,9 @@ impl Gpu {
                 .push(&mut mesh_features)
                 .push(&mut barycentric_features)
                 .push(&mut ray);
+            if robustness2_extension.is_some() {
+                supported = supported.push(&mut robustness2);
+            }
             instance.get_physical_device_features2(physical, &mut supported);
             let core_supported = supported.features;
             let mesh_shading = has_extension(ash::ext::mesh_shader::NAME)
@@ -200,6 +209,18 @@ impl Gpu {
             let buffer_int64_atomics =
                 core_supported.shader_int64 != 0 && v12.shader_buffer_int64_atomics != 0;
             let shader_integer_dot_product = v13.shader_integer_dot_product != 0;
+            // Optional: an image load outside its image reads zero, so shaders need no
+            // size test of their own. Enabled with Vulkan 1.3's robustImageAccess, as
+            // wgpu enables the pair.
+            let robust_image_access = robustness2_extension.is_some()
+                && robustness2.robust_image_access2 != 0
+                && v13.robust_image_access != 0;
+            if let Some(name) = robustness2_extension.filter(|_| robust_image_access) {
+                device_extensions.push(name.as_ptr());
+            }
+            // Optional: the driver zeroes workgroup variables declared with a null
+            // initializer, so shaders need no zeroing stores and barrier of their own.
+            let zero_initialize_workgroup_memory = v13.shader_zero_initialize_workgroup_memory != 0;
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
@@ -270,6 +291,8 @@ impl Gpu {
                 .shader_storage_image_array_non_uniform_indexing(true);
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
                 .shader_integer_dot_product(shader_integer_dot_product)
+                .robust_image_access(robust_image_access)
+                .shader_zero_initialize_workgroup_memory(zero_initialize_workgroup_memory)
                 .shader_demote_to_helper_invocation(true)
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -317,6 +340,11 @@ impl Gpu {
                     .fragment_shader_barycentric(true);
             if fragment_barycentrics {
                 device_info = device_info.push(&mut barycentric_features);
+            }
+            let mut robustness2 =
+                vk::PhysicalDeviceRobustness2FeaturesKHR::default().robust_image_access2(true);
+            if robust_image_access {
+                device_info = device_info.push(&mut robustness2);
             }
             let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
@@ -435,6 +463,8 @@ impl Gpu {
                 buffer_int64_atomics,
                 fragment_barycentrics,
                 cube_arrays: core_supported.image_cube_array != 0,
+                robust_image_access,
+                zero_initialize_workgroup_memory,
                 shader_integer_dot_product,
                 packed_integer_dot_accelerated: shader_integer_dot_product
                     && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,

@@ -87,7 +87,7 @@ if (args.Contains("--fix", StringComparer.Ordinal))
 StartupTrace.Describe();
 StartupTrace.Mark("main entered");
 // The host needs ~100 ms to send the first module; use it to warm Roslyn on another core.
-if (ModuleCompiler.ShouldWarmUp(System.Environment.ProcessorCount))
+if (ModuleCompiler.ShouldWarmUp(System.Environment.ProcessorCount, System.Environment.GetEnvironmentVariable("ARA_WARMUP")))
 {
     StartupTrace.Mark("warm-up started");
     _ = ModuleCompiler.WarmUpAsync().ContinueWith(

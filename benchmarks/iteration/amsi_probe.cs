@@ -27,9 +27,12 @@ using System.Text.Json.Nodes;
 
 var options = args.ToList();
 string? Option(string name) => options.IndexOf(name) is var i and >= 0 && i + 1 < options.Count ? options[i + 1] : null;
-var imagesFolder = Option("--images") ?? throw new ArgumentException("usage: amsi_probe.cs -- --images <folder with the dumped .dll files> [--iterations 15]");
+var folders = options.Select((value, i) => (value, i)).Where(x => x.value == "--images" && x.i + 1 < options.Count).Select(x => options[x.i + 1]).ToArray();
+if (folders.Length == 0) throw new ArgumentException("usage: amsi_probe.cs -- --images <folder with the dumped .dll files> [--images <another folder>] [--iterations 15]");
+var imagesFolder = folders[0];
 var iterations = int.Parse(Option("--iterations") ?? "15");
-var images = Directory.GetFiles(imagesFolder, "*.dll").OrderByDescending(path => new FileInfo(path).Length).ToArray();
+// Several folders (images dumped from runs with different --lines) give the scan time against module size.
+var images = folders.SelectMany(folder => Directory.GetFiles(folder, "*.dll")).OrderByDescending(path => new FileInfo(path).Length).ToArray();
 if (images.Length == 0) throw new FileNotFoundException("no .dll files in " + imagesFolder);
 var imagePath = images[0]; // the biggest: an L3 image of the whole module
 var original = File.ReadAllBytes(imagePath);
@@ -52,6 +55,19 @@ foreach (var (name, make, namedBytes) in variants)
     var ok = made.Length == expectedLength && (name.StartsWith("random", StringComparison.Ordinal) || changed <= namedBytes + 4);
     Console.WriteLine($"  variant {name,-46} {made.Length,9:N0} bytes, {changed,9:N0} differ from the image {(ok ? "" : "  <-- SELF-CHECK FAILED")}");
     if (!ok) throw new InvalidOperationException($"variant '{name}' does not change what it says it changes");
+    if (name.StartsWith("VALID", StringComparison.Ordinal))
+    {
+        // A VALID variant must still be a loadable assembly with readable metadata and bodies, or it measures a broken file.
+        using (var reader = new PEReader(new MemoryStream(made)))
+        {
+            var md = reader.GetMetadataReader();
+            foreach (var method in md.MethodDefinitions)
+                if (md.GetMethodDefinition(method).RelativeVirtualAddress is var rva and > 0) _ = reader.GetMethodBody(rva).GetILBytes();
+        }
+        var context = new AssemblyLoadContext("amsi-probe-check", isCollectible: true);
+        try { context.LoadFromStream(new MemoryStream(made)); }
+        finally { context.Unload(); }
+    }
 }
 
 // ---- A. the scan itself, by content
@@ -74,6 +90,21 @@ if (OperatingSystem.IsWindows())
                 results.Add(result);
             }
             rows.Add(("scan", name, [.. times], "AMSI_RESULT " + string.Join(",", results)));
+        }
+        // Every dumped image as emitted: Release-IL (cold) against Debug-IL (hot) images, and module size against scan time.
+        foreach (var path in images.OrderBy(path => new FileInfo(path).Length))
+        {
+            var bytes = File.ReadAllBytes(path);
+            var times = new List<double>();
+            for (var i = -1; i < Math.Min(iterations, 8); i++)
+            {
+                var copy = (byte[])bytes.Clone();
+                StampUnique(copy, 700 + i);
+                var sw = Stopwatch.StartNew();
+                amsi.Scan(copy, "image");
+                if (i >= 0) times.Add(sw.Elapsed.TotalMilliseconds);
+            }
+            rows.Add(("image", $"{Path.GetFileName(Path.GetDirectoryName(path))}/{Path.GetFileName(path)} ({bytes.Length:N0} bytes)", [.. times], "as emitted"));
         }
     }
 }
@@ -209,15 +240,62 @@ static List<(string Name, Func<int, byte[]> Make, long NamedBytes)> Variants(byt
         StampUnique(copy, n);
         return copy;
     };
+    // The user-string literals, read now (the reader is disposed when this method returns): where each one starts in the image,
+    // the width of its length prefix, its length in bytes, and whether it is one of the generated {json} descriptors.
+    var literals = new List<(int At, int LengthBytes, int Chars, bool Json)>();
+    {
+        var heap = Heap(HeapIndex.UserString);
+        var handle = MetadataTokens.UserStringHandle(1);
+        while (!handle.IsNil)
+        {
+            var text = metadata.GetUserString(handle);
+            var at = heap.Offset + MetadataTokens.GetHeapOffset(handle);
+            var lengthBytes = (original[at] & 0x80) == 0 ? 1 : (original[at] & 0xC0) == 0x80 ? 2 : 4;
+            literals.Add((at, lengthBytes, text.Length * 2, text.StartsWith('{')));
+            handle = metadata.GetNextHandle(handle);
+        }
+    }
+
+    // Valid-structure variants: the metadata and IL still parse, so a scanner that gives up on a broken image (the zeroed rows
+    // above) still has to do its normal work. Same size as the image, so only the content differs.
+    byte[] Mutate(int n, bool nopIl, Func<bool, bool>? blankLiteral)
+    {
+        var copy = (byte[])original.Clone();
+        if (nopIl)
+            foreach (var (offset, _) in bodies)
+            {
+                var first = copy[offset];
+                int start, size;
+                if ((first & 3) == 2) { start = offset + 1; size = first >> 2; }
+                else { start = offset + (BitConverter.ToUInt16(copy, offset) >> 12) * 4; size = BitConverter.ToInt32(copy, offset + 4); }
+                if (size <= 0) continue;
+                Array.Fill(copy, (byte)0x00, start, size); // nop
+                copy[start + size - 1] = 0x2A;             // ret
+            }
+        if (blankLiteral is not null)
+            foreach (var (at, lengthBytes, chars, json) in literals)
+                if (blankLiteral(json))
+                    for (var i = 0; i + 1 < chars; i += 2) { copy[at + lengthBytes + i] = (byte)'a'; copy[at + lengthBytes + i + 1] = 0; }
+        StampUnique(copy, n);
+        return copy;
+    }
+    var jsonBytes = literals.Where(l => l.Json).Sum(l => (long)l.Chars);
+    var literalBytes = (long)metadata.GetHeapSize(HeapIndex.UserString);
+    var ilBytes = bodies.Sum(b => (long)b.Length);
+
     return
     [
         ("as emitted", n => { var copy = (byte[])original.Clone(); StampUnique(copy, n); return copy; }, 0),
-        ($"method bodies zeroed ({bodies.Sum(b => (long)b.Length):N0} bytes)", Zero(bodies), bodies.Sum(b => (long)b.Length)),
+        ($"method bodies zeroed ({ilBytes:N0} bytes)", Zero(bodies), ilBytes),
         ($"string heaps zeroed ({strings.Sum(s => (long)s.Length):N0} bytes)", Zero(strings), strings.Sum(s => (long)s.Length)),
         ($"blob heap zeroed ({blob.Sum(s => (long)s.Length):N0} bytes)", Zero(blob), blob.Sum(s => (long)s.Length)),
         ($"all metadata zeroed ({whole.Sum(s => (long)s.Item2):N0} bytes)", Zero(whole), whole.Sum(s => (long)s.Item2)),
         ("first half only", n => { var copy = original[..(original.Length / 2)]; StampUnique(copy, n); return copy; }, 0),
         ("random bytes, same length", n => { var copy = new byte[original.Length]; new Random(n).NextBytes(copy); return copy; }, original.Length),
+        ($"VALID: IL replaced by nops + ret ({ilBytes:N0} bytes)", n => Mutate(n, true, null), ilBytes),
+        ($"VALID: all string literals blanked ({literalBytes:N0} bytes)", n => Mutate(n, false, _ => true), literalBytes),
+        ($"VALID: only the {{json}} literals blanked ({jsonBytes:N0} bytes)", n => Mutate(n, false, json => json), jsonBytes),
+        ($"VALID: IL nopped and all literals blanked", n => Mutate(n, true, _ => true), ilBytes + literalBytes),
     ];
 }
 
