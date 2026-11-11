@@ -1,10 +1,6 @@
-//! Editor-only SDL clipboard, IME, monitor scale and Windows accessibility adapters.
-#[cfg(windows)]
-mod accessibility;
+//! Editor-only SDL clipboard and monitor-scale adapters.
 mod coordinates;
 pub(crate) mod frame;
-#[cfg(windows)]
-mod pacing;
 use ara_ui_text::Clipboard;
 
 pub(crate) struct OsClipboard;

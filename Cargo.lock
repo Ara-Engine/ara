@@ -909,8 +909,6 @@ dependencies = [
 name = "ara-editor"
 version = "0.0.1-alpha"
 dependencies = [
- "accesskit 0.25.2",
- "accesskit_windows 0.35.2",
  "anyhow",
  "ara-agents",
  "ara-ai",
