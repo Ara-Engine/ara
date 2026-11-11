@@ -89,6 +89,67 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(latencies[latencies.Count / 2] < 8, $"median {latencies[latencies.Count / 2]:F1} ms");
     }
 
+    void AtomicSave(string path, string text)
+    {
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, text);
+        File.Move(temp, path, overwrite: true);
+    }
+
+    [MacOnlyFact]
+    public void One_atomic_save_is_delivered_once_on_macOS()
+    {
+        var start = Stopwatch.GetTimestamp();
+        AtomicSave(Path.Combine(_directory, "A.cs"), "class A { int atomic; }");
+        Assert.NotNull(Next("A.cs"));
+        // FSEvents reports the rename ~11 ms later; the file is unchanged since the fast delivery, so it is dropped.
+        Thread.Sleep(400);
+        var extras = new List<string>();
+        while (_sets.TryTake(out var extra)) extras.Add(string.Join(",", extra.Paths.Select(Path.GetFileName)) + "@" + Stopwatch.GetElapsedTime(start, extra.At).TotalMilliseconds.ToString("F1"));
+        Assert.True(extras.Count == 0, "extra sets: " + string.Join(" | ", extras));
+    }
+
+    [MacOnlyFact]
+    public void Atomic_saves_arrive_faster_than_the_directory_watcher_on_macOS()
+    {
+        var latencies = new List<double>();
+        for (var i = 0; i < 20; i++)
+        {
+            Drain();
+            var start = Stopwatch.GetTimestamp();
+            AtomicSave(Path.Combine(_directory, "A.cs"), $"class A {{ int a{i}; }}");
+            var set = Next("A.cs") ?? throw new Xunit.Sdk.XunitException("save not delivered");
+            latencies.Add(Stopwatch.GetElapsedTime(start, set.At).TotalMilliseconds);
+        }
+        latencies.Sort();
+        Assert.True(latencies[latencies.Count / 2] < 8, $"median {latencies[latencies.Count / 2]:F1} ms");
+    }
+
+    [MacOnlyFact]
+    public void A_new_file_is_delivered_once_on_macOS()
+    {
+        File.WriteAllText(Path.Combine(_directory, "New.cs"), "class New { }");
+        Assert.NotNull(Next("New.cs"));
+        Thread.Sleep(400);
+        Assert.False(_sets.TryTake(out var extra) && extra.Paths.Any(path => Path.GetFileName(path) == "New.cs"));
+    }
+
+    [MacOnlyFact]
+    public void A_save_in_a_new_subfolder_is_delivered_fast_on_macOS()
+    {
+        var folder = Path.Combine(_directory, "Sub");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "S.cs");
+        File.WriteAllText(path, "class S { }");
+        Assert.NotNull(Next("S.cs"));
+        Thread.Sleep(300); // the folder's own watch starts from its Created event
+        Drain();
+        var start = Stopwatch.GetTimestamp();
+        AtomicSave(path, "class S { int v; }");
+        var set = Next("S.cs") ?? throw new Xunit.Sdk.XunitException("save not delivered");
+        Assert.True(Stopwatch.GetElapsedTime(start, set.At).TotalMilliseconds < 9, "a save in a folder created after Watch took the slow path");
+    }
+
     /// <summary>A save written in chunks ends with its final state reported, whatever was reported before it.</summary>
     [MacOnlyFact]
     public void A_save_written_in_chunks_ends_with_its_whole_file_reported()
@@ -187,7 +248,16 @@ public sealed class VnodeEventsTests : IDisposable
     {
         var events = new VnodeEvents((_, _) => { }, maxFiles: 5);
         foreach (var i in Enumerable.Range(0, 20)) events.Add(0, Make($"F{i}.cs"));
+        // Files may not take the slots reserved for folders (2 of 5), so a small budget never starves the folder watches.
+        Assert.Equal(3, events.WatchedCount);
+        foreach (var i in Enumerable.Range(0, 4))
+        {
+            var folder = Path.Combine(_directory, $"D{i}");
+            Directory.CreateDirectory(folder);
+            events.AddDirectory(0, folder);
+        }
         Assert.Equal(5, events.WatchedCount);
+        Assert.Equal(2, events.DirectoryCount);
         Assert.Equal(5, events.DescriptorCount);
         events.Dispose();
         Assert.Equal(0, events.WatchedCount);
@@ -217,6 +287,32 @@ public sealed class VnodeEventsTests : IDisposable
         }
         Assert.Equal(0, events.WatchedCount);
         Assert.Equal(0, events.DescriptorCount);
+    }
+
+    /// <summary>
+    /// A descriptor number is reused as soon as it is closed. Replacing a watch while its file keeps raising events must never
+    /// let an event queued for the old registration remove the new one.
+    /// </summary>
+    [MacOnlyFact]
+    public void Replacing_a_watch_while_its_file_changes_never_loses_the_new_watch()
+    {
+        var path = Make("Hammer.cs");
+        var events = 0;
+        using var watcher = new VnodeEvents((_, _) => Interlocked.Increment(ref events));
+        watcher.Add(0, path);
+        for (var i = 0; i < 400; i++)
+        {
+            File.WriteAllText(path, $"class H {{ int v{i}; }}"); // raises an event for the current registration
+            watcher.Replace(0, path);                          // closes it and opens the next, usually the same number
+        }
+        Assert.True(watcher.Watching(path));
+        Assert.Equal(watcher.WatchedCount, watcher.DescriptorCount);
+        Thread.Sleep(100);
+        var before = Volatile.Read(ref events);
+        File.WriteAllText(path, "class H { int last; }");
+        var deadline = System.Environment.TickCount64 + 2000;
+        while (Volatile.Read(ref events) == before && System.Environment.TickCount64 < deadline) Thread.Sleep(2);
+        Assert.True(Volatile.Read(ref events) > before, "the replaced watch no longer reports writes");
     }
 
     [MacOnlyFact]
