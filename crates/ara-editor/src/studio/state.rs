@@ -478,7 +478,7 @@ pub struct Local {
     pub gizmo_hover: Option<crate::overlay::Handle>,
     /// The selection's rendered world bounds, which the host publishes while the Rect
     /// tool is on (`studio::rect_tool`).
-    pub rect_bounds: Option<[glam::Vec3; 2]>,
+    pub rect_bounds: Option<super::rect_tool::RectBounds>,
     /// An Inspector component header being dragged to reorder, and where it would land.
     pub component_drag: Option<(String, Option<super::inspector::Slot>)>,
     /// A component drag just dropped: that release's click on its header is no fold.

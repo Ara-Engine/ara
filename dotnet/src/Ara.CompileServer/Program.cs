@@ -86,6 +86,19 @@ if (args.Contains("--fix", StringComparer.Ordinal))
 }
 StartupTrace.Describe();
 StartupTrace.Mark("main entered");
+// The host needs ~100 ms to send the first module; use it to warm Roslyn on another core.
+if (ModuleCompiler.ShouldWarmUp(System.Environment.ProcessorCount))
+{
+    StartupTrace.Mark("warm-up started");
+    _ = ModuleCompiler.WarmUpAsync().ContinueWith(
+        warm =>
+        {
+            StartupTrace.Mark("warm-up finished");
+            if (warm.Result is { } failure) Console.Error.WriteLine($"[ara] compile warm-up failed (the first compile will be slower): {failure}");
+        },
+        TaskContinuationOptions.OnlyOnRanToCompletion);
+}
+else StartupTrace.Mark($"warm-up skipped ({System.Environment.ProcessorCount} cores)");
 var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
 var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 
