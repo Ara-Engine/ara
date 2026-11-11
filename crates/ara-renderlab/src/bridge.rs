@@ -297,7 +297,10 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture()?;
-            if let Some(meter) = metered {
+            // Every frame is read back here, but metered only when the meter asks.
+            if let Some(meter) = metered
+                && self.metering.due()
+            {
                 self.metering.observe(view.look, meter, stops, &read.rgba8);
             }
             upload(gpu, target, &read.rgba8)?
