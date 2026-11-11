@@ -37,6 +37,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Layout rects are then desktop frames (design px); system moves settle into `editor.window`.
   Headless tests leave `Local::desktop.on` off: floats draw inside the main window.
   `window.dock` (title-bar button, tab menu) returns a panel to its `state::home_slot`.
+- Click against drag: feed every phase of a press to `studio::click` and act on its answer
+  at release. It decides by the farthest the pointer went and how long it was held; never
+  decide from `e.travel()` at release (a drag that returns would count as a click).
 - `layer.rs`: a native layer with its own GPU UI adapter (`Layer::draw` of a display list);
   the Game view and the graph canvas each own one.
 - `graph.rs`: the Material and Animation pages: the shared node canvas

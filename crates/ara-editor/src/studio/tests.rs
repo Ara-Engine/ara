@@ -307,6 +307,82 @@ fn a_vector_that_differs_shows_a_dash_per_axis_and_each_keeps_its_others() {
     );
 }
 
+/// A right press at `from`, moved through `path`, released at its last point.
+fn right_drag(rt: &mut Runtime<Studio>, from: (f32, f32), path: &[(f32, f32)]) {
+    let pointer = |(x, y): (f32, f32)| stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.pointer_move(from.0, from.1);
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Press(
+        pointer(from),
+        stillkit::Button::Right,
+    ));
+    for at in path {
+        rt.handle(&stillkit::Event::Move(pointer(*at)));
+        rt.frame(FRAME);
+    }
+    let end = path.last().copied().unwrap_or(from);
+    rt.handle(&stillkit::Event::Release(
+        pointer(end),
+        stillkit::Button::Right,
+    ));
+    settle(rt);
+}
+
+#[test]
+fn a_right_drag_that_comes_back_is_not_a_right_click() {
+    let mut rt = open();
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let (x, y) = (view.center().x, view.center().y);
+    // Look around and come back to where it began: no menu.
+    // (The host opens the menu from the pick a right click leaves.)
+    let asks_for_menu = |rt: &Runtime<Studio>| {
+        rt.state()
+            .local
+            .pick
+            .as_ref()
+            .is_some_and(|p| p.context.is_some())
+    };
+    right_drag(
+        &mut rt,
+        (x, y),
+        &[(x + 30.0, y), (x + 60.0, y + 20.0), (x + 30.0, y), (x, y)],
+    );
+    assert!(!asks_for_menu(&rt), "a drag opens no menu");
+    // A still right click does.
+    right_drag(&mut rt, (x, y), &[]);
+    assert!(asks_for_menu(&rt), "a click opens the menu");
+    // The Material canvas pans on a right drag and searches nodes on a right click.
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/drag.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let canvas = rt.find("graph/view").expect("the canvas");
+    let (x, y) = (canvas.center().x, canvas.center().y);
+    right_drag(&mut rt, (x, y), &[(x + 40.0, y + 10.0), (x, y)]);
+    assert!(rt.state().graph.adding.is_none(), "a pan opens no search");
+    right_drag(&mut rt, (x, y), &[]);
+    assert!(
+        rt.state().graph.adding.is_some(),
+        "a click opens the search"
+    );
+}
+
 #[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
