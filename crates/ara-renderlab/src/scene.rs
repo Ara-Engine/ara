@@ -5,6 +5,7 @@
 //! into world-space batches per material (`batch`), and only what still does not fit
 //! is left out. Both are reported (`ARA_RENDERLAB_LIMIT`). Draws the bridge derives
 //! itself (foliage) are placed once per content key and then left alone.
+use crate::rl::Engine;
 use crate::{
     batch::{self, Fate, Group},
     cutout,
@@ -19,7 +20,7 @@ use ara_runtime::{
 use renderlab::{
     asset::{TangentBasis, TextureRole},
     engine::{
-        Engine, Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Primitive,
+        Influence, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Primitive,
         ProgramId, Sampler, TangentStream, TextureId, TextureRef, Transparency, Value, Vertex,
     },
 };
@@ -551,6 +552,8 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 impl Scene {
     /// Triangles of the largest mesh this scene has uploaded (cut meshes and static
     /// batches included). Renderlab's non-RT shadows size their ids by it.
+    // On Apple, only the non-RT path caps foliage by it.
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     pub fn largest_triangles(&self) -> usize {
         self.largest
     }

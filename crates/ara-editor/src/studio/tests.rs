@@ -21,6 +21,15 @@ fn open() -> Runtime<Studio> {
 
 /// [`open`] in a window of `size` (logical px at scale 1).
 fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
+    let studio = open_studio(size);
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
+    rt.frame(Duration::ZERO);
+    rt
+}
+
+/// The studio [`open_sized`] shows: a project of four entities, one selected.
+fn open_studio(size: (u32, u32)) -> Studio {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
@@ -62,11 +71,7 @@ fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
             json!({"tool": "translate", "snapping": false, "local": false}),
         )
         .unwrap();
-    let studio = Studio::new(editor, (size.0 as f32, size.1 as f32));
-    let theme = studio.look.theme.clone();
-    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
-    rt.frame(Duration::ZERO);
-    rt
+    Studio::new(editor, (size.0 as f32, size.1 as f32))
 }
 
 /// A few frames, applying focus requests as the host does.
@@ -1731,9 +1736,36 @@ fn file_play_and_assets_commands_run_in_the_studio() {
     assert!(!rt.state().editor.state.asset_favourites.is_empty());
     run(&mut rt, "assets.search.scope");
     assert!(rt.state().editor.state.asset_search_folder_only);
-    // Exit asks the host to close.
+    // Exit asks the host to close (with the documents written, nothing is left to ask about).
+    rt.update(|s| s.editor.host.flush());
     run(&mut rt, "file.exit");
     assert!(rt.state().local.quit);
+}
+
+/// A human session's `daemon.shutdown` closes the studio like File › Exit, so tools that stop the
+/// editor through the protocol (the installed-package smoke, Hub) are not left waiting for it.
+#[test]
+fn a_human_sessions_daemon_shutdown_closes_the_studio() {
+    let mut rt = open();
+    assert!(!super::closing(rt.state()));
+    rt.update(|s| {
+        let begun = s
+            .editor
+            .call_for(
+                ara_proto::ConnId::LOCAL,
+                "session.begin",
+                json!({"client": "test", "author": "human", "label": "stop"}),
+            )
+            .expect("a human session");
+        s.editor
+            .call_for(
+                ara_proto::ConnId::LOCAL,
+                "daemon.shutdown",
+                json!({"session": begun["session"]}),
+            )
+            .expect("a human session may stop the daemon");
+    });
+    assert!(super::closing(rt.state()));
 }
 
 #[test]
@@ -7062,7 +7094,7 @@ fn the_title_bar_has_no_theme_button_and_no_rule_under_it() {
 fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
     let mut rt = open();
     settle(&mut rt);
-    for panel in ["hierarchy", "inspector", "scene", "game"] {
+    for panel in ["hierarchy", "inspector", "scene", "game", "assets"] {
         rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
         settle(&mut rt);
         assert!(
@@ -7077,17 +7109,20 @@ fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
         "other panels keep their ×"
     );
     // Window › Hierarchy is checked while shown; pressing it hides the panel, and again shows it.
-    for (shown_after, key) in [
-        (false, "cmd/window.close_panel/Hierarchy"),
-        (true, "cmd/window.hierarchy/Hierarchy"),
-    ] {
-        press(&mut rt, "menu/Window");
-        press(&mut rt, key);
-        assert_eq!(
-            crate::state::panel_visible(&rt.state().editor.state, "hierarchy"),
-            shown_after
-        );
-        settle(&mut rt);
+    for (panel, label) in [("hierarchy", "Hierarchy"), ("assets", "Assets")] {
+        for (shown_after, key) in [
+            (false, format!("cmd/window.close_panel/{label}")),
+            (true, format!("cmd/window.{panel}/{label}")),
+        ] {
+            press(&mut rt, "menu/Window");
+            press(&mut rt, &key);
+            assert_eq!(
+                crate::state::panel_visible(&rt.state().editor.state, panel),
+                shown_after,
+                "{label} after pressing {key}"
+            );
+            settle(&mut rt);
+        }
     }
 }
 
@@ -7340,4 +7375,292 @@ fn the_frame_time_readout_is_scene_statistics_and_off_by_default() {
     });
     settle(&mut rt);
     assert!(shows(&rt), "Scene statistics shows it");
+}
+
+// UI pass 3: the left of the window.
+
+/// How far from its panel's left edge things start, at 1000x630 (logical px). Before: a
+/// Hierarchy entity's name 50, "Project" 45 and "content" 57 in the Assets tree.
+#[test]
+fn the_left_columns_start_their_names_close_to_the_edge() {
+    let mut rt = open_sized((1000, 630));
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    let tree = rt.tree();
+    let left_of = |label: &str| {
+        tree.iter()
+            .filter(|n| n.text.as_deref() == Some(label))
+            .map(|n| n.rect.left)
+            .fold(f32::MAX, f32::min)
+    };
+    let area = |key: &str| {
+        tree.iter()
+            .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key))
+            .map(|n| n.rect)
+            .unwrap_or_else(|| panic!("{key} shows"))
+    };
+    let outline = area("area/outline");
+    let name = left_of("Box") - outline.left;
+    assert!(
+        name <= 36.0,
+        "a Hierarchy entity's name starts {name}px from its panel's edge"
+    );
+    let tree_edge = tree
+        .iter()
+        .filter(|n| {
+            n.key
+                .as_ref()
+                .is_some_and(|k| k.to_string().starts_with("assets/tree/"))
+        })
+        .map(|n| n.rect.left)
+        .fold(f32::MAX, f32::min)
+        - 3.0;
+    let project = left_of("Project") - tree_edge;
+    let content = left_of("content") - tree_edge;
+    assert!(
+        project <= 24.0,
+        "\"Project\" starts {project}px from its column's edge"
+    );
+    assert!(
+        content <= 38.0,
+        "\"content\" starts {content}px from its column's edge"
+    );
+    // The left column is narrower by default: the Hierarchy takes at most 14% of the window.
+    assert!(
+        outline.width() <= 1000.0 * 0.14,
+        "the Hierarchy is {}px wide",
+        outline.width()
+    );
+}
+
+/// The UI pass 3 review shots at three window sizes (device px; the zoom applies as in the
+/// window): a three-level Hierarchy nest, the Assets tree two folders deep with the path bar and a
+/// hovered filter's tooltip, and Settings' theme control. Written to
+/// `target/studio-captures/pass3/<ARA_CAP_TAG, default "after">/`.
+#[test]
+#[ignore = "writes review captures under target/"]
+fn pass_three_captures() {
+    let tag = std::env::var("ARA_CAP_TAG").unwrap_or_else(|_| "after".into());
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/studio-captures/pass3")
+        .join(tag);
+    std::fs::create_dir_all(&out).unwrap();
+    let shot = |rt: &mut Runtime<Studio>, name: &str| {
+        std::fs::write(
+            out.join(format!("{name}.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+    };
+    for (w, h) in [(1280u32, 720u32), (1000, 630), (900, 560)] {
+        let zoom = super::zoom::for_width(w as f32);
+        let mut rt = open_sized(((w as f32 / zoom) as u32, (h as f32 / zoom) as u32));
+        rt.set_scale(zoom);
+        rt.resize((w, h));
+        let size = format!("{w}x{h}");
+        let root = rt.state().editor.host.root().to_owned();
+        std::fs::create_dir_all(root.join("content/models/props")).unwrap();
+        std::fs::create_dir_all(root.join("content/textures")).unwrap();
+        std::fs::write(root.join("content/models/props/notes.md"), "# Props").unwrap();
+        rt.touch(|s| {
+            s.editor
+                .apply(
+                    vec![
+                        json!({"cmd":"entity.create","args":{"id":"e_arm","name":"Arm","parent":"e_lamp","components":{"Transform":{}}}}),
+                        json!({"cmd":"entity.create","args":{"id":"e_hand","name":"Hand","parent":"e_arm","components":{"Transform":{}}}}),
+                    ],
+                    "Create",
+                    None,
+                )
+                .unwrap()
+        });
+        rt.update(|s| s.resolve());
+        scan(&mut rt);
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+        settle(&mut rt);
+        for _ in 0..20 {
+            rt.frame(FRAME);
+        }
+        // The host feeds back the Assets body and path bar rects; do the same here.
+        let measure = |rt: &mut Runtime<Studio>| {
+            let scale = rt.scale();
+            let rects: Vec<_> = ["assets/body", "assets/crumbs", "assets/search"]
+                .into_iter()
+                .filter_map(|k| rt.find(k).map(|r| (k.to_owned(), r)))
+                .map(|(k, r)| {
+                    let r = stillkit::Rect::new(
+                        r.left / scale,
+                        r.top / scale,
+                        r.width() / scale,
+                        r.height() / scale,
+                    );
+                    (k, r)
+                })
+                .collect();
+            rt.update(|s| s.local.rects.extend(rects));
+            settle(rt);
+        };
+        measure(&mut rt);
+        shot(&mut rt, &format!("{size}-hierarchy-nest"));
+        // Two folders deep: the path bar reads project › content › models › props.
+        rt.update(|s| {
+            s.act(
+                "editor.workspace",
+                json!({"folder": "content/models/props", "asset": ""}),
+            )
+        });
+        settle(&mut rt);
+        measure(&mut rt);
+        shot(&mut rt, &format!("{size}-assets-two-deep"));
+        // A hovered filter shows its name in a tooltip once the pointer has rested.
+        let chip = rt
+            .find("assets/filter/texture")
+            .expect("the Textures filter");
+        rt.pointer_move(chip.center().x, chip.center().y);
+        for _ in 0..80 {
+            rt.frame(FRAME);
+        }
+        assert!(
+            rt.tree()
+                .iter()
+                .any(|n| n.text.as_deref() == Some("Textures")),
+            "the hovered filter's tooltip shows"
+        );
+        shot(&mut rt, &format!("{size}-assets-filter-tooltip"));
+        rt.pointer_move(0.0, 0.0);
+        // Exit with a number mid-drag asks first.
+        rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+        rt.update(|s| super::commands::run(s, "file.exit", &crate::catalog::Target::None));
+        settle(&mut rt);
+        assert!(rt.find("quit/save").is_some(), "the question shows");
+        for _ in 0..40 {
+            rt.frame(FRAME);
+        }
+        shot(&mut rt, &format!("{size}-quit-dialog"));
+        press(&mut rt, "quit/cancel");
+        rt.update(|s| s.local.scrub = None);
+        // Settings, filtered to the theme control.
+        rt.update(|s| super::commands::run(s, "edit.preferences", &crate::catalog::Target::None));
+        settle(&mut rt);
+        rt.update(|s| s.local.settings.as_mut().unwrap().query = "Theme".into());
+        settle(&mut rt);
+        shot(&mut rt, &format!("{size}-settings-theme"));
+    }
+}
+
+/// The path bar names as many trailing folders as fit and folds the rest into one "…" step
+/// that opens the nearest hidden folder; it never overprints.
+#[test]
+fn a_deep_path_folds_its_leading_folders_into_one_step() {
+    use super::panels::crumbs_fit;
+    let parts = ["models", "props", "crates", "small"];
+    let fit = |parts: &[&str], room| {
+        let c = crumbs_fit("Studio", parts, room);
+        (c.shown, c.root_named)
+    };
+    assert_eq!(fit(&parts, None), (4, true), "unmeasured shows all");
+    assert_eq!(fit(&parts, Some(900.0)), (4, true), "room for all");
+    let (some, named) = fit(&parts, Some(260.0));
+    assert!(
+        (1..4).contains(&some) && named,
+        "{some} of 4 in a narrow bar"
+    );
+    assert_eq!(
+        fit(&parts, Some(10.0)),
+        (1, false),
+        "the current one stays, the root is its icon"
+    );
+    assert_eq!(fit(&[], Some(60.0)), (0, false), "no room for the name");
+    assert_eq!(fit(&[], Some(200.0)), (0, true), "the root alone");
+    // What it reserves is what it shows.
+    let c = crumbs_fit("Studio", &parts, Some(260.0));
+    assert!(c.width <= 260.0, "{} fits 260", c.width);
+}
+
+#[test]
+fn exit_asks_only_when_work_could_be_lost_and_a_tool_shutdown_never_asks() {
+    use crate::catalog::Target;
+    let exit = |rt: &mut Runtime<Studio>| {
+        rt.update(|s| super::commands::run(s, "file.exit", &Target::None));
+        settle(rt);
+    };
+    // Nothing at risk: it closes at once.
+    let mut rt = open();
+    rt.update(|s| s.editor.host.flush());
+    exit(&mut rt);
+    assert!(rt.state().local.quit, "closes without asking");
+    assert!(rt.state().local.quit_ask.is_none());
+
+    // A number being dragged: it asks first, and Cancel keeps the editor open.
+    let mut rt = open();
+    rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+    exit(&mut rt);
+    assert!(!rt.state().local.quit, "asks first");
+    assert!(rt.state().local.quit_ask.is_some());
+    assert!(rt.find("quit/save").is_some() && rt.find("quit/discard").is_some());
+    press(&mut rt, "quit/cancel");
+    assert!(rt.state().local.quit_ask.is_none() && !rt.state().local.quit);
+
+    // Save and close commits the drag, then closes.
+    exit(&mut rt);
+    press(&mut rt, "quit/save");
+    assert!(rt.state().local.quit);
+    assert_eq!(
+        position(&rt, "e_box")[0].as_f64(),
+        Some(2.0),
+        "the drag's value was committed"
+    );
+
+    // Discard and close drops the drag.
+    let mut rt = open();
+    rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+    exit(&mut rt);
+    press(&mut rt, "quit/discard");
+    assert!(rt.state().local.quit && rt.state().local.scrub.is_none());
+    assert_eq!(position(&rt, "e_box")[0].as_f64(), Some(0.0));
+}
+
+/// The shared placeholder for what the renderer does not provide yet shows its one line, in a
+/// tile that fills the space it is given. Also writes `target/studio-captures/pass3/unavailable.png`.
+#[test]
+fn the_unavailable_tile_says_what_is_missing() {
+    let studio = open_studio((320, 320));
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(
+        studio,
+        |s: &Studio| {
+            stillkit::el::col()
+                .size(320.0)
+                .fill(s.look.c.card.0)
+                .child(super::unavailable::tile(
+                    &s.look,
+                    "unavailable",
+                    "Material previews are not available yet.",
+                ))
+        },
+        theme,
+        (320, 320),
+        1.0,
+    )
+    .unwrap();
+    settle(&mut rt);
+    let tile = rt.find("unavailable").expect("the tile shows");
+    assert!(
+        tile.width() > 300.0 && tile.height() > 300.0,
+        "it fills its parent"
+    );
+    assert!(
+        rt.tree()
+            .iter()
+            .any(|n| n.text.as_deref() == Some("Material previews are not available yet.")),
+        "and says what is missing"
+    );
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures/pass3");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(
+        out.join("unavailable.png"),
+        ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+    )
+    .unwrap();
 }

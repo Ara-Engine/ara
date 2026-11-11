@@ -693,8 +693,9 @@ pub(super) fn area_holding(s: &Studio, panel: &str) -> Option<String> {
     })
 }
 
-/// Panels with no × on their tab: the studio's core. Window › a panel hides and shows them.
-pub(super) const CORE_PANELS: [&str; 4] = ["hierarchy", "inspector", "scene", "game"];
+/// Panels with no × on their tab: the studio's core and its Assets. Window › a panel hides
+/// and shows them (a tab's right-click menu still closes any tab).
+pub(super) const CORE_PANELS: [&str; 5] = ["hierarchy", "inspector", "scene", "game", "assets"];
 
 /// A panel's title and icon.
 pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
