@@ -274,6 +274,40 @@ fn two_d_mode_looks_head_on_and_flat_and_right_drags_pan() {
 }
 
 #[test]
+fn a_vector_that_differs_shows_a_dash_per_axis_and_each_keeps_its_others() {
+    let mut rt = open();
+    rt.update(|s| s.select(vec!["e_box".into(), "e_lamp".into()], false));
+    settle(&mut rt);
+    let shown = |rt: &Runtime<Studio>, axis: usize| {
+        let key = format!("field/Transform.position/{axis}");
+        rt.tree()
+            .into_iter()
+            .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key))
+            .and_then(|n| n.value.or(n.text))
+            .map(|t| t.to_string())
+    };
+    assert_eq!(shown(&rt, 0).as_deref(), Some("—"), "X differs (0, 3)");
+    assert_eq!(shown(&rt, 1).as_deref(), Some("—"), "Y differs (0, 2)");
+    assert_eq!(shown(&rt, 2).as_deref(), Some("0"), "Z is shared");
+    let r = rt.find("field/Transform.position/0").expect("X");
+    rt.pointer_move(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.center().x, r.center().y);
+    rt.pointer_up(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.type_text("5");
+    rt.key(0x0D);
+    settle(&mut rt);
+    let position = |id: &str| rt.state().resolved[id].record["Transform"]["position"].clone();
+    assert_eq!(position("e_box"), json!([5.0, 0, 0]));
+    assert_eq!(
+        position("e_lamp"),
+        json!([5.0, 2, 0]),
+        "the Lamp keeps its Y"
+    );
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);
