@@ -39,6 +39,7 @@ use ara_render_fidelity::{
 };
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
+mod bounds;
 mod content;
 mod convergence;
 mod picking;
