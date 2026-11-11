@@ -10,7 +10,7 @@
 //! ```sh
 //! dotnet build dotnet/Ara.slnx -c Release
 //! cargo run -p ara-script --release --example reload_bench -- [--edits 60] [--lines 5000] [--verbose]
-//! # Optional: --single-file --dotnet-bin /absolute/projects-bin --output target/reload.json
+//! # Optional: --single-file --atomic-save --dotnet-bin /absolute/projects-bin --output target/reload.json
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -215,6 +215,8 @@ fn main() {
     let edits = arg("--edits", 60);
     let lines_target = arg("--lines", 5000);
     let single_file = std::env::args().any(|arg| arg == "--single-file");
+    // Save by writing a temp file and renaming it over the source (JetBrains safe write, vim, …).
+    let atomic_save = std::env::args().any(|arg| arg == "--atomic-save");
     let sdk_bin = option("--dotnet-bin")
         .map(PathBuf::from)
         .unwrap_or_else(|| dotnet().join("artifacts/bin"));
@@ -224,7 +226,7 @@ fn main() {
         path: PathBuf::from(path),
         data: json!({"schema": 1, "completed": false,
             "timing_acceptance": "external controller required", "configured_edits": edits,
-            "configured_filler_lines": lines_target, "single_file": single_file,
+            "configured_filler_lines": lines_target, "single_file": single_file, "atomic_save": atomic_save,
             "simulation_entities": 20_000, "probe_entities": 1, "tick_hz": 60,
             "sdk_bin": sdk_bin, "host_bin": host_bin, "compile_server": compile_server,
             "sample_directory": dotnet().join("samples/Outpost.Sample"),
@@ -379,7 +381,13 @@ fn main() {
                     text = text.replace(from, to);
                     long = !long;
                 }
-                if let Err(error) = std::fs::write(&file, &text) {
+                let saved_ok = if atomic_save {
+                    let temp = file.with_extension("cs.tmp");
+                    std::fs::write(&temp, &text).and_then(|()| std::fs::rename(&temp, &file))
+                } else {
+                    std::fs::write(&file, &text)
+                };
+                if let Err(error) = saved_ok {
                     results.push(Edit {
                         index: e as usize,
                         kind,
