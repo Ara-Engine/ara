@@ -551,6 +551,9 @@ mod tests {
 
     #[test]
     fn embedded_gpu_defaults_to_raster_and_honours_the_rt_opt_in() -> Result<()> {
+        // This asserts on ara-render's presenter (native raster geometry, its quality preset),
+        // so it names that renderer; the player's own default is Renderlab.
+        crate::renderer::configure(crate::renderer::RendererChoice::Ara);
         // Field order also protects assertion/error unwinding: the ring borrows
         // native device objects and must be dropped before the owning presenter.
         struct Session {

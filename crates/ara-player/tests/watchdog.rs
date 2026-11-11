@@ -20,6 +20,7 @@ fn stalled_simulation_keeps_its_heartbeat_and_only_real_silence_is_killed() {
         headless: 1,
         windowed: 0,
         size: [64, 64],
+        renderer: Some("ara".to_owned()),
     };
     let mut pool = Pool::new(config, "watchdog-test".into()).unwrap();
     let mut player = pool

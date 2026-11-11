@@ -1,11 +1,12 @@
 # ara-renderlab
 
-Renderlab (`github.com/Ara-Engine/renderlab`) as an Ara renderer. Provisional: D35.
+Renderlab (`github.com/Ara-Engine/renderlab`) as Ara's default renderer (D35, D39).
 `Renderlab` implements `ara_runtime_render::ExternalRenderer`; a host installs it
 with `Presenter::set_external_renderer`, and presents, captures and perf runs then
 draw the extracted `RenderFrame` through Renderlab's `Engine`. The player's switch is
-`--renderer ara|renderlab|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`).
-`ara-render` stays the default.
+`--renderer renderlab|ara|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`); `renderlab` is the
+default. `ara-render` is frozen and draws where Renderlab cannot start, and the editor's Scene
+view, until Renderlab has more than one view per engine.
 
 This is the only crate that names a Renderlab or wgpu type. Keep it that way: the
 GPU layer under Renderlab is being measured against `ara-gpu`, and a swap must touch
