@@ -11,6 +11,8 @@ workspace = true
 [features]
 hotpatch = ["dep:ara-hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
+# Counts heap allocations for the Profiler's Memory module (a counting global allocator).
+memory-profile = ["ara-profile/allocation"]
 
 [build-dependencies]
 embed-resource.workspace = true
