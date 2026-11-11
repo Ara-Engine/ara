@@ -71,7 +71,7 @@ drag and graph create/connect/undo, then captures every panel in both themes and
 measures 1,000 warm input-to-present samples with 500 nodes open.
 
 Commands: `catalog/` is what the studio offers (`table.rs` id, title, icon, keys,
-summary; `menus.rs` the menus and context menus; `UNBUILT`/`UNPORTED` show dimmed with
+summary; `menus.rs` the menus and context menus; `UNBUILT` commands show dimmed with
 their reason). `keys.rs` holds chords and the Ara/Unreal/Unity/Blender presets;
 `catalog::keymap` layers them with `input.shortcuts`, and `catalog::export` is
 `editor.commands` (MCP). The legacy `shell/commands` registry still drives `--legacy-ui`.

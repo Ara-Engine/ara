@@ -148,10 +148,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     let search = search(
         l,
         "hierarchy/search",
-        "Filter: name, or t:Light",
+        // Short enough for a narrow panel; the syntax is in its tooltip and label.
+        "Filter",
         &query,
         None,
-        |f| f.on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into()),
+        |f| {
+            f.label("Filter by name, or by component: t:Light")
+                .tooltip("Filter by name, or by component: t:Light")
+                .on_input(|s: &mut Studio, t| s.local.hierarchy_query = t.into())
+        },
         |s: &mut Studio| s.local.hierarchy_query.clear(),
     );
     let all = rows(s, &query);
@@ -169,7 +174,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             l,
             icons::SEARCH,
             "No entities match",
-            "Search looks at entity names.",
+            "The filter looks at names, or at components with t:Light.",
             None,
         )
     } else {
@@ -211,6 +216,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .grow(1.0)
         .pad_x(4.0)
+        // One Tab stop for the whole tree, on its selected row: the rows' own arrows move
+        // through it (the WAI tree pattern), as Unity's and VS Code's trees do.
+        .focus_group(stillkit::el::Orientation::Vertical)
         // Empty space: create at the root (rows have their own menu).
         .on_context_menu(|s: &mut Studio, x, y| {
             s.local.context = Some((
@@ -507,6 +515,11 @@ fn row_el(
     };
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
+        // Unset off the hovered row it isn't shown: a plain spacer, not a Tab stop on
+        // every row of the tree.
+        if !on && !hovered {
+            return el().size(18.0);
+        }
         el().key(key)
             .size(18.0)
             .align(Align::Center)

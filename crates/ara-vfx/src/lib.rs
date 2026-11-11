@@ -16,6 +16,7 @@ mod starter;
 mod validate;
 
 pub use appearance::*;
+pub use ara_curve::{self, Curve};
 pub use model::*;
 pub use modules::*;
 pub use projection::{VfxAdapter, registry};

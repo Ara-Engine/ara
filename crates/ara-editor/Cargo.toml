@@ -16,6 +16,7 @@ tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
 embed-resource.workspace = true
 
 [dependencies]
+ara-curve = { path = "../ara-curve" }
 ara-kit = { path = "../ara-kit" }
 stillkit.workspace = true
 stillkit-kit.workspace = true
