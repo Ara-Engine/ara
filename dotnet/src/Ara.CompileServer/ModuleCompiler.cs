@@ -97,9 +97,9 @@ internal sealed class ModuleCompiler
     /// <summary>
     /// Compiles a small component and system once, with the generator and a debug-IL emit, to load Roslyn's cold paths
     /// (type loading, framework reference metadata, generator driver) while the server waits for its first module.
-    /// Failures are ignored: this only warms.
+    /// Failures are ignored (false): this only warms.
     /// </summary>
-    internal static void WarmUp()
+    internal static bool WarmUp()
     {
         try
         {
@@ -108,9 +108,9 @@ internal sealed class ModuleCompiler
                 + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
             var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
             Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out _);
-            Emit(final);
+            return Emit(final).Image is not null;
         }
-        catch (Exception) { /* a failed warm-up costs nothing */ }
+        catch (Exception) { return false; /* a failed warm-up costs nothing */ }
     }
 
     /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
