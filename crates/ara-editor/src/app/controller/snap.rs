@@ -1,6 +1,6 @@
 //! Exact contact previews are transient; release and End use ordinary transform commands.
 use super::*;
-use crate::surface_drop::{offset, within};
+use crate::surface_drop::{contact_delta, offset, within};
 use glam::Mat4;
 use std::collections::BTreeMap;
 
@@ -24,30 +24,6 @@ fn setting(editor: &Editor, key: &str) -> bool {
         .get(key)
         .and_then(Value::as_bool)
         .unwrap_or(false)
-}
-
-fn contact_delta(
-    vertices: &[Vec3],
-    pivot: Vec3,
-    point: Vec3,
-    normal: Vec3,
-    offset: f32,
-) -> Option<Vec3> {
-    if vertices.is_empty()
-        || !pivot.is_finite()
-        || !point.is_finite()
-        || !normal.is_finite()
-        || !offset.is_finite()
-        || normal.length_squared() < 0.5
-    {
-        return None;
-    }
-    let support = vertices
-        .iter()
-        .map(|vertex| (*vertex - pivot).dot(normal))
-        .min_by(f32::total_cmp)?;
-    let delta = point - pivot + normal * (offset - support);
-    delta.is_finite().then_some(delta)
 }
 
 impl Drag {

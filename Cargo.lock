@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/Snowy7/stillkit?rev=7a5f87e38bca3734151213074a27e50251e5df5c#7a5f87e38bca3734151213074a27e50251e5df5c"
+source = "git+https://github.com/Snowy7/stillkit?rev=3621edbd78d10ba543a51c413fe7c74f5a8400a9#3621edbd78d10ba543a51c413fe7c74f5a8400a9"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_consumer 0.39.2",
@@ -5992,7 +5992,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7596,7 +7596,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11035,7 +11035,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11689,7 +11689,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -12394,7 +12394,7 @@ checksum = "ae139f051204a4af015d4f0ed3a1f7a51020d03a44c7cf249168c543d88131e9"
 [[package]]
 name = "stillkit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=7a5f87e38bca3734151213074a27e50251e5df5c#7a5f87e38bca3734151213074a27e50251e5df5c"
+source = "git+https://github.com/Snowy7/stillkit?rev=3621edbd78d10ba543a51c413fe7c74f5a8400a9#3621edbd78d10ba543a51c413fe7c74f5a8400a9"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_macos 0.27.2",
@@ -12435,7 +12435,7 @@ dependencies = [
 [[package]]
 name = "stillkit-glass"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=7a5f87e38bca3734151213074a27e50251e5df5c#7a5f87e38bca3734151213074a27e50251e5df5c"
+source = "git+https://github.com/Snowy7/stillkit?rev=3621edbd78d10ba543a51c413fe7c74f5a8400a9#3621edbd78d10ba543a51c413fe7c74f5a8400a9"
 dependencies = [
  "bytemuck",
  "glam 0.34.1",
@@ -12446,7 +12446,7 @@ dependencies = [
 [[package]]
 name = "stillkit-kit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=7a5f87e38bca3734151213074a27e50251e5df5c#7a5f87e38bca3734151213074a27e50251e5df5c"
+source = "git+https://github.com/Snowy7/stillkit?rev=3621edbd78d10ba543a51c413fe7c74f5a8400a9#3621edbd78d10ba543a51c413fe7c74f5a8400a9"
 dependencies = [
  "stillkit",
 ]
@@ -12880,10 +12880,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -14387,7 +14387,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

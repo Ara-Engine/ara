@@ -715,7 +715,14 @@ pub(super) fn drop_keys(s: &Studio) -> Vec<String> {
     let Some(browser) = s.assets.as_ref() else {
         return Vec::new();
     };
-    let mut keys = vec!["assets/tree/".to_owned()];
+    let mut keys = vec!["assets/tree/".to_owned(), "hierarchy/rows".to_owned()];
+    // The Hierarchy's rows (those on screen report a rect) and the Inspector's asset fields.
+    keys.extend(s.resolved.keys().map(|id| format!("row/{id}")));
+    keys.extend(
+        super::inspector::asset_fields(s)
+            .into_iter()
+            .map(|p| format!("field/{p}")),
+    );
     for folder in folders(browser) {
         keys.push(format!("asset/{folder}"));
         keys.push(format!("asset/{folder}/"));
@@ -815,6 +822,137 @@ fn bookmarks(s: &Studio) -> Vec<El<Studio>> {
     }
     if !out.is_empty() {
         out.push(el().h(6.0));
+    }
+    out
+}
+
+/// The file a stack frame names, when it may be opened: a relative path (no root, drive,
+/// UNC prefix or `..`, in either separator) that, canonicalised, lies inside the project
+/// `root`. Frames come from scripts, so anything else is shown as plain text and never
+/// handed to an opener.
+pub(super) fn frame_target(root: &std::path::Path, file: &str) -> Option<std::path::PathBuf> {
+    use std::path::{Component, Path};
+    let portable = file.replace('\\', "/");
+    let relative = Path::new(&portable);
+    let plain = !portable.starts_with('/')
+        && !portable.contains(':')
+        && relative
+            .components()
+            .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    if !plain {
+        return None;
+    }
+    let root = std::fs::canonicalize(root).ok()?;
+    let target = std::fs::canonicalize(root.join(relative)).ok()?;
+    target.starts_with(&root).then_some(target)
+}
+
+/// Opens `file` at `line`: a script in the IDE, anything else where the system opens it;
+/// only inside the project (`frame_target`).
+fn open_source(s: &mut Studio, file: &str, line: Option<u32>, column: Option<u32>) {
+    let Some(target) = frame_target(s.editor.host.root(), file) else {
+        s.editor.report_failure(&*anyhow::anyhow!(
+            "{file} is not a file in this project, so it was not opened"
+        ));
+        return;
+    };
+    let path = target.to_string_lossy().into_owned();
+    if file.ends_with(".cs") {
+        let at = line.map(|l| (l, column.unwrap_or(1)));
+        super::asset_ops::open_in_ide(s, &path, at);
+    } else if let Err(error) = crate::system::open_external(&target) {
+        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+    }
+}
+
+/// Whether a diagnostic carries an exception stack (a C# fault).
+fn has_stack(d: &ara_diag::Diagnostic) -> bool {
+    d.data
+        .as_deref()
+        .is_some_and(|data| data.get("exception").is_some())
+}
+
+/// A C# fault's stack, as Unity's Console shows it: each exception (inner ones as "Caused
+/// by"), its type and message, then its frames, a frame's file and line a link that opens
+/// it. Empty for anything else.
+fn stack(s: &Studio, d: &ara_diag::Diagnostic) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let c = &l.c;
+    let Some(value) = d.data.as_deref().and_then(|data| data.get("exception")) else {
+        return Vec::new();
+    };
+    let stack = crate::exception_stack::Stack::parse(value);
+    let mut out = Vec::new();
+    for (i, exception) in stack.nodes.iter().enumerate() {
+        let title = match i {
+            0 => format!("{}: {}", exception.kind, exception.message),
+            _ => format!("Caused by {}: {}", exception.kind, exception.message),
+        };
+        let indent = exception.depth as f32 * 10.0;
+        out.push(
+            row().child(el().w(indent)).child(
+                text(title)
+                    .text_size(11.5)
+                    .weight(600)
+                    .wrap(3)
+                    .color(c.foreground.0)
+                    .w(0.0)
+                    .grow(1.0),
+            ),
+        );
+        for frame in &exception.frames {
+            let mut line = row()
+                .gap(8.0)
+                .align(Align::Center)
+                .child(el().w(indent + 10.0))
+                .child(
+                    text(format!("at {}", frame.method))
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(c.muted_foreground.0)
+                        .wrap(1)
+                        .w(0.0)
+                        .grow(1.0),
+                );
+            let root = s.editor.host.root();
+            if let Some(file) = frame
+                .file
+                .filter(|f| !frame.link || frame_target(root, f).is_none())
+            {
+                // A file outside the project (or not a source) reads, never opens.
+                let shown = match frame.line {
+                    Some(n) => format!("{file}:{n}"),
+                    None => file.to_owned(),
+                };
+                line = line.child(
+                    text(shown)
+                        .key(format!("console/detail/source/{}", frame.index))
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(c.muted_foreground.0),
+                );
+            } else if let (true, Some(file)) = (frame.link, frame.file) {
+                let shown = match frame.line {
+                    Some(n) => format!("{}:{n}", file.rsplit(['/', '\\']).next().unwrap_or(file)),
+                    None => file.to_owned(),
+                };
+                let (file, at, column) = (file.to_owned(), frame.line, frame.column);
+                line = line.child(
+                    button(l, Tone::Ghost, Size::Sm, None, &shown)
+                        .key(format!("console/detail/frame/{}", frame.index))
+                        .tooltip(format!("Open {file}"))
+                        .on_press(move |s: &mut Studio| open_source(s, &file, at, column)),
+                );
+            }
+            out.push(line);
+        }
+    }
+    if stack.truncated {
+        out.push(
+            text("The stack is longer; the rest was cut.")
+                .text_size(11.0)
+                .color(c.muted_foreground.0),
+        );
     }
     out
 }
@@ -1356,16 +1494,22 @@ fn tile(
                             s.resolve();
                         }
                     }
+                    // A press picks it; the Inspector turns to it on release, unless it was
+                    // dragged (as in Unity: dragging an asset onto an entity's field keeps
+                    // that entity in the Inspector).
                     PointerPhase::Down => {
                         s.act("editor.workspace", json!({"asset": path}));
-                        s.local.inspect_asset = !folder;
                     }
-                    // Anything drags onto a folder (moving it there); models and prefabs
-                    // drag into the Scene too.
+                    // Anything drags onto a folder (moving it there) or an Inspector field
+                    // that takes it; models and prefabs drag into the Scene or onto the
+                    // Hierarchy (under the row they land on) too.
                     PointerPhase::Move if e.travel().x.abs() + e.travel().y.abs() >= 4.0 => {
                         s.local.asset_drag = Some((path.clone(), name.clone(), (e.at.x, e.at.y)));
                     }
                     PointerPhase::Up => {
+                        if s.local.asset_drag.is_none() {
+                            s.local.inspect_asset = !folder;
+                        }
                         if let Some((path, _, at)) = s.local.asset_drag.take() {
                             let own = path.trim_end_matches('/');
                             match folder_at(s, at) {
@@ -1373,8 +1517,14 @@ fn tile(
                                     super::asset_ops::move_to(s, &path, &folder)
                                 }
                                 Some(_) => {}
-                                None if placeable => place(s, &path, at),
-                                None => {}
+                                None => match (hierarchy_at(s, at), field_at(s, at)) {
+                                    (Some(parent), _) if placeable => {
+                                        place_under(s, &path, parent.as_deref())
+                                    }
+                                    (_, Some(field)) => assign(s, &path, &field),
+                                    _ if placeable => place(s, &path, at),
+                                    _ => {}
+                                },
                             }
                         }
                     }
@@ -1758,8 +1908,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
         let file = parts.next().unwrap_or(source).to_owned();
         let line = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
         let column = parts.next().and_then(|n| n.trim().parse::<u32>().ok());
-        let path = s.editor.host.root().join(&file);
-        if path.is_file() {
+        if s.editor.host.root().join(&file).is_file() {
             head = head.child(
                 icon_button(
                     l,
@@ -1769,14 +1918,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
                     "Open source",
                 )
                 .key("console/detail/open")
-                .on_press(move |s: &mut Studio| {
-                    if file.ends_with(".cs") {
-                        let at = line.map(|l| (l, column.unwrap_or(1)));
-                        super::asset_ops::open_in_ide(s, &file, at);
-                    } else if let Err(error) = crate::system::open_external(&path) {
-                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
-                    }
-                }),
+                .on_press(move |s: &mut Studio| open_source(s, &file, line, column)),
             );
         }
     }
@@ -1785,7 +1927,11 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
             .on_press(|s: &mut Studio| s.local.console_open = None),
     );
     let mut out = col()
-        .max_h(180.0)
+        .max_h(if has_stack(&r.diagnostic) {
+            300.0
+        } else {
+            180.0
+        })
         .pad_x(12.0)
         .pad_y(8.0)
         .gap(6.0)
@@ -1827,6 +1973,7 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
             );
         }
     }
+    out = out.children(stack(s, &r.diagnostic));
     if !r.diagnostic.fixes.is_empty() {
         let mut fixes = row().gap(4.0);
         for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(3) {
@@ -2189,6 +2336,82 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
         )
         .children(doc.map(|_| why))
         .children(go)
+}
+
+/// Where a drop on the Hierarchy lands: under the row's entity, or at the scene's root on
+/// its empty space (`Some(None)`); `None` off the Hierarchy.
+fn hierarchy_at(s: &Studio, at: (f32, f32)) -> Option<Option<String>> {
+    let inside =
+        |r: &stillkit::Rect| at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom;
+    let list = s.local.rects.get("hierarchy/rows").filter(|r| inside(r))?;
+    let row = s.local.rects.iter().find_map(|(key, r)| {
+        let id = key.strip_prefix("row/").filter(|id| !id.contains('/'))?;
+        (inside(r) && inside(list)).then(|| id.to_owned())
+    });
+    Some(row)
+}
+
+/// The Inspector asset field under `at`, by path.
+fn field_at(s: &Studio, at: (f32, f32)) -> Option<String> {
+    s.local.rects.iter().find_map(|(key, r)| {
+        let path = key.strip_prefix("field/")?;
+        (at.0 >= r.left && at.0 <= r.right && at.1 >= r.top && at.1 <= r.bottom)
+            .then(|| path.to_owned())
+    })
+}
+
+/// The asset at storage `path` and its reference.
+fn dropped(s: &Studio, path: &str) -> Option<(Asset, String)> {
+    let asset = s
+        .assets
+        .as_ref()?
+        .items
+        .iter()
+        .find(|a| a.path == path)
+        .cloned()?;
+    let reference = asset.current_reference(s.editor.host.store().workspace())?;
+    Some((asset, reference))
+}
+
+/// Places the model or prefab at storage `path` in the scene under `parent` (the root
+/// when `None`), as a drop on the Hierarchy does in Unity.
+fn place_under(s: &mut Studio, path: &str, parent: Option<&str>) {
+    let Some((asset, reference)) = dropped(s, path) else {
+        return;
+    };
+    let mut args = match asset.kind.as_str() {
+        "prefab" => json!({"prefab": reference}),
+        _ => json!({"mesh": reference}),
+    };
+    if let Some(parent) = parent {
+        args["parent"] = json!(parent);
+    }
+    let cmd = if asset.kind == "prefab" {
+        "prefab.instantiate"
+    } else {
+        "editor.mesh.instantiate"
+    };
+    s.apply(vec![json!({"cmd": cmd, "args": args})], "Place asset");
+}
+
+/// Assigns the asset at storage `path` to Inspector field `field` on every inspected
+/// entity, when the field takes that kind of asset (dropped on it).
+fn assign(s: &mut Studio, path: &str, field: &str) {
+    let Some(f) = super::inspector::field_of(s, field) else {
+        return;
+    };
+    let crate::inspector::Widget::Asset { kind } = &f.widget else {
+        return;
+    };
+    let Some((asset, reference)) = dropped(s, path) else {
+        return;
+    };
+    if f.read_only || !asset.fits(kind.as_deref(), field) {
+        super::note(s, format!("{} doesn't take {}", f.label, asset.name()));
+        return;
+    }
+    let commands = crate::inspector::edit_commands(s.inspected(), field, &json!(reference));
+    s.apply(commands, "Assign asset");
 }
 
 /// Places the model or prefab at storage `path` where the pointer let go: on the ground

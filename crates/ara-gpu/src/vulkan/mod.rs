@@ -219,7 +219,7 @@ impl VulkanDevice {
         let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
             Some(reload::Worker::new(
                 context.device.clone(),
-                context.info.mesh_shading,
+                pipeline::ShaderFeatures::of(&context.info),
                 heap.layout,
             )?)
         } else {

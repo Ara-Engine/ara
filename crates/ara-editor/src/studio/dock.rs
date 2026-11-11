@@ -104,6 +104,26 @@ fn native_floating(s: &Studio) -> Vec<El<Studio>> {
                             .wrap(1),
                     ),
                 );
+            // Dock back: every panel of the window where the default layout keeps it (the
+            // way back where dragging between windows can't work, as on Wayland).
+            let home = panels.clone();
+            bar = bar.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::PANEL_BOTTOM,
+                    "Dock in main window",
+                )
+                .size(20.0)
+                .key(format!("float/{id}/dock"))
+                .on_press(move |s: &mut Studio| {
+                    for panel in &home {
+                        let target = crate::catalog::Target::Panel(panel.clone());
+                        super::commands::run(s, "window.dock", &target);
+                    }
+                }),
+            );
             // macOS draws its own close (the traffic lights, in the inset).
             if !cfg!(target_os = "macos") {
                 bar = bar.child(
