@@ -344,6 +344,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(4.),
     ),
     def(
+        "viewport.mode2d",
+        User,
+        "Viewport",
+        "2D mode",
+        "Look at the scene head-on and flat, as a 2D game does: right and Alt drags pan.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
         "viewport.surfaceSnap",
         User,
         "Viewport",

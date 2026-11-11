@@ -1087,6 +1087,13 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Choose the Scene view's vertical field of view.",
     },
     Command {
+        id: "view.mode_2d",
+        title: "2D Mode",
+        icon: "square",
+        keys: "",
+        summary: "Look at the scene head-on and flat; right and Alt drags pan instead of turning.",
+    },
+    Command {
         id: "view.camera.front",
         title: "Front",
         icon: "camera",

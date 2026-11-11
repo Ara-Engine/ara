@@ -229,6 +229,51 @@ fn the_tools_overlay_selects_without_a_gizmo_and_moves_with_one() {
 }
 
 #[test]
+fn two_d_mode_looks_head_on_and_flat_and_right_drags_pan() {
+    use crate::state::CameraProjection;
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/2d");
+    let camera = rt.state().editor.state.camera;
+    assert_eq!(camera.projection, CameraProjection::Orthographic);
+    assert_eq!((camera.yaw, camera.pitch), (0.0, 0.0), "head-on");
+    // A right drag pans; the view doesn't turn.
+    let view = rt.find("scene/view").unwrap();
+    let (x, y) = (view.center().x, view.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Press(
+        stillkit::Pointer {
+            at: stillkit::Point::new(x, y),
+            screen: (0, 0),
+        },
+        stillkit::Button::Right,
+    ));
+    rt.handle(&stillkit::Event::Move(stillkit::Pointer {
+        at: stillkit::Point::new(x + 60.0, y),
+        screen: (0, 0),
+    }));
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Release(
+        stillkit::Pointer {
+            at: stillkit::Point::new(x + 60.0, y),
+            screen: (0, 0),
+        },
+        stillkit::Button::Right,
+    ));
+    settle(&mut rt);
+    let panned = rt.state().editor.state.camera;
+    assert_eq!((panned.yaw, panned.pitch), (0.0, 0.0), "still head-on");
+    assert_ne!(panned.target, camera.target, "panned");
+    // Off again: perspective, at an angle.
+    press(&mut rt, "scene/2d");
+    assert_eq!(
+        rt.state().editor.state.camera.projection,
+        CameraProjection::Perspective
+    );
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);
