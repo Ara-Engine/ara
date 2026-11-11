@@ -9,6 +9,7 @@
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
 mod about;
+mod agent_work;
 mod agents;
 mod animator;
 mod asset_create;
@@ -71,6 +72,9 @@ const VERTEX_KEY: u16 = 0x56;
 
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
+
+/// How long closing waits for running probe work to retire before leaving it.
+const CLOSE_DRAIN: Duration = Duration::from_secs(5);
 
 /// Open the project in the studio and run until its window closes.
 pub fn run(options: Options) -> anyhow::Result<()> {
@@ -241,6 +245,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // Windows uses separate Scene/UI queues: finish external reads before recycling images.
         #[cfg(windows)]
         if !compositor.scene_ready(&renderer)? {
+            // Cancelling a bake must not wait for the GPU reads this gate waits on.
+            rt.touch(|s| {
+                server.pump(&mut s.editor);
+                agent_work::deliver_cancellations(&mut s.editor, &mut probe_owner, &mut scene_view);
+            });
             if pump(
                 &mut rt,
                 &mut surface,
@@ -427,7 +436,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let shown = surface.is_visible();
         #[cfg(not(any(windows, target_os = "macos")))]
         let shown = true;
-        if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
+        let on_screen = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0);
+        let scene_presented = on_screen.is_some();
+        if let Some(rect) = on_screen {
             let actual = [rect.width() as u32, rect.height() as u32];
             // Reallocating the renderer's targets takes hundreds of milliseconds, so a live
             // resize keeps the last frame (the layer stretches it) and the renderer follows
@@ -456,28 +467,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 renderer
                     .resize(extent)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let Err(error) = rt.touch(|s| -> ara_ui::Result<()> {
-                    // A probe bake reading this Scene holds it until its work retires.
-                    let mut safe = probe_owner.prepare_scene_change(
-                        &mut s.editor,
-                        &mut scene_view,
-                        &mut renderer,
-                    )?;
-                    if safe
-                        && probe_owner.busy()
-                        && scene_view.probe_replacement_required(&renderer, &s.editor)?
-                    {
-                        safe = probe_owner.prepare_replacement(&mut s.editor);
-                    }
-                    if !safe {
-                        return Ok(());
-                    }
-                    // Frames carry the drag pose they show (`SceneView::shown_frame`).
-                    scene_view.gizmo_offset = gizmo_state(s).offset;
-                    scene_view.render(&mut renderer, &s.editor, &view, 1)
-                }) {
-                    rt.touch(|s| s.editor.report_failure(&*error));
-                }
+                agent_work::render(
+                    &mut rt,
+                    &mut probe_owner,
+                    &mut scene_view,
+                    &mut renderer,
+                    &view,
+                );
             }
             pass.mark(if render {
                 "scene render"
@@ -551,20 +547,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             if render {
                 scene_dirty = false;
             }
-            // Probe jobs advance; agents' captures read the Scene just rendered.
-            match rt.touch(|s| probe_owner.poll(&mut s.editor, &mut scene_view, &mut renderer)) {
-                Ok(probe) => {
-                    scene_dirty |= probe.scene_dirty;
-                    if probe.changed {
-                        rt.update(|_| {});
-                    }
-                }
-                Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
-            }
-            capture::serve(&mut rt, Some((&mut renderer, &scene_view)));
-            // A click in the view: the entity under it through the channel map.
             pass.mark("composite");
-            pass.phase("studio.game");
+            // A click in the view: the entity under it through the channel map.
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
                 let size = renderer.size();
                 let at = [
@@ -595,7 +579,38 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 });
             }
+        } else if agent_work::needs_unpresented_render(&probe_owner, shown_extent) {
+            // A probe bake advances only through Scene renders. With the Scene covered (the
+            // Lighting page in front) or the window hidden, render at the size last shown and
+            // present nothing; the frame shows if the Scene comes back.
+            if scene_dirty || scene_view.needs_frame(rt.state().editor.state.quality) {
+                renderer
+                    .resize(shown_extent)
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                agent_work::render(
+                    &mut rt,
+                    &mut probe_owner,
+                    &mut scene_view,
+                    &mut renderer,
+                    &view,
+                );
+                scene_dirty = false;
+            }
+            pass.mark("scene unpresented");
         }
+        // Probe jobs and agents' captures are served every pass, the Scene shown or not.
+        pass.phase("studio.agents");
+        // The Scene is "presented" once a frame of it has been composited into its layer.
+        let presented = shown_extent != [0, 0] && scene_presented;
+        scene_dirty |= agent_work::serve(
+            &mut rt,
+            &mut probe_owner,
+            &mut scene_view,
+            &mut renderer,
+            presented,
+        );
+        pass.mark("agents");
+        pass.phase("studio.game");
         // A move with vertex or surface snapping: the presented geometry answers it.
         if let Some(request) = rt.touch(|s| s.local.snap.take()) {
             let channels = compositor.channels(&renderer, &view, revision);
@@ -917,7 +932,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
             || composite
-            || probe_owner.busy()
+            // A job wakes the loop only while the Scene can render for it.
+            || agent_work::needs_unpresented_render(&probe_owner, shown_extent)
             || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
@@ -934,7 +950,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // Sleep until an event, that wake, or an animation frame: never spin.
         wait();
     }
-    // Probe work retires with the Scene view it read, before the renderer goes.
+    // Probe work retires with the Scene view it read, before the renderer goes. The window
+    // goes first so the wait is never an unresponsive window, and it is bounded.
+    surface.hide();
     rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
     let draining = Instant::now();
     loop {
@@ -947,7 +965,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         match done {
             Ok(true) => break,
-            Ok(false) if draining.elapsed() < Duration::from_secs(90) => {
+            Ok(false) if draining.elapsed() < CLOSE_DRAIN => {
                 std::thread::sleep(Duration::from_millis(8))
             }
             Ok(false) => {

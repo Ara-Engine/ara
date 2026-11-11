@@ -13,7 +13,8 @@ use crate::capture::{CaptureTask, Work, output_path};
 use crate::world::EditWorldView as _;
 
 /// Serves the next queued capture job, if there is one. `scene` is the renderer and the
-/// Scene view it presents, for viewport captures (none before the renderer starts).
+/// Scene view it presents, for viewport captures; none while the Scene is not shown, which
+/// fails a `viewport` capture with a message saying so.
 pub(super) fn serve(rt: &mut Runtime<Studio>, scene: Option<(&mut Renderer, &SceneView)>) {
     let Ok(task) = rt.state().editor.captures.try_recv() else {
         return;
@@ -48,8 +49,13 @@ fn prepare(
             Ok(Work::Editor(png, path, report))
         }
         _ => {
-            let (renderer, scene) =
-                scene.ok_or_else(|| anyhow::anyhow!("the Scene view has not started yet"))?;
+            let (renderer, scene) = scene.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "the Scene view is not shown (another page is in front, the window is \
+                     hidden, or the renderer has not started): show the Scene, or capture \
+                     `editor` or `layout`"
+                )
+            })?;
             let capture = scene.capture(
                 renderer,
                 &CaptureRequest {
