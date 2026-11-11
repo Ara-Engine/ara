@@ -193,6 +193,11 @@ pub enum ViewDimension {
     D2Array,
     /// A volume, with depth selected by the shader.
     D3,
+    /// Whole cubes, six consecutive layers each in the order +X, -X, +Y, -Y, +Z, -Z,
+    /// sampled by direction and cube index. Sampled views only, over a square
+    /// two-dimensional image, where `DeviceInfo::cube_arrays` is set. Write the faces
+    /// through `D2` or `D2Array` storage views of the same image.
+    CubeArray,
 }
 /// Immutable view; heap slots retire with the parent image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,8 +214,10 @@ pub struct ImageViewDesc {
     pub layer_count: u32,
 }
 impl ImageViewDesc {
-    pub(crate) fn validate(self, shape: ImageShape, storage: bool) -> Result<()> {
+    /// Checks the view against its image's shape and base extent.
+    pub(crate) fn validate(self, shape: ImageShape, size: [u32; 2], storage: bool) -> Result<()> {
         let volume = shape.dimension == TextureDimension::D3;
+        let cube = self.dimension == ViewDimension::CubeArray;
         if shape.samples != SampleCount::One
             || self.mip_count == 0
             || self.layer_count == 0
@@ -224,6 +231,7 @@ impl ImageViewDesc {
                 .is_none_or(|end| end > shape.layers)
             || volume != (self.dimension == ViewDimension::D3)
             || (self.dimension == ViewDimension::D2 && self.layer_count != 1)
+            || (cube && (storage || size[0] != size[1] || !self.layer_count.is_multiple_of(6)))
             || (storage && (self.mip_count != 1 || shape.samples != SampleCount::One))
         {
             return Err(GpuError::Contract(

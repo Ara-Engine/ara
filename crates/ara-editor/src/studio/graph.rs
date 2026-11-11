@@ -477,7 +477,8 @@ fn toolchain() -> String {
     )
 }
 
-/// Draws the canvas into the page's layer. `extent` is in physical pixels.
+/// Draws the canvas into the page's layer (`extent` in physical pixels); whether it
+/// reached the screen.
 /// # Safety
 /// `layer` is the graph page's live native layer (`present::Target`).
 pub(super) unsafe fn draw(
@@ -487,7 +488,7 @@ pub(super) unsafe fn draw(
     layer: super::present::Target,
     extent: [u32; 2],
     scale: f32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let rect = Box2 {
         x: 0.0,
         y: 0.0,
@@ -497,7 +498,7 @@ pub(super) unsafe fn draw(
     let theme = theme(&s.look);
     let page = &mut s.graph;
     let (Some(shown), Some(text)) = (page.shown.as_mut(), page.text.as_ref()) else {
-        return Ok(());
+        return Ok(true);
     };
     if std::mem::take(&mut shown.fresh) {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
@@ -508,9 +509,10 @@ pub(super) unsafe fn draw(
     let mut list = DisplayList::default();
     shown.canvas.paint(&mut list, rect, theme);
     // SAFETY: forwarded caller contract.
-    unsafe { target.draw(renderer, layer, extent, scale, &list, &text.assets)? };
-    page.dirty = false;
-    Ok(())
+    let landed = unsafe { target.draw(renderer, layer, extent, scale, &list, &text.assets)? };
+    // One that didn't reach the screen draws again on the next pass.
+    page.dirty = !landed;
+    Ok(landed)
 }
 
 /// The canvas colours from the studio's tokens.
@@ -1353,6 +1355,8 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         h: e.size.1,
     };
     let p = [e.local.x, e.local.y];
+    // Click or drag: by the farthest the pointer went, not where it let go.
+    let clicked = super::click(s, e);
     let Some(shown) = s.graph.shown.as_mut() else {
         return false;
     };
@@ -1386,7 +1390,7 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         PointerPhase::Move if s.graph.dragging => shown.canvas.motion(p),
         PointerPhase::Up if s.graph.dragging => {
             s.graph.dragging = false;
-            let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
+            let still = clicked;
             // A wire dropped where no pin is: search for the node to feed (or be fed by).
             let dropped = shown
                 .canvas

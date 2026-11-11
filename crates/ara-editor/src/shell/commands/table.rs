@@ -602,7 +602,7 @@ fn build() -> Vec<Spec> {
             s.status_note = Some("All changes saved".into());
             Ok(())
         }),
-        later("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Documents save in place through the host journal; Save As needs a typed document-copy command."),
+        cmd("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Save the open scene under a new name inside the content folder, and open the copy.", |_, _, _| Ok(())).when(|_| Avail::Blocked("Save As is in the new editor; open it without --legacy-ui.".into())),
         cmd("file.save_all", "Save All", "save", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());
@@ -785,7 +785,7 @@ fn build() -> Vec<Spec> {
         cmd("transform.reset_position", "Reset Position", "rotate-ccw", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
         cmd("transform.reset_rotation", "Reset Rotation", "rotate-ccw", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
         cmd("transform.reset_scale", "Reset Scale", "rotate-ccw", "", "Reset scale to the default or prefab value.", |_, e, t| transform_reset(e, t, "scale")).when(has_entity),
-        later("transform.align_view", "Align to View", "", "", "Aligning rotation to the camera needs a view-matrix to Euler command."),
+        cmd("transform.align_view", "Align with View", "video", "", "Move and turn the selection to the Scene camera's place and view.", |_, _, _| Ok(())).when(|_| Avail::Blocked("Align with View is in the new editor; open it without --legacy-ui.".into())),
         cmd("transform.move_to_view", "Move to View", "video", "", "Move the selection to the camera's focus point.", |_, e, t| {
             let p = e.state.camera.target;
             let commands = crate::inspector::edit_commands(&t.entities(&e.state), "Transform.position", &json!([p.x, p.y, p.z]));
@@ -1105,7 +1105,11 @@ fn build() -> Vec<Spec> {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "scale"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Scale)),
-        cmd("view.tool.universal", "Universal Tool", "transform", "T", "Move, rotate or scale using the combined handles.", |_, e, _| {
+        cmd("view.tool.rect", "Rect Tool", "scan", "T", "Resize and move by a rectangle round the selection, in the plane facing the view.", |_, e, _| {
+            view(e, json!({"gizmos": true}))?;
+            act(e, "editor.tool", json!({"tool": "rect"}))
+        }).when(|_| Avail::Blocked("The Rect tool is in the new editor; open it without --legacy-ui.".into())),
+        cmd("view.tool.universal", "Universal Tool", "transform", "Y", "Move, rotate or scale using the combined handles.", |_, e, _| {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "universal"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Universal)),
