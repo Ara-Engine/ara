@@ -30,9 +30,9 @@ fn main() -> ara_ui::Result<()> {
         background: std::env::var_os("ARA_EDITOR_BACKGROUND").is_some_and(|v| v == "1"),
         ..Default::default()
     };
-    // The studio (D31) is the interactive editor on macOS and Windows; the legacy window
-    // keeps the verify routes, headless captures and Linux, whose Scene layer is not yet in.
-    let mut legacy = !cfg!(any(target_os = "macos", windows));
+    // The studio (D31) is the interactive editor everywhere; the legacy window keeps only
+    // the verify routes and headless captures until it is removed.
+    let mut legacy = false;
     let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {

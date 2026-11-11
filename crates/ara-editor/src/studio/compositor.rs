@@ -23,14 +23,14 @@ pub(super) struct Compositor {
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     scene_stall: Option<(std::time::Instant, bool)>,
 }
 
 impl Compositor {
     /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
     /// A persistent stall skips Scene passes and logs once while events keep pumping.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
@@ -77,7 +77,7 @@ impl Compositor {
             sheet: sheet(light)?,
             light,
             present: None,
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             scene_stall: None,
         })
     }

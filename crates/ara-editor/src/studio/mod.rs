@@ -92,8 +92,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
-    // Windows child HWND viewports require a DirectComposition UI surface.
-    #[cfg(windows)]
+    // Native layers need a GPU UI surface: DirectComposition over child HWNDs on Windows,
+    // a Vulkan surface over Wayland subsurfaces on Linux.
+    #[cfg(any(windows, target_os = "linux"))]
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
@@ -225,8 +226,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
-        // Windows uses separate Scene/UI queues: finish external reads before recycling images.
-        #[cfg(windows)]
+        // Vulkan's Scene may run on its own queue: finish external reads before recycling images.
+        #[cfg(any(windows, target_os = "linux"))]
         if !compositor.scene_ready(&renderer)? {
             if pump(
                 &mut rt,
