@@ -1,10 +1,13 @@
 //! The Rect tool (T), as Unity's: a rectangle round the selection's rendered bounds, in the
-//! plane among its handle axes (world or local, as the handle space says) that faces the
-//! camera most, so XY in 2D mode. Drag an edge or a corner to resize, the opposite side
-//! staying put (Alt resizes about the centre, Shift on a corner keeps the shape), or inside
-//! to move in that plane. The host publishes the bounds (`Local::rect_bounds`) from the
+//! plane that faces the camera most, so XY in 2D mode. One object, or several sharing a
+//! rotation, get the rectangle in their own frame (`frame_rotation`), so a drag resizes them
+//! exactly as the rectangle shows; a selection of mixed rotations gets a world rectangle,
+//! and each object scales only along its own axis closest to the dragged one
+//! (`Gesture::rect_resize`). Drag an edge or a corner to resize, the opposite side staying put
+//! (Alt resizes about the centre, Shift on a corner keeps the shape), or inside to move in
+//! that plane. The host publishes the bounds in that frame (`Local::rect_bounds`) from the
 //! presented scene; a drag is an editor gesture, so it previews live and commits as one undo
-//! step (position and scale).
+//! step.
 use glam::{Mat4, Quat, Vec2, Vec3};
 use stillkit::el::El;
 
@@ -37,10 +40,50 @@ pub struct Frame {
     pub max: Vec2,
 }
 
+/// The selection's rendered bounds as the host publishes them: a box in the frame
+/// `rotation` (its axes `rotation * X, Y, Z`), from `min` to `max` in that frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RectBounds {
+    /// The frame: the shared rotation of the selection, or identity (world).
+    pub rotation: Quat,
+    /// The box's low corner, in the frame.
+    pub min: Vec3,
+    /// Its high corner.
+    pub max: Vec3,
+}
+
+/// The Rect tool's frame for `selection`: the world rotation its roots (those under no other
+/// selected entity) share, or identity when their rotations differ (a world rectangle).
+pub(crate) fn frame_rotation(entities: &ara_doc::prefab::Resolved, selection: &[String]) -> Quat {
+    let under_selected = |id: &str| {
+        let mut at = entities.get(id).and_then(|e| e.parent.clone());
+        while let Some(parent) = at {
+            if selection.contains(&parent) {
+                return true;
+            }
+            at = entities.get(&parent).and_then(|e| e.parent.clone());
+        }
+        false
+    };
+    let mut rotations = selection
+        .iter()
+        .filter(|id| !under_selected(id))
+        .filter_map(|id| crate::world::world_transform(entities, id))
+        .map(|world| world.to_scale_rotation_translation().1);
+    let Some(first) = rotations.next() else {
+        return Quat::IDENTITY;
+    };
+    match rotations.all(|r| r.dot(first).abs() > 0.99999) {
+        true => first,
+        false => Quat::IDENTITY,
+    }
+}
+
 impl Frame {
-    /// The rect round world `bounds`, in the plane among `rotation`'s axes whose normal is
-    /// nearest the camera's view direction.
-    pub fn around(bounds: [Vec3; 2], camera: &Camera, rotation: Quat) -> Option<Self> {
+    /// The rect round `bounds`, in the plane among its frame's axes whose normal is nearest
+    /// the camera's view direction.
+    pub fn around(bounds: RectBounds, camera: &Camera) -> Option<Self> {
+        let RectBounds { rotation, .. } = bounds;
         let forward = (camera.target - camera.position()).normalize_or_zero();
         let all = [Vec3::X, Vec3::Y, Vec3::Z].map(|a| rotation * a);
         let normal = (0..3).max_by(|&a, &b| {
@@ -55,14 +98,17 @@ impl Frame {
             1 => (all[0], all[2]),
             _ => (all[0], all[1]),
         };
-        let origin = (bounds[0] + bounds[1]) * 0.5;
+        let corners = [bounds.min, bounds.max];
+        let origin = rotation * ((bounds.min + bounds.max) * 0.5);
         let (mut min, mut max) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
         for corner in 0..8 {
-            let p = Vec3::new(
-                bounds[corner & 1].x,
-                bounds[(corner >> 1) & 1].y,
-                bounds[(corner >> 2) & 1].z,
-            ) - origin;
+            let p = rotation
+                * Vec3::new(
+                    corners[corner & 1].x,
+                    corners[(corner >> 1) & 1].y,
+                    corners[(corner >> 2) & 1].z,
+                )
+                - origin;
             let at = Vec2::new(p.dot(u), p.dot(v));
             min = min.min(at);
             max = max.max(at);
@@ -191,14 +237,13 @@ fn frame(s: &Studio) -> Option<Frame> {
     if state.tool != Tool::Rect || state.hide_gizmos || state.game_view {
         return None;
     }
-    let rotation = if state.local {
-        crate::world::world_transform(&s.resolved, state.selection.first()?)?
-            .to_scale_rotation_translation()
-            .1
-    } else {
-        Quat::IDENTITY
-    };
-    Frame::around(s.local.rect_bounds?, &state.camera, rotation)
+    Frame::around(s.local.rect_bounds?, &state.camera)
+}
+
+/// The rect shown now: the drag's, or the one round the published bounds (tests).
+#[cfg(test)]
+pub(super) fn shown(s: &Studio) -> Option<Frame> {
+    frame(s)
 }
 
 /// The rect's corners on screen (view px), when all are in front of the camera.
@@ -306,7 +351,13 @@ pub(super) fn drive(s: &mut Studio, at: [f32; 2], alt: bool, shift: bool) {
     drag.now = now;
     let size = now.max - now.min;
     if let Some(gesture) = s.editor.gesture.as_mut() {
-        gesture.map_world(start.map_to(&now));
+        let (from, to) = (start.max - start.min, now.max - now.min);
+        let ratio = |a: f32, b: f32| if a.abs() > 1e-6 { b / a } else { 1.0 };
+        gesture.rect_resize(
+            start.map_to(&now),
+            [start.axes[0], start.axes[1]],
+            Vec2::new(ratio(from.x, to.x), ratio(from.y, to.y)),
+        );
     }
     super::note(s, format!("{:.2} × {:.2} m", size.x, size.y));
 }
@@ -448,9 +499,12 @@ mod tests {
             ..Camera::default()
         };
         let frame = Frame::around(
-            [Vec3::new(-1.0, 0.0, -2.0), Vec3::new(1.0, 0.0, 2.0)],
+            RectBounds {
+                rotation: Quat::IDENTITY,
+                min: Vec3::new(-1.0, 0.0, -2.0),
+                max: Vec3::new(1.0, 0.0, 2.0),
+            },
             &camera,
-            Quat::IDENTITY,
         )
         .expect("a frame");
         let normal = frame.axes[2];

@@ -19,7 +19,7 @@ Locked decisions for Ara. To change one, add a new entry that supersedes it; don
 | D11 | **C# is the single scripting language**: gameplay, UI logic, editor extensions and agent scripts. C# 14 / .NET 10 LTS. It stays unless the S2 reload gates or the S7 AOT gates fail (see R10). | 2026-10-23 |
 | D12 | **GPU: own native backends from the start.** `ara-gpu` with Vulkan 1.3 (Windows, Linux, Android) and Metal 4 (macOS, iOS). No wgpu. D3D12 only on evidence. | 2026-10-23 |
 | D13 | **Team:** Islam plus agents. | 2026-10-23 |
-| D14 | **License not decided.** The repo is private until it is. | 2026-10-23 |
+| D14 | ~~License not decided; the repo is private until it is.~~ Superseded by D38. | 2026-10-23 |
 | D15 | **Apple:** Apple silicon only; Intel Macs dropped for now. A MacBook Pro M5 (Apple10: hardware RT and mesh shading) is the Metal dev and Mac/iOS build machine. | 2026-10-23 |
 | D16 | **Dogfood game: Outpost**, a co-op third-person salvage run built on the engine as it grows (see [milestones](plan/milestones.md)). | 2026-10-23 |
 | D17 | **Toolchain: Rust 1.99.1, the latest stable**, pinned in `rust-toolchain.toml`. Track stable deliberately: bump when a dependency needs it or roughly every release cycle, in one commit that updates the pin and `rust-version` together. (The original 1.96 pin was just the version installed on the machine; Bevy 0.20 and Lightyear need ≥1.97.1.) | 2026-10-23 |
@@ -45,6 +45,8 @@ Locked decisions for Ara. To change one, add a new entry that supersedes it; don
 | D36 | **Compute queues may share the graphics family** (supersedes only S1’s dedicated-compute-family assumption). Prefer a compute-only Vulkan family; otherwise use a compute-capable graphics family, choosing a second queue when available and sharing one native queue when necessary. Keep separate logical queue identities and timeline dependencies; omit ownership transfers between queues of the same family. This admits devices Renderlab needs without changing A8’s bindless or explicit synchronization model. Selection tests pass on the Mac; native Vulkan execution remains pending on Windows. Evidence: [`queues.rs`](../crates/ara-gpu/src/vulkan/context/queues.rs), [`barriers.rs`](../crates/ara-gpu/src/vulkan/barriers.rs). | 2026-11-10 |
 
 | D37 | **Mac test-cohort cooks are permitted when explicitly requested and all carried targets are rebuilt** (exception to `docs/dev/macos.md` and `ara-shader-cook/AGENTS.md`'s Windows-only publication rule). Windows remains the default cook host. The Mac Vulkan SDK's Slang cannot load DXC downstream, so use Slang-generated HLSL → the same SDK's DXC CLI (`SM6.6`, `-O2 -Zpc -enable-16bit-types -HV 2021`) → Metal Shader Converter 4.0.3. Fingerprint the Mac recipe, DXC executable and Slang/DXC libraries; never claim the Windows cook key. Islam requested the complete `ara-gpu/tests/shaders/pipelines.json` cohort on 2026-11-10 to unblock PR #5's Vulkan slope-bias probe. The expanded local converter package requires no admin installation or additional Apple sign-in. Native Metal and Vulkan still verify the same committed cohort. | 2026-11-10 |
+
+| D38 | **License: MIT OR Apache-2.0**, at the user's option (supersedes D14). Same terms as Rust, wgpu and Bevy. Every vendored dependency is compatible: Jolt, FSR and meshoptimizer are MIT, Recast is zlib, Opus is BSD, the Lucide icons are ISC, and SDL's hidapi is used under its BSD option. Contributions are accepted under the same dual license. Texts: `LICENSE-MIT`, `LICENSE-APACHE`. | 2026-11-11 |
 
 ## Architecture (adopted from research)
 
