@@ -7175,3 +7175,169 @@ fn hierarchy_names_run_to_the_row_edge() {
         row.right - name.right
     );
 }
+
+// The second UI pass: tiles in a short panel, filter names, the path bar, the stats readout.
+
+#[test]
+fn tiles_step_down_to_fit_a_short_panel_and_never_lose_their_name() {
+    use super::panels::{TileSize, fitting};
+    // No measurement yet: the chosen size.
+    assert_eq!(fitting(TileSize::Medium, None), TileSize::Medium);
+    // Plenty of room keeps the choice; less steps down; too little is the list.
+    assert_eq!(fitting(TileSize::Large, Some(400.0)), TileSize::Large);
+    assert_eq!(fitting(TileSize::Large, Some(110.0)), TileSize::Medium);
+    assert_eq!(fitting(TileSize::Medium, Some(95.0)), TileSize::Small);
+    assert_eq!(fitting(TileSize::Medium, Some(77.0)), TileSize::List);
+    assert_eq!(fitting(TileSize::List, Some(500.0)), TileSize::List);
+    // The real panel: with a body too short for a tile, the folder is a list row with its name.
+    let mut rt = open_sized((1000, 630));
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    let body = rt.find("assets/body").expect("the Assets body");
+    let height_of = |rt: &Runtime<Studio>| {
+        rt.tree()
+            .into_iter()
+            .find(|n| {
+                n.key
+                    .as_ref()
+                    .is_some_and(|k| k.to_string().starts_with("asset/"))
+            })
+            .map(|n| n.rect.height())
+            .expect("an asset shows")
+    };
+    // Tall: tiles. Short (the measured height the host feeds back): a list row.
+    rt.update(|s| {
+        s.local.rects.insert(
+            "assets/body".into(),
+            stillkit::Rect::new(body.left, body.top, body.width(), 400.0),
+        );
+    });
+    settle(&mut rt);
+    assert!(height_of(&rt) > 60.0, "tiles when there is room");
+    rt.update(|s| {
+        s.local.rects.insert(
+            "assets/body".into(),
+            stillkit::Rect::new(body.left, body.top, body.width(), 62.0),
+        );
+    });
+    settle(&mut rt);
+    assert_eq!(height_of(&rt), 22.0, "a list row in a short panel");
+    let named = rt.tree().into_iter().any(|n| {
+        n.key
+            .as_ref()
+            .is_some_and(|k| k.to_string().starts_with("asset/"))
+            && n.label.is_some()
+    });
+    assert!(named, "and it carries its name");
+}
+
+#[test]
+fn each_asset_filter_is_named_and_the_active_one_shows_its_name() {
+    let mut rt = open_sized((1000, 630));
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    let chips: Vec<(String, Option<String>)> = rt
+        .tree()
+        .into_iter()
+        .filter(|n| {
+            n.key
+                .as_ref()
+                .is_some_and(|k| k.to_string().starts_with("assets/filter/"))
+        })
+        .map(|n| {
+            (
+                n.key.unwrap().to_string(),
+                n.label.as_deref().map(str::to_owned),
+            )
+        })
+        .collect();
+    assert_eq!(chips.len(), 9, "{chips:?}");
+    assert!(
+        chips
+            .iter()
+            .all(|(_, label)| label.as_deref().is_some_and(|l| !l.is_empty())),
+        "{chips:?}"
+    );
+    press(&mut rt, "assets/filter/model");
+    let shown: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    assert!(
+        shown.iter().any(|t| t == "Models"),
+        "the active filter shows its name: {shown:?}"
+    );
+}
+
+#[test]
+fn the_path_bar_reads_as_a_path_from_the_project_down() {
+    let mut rt = open_sized((1000, 630));
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    let root = rt.find("assets/crumb/root").expect("the root step");
+    let search = rt.find("assets/search").expect("the search");
+    let on_bar = |rt: &Runtime<Studio>, label: &str| {
+        rt.tree().into_iter().any(|n| {
+            n.text.as_deref() == Some(label)
+                && (n.rect.top - search.top).abs() < 12.0
+                && n.rect.right <= search.left + 0.5
+        })
+    };
+    // The project's name (its marker's `name`, else its folder's) is the root step's label.
+    let project = rt
+        .tree()
+        .into_iter()
+        .find(|n| {
+            n.key
+                .as_ref()
+                .is_some_and(|k| k.to_string() == "assets/crumb/root")
+        })
+        .and_then(|n| n.label.as_deref().map(str::to_owned))
+        .expect("the root step is named");
+    assert_ne!(project, "Project");
+    assert!(
+        on_bar(&rt, &project),
+        "the root names the project, not \"Project\": {root:?}"
+    );
+    // Inside a folder: the project, then the folder's own name.
+    rt.update(|s| {
+        s.act(
+            "editor.workspace",
+            json!({"folder": ara_doc::AUTHORING_ROOT, "asset": ""}),
+        )
+    });
+    settle(&mut rt);
+    assert!(
+        on_bar(&rt, &project) && on_bar(&rt, ara_doc::AUTHORING_ROOT),
+        "project › {}",
+        ara_doc::AUTHORING_ROOT
+    );
+}
+
+#[test]
+fn the_frame_time_readout_is_scene_statistics_and_off_by_default() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.local.scene.ready = true;
+        s.local.scene.fps = Some((2.0, 631.0));
+    });
+    settle(&mut rt);
+    let shows = |rt: &Runtime<Studio>| {
+        rt.tree()
+            .into_iter()
+            .any(|n| n.text.as_deref().is_some_and(|t| t.contains(" fps ")))
+    };
+    assert!(!shows(&rt), "no \"2 fps 631 ms\" unless asked for");
+    rt.update(|s| {
+        s.act(
+            "editor.settings.set",
+            json!({"key": "viewport.stats", "value": true}),
+        )
+    });
+    settle(&mut rt);
+    assert!(shows(&rt), "Scene statistics shows it");
+}

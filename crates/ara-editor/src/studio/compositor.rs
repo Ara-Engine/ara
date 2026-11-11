@@ -9,7 +9,7 @@ use ara_ui::style::Color;
 use ara_ui_render::atlas::TextMode;
 use ara_ui_render::gpu::Renderer as UiRenderer;
 
-use crate::gpu::{NativeUi, ui_device};
+use crate::gpu::{IdHit, IdPick, NativeUi, ui_device};
 use crate::overlay::{self, GizmoState, Outlines};
 use crate::state::EditorState;
 use crate::world::DocumentView;
@@ -20,6 +20,8 @@ pub(super) struct Compositor {
     ui: NativeUi,
     paint: UiRenderer,
     outlines: Outlines,
+    /// How the overlays read object ids (`ARA_SCENE_IDS`).
+    ids: overlay::IdMode,
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
@@ -74,6 +76,7 @@ impl Compositor {
             ui,
             paint,
             outlines: Outlines::default(),
+            ids: overlay::IdMode::from_env(),
             sheet: sheet(light)?,
             light,
             present: None,
@@ -99,10 +102,13 @@ impl Compositor {
     }
 
     /// The renderer entity the click at physical pixel `at` lands on, through the
-    /// channel map (a model's parts and a terrain's tiles pick their entity).
+    /// channel map (a model's parts and a terrain's tiles pick their entity). `host`
+    /// answers from its own id image (Renderlab's); without one the click reads the id
+    /// source the overlays read: ara-render's, or the repacked debug image.
     pub fn pick(
         &mut self,
         renderer: &mut ara_render::Renderer,
+        host: Option<&mut dyn IdPick>,
         view: &DocumentView,
         revision: u64,
         at: [u32; 2],
@@ -112,10 +118,27 @@ impl Compositor {
             revision,
             renderer.entities(),
         );
-        let id = renderer.entity_at(at).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let id = match host {
+            Some(host) => hit_entity(host.id_at(at)?, renderer.entities()),
+            None if self.ids == overlay::IdMode::Repacked => {
+                hit_entity(self.repacked_hit(at)?, renderer.entities())
+            }
+            None => renderer.entity_at(at).map_err(|e| anyhow::anyhow!("{e}"))?,
+        };
         Ok(id
             .and_then(|id| self.outlines.channels.target_of(id))
             .map(str::to_owned))
+    }
+
+    /// The hit under `at` in the repacked debug image the overlays just read.
+    #[cfg(target_os = "macos")]
+    fn repacked_hit(&mut self, at: [u32; 2]) -> Result<IdHit> {
+        crate::gpu::PackedPick(|at| self.ui.repacked_texel(at)).id_at(at)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn repacked_hit(&mut self, _at: [u32; 2]) -> Result<IdHit> {
+        anyhow::bail!("ARA_SCENE_IDS=repacked is only available on Metal")
     }
 
     /// Draws the Scene's image on screen and the overlays for `state` at `extent` physical
@@ -155,7 +178,7 @@ impl Compositor {
         scene
             .attach(&mut self.ui, renderer, state.quality)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        self.outlines.in_scene = scene.draws_outlines();
+        self.outlines.in_scene = self.ids.outlines_in_scene(scene.draws_outlines());
         let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
         let rect = Box2 {
             x: 0.0,
@@ -183,7 +206,7 @@ impl Compositor {
             .upload(&mut self.paint, &mut self.ui)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         self.ui.set_dpi(scale)?;
-        self.ui.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+        self.ui.overlays(rect, self.ids.source(), overlays);
         let list = DisplayList {
             commands: vec![Draw::Image {
                 node: 1,
@@ -240,6 +263,14 @@ impl Compositor {
             };
         }
     }
+}
+
+/// The renderer entity (`Renderer::entities()` identity) an id hit names. Nothing, and a
+/// hit without an id (something is there that is not selectable), name none: the click
+/// lands on empty space, as it does for an entity with no scene address.
+fn hit_entity(hit: IdHit, entities: &[(u64, String)]) -> Option<u64> {
+    let index = usize::try_from(hit.id()?.checked_sub(1)?).ok()?;
+    entities.get(index).map(|(entity, _)| *entity)
 }
 
 /// The overlay colours come from the editor theme's tokens.
@@ -355,5 +386,22 @@ mod tests {
         compositor.retire(&renderer);
         renderer.gpu().assert_clean()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+
+    #[test]
+    fn a_hit_names_the_renderer_entity_of_its_id() {
+        let entities = [(11, "a".to_owned()), (22, "b".to_owned())];
+        assert_eq!(hit_entity(IdHit::Id(1), &entities), Some(11));
+        assert_eq!(hit_entity(IdHit::Id(2), &entities), Some(22));
+        // Past the table, background, and a hit without an id: empty space.
+        assert_eq!(hit_entity(IdHit::Id(3), &entities), None);
+        assert_eq!(hit_entity(IdHit::Nothing, &entities), None);
+        assert_eq!(hit_entity(IdHit::Unselectable, &entities), None);
+        assert_eq!(hit_entity(IdHit::from_packed([0xFF; 4]), &entities), None);
     }
 }

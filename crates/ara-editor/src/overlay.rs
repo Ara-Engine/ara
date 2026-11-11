@@ -20,6 +20,44 @@ pub const ENTITY_IMAGE: u32 = 0x7fff_0001;
 /// Resource handle of the outline group table (`NativeUi::outline_groups`).
 pub const OUTLINE_GROUPS: u32 = 0x7fff_0002;
 
+/// How the Scene overlays get object ids: the debug switch `ARA_SCENE_IDS`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdMode {
+    /// The default: ara-render's id image, and a raster Scene draws its own outlines.
+    Scene,
+    /// `direct`: ara-render's id image, with the outlines drawn by the overlay shader
+    /// (what a Renderlab Scene does): the control for `Repacked`.
+    Direct,
+    /// `repacked`: ara-render's id image repacked on the GPU into the packed form
+    /// Renderlab delivers, so grid, hover and outlines run the packed path (Metal only).
+    Repacked,
+}
+
+impl IdMode {
+    /// The mode `ARA_SCENE_IDS` names (`direct`, `repacked`); anything else is `Scene`.
+    pub fn from_env() -> Self {
+        match std::env::var("ARA_SCENE_IDS").as_deref() {
+            Ok("direct") => Self::Direct,
+            Ok("repacked") => Self::Repacked,
+            _ => Self::Scene,
+        }
+    }
+
+    /// The id source the overlays read.
+    pub fn source(self) -> crate::gpu::IdSource {
+        match self {
+            Self::Scene | Self::Direct => crate::gpu::IdSource::Direct(ENTITY_IMAGE),
+            Self::Repacked => crate::gpu::IdSource::Repacked(ENTITY_IMAGE),
+        }
+    }
+
+    /// Whether the raster Scene draws the selection outlines into its frames
+    /// ([`Outlines::in_scene`]) rather than the overlay shader.
+    pub fn outlines_in_scene(self, raster: bool) -> bool {
+        raster && self == Self::Scene
+    }
+}
+
 /// Selection, review and hover outlines by entity, not by renderer channel: an entity
 /// drawn as several instances (a terrain's chunks, a model's parts) outlines as one
 /// shape, and a terrain chunk hovers and outlines as its whole terrain. Holds the
