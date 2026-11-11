@@ -425,14 +425,24 @@ contract errors on both backends.
 - **Vulkan:** square layered single-sample images are created `CUBE_COMPATIBLE`; the
   device enables `imageCubeArray` whenever the driver reports it and
   `DeviceInfo::cube_arrays` says whether it did. Without it, a cube-array view and a
-  shader module that declares `SampledCubeArray` are both refused with a contract
-  error, as with barycentrics.
+  shader module with an arrayed cube image type are both refused with a contract
+  error. The module check reads the image types, not `OpCapability SampledCubeArray`:
+  Slang emits the type without declaring the capability, and `spirv-val` accepts
+  that.
 - **Metal:** a `MTLTextureTypeCubeArray` texture view of the 2D-array texture;
   `cube_arrays` is always true.
 
-Proof so far is Metal only: `cube_array_views_sample_faces_by_direction_and_cubes_by_index`
-fills twelve layers with their own index, samples each face of both cubes by
-direction and reads back all twelve, and checks the three refusals and that the view
-retires with its parent. Nothing in `ara-gpu`'s cooked cohort samples a cube array,
-so the Vulkan path (the creation flag, the feature, the view type) has not run; its
-first run is Renderlab's backend suite under validation once the backend uses it.
+Tests, one per backend, both named
+`cube_array_views_sample_faces_by_direction_and_cubes_by_index`: twelve layers hold
+their own index, each face of both cubes is sampled by direction, and all twelve
+come back in order; a storage cube view, a non-square image and a partial cube are
+refused. The Metal one (`metal/texture_tests.rs`) compiles MSL at run time. The
+Vulkan one (`tests/cube_arrays.rs`) runs a cooked Slang stage that stores the twelve
+samples through a 2D-array storage view, and on a device without `imageCubeArray`
+checks instead that the view and the pipeline are refused, prints `SKIPPED` and
+stops. Its shader is its own cohort (`tests/cube_shaders`, `tests/cube_cooked`),
+cooked on the Mac with every target rebuilt (SPIR-V, DXIL, metallib) under the Mac
+key, so no Windows-keyed cook was touched. On the Mac the Vulkan test passes on the
+Vulkan SDK's KosmicKrisp driver with the Khronos validation layer (`DYLD_LIBRARY_PATH`,
+`VK_LAYER_PATH` and `VK_DRIVER_FILES` pointed into the SDK); it has not run on RADV
+or NVIDIA from here.

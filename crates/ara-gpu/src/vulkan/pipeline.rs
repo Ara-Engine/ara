@@ -14,7 +14,7 @@ pub(super) struct ShaderFeatures {
     pub mesh_shading: bool,
     /// `FragmentBarycentricKHR` in a fragment stage.
     pub fragment_barycentrics: bool,
-    /// `SampledCubeArray` in any stage.
+    /// An arrayed cube image type in any stage (`imageCubeArray`).
     pub cube_arrays: bool,
 }
 impl ShaderFeatures {
@@ -28,8 +28,7 @@ impl ShaderFeatures {
 }
 /// `OpCapability FragmentBarycentricKHR`.
 const FRAGMENT_BARYCENTRIC: u32 = 5284;
-/// `OpCapability SampledCubeArray`.
-const SAMPLED_CUBE_ARRAY: u32 = 45;
+
 /// Whether a SPIR-V module declares `capability`. Capabilities lead the module, right
 /// after its five-word header, so the scan stops at the first other instruction.
 fn declares_capability(words: &[u32], capability: u32) -> bool {
@@ -40,6 +39,25 @@ fn declares_capability(words: &[u32], capability: u32) -> bool {
             return false;
         }
         if words.get(at + 1) == Some(&capability) {
+            return true;
+        }
+        at += count;
+    }
+    false
+}
+
+/// Whether a SPIR-V module declares an arrayed cube image type (`OpTypeImage` with
+/// `Dim` Cube and `Arrayed` 1), which needs `imageCubeArray`. The type is scanned for,
+/// not `OpCapability SampledCubeArray`: Slang emits the type without the capability.
+fn declares_cube_array(words: &[u32]) -> bool {
+    let mut at = 5;
+    while let Some(&word) = words.get(at) {
+        let (count, opcode) = ((word >> 16) as usize, word & 0xffff);
+        if count == 0 {
+            return false;
+        }
+        // OpTypeImage: result, sampled type, Dim, Depth, Arrayed, MS, Sampled, Format.
+        if opcode == 25 && words.get(at + 3) == Some(&3) && words.get(at + 5) == Some(&1) {
             return true;
         }
         at += count;
@@ -164,7 +182,7 @@ pub(super) fn create_inner(
                     stage.spirv
                 )));
             }
-            if !features.cube_arrays && declares_capability(&words, SAMPLED_CUBE_ARRAY) {
+            if !features.cube_arrays && declares_cube_array(&words) {
                 return Err(GpuError::Contract(format!(
                     "{} samples cube arrays, which this device does not support",
                     stage.spirv
@@ -466,5 +484,27 @@ mod capability_tests {
         other.extend([(2 << 16) | 10, FRAGMENT_BARYCENTRIC]);
         assert!(!declares_capability(&other, FRAGMENT_BARYCENTRIC));
         assert!(!declares_capability(&header, FRAGMENT_BARYCENTRIC));
+    }
+    #[test]
+    fn cube_array_scan_reads_image_types_whatever_the_capabilities_say() {
+        let header = [0x0723_0203, 0x0001_0600, 0, 8, 0];
+        // OpTypeImage %2 = float, Dim, depth 2, arrayed, single-sampled, sampled, Unknown.
+        let image = |dim, arrayed| [(9 << 16) | 25, 2, 1, dim, 2, arrayed, 0, 1, 0];
+        let module = |dim, arrayed| {
+            let mut words = header.to_vec();
+            words.extend([(2 << 16) | 17, 1]);
+            words.extend([(3 << 16) | 22, 1, 32]);
+            words.extend(image(dim, arrayed));
+            words
+        };
+        // Slang's shape: an arrayed cube with only `Shader` declared.
+        assert!(declares_cube_array(&module(3, 1)));
+        assert!(!declares_cube_array(&module(3, 0)));
+        assert!(!declares_cube_array(&module(1, 1)));
+        assert!(!declares_cube_array(&header));
+        // A zero word count never loops.
+        let mut broken = header.to_vec();
+        broken.push(25);
+        assert!(!declares_cube_array(&broken));
     }
 }
