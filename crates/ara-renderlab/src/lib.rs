@@ -15,11 +15,6 @@
 //! feature reports `ARA_RENDERLAB_UNSUPPORTED` once when a frame uses it.
 #![warn(missing_docs)]
 
-// On Apple, Renderlab's ara-gpu backend is a separate revision (Cargo.toml); it is
-// `renderlab` to every module, as the wgpu revision is elsewhere.
-#[cfg(target_vendor = "apple")]
-extern crate renderlab_metal as renderlab;
-
 mod atmosphere;
 mod batch;
 mod cutout;
