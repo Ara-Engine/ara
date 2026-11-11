@@ -222,6 +222,8 @@ ara why name:Lamp not visible
 
 ## License
 
-Not decided yet: **all rights reserved for now** (D14). The repository is private until a license is chosen.
+Ara is dual-licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option (D38). Vendored third-party code keeps its own license, listed beside it.
+
+Unless you state otherwise, any contribution you submit for inclusion in Ara is dual-licensed as above, without any additional terms or conditions.
 
 <p align="center"><img src="assets/brand/ara-icon.svg" width="40" alt=""></p>
