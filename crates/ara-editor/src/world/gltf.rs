@@ -8,7 +8,9 @@ use std::path::Path;
 mod patch;
 mod pending;
 mod prepare;
-pub(crate) use prepare::PreparedScene;
+pub(crate) use prepare::{PreparedScene, SnapshotInput};
+#[cfg(test)]
+pub(crate) use prepare::{FrameInputs, extract_frame};
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -215,7 +217,7 @@ impl FidelityContent {
     ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
         self.frame_with_poses(view, workspace, schema, preview.map(|p| &p.current), hidden)
     }
-    fn frame_with_poses(
+    pub(crate) fn frame_with_poses(
         &mut self,
         view: &super::DocumentView,
         workspace: &ara_doc::Workspace,

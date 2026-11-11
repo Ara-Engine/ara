@@ -52,6 +52,7 @@ mod preview;
 mod probes;
 mod recovery;
 mod renderlab;
+mod scene_frame;
 #[cfg(test)]
 mod scene_switch;
 mod startup;
@@ -101,6 +102,12 @@ pub(crate) struct SceneView {
     renderlab: Option<renderlab::RenderlabScene>,
     /// Renderlab failed to start or draw: reported once, and `ara-render` shows the Scene.
     renderlab_failed: bool,
+    /// The frame is the Scene view's own (`scene_frame`), not the old raster path's.
+    scene_only: bool,
+    /// What the Renderlab image last drawn was drawn from (`scene_frame`).
+    scene_drawn: Option<scene_frame::Drawn>,
+    /// Passes Renderlab still draws after the last change (`scene_frame`).
+    scene_settle: u32,
     plan: Option<FidelityPlan>,
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
@@ -338,6 +345,10 @@ impl SceneView {
     ) -> ara_ui::Result<()> {
         let mode = view_mode(&editor.state.view_mode);
         self.lit = matches!(mode, ViewMode::Lit);
+        // Renderlab draws the Scene from the frame the editor extracts itself: no raster view.
+        if renderlab::requested() && !self.renderlab_failed && std::env::var_os("ARA_SCENE_RASTER_FRAME").is_none() {
+            return self.render_scene_frame(renderer, editor, view);
+        }
         let settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
         let options = ara_runtime_render::RenderOptions {
             ray_tracing: settings.ray_tracing,
@@ -385,8 +396,10 @@ impl SceneView {
         }
         self.frame_pending = false;
         self.content_job = None;
-        if let Some(candidate) = self.content_ready.take() {
-            candidate.scene.raster.destroy(renderer)?;
+        if let Some(candidate) = self.content_ready.take()
+            && let Some(raster) = candidate.scene.raster
+        {
+            raster.destroy(renderer)?;
         }
         if self.preview_view.is_some() {
             self.set_preview_view(&editor.state.doc, None);
@@ -437,6 +450,7 @@ impl SceneView {
         view: &crate::world::DocumentView,
         work: RasterWork,
     ) -> ara_ui::Result<()> {
+        self.leave_scene_frame();
         if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
             // Drafts belong to the outgoing scene. Clear them before forming
             // the recovery key, which must describe the same extraction input.
@@ -506,9 +520,11 @@ impl SceneView {
                 .failed(key, std::time::Instant::now(), error.to_string());
             if self.recovery.blocked(key.revision.3) {
                 self.content_job = None;
-                if let Some(candidate) = self.content_ready.take() {
-                    candidate.scene.raster.destroy(renderer)?;
-                }
+                if let Some(candidate) = self.content_ready.take()
+            && let Some(raster) = candidate.scene.raster
+        {
+            raster.destroy(renderer)?;
+        }
                 self.convergence.failed();
                 self.raster_gpu_pending = false;
             }
@@ -740,15 +756,20 @@ impl SceneView {
                 .ok_or("Scene content publication")?;
             let candidate_epoch = candidate.key.epoch;
             let prepared = candidate.scene;
+            let Some(raster_content) = prepared.raster else {
+                // The Scene view's own frame (`scene_frame`) is not raster content: extract again.
+                self.revision = None;
+                return Ok(());
+            };
             self.failed = Some(revision);
             let raster = self.raster.get_or_insert_with(|| {
                 ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
             });
             let scene_changed = self.raster_scene.as_deref() != Some(editor.state.doc.as_str());
             let frame = if scene_changed {
-                raster.publish_scene(renderer, prepared.raster, plan)?
+                raster.publish_scene(renderer, raster_content, plan)?
             } else {
-                raster.publish_content(renderer, prepared.raster, plan)?
+                raster.publish_content(renderer, raster_content, plan)?
             };
             self.raster_scene = Some(editor.state.doc.clone());
             *content = prepared.content;
@@ -1111,6 +1132,7 @@ impl SceneView {
             return self.frame_pending;
         }
         self.frame_pending
+            || self.scene_settle > 0
             || self
                 .raster
                 .as_ref()
@@ -1130,6 +1152,15 @@ impl SceneView {
     /// The ids and channels of the Renderlab frame on screen: the click and the overlays
     /// read them (`IdSource::Packed`) in place of the renderer's.
     /// A Scene frame reached the screen: earlier render errors no longer matter.
+    /// Whether the Scene has an image the compositor can show: the old renderer's presented
+    /// frame, or Renderlab's (`scene_frame`: the old renderer renders none beside it).
+    pub(super) fn presentable(&self, renderer: &Renderer) -> bool {
+        renderer.presentation_ready()
+            || self
+                .renderlab
+                .as_ref()
+                .is_some_and(|scene| scene.image().is_some())
+    }
     pub(super) fn presented(&mut self) {
         self.failure = None;
     }
@@ -1160,7 +1191,7 @@ impl SceneView {
         renderer: &Renderer,
         quality: bool,
     ) -> ara_ui::Result<()> {
-        if renderer.presentation_ready() {
+        if self.presentable(renderer) {
             attach(
                 gpu,
                 renderer,
@@ -1217,8 +1248,10 @@ impl SceneView {
     }
     pub fn destroy(self, renderer: &mut Renderer) -> ara_ui::Result<()> {
         renderer.wait_scene_frame()?;
-        if let Some(candidate) = self.content_ready {
-            candidate.scene.raster.destroy(renderer)?;
+        if let Some(candidate) = self.content_ready
+            && let Some(raster) = candidate.scene.raster
+        {
+            raster.destroy(renderer)?;
         }
         if let Some(raster) = self.raster {
             raster.destroy(renderer)?;

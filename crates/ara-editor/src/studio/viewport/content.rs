@@ -94,13 +94,13 @@ pub(super) fn poll(
     if publication
         .as_ref()
         .is_some_and(|p| !p.key.shows_progress(current, shown))
-    {
-        publication
+        && let Some(raster) = publication
             .take()
             .expect("superseded publication")
             .scene
             .raster
-            .destroy(renderer)?;
+    {
+        raster.destroy(renderer)?;
     }
     if job
         .as_ref()
@@ -120,15 +120,17 @@ pub(super) fn poll(
         }
     }
     if let Some(candidate) = publication {
-        match candidate.scene.raster.preallocate(renderer) {
+        // The Scene view's own frame (no raster content) has no GPU allocations to prepare.
+        let Some(raster) = candidate.scene.raster.as_mut() else {
+            candidate.ready = true;
+            return Ok(());
+        };
+        match raster.preallocate(renderer) {
             Ok(ready) => candidate.ready = ready,
             Err(error) => {
-                publication
-                    .take()
-                    .expect("failed publication")
-                    .scene
-                    .raster
-                    .destroy(renderer)?;
+                if let Some(raster) = publication.take().expect("failed publication").scene.raster {
+                    raster.destroy(renderer)?;
+                }
                 return Err(error);
             }
         }
@@ -136,7 +138,37 @@ pub(super) fn poll(
     Ok(())
 }
 
+/// The editor's state a content job snapshots when it starts.
+fn snapshot<'a>(
+    editor: &'a crate::Editor,
+    view: &'a crate::world::DocumentView,
+) -> crate::world::gltf::SnapshotInput<'a> {
+    let store = editor.host.store();
+    crate::world::gltf::SnapshotInput {
+        view,
+        workspace: store.workspace(),
+        schema: store.schema(),
+        gesture: editor.gesture.as_ref(),
+        hidden: &editor.state.hidden,
+        camera: editor.state.camera,
+    }
+}
+
 impl Job {
+    /// The Scene view's own frame, with no renderer: the worker extracts it and the CPU scene
+    /// picking reads, and hands both straight back (`PreparedScene::frame`).
+    pub fn start_frame(
+        key: Key,
+        content: &crate::world::gltf::FidelityContent,
+        editor: &crate::Editor,
+        view: &crate::world::DocumentView,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            key,
+            thread: content.prepare_async(snapshot(editor, view), None)?,
+        })
+    }
+
     pub fn start(
         key: Key,
         content: &crate::world::gltf::FidelityContent,
@@ -145,16 +177,11 @@ impl Job {
         renderer: &ara_render::Renderer,
         quality: ara_frame::look::Quality,
     ) -> anyhow::Result<Self> {
-        let store = editor.host.store();
         Ok(Self {
             key,
             thread: content.prepare_async(
-                view,
-                store.workspace(),
-                store.schema(),
-                editor.gesture.as_ref(),
-                &editor.state.hidden,
-                renderer.native_seed_for_quality(&quality)?,
+                snapshot(editor, view),
+                Some(renderer.native_seed_for_quality(&quality)?),
             )?,
         })
     }
