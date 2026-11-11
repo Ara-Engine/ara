@@ -228,7 +228,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // Windows uses separate Scene/UI queues: finish external reads before recycling images.
         #[cfg(windows)]
         if !compositor.scene_ready(&renderer)? {
-            if pump(&mut rt, &mut surface, &mut portals, started, Some(&mut game))? {
+            if pump(
+                &mut rt,
+                &mut surface,
+                &mut portals,
+                started,
+                Some(&mut game),
+            )? {
                 break;
             }
             std::thread::sleep(Duration::from_millis(1));
