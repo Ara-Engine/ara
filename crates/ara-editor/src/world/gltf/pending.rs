@@ -230,7 +230,7 @@ mod tests {
         for (draw, instance) in frame.draws.iter().zip(&prepared.scene.instances) {
             assert_eq!(
                 prepared.scene.materials[instance.material].pbr.flags[1]
-                    & ara_render::scene::MODEL_BOUNDS
+                    & ara_frame::scene::MODEL_BOUNDS
                     != 0,
                 draw.address != "e_authored01",
                 "editor fallback metadata must reach the native corner-mark material"

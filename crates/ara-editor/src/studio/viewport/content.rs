@@ -143,7 +143,7 @@ impl Job {
         editor: &crate::Editor,
         view: &crate::world::DocumentView,
         renderer: &ara_render::Renderer,
-        quality: ara_render::look::Quality,
+        quality: ara_frame::look::Quality,
     ) -> anyhow::Result<Self> {
         let store = editor.host.store();
         Ok(Self {

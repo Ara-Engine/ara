@@ -5,7 +5,7 @@ use std::{ffi::CString, thread::JoinHandle};
 /// Keep pumping the loading window/authority while cold PSOs and initial scene
 /// resources are created. No Vulkan owner is shared across these threads.
 pub(crate) fn prepare_renderer(
-    scene: ara_render::scene::Scene,
+    scene: ara_frame::scene::Scene,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
