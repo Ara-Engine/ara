@@ -26,6 +26,7 @@ internal sealed class VnodeEvents : IDisposable
     readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
     readonly Thread _thread;
     readonly int _maxFiles;
+    int _held;
     volatile bool _stopped;
 
     /// <summary><paramref name="changed"/> receives (slot, path) on the watcher thread for each in-place write.</summary>
@@ -47,16 +48,25 @@ internal sealed class VnodeEvents : IDisposable
     /// <summary>Starts watching a file. Failures (a missing file, no descriptors left) leave it to the directory watcher.</summary>
     internal void Add(uint slot, string path)
     {
-        if (_stopped || _byPath.ContainsKey(path) || _byPath.Count >= _maxFiles) return;
-        var fd = open(path, OEvtOnly | OCloexec);
-        if (fd < 0) return;
-        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke };
-        _byDescriptor[fd] = (slot, path);
-        if (Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0 || !_byPath.TryAdd(path, fd))
+        if (_stopped || _byPath.ContainsKey(path)) return;
+        // Reserve a slot first so concurrent adds cannot overshoot the budget.
+        if (Interlocked.Increment(ref _held) > _maxFiles)
         {
-            _byDescriptor.TryRemove(fd, out _);
-            _ = close(fd);
+            Interlocked.Decrement(ref _held);
+            return;
         }
+        var fd = open(path, OEvtOnly | OCloexec);
+        if (fd < 0 || !_byPath.TryAdd(path, fd))
+        {
+            if (fd >= 0) _ = close(fd);
+            Interlocked.Decrement(ref _held);
+            return;
+        }
+        // Both maps are complete before the kernel can deliver the first event for this descriptor, so a delete or
+        // rename that lands right after registration finds (and removes) both entries.
+        _byDescriptor[fd] = (slot, path);
+        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke };
+        if (_stopped || Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0) Remove(fd);
     }
 
     void Remove(int fd)
@@ -64,6 +74,7 @@ internal sealed class VnodeEvents : IDisposable
         if (!_byDescriptor.TryRemove(fd, out var entry)) return;
         _byPath.TryRemove(new KeyValuePair<string, int>(entry.Path, fd));
         _ = close(fd); // closing the descriptor removes its kqueue registration
+        Interlocked.Decrement(ref _held);
     }
 
     void Pump()
