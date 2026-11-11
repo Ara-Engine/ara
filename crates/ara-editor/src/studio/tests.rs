@@ -5992,6 +5992,91 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     view.destroy(&mut renderer).unwrap();
 }
 
+/// The `window` target is the editor window with the Scene in it: the picture is the size of
+/// the window's own snapshot, the Scene view's middle is the render (not the window's hole),
+/// and the chrome over it is the UI's.
+#[test]
+fn agents_capture_the_window_with_the_scene_in_it_on_this_gpu() {
+    use crate::world::EditWorldView as _;
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    let scene = rt.touch(|s| {
+        s.editor
+            .view()
+            .unwrap()
+            .scene(
+                s.editor.host.root(),
+                &s.editor.state,
+                None,
+                &mut s.editor.models,
+            )
+            .unwrap()
+    });
+    let mut renderer = crate::studio::viewport::prepare_renderer(
+        scene,
+        [320, 240],
+        super::present_extensions(),
+        root.join(".ara/gpu"),
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .unwrap()
+    .expect("the renderer starts on this GPU");
+    let view = crate::studio::viewport::SceneView::default();
+    let job = rt.touch(|s| {
+        s.editor
+            .action(
+                "capture",
+                json!({"target": "window", "path": ".ara/captures/window.png"}),
+            )
+            .unwrap()["job"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    });
+    super::capture::serve(&mut rt, Some((&mut renderer, &view)));
+    let started = std::time::Instant::now();
+    let status = loop {
+        let status = rt.touch(|s| {
+            s.editor.tick();
+            s.editor.action("jobs.status", json!({"job": job})).unwrap()
+        });
+        if status["status"] != "running" {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "{status}");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(status["status"], "done", "{status}");
+    let picture = image::open(root.join(".ara/captures/window.png"))
+        .unwrap()
+        .to_rgba8();
+    let ui = rt.snap().unwrap();
+    assert_eq!(
+        picture.dimensions(),
+        (ui.width, ui.height),
+        "the window's size"
+    );
+    let rect = rt.find("scene/view").unwrap();
+    let scale = rt.scale();
+    let (x, y) = (
+        ((rect.left + rect.width() / 2.0) * scale) as u32,
+        ((rect.top + rect.height() / 2.0) * scale) as u32,
+    );
+    let [r, g, b, a] = picture.get_pixel(x, y).0;
+    // Opaque (blending a faint UI pixel over the Scene may round down by one).
+    assert!(a >= 250, "alpha {a}");
+    assert!(
+        u32::from(r) + u32::from(g) + u32::from(b) > 30,
+        "the Scene's render is there, not the hole: {r} {g} {b}"
+    );
+    // The chrome is the UI's: the title bar is not the Scene's sky.
+    assert_ne!(picture.get_pixel(x, 4).0, picture.get_pixel(x, y).0);
+    view.destroy(&mut renderer).unwrap();
+}
+
 /// Drags the rect's edge from corner 1 to 2 (its first axis' high side) 60 px outward and
 /// lets go; the rect as it showed just before the release.
 fn drag_rect_edge(rt: &mut Runtime<Studio>) -> super::rect_tool::Frame {
@@ -6355,4 +6440,475 @@ fn a_rect_press_that_has_not_moved_leaves_a_skewed_childs_pose_exactly() {
         gesture.current["e_kid"], gesture.initial["e_kid"],
         "back where it started: the pose is the one it had, not a re-decomposed one"
     );
+}
+
+// The import gate: the card over the window while a project's imports settle.
+
+/// The text a keyed element shows.
+fn shown_text(rt: &Runtime<Studio>, key: &str) -> Option<String> {
+    rt.tree()
+        .into_iter()
+        .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key))
+        .and_then(|n| n.text)
+        .map(|t| t.to_string())
+}
+
+/// What the import feed says: `done` sources imported, `pending` ids still importing,
+/// `failed` ids with their errors.
+fn feed(done: usize, pending: &[&str], failed: &[(&str, &str)]) -> ara_play_host::ImportProgress {
+    ara_play_host::ImportProgress {
+        done,
+        total: done + pending.len() + failed.len(),
+        pending: pending.iter().map(|id| id.to_string()).collect(),
+        failed: failed
+            .iter()
+            .map(|(id, error)| (id.to_string(), error.to_string()))
+            .collect(),
+    }
+}
+
+/// A gate over the open project whose pipeline reports only what the test feeds it, started
+/// `ago` ago.
+fn silent_gate(rt: &mut Runtime<Studio>, ago: Duration) -> super::loading::Gate {
+    rt.touch(|s| super::loading::Gate::new(&s.editor, false))
+        .without_feed()
+        .started_ago(ago)
+}
+
+#[test]
+fn the_gate_follows_a_slow_import_to_its_end() {
+    use super::loading::Stage;
+    let mut rt = open();
+    // Just started and the pipeline silent: held, but the card is not up yet.
+    let mut gate = silent_gate(&mut rt, Duration::ZERO);
+    let first = gate.step().expect("the gate holds");
+    assert!(
+        !first.shown,
+        "imports that settle at once never show the card"
+    );
+    assert_eq!(first.stage(), Stage::Preparing);
+    // Past the first moments, still silent: the card says it is preparing.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(1));
+    let preparing = gate.step().expect("the gate holds");
+    assert!(preparing.shown);
+    assert_eq!(preparing.stage(), Stage::Preparing);
+    assert!(!preparing.skip, "no Open now yet");
+    // Three sources importing, then one at a time finishing: the last to finish is named.
+    gate.observe(feed(0, &["as_a", "as_b", "as_c"], &[]));
+    let importing = gate.step().unwrap();
+    assert_eq!(importing.stage(), Stage::Importing);
+    let imports = importing.imports.as_ref().unwrap();
+    assert_eq!((imports.done, imports.total, imports.pending), (0, 3, 3));
+    assert_eq!(importing.latest, None);
+    gate.observe(feed(1, &["as_b", "as_c"], &[]));
+    let importing = gate.step().unwrap();
+    assert_eq!(importing.latest.as_deref(), Some("as_a"));
+    assert_eq!(importing.imports.as_ref().unwrap().done, 1);
+    // A slow one: Open now appears after a few seconds, and the wait is shown.
+    let mut slow = silent_gate(&mut rt, Duration::from_secs(5));
+    slow.observe(feed(1, &["as_b", "as_c"], &[]));
+    let slow = slow.step().unwrap();
+    assert!(slow.skip && slow.elapsed >= 5);
+    // Everything imported clean: the gate opens by itself.
+    gate.observe(feed(3, &[], &[]));
+    assert_eq!(gate.step(), None);
+}
+
+#[test]
+fn a_failed_import_holds_the_gate_on_a_review_with_its_error() {
+    use super::loading::Stage;
+    let mut rt = open();
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(1));
+    gate.observe(feed(
+        2,
+        &[],
+        &[
+            (
+                "models/b.gltf",
+                "ARA4302 the glTF buffer `b.bin` is missing",
+            ),
+            ("models/a.png", "not an image"),
+        ],
+    ));
+    for _ in 0..3 {
+        let review = gate.step().expect("failures keep the gate closed");
+        assert_eq!(review.stage(), Stage::Review);
+        let failed = &review.imports.as_ref().unwrap().failed;
+        assert_eq!(
+            failed
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<Vec<_>>(),
+            ["models/a.png", "models/b.gltf"],
+            "sorted by path"
+        );
+        assert!(failed[1].1.contains("ARA4302"), "with the import's error");
+    }
+}
+
+#[test]
+fn a_pipeline_that_never_reports_does_not_hold_the_gate_forever() {
+    let mut rt = open();
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(13));
+    assert_eq!(gate.step(), None);
+}
+
+#[test]
+fn the_card_shows_progress_and_lets_a_person_in() {
+    let mut rt = open();
+    // Before the first moments are over the card is not drawn.
+    let mut gate = silent_gate(&mut rt, Duration::ZERO);
+    let early = gate.step();
+    rt.update(|s| s.local.import_gate = early);
+    settle(&mut rt);
+    assert!(rt.find("loading/detail").is_none(), "no card yet");
+    // Importing: the count, the last source, the clock; no Open now before a few seconds.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(2));
+    gate.observe(feed(0, &["models/a.gltf", "models/b.gltf"], &[]));
+    gate.observe(feed(1, &["models/b.gltf"], &[]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    assert_eq!(
+        shown_text(&rt, "loading/detail").as_deref(),
+        Some("Last: models/a.gltf")
+    );
+    assert_eq!(shown_text(&rt, "loading/elapsed").as_deref(), Some("0:02"));
+    assert!(rt.find("loading/open").is_none());
+    // A few seconds later Open now is there; pressing it lets the person in.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(4));
+    gate.observe(feed(1, &["models/b.gltf"], &[]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    press(&mut rt, "loading/open");
+    assert!(rt.state().local.import_released);
+    settle(&mut rt);
+    assert!(rt.find("loading/detail").is_none(), "the card is gone");
+}
+
+#[test]
+fn the_card_lists_failed_imports_with_their_errors_and_waits_for_open_project() {
+    let mut rt = open();
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(1));
+    let errors: Vec<(String, String)> = (0..5)
+        .map(|i| {
+            (
+                format!("models/bad_{i}.gltf"),
+                format!("ARA4302 buffer {i} is missing"),
+            )
+        })
+        .collect();
+    let refs: Vec<(&str, &str)> = errors
+        .iter()
+        .map(|(a, b)| (a.as_str(), b.as_str()))
+        .collect();
+    gate.observe(feed(10, &[], &refs));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    for i in 0..4 {
+        assert!(
+            texts.iter().any(|t| t == &format!("models/bad_{i}.gltf")),
+            "{texts:?}"
+        );
+        assert!(
+            texts
+                .iter()
+                .any(|t| t == &format!("ARA4302 buffer {i} is missing")),
+            "the error of source {i} shows"
+        );
+    }
+    assert!(
+        texts.iter().any(|t| t == "and 1 more"),
+        "the fifth is counted"
+    );
+    assert!(texts.iter().any(|t| t == "5 imports failed"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "10 of 15 imported"), "{texts:?}");
+    // Review waits for Open project, however long it has been.
+    press(&mut rt, "loading/open");
+    assert!(rt.state().local.import_released);
+}
+
+#[test]
+fn native_views_stay_hidden_while_the_gate_holds() {
+    let mut rt = open();
+    settle(&mut rt);
+    assert!(
+        super::native_rect(&rt, super::SCENE_LAYER, false).is_some(),
+        "the Scene's element has a place"
+    );
+    for layer in [super::SCENE_LAYER, super::game::GAME_LAYER] {
+        assert_eq!(super::native_rect(&rt, layer, true), None, "{layer} hidden");
+    }
+}
+
+/// A studio over a fresh project whose scene uses `models/crate.gltf`; each of `sources`
+/// (file name, importer, bytes) is registered for import. A glTF of `{}` fails to import.
+fn open_with_imports(sources: &[(&str, &str, &[u8])]) -> Runtime<Studio> {
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+    let root = target.join("studio-tests").join(format!(
+        "imports-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let content = root.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(content.join("levels")).unwrap();
+    std::fs::create_dir_all(content.join("models")).unwrap();
+    std::fs::create_dir_all(root.join("settings")).unwrap();
+    std::fs::write(
+        root.join("settings/ara.imports"),
+        ara_asset::ProjectImportSettings::default()
+            .canonical_text()
+            .unwrap(),
+    )
+    .unwrap();
+    let write = |path: PathBuf, value: Value| {
+        std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap()
+    };
+    write(
+        root.join("ara.project.json"),
+        json!({"name": "Imports", "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION, "main": "levels/main.scene"}),
+    );
+    write(
+        content.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_import01","records":{
+            "e_crate001":{"name":"Crate","Transform":{},
+                "MeshRenderer":{"model":"@models/crate.gltf#as_crate0001"}}}}),
+    );
+    for (i, (file, importer, bytes)) in sources.iter().enumerate() {
+        std::fs::write(content.join("models").join(file), bytes).unwrap();
+        write(
+            content.join(format!("models/{file}.import.json")),
+            json!({"$schema":"ara://schema/import/1","id":format!("as_source{i:04}"),"records":{
+                "i_settings":{"importer":importer,"version":"1","settings":{}}}}),
+        );
+    }
+    let editor = Editor::open_with(&root, Some(root.join(".ara/test-user.json"))).unwrap();
+    let studio = Studio::new(editor, (1400.0, 900.0));
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(studio, chrome::view, theme, (1400, 900), 1.0).unwrap();
+    rt.frame(Duration::ZERO);
+    rt
+}
+
+/// The real pipeline, end to end: a project whose glTF cannot be imported reaches the
+/// gate's review with the import's own error, and the gate stays closed on it.
+#[test]
+fn a_project_with_a_failing_import_reaches_the_review_with_the_real_error() {
+    use super::loading::Stage;
+    let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, false));
+    let started = std::time::Instant::now();
+    let review = loop {
+        rt.touch(|s| s.editor.tick());
+        match gate.step() {
+            Some(standing) if standing.stage() == Stage::Review => break standing,
+            Some(_) => {}
+            None => panic!("the gate opened without a failure or an import report"),
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the import never settled: {:?}",
+            gate.step()
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let failed = &review.imports.as_ref().unwrap().failed;
+    assert_eq!(failed.len(), 1, "{failed:?}");
+    assert!(failed[0].0.ends_with("models/crate.gltf"), "{failed:?}");
+    assert!(
+        !failed[0].1.trim().is_empty(),
+        "the import's error is shown"
+    );
+    assert!(gate.step().is_some(), "a failure keeps the gate closed");
+    // The console says it, so a real import can be checked without a screenshot.
+    let log = gate.take_log();
+    assert!(
+        log.iter()
+            .any(|l| l.starts_with("imports: review with 1 failure: ")
+                && l.contains("models/crate.gltf")),
+        "{log:?}"
+    );
+    // An agent reads the same list over the protocol, and can open the gate.
+    let said = rt.touch(|s| s.editor.action("editor.imports", json!({})).unwrap());
+    assert_eq!(said["stage"], "review", "{said}");
+    assert!(
+        said["failed"][0]["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("models/crate.gltf")
+    );
+    assert!(
+        !said["failed"][0]["error"]
+            .as_str()
+            .unwrap()
+            .trim()
+            .is_empty()
+    );
+    assert!(!rt.state().editor.import_gate.take_release());
+    rt.touch(|s| {
+        s.editor
+            .action("editor.imports", json!({"release": true}))
+            .unwrap()
+    });
+    assert!(
+        rt.state().editor.import_gate.take_release(),
+        "release reaches the window"
+    );
+    gate.release("an agent");
+    assert_eq!(gate.step(), None);
+    let log = gate.take_log();
+    assert_eq!(log, ["imports: opened (an agent), 1 failed"], "{log:?}");
+}
+
+/// The real pipeline with no one at the window: the gate opens on the failed import and says
+/// what failed, so a studio started for an agent is never held on a review.
+#[test]
+fn an_unattended_gate_on_a_project_with_a_failing_import_opens_by_itself() {
+    let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, true));
+    let started = std::time::Instant::now();
+    while gate.step().is_some() {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the gate never opened"
+        );
+        rt.touch(|s| s.editor.tick());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let log = gate.take_log();
+    assert!(
+        log.iter()
+            .any(|l| l.starts_with("imports: review with 1 failure: ")),
+        "{log:?}"
+    );
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("imports: opened (no one at the window), 1 failed"),
+        "{log:?}"
+    );
+}
+
+/// The real pipeline's success path: a valid image imports and the gate opens by itself.
+#[test]
+fn a_project_whose_imports_succeed_opens_the_gate_by_itself() {
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(4, 4)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let png = png.into_inner();
+    let mut rt = open_with_imports(&[("rock.png", "ara.texture", &png)]);
+    let worker =
+        ara_play_host::PlayConfig::for_project(rt.state().editor.host.root()).import_worker;
+    if !worker.exists() {
+        eprintln!("skipped: no ara-import-worker at {}", worker.display());
+        return;
+    }
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, false));
+    let started = std::time::Instant::now();
+    let mut last = None;
+    while let Some(standing) = gate.step() {
+        last = Some(standing);
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the gate never opened: {last:?}"
+        );
+        rt.touch(|s| s.editor.tick());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // It opened because the import settled clean, not because the pipeline stayed silent.
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "opened by giving up: {last:?}"
+    );
+    let log = gate.take_log();
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("imports: opened (all imported), 0 failed"),
+        "{log:?}"
+    );
+}
+
+#[test]
+fn an_unattended_gate_opens_when_imports_settle_even_with_failures() {
+    let mut rt = open();
+    let mut gate = rt
+        .touch(|s| super::loading::Gate::new(&s.editor, true))
+        .without_feed()
+        .started_ago(Duration::from_secs(1));
+    let a = (
+        "models/a.gltf",
+        "ARA4302 missing buffer\nimport-worker exited",
+    );
+    gate.observe(feed(1, &["models/b.gltf"], &[a]));
+    assert!(gate.step().is_some(), "still importing: held");
+    gate.observe(feed(1, &[], &[a, ("models/b.gltf", "not a model")]));
+    assert_eq!(
+        gate.step(),
+        None,
+        "settled with failures and no one there: open"
+    );
+    assert_eq!(
+        gate.take_log(),
+        [
+            "imports: importing 1 of 3",
+            "imports: review with 2 failures: models/a.gltf: ARA4302 missing buffer; models/b.gltf: not a model",
+            "imports: opened (no one at the window), 2 failed",
+        ]
+    );
+}
+
+#[test]
+fn an_attended_gate_logs_each_stage_once_and_opens_when_released() {
+    let mut rt = open();
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(1));
+    gate.observe(feed(0, &["a", "b"], &[]));
+    for _ in 0..3 {
+        gate.step();
+    }
+    gate.observe(feed(1, &[], &[("b", "bad")]));
+    for _ in 0..3 {
+        assert!(gate.step().is_some(), "an attended review waits");
+    }
+    gate.release("a person");
+    assert_eq!(gate.step(), None);
+    assert_eq!(gate.step(), None);
+    assert_eq!(
+        gate.take_log(),
+        [
+            "imports: importing 0 of 2",
+            "imports: review with 1 failure: b: bad",
+            "imports: opened (a person), 1 failed",
+        ],
+        "each stage once"
+    );
+}
+
+#[test]
+fn enter_takes_the_cards_button_once_it_is_offered() {
+    let mut rt = open();
+    // Importing, before Open now is offered: Enter does nothing.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(2));
+    gate.observe(feed(0, &["models/a.gltf"], &[]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    assert!(!rt.state().local.import_released, "no button yet");
+    // A review: Enter is Open project.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(2));
+    gate.observe(feed(1, &[], &[("models/a.gltf", "bad")]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    assert!(rt.state().local.import_released, "Enter opens the project");
 }

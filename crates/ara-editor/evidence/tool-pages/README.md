@@ -1,5 +1,7 @@
 # Tool pages: before and after
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 Design: [`docs/design/editor-tool-pages.md`](../../../../docs/design/editor-tool-pages.md).
 Open `gallery.html` to compare each page side by side (round 1 and round 2).
 

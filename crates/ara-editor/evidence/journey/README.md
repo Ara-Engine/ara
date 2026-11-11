@@ -1,5 +1,7 @@
 # Editor UX v2, phase 2: the alpha journey
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 The 0.0.1-alpha exit criterion: the essential journey through the editor's
 visible UI only, on the Outpost sample. Produced at `88b59c84` by
 

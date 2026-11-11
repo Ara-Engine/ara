@@ -37,7 +37,7 @@ fn native_ui_matches_the_cpu_reference() -> ara_ui::Result<()> {
             .ok_or("CPU reference extent")?;
         actual.save(output.join(format!("gpu-{name}.png")))?;
         reference.save(output.join(format!("cpu-{name}.png")))?;
-        // The editor's GPU/CPU contract (`ara-editor --verify`): local SSIM loss <= 0.01.
+        // The GPU/CPU contract: local SSIM loss <= 0.01.
         let comparison = ara_render::capture::compare(&reference, &actual, 0.01)?;
         comparison
             .diff

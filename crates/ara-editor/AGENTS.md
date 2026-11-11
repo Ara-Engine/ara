@@ -5,6 +5,14 @@ the **studio** (`src/studio/`, stillkit, D34): read `src/studio/AGENTS.md` first
 its views need a Wayland session with subsurfaces (`studio::can_host`); elsewhere it opens
 with no setup. `--headless` captures the Scene to `editor-scene.png` without a window
 (`studio::headless`, used by release smoke tests and `ara hub open --headless`).
+Bounded and unattended starts (`studio/setup.rs`, `Options`): `--frames N` ends the run after N
+frames with the window never shown, so `--frames 1000000` is a protocol server for an export
+step; `--screenshot` shows the window in the background, then after the frames saves it with
+its Scene as `editor.png` in `--output` (the capture service's `window` target, one
+implementation); `--background` shows it unfocused. All three are unattended: the studio's
+import gate opens by itself once imports settle (`Options::unattended`). Tests that open a
+window are `#[ignore]`: `cargo test -p ara-editor --test bounded_runs --test
+background_capture -- --ignored`.
 
 API:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
@@ -72,7 +80,8 @@ to `settings/project.json`; marker name/main stay in `ara.project.json`.
 Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-run
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and a headless run (`Options::isolate_profile`) starts
-from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
+from a fresh `<output>/.ara-profile` (bounded runs too: `--frames`, `--screenshot`). Never write
+user state anywhere else.
 Scene quality: `EditorState.render_quality` mirrors `viewport.quality` (None = project);
 commands `view.quality.{project,auto,low,medium,high,epic}`; agents: `editor.preferences`.
 Scene convergence is three jitter cycles of completed frames, plus frames while auto

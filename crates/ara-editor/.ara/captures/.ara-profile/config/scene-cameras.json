@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "/Users/islam/.t3/worktrees/ara/t3-4359603b/crates/ara-editor/../../target/ara-editor/bounded-frames/2563": {
+      "cameras": {
+        "sc_back0001": {
+          "target": [0, 0.5, 0],
+          "yaw": 0.6000000238418579,
+          "pitch": 0.4000000059604645,
+          "distance": 10,
+          "fovYDegrees": 50,
+          "projection": "perspective",
+          "orthographicHeight": 10
+        }
+      },
+      "bookmarks": {}
+    }
+  }
+}

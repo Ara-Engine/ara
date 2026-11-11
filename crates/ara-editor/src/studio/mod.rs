@@ -34,6 +34,7 @@ mod hierarchy;
 mod inspector;
 mod layer;
 mod lighting;
+mod loading;
 mod material_stats;
 mod mesh_paint;
 mod panels;
@@ -121,8 +122,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     surface.set_caption(Caption::Compact);
     let scale = surface.scale();
     let (sw, sh) = stillkit::platform::current::host::screen_size();
-    let w = ((1600.0 * scale) as i32).min(sw - 40);
-    let h = ((1000.0 * scale) as i32).min(sh - 80);
+    // A bounded run opens at the requested size in device pixels (`--size`); otherwise the
+    // studio's own.
+    let (want_w, want_h) = if options.bounded() {
+        (options.size[0] as f32, options.size[1] as f32)
+    } else {
+        (1600.0 * scale, 1000.0 * scale)
+    };
+    let w = (want_w as i32).min(sw - 40);
+    let h = (want_h as i32).min(sh - 80);
     surface.place(((sw - w) / 2, (sh - h) / 2, w, h));
     let size = surface.client_size();
     let mut studio = Studio::new(editor, (size.0 as f32 / scale, size.1 as f32 / scale));
@@ -143,7 +151,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut portals = portals::Portals::default();
     // In the background (automated captures, tests beside a person's work) the window
     // shows without activating or taking focus; otherwise it comes forward, active.
-    if options.background {
+    if options.hidden() {
+        // `--frames N`: never shown. The loop and the protocol server run as usual.
+        rt.touch(|s| s.local.background = true);
+    } else if options.background || options.screenshot {
         rt.touch(|s| s.local.background = true);
         surface.show();
     } else {
@@ -238,6 +249,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The last native-layer failure reported, so a recurring one is said once.
     let mut layer_failure: Option<String> = None;
     let mut scene_dirty = true;
+    // The import gate: held until the project's imports settle (see `loading`).
+    let mut gate = Some(rt.touch(|s| loading::Gate::new(&s.editor, options.unattended())));
+    // A bounded run counts frames and ends itself: `--frames N`, or `--screenshot` (60 unless
+    // given). Presented Scene frames count when the window shows; hidden, the loop's own.
+    let frame_limit = options.bounded().then(|| options.frames.unwrap_or(60));
+    let mut frames = 0_u64;
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -335,6 +352,31 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|_| {});
             scene_dirty = true;
         }
+        // The import card shows while imports settle, and the native views stay hidden so a
+        // half-imported scene is never presented as finished. A person can let themselves in.
+        if let Some(g) = gate.as_mut() {
+            if rt.state().local.import_released {
+                g.release("a person");
+            }
+            if rt.state().editor.import_gate.take_release() {
+                g.release("an agent");
+            }
+            let standing = g.step();
+            for line in g.take_log() {
+                eprintln!("ara-editor: {line}");
+            }
+            if rt.state().local.import_gate != standing {
+                let next = standing.clone();
+                rt.update(|s| s.local.import_gate = next);
+            }
+            if standing.is_none() {
+                gate = None;
+                scene_dirty = true;
+                composite = true;
+            }
+        }
+        let gated = gate.is_some();
+        rt.state().editor.import_gate.set_holding(gated);
         // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
         // pass boundary through the same handlers as the menus.
         // A preset or rebind changed in Settings: menus and the palette show it.
@@ -457,11 +499,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.mark("scene sync");
         pass.phase("studio.scene");
         // The Scene view: render where its element shows and present into its layer.
-        let rect = rt
-            .natives()
-            .into_iter()
-            .find(|(n, _)| &**n == SCENE_LAYER)
-            .map(|(_, r)| r);
+        let rect = native_rect(&rt, SCENE_LAYER, gated);
         surface.place_native_layer(SCENE_LAYER, rect);
         composite |= shown_again(&mut placed, SCENE_LAYER, rect.is_some());
         // A hidden (minimized) window shows no frames: render none. A covered one skips
@@ -769,11 +807,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.paint_ring = None);
         }
         // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
-        let game_rect = rt
-            .natives()
-            .into_iter()
-            .find(|(n, _)| &**n == game::GAME_LAYER)
-            .map(|(_, r)| r);
+        let game_rect = native_rect(&rt, game::GAME_LAYER, gated);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
         if shown_again(&mut placed, game::GAME_LAYER, game_rect.is_some()) {
             game.redraw();
@@ -847,11 +881,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // The Material and Animation pages' canvases, each in its own layer.
         for (domain, name) in graph::PAGES {
-            let rect = rt
-                .natives()
-                .into_iter()
-                .find(|(n, _)| &**n == name)
-                .map(|(_, r)| r);
+            let rect = native_rect(&rt, name, gated);
             surface.place_native_layer(name, rect);
             if shown_again(&mut placed, name, rect.is_some()) {
                 graph_extent = ("", [0, 0]);
@@ -981,6 +1011,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.profiling = recording);
         }
         was_recording = recording;
+        if let Some(limit) = frame_limit {
+            if options.hidden() || presented {
+                frames += 1;
+            }
+            if frames >= limit {
+                if options.screenshot {
+                    capture::screenshot(
+                        &mut rt,
+                        Some((&mut renderer, &scene_view)),
+                        &options.output,
+                    )?;
+                }
+                break;
+            }
+        }
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
@@ -993,6 +1038,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let next = [
             rt.wake_at().map(|at| started + at),
             busy.then(|| Instant::now() + Duration::from_millis(8)),
+            // A bounded run counts frames: it never idles for its half second.
+            frame_limit.map(|_| Instant::now() + Duration::from_millis(16)),
+            // The card's clock and the import feed are read on this wake while it holds.
+            gated.then(|| Instant::now() + Duration::from_millis(100)),
             sizing.map(|(_, at)| at + Duration::from_millis(125)),
             Some(Instant::now() + Duration::from_millis(500)),
         ]
@@ -1052,6 +1101,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         .destroy(&mut renderer)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
+}
+
+/// Where native layer `name` shows: its element's rect, or nowhere while the import gate
+/// holds, so a half-imported scene is never presented as finished.
+fn native_rect(rt: &Runtime<Studio>, name: &str, gated: bool) -> Option<stillkit::Rect> {
+    if gated {
+        return None;
+    }
+    rt.natives()
+        .into_iter()
+        .find(|(n, _)| &**n == name)
+        .map(|(_, rect)| rect)
 }
 
 /// Records whether native layer `name` is placed this pass; true when it was not on the

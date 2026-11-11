@@ -1,5 +1,7 @@
 # Linux bring-up results: m6u
 
+> **Historical record.** The editor routes named below (`--verify`, `--verify-journey`, `--test native`) belonged to the previous editor shell and went with it (#53); the rows are what those runs reported on 2026-10-27, not commands to repeat. The studio is launched and checked as `AGENTS.md` says.
+
 2026-10-27; base `81c0b8e9` plus `t3/linux-node` portability fixes.
 All commands ran on Ubuntu 26.04 / Linux 7.0, Rust 1.99.1, GCC 15.2, .NET SDK 10.0.403, Mesa RADV 26.0.8 on the Radeon 760M. `CARGO_BUILD_JOBS=10`.
 

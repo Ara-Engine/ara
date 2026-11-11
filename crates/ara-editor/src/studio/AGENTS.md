@@ -16,6 +16,15 @@ equivalent.
   owner's poll (`probes.rs`) and queued captures (`capture.rs`), plus the unpresented Scene
   render a probe bake needs (a bake advances only through Scene renders). A `viewport`
   capture without a presented Scene fails saying so; `editor` and `layout` never need it.
+- `loading.rs`: the import gate. While a project's imports settle, a modal card shows the last
+  source to finish, N of M, the clock and every failed import with its error, and the host
+  loop keeps the native views hidden (`native_rect`), so a half-imported scene is never
+  presented as finished. Clean imports open it by itself; "Open now" (after 3 s) and "Open
+  project" (on failures), or Enter, let a person in. A studio nobody is at (`--background`,
+  captures, `Options::unattended`) opens it once the imports settle, failures or not; an
+  agent can open it too, and read what failed, with `editor.imports` (`import_gate.rs`).
+  Each stage change is one `ara-editor: imports: …` line on stderr (importing N of M, review
+  with K failures, opened and why), so a real import is checkable without a screenshot.
 - `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
 - `game.rs`: the Game view's own layer (`GAME_LAYER`): the gameplay camera's preview outside
   Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during

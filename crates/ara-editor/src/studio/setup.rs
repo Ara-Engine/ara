@@ -14,10 +14,16 @@ pub struct Options {
     pub project: PathBuf,
     /// Populate an empty scene using one typed sample-content batch.
     pub sample: bool,
-    /// Where the headless capture is written.
+    /// Where a headless or screenshot capture is written.
     pub output: PathBuf,
-    /// The headless capture's size in pixels.
+    /// The headless capture's size, or the studio window's, in pixels.
     pub size: [u32; 2],
+    /// Stop after this many presented frames (`--frames N`). The window stays hidden unless
+    /// `screenshot` asks for a picture of it; `None` keeps the editor open.
+    pub frames: Option<u64>,
+    /// After the frames, save the editor window with its Scene in it (the capture service's
+    /// `window` target) as `<output>/editor.png`, then exit (`--screenshot`).
+    pub screenshot: bool,
     /// Open an authoring panel directly; --sample creates its starter asset when absent.
     pub panel: Option<String>,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
@@ -30,7 +36,27 @@ pub struct Options {
 }
 
 impl Options {
-    /// A headless capture never touches the owner's profile and starts from fresh
+    /// A bounded run: it ends by itself after its frames, or once its screenshot is taken.
+    pub fn bounded(&self) -> bool {
+        self.frames.is_some() || self.screenshot
+    }
+
+    /// A bounded run that wants no picture of the window: it never shows it, and keeps the
+    /// protocol server up for as long as it runs (`--frames 1000000` is a server for an
+    /// export step). Nothing renders into a hidden window, so counted frames are the loop's.
+    pub fn hidden(&self) -> bool {
+        self.frames.is_some() && !self.screenshot
+    }
+
+    /// Nobody is at the window: a background start (`--background`, `ARA_EDITOR_BACKGROUND=1`)
+    /// or any bounded or headless run. The studio's import gate opens by itself for these
+    /// once the imports settle, so an agent's captures are never held for a person to press
+    /// Open project.
+    pub fn unattended(&self) -> bool {
+        self.background || self.bounded() || self.headless
+    }
+
+    /// A headless or bounded run never touches the owner's profile and starts from fresh
     /// preferences: preferences (`ARA_CONFIG_DIR`) and crash reports (`ARA_CRASH_DIR`) go
     /// to `<output>/.ara-profile`, and the players and import workers it starts inherit
     /// both, hidden (`ARA_PLAY_OFFSCREEN`).
@@ -38,7 +64,7 @@ impl Options {
     /// # Safety
     /// Mutates the process environment: call it before any thread exists.
     pub unsafe fn isolate_profile(&self) {
-        if !self.headless {
+        if !(self.headless || self.bounded()) {
             return;
         }
         let profile = self.output.join(".ara-profile");
@@ -62,6 +88,8 @@ impl Default for Options {
             sample: false,
             output: PathBuf::from(".ara/captures"),
             size: [1440, 900],
+            frames: None,
+            screenshot: false,
             panel: None,
             scene: None,
             select: None,
@@ -178,4 +206,31 @@ fn sample(editor: &mut Editor) -> ara_ui::Result<()> {
     editor.apply(commands, "Create sample Outpost scene", None)?;
     editor.host.flush();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_frame_run_is_hidden_and_a_screenshot_run_is_shown_and_both_are_unattended() {
+        let frames = Options {
+            frames: Some(20),
+            ..Default::default()
+        };
+        assert!(frames.bounded() && frames.hidden() && frames.unattended());
+        let shot = Options {
+            frames: Some(4),
+            screenshot: true,
+            ..Default::default()
+        };
+        assert!(shot.bounded() && !shot.hidden() && shot.unattended());
+        let background = Options {
+            background: true,
+            ..Default::default()
+        };
+        assert!(!background.bounded() && !background.hidden() && background.unattended());
+        let person = Options::default();
+        assert!(!person.bounded() && !person.hidden() && !person.unattended());
+    }
 }

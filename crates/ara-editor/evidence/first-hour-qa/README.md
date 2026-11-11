@@ -1,5 +1,7 @@
 # First-hour QA fixes: before and after
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 The editor agent's first-hour QA (`--verify-first-hour`, findings sheet tiles E–H) found
 three problems in the tool pages. Design notes: [`docs/design/editor-tool-pages.md`](../../../../docs/design/editor-tool-pages.md)
 (sections 1, 2 and 7). Open `gallery.html` to compare each step side by side.

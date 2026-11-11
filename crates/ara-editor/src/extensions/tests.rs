@@ -68,6 +68,7 @@ impl Project {
             bounds_key: None,
             pending_frames: Default::default(),
             frame_aspect: 16. / 9.,
+            import_gate: Default::default(),
             extensions: Extensions {
                 interaction: interaction.clone(),
                 catalog: Catalog {

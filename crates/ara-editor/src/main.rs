@@ -61,12 +61,17 @@ fn main() -> ara_ui::Result<()> {
                     return Err("invalid capture size".into());
                 }
             }
+            "--frames" => {
+                let frames = args.next().ok_or("--frames needs a count")?;
+                options.frames = Some(frames.parse().map_err(|_| "--frames needs a count")?);
+            }
+            "--screenshot" => options.screenshot = true,
             "--output" => {
                 options.output = PathBuf::from(args.next().ok_or("--output needs a directory")?)
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--scene levels/x.scene] [--select a,b] [--play] [--panel NAME] [--sample] [--background] [--headless [--size WxH] [--output DIR]]\n\nNative editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--panel NAME opens that panel; with --sample, its starter asset when there is none.\n--sample creates an undoable sample scene if the scene is empty.\n--background opens the window behind others without taking focus (also ARA_EDITOR_BACKGROUND=1), for automated captures.\n--headless captures editor-scene.png (at --size, into --output) without creating a window, then exits."
+                    "ara-editor <project> [--scene levels/x.scene] [--select a,b] [--play] [--panel NAME] [--sample] [--background] [--frames N] [--screenshot] [--size WxH] [--output DIR] [--headless]\n\nNative editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--panel NAME opens that panel; with --sample, its starter asset when there is none.\n--sample creates an undoable sample scene if the scene is empty.\n--background opens the window behind others without taking focus (also ARA_EDITOR_BACKGROUND=1), for automated captures.\n--frames N ends the editor after N frames with its window hidden (the protocol server stays up until then: --frames 1000000 is a server for an export step).\n--screenshot opens the window in the background at --size, then after the frames (default 60) saves it with its Scene as editor.png in --output and exits; the same picture agents get from the capture target `window`.\n--headless captures editor-scene.png (at --size, into --output) without creating a window, then exits."
                 );
                 return Ok(());
             }

@@ -15,7 +15,9 @@ cargo run -p ara-editor -- <project> --sample
 always saved through the host. Docking is saved per project in `.ara/editor-layout.json`.
 On Linux the editor needs a Wayland session whose compositor offers subsurfaces (GNOME and
 KDE do); elsewhere it opens with no setup. `--headless` writes `editor-scene.png` to
-`--output` without opening a window.
+`--output` without opening a window. `--frames N` ends a run after N frames with the window
+hidden; `--screenshot` saves the window with its Scene as `editor.png` in `--output` and
+exits.
 
 ## Two-minute demo
 
