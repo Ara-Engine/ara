@@ -424,6 +424,9 @@ pub struct Local {
     pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
+    /// The press under way: when it went down and the farthest the pointer has travelled
+    /// from there (`studio::click` decides click against drag from it).
+    pub press: Option<(std::time::Instant, f32)>,
     /// A gizmo move waiting for the host's vertex or surface snap (`studio::snapping`).
     pub snap: Option<super::snapping::Request>,
     /// V is held: moves snap vertex to vertex, as in Unity.

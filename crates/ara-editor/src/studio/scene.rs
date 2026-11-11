@@ -230,6 +230,8 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
             _ => {}
         }
     }
+    // Click or drag: by the farthest the pointer went, not where it let go.
+    let clicked = super::click(s, e);
     // The gizmo takes the left button before picking and orbiting.
     match (e.phase, e.button) {
         (PointerPhase::Hover, _) => {
@@ -282,8 +284,7 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
             s.local.flying = false;
             s.local.navigating = false;
             s.local.held.clear();
-            let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
-            if e.phase == PointerPhase::Up && still && e.size.0 > 0.0 {
+            if e.phase == PointerPhase::Up && clicked && e.size.0 > 0.0 {
                 s.local.pick = Some(Pick {
                     u: e.local.x / e.size.0,
                     v: e.local.y / e.size.1,
@@ -315,9 +316,7 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
             }
         }
         (PointerPhase::Cancel, _) if s.local.marquee.is_some() => s.local.marquee = None,
-        (PointerPhase::Up, Button::Left)
-            if !e.mods.alt && e.travel().x.abs() + e.travel().y.abs() < 4.0 && e.size.0 > 0.0 =>
-        {
+        (PointerPhase::Up, Button::Left) if !e.mods.alt && clicked && e.size.0 > 0.0 => {
             s.local.pick = Some(Pick {
                 u: e.local.x / e.size.0,
                 v: e.local.y / e.size.1,

@@ -933,6 +933,42 @@ fn overlays_key(s: &Studio) -> u64 {
     h.finish()
 }
 
+/// How far the pointer may stray during a press that still counts as a click (design px).
+const CLICK_SLOP: f32 = 4.0;
+/// How long a press may be held and still count as a click.
+const CLICK_TIME: Duration = Duration::from_millis(500);
+
+/// Whether press `e` ends as a click rather than a drag, decided as Unity does: by the
+/// farthest the pointer went while the button was down (a drag that comes back to its
+/// start is still a drag) and how long it was held, never by where it let go. Feed it every
+/// phase of a press; it answers on the release.
+pub(super) fn click(s: &mut Studio, e: &stillkit::el::PointerEvent) -> bool {
+    use stillkit::el::PointerPhase;
+    let travel = e.travel().x.abs() + e.travel().y.abs();
+    match e.phase {
+        PointerPhase::Down => {
+            s.local.press = Some((Instant::now(), 0.0));
+            false
+        }
+        PointerPhase::Move => {
+            if let Some((_, far)) = s.local.press.as_mut() {
+                *far = far.max(travel);
+            }
+            false
+        }
+        PointerPhase::Up => s
+            .local
+            .press
+            .take()
+            .is_some_and(|(at, far)| far.max(travel) < CLICK_SLOP && at.elapsed() < CLICK_TIME),
+        PointerPhase::Cancel => {
+            s.local.press = None;
+            false
+        }
+        PointerPhase::Hover => false,
+    }
+}
+
 /// Shows `message` in the status bar for a few seconds (what a request did).
 pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
