@@ -8,8 +8,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Ara.CompileServer</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- Workstation concurrent GC keeps the footprint small next to the editor. -->
-    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- Workstation, non-concurrent GC: the footprint stays small next to the editor, and the GC budgets gen0 by cache size
+         instead of the much smaller concurrent budget. A compile allocates 100-160 MB in ~100 ms; with background GC an L3 ran
+         ~10 gen0 and 3 gen1 collections (44 ms of GC pause in a 122 ms compile, 135 ms in the initial compile). Without it the
+         same compile has 1-2 collections (benchmarks/iteration/SERVER_GC.md). Blocking gen2 collections happen in the compile
+         server, never in the game process. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- ReadyToRun (below) makes Roslyn start without JIT, so the server tiers normally. Without it
          (-p:AraReadyToRun=false) every Roslyn method would run at tier 0 for many edits, so keep
          the older no-tiering setting: every method is JIT-optimized on first use. -->

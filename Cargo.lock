@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/Snowy7/stillkit?rev=492ed6ab67040af7d97742f1dc7ca753767e4a7b#492ed6ab67040af7d97742f1dc7ca753767e4a7b"
+source = "git+https://github.com/Snowy7/stillkit?rev=5138e95f7c21f6689271c347b4ff2c92a2c17b6a#5138e95f7c21f6689271c347b4ff2c92a2c17b6a"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_consumer 0.39.2",
@@ -10020,7 +10020,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e079e5dff9fc17017bfb526d5b71fe077e603de662e4b22f6deb4b6b36e5895"
 dependencies = [
  "bytemuck",
- "glam 0.34.1",
+ "glam 0.33.12",
  "half",
  "log",
  "rdst",
@@ -10902,7 +10902,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -12394,7 +12394,7 @@ checksum = "ae139f051204a4af015d4f0ed3a1f7a51020d03a44c7cf249168c543d88131e9"
 [[package]]
 name = "stillkit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=492ed6ab67040af7d97742f1dc7ca753767e4a7b#492ed6ab67040af7d97742f1dc7ca753767e4a7b"
+source = "git+https://github.com/Snowy7/stillkit?rev=5138e95f7c21f6689271c347b4ff2c92a2c17b6a#5138e95f7c21f6689271c347b4ff2c92a2c17b6a"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_macos 0.27.2",
@@ -12435,7 +12435,7 @@ dependencies = [
 [[package]]
 name = "stillkit-glass"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=492ed6ab67040af7d97742f1dc7ca753767e4a7b#492ed6ab67040af7d97742f1dc7ca753767e4a7b"
+source = "git+https://github.com/Snowy7/stillkit?rev=5138e95f7c21f6689271c347b4ff2c92a2c17b6a#5138e95f7c21f6689271c347b4ff2c92a2c17b6a"
 dependencies = [
  "bytemuck",
  "glam 0.34.1",
@@ -12446,7 +12446,7 @@ dependencies = [
 [[package]]
 name = "stillkit-kit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=492ed6ab67040af7d97742f1dc7ca753767e4a7b#492ed6ab67040af7d97742f1dc7ca753767e4a7b"
+source = "git+https://github.com/Snowy7/stillkit?rev=5138e95f7c21f6689271c347b4ff2c92a2c17b6a#5138e95f7c21f6689271c347b4ff2c92a2c17b6a"
 dependencies = [
  "stillkit",
 ]
@@ -12880,7 +12880,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.52.0",

@@ -8,6 +8,9 @@
 //! - Windows: the layer is a child `HWND` covering the hole; a Vulkan swapchain for its
 //!   client area (`VK_KHR_win32_surface`), sized explicitly, since the child window is
 //!   not an SDL window. Resizes are applied at the next presentation pass.
+//! - Linux: the layer is a Wayland subsurface below the window; a Vulkan swapchain for it
+//!   (`VK_KHR_wayland_surface`), sized explicitly (a Wayland surface takes the swapchain's
+//!   size). Resizes are applied at the next presentation pass, as on Windows.
 //!
 //! Everything above this module (what is drawn, when, at what size) is shared.
 use std::num::NonZeroIsize;
@@ -15,8 +18,10 @@ use std::ptr::NonNull;
 
 use anyhow::{Context, Result};
 
-// Windows presents with `ui_device` too, once its child-window swapchain lands (PR #10).
-#[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
+#[cfg_attr(
+    not(any(target_os = "macos", windows, target_os = "linux")),
+    allow(unused_imports)
+)]
 use crate::gpu::{NativeUi, ui_device};
 
 /// A native layer to present into, as stillkit gives it.
@@ -26,6 +31,13 @@ pub(super) enum Target {
     Metal(NonNull<std::ffi::c_void>),
     /// A child `HWND` (Windows) covering the layer's rect.
     Hwnd(NonZeroIsize),
+    /// A Wayland subsurface (Linux): its connection's `wl_display *` and its `wl_surface *`.
+    Wayland {
+        /// The `wl_display *`.
+        display: NonNull<std::ffi::c_void>,
+        /// The subsurface's `wl_surface *`.
+        surface: NonNull<std::ffi::c_void>,
+    },
 }
 
 impl Target {
@@ -34,6 +46,7 @@ impl Target {
         match self {
             Self::Metal(layer) => layer.as_ptr() as usize,
             Self::Hwnd(hwnd) => hwnd.get() as usize,
+            Self::Wayland { surface, .. } => surface.as_ptr() as usize,
         }
     }
 }
@@ -47,6 +60,12 @@ pub(super) fn target(handle: stillkit::NativeHandle) -> Result<Target> {
         stillkit::NativeHandle::Hwnd(hwnd) => NonZeroIsize::new(hwnd)
             .map(Target::Hwnd)
             .context("the native layer's window is null"),
+        stillkit::NativeHandle::Wayland { display, surface } => {
+            match (NonNull::new(display), NonNull::new(surface)) {
+                (Some(display), Some(surface)) => Ok(Target::Wayland { display, surface }),
+                _ => anyhow::bail!("the native layer's Wayland surface is null"),
+            }
+        }
     }
 }
 
@@ -76,6 +95,13 @@ pub(super) unsafe fn create(
             // SAFETY: forwarded caller contract.
             unsafe { ui.create_hwnd_present(ui_device(renderer.gpu()), hwnd, extent) }
         }
+        #[cfg(target_os = "linux")]
+        Target::Wayland { display, surface } => {
+            // SAFETY: forwarded caller contract.
+            unsafe {
+                ui.create_wayland_present(ui_device(renderer.gpu()), display, surface, extent)
+            }
+        }
         other => {
             let _ = (ui, renderer, extent);
             anyhow::bail!(
@@ -85,17 +111,31 @@ pub(super) unsafe fn create(
     }
 }
 
+/// Whether `present`'s last display reached the screen (Vulkan skips one while the
+/// engine stalls or the swapchain is recreated; Metal's always lands).
+pub(super) fn landed(present: &ara_platform::Present) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = present;
+        true
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        present.presented()
+    }
+}
+
 /// Matches `present` to its layer's new size, `extent` physical pixels.
 pub(super) fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         present.resize(extent)
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     {
         present.request_resize(extent)
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
     {
         let _ = (present, extent);
         anyhow::bail!("the studio cannot resize a layer presentation on this platform yet")

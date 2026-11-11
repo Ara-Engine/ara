@@ -57,6 +57,9 @@ pub struct Present {
     native_size: Option<[u32; 2]>,
     pending_size: Option<[u32; 2]>,
     wait_ns: u64,
+    /// Whether the last display reached the presentation engine (a skipped or
+    /// recreating one did not).
+    presented: bool,
 }
 
 impl Present {
@@ -131,6 +134,37 @@ impl Present {
                 &vk::Win32SurfaceCreateInfoKHR::default()
                     .hinstance(instance)
                     .hwnd(hwnd.get()),
+                None,
+            )?;
+            let mut present = Self::from_surface(gpu, surface, size, OutputSettings::default())?;
+            present.native_size = Some(size);
+            present.wait_ns = 1_000_000;
+            Ok(present)
+        }
+    }
+    /// Create an SDR presentation for a live Wayland subsurface without SDL ownership,
+    /// at an explicit pixel size (Wayland surfaces take their size from the swapchain).
+    /// Acquiring or reusing an image waits at most one millisecond per wait.
+    /// # Safety
+    /// `display` is the live `wl_display *` and `surface` a `wl_surface *` on it, both
+    /// outliving the presentation. `gpu` must enable VK_KHR_surface and
+    /// VK_KHR_wayland_surface and outlive teardown.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn from_wayland(
+        gpu: &Gpu,
+        display: std::ptr::NonNull<std::ffi::c_void>,
+        surface: std::ptr::NonNull<std::ffi::c_void>,
+        size: [u32; 2],
+    ) -> Result<Self> {
+        ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
+        let loader = ash::khr::wayland_surface::Instance::load(&gpu._entry, &gpu.instance);
+        // SAFETY: live instance, display and surface, retained by the caller. Construction
+        // takes ownership of the Vulkan surface even if swapchain creation fails.
+        unsafe {
+            let surface = loader.create_wayland_surface(
+                &vk::WaylandSurfaceCreateInfoKHR::default()
+                    .display(display.as_ptr())
+                    .surface(surface.as_ptr()),
                 None,
             )?;
             let mut present = Self::from_surface(gpu, surface, size, OutputSettings::default())?;
@@ -234,6 +268,7 @@ impl Present {
                 native_size: None,
                 pending_size: None,
                 wait_ns: PRESENT_WAIT_NS,
+                presented: false,
             })
         }
     }
@@ -281,9 +316,12 @@ impl Present {
     }
     /// Queue a native-layer resize for the next display call, which has the GPU
     /// context. Repeated requests coalesce; no raw device pointer is retained.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub fn request_resize(&mut self, size: [u32; 2]) -> Result<()> {
-        ensure!(self.native_size.is_some(), "Not a native HWND presentation");
+        ensure!(
+            self.native_size.is_some(),
+            "Not a native-layer presentation"
+        );
         ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
         self.pending_size = Some(size);
         Ok(())
@@ -636,6 +674,12 @@ impl Present {
         // SAFETY: Same completed CopySource image and native owner contract.
         unsafe { self.display_encoded(gpu, source, size, OutputMode::Sdr) }
     }
+    /// Whether the last [`Self::display`] reached the presentation engine; false when it
+    /// skipped (a stalled engine, a pending resize, an out-of-date swapchain), so the
+    /// caller presents again rather than counting the frame as shown.
+    pub fn presented(&self) -> bool {
+        self.presented
+    }
     /// Active display transfer and paper-white policy for the output pass.
     pub fn output_settings(&self) -> OutputSettings {
         self.output
@@ -657,6 +701,7 @@ impl Present {
         encoding: OutputMode,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Platform.display");
+        self.presented = false;
         ensure!(
             encoding == self.output.mode,
             "Presentation/output encoding mismatch"
@@ -712,6 +757,7 @@ impl Present {
             )?;
         }
         let mut result = self.present(gpu, index);
+        self.presented = result.is_ok();
         if self.native_size.is_some() && result.as_ref().is_err_and(is_out_of_date) {
             self.pending_size = self.native_size;
             result = Ok(());
