@@ -4834,6 +4834,21 @@ fn emitters_add_duplicate_and_delete_but_one_stays() {
 }
 
 #[test]
+fn assets_hide_their_folder_tree_for_one_column() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    scan(&mut rt);
+    settle(&mut rt);
+    assert!(rt.find("assets/tree/").is_some(), "the tree shows");
+    press(&mut rt, "assets/menu");
+    press(&mut rt, "assets/menu/tree");
+    assert!(rt.find("assets/tree/").is_none(), "one column");
+    press(&mut rt, "assets/menu");
+    press(&mut rt, "assets/menu/tree");
+    assert!(rt.find("assets/tree/").is_some(), "back again");
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
