@@ -16,3 +16,10 @@ The first warm-up ran the generator and then the emit on one thread, so it conte
 
 20 fresh processes per arm, mirrored order, launch to first tick on the Mac (on top of #37 and #38): median 700 → 654 ms, p95 925 → 881, min 665 → 616. Per-edit levels unchanged (they are measured right after launch; L3 differs only because the two builds carry different L3 scoping). Same caveat as #38: measured on a 15-core Mac; the two threads run beside the real compile for a few hundred ms, so a machine with few cores may gain less. Raw rows: `server_warmup_split_mac_2026-11-11.json`.
 
+## Dedicated threads, a retrying framework set, and a core-count gate (review round)
+- The warm-up no longer blocks a thread-pool thread on two others: each part runs on its own below-normal background thread and the warm-up is a `Task` that is never awaited by the compile path. A failed part is reported once on stderr (`[ara] compile warm-up failed ...`).
+- The shared framework reference set is built with `LazyThreadSafetyMode.PublicationOnly`, so a failed read (a scanner holding a file) is retried by the next caller instead of failing every compile in the process (test: a factory that fails once).
+- Measured with the machine limited to about two cores (`DOTNET_PROCESSOR_COUNT=2` plus 12 busy-loop processes; macOS has no CPU affinity, so this is an emulation), 20 fresh processes per arm, launch to first tick: no warm-up 1389 median / 1588 p95 (max 2017) against 1345 / 2357 (max 3480) with the warm-up. The median barely moves and the tail gets worse, so the warm-up now runs only with at least 8 logical cores.
+- On the whole machine (15 cores), same method: no warm-up 786 / 817 (min 770) against 665 / 690 (min 625), i.e. -121 ms median and a better p95. (An earlier note measured the two-thread warm-up against the one-thread one: 700 -> 654.)
+Raw rows: `server_warmup_cores_mac_2026-11-11.json`.
+

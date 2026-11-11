@@ -35,7 +35,14 @@ internal sealed class ModuleCompiler
     internal static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest, DocumentationMode.Parse);
 
     /// <summary>Framework references, shared by every module (Roslyn shares their metadata).</summary>
-    static readonly Lazy<ImmutableArray<MetadataReference>> Framework = new(() => [.. FrameworkReferences()]);
+    static readonly Lazy<ImmutableArray<MetadataReference>> Framework = FrameworkOnce(() => FrameworkReferences());
+
+    /// <summary>
+    /// A shared, lazily built reference set. PublicationOnly: a failure (a scanner holding a reference file, say) is not cached,
+    /// so the next caller tries again instead of every compile in the process failing with the first exception.
+    /// </summary>
+    internal static Lazy<ImmutableArray<MetadataReference>> FrameworkOnce(Func<IEnumerable<MetadataReference>> build) =>
+        new(() => [.. build()], LazyThreadSafetyMode.PublicationOnly);
     static readonly Dictionary<string, MetadataReference> FileReferences = new(StringComparer.OrdinalIgnoreCase);
 
     internal readonly string AssemblyName;
@@ -95,42 +102,62 @@ internal sealed class ModuleCompiler
         CSharpGeneratorDriver.Create([new Ara.Generators.ModuleGenerator().AsSourceGenerator()], parseOptions: ParseOptions);
 
     /// <summary>
-    /// Loads Roslyn's cold paths while the server waits for its first module, on two threads at once: one runs the Ara
+    /// Whether the start-up warm-up is worth running on a machine with <paramref name="logicalCores"/> cores. It runs beside the
+    /// first real compile for a few hundred ms, so on a small machine it competes with it: measured with the machine limited to
+    /// about two cores, the median improved 3% but the 95th percentile worsened from 1.6 s to 2.4 s. From 8 cores up it
+    /// shortened both (665 ms against 786 ms median, p95 690 against 817).
+    /// </summary>
+    internal static bool ShouldWarmUp(int logicalCores) => logicalCores >= 8;
+
+    /// <summary>
+    /// Loads Roslyn's cold paths while the server waits for its first module, on two dedicated low-priority threads (not the
+    /// thread pool, so a small machine's first real compile never waits for a pool thread the warm-up holds): one runs the Ara
     /// generator over a small component and system (the real compile runs it first), the other binds and emits a plain
     /// debug-IL module with a PDB (the real compile emits after the generator, so by then those paths are warm).
-    /// Failures are ignored (false): this only warms.
+    /// The task's result is null when both parts worked, else what failed; it never throws. This only warms.
     /// </summary>
-    internal static bool WarmUp()
+    internal static Task<string?> WarmUpAsync()
     {
-        var generator = Task.Run(() =>
+        var generator = Part("generator", () =>
         {
-            try
-            {
-                var compiler = new ModuleCompiler("Ara.Warmup.Generator", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
-                var source = Parse("Warmup.cs", "namespace Warmup;\n/// <summary>Warm.</summary>\n[Component] public partial struct Warm { /// <summary>V.</summary>\n public int V; }\n"
-                    + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
-                var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
-                Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out var diagnostics);
-                return !diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error) && final.SyntaxTrees.Count() > 2;
-            }
-            catch (Exception) { return false; }
+            var compiler = new ModuleCompiler("Ara.Warmup.Generator", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
+            var source = Parse("Warmup.cs", "namespace Warmup;\n/// <summary>Warm.</summary>\n[Component] public partial struct Warm { /// <summary>V.</summary>\n public int V; }\n"
+                + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
+            var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
+            Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out var diagnostics);
+            return diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error) ? "generator reported errors" : final.SyntaxTrees.Count() > 2 ? null : "generator produced no source";
         });
-        var emit = Task.Run(() =>
+        var emit = Part("emit", () =>
         {
-            try
-            {
-                var compiler = new ModuleCompiler("Ara.Warmup.Emit", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
-                var source = Parse("WarmEmit.cs", "namespace WarmEmit;\npublic struct P { public int V; public float W; }\n"
-                    + "public static class S { public static int Run(List<int> xs, string t) { var total = 0; foreach (var x in xs) total += x * 2; "
-                    + "var q = xs.Where(v => v > 1).Select(v => v + 1).ToArray(); return total + q.Length + t.Length + Math.Abs(-total); } "
-                    + "public static P Make(int v) { var p = new P { V = v }; p.W = v * 0.5f; return p; } }");
-                var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
-                return Emit(user).Image is not null;
-            }
-            catch (Exception) { return false; }
+            var compiler = new ModuleCompiler("Ara.Warmup.Emit", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
+            var source = Parse("WarmEmit.cs", "namespace WarmEmit;\npublic struct P { public int V; public float W; }\n"
+                + "public static class S { public static int Run(List<int> xs, string t) { var total = 0; foreach (var x in xs) total += x * 2; "
+                + "var q = xs.Where(v => v > 1).Select(v => v + 1).ToArray(); return total + q.Length + t.Length + Math.Abs(-total); } "
+                + "public static P Make(int v) { var p = new P { V = v }; p.W = v * 0.5f; return p; } }");
+            var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
+            return Emit(user).Image is not null ? null : "emit failed";
         });
-        return Task.WhenAll(generator, emit).GetAwaiter().GetResult().All(ok => ok);
+        return Task.WhenAll(generator, emit).ContinueWith(done =>
+        {
+            var failures = done.Result.Where(failure => failure is not null).ToArray();
+            return failures.Length == 0 ? null : string.Join("; ", failures);
+        }, TaskScheduler.Default);
     }
+
+    /// <summary>Runs one warm-up part on its own below-normal thread; its task holds null, or the failure.</summary>
+    static Task<string?> Part(string name, Func<string?> work)
+    {
+        var done = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() =>
+        {
+            try { done.SetResult(work()); }
+            catch (Exception error) { done.SetResult($"{name}: {error.GetType().Name}: {error.Message}"); }
+        }) { Name = "ara-warmup-" + name, IsBackground = true, Priority = ThreadPriority.BelowNormal }.Start();
+        return done.Task;
+    }
+
+    /// <summary>Synchronous form for tests: null when the warm-up worked, else what failed.</summary>
+    internal static string? WarmUp() => WarmUpAsync().GetAwaiter().GetResult();
 
     /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
     internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Errors) Emit(Compilation c, CancellationToken ct = default)
