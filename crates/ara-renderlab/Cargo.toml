@@ -37,12 +37,9 @@ renderlab_metal = { package = "renderlab", git = "https://github.com/Ara-Engine/
 # Pinned: the engine builds against a frozen renderer while it is improved
 # behind `renderlab::engine`. Nothing outside this crate names a Renderlab type.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
-# Renderlab main (v0.1.3 plus 256 groups per frame #2, the emitter work #6, wgpu object
-# names opt-in #12, the adapter's TLAS limit #13, P-PIPE, P-SKY's filtered sky lookups with
-# `Background::ScaledSky` #16/#17 and `Settings::sky_light` #21) with one open PR merged on
-# top on `t3/ara-pin-curl`: the emitter curl's origin, birth-time phase and stepped prewarm
-# (Ara-Engine/renderlab#25), merged with Renderlab main (views). Repin to main when #25 merges.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3" }
+# Renderlab main: the view API (#39) and the emitter curl's origin, birth-time phase and
+# stepped prewarm (#25), at the merge that recorded #25.
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "1e3c72df8812639642a361ac6fa273c094dd0d33" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
