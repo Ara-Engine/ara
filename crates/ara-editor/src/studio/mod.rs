@@ -81,7 +81,9 @@ const VERTEX_KEY: u16 = 0x56;
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
 
-/// How long closing waits for running probe work to retire before leaving it.
+/// How long closing waits for running probe work to retire (it is cancelled first, so this
+/// is normally the time its in-flight GPU work needs). Past it the GPU objects are left to
+/// the process exit rather than destroyed under that work.
 const CLOSE_DRAIN: Duration = Duration::from_secs(5);
 
 /// Open the project in the studio and run until its window closes.
@@ -240,6 +242,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
+    let mut probe_report_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
     let (mut profile_at, mut was_recording) = (Instant::now(), false);
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
@@ -435,9 +438,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
                 let channels = compositor.channels(&renderer, &view, revision);
                 let entities = view.entities();
-                let bounds = scene_view.bounds_where(channels, |address| {
-                    crate::world::bounds::selected(entities, address, &selection)
-                });
+                let rotation = rect_tool::frame_rotation(entities, &selection);
+                let bounds = scene_view
+                    .bounds_in(
+                        channels,
+                        |address| crate::world::bounds::selected(entities, address, &selection),
+                        rotation,
+                    )
+                    .map(|[min, max]| rect_tool::RectBounds { rotation, min, max });
                 rect_for = Some(selection);
                 if rt.state().local.rect_bounds != bounds {
                     rt.update(|s| s.local.rect_bounds = bounds);
@@ -912,6 +920,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if rt.touch(|s| s.local.agent_setups.poll()) {
             rt.update(|_| {});
         }
+        // The Lighting page reads the renderer's probe report while it shows, so Recapture
+        // knows whether this quality can capture (and says why when it cannot).
+        if probe_report_at.elapsed() >= Duration::from_secs(1)
+            && rt.find("lighting/probe/refresh").is_some()
+        {
+            probe_report_at = Instant::now();
+            let version = |s: &Studio| s.local.probe_status.as_ref().map(|r| r.version);
+            let before = version(rt.state());
+            if rt.touch(|s| lighting::refresh_probes(s).is_ok()) && version(rt.state()) != before {
+                rt.update(|_| {});
+            }
+        }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
             rt.update(|_| {});
@@ -988,6 +1008,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     surface.hide();
     rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
     let draining = Instant::now();
+    let mut retired = true;
     loop {
         let done = rt.touch(|s| -> ara_ui::Result<bool> {
             server.pump(&mut s.editor);
@@ -1006,13 +1027,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     "ara-editor: probe work did not retire: {}",
                     ara_json::to_canonical_string(&probe_owner.resource_report())
                 );
+                retired = false;
                 break;
             }
             Err(error) => {
                 eprintln!("ara-editor: probe work failed while closing: {error}");
+                retired = false;
                 break;
             }
         }
+    }
+    if !retired {
+        // A bake still has work on the GPU: destroying its renderer under it is worse than
+        // leaving the GPU objects to the process exit, which follows at once.
+        std::mem::forget((scene_view, graph_layer, compositor, game, renderer));
+        return Ok(());
     }
     renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
