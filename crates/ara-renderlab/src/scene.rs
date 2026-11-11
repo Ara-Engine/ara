@@ -94,38 +94,86 @@ pub(crate) struct Scene {
     coverage: Coverage,
 }
 
-/// The alpha class (`cutout::Alpha`) of base-colour maps already looked at, by the
-/// identity of their KTX2 bytes. Each entry keeps a weak handle on those bytes, so an
-/// address is never reused while its entry lives; `prune` drops entries of freed maps.
+/// What a draw's blended material shows through, and where: the alpha class
+/// (`cutout::Alpha`) of base-colour maps already looked at, by the identity of their
+/// KTX2 bytes, and which primitives fade by vertex colour. Each map entry keeps a weak
+/// handle on its bytes, so an address is never reused while its entry lives; `prune`
+/// drops entries of freed maps.
 #[derive(Default)]
 struct Coverage {
     known: HashMap<(usize, usize), Seen>,
+    /// Whether each model primitive's vertex colour alpha fades it (`FADED_BELOW`),
+    /// by model digest and primitive. A few bytes per primitive, never pruned.
+    faded: HashMap<(u64, usize), bool>,
 }
 
-/// One map `Coverage` has looked at: its bytes, held weakly, and its class.
+/// One map `Coverage` has looked at: its bytes, held weakly, and what its alpha does.
 struct Seen {
     bytes: std::sync::Weak<[u8]>,
-    class: cutout::Alpha,
+    alpha: MapAlpha,
 }
 
+/// What a base-colour map's alpha does (`cutout::alpha`), and whether it could be read.
+#[derive(Clone, Copy)]
+struct MapAlpha {
+    class: cutout::Alpha,
+    /// The share of visible texels that are partly there.
+    partly: f32,
+    /// False when the map did not decode; it then counts as opaque.
+    decoded: bool,
+}
+
+/// A vertex colour alpha under this (of 255) fades a primitive: Renderlab's transparent
+/// pass multiplies coverage by it, as it does the alpha factor and the map's alpha.
+const FADED_BELOW: u8 = 250;
+
+/// A there-or-not map with more than this share of its visible texels partly there is
+/// reported: those texels are cut or kept at half coverage.
+const PARTLY_REPORTED: f32 = 0.03;
+
 impl Coverage {
-    /// The class of `texture`'s alpha, decoded on first sight. A map that does not
-    /// decode counts as opaque here; uploading it reports the error.
-    fn of(&mut self, texture: &ModelTexture) -> cutout::Alpha {
+    /// What `texture`'s alpha does, decoded on first sight. A map that does not decode
+    /// counts as opaque (`decoded` is false so the caller can say so).
+    fn of(&mut self, texture: &ModelTexture) -> MapAlpha {
         let key = (texture.ktx2.as_ptr() as usize, texture.ktx2.len());
         self.known
             .entry(key)
             .or_insert_with(|| {
-                let class = ara_runtime_render::decode_texture(&texture.ktx2)
-                    .map_or(cutout::Alpha::Opaque, |decoded| {
-                        cutout::alpha(&decoded.rgba)
-                    });
+                let alpha = match ara_runtime_render::decode_texture(&texture.ktx2) {
+                    Ok(decoded) => {
+                        let stats = cutout::alpha(&decoded.rgba);
+                        MapAlpha {
+                            class: stats.class,
+                            partly: stats.partly,
+                            decoded: true,
+                        }
+                    }
+                    Err(_) => MapAlpha {
+                        class: cutout::Alpha::Opaque,
+                        partly: 0.,
+                        decoded: false,
+                    },
+                };
                 Seen {
                     bytes: std::sync::Arc::downgrade(&texture.ktx2),
-                    class,
+                    alpha,
                 }
             })
-            .class
+            .alpha
+    }
+
+    /// Whether the draw's primitive fades by vertex colour alpha. Shapes carry none.
+    fn faded(&mut self, draw: &Draw) -> bool {
+        let Geometry::Model { model, primitive } = &draw.geometry else {
+            return false;
+        };
+        let key = (fnv(FNV, &model.digest.0), *primitive);
+        *self.faded.entry(key).or_insert_with(|| {
+            model
+                .primitives
+                .get(*primitive)
+                .is_some_and(|p| p.vertices.iter().any(|v| v.color[3] < FADED_BELOW))
+        })
     }
 
     fn prune(&mut self) {
@@ -222,16 +270,21 @@ struct Cut<'a> {
 }
 
 /// The cut a draw's material asks for: an alpha mask over a base-colour map, or a
-/// blended material whose map is there-or-not (`cutout::Alpha::Binary`), cut at half
-/// coverage. Both stay in the opaque path. None for opaque materials and for blended
-/// ones that are really see-through (`blends`).
+/// blended material whose map is there-or-not (`cutout::Alpha::Binary`) and whose
+/// vertices do not fade it, cut at half coverage. Both stay in the opaque path. None
+/// for opaque materials and for blended ones that are really see-through (`blends`).
 fn cut<'a>(draw: &'a Draw, coverage: &mut Coverage) -> Option<Cut<'a>> {
     let (m, textures) = source(draw)?;
     let texture = textures.get(m.base_color_texture?)?;
     let opacity = m.base_color[3] * draw.color[3];
     let cutoff = match m.alpha_mode {
         1 => m.alpha_cutoff,
-        2 if opacity >= 1. && coverage.of(texture) == cutout::Alpha::Binary => 0.5,
+        2 if opacity >= 1.
+            && coverage.of(texture).class == cutout::Alpha::Binary
+            && !coverage.faded(draw) =>
+        {
+            0.5
+        }
         _ => return None,
     };
     Some(Cut {
@@ -241,12 +294,14 @@ fn cut<'a>(draw: &'a Draw, coverage: &mut Coverage) -> Option<Cut<'a>> {
     })
 }
 
-/// Whether a material blends: by an alpha factor below one, or by a base-colour map
-/// with partial coverage (an opacity map; `cutout::Alpha::Partial`). Renderlab's
-/// transparent pass takes both as coverage. A blended material whose map has no alpha
-/// is opaque, and one whose map is there-or-not is cut (`cut`): transparency costs
-/// Renderlab milliseconds a frame, so only what is seen through pays for it.
+/// Whether a material blends: by an alpha factor below one, by a base-colour map with
+/// partial coverage (an opacity map; `cutout::Alpha::Partial`), or by vertex colour
+/// alpha. Renderlab's transparent pass takes all three as coverage. A blended material
+/// whose map has no alpha and whose vertices do not fade it is opaque, and one whose
+/// map is there-or-not is cut (`cut`): transparency costs Renderlab milliseconds a
+/// frame, so only what is seen through pays for it.
 fn blends(
+    draw: &Draw,
     m: &ModelMaterial,
     textures: &[ModelTexture],
     opacity: f32,
@@ -256,7 +311,8 @@ fn blends(
         && (opacity < 1.
             || m.base_color_texture
                 .and_then(|index| textures.get(index))
-                .is_some_and(|map| coverage.of(map) == cutout::Alpha::Partial))
+                .is_some_and(|map| coverage.of(map).class == cutout::Alpha::Partial)
+            || coverage.faded(draw))
 }
 
 /// Whether the draw can be seen through (as `Scene::material` decides): such draws
@@ -265,7 +321,7 @@ fn see_through(draw: &Draw, coverage: &mut Coverage) -> bool {
     match source(draw) {
         Some((m, textures)) => {
             m.transmission_factor > 0.
-                || blends(m, textures, m.base_color[3] * draw.color[3], coverage)
+                || blends(draw, m, textures, m.base_color[3] * draw.color[3], coverage)
         }
         None => draw.color[3] < 1.,
     }
@@ -285,12 +341,12 @@ fn geometry_key(draw: &Draw, coverage: &mut Coverage) -> u64 {
     // Cut geometry belongs to its mask as much as to its triangles: the material key
     // names the mask's texture, opacity and cutoff.
     match cut(draw, coverage) {
-        Some(_) => fnv(hash, &material_key(draw).to_le_bytes()),
+        Some(_) => fnv(hash, &material_key(draw, coverage).to_le_bytes()),
         None => hash,
     }
 }
 
-fn material_key(draw: &Draw) -> u64 {
+fn material_key(draw: &Draw, coverage: &mut Coverage) -> u64 {
     let mut hash = FNV;
     for value in draw
         .color
@@ -311,6 +367,10 @@ fn material_key(draw: &Draw) -> u64 {
             .and_then(|p| p.material)
             .map_or(u64::MAX, |slot| slot as u64);
         hash = fnv(fnv(hash, &model.digest.0), &slot.to_le_bytes());
+    }
+    // Primitives sharing a blended material differ in whether their vertices fade it.
+    if source(draw).is_some_and(|(m, _)| m.alpha_mode == 2) {
+        hash = fnv(hash, &[u8::from(coverage.faded(draw))]);
     }
     hash
 }
@@ -486,7 +546,7 @@ impl Scene {
                     Some(_) => MeshKey::Skinned(draw.entity),
                     None => MeshKey::Static(geometry_key(draw, &mut self.coverage)),
                 };
-                (mesh, material_key(draw))
+                (mesh, material_key(draw, &mut self.coverage))
             });
             let group = *index.entry((mesh, material)).or_insert_with(|| {
                 groups.push(Group {
@@ -880,7 +940,8 @@ impl Scene {
             // map with partial coverage (`blends`). An alpha mask, or a blended map
             // that is there-or-not, is cut into the geometry (`cut`); the material
             // itself is then opaque.
-            blend = blends(m, textures, desc.base_color[3], &mut self.coverage);
+            blend = blends(draw, m, textures, desc.base_color[3], &mut self.coverage);
+            self.report_alpha_guesses(draw, m, textures, gaps);
             if !blend && m.base_color_texture.is_some() {
                 desc.base_color[3] = 1.;
             }
@@ -974,6 +1035,45 @@ impl Scene {
         let id = engine.create_material(&desc)?;
         self.materials.insert(key, Shared { id, users: 1 });
         Ok(id)
+    }
+
+    /// Says so, naming the material, when a blended material's alpha was guessed: its
+    /// map did not decode and is drawn opaque, or the map was classed there-or-not
+    /// although more than `PARTLY_REPORTED` of its visible texels are partly there, so
+    /// they are cut or kept at half coverage. (The gap report names the first such
+    /// material.)
+    fn report_alpha_guesses(
+        &mut self,
+        draw: &Draw,
+        m: &ModelMaterial,
+        textures: &[ModelTexture],
+        gaps: &mut Gaps,
+    ) {
+        if m.alpha_mode != 2 {
+            return;
+        }
+        let Some(map) = m.base_color_texture.and_then(|index| textures.get(index)) else {
+            return;
+        };
+        let alpha = self.coverage.of(map);
+        if !alpha.decoded {
+            gaps.unsupported(
+                "blended materials whose base-colour map does not decode",
+                &format!(
+                    "`{}` is drawn opaque (only BC7 and BC5 maps are read)",
+                    draw.label
+                ),
+            );
+        } else if alpha.class == cutout::Alpha::Binary && alpha.partly > PARTLY_REPORTED {
+            gaps.unsupported(
+                "partly transparent texels in a blended map that is mostly there-or-not",
+                &format!(
+                    "`{}` is cut at half coverage; {:.0}% of its visible texels are partly transparent and are cut or kept",
+                    draw.label,
+                    alpha.partly * 100.
+                ),
+            );
+        }
     }
 
     /// The program emissive materials shade with, with or without an emissive map,

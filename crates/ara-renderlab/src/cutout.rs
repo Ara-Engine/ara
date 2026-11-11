@@ -51,20 +51,37 @@ const CLEAR: u8 = 12;
 /// A cut-out's soft edges stay under it; a pane of glass is all of it.
 const PARTIAL_SHARE: f32 = 0.15;
 
-/// The class of a map's alpha from its `rgba` texels.
-pub(crate) fn alpha(rgba: &[u8]) -> Alpha {
+/// A map's alpha: its class and the share of visible texels that are partly there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct AlphaStats {
+    pub class: Alpha,
+    pub partly: f32,
+}
+
+/// The class of a map's alpha from its `rgba` texels, with the share of visible texels
+/// that are partly there (zero when none is visible).
+pub(crate) fn alpha(rgba: &[u8]) -> AlphaStats {
     let (mut visible, mut partly, mut least) = (0usize, 0usize, u8::MAX);
     for a in rgba.iter().skip(3).step_by(4) {
         least = least.min(*a);
         visible += usize::from(*a > CLEAR);
         partly += usize::from(*a > CLEAR && *a < SOLID);
     }
-    if least >= SOLID {
+    let share = if visible == 0 {
+        0.
+    } else {
+        partly as f32 / visible as f32
+    };
+    let class = if least >= SOLID {
         Alpha::Opaque
-    } else if partly as f32 > PARTIAL_SHARE * visible as f32 {
+    } else if share > PARTIAL_SHARE {
         Alpha::Partial
     } else {
         Alpha::Binary
+    };
+    AlphaStats {
+        class,
+        partly: share,
     }
 }
 
@@ -154,19 +171,19 @@ mod tests {
         let map =
             |alphas: &[u8]| -> Vec<u8> { alphas.iter().flat_map(|a| [9, 9, 9, *a]).collect() };
         // No alpha at all (a JPG under a BLEND material): opaque.
-        assert_eq!(alpha(&map(&[255; 64])), Alpha::Opaque);
+        assert_eq!(alpha(&map(&[255; 64])).class, Alpha::Opaque);
         // A leaf card: gone or there, with a soft edge on one texel in sixteen.
         let mut leaf = [0u8; 64];
         leaf[32..].fill(255);
         leaf[30] = 128;
         leaf[31] = 128;
-        assert_eq!(alpha(&map(&leaf)), Alpha::Binary);
+        assert_eq!(alpha(&map(&leaf)).class, Alpha::Binary);
         // A pane of glass: partly there everywhere.
-        assert_eq!(alpha(&map(&[80; 64])), Alpha::Partial);
+        assert_eq!(alpha(&map(&[80; 64])).class, Alpha::Partial);
         // A decal that fades over a third of what shows.
         let mut fade = [255u8; 64];
         fade[..24].fill(120);
-        assert_eq!(alpha(&map(&fade)), Alpha::Partial);
+        assert_eq!(alpha(&map(&fade)).class, Alpha::Partial);
     }
 
     /// A unit quad facing +Z with u to the right and v down the image, as glTF maps it.
