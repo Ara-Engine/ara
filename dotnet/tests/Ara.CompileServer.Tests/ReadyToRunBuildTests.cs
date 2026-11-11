@@ -35,4 +35,16 @@ public sealed class ReadyToRunBuildTests
             Assert.True(pe.PEHeaders.CorHeader!.ManagedNativeHeaderDirectory.Size > 0, $"{name} is IL only");
         }
     }
+
+    /// <summary>
+    /// The server runs non-concurrent workstation GC: with background GC the gen0 budget is so small that an L3 compile spent a
+    /// third of its time in GC pauses (benchmarks/iteration/SERVER_GC.md).
+    /// </summary>
+    [Fact]
+    public void The_built_server_uses_non_concurrent_gc()
+    {
+        var output = Path.Combine(DotnetRoot(), "artifacts", "bin", "Ara.CompileServer", "release");
+        if (!Directory.Exists(output)) return; // the server was built elsewhere (a private SDK layout)
+        Assert.Contains("\"System.GC.Concurrent\": false", File.ReadAllText(Path.Combine(output, "Ara.CompileServer.runtimeconfig.json")));
+    }
 }

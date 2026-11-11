@@ -278,4 +278,95 @@ mod tests {
             );
         }
     }
+
+    /// Trilinear lookup of `table` at display-linear `c`, as Renderlab's filtered 3D texture.
+    fn sample(table: &ColourLut, c: [f32; 3]) -> [f32; 3] {
+        let n = table.size as usize;
+        let at = c.map(|v| v.clamp(0., 1.) * (n - 1) as f32);
+        let base = at.map(|v| (v as usize).min(n - 2));
+        let t: [f32; 3] = std::array::from_fn(|i| at[i] - base[i] as f32);
+        let mut sum = [0f32; 3];
+        for k in 0..8 {
+            let o = [k & 1, (k >> 1) & 1, k >> 2];
+            let q: [usize; 3] = std::array::from_fn(|i| base[i] + o[i]);
+            let w: f32 = (0..3)
+                .map(|i| if o[i] == 1 { t[i] } else { 1. - t[i] })
+                .product();
+            let texel = table.rgb[q[0] + q[1] * n + q[2] * n * n];
+            for i in 0..3 {
+                sum[i] += texel[i] * w;
+            }
+        }
+        sum
+    }
+
+    /// How far the 33-point table is from Ara's exact curve, in 8-bit sRGB codes, over
+    /// saturated and neutral colours at several scene brightnesses (reported with
+    /// `--nocapture`; the bound is the worst case measured, with room).
+    #[test]
+    fn the_table_stays_near_aras_curve_off_axis() {
+        let mut look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
+        // (mean, worst) bounds in codes: measured 0.51/10.6, 1.17/6.6 and 2.43/20.8. The
+        // worst cases are deep shadows under Neutral's toe (display below 0.03, inside
+        // the table's first cell) and bright saturated colours past where Renderlab's
+        // curve saturates (the table cannot tell them apart); neither shrinks with
+        // a finer table (65 points: 18.5 and 10.6), which also builds eight times slower.
+        for (mapper, bounds) in [
+            (ToneMapper::Filmic, (0.7, 12.)),
+            (ToneMapper::Agx, (1.5, 8.)),
+            (ToneMapper::PbrNeutral, (3., 24.)),
+        ] {
+            look.tone_mapper = mapper;
+            let table = lut(&look, None).expect("table");
+            let (mut worst, mut sum, mut count) = (0f32, 0f32, 0u32);
+            let mut worst_at = ([0f32; 3], 0f32);
+            // Scene colours: neutral, primaries, secondaries and a few skin/sky mixes, at
+            // brightnesses from deep shadow to 8x white (inside the table's range).
+            let hues: [[f32; 3]; 12] = [
+                [1., 1., 1.],
+                [1., 0., 0.],
+                [0., 1., 0.],
+                [0., 0., 1.],
+                [1., 1., 0.],
+                [0., 1., 1.],
+                [1., 0., 1.],
+                [1., 0.5, 0.2],
+                [0.8, 0.5, 0.4],
+                [0.4, 0.6, 1.],
+                [0.2, 0.05, 0.02],
+                [0.05, 0.1, 0.3],
+            ];
+            for hue in hues {
+                for level in [0.005f32, 0.02, 0.05, 0.18, 0.5, 1., 2., 4., 8.] {
+                    let scene = glam30::Vec3::from_array(hue) * level;
+                    let want = tone_map(scene, mapper)
+                        .to_array()
+                        .map(|v| srgb(v.clamp(0., 1.)));
+                    let display = scene.to_array().map(filmic);
+                    let got = sample(&table, display).map(|v| srgb(v.clamp(0., 1.)));
+                    for i in 0..3 {
+                        let e = (got[i] - want[i]).abs() * 255.;
+                        sum += e;
+                        count += 1;
+                        if e > worst {
+                            worst = e;
+                            worst_at = (hue, level);
+                        }
+                    }
+                }
+            }
+            println!(
+                "{mapper:?}: mean {:.2} codes, worst {worst:.1} codes at hue {:?} level {}",
+                sum / count as f32,
+                worst_at.0,
+                worst_at.1
+            );
+            assert!(
+                sum / (count as f32) < bounds.0,
+                "{mapper:?} mean {}",
+                sum / count as f32
+            );
+            assert!(worst < bounds.1, "{mapper:?} worst {worst} at {worst_at:?}");
+        }
+    }
 }

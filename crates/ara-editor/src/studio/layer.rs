@@ -51,14 +51,14 @@ impl Layer {
 
     /// Whether the last frame left the GPU (else skip this pass and draw on a later one).
     pub fn ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
         if !self.ui.wait_previous_for(budget)? {
             return Ok(false);
         }
         // Windows' bounded blit may still read the target the next draw resizes.
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             if let Some((present, _, _)) = &mut self.present {
                 // SAFETY: the layer and renderer retain the presentation's creating device.
@@ -74,7 +74,8 @@ impl Layer {
         Ok(true)
     }
 
-    /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels.
+    /// Draws `list` (shaped with `fonts`) into `layer` at `extent` physical pixels; whether
+    /// it reached the screen (else draw it again on a later pass).
     /// # Safety
     /// `layer` is the live native layer this presents into (`present::Target`).
     pub unsafe fn draw(
@@ -85,7 +86,7 @@ impl Layer {
         scale: f32,
         list: &DisplayList,
         fonts: &[FontAsset],
-    ) -> Result<()> {
+    ) -> Result<bool> {
         self.ui.set_dpi(scale)?;
         let size =
             [extent[0] as f32 / scale, extent[1] as f32 / scale].map(|v| v.round().max(1.0) as u32);
@@ -117,7 +118,7 @@ impl Layer {
             // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
             unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
         })?;
-        Ok(())
+        Ok(super::present::landed(present))
     }
 
     /// Waits for and releases the presentation; call before the renderer drops.
