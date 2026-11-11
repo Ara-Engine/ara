@@ -1,5 +1,5 @@
 //! The studio window's frame: the title bar (menus from the command registry, Play
-//! controls, the scene path, the ⌘K launcher), the dock in between, the status bar, and the
+//! controls, the scene path, the command launcher), the dock in between, the status bar, and the
 //! overlays they open (menus, the command palette).
 use ara_kit::icons;
 use ara_kit::ui::*;
@@ -181,6 +181,23 @@ fn keys(s: &mut Studio, key: KeyCode, tx: &mut stillkit::el::Tx) -> Handled {
     }
 }
 
+/// The command launcher's chord as this platform writes it: ⌘K on macOS, Ctrl K elsewhere.
+pub(super) fn launcher_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "⌘K"
+    } else {
+        "Ctrl K"
+    }
+}
+
+/// The status bar's keys worth knowing, with the launcher chord in the platform's own words.
+pub(super) fn idle_hint() -> String {
+    format!(
+        "W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · {} commands",
+        launcher_chord()
+    )
+}
+
 fn title_bar(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
@@ -241,14 +258,7 @@ fn title_bar(s: &Studio) -> El<Studio> {
         })
         .child(icon(icons::SEARCH).size(13.0))
         .child(text("Search or run…").text_size(12.0).grow(1.0))
-        .child(kbd(
-            l,
-            if cfg!(target_os = "macos") {
-                "⌘K"
-            } else {
-                "Ctrl K"
-            },
-        ));
+        .child(kbd(l, launcher_chord()));
     let crumb = row()
         .gap(6.0)
         .align(Align::Center)
@@ -264,32 +274,13 @@ fn title_bar(s: &Studio) -> El<Studio> {
                 .color(c.muted_foreground.0),
         )
         .child(text(scene).text_size(12.0).color(c.muted_foreground.0));
-    let theme = icon_button(
-        l,
-        Tone::Ghost,
-        Size::Sm,
-        if s.editor.state.light {
-            icons::MOON
-        } else {
-            icons::SUN
-        },
-        "Toggle theme",
-    )
-    .key("theme")
-    .on_press(|s: &mut Studio| {
-        let id = if s.editor.state.light {
-            "view.theme.dark"
-        } else {
-            "view.theme.light"
-        };
-        commands::run(s, id, &Target::None);
-    });
-    ara_kit::ui::title_bar(
+    // Menus, Play, project, search and the window buttons; the theme is in Settings.
+    ara_kit::ui::title_bar_flush(
         l,
         s.frame.inset,
         lead,
         vec![play],
-        vec![crumb, launcher, theme],
+        vec![crumb, launcher],
         s.frame.controls,
     )
 }
@@ -363,6 +354,25 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
             Item::Separator => out.push(Line::Separator),
             // Only what the editor runs; a context menu, only what applies to what was
             // clicked (the menu bar keeps every entry).
+            // Window › a core panel: checked while shown, and a press hides or shows it (its
+            // tab has no ×).
+            Item::Command(id @ ("window.hierarchy" | "window.inspector" | "window.game"))
+                if *target == Target::None =>
+            {
+                let panel = id.trim_start_matches("window.");
+                let shown = crate::state::panel_visible(&s.editor.state, panel);
+                let title = super::dock::panel_title(panel).0.to_owned();
+                out.push(if shown {
+                    Line::Entry(
+                        title,
+                        "window.close_panel",
+                        Target::Panel(panel.to_owned()),
+                        Some(true),
+                    )
+                } else {
+                    Line::Entry(title, id, Target::None, Some(false))
+                });
+            }
             Item::Command(id)
                 if crate::catalog::get(id).is_some()
                     && (*target == Target::None || commands::applies(s, id, target)) =>
@@ -1104,7 +1114,7 @@ fn status_bar(s: &Studio) -> El<Studio> {
                         .min_w(0.0),
                 )
         }
-        _ => text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
+        _ => text(idle_hint())
             .text_size(11.0)
             .color(c.muted_foreground.0.with_alpha(0.8)),
     };

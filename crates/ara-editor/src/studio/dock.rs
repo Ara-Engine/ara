@@ -693,6 +693,9 @@ pub(super) fn area_holding(s: &Studio, panel: &str) -> Option<String> {
     })
 }
 
+/// Panels with no × on their tab: the studio's core. Window › a panel hides and shows them.
+pub(super) const CORE_PANELS: [&str; 4] = ["hierarchy", "inspector", "scene", "game"];
+
 /// A panel's title and icon.
 pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {
     match id {
@@ -804,8 +807,9 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                         .text_size(style::TEXT)
                         .weight(if on { 600 } else { 500 }),
                 );
-            // The open tab closes from its ×, as Unreal's do (the Scene view stays).
-            if on && tab != "scene" {
+            // The open tab closes from its ×, as Unreal's do, except the core panels (Hierarchy,
+            // Inspector, Scene, Game): those hide and show from the Window menu.
+            if on && !CORE_PANELS.contains(&tab.as_str()) {
                 let close = crate::catalog::Target::Panel(tab.clone());
                 tab_el = tab_el.child(
                     icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close tab")

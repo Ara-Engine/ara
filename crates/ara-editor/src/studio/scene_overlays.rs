@@ -411,7 +411,7 @@ pub struct Drag {
 }
 
 /// A user setting as a flag.
-fn flag(s: &Studio, key: &str, default: bool) -> bool {
+pub(super) fn flag(s: &Studio, key: &str, default: bool) -> bool {
     s.editor
         .state
         .settings
