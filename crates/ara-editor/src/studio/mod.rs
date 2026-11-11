@@ -97,6 +97,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
+    // Windows child HWND viewports require a DirectComposition UI surface.
+    #[cfg(windows)]
+    stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
     let scale = surface.scale();
@@ -231,6 +234,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
+        // Windows uses separate Scene/UI queues: finish external reads before recycling images.
+        #[cfg(windows)]
+        if !compositor.scene_ready(&renderer)? {
+            if pump(
+                &mut rt,
+                &mut surface,
+                &mut portals,
+                started,
+                Some(&mut game),
+            )? {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+            continue;
+        }
         // While profiling records, every pass is a frame (the Profiler panel reads them).
         let profiling = rt.touch(|s| {
             let profiler = s.editor.host.profiler();
@@ -749,7 +767,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
             rt.touch(graph::previews);
-            if (rt.state().graph.dirty || graph_extent != (name, extent)) && graph_layer.ready()? {
+            if (rt.state().graph.dirty || graph_extent != (name, extent))
+                && graph_layer.ready(&renderer)?
+            {
                 let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.

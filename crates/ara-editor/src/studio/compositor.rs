@@ -23,9 +23,40 @@ pub(super) struct Compositor {
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
+    #[cfg(windows)]
+    scene_stall: Option<(std::time::Instant, bool)>,
 }
 
 impl Compositor {
+    /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
+    /// A persistent stall skips Scene passes and logs once while events keep pumping.
+    #[cfg(windows)]
+    pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+        let started = std::time::Instant::now();
+        let budget = std::time::Duration::from_millis(1);
+        let mut ready = self.ui.wait_previous_for(budget)?;
+        // A bounded present can return with its blit still reading the UI target.
+        if ready && let Some((present, _)) = &mut self.present {
+            // SAFETY: this compositor retains the presentation and its creating device.
+            ready = unsafe {
+                present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))?
+            };
+        }
+        if ready {
+            self.ui.order_before_scene(ui_device(renderer.gpu()))?;
+            self.scene_stall = None;
+        } else {
+            let (since, reported) = self.scene_stall.get_or_insert((started, false));
+            if !*reported && since.elapsed() >= std::time::Duration::from_millis(250) {
+                eprintln!(
+                    "Scene GPU read is still pending; skipping Scene passes while pumping events"
+                );
+                *reported = true;
+            }
+        }
+        Ok(ready)
+    }
+
     /// An adapter on the renderer's GPU, themed for `light`.
     /// # Safety
     /// The renderer outlives the compositor; one thread submits for both.
@@ -46,6 +77,8 @@ impl Compositor {
             sheet: sheet(light)?,
             light,
             present: None,
+            #[cfg(windows)]
+            scene_stall: None,
         })
     }
 
@@ -160,10 +193,10 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
-        // Metal: the adapter has its own queue (Vulkan shares the renderer's). A synchronous
-        // frame's image needs ordering after the renderer's work. An asynchronous Scene shows
-        // its last completed frame instead, so waiting on the renderer would wait on the
-        // frame still in flight and stall the UI until it lands (seconds while converging).
+        // Metal orders a synchronous frame after the renderer on its adapter's queue.
+        // An asynchronous Scene shows a completed pair instead; waiting for its pending
+        // frame would stall the UI while it converges. The Vulkan host gates the pair's
+        // reuse separately, before the renderer starts the next pass.
         #[cfg(target_os = "macos")]
         if !renderer.scene_frame_async() {
             self.ui.order_after(renderer.gpu());
@@ -218,4 +251,109 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
     };
     let tokens = theme.tokens().map_err(|e| anyhow::anyhow!("{e}"))?;
     ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use ara_gpu::vulkan::QueueGate;
+    use ara_render::scene::{CameraSpec, Material, Scene, Texture};
+    use glam::Vec3;
+
+    #[test]
+    #[ignore = "requires Vulkan and the shared GPU lease"]
+    fn scene_recycling_waits_for_the_compositor_read() -> Result<()> {
+        let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/studio-compositor-handoff");
+        let mut renderer = ara_render::Renderer::new_raster(
+            Scene {
+                meshes: Vec::new(),
+                materials: vec![Material {
+                    textures: [0; 4],
+                    ..Default::default()
+                }],
+                textures: vec![Texture {
+                    size: [1, 1],
+                    rgba: vec![255; 4],
+                    srgb: false,
+                }],
+                lights: Vec::new(),
+                sun_direction: Vec3::Y,
+                sun_lux: Vec3::ZERO,
+                environment: vec![[0.2, 0.3, 0.4, 1.]; 8],
+                environment_size: [4, 2],
+            },
+            [64, 48],
+            &[],
+            cache,
+        )?;
+        renderer.render_view(
+            &CameraSpec::LookAt {
+                position: Vec3::new(0., 0., 3.),
+                target: Vec3::ZERO,
+                vertical_fov: 55f32.to_radians(),
+            },
+            1.,
+            ara_render::capture::ViewMode::Lit,
+        )?;
+        renderer.submit_scene_frame(|_| Ok(()))?;
+        renderer.wait_scene_frame()?;
+        // SAFETY: the renderer outlives its compositor on this owner thread.
+        let mut compositor = unsafe { Compositor::new(&renderer, false)? };
+        let image = renderer.output();
+        // SAFETY: this retained, completed image stays live through the UI read.
+        unsafe {
+            compositor.ui.external_image(
+                overlay::viewport_image(),
+                renderer.gpu().native_image(image)?,
+                renderer.gpu().image_view(image)?,
+            )?;
+        }
+        let context = renderer.gpu().context();
+        let mut gate = QueueGate::new(context, context.graphics)?;
+        compositor
+            .paint
+            .render(
+                &mut compositor.ui,
+                &DisplayList {
+                    commands: vec![Draw::Image {
+                        node: 1,
+                        rect: Box2 {
+                            x: 0.,
+                            y: 0.,
+                            w: 64.,
+                            h: 48.,
+                        },
+                        image: overlay::viewport_image(),
+                        tint: Color(255, 255, 255, 255),
+                    }],
+                    glyphs: Vec::new(),
+                },
+                &[],
+                [64, 48],
+                TextMode::Raster,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let started = std::time::Instant::now();
+        assert!(
+            !compositor.scene_ready(&renderer)?,
+            "a pending external read must prevent recycling and resize"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_millis(50));
+        compositor.scene_stall = Some((started - std::time::Duration::from_secs(1), false));
+        assert!(!compositor.scene_ready(&renderer)?);
+        assert!(compositor.scene_stall.is_some_and(|(_, reported)| reported));
+        gate.open()?;
+        compositor.ui.wait_previous()?;
+        assert!(compositor.scene_ready(&renderer)?);
+        // Two publications recycle the pair that the compositor just released.
+        for _ in 0..2 {
+            renderer.submit_scene_frame(|_| Ok(()))?;
+            renderer.wait_scene_frame()?;
+        }
+        renderer.resize([80, 60])?;
+        compositor.retire(&renderer);
+        renderer.gpu().assert_clean()?;
+        Ok(())
+    }
 }
