@@ -618,4 +618,33 @@ mod tests {
         assert!(!readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
         assert!(gaps.reported("exposure meter readbacks refused"));
     }
+
+    /// A cut's own reading is the next one applied: with every slot busy on passes from before
+    /// the cut, `discard` drops those, the cut frame's pass still gets a slot (a new one), and
+    /// the only reading that comes back is the cut frame's.
+    #[test]
+    fn a_cut_frames_reading_is_the_next_one_applied() {
+        let Some((device, queue, texture)) = gpu() else {
+            eprintln!("no adapter: the cut bound was not checked");
+            return;
+        };
+        let (mut gaps, mut readbacks) = (Gaps::default(), Readbacks::new(&device));
+        for old in 0..SLOTS {
+            assert!(readbacks.submit(&device, &queue, &texture, old as f32, 0., &mut gaps));
+        }
+        assert!(
+            readbacks.slots.iter().all(|s| s.pending.is_some()),
+            "all busy"
+        );
+        // The cut: readings in flight describe the old view.
+        readbacks.discard();
+        assert!(
+            readbacks.submit(&device, &queue, &texture, 99., 0., &mut gaps),
+            "the cut frame's pass cannot be refused"
+        );
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
+        let readings = readbacks.poll(&device, &mut gaps);
+        assert_eq!(readings.len(), 1, "only the cut frame's reading is applied");
+        assert_eq!(readings[0].meter, 99.);
+    }
 }
