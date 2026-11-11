@@ -556,20 +556,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-anim-capture"
-version = "0.0.1-alpha"
-dependencies = [
- "ara-anim",
- "ara-anim-physics",
- "ara-frame",
- "ara-physics",
- "ara-physics-jolt",
- "ara-render",
- "ara-schema",
- "glam 0.30.10",
-]
-
-[[package]]
 name = "ara-anim-physics"
 version = "0.0.1-alpha"
 dependencies = [
