@@ -794,11 +794,27 @@ impl crate::app::scene_sync::Drafts for Preview {
     }
 }
 
+/// Axis `axis` of vector `path` when every inspected entity has the same value there
+/// (`None` where they differ: the field shows "—" for that axis).
+fn shared_axis(s: &Studio, path: &str, axis: usize) -> Option<f64> {
+    let (component, field) = path.split_once('.')?;
+    let mut values = s.inspected().iter().map(|id| {
+        s.resolved
+            .get(id)
+            .and_then(|e| e.record.get(component)?.get(field)?.get(axis)?.as_f64())
+    });
+    let first = values.next()??;
+    values.all(|v| v == Some(first)).then_some(first)
+}
+
 /// Commits a number (one channel of a vector when `axis` is set) to every selected entity.
 pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, value: f64) {
-    // A linked scale moves every axis by the same ratio (equal values from a zero axis).
+    // A linked scale moves every axis by the same ratio (equal values from a zero axis),
+    // when the selection shares one scale; scales that differ set the one axis.
+    let shared = (0..3).all(|a| shared_axis(s, path, a).is_some()) || s.inspected().len() < 2;
     if let Some(a) = axis
         && s.local.scale_linked
+        && shared
         && path.ends_with(".scale")
         && let Some(id) = s.inspected().first()
     {
@@ -861,11 +877,14 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
     let c = &l.c;
     let path = f.path.clone();
     // Values that differ across the selection show "—" and, as in Unity, take a new value
-    // for all of them. A mixed vector stays read-only: its axes commit from the first
-    // selected entity's.
+    // for all of them; a vector, axis by axis (each entity keeps its other axes).
     let scalar = matches!(
         f.widget,
-        Widget::Number { .. } | Widget::Bool | Widget::Enum { .. } | Widget::Text
+        Widget::Number { .. }
+            | Widget::Bool
+            | Widget::Enum { .. }
+            | Widget::Text
+            | Widget::Vector { color: false, .. }
     );
     if f.mixed && !scalar {
         return text("—").text_size(12.0).color(c.muted_foreground.0);
@@ -906,6 +925,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                     (Some((p, v)), _) if *p == f.path => {
                         v.get(axis).and_then(Value::as_f64).unwrap_or(0.0)
                     }
+                    _ if f.mixed => shared_axis(s, &f.path, axis).unwrap_or(f64::NAN),
                     _ => f
                         .channels
                         .get(axis)
