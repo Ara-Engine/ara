@@ -220,3 +220,93 @@ fn raster_mips_layers_and_resolves_preserve_the_other_slices() {
         gpu.assert_clean().unwrap();
     }
 }
+
+/// Layer 0 of an array is a selected slice like any other: rendering to it must not
+/// attach, or need a layout for, its sibling layers. Only the rendered layer is ever
+/// transitioned here, so on Vulkan a view spanning both layers fails validation.
+#[test]
+fn regression_first_layer_of_an_array_renders_without_touching_its_siblings() {
+    use ara_gpu::{
+        sync::{BarrierRange, ResourceBarrier},
+        texture::ImageRegion,
+    };
+    let mut gpu = GpuDevice::new_raster(
+        &[],
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-gpu/render-targets-first-layer"),
+    )
+    .unwrap();
+    let image = gpu
+        .create_texture(&TextureDesc {
+            shape: ImageShape {
+                layers: 2,
+                ..Default::default()
+            },
+            ..desc(Format::Rgba8)
+        })
+        .unwrap();
+    let layer = |layer, before, after| ResourceBarrier {
+        barrier: edge(Resource::Image(image), before, after),
+        range: BarrierRange::Image {
+            base_mip: 0,
+            mip_count: 1,
+            base_layer: layer,
+            layer_count: 1,
+        },
+    };
+    // Layer 0 first and alone, each in its own submission as a renderer would.
+    let mut reads = Vec::new();
+    let mut last = None;
+    for (index, clear) in [[0.2, 0.4, 0.6, 1.0], [1.0, 0.8, 0.0, 1.0]]
+        .into_iter()
+        .enumerate()
+    {
+        let index = index as u32;
+        let output = gpu.create_readback_buffer(8 * 8 * 4).unwrap();
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.barrier_ranges([layer(index, Access::Undefined, Access::Color)]);
+        rec.push(Command::BeginRenderingSubresources {
+            colors: vec![RenderAttachment {
+                target: RenderTarget {
+                    image,
+                    mip: 0,
+                    layer: index,
+                },
+                clear: Some(clear),
+            }],
+            depth: None,
+            resolves: vec![],
+            size: [8, 8],
+        });
+        rec.push(Command::EndRendering);
+        rec.barrier_ranges([layer(index, Access::Color, Access::CopySource)]);
+        rec.push(Command::ReadImageRegion {
+            source: image,
+            destination: output,
+            buffer_offset: 0,
+            region: ImageRegion {
+                mip: 0,
+                origin: [0; 3],
+                extent: [8, 8, 1],
+                base_layer: index,
+                layer_count: 1,
+            },
+        });
+        rec.barriers([edge(
+            Resource::Buffer(output),
+            Access::CopyDestination,
+            Access::HostRead,
+        )]);
+        last = Some(gpu.submit(rec.finish(), &[]).unwrap());
+        reads.push(output);
+    }
+    gpu.wait(last.unwrap()).unwrap();
+    assert_eq!(gpu.read(reads[0]).unwrap(), [51, 102, 153, 255].repeat(64));
+    assert_eq!(gpu.read(reads[1]).unwrap(), [255, 204, 0, 255].repeat(64));
+    gpu.retire(Resource::Image(image)).unwrap();
+    for buffer in reads {
+        gpu.retire(Resource::Buffer(buffer)).unwrap();
+    }
+    gpu.collect().unwrap();
+    gpu.assert_clean().unwrap();
+}

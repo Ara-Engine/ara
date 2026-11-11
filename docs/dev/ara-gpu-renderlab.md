@@ -390,3 +390,16 @@ backend suite under validation on a Vulkan device, which has not been rerun yet.
 Ray-query position fetch is deliberately not enabled: hit positions come from
 retained geometry (`hit_geometry`), and Renderlab's modules no longer declare the
 SPIR-V extension.
+
+## The first layer of an array as a render target (same run)
+
+`BeginRenderingSubresources` took a shortcut for mip 0, layer 0: it attached the
+image's own attachment view. On an array that view spans every layer, so rendering
+to layer 0 alone also required layer 1 to be in the attachment layout; Renderlab's
+per-caster transmission layers hit `VUID-vkCmdBeginRendering-pRenderingInfo-09592`
+with layer 1 still `UNDEFINED`. The shortcut now applies only to images with one
+layer; every other selected slice, layer 0 included, gets its own cached single-slice
+view. The existing sibling-preservation probe uploads the whole image first, which
+hid this. `regression_first_layer_of_an_array_renders_without_touching_its_siblings`
+transitions and renders one layer at a time, layer 0 first; it passes on Metal and
+has not run on Vulkan, where it is expected to fail validation without the fix.
