@@ -31,7 +31,7 @@ glam30 = { workspace = true }
 # Cargo allows one source per dependency name, so this revision has its own name;
 # `lib.rs` brings it in as `renderlab`.
 [target.'cfg(target_vendor = "apple")'.dependencies]
-renderlab_metal = { package = "renderlab", git = "https://github.com/Ara-Engine/renderlab", rev = "2395c6bcdbacae93f61f40c0f62f373b007d0132", features = ["backend-ara"] }
+renderlab_metal = { package = "renderlab", git = "https://github.com/Ara-Engine/renderlab", rev = "1208787f10f73b3090b22fb47d6038ba1ab727b9", features = ["backend-ara"] }
 
 # Elsewhere Renderlab renders through wgpu on its own Vulkan device.
 # Pinned: the engine builds against a frozen renderer while it is improved
