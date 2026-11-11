@@ -23,14 +23,14 @@ pub(super) struct Compositor {
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     scene_stall: Option<(std::time::Instant, bool)>,
 }
 
 impl Compositor {
     /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
     /// A persistent stall skips Scene passes and logs once while events keep pumping.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
@@ -77,7 +77,7 @@ impl Compositor {
             sheet: sheet(light)?,
             light,
             present: None,
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             scene_stall: None,
         })
     }
@@ -122,8 +122,8 @@ impl Compositor {
     /// pixels (`scale` per logical px), and presents it into `layer`. `state` carries the
     /// camera and `gizmo` the drag pose of the frame on screen, so overlays never drift from
     /// a lagging image. A raster Scene draws selection outlines itself: changed outlines go
-    /// to the renderer and `scene` redraws. False skips the frame while the last one is
-    /// still on the GPU: call again on a later pass.
+    /// to the renderer and `scene` redraws. False when nothing reached the screen (the last
+    /// frame is still on the GPU, or the present was skipped): call again on a later pass.
     /// # Safety
     /// `layer` is the Scene view's live native layer (`present::Target`).
     #[allow(clippy::too_many_arguments)]
@@ -226,7 +226,7 @@ impl Compositor {
             // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
             unsafe { self.ui.present(ui_device(renderer.gpu()), present) }
         })?;
-        Ok(true)
+        Ok(super::present::landed(present))
     }
 
     /// Releases the layer presentation; call before the window closes.
