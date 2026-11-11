@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use support::Agent;
+use support::{Agent, Scratch};
 
 fn sample() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-render2d/sample")
@@ -19,9 +19,8 @@ fn sample() -> PathBuf {
 
 /// A project around the sample: its scene, the two atlas PNGs and their sidecars
 /// (authored with typed `SidecarCommand`s and written canonically).
-fn project() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ara-2d-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn project() -> Scratch {
+    let dir = Scratch::new("2d");
     std::fs::create_dir_all(dir.join("content/levels")).unwrap();
     std::fs::create_dir_all(dir.join("content/art")).unwrap();
     std::fs::write(
