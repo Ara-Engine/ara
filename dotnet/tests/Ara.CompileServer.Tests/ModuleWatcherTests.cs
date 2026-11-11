@@ -248,7 +248,16 @@ public sealed class VnodeEventsTests : IDisposable
     {
         var events = new VnodeEvents((_, _) => { }, maxFiles: 5);
         foreach (var i in Enumerable.Range(0, 20)) events.Add(0, Make($"F{i}.cs"));
+        // Files may not take the slots reserved for folders (2 of 5), so a small budget never starves the folder watches.
+        Assert.Equal(3, events.WatchedCount);
+        foreach (var i in Enumerable.Range(0, 4))
+        {
+            var folder = Path.Combine(_directory, $"D{i}");
+            Directory.CreateDirectory(folder);
+            events.AddDirectory(0, folder);
+        }
         Assert.Equal(5, events.WatchedCount);
+        Assert.Equal(2, events.DirectoryCount);
         Assert.Equal(5, events.DescriptorCount);
         events.Dispose();
         Assert.Equal(0, events.WatchedCount);

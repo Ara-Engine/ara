@@ -27,6 +27,8 @@ internal sealed class VnodeEvents : IDisposable
     readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
     readonly Thread _thread;
     readonly int _maxFiles;
+    /// <summary>Slots only directories may take: one directory watch covers every atomic save in its folder, a file watch one file's in-place saves.</summary>
+    readonly int _directoryReserve;
     int _held;
     volatile bool _stopped;
 
@@ -42,6 +44,7 @@ internal sealed class VnodeEvents : IDisposable
         // Never take more than a quarter of the process's descriptor limit: the server also needs descriptors
         // for source reads, memory-mapped references, pipes and the other watchers.
         _maxFiles = Math.Min(maxFiles, (int)Math.Min(DescriptorLimit() / 4, int.MaxValue));
+        _directoryReserve = Math.Min(Math.Max(2, _maxFiles / 8), _maxFiles / 2);
         _queue = kqueue();
         if (_queue < 0) throw new InvalidOperationException("kqueue is unavailable");
         _thread = new Thread(Pump) { Name = "ara-vnode", IsBackground = true };
@@ -60,8 +63,8 @@ internal sealed class VnodeEvents : IDisposable
     void Register(uint slot, string path, bool directory)
     {
         if (_stopped || _byPath.ContainsKey(path)) return;
-        // Reserve a slot first so concurrent adds cannot overshoot the budget.
-        if (Interlocked.Increment(ref _held) > _maxFiles)
+        // Reserve a slot first so concurrent adds cannot overshoot the budget; files may not take the directories' reserve.
+        if (Interlocked.Increment(ref _held) > (directory ? _maxFiles : _maxFiles - _directoryReserve))
         {
             Interlocked.Decrement(ref _held);
             return;
@@ -79,6 +82,34 @@ internal sealed class VnodeEvents : IDisposable
         var flags = directory ? NoteWrite | NoteDelete | NoteRename | NoteRevoke : NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke;
         var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = flags };
         if (_stopped || Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0) Remove(fd);
+    }
+
+    /// <summary>
+    /// Watches <paramref name="path"/> again from scratch: a file replaced by a rename is a new inode, and the old
+    /// descriptor (if its delete event has not been processed yet) must not keep the path looking watched.
+    /// </summary>
+    internal void Replace(uint slot, string path)
+    {
+        RemovePath(path);
+        Add(slot, path);
+    }
+
+    /// <summary>Stops watching exactly <paramref name="path"/>.</summary>
+    internal void RemovePath(string path)
+    {
+        if (_byPath.TryGetValue(path, out var fd)) Remove(fd);
+    }
+
+    /// <summary>
+    /// Stops watching everything below the folder <paramref name="folder"/>. kqueue reports a rename or delete per vnode, so
+    /// when a folder goes the descriptors of its files and subfolders stay registered under paths that no longer exist
+    /// (holding budget, and blocking a new folder created under the old name) unless they are removed here.
+    /// </summary>
+    internal void RemoveUnder(string folder)
+    {
+        var prefix = folder.EndsWith('/') ? folder : folder + "/";
+        foreach (var (path, fd) in _byPath)
+            if (path.StartsWith(prefix, StringComparison.Ordinal)) Remove(fd);
     }
 
     void Remove(int fd)
@@ -101,7 +132,11 @@ internal sealed class VnodeEvents : IDisposable
             {
                 var fd = (int)events[i].Ident;
                 if (!_byDescriptor.TryGetValue(fd, out var entry)) continue;
-                if ((events[i].FFlags & (NoteDelete | NoteRename | NoteRevoke)) != 0) Remove(fd);
+                if ((events[i].FFlags & (NoteDelete | NoteRename | NoteRevoke)) != 0)
+                {
+                    if (entry.Directory) RemoveUnder(entry.Path);
+                    Remove(fd);
+                }
                 else
                 {
                     // A failing callback must not end the watcher thread (and with it every later fast save).
@@ -131,8 +166,11 @@ internal sealed class VnodeEvents : IDisposable
         return getrlimit(RlimitNofile, ref limit) == 0 && limit.Current > 0 ? limit.Current : 256;
     }
 
-    /// <summary>How many files are watched right now (open descriptors held by this class).</summary>
+    /// <summary>How many files and folders are watched right now (open descriptors held by this class).</summary>
     internal int WatchedCount => _byPath.Count;
+
+    /// <summary>How many of them are folders.</summary>
+    internal int DirectoryCount => _byDescriptor.Values.Count(entry => entry.Directory);
 
     /// <summary>Descriptors this instance still owns; equals <see cref="WatchedCount"/> unless one leaked.</summary>
     internal int DescriptorCount => _byDescriptor.Count;

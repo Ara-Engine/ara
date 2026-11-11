@@ -7,8 +7,8 @@ namespace Ara.CompileServer;
 /// Watches module folders for <c>*.cs</c> changes and reports one change set per module per
 /// save: events are coalesced over a 1 ms settle (a truncate+write pair reads once). One pump
 /// thread serves every module. On macOS, <c>FileSystemWatcher</c> (FSEvents) reports an in-place save
-/// ~11 ms late, so source files also carry a kqueue watch (<see cref="VnodeEvents"/>) that reports the
-/// write at once; the late directory event for the same write is dropped as a duplicate.
+/// ~11 ms late, so source files and folders also carry kqueue watches (<see cref="VnodeEvents"/>) that report in-place
+/// saves, atomic saves and new files at once; the late directory-watcher event for the same save is dropped as a duplicate.
 /// </summary>
 internal sealed class ModuleWatcher : IDisposable
 {
@@ -29,19 +29,38 @@ internal sealed class ModuleWatcher : IDisposable
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long At, long Mtime, long Length)> _deliveries = new(StringComparer.Ordinal);
     /// <summary>Source files' last seen modification time and length, to find which file a directory event is about.</summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long Mtime, long Length)> _known = new(StringComparer.Ordinal);
+    /// <summary>Folders whose entries changed and have not been rescanned yet (folder, slot); the scan thread debounces them.</summary>
+    readonly ConcurrentDictionary<string, uint> _dirty = new(StringComparer.Ordinal);
+    readonly AutoResetEvent _scanWake = new(false);
+    readonly Thread? _scan;
+    int _scans;
 
     /// <summary><paramref name="changed"/> receives (slot, paths, first event timestamp) on the pump thread.</summary>
-    internal ModuleWatcher(Action<uint, IReadOnlyCollection<string>, long> changed)
+    internal ModuleWatcher(Action<uint, IReadOnlyCollection<string>, long> changed, int vnodeBudget = int.MaxValue)
     {
         _changed = changed;
         if (OperatingSystem.IsMacOS())
         {
-            try { _vnode = new VnodeEvents(OnVnode, OnDirectory); }
+            try
+            {
+                _vnode = new VnodeEvents(OnVnode, MarkDirty, Math.Min(vnodeBudget, 1024));
+                _scan = new Thread(ScanLoop) { Name = "ara-vnode-scan", IsBackground = true };
+                _scan.Start();
+            }
             catch (Exception) { /* no kqueue: the directory watcher alone, as on every other platform */ }
         }
         _pump = new Thread(Pump) { Name = "ara-watch", IsBackground = true };
         _pump.Start();
     }
+
+    /// <summary>Folder rescans run so far (tests: a burst of entry changes must not cost one scan per event).</summary>
+    internal int ScanCount => Volatile.Read(ref _scans);
+
+    /// <summary>True when the kqueue layer watches <paramref name="path"/> (a file or a folder).</summary>
+    internal bool VnodeWatching(string path) => _vnode?.Watching(path) == true;
+
+    /// <summary>Files and folders under kqueue watches right now (tests).</summary>
+    internal int VnodeWatchedCount => _vnode?.WatchedCount ?? 0;
 
     /// <summary>Starts watching a module folder.</summary>
     internal void Watch(uint slot, string dir)
@@ -55,12 +74,12 @@ internal sealed class ModuleWatcher : IDisposable
         static bool Relevant(string path) => IsSourceInput(path) || !Path.HasExtension(path);
         FileSystemEventHandler on = (_, e) =>
         {
-            if (!Relevant(e.FullPath) || IsFastDuplicate(e.FullPath, e.ChangeType)) return;
+            if (!Relevant(e.FullPath)) return;
+            // Arm first, then maybe drop the echo: an echo must never be the reason a replaced file or a new folder stays unwatched.
+            if (_vnode is not null) ArmFromEvent(slot, e.FullPath, e.ChangeType);
+            if (IsFastDuplicate(e.FullPath, e.ChangeType)) return;
+            if (_vnode is not null && IsSourceInput(e.FullPath)) RememberOrForget(e.FullPath, e.ChangeType);
             _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp()));
-            if (_vnode is null || e.ChangeType == WatcherChangeTypes.Deleted) return;
-            // A new or replaced source file needs a fresh vnode watch, a new folder a directory watch.
-            if (IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
-            else if (e.ChangeType == WatcherChangeTypes.Created && Directory.Exists(e.FullPath) && !IsSkippedFolder(Path.GetFileName(e.FullPath))) AddVnodeDirectory(slot, e.FullPath);
         };
         w.Changed += on;
         w.Created += on;
@@ -68,22 +87,61 @@ internal sealed class ModuleWatcher : IDisposable
         w.Renamed += (_, e) =>
         {
             var t = Stopwatch.GetTimestamp();
+            if (_vnode is not null)
+            {
+                _vnode.RemoveUnder(e.OldFullPath); // a renamed folder's descendants are registered under paths that no longer exist
+                _vnode.RemovePath(e.OldFullPath);
+                ArmFromEvent(slot, e.FullPath, e.ChangeType);
+            }
             if (Relevant(e.OldFullPath)) _events.Add((slot, e.OldFullPath, t));
-            if (Relevant(e.FullPath) && !IsFastDuplicate(e.FullPath, e.ChangeType)) _events.Add((slot, e.FullPath, t));
-            if (_vnode is not null && IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
+            if (Relevant(e.FullPath) && !IsFastDuplicate(e.FullPath, e.ChangeType))
+            {
+                if (_vnode is not null && IsSourceInput(e.FullPath)) RememberOrForget(e.FullPath, e.ChangeType);
+                _events.Add((slot, e.FullPath, t));
+            }
         };
         w.EnableRaisingEvents = true;
-        if (_vnode is not null)
-        {
-            foreach (var file in SourceFiles(dir))
-            {
-                if (Stat(file) is { } stat) _known[file] = stat;
-                AddVnode(slot, file);
-            }
-            AddVnodeDirectory(slot, dir);
-            foreach (var folder in SourceFolders(dir)) AddVnodeDirectory(slot, folder);
-        }
+        if (_vnode is not null) ArmFolder(slot, dir);
         lock (_watchers) _watchers.Add(w);
+    }
+
+    /// <summary>
+    /// Arms what a directory-watcher event tells about: a source file (new or replaced) gets a file watch, a folder (new,
+    /// or moved in by a rename) gets its folder watches, and a deleted folder drops everything under it.
+    /// </summary>
+    void ArmFromEvent(uint slot, string path, WatcherChangeTypes type)
+    {
+        if (type == WatcherChangeTypes.Deleted)
+        {
+            if (!IsSourceInput(path)) { _vnode!.RemoveUnder(path); _vnode.RemovePath(path); }
+            return;
+        }
+        if (IsSourceInput(path)) AddVnode(slot, path);
+        else if (type is WatcherChangeTypes.Created or WatcherChangeTypes.Renamed && Directory.Exists(path) && !IsSkippedFolder(Path.GetFileName(path)))
+            ArmFolder(slot, path);
+    }
+
+    /// <summary>
+    /// Folder watches first, then file watches: one folder watch covers every atomic save in its folder, a file watch only
+    /// one file's in-place saves, so when the descriptor budget is small the folders must not be starved by the files.
+    /// Files already in the folder are recorded as known (their change set is the folder event's business).
+    /// </summary>
+    void ArmFolder(uint slot, string folder)
+    {
+        AddVnodeDirectory(slot, folder);
+        foreach (var sub in SourceFolders(folder)) AddVnodeDirectory(slot, sub);
+        foreach (var file in SourceFiles(folder))
+        {
+            if (Stat(file) is { } stat) _known[file] = stat;
+            AddVnode(slot, file);
+        }
+    }
+
+    /// <summary>Keeps <c>_known</c> in step with changes the slow path reported, so the next folder scan does not redeliver them.</summary>
+    void RememberOrForget(string path, WatcherChangeTypes type)
+    {
+        if (type == WatcherChangeTypes.Deleted) _known.TryRemove(path, out _);
+        else if (Stat(path) is { } stat) _known[path] = stat;
     }
 
     /// <summary>The file watch of an in-place write: queued at once, and remembered to drop the directory watcher's echo.</summary>
@@ -94,24 +152,87 @@ internal sealed class ModuleWatcher : IDisposable
     }
 
     /// <summary>
-    /// Entries of a watched folder changed. An atomic save (a temp file renamed over the source) and a new file look
-    /// like this: report the source files whose modification time or length differs from what was last seen. A file that
-    /// is missing is left to the directory watcher, so a delete-then-rename save is not compiled half done.
+    /// Entries of a watched folder changed (called on the kqueue thread, so it only records the folder): an atomic save (a
+    /// temp file renamed over the source) or a new file looks like this. The scan thread rescans it after a short debounce.
     /// </summary>
-    void OnDirectory(uint slot, string directory)
+    void MarkDirty(uint slot, string folder)
     {
+        _dirty[folder] = slot;
+        _scanWake.Set();
+    }
+
+    /// <summary>
+    /// Rescans changed folders on its own thread, never the kqueue thread, so a burst of temp files cannot hold up in-place
+    /// saves. A folder is rescanned once per ~1.5 ms burst however many entry events it raised.
+    /// </summary>
+    void ScanLoop()
+    {
+        while (!_stop.IsCancellationRequested)
+        {
+            if (!_scanWake.WaitOne(250)) continue;
+            Spin(1.5); // let the burst (a save's temp file, rename and cleanup) finish, collecting more folders
+            foreach (var (folder, slot) in _dirty.ToArray())
+            {
+                if (!_dirty.TryRemove(folder, out _)) continue;
+                try { ScanFolder(slot, folder); }
+                catch (Exception) { /* the directory watcher still reports the save */ }
+            }
+        }
+    }
+
+    static void Spin(double ms)
+    {
+        var until = Stopwatch.GetTimestamp() + (long)(ms * Stopwatch.Frequency / 1000);
+        while (Stopwatch.GetTimestamp() < until) Thread.SpinWait(20);
+    }
+
+    /// <summary>
+    /// Reports the source files of <paramref name="folder"/> whose modification time or length differs from what was last
+    /// seen. A replaced file gets a fresh file watch; a file that is missing is left to the directory watcher (a save that
+    /// deletes the source and then renames the new one in must not be compiled half done). A new file is reported only
+    /// once its length and time hold still for ~3 ms, and not while empty: the folder event fires at creation, before
+    /// the first write, and a partial source would show as errors until the rest lands. Its own writes raise file events.
+    /// </summary>
+    void ScanFolder(uint slot, string folder)
+    {
+        Interlocked.Increment(ref _scans);
         try
         {
-            foreach (var path in Directory.EnumerateFiles(directory))
+            foreach (var info in new DirectoryInfo(folder).EnumerateFiles())
             {
-                if (!IsSourceInput(path) || Stat(path) is not { } stat) continue;
-                if (_known.TryGetValue(path, out var known) && known == stat) continue;
-                Deliver(slot, path, stat);
-                AddVnode(slot, path); // the replacement is a new file: watch it
+                var path = info.FullName;
+                if (!IsSourceInput(path)) continue;
+                (long Mtime, long Length) stat;
+                try { stat = (info.LastWriteTimeUtc.Ticks, info.Length); }
+                catch (IOException) { continue; }
+                if (_known.TryGetValue(path, out var known))
+                {
+                    if (known == stat) continue;
+                    _vnode!.Replace(slot, path); // a replacement is a new inode: watch it, whatever the old watch is doing
+                    Deliver(slot, path, stat);
+                    continue;
+                }
+                if (!SettleNewFile(path, ref stat)) continue;
+                _known[path] = stat;
+                _vnode!.Replace(slot, path);
+                if (stat.Length > 0) Deliver(slot, path, stat);
             }
         }
         catch (IOException) { /* the folder went away; the directory watcher reports it */ }
         catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Waits (up to ~12 ms) until a new file's stat holds still for ~3 ms; false when it disappeared.</summary>
+    static bool SettleNewFile(string path, ref (long Mtime, long Length) stat)
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            Spin(3);
+            if (Stat(path) is not { } now) return false;
+            if (now == stat) return true;
+            stat = now;
+        }
+        return true;
     }
 
     void Deliver(uint slot, string path, (long Mtime, long Length) stat)
@@ -218,6 +339,8 @@ internal sealed class ModuleWatcher : IDisposable
     public void Dispose()
     {
         _stop.Cancel();
+        _scanWake.Set();
+        _scan?.Join(1000);
         _vnode?.Dispose();
         lock (_watchers)
         {

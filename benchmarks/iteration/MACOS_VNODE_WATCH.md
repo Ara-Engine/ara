@@ -33,3 +33,11 @@ The per-file watch only covers in-place saves. Editors that save by writing a te
 | L3 | 142.6 / 168.9 | 129.5 / 157.9 |
 
 Raw rows: `macos_vnode_dirs_mac_2026-11-11.json`.
+
+### Review round (directory watches)
+- **Folder renamed or deleted while watched:** when a folder's own watch reports delete or rename (or the directory watcher reports `Renamed`/`Deleted`), every entry under it is released, so no stale path holds budget or blocks a folder created under the old name; folders (with their subfolders and files) are armed from `Renamed` as well as `Created`.
+- **Budget:** folders are armed before files, and files cannot take the last slots (an eighth of the budget, at least 2), so a small budget (64 slots at the macOS shell default of 256) cannot starve the folder watches.
+- **Burst of entries:** the kqueue thread only marks the folder dirty; a separate scan thread rescans it after a ~1.5 ms debounce, so a burst of temp files neither holds up in-place saves nor costs a scan per event.
+- **`_known`** is also updated from the directory watcher's events, so a slow-path change is not re-reported by the next folder scan. A replaced file's watch is replaced (`Replace`), and arming happens before the duplicate check, so an echo can never be the reason a file stays unwatched.
+- **New files** are reported only once their length and time hold still for ~3 ms, and not while empty (an empty file compiles to nothing, and its first write raises a file event). A partial first compile would show as errors until the rest of the file landed.
+Spot check, atomic saves, 8 fresh processes per arm against #36: L1 33.0 → 26.1 ms, L2 37.5 → 32.7 ms (the 20-process campaign above, before these changes, was 35.2 → 25.3 and 42.6 → 34.3).
