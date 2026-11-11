@@ -40,5 +40,7 @@ glam34 = { workspace = true }
 glam30 = { workspace = true }
 
 [dev-dependencies]
+ara-asset = { path = "../ara-asset" }
+ara-asset-format = { path = "../ara-asset-format" }
 ara-render = { path = "../ara-render" }
 image = { workspace = true, features = ["png"] }
