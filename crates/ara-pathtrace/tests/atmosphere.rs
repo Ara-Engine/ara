@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
-use ara_render::scene::{CameraSpec, Mesh, Vertex};
+use ara_frame::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{
     FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, ToneMapper, Upscaler,
     atmosphere::Atmosphere,

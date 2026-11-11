@@ -1,6 +1,6 @@
 //! Content-boundary preparation. Geometry stays local; material maps stay compressed.
 use anyhow::{Context, Result};
-use ara_render::instanced::{self as render, Instance, Material, Scene};
+use ara_frame::instanced::{self as render, Instance, Material, Scene};
 use ara_runtime::{
     extract::{Draw, RenderFrame},
     material::MaterialAsset,
@@ -182,7 +182,7 @@ impl Builder {
             } else {
                 let index = self.scene.materials.len();
                 let mut bounds = self.scene.materials[material];
-                bounds.pbr.flags[1] |= ara_render::scene::MODEL_BOUNDS;
+                bounds.pbr.flags[1] |= ara_frame::scene::MODEL_BOUNDS;
                 self.scene.materials.push(bounds);
                 self.unpublished
                     .entry(asset.to_owned())

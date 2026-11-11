@@ -561,6 +561,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-anim",
  "ara-anim-physics",
+ "ara-frame",
  "ara-physics",
  "ara-physics-jolt",
  "ara-render",
@@ -925,6 +926,7 @@ dependencies = [
  "ara-doc",
  "ara-editor-gpu",
  "ara-export",
+ "ara-frame",
  "ara-gpu",
  "ara-graph",
  "ara-host",
@@ -980,6 +982,7 @@ name = "ara-editor-gpu"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-platform",
  "ara-render",
@@ -1085,6 +1088,20 @@ dependencies = [
  "ara-schema",
  "ara-terrain",
  "bytemuck",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-frame"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-json",
+ "bytemuck",
+ "glam 0.30.10",
+ "image",
  "serde",
  "serde_json",
 ]
@@ -1221,6 +1238,7 @@ name = "ara-hotpatch-probe"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-render",
@@ -1426,6 +1444,7 @@ dependencies = [
  "ara-asset-format",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-material",
@@ -1616,6 +1635,7 @@ name = "ara-pathtrace"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-landscape",
  "ara-render",
@@ -1753,6 +1773,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-editor-gpu",
+ "ara-frame",
  "ara-gpu",
  "ara-graphics-settings",
  "ara-host",
@@ -1847,6 +1868,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-bvh",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-json",
@@ -1873,6 +1895,7 @@ dependencies = [
  "anyhow",
  "ara-asset-format",
  "ara-components",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-pathtrace",
@@ -1896,6 +1919,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-color",
+ "ara-frame",
  "ara-geo",
  "ara-gpu",
  "ara-importers",
@@ -1923,6 +1947,7 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-doc",
+ "ara-frame",
  "ara-gpu",
  "ara-import2d",
  "ara-json",
@@ -1947,6 +1972,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-components",
+ "ara-frame",
  "ara-gpu",
  "ara-material",
  "ara-render",
@@ -2072,6 +2098,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-graphics-settings",
  "ara-importers",
@@ -2157,6 +2184,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-ops",
@@ -2353,6 +2381,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-asset-format",
+ "ara-frame",
  "ara-gpu",
  "ara-render",
  "ash 0.38.0+1.4.352",
@@ -2484,6 +2513,7 @@ name = "ara-vfx-gpu"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-material",

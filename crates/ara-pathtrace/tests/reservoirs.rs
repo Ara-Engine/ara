@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_gpu::GpuDevice;
-use ara_render::scene::{CameraSpec, Light, Mesh, Vertex};
+use ara_frame::scene::{CameraSpec, Light, Mesh, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use glam::Vec3;
 
@@ -188,7 +188,7 @@ fn thousand_identical_lights_preserve_analytic_energy_through_reuse() -> Result<
         color_lumens: [1., 1., 1., 16. * std::f32::consts::PI / 1000.],
         direction_outer: [0., 0., -1., -1.],
         parameters: [0., 0., 0., 1.],
-        ..ara_render::scene::Light::ZERO
+        ..ara_frame::scene::Light::ZERO
     };
     scene.lights = vec![light; 1000];
     let camera = CameraSpec::LookAt {

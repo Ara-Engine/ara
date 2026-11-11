@@ -2,10 +2,7 @@
 //! generation read-only; geometry remains local with explicit node instances.
 use super::fixture::Fixture;
 use anyhow::{Context, Result, ensure};
-use ara_render::{
-    instanced::*,
-    scene::{CameraSpec, Light},
-};
+use ara_frame::{instanced::*, scene::{CameraSpec, Light}};
 use ara_texture_stream::{NativeConfig, NativeResidency, NativeSource};
 use glam::{Mat4, Quat, Vec3};
 use serde_json::Value;
@@ -173,9 +170,9 @@ pub fn load() -> Result<Fixture> {
             Some("BLEND") => 2,
             _ => 0,
         };
-        out.pbr.flags[1] = ara_render::scene::VERTEX_COLOR_TINT
+        out.pbr.flags[1] = ara_frame::scene::VERTEX_COLOR_TINT
             | if m["doubleSided"] == true {
-                ara_render::scene::DOUBLE_SIDED
+                ara_frame::scene::DOUBLE_SIDED
             } else {
                 0
             };

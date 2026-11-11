@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use ara_gpu::{GpuDevice, Image, commands::PassTiming};
-use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
+use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{extract::Draw, material::MaterialAsset};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};

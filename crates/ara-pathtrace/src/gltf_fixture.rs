@@ -1,6 +1,6 @@
 //! Strict fixture-only glTF import for pinned CC0 PBR content, not the engine importer.
 use anyhow::{Context, Result, ensure};
-use ara_render::scene::{Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{Material, Mesh, Scene, Texture, Vertex};
 use glam::{Mat4, Quat, Vec2, Vec3};
 use serde_json::Value;
 use std::{collections::BTreeMap, path::Path};

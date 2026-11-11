@@ -238,7 +238,7 @@ fn embedded_play_shares_frames_with_the_owner_device() {
     );
     let captured = image::open(&capture_path).unwrap().into_rgba8();
     let difference = coarse_difference(&live, &captured);
-    let ssim = ara_render::capture::compare(&live, &captured, 1.0)
+    let ssim = ara_frame::capture::compare(&live, &captured, 1.0)
         .unwrap()
         .score;
     assert!(

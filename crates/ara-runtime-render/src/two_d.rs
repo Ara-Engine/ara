@@ -3,7 +3,7 @@
 //! immutable fixed-tick extraction (`Scene2d::extract`).
 use anyhow::{Context, Result};
 use ara_2d::{Atlas, Camera2d, Flipbook, Sprite, SpriteRegion, Tilemap};
-use ara_render::capture::{Capture, CaptureRequest, ViewMode};
+use ara_frame::capture::{Capture, CaptureRequest, ViewMode};
 use ara_render2d::{AtlasImage, Renderer2d, Scene2d};
 use ara_runtime::assets::{AssetSource, asset_id};
 use ara_schema::AssetRef;
@@ -227,7 +227,7 @@ impl Presenter2d {
         renderer.capture(
             &camera,
             CaptureRequest {
-                camera: ara_render::scene::CameraSpec::Orthographic {
+                camera: ara_frame::scene::CameraSpec::Orthographic {
                     centre: glam30::Vec2::ZERO,
                     world_size: glam30::Vec2::ONE,
                 },

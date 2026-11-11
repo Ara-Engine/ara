@@ -12,7 +12,7 @@ pub mod scenes;
 mod vegetation;
 use anyhow::Result;
 use ara_gpu::GpuDevice;
-use ara_render::scene::{CameraSpec, Scene};
+use ara_frame::scene::{CameraSpec, Scene};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 
 /// Progressive undenoised reference renderer. Independent samples accumulate in

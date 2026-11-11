@@ -15,10 +15,8 @@ use ara_gpu::{
     commands::{Attachment, Command, CommandList},
     cooked::CookedPipeline,
 };
-use ara_render::{
-    graph::{Graph, State},
-    scene::CameraSpec,
-};
+use ara_frame::{scene::CameraSpec};
+use ara_render::{graph::{Graph, State}};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use std::{collections::BTreeMap, path::Path};

@@ -2,11 +2,8 @@ use crate::layout::*;
 use crate::passes::FrameOutput;
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource};
-use ara_render::{
-    capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata},
-    graph::State,
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata}, scene::CameraSpec};
+use ara_render::{graph::State};
 use ara_vfx::{Effect, Module};
 use glam::Vec3;
 
@@ -283,7 +280,7 @@ impl GpuSystem {
             "VFX captures require deterministic mode and the authored seed"
         );
         ensure!(
-            matches!(request.mode, ara_render::capture::ViewMode::Lit),
+            matches!(request.mode, ara_frame::capture::ViewMode::Lit),
             "VFX feature capture currently supports the lit channel"
         );
         ensure!(

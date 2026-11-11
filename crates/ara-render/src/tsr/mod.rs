@@ -62,35 +62,7 @@ use glam::Mat4;
 use std::path::Path;
 use tuning::{Path as AccumulatePath, Tuning};
 
-/// The raster renderer's temporal upscaler (`Renderer::set_upscaler`). Both resolve
-/// into the same display history; switching keeps the post chain and captures
-/// unchanged, and switching to TSR restarts its accumulation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Upscaler {
-    /// Ara's temporal antialiasing and upscaling (`taaMain`): one pass, a
-    /// luminance-weighted Gaussian reconstruction with variance clipping.
-    #[default]
-    Taau,
-    /// Ara TSR: FSR 3.1.4's temporal upscaler (reactivity, shading change, luma
-    /// instability and thin-feature locks) with Ara's engine signals.
-    Tsr,
-}
-
-impl Upscaler {
-    /// The `ARA_UPSCALER` environment variable (`tsr` or `taau`, any case) for A/B
-    /// runs; unset or anything else selects TAAU.
-    pub fn from_env() -> Self {
-        Self::forced().unwrap_or_default()
-    }
-    /// The upscaler `ARA_UPSCALER` forces over the preset's (`Quality::upscaler`), if set.
-    pub fn forced() -> Option<Self> {
-        match std::env::var("ARA_UPSCALER") {
-            Ok(value) if value.eq_ignore_ascii_case("tsr") => Some(Self::Tsr),
-            Ok(value) if value.eq_ignore_ascii_case("taau") => Some(Self::Taau),
-            _ => None,
-        }
-    }
-}
+pub use ara_frame::look::Upscaler;
 
 // TSR images, in the record's index rows (`TsrConstants::sampled`/`storage`).
 /// R16F render size: luma instability (FSR's INTERMEDIATE_FP16x1).

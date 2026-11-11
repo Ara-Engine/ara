@@ -70,7 +70,7 @@ impl FidelityView {
     pub fn replace_native_scene(
         &mut self,
         gpu: &mut GpuDevice,
-        scene: &ara_render::instanced::Scene,
+        scene: &ara_frame::instanced::Scene,
         textures: ara_texture_stream::NativeResidency,
     ) -> Result<()> {
         let next = GpuScene::new_native(gpu, scene, textures, self.settings.tier == Tier::Rt)?;

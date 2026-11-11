@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 //! Probe GI follows edits: after an entity moves and settles, the spot it left
 //! renders as if it had never stood there, without a full rebake.
-use ara_render::capture::{Capture, ViewMode};
+use ara_frame::capture::{Capture, ViewMode};
 use ara_runtime::{
     components::MeshShape,
     extract::{CameraView, Draw, Geometry, RenderFrame},

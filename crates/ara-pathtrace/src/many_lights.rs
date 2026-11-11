@@ -1,6 +1,6 @@
 //! A deterministic 1,000-light corridor, including real emissive geometry.
 use crate::scenes::{mat, quad};
-use ara_render::scene::{CameraSpec, Light, Scene};
+use ara_frame::scene::{CameraSpec, Light, Scene};
 use glam::Vec3;
 
 /// Five hundred point lights plus five hundred emissive panels; no sun or sky.
@@ -53,7 +53,7 @@ pub fn scene() -> Scene {
             color_lumens: [0.55, 0.75, 1., 20.],
             direction_outer: [0., -1., 0., -1.],
             parameters: [0., 0., 0., 1.],
-            ..ara_render::scene::Light::ZERO
+            ..ara_frame::scene::Light::ZERO
         });
         scene.meshes.push(quad(
             scene.meshes.len() as u64 + 1,
