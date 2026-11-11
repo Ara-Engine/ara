@@ -889,7 +889,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
-            rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
                 && let Some(layer) = layer_target(&surface, name, &mut rt, &mut layer_failure)
@@ -960,10 +959,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 rt.update(|_| {});
             }
         }
-        let vfx_visible = rt.find("vfx/preview").is_some();
-        if rt.touch(|s| vfx::update(s, vfx_visible)) {
-            rt.update(|_| {});
-        }
         pass.mark("game");
         pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
@@ -1030,7 +1025,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || composite
             // A job wakes the loop only while the Scene can render for it.
             || agent_work::needs_unpresented_render(&probe_owner, shown_extent)
-            || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [

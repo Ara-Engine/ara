@@ -11,7 +11,7 @@
 //!   give it the tooltip [`SOON`], so the menu keeps its shape.
 use ara_kit::icons;
 use ara_kit::look::Look;
-use stillkit::el::{Align, El, Justify, col, el, icon, text};
+use stillkit::el::{Align, El, Justify, col, el, icon, row, text};
 
 use super::Studio;
 
@@ -37,6 +37,19 @@ pub(super) fn tile(l: &Look, key: &str, line: &str) -> El<Studio> {
                 .child(icon(icons::SQUARE_DASHED).size(22.0))
                 .child(text(line.to_owned()).text_size(12.0).wrap(3)),
         )
+}
+
+/// One muted line with the outlined square, for a panel that has room for a sentence but not a
+/// tile (a page's side panel, a strip): what is not available, in `line`.
+pub(super) fn note(l: &Look, line: &str) -> El<Studio> {
+    row()
+        .pad(10.0)
+        .gap(8.0)
+        .align(Align::Center)
+        .color(l.c.muted_foreground.0)
+        .cascade_ink()
+        .child(icon(icons::SQUARE_DASHED).size(14.0))
+        .child(text(line.to_owned()).text_size(11.5).wrap(3).grow(1.0))
 }
 
 /// Whether the Scene view's renderer offers the view mode `name` (a `VIEW_MODES` name, such as

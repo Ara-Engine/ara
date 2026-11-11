@@ -1730,23 +1730,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             s.local.game_captured = id == "game.capture";
             Ok(())
         }
-        "vfx.restart" => {
-            s.vfx.restart();
-            Ok(())
-        }
-        "vfx.step" => {
-            e.state.preview_playing = false;
-            s.vfx.step();
-            Ok(())
-        }
-        "vfx.rate" => match target {
-            Target::Text(rate) => rate
-                .trim_end_matches('%')
-                .parse()
-                .map_err(|_| "Rates are percentages".into())
-                .map(|rate| s.vfx.set_rate(rate)),
-            _ => Err("Choose a rate".into()),
-        },
+        // The effect preview has no renderer to run on yet.
+        "vfx.restart" | "vfx.step" | "vfx.rate" => Err(super::unavailable::SOON.into()),
         "vfx.emitter.collapse" | "vfx.emitter.hide" | "vfx.emitter.isolate" => match target {
             Target::Text(name) => {
                 use super::vfx::Emitter;

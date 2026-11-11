@@ -4198,7 +4198,7 @@ fn the_material_source_view_edits_the_graph_as_text_and_wires_reroute() {
             .is_empty()
     );
     // Typed text applies to the document; the graph follows.
-    let showcase = crate::asset_tools::node_preview::SHOWCASE.to_owned();
+    let showcase = SHOWCASE.to_owned();
     rt.update(|s| s.graph.source = Some(showcase.clone()));
     settle(&mut rt);
     press(&mut rt, "material/source/apply");
@@ -4722,7 +4722,7 @@ fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspec
 }
 
 #[test]
-fn the_material_page_shows_each_operation_s_value_in_its_node() {
+fn the_material_page_says_in_node_previews_are_not_available() {
     let mut rt = open();
     rt.touch(|s| {
         let doc = s
@@ -4738,7 +4738,7 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
         s.editor
             .apply_to(
                 &doc,
-                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                vec![json!({"cmd": "material.text.apply", "args": {"text": SHOWCASE}})],
                 "Showcase",
             )
             .unwrap();
@@ -4746,22 +4746,13 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
     });
     rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     settle(&mut rt);
-    // The previews render on their own worker on this GPU: wait for them to land.
-    let started = std::time::Instant::now();
-    while rt.state().graph.previewed() < 3
-        && started.elapsed() < std::time::Duration::from_secs(120)
-    {
-        rt.touch(|s| super::graph::sync(s, "material"));
-        rt.touch(super::graph::previews);
-        if let Some(error) = rt.state().graph.preview_error() {
-            panic!("the previews can't render here: {error}");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    rt.touch(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
     assert!(
-        rt.state().graph.previewed() >= 3,
-        "operation nodes show their values ({} rendered)",
-        rt.state().graph.previewed()
+        rt.tree()
+            .iter()
+            .any(|n| n.text.as_deref() == Some("In-node previews are not available yet.")),
+        "the Details say what is missing"
     );
 }
 
@@ -5506,105 +5497,6 @@ fn stack_frames_outside_the_project_never_open() {
         "the project file links"
     );
     let _ = std::fs::remove_file(root.with_extension("bat"));
-}
-
-#[test]
-fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
-    let mut rt = open();
-    let doc = rt.touch(|s| {
-        let doc = s
-            .editor
-            .action(
-                "editor.resource.create",
-                json!({"path": "samples/cycle.graph", "domain": "material"}),
-            )
-            .unwrap()["doc"]
-            .as_str()
-            .unwrap()
-            .to_owned();
-        s.editor
-            .apply_to(
-                &doc,
-                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
-                "Showcase",
-            )
-            .unwrap();
-        s.act("editor.workspace", json!({"resource": doc.clone()}));
-        doc
-    });
-    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
-    // Every previewed node shows the picture of its own current key, once renders land.
-    let settle_previews = |rt: &mut Runtime<Studio>| {
-        let started = std::time::Instant::now();
-        loop {
-            rt.touch(|s| super::graph::sync(s, "material"));
-            rt.touch(super::graph::previews);
-            if let Some(error) = rt.state().graph.preview_error() {
-                panic!("the previews can't render here: {error}");
-            }
-            let slots = rt.state().graph.preview_slots();
-            if !slots.is_empty()
-                && slots
-                    .iter()
-                    .all(|(_, _, shown, own)| own.is_some() && shown == own)
-            {
-                return slots;
-            }
-            assert!(
-                started.elapsed() < std::time::Duration::from_secs(120),
-                "previews never settled: {slots:?}"
-            );
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-    };
-    // By key: a text edit gives the nodes new ids, but an unchanged node keeps its key.
-    let by_key = |slots: Vec<(String, String, Option<u32>, Option<u32>)>| {
-        slots
-            .into_iter()
-            .map(|(_, key, shown, _)| (key, shown))
-            .collect::<std::collections::BTreeMap<_, _>>()
-    };
-    let mut before = by_key(settle_previews(&mut rt));
-    // The `scale` constant (6) feeds three previewed nodes; the four others (uv, normal,
-    // view, rim) never change. Its value is edited in place, as the canvas does, so node
-    // ids stay; enough edits to go round every slot several times.
-    let scale_node = {
-        let graph = rt.state().graph.shown_graph().expect("the material shows");
-        graph
-            .nodes
-            .iter()
-            .find(|(_, n)| n.payload["name"] == "scale")
-            .map(|(id, _)| id.clone())
-            .unwrap_or_else(|| panic!("the scale constant: {:?}", graph.nodes))
-    };
-    for scale in 7..19 {
-        rt.touch(|s| {
-            s.editor
-                .apply_to(
-                    &doc,
-                    vec![json!({"cmd": "editor.material.value.set", "args": {"node": scale_node, "value": [scale as f64]}})],
-                    "Scale",
-                )
-                .unwrap();
-        });
-        let now = by_key(settle_previews(&mut rt));
-        let unchanged: Vec<_> = now
-            .iter()
-            .filter(|(key, _)| before.contains_key(*key))
-            .collect();
-        assert_eq!(
-            unchanged.len(),
-            4,
-            "scale {scale}: {now:?} before {before:?}"
-        );
-        for (key, shown) in unchanged {
-            assert_eq!(
-                before[key], *shown,
-                "scale {scale}: {key} keeps its own picture"
-            );
-        }
-        before = now;
-    }
 }
 
 #[test]
@@ -7707,3 +7599,6 @@ fn the_hierarchy_keeps_room_for_an_indented_name_in_a_small_window() {
         outline.width()
     );
 }
+
+/// A material with UV, noise, colour and world-space operations: the material page tests' showcase.
+const SHOWCASE: &str = "material Paint : surface budget 1 { param color : ColorLinear = linear(0.18, 0.42, 0.72); param roughness : float = 0.35; let tiling : vec2 = uv(); let scale : float = 6; let scaled : vec2 = mul(tiling, scale); let grain : float = noise(scaled); let dark : ColorLinear = linear(0.03, 0.05, 0.08); let tinted : ColorLinear = lerp(dark, color, grain); let n : vec3 = worldNormal(); let v : vec3 = viewDirection(); let power : float = 3; let rim : float = fresnel(n, v, power); output baseColor = tinted; output roughness = roughness; output clearCoat = rim; }";
