@@ -266,11 +266,21 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         }
         _ => {}
     }
+    // 2D mode: no turning; right and Alt drags pan.
+    let flat = s
+        .editor
+        .state
+        .settings
+        .get("viewport.mode2d")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
     let camera = &mut s.editor.state.camera;
     match (e.phase, e.button) {
+        (PointerPhase::Down, Button::Right) if flat => s.local.navigating = true,
         (PointerPhase::Down, Button::Right) => s.local.flying = true,
         (PointerPhase::Up, Button::Right) | (PointerPhase::Cancel, Button::Right) => {
             s.local.flying = false;
+            s.local.navigating = false;
             s.local.held.clear();
             let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
             if e.phase == PointerPhase::Up && still && e.size.0 > 0.0 {
@@ -282,8 +292,12 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
                 });
             }
         }
+        (PointerPhase::Move, Button::Right) if flat => camera.pan([e.delta.x, e.delta.y]),
         (PointerPhase::Move, Button::Right) => camera.look([e.delta.x * 0.006, e.delta.y * 0.006]),
         (PointerPhase::Move, Button::Middle) => camera.pan([e.delta.x, e.delta.y]),
+        (PointerPhase::Move, Button::Left) if e.mods.alt && flat => {
+            camera.pan([e.delta.x, e.delta.y])
+        }
         (PointerPhase::Move, Button::Left) if e.mods.alt => {
             camera.orbit([e.delta.x * 0.008, e.delta.y * 0.008])
         }

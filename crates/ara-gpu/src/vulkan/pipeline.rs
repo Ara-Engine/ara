@@ -7,6 +7,41 @@ use ash::vk::{self, TaggedStructure};
 use sha2::{Digest, Sha256};
 use std::{io::Cursor, path::Path};
 
+/// Optional device features a cooked pipeline's stages may need.
+#[derive(Clone, Copy)]
+pub(super) struct ShaderFeatures {
+    /// Mesh and task stages (`VK_EXT_mesh_shader`).
+    pub mesh_shading: bool,
+    /// `FragmentBarycentricKHR` in a fragment stage.
+    pub fragment_barycentrics: bool,
+}
+impl ShaderFeatures {
+    pub(super) fn of(info: &super::DeviceInfo) -> Self {
+        Self {
+            mesh_shading: info.mesh_shading,
+            fragment_barycentrics: info.fragment_barycentrics,
+        }
+    }
+}
+/// `OpCapability FragmentBarycentricKHR`.
+const FRAGMENT_BARYCENTRIC: u32 = 5284;
+/// Whether a SPIR-V module declares `capability`. Capabilities lead the module, right
+/// after its five-word header, so the scan stops at the first other instruction.
+fn declares_capability(words: &[u32], capability: u32) -> bool {
+    let mut at = 5;
+    while let Some(&word) = words.get(at) {
+        let (count, opcode) = ((word >> 16) as usize, word & 0xffff);
+        if opcode != 17 || count != 2 {
+            return false;
+        }
+        if words.get(at + 1) == Some(&capability) {
+            return true;
+        }
+        at += count;
+    }
+    false
+}
+
 pub(super) struct NativePipeline {
     pub handle: vk::Pipeline,
     pub compute: bool,
@@ -26,7 +61,7 @@ pub(super) fn create(
 ) -> Result<NativePipeline> {
     create_on_device(
         &gpu.device,
-        gpu.info.mesh_shading,
+        ShaderFeatures::of(&gpu.info),
         layout,
         cache,
         cooked,
@@ -37,13 +72,13 @@ pub(super) fn create(
 /// The caller retains device/layout ownership until compilation finishes; cache access is exclusive.
 pub(super) fn create_on_device(
     device: &ash::Device,
-    mesh_shading: bool,
+    features: ShaderFeatures,
     layout: vk::PipelineLayout,
     cache: vk::PipelineCache,
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
-    create_inner(device, mesh_shading, layout, cache, cooked, dir, None)
+    create_inner(device, features, layout, cache, cooked, dir, None)
 }
 
 #[derive(Default)]
@@ -54,27 +89,19 @@ pub(super) struct CreationTimes {
 
 pub(super) fn create_profiled(
     device: &ash::Device,
-    mesh_shading: bool,
+    features: ShaderFeatures,
     layout: vk::PipelineLayout,
     cache: vk::PipelineCache,
     cooked: &CookedPipeline,
     dir: &Path,
     times: &mut CreationTimes,
 ) -> Result<NativePipeline> {
-    create_inner(
-        device,
-        mesh_shading,
-        layout,
-        cache,
-        cooked,
-        dir,
-        Some(times),
-    )
+    create_inner(device, features, layout, cache, cooked, dir, Some(times))
 }
 
 pub(super) fn create_inner(
     device: &ash::Device,
-    mesh_shading: bool,
+    features: ShaderFeatures,
     layout: vk::PipelineLayout,
     cache: vk::PipelineCache,
     cooked: &CookedPipeline,
@@ -101,7 +128,7 @@ pub(super) fn create_inner(
     let mesh = cooked.stages.iter().any(|s| s.stage == Stage::Mesh);
     let task = cooked.stages.iter().any(|s| s.stage == Stage::Task);
     if (mesh || task)
-        && (!mesh_shading
+        && (!features.mesh_shading
             || !mesh
             || cooked
                 .stages
@@ -125,6 +152,13 @@ pub(super) fn create_inner(
             }
             let words =
                 ash::util::read_spv(&mut Cursor::new(bytes)).map_err(anyhow::Error::from)?;
+            if !features.fragment_barycentrics && declares_capability(&words, FRAGMENT_BARYCENTRIC)
+            {
+                return Err(GpuError::Contract(format!(
+                    "{} reads fragment barycentrics, which this device does not support",
+                    stage.spirv
+                )));
+            }
             // SAFETY: Offline SPIR-V has a checked content hash and correct word alignment.
             modules.push(
                 unsafe {
@@ -398,5 +432,28 @@ fn blend_op(o: crate::raster::BlendOp) -> vk::BlendOp {
         O::ReverseSubtract => vk::BlendOp::REVERSE_SUBTRACT,
         O::Min => vk::BlendOp::MIN,
         O::Max => vk::BlendOp::MAX,
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+    #[test]
+    fn capability_scan_reads_only_the_leading_capabilities() {
+        let header = [0x0723_0203, 0x0001_0600, 0, 8, 0];
+        let capability = |c| [(2 << 16) | 17, c];
+        // Shader, then FragmentBarycentricKHR, then OpExtension "x".
+        let mut module = header.to_vec();
+        module.extend(capability(1));
+        module.extend(capability(FRAGMENT_BARYCENTRIC));
+        module.extend([(2 << 16) | 10, u32::from(b'x')]);
+        assert!(declares_capability(&module, FRAGMENT_BARYCENTRIC));
+        assert!(!declares_capability(&module, 4472));
+        // The same number later in the module is an operand, not a capability.
+        let mut other = header.to_vec();
+        other.extend(capability(1));
+        other.extend([(2 << 16) | 10, FRAGMENT_BARYCENTRIC]);
+        assert!(!declares_capability(&other, FRAGMENT_BARYCENTRIC));
+        assert!(!declares_capability(&header, FRAGMENT_BARYCENTRIC));
     }
 }

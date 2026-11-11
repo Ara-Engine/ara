@@ -114,10 +114,10 @@ impl VulkanDevice {
                     .chain(depth.iter().map(|a| a.target))
                     .chain(resolves.iter().flatten().copied())
                 {
-                    if target.mip == 0 && target.layer == 0 {
+                    let raw = self.images.get(target.image)?.raw;
+                    if whole_view_is_the_slice(target, raw.shape) {
                         continue;
                     }
-                    let raw = self.images.get(target.image)?.raw;
                     let desc = attachment_desc(target);
                     if self
                         .views
@@ -170,7 +170,7 @@ impl VulkanDevice {
         target: crate::rendering::RenderTarget,
     ) -> Result<vk::ImageView> {
         let raw = self.images.get(target.image)?.raw;
-        if target.mip == 0 && target.layer == 0 {
+        if whole_view_is_the_slice(target, raw.shape) {
             return Ok(raw.attachment_view.unwrap_or(raw.view));
         }
         let desc = attachment_desc(target);
@@ -202,6 +202,15 @@ impl VulkanDevice {
     }
 }
 
+/// The image's own attachment view serves a selected target only when it is exactly
+/// that slice: mip 0 of an image with one layer. On an array it spans every layer, so
+/// attaching it for layer 0 would also require (and expose) the sibling layers.
+fn whole_view_is_the_slice(
+    target: crate::rendering::RenderTarget,
+    shape: crate::texture::ImageShape,
+) -> bool {
+    target.mip == 0 && target.layer == 0 && shape.layers == 1
+}
 fn attachment_desc(target: crate::rendering::RenderTarget) -> ImageViewDesc {
     ImageViewDesc {
         dimension: ViewDimension::D2,

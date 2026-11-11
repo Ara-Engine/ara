@@ -38,3 +38,13 @@ A 90-edit run (first versus last 30 edits per level) shows the delay knob matter
 boundary; L2: 90–120 ms of 145 is the full-module analyzer run (emit is 3 ms); L3: 150–290 ms is the full emit.
 The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on macOS delivers events 11 ms
 (median) after the write, a third of an L1 save→visible.
+
+## One-command timing (any OS)
+`dotnet run benchmarks/iteration/reload_timing.cs` builds `dotnet/Ara.slnx` (Release) and the `reload_bench`
+example, runs the bench in fresh processes and prints median / p95 of launch to first tick and of save → visible
+for L1 (body), L2 (new member) and L3 (signature change), with the phases behind them (emit, analyzers, generators,
+the Windows AMSI image scan, register). Needs only the .NET 10 SDK and Rust. Options after `--`: `--runs 10` (fresh
+processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-build`, `--output <dir>` (default
+`target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
+each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
+mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
