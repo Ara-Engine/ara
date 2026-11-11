@@ -277,6 +277,8 @@ impl Metering {
     }
 
     /// The pass `due` asked for was not queued: ask again next frame, not 16 frames on.
+    // On Apple, the Metal arm meters synchronously, so a pass is never refused.
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     pub fn retry(&mut self) {
         self.wait = 0;
     }
