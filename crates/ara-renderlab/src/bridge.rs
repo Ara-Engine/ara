@@ -9,6 +9,7 @@ use crate::{
     environment,
     gaps::Gaps,
     lighting::{self, Metering, SkySource},
+    meter::Readbacks,
     scene::{MAX_GROUPS, Scene},
     shared::SharedHandoff,
     terrain::Terrain,
@@ -64,6 +65,8 @@ pub(crate) struct Bridge {
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
+    /// The GPU histogram passes in flight for the meter.
+    readbacks: Readbacks,
     max_reflection_roughness: Option<f32>,
     /// A sky image lights the scene as a constant of its mean radiance (`Options`).
     constant_sky: bool,
@@ -156,6 +159,7 @@ impl Bridge {
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
+            readbacks: Readbacks::default(),
             max_reflection_roughness: options.max_reflection_roughness,
             constant_sky: options.constant_sky,
             cpu_copy: options.cpu_copy_handoff,
@@ -252,6 +256,8 @@ impl Bridge {
             self.engine.cut();
             // As Ara resets its exposure history: the meter snaps to its target.
             self.metering.snap();
+            // Readings in flight describe the old view.
+            self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
         let rendered = self.engine.render(&lighting::camera(frame)?)?.frame;
@@ -259,6 +265,23 @@ impl Bridge {
         // Shared: the copy into the shared slot queues behind the frame right away.
         if let Some(shared) = &mut target.shared {
             shared.publish(&self.engine)?;
+        }
+
+        // The meter: take the histograms of earlier frames that have finished, then queue
+        // this frame's when the meter asks (every frame while it snaps, then every 16th).
+        // Neither waits for the GPU.
+        if let Some(meter) = metered {
+            let device = self.engine.device();
+            for reading in self.readbacks.poll(device) {
+                self.metering
+                    .observe(view.look, reading.meter, reading.stops, &reading.histogram);
+            }
+            if self.metering.due()
+                && let Some(output) = self.engine.output()
+            {
+                self.readbacks
+                    .submit(device, self.engine.queue(), output, meter, stops);
+            }
         }
 
         // Wait for the frame on Renderlab's device first, so the handoff below times
@@ -297,24 +320,10 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture()?;
-            // Every frame is read back here, but metered only when the meter asks.
-            if let Some(meter) = metered
-                && self.metering.due()
-            {
-                self.metering.observe(view.look, meter, stops, &read.rgba8);
-            }
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
 
-        // The shared route reads a frame back only for the meter, when it asks: every
-        // frame while it snaps, then every 16th (`Metering::due`).
-        if let Some(meter) = metered.filter(|_| target.shared.is_some())
-            && self.metering.due()
-        {
-            let read = self.engine.capture()?;
-            self.metering.observe(view.look, meter, stops, &read.rgba8);
-        }
         Ok(ExternalFrame {
             image,
             gpu_ms: self.gpu_ms,
