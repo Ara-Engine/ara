@@ -408,3 +408,31 @@ depth array; it passes on Metal and has not run on Vulkan, where it is expected 
 fail validation without the fix. It detects the fault through validation only,
 which debug builds enable. A resolve target at layer 0 of an array takes the same
 view path and has no test.
+
+## Cube-array views (found by merging Renderlab main)
+
+Renderlab's P-SKY change samples its three environment maps as
+`texture_cube_array<f32>` with a filtering sampler, in the prelude every lit program
+includes. `ViewDimension` had 2D, 2D-array and volume views only, so those inputs
+could not be published on either backend.
+
+`ViewDimension::CubeArray` publishes whole cubes over six consecutive layers each
+(+X, -X, +Y, -Y, +Z, -Z) of a square two-dimensional image, sampled only. The faces
+are still written through `D2` or `D2Array` storage views of the same image. A
+storage cube view, a non-square image and a layer count that is not whole cubes are
+contract errors on both backends.
+
+- **Vulkan:** square layered single-sample images are created `CUBE_COMPATIBLE`; the
+  device enables `imageCubeArray` whenever the driver reports it and
+  `DeviceInfo::cube_arrays` says whether it did. Without it, a cube-array view and a
+  shader module that declares `SampledCubeArray` are both refused with a contract
+  error, as with barycentrics.
+- **Metal:** a `MTLTextureTypeCubeArray` texture view of the 2D-array texture;
+  `cube_arrays` is always true.
+
+Proof so far is Metal only: `cube_array_views_sample_faces_by_direction_and_cubes_by_index`
+fills twelve layers with their own index, samples each face of both cubes by
+direction and reads back all twelve, and checks the three refusals and that the view
+retires with its parent. Nothing in `ara-gpu`'s cooked cohort samples a cube array,
+so the Vulkan path (the creation flag, the feature, the view type) has not run; its
+first run is Renderlab's backend suite under validation once the backend uses it.

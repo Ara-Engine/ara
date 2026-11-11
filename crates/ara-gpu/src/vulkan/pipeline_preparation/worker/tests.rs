@@ -49,6 +49,7 @@ fn blocked_pipeline_compiler_does_not_wait_or_publish_and_cancellation_is_bounde
             let features = crate::vulkan::pipeline::ShaderFeatures {
                 mesh_shading: false,
                 fragment_barycentrics: false,
+                cube_arrays: false,
             };
             Compiler::new(device, features, layout, path, Vec::new())
         },
