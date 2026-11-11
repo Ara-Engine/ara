@@ -62,6 +62,34 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly List<FileSystemWatcher> _referenceWatchers = [];
     readonly List<Task> _watchStarts = [];
     readonly HashSet<string> _referenceWatched = new(ModuleState.Paths);
+    readonly HashSet<string> _referenceStarting = new(ModuleState.Paths);
+    readonly Dictionary<uint, WatchProgress> _watchProgress = [];
+
+    /// <summary>What a module's watcher start has already done, so a retry resumes from the failed step instead of repeating it.</summary>
+    sealed class WatchProgress
+    {
+        internal bool Module;
+        internal readonly HashSet<string> References = new(ModuleState.Paths);
+        internal bool Verified;
+    }
+
+    /// <summary>How the folder and reference watchers are created; tests replace these to make a start fail.</summary>
+    internal Func<string, string, FileSystemWatcher> ReferenceWatcherFactory = (directory, file) => new FileSystemWatcher(directory, file);
+    internal Action<ModuleWatcher, uint, string> ModuleWatchStart = (watcher, slot, directory) => watcher.Watch(slot, directory);
+
+    /// <summary>Blocks until every watcher start requested so far has finished (tests).</summary>
+    internal void WaitForWatchStarts()
+    {
+        Task[] starts;
+        lock (_watchStarts) starts = [.. _watchStarts];
+        Task.WaitAll(starts, TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>Folder watchers started so far (one per module); a retry must not add a second.</summary>
+    internal int ModuleWatcherCount => _watcher.Count;
+
+    /// <summary>Reference-assembly watchers started so far (one per distinct assembly).</summary>
+    internal int ReferenceWatcherCount { get { lock (_referenceWatchers) return _referenceWatchers.Count; } }
     readonly AutoResetEvent _wake = new(false);
     readonly CancellationTokenSource _stop = new();
     readonly Thread _worker;
@@ -150,6 +178,8 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal void StartWatching(uint slot, IReadOnlyList<string> assemblies, bool watch)
     {
         string? name = null;
+        WatchProgress progress;
+        lock (_watchProgress) progress = _watchProgress.TryGetValue(slot, out var known) ? known : _watchProgress[slot] = new();
         for (var attempt = 1; attempt <= 2 && !_stop.IsCancellationRequested; attempt++)
         {
             try
@@ -157,9 +187,24 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 ModuleSession m;
                 lock (_lock) m = _bySlot[slot];
                 name = m.Name;
-                if (watch && !m.ReadOnlyPublished) _watcher.Watch(slot, m.WatchDirectory);
-                foreach (var a in assemblies) WatchReference(a);
-                if (watch && !m.ReadOnlyPublished) Enqueue(new Work(WorkKind.Verify, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
+                var watched = watch && !m.ReadOnlyPublished;
+                // Each step is recorded once it has completed, so the retry resumes after the last good one.
+                if (watched && !progress.Module)
+                {
+                    ModuleWatchStart(_watcher, slot, m.WatchDirectory);
+                    progress.Module = true;
+                }
+                foreach (var a in assemblies)
+                {
+                    if (progress.References.Contains(a)) continue;
+                    WatchReference(a);
+                    progress.References.Add(a);
+                }
+                if (watched && !progress.Verified)
+                {
+                    Enqueue(new Work(WorkKind.Verify, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
+                    progress.Verified = true;
+                }
                 return;
             }
             catch (Exception error) when (!_stop.IsCancellationRequested)
@@ -824,17 +869,23 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         path = Path.GetFullPath(path);
         lock (_lock)
         {
-            if (!_references.ContainsKey(path) || !_referenceWatched.Add(path)) return;
+            // Another module's start may be creating (or have created) this watcher; and a path is only "watched"
+            // once its watcher is live, so a failed creation can be retried.
+            if (!_references.ContainsKey(path) || _referenceWatched.Contains(path) || !_referenceStarting.Add(path)) return;
         }
-        var w = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path))
+        try
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-        };
-        FileSystemEventHandler on = (_, _) => ThreadPool.QueueUserWorkItem(_ => CheckReference(path));
-        w.Changed += on;
-        w.Created += on;
-        w.EnableRaisingEvents = true;
-        lock (_referenceWatchers) _referenceWatchers.Add(w);
+            var w = ReferenceWatcherFactory(Path.GetDirectoryName(path)!, Path.GetFileName(path));
+            w.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
+            FileSystemEventHandler on = (_, _) => ThreadPool.QueueUserWorkItem(_ => CheckReference(path));
+            w.Changed += on;
+            w.Created += on;
+            try { w.EnableRaisingEvents = true; }
+            catch { w.Dispose(); throw; }
+            lock (_referenceWatchers) _referenceWatchers.Add(w);
+            lock (_lock) _referenceWatched.Add(path);
+        }
+        finally { lock (_lock) _referenceStarting.Remove(path); }
         // A rebuild between the baseline and the watcher going live raised no event.
         ThreadPool.QueueUserWorkItem(_ => CheckReference(path));
     }
