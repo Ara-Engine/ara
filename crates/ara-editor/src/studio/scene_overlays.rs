@@ -1062,30 +1062,38 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
                     .key(format!("scene/{id}"))
                     .on_press(move |s: &mut Studio| commands::run(s, id, &Target::None))
             };
+            // Select (Q) shows no gizmo: picking only, as Unity's first tool.
+            let gizmos = !st.hide_gizmos;
             line()
+                .child(tool(
+                    "view.tool.select",
+                    icons::MOUSE_POINTER_2,
+                    "Select (Q)",
+                    !gizmos,
+                ))
                 .child(tool(
                     "view.tool.move",
                     icons::MOVE_3D,
                     "Move (W)",
-                    st.tool == Tool::Translate,
+                    gizmos && st.tool == Tool::Translate,
                 ))
                 .child(tool(
                     "view.tool.rotate",
                     icons::ROTATE_3D,
                     "Rotate (E)",
-                    st.tool == Tool::Rotate,
+                    gizmos && st.tool == Tool::Rotate,
                 ))
                 .child(tool(
                     "view.tool.scale",
                     icons::SCALE_3D,
                     "Scale (R)",
-                    st.tool == Tool::Scale,
+                    gizmos && st.tool == Tool::Scale,
                 ))
                 .child(tool(
                     "view.tool.universal",
                     icons::MOVE,
                     "Universal (T)",
-                    st.tool == Tool::Universal,
+                    gizmos && st.tool == Tool::Universal,
                 ))
         }
         "transform" => line()
