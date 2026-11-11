@@ -550,7 +550,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     void Handle(Outcome o, uint origin, CancellationToken cancellation)
     {
         var m = o.Module;
-        StartupTrace.Outcome($"{o.Kind}/{(o.ReloadKind == AbiConst.ReloadL1 ? "L1" : o.ReloadKind == AbiConst.ReloadL2 ? "L2" : o.ReloadKind == AbiConst.ReloadL3 ? "L3" : o.ReloadKind == AbiConst.ReloadInitial ? "initial" : o.ReloadKind.ToString())}");
+        StartupTrace.Outcome($"{o.Kind}/{(o.ReloadKind == AbiConst.ReloadL1 ? "L1" : o.ReloadKind == AbiConst.ReloadL2 ? "L2" : o.ReloadKind == AbiConst.ReloadL3 ? "L3" : o.ReloadKind == AbiConst.ReloadInitial ? "initial" : o.ReloadKind.ToString())}", (Escalation)o.Escalation);
         switch (o.Kind)
         {
             case OutcomeKind.None:
