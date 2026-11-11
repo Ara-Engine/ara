@@ -740,7 +740,9 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
             "PostProcessVolume": {"overrides": [{"module": "exposure", "compensation": -0.5}, {"module": "bloom", "bloom": 0.05}]}
         }),
     );
-    let sun_toward = Vec3::new(-0.9302, 0.0698, 0.3601).normalize();
+    // 10 degrees up, 82 degrees from +Z toward -X (west). The terrain's shadow covers the whole
+    // compound at the earlier 4 degrees up and 69 degrees; this is a nearby direction that lights it.
+    let sun_toward = Vec3::new(-0.9752, 0.1736, 0.1371).normalize();
     s.commands.extend(light(
         "e_sun",
         "Setting sun",
