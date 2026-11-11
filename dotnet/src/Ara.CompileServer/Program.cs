@@ -84,11 +84,14 @@ if (args.Contains("--fix", StringComparer.Ordinal))
     }
     catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
 }
+StartupTrace.Describe();
+StartupTrace.Mark("main entered");
 var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
 var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 
 using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 pipe.Connect(TimeSpan.FromSeconds(30));
+StartupTrace.Mark("pipe connected");
 if (parent != 0) _ = Task.Run(() => WatchParent(parent));
 
 using var coordinator = new Coordinator(new PipeSink(pipe), new AnalyzerSet());
@@ -102,6 +105,7 @@ while (Protocol.Receive(pipe) is { } msg)
             if (version != Protocol.Version) throw new InvalidOperationException($"protocol {version}, server {Protocol.Version}");
             r.U32();
             var enc = r.Bool();
+            StartupTrace.Mark("hello");
             coordinator.Hello(enc, r.Str());
             break;
         case MessageKind.Watch:
@@ -109,7 +113,9 @@ while (Protocol.Receive(pipe) is { } msg)
             var initial = r.Remaining == 0 || r.Bool();
             var generation = r.Remaining == 0 ? 0 : r.U32();
             var published = r.Remaining > 0 && r.Bool() ? PublishedSnapshot.Read(r) : null;
+            StartupTrace.Mark("watch received");
             coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation, published);
+            StartupTrace.Mark("watch returned");
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());
