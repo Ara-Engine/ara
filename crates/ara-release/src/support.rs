@@ -18,13 +18,16 @@ pub fn run(command: &mut Command, log: &Path) -> Result<()> {
         .stderr(Stdio::from(output))
         .spawn()
         .with_context(|| format!("starting {command:?}"))?;
-    // Builds get two hours; an editor opening a sample imports all of its assets.
+    // Builds get two hours; an editor opening a sample imports all of its assets; the engine's
+    // setup program extracts and writes about 1.6 GB (866 MB packed), which took 100 s to 330 s
+    // on a quiet Windows machine with the antivirus scanning each new file.
     let seconds = match std::path::Path::new(command.get_program())
         .file_stem()
         .and_then(|name| name.to_str())
     {
         Some("cargo" | "dotnet") => 7200,
         Some("ara-editor" | "ara-samples") => 900,
+        Some(name) if name.ends_with("-setup") => 900,
         _ => 180,
     };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
