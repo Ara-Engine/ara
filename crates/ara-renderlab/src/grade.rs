@@ -37,6 +37,16 @@ pub(crate) fn authored<'a>(view: &ExternalView<'a>) -> Option<Authored<'a>> {
         .filter(|a| a.share > 0. && a.table.size >= 2)
 }
 
+impl Authored<'_> {
+    /// A hash of the table's size and texels (FNV over the words: a 32³ table is 128 KiB).
+    fn content_hash(&self) -> u64 {
+        self.table.texels.iter().fold(
+            0xcbf2_9ce4_8422_2325u64 ^ u64::from(self.table.size),
+            |h, w| (h ^ u64::from(*w)).wrapping_mul(0x0000_0100_0000_01b3),
+        )
+    }
+}
+
 /// Ara's sRGB encoding (`srgb`, shaders/look.slangh) and its inverse.
 fn srgb(x: f32) -> f32 {
     if x < 0.003_130_8 {
@@ -167,8 +177,9 @@ pub(crate) fn key(look: &FrameEnvironment, authored: Option<Authored<'_>>) -> u6
     let values = [&g.white_balance, &g.contrast, &g.saturation, &share]
         .into_iter()
         .chain(look.display.iter().flatten());
-    // The table's identity: the frame shares one allocation per authored table.
-    let table = authored.map_or(0, |a| a.table as *const _ as usize as u64);
+    // The table's contents, not its address: a reimported texture can reuse the address
+    // of the one it replaces.
+    let table = authored.map_or(0, |a| a.content_hash());
     let seed = 0xcbf2_9ce4_8422_2325u64 ^ look.tone_mapper as u64 ^ table.rotate_left(17);
     values.fold(seed, |h, v| {
         v.to_bits().to_le_bytes().iter().fold(h, |h, b| {
@@ -368,5 +379,25 @@ mod tests {
             );
             assert!(worst < bounds.1, "{mapper:?} worst {worst} at {worst_at:?}");
         }
+    }
+
+    /// The rebuild key follows the table's contents: an edited table with the same share
+    /// rebuilds (a reimport can reuse the old allocation's address), an identical copy
+    /// does not, and a changed share does.
+    #[test]
+    fn the_key_follows_the_authored_tables_contents() {
+        let look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
+        let table = |texel: u32| ara_components::post::ColorLut {
+            size: 2,
+            texels: vec![texel; 8],
+        };
+        let (a, copy, edited) = (table(0xff00_00ff), table(0xff00_00ff), table(0xff00_00fe));
+        let key_of = |table: &ara_components::post::ColorLut, share: f32| {
+            key(&look, Some(Authored { table, share }))
+        };
+        assert_eq!(key_of(&a, 1.), key_of(&copy, 1.));
+        assert_ne!(key_of(&a, 1.), key_of(&edited, 1.));
+        assert_ne!(key_of(&a, 1.), key_of(&a, 0.5));
+        assert_ne!(key_of(&a, 1.), key(&look, None));
     }
 }
