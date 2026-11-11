@@ -64,6 +64,8 @@ pub(crate) struct Bridge {
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
+    /// The simulation tick of the last frame the meter saw: its adaptation's clock.
+    meter_tick: Option<u64>,
     max_reflection_roughness: Option<f32>,
     /// A sky image lights the scene as a constant of its mean radiance (`Options`).
     constant_sky: bool,
@@ -158,6 +160,7 @@ impl Bridge {
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
+            meter_tick: None,
             max_reflection_roughness: options.max_reflection_roughness,
             constant_sky: options.constant_sky,
             cpu_copy: options.cpu_copy_handoff,
@@ -218,6 +221,13 @@ impl Bridge {
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &self.metering);
+        // Seconds of simulation since the meter last saw a frame (Ara's 60 Hz ticks).
+        let meter_seconds = |last: &mut Option<u64>| {
+            let tick = view.frame.tick;
+            let seconds = last.map_or(0., |l| tick.saturating_sub(l) as f32 / 60.);
+            *last = Some(tick);
+            seconds
+        };
         self.engine.set_settings(lighting::settings(
             view,
             stops,
@@ -253,6 +263,8 @@ impl Bridge {
         }
         if std::mem::take(&mut self.cut) {
             self.engine.cut();
+            // As Ara resets its exposure history: the meter snaps to its target.
+            self.metering.snap();
         }
         self.ensure_target(gpu, view.size)?;
         let rendered = self.engine.render(&lighting::camera(frame)?)?.frame;
@@ -298,8 +310,10 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture()?;
-            if metered {
-                self.metering.observe(view.look, stops, &read.rgba8);
+            if let Some(meter) = metered {
+                let seconds = meter_seconds(&mut self.meter_tick);
+                self.metering
+                    .observe(view.look, meter, stops, &read.rgba8, seconds);
             }
             upload(gpu, target, &read.rgba8)?
         };
@@ -307,10 +321,13 @@ impl Bridge {
 
         // The shared route reads a frame back only for the meter: every frame while
         // the meter is moving, then every 16th.
-        if metered && target.shared.is_some() {
+        if let Some(meter) = metered.filter(|_| target.shared.is_some()) {
             if self.meter_wait == 0 {
                 let read = self.engine.capture()?;
-                let moved = self.metering.observe(view.look, stops, &read.rgba8);
+                let seconds = meter_seconds(&mut self.meter_tick);
+                let moved = self
+                    .metering
+                    .observe(view.look, meter, stops, &read.rgba8, seconds);
                 self.meter_wait = if moved { 0 } else { 15 };
             } else {
                 self.meter_wait -= 1;
