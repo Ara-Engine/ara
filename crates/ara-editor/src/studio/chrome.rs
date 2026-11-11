@@ -1,5 +1,5 @@
 //! The studio window's frame: the title bar (menus from the command registry, Play
-//! controls, the scene path, the ⌘K launcher), the dock in between, the status bar, and the
+//! controls, the scene path, the command launcher), the dock in between, the status bar, and the
 //! overlays they open (menus, the command palette).
 use ara_kit::icons;
 use ara_kit::ui::*;
@@ -181,6 +181,23 @@ fn keys(s: &mut Studio, key: KeyCode, tx: &mut stillkit::el::Tx) -> Handled {
     }
 }
 
+/// The command launcher's chord as this platform writes it: ⌘K on macOS, Ctrl K elsewhere.
+pub(super) fn launcher_chord() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "⌘K"
+    } else {
+        "Ctrl K"
+    }
+}
+
+/// The status bar's keys worth knowing, with the launcher chord in the platform's own words.
+pub(super) fn idle_hint() -> String {
+    format!(
+        "W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · {} commands",
+        launcher_chord()
+    )
+}
+
 fn title_bar(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
@@ -241,14 +258,7 @@ fn title_bar(s: &Studio) -> El<Studio> {
         })
         .child(icon(icons::SEARCH).size(13.0))
         .child(text("Search or run…").text_size(12.0).grow(1.0))
-        .child(kbd(
-            l,
-            if cfg!(target_os = "macos") {
-                "⌘K"
-            } else {
-                "Ctrl K"
-            },
-        ));
+        .child(kbd(l, launcher_chord()));
     let crumb = row()
         .gap(6.0)
         .align(Align::Center)
@@ -1104,7 +1114,7 @@ fn status_bar(s: &Studio) -> El<Studio> {
                         .min_w(0.0),
                 )
         }
-        _ => text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
+        _ => text(idle_hint())
             .text_size(11.0)
             .color(c.muted_foreground.0.with_alpha(0.8)),
     };

@@ -16,6 +16,11 @@ const FRAME: Duration = Duration::from_millis(16);
 
 /// A studio over a project with one box at the origin, selected, with the move tool.
 fn open() -> Runtime<Studio> {
+    open_sized((1400, 900))
+}
+
+/// [`open`] in a window of `size` (logical px at scale 1).
+fn open_sized(size: (u32, u32)) -> Runtime<Studio> {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
@@ -57,9 +62,9 @@ fn open() -> Runtime<Studio> {
             json!({"tool": "translate", "snapping": false, "local": false}),
         )
         .unwrap();
-    let studio = Studio::new(editor, (1400.0, 900.0));
+    let studio = Studio::new(editor, (size.0 as f32, size.1 as f32));
     let theme = studio.look.theme.clone();
-    let mut rt = Runtime::new(studio, chrome::view, theme, (1400, 900), 1.0).unwrap();
+    let mut rt = Runtime::new(studio, chrome::view, theme, size, 1.0).unwrap();
     rt.frame(Duration::ZERO);
     rt
 }
@@ -6952,4 +6957,57 @@ fn a_failed_import_is_in_the_problems_panel_after_an_unattended_open() {
         texts.iter().any(|t| t.contains("import worker failed")),
         "the Problems panel lists the failed import: {texts:?}"
     );
+}
+
+/// The Assets toolbar at the width of a 960 px window: the breadcrumb keeps its label whole
+/// and the search box sits beside it, never over it.
+#[test]
+fn the_assets_breadcrumb_and_search_share_the_row_at_narrow_widths() {
+    for width in [960_u32, 720, 560, 480] {
+        let mut rt = open_sized((width, 600));
+        settle(&mut rt);
+        let nodes = rt.tree();
+        let search = nodes
+            .iter()
+            .find(|n| {
+                n.key
+                    .as_ref()
+                    .is_some_and(|k| k.to_string() == "assets/search")
+            })
+            .map(|n| n.rect)
+            .expect("the search box shows");
+        // The "Project" text on the search box's row (the tree's own folder row is elsewhere).
+        let label = nodes
+            .iter()
+            .filter(|n| n.text.as_deref() == Some("Project"))
+            .map(|n| n.rect)
+            .find(|r| (r.top - search.top).abs() < 12.0)
+            .expect("the breadcrumb label shows");
+        assert!(
+            label.right <= search.left + 0.5,
+            "{width}px: the label {label:?} runs under the search box {search:?}"
+        );
+        assert!(
+            width < 720 || search.width() >= 90.0,
+            "{width}px: the search box keeps a usable width, {search:?}"
+        );
+        assert!(
+            label.width() > 20.0,
+            "{width}px: the label survives, {label:?}; search {search:?}"
+        );
+    }
+}
+
+/// The status bar's hint names the launcher chord the title bar's box shows, never the other
+/// platform's (it read "⌘K" on Windows).
+#[test]
+fn the_status_hint_and_the_launcher_box_use_the_same_platform_chord() {
+    let hint = super::chrome::idle_hint();
+    let chord = super::chrome::launcher_chord();
+    assert!(hint.ends_with(&format!("{chord} commands")), "{hint}");
+    if cfg!(target_os = "macos") {
+        assert!(hint.contains('⌘') && !hint.contains("Ctrl"), "{hint}");
+    } else {
+        assert!(hint.contains("Ctrl K") && !hint.contains('⌘'), "{hint}");
+    }
 }
