@@ -15,7 +15,6 @@ mod tests;
 mod wire;
 
 use super::*;
-pub(crate) use billboard::install;
 use glam::Mat4;
 use parts::{Icon, Part};
 

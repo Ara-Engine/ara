@@ -235,14 +235,6 @@ impl Preset {
             Self::Blender => "blender",
         }
     }
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::Ara => "Ara",
-            Self::Unreal => "Unreal",
-            Self::Unity => "Unity",
-            Self::Blender => "Blender",
-        }
-    }
     pub fn parse(name: &str) -> Self {
         Self::ALL
             .into_iter()

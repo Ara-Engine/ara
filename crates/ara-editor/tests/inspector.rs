@@ -71,7 +71,6 @@ impl Project {
         Self(root)
     }
 
-
 }
 impl Drop for Project {
     fn drop(&mut self) {
@@ -82,67 +81,6 @@ impl Drop for Project {
 fn write(path: &Path, value: Value) {
     std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap();
 }
-#[derive(Default)]
-struct MemoryClipboard(String);
-impl ara_ui_text::Clipboard for MemoryClipboard {
-    fn read(&mut self) -> ara_ui_text::Result<String> {
-        Ok(self.0.clone())
-    }
-    fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
-        self.0 = text.into();
-        Ok(())
-    }
-}
-
-
-
-
-/// `Component.field` of `entity` as authored (Null when omitted).
-fn authored(editor: &Editor, entity: &str, component: &str, field: &str) -> Value {
-    let resolved = ara_editor::world::resolve(editor.host.store(), &editor.state.doc).unwrap();
-    resolved[entity].record[component]
-        .get(field)
-        .cloned()
-        .unwrap_or(Value::Null)
-}
-/// The crate's `MeshRenderer.model` reference.
-fn model(editor: &Editor) -> Value {
-    authored(editor, "e_crate001", "MeshRenderer", "model")
-}
-
-
-
-
-
-
-
-
-
-/// A stored colour's channels as numbers (documents may write `1` or `1.0`).
-fn channels(value: Value) -> Vec<f64> {
-    value
-        .as_array()
-        .unwrap_or_else(|| panic!("not a colour: {value}"))
-        .iter()
-        .map(|c| c.as_f64().unwrap())
-        .collect()
-}
-fn history(editor: &Editor) -> usize {
-    editor.host.store().history().len()
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /// Whether the Inspector edits `ty` with typed widgets all the way down: no element
 /// of any list, map or struct falls back to a JSON text box.
@@ -192,8 +130,4 @@ fn no_inspector_field_falls_back_to_raw_json() {
     // The fifteen list/map/struct fields this replaced, among them Material Overrides.
     assert!(compound >= 15, "{compound} compound fields");
 }
-
-
-
-
 

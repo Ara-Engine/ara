@@ -1,7 +1,8 @@
 use ara_diag::Diagnostic;
+#[cfg(test)]
+use serde_json::{Value, json};
 use ara_runtime_render::probes::{ProbeJob, ProbeJobStatus, ProbeSnapshot};
 use serde::Serialize;
-use serde_json::{Value, json};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
 
@@ -298,7 +299,8 @@ impl Bridge {
             .count()
     }
 
-    /// Resource proof reports retirement, separately from a cancelled Host receipt.
+    /// Resource proof reports retirement, separately from a cancelled Host receipt (tests).
+    #[cfg(test)]
     pub(crate) fn resource_report(&mut self) -> Value {
         self.collect();
         let pending_work = self.pending_work();

@@ -1,8 +1,6 @@
 //! Source authoring and folder UX through the production shell and protocol.
 #![allow(clippy::unwrap_used)]
 use ara_editor::Editor;
-use ara_ui::input::InputEvent;
-use ara_ui_text::EditEvent;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -69,17 +67,6 @@ fn completed(editor: &mut Editor, response: Value) -> Result<Value, Value> {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
 }
-fn wait_sources(editor: &mut Editor) {
-    let jobs = editor.action("jobs.list", json!({})).unwrap();
-    for job in jobs["jobs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|job| job["name"] == "Author C# source" && job["status"] == "running")
-    {
-        completed(editor, json!({"job":job["job"]})).unwrap();
-    }
-}
 
 #[test]
 fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites() {
@@ -141,9 +128,6 @@ fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites
     );
 }
 
-
-
-
 #[test]
 #[ignore = "requires the built editor executable and .NET host; offscreen native route"]
 fn native_create_rename_compile_and_attach() {
@@ -166,5 +150,4 @@ fn native_create_rename_compile_and_attach() {
     assert_eq!(report["attached"], true);
     assert_eq!(report["hotCompiled"], true);
 }
-
 

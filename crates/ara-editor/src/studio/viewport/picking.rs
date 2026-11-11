@@ -42,16 +42,6 @@ impl SceneView {
         }
     }
 
-    /// The precise native triangle, normal, vertex candidate and source primitive under a pointer.
-    pub(crate) fn surface_hit(
-        &self,
-        camera: &crate::state::Camera,
-        rect: Box2,
-        pointer: [f32; 2],
-    ) -> Option<SurfaceHit<'_>> {
-        self.surface_hit_excluding(camera, rect, pointer, &BTreeSet::new())
-    }
-
     /// Pick through selected geometry while retaining the presented target mesh.
     pub(crate) fn surface_hit_excluding(
         &self,

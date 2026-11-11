@@ -127,8 +127,6 @@ fn item_one_hundred_edits_matching_objects_and_undoes_as_one_transaction() {
     );
 }
 
-
-
 #[test]
 fn append_remove_rename_and_invalid_paths_remain_typed_and_atomic() {
     let project = Project::new();
@@ -194,19 +192,4 @@ fn append_remove_rename_and_invalid_paths_remain_typed_and_atomic() {
     );
     assert_eq!(record(&editor, "e_collect02"), before);
 }
-
-#[derive(Default)]
-struct Clip(String);
-impl ara_ui_text::Clipboard for Clip {
-    fn read(&mut self) -> ara_ui_text::Result<String> {
-        Ok(self.0.clone())
-    }
-    fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
-        self.0 = text.into();
-        Ok(())
-    }
-}
-
-
-
 

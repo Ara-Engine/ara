@@ -225,61 +225,6 @@ impl SceneView {
         })
     }
 
-    /// One explicit native-verification observation of the completed Scene image.
-    /// Request metadata does not establish the mode: inspect the retained raster
-    /// presentation and current source before reading its already completed output.
-    pub(crate) fn completed_debug_view_observation(
-        &self,
-        renderer: &mut ara_render::Renderer,
-        editor: &Editor,
-        requested: &str,
-        scene_ready: bool,
-    ) -> ara_ui::Result<Option<serde_json::Value>> {
-        use ara_render::capture::{CaptureRequest, ViewMode};
-        let expected = match requested {
-            "gi_diffuse" => ViewMode::GiDiffuse,
-            "overdraw" => ViewMode::Overdraw,
-            _ => return Err("Unknown native debug-view observation".into()),
-        };
-        if !scene_ready
-            || self.frame_pending
-            || renderer.scene_frame_pending()
-            || !renderer.presentation_ready()
-            || !renderer.is_native()
-            || self.raster_presentation.as_ref().map(|(mode, _)| *mode) != Some(expected)
-            || self
-                .validate_probe_frame(editor, &editor.state.doc, editor.host.store().revision())
-                .is_err()
-        {
-            return Ok(None);
-        }
-        let request = CaptureRequest {
-            camera: editor.state.camera.spec(),
-            size: renderer.size(),
-            mode: expected,
-            deterministic: true,
-            exposure: self
-                .raster_frame
-                .as_ref()
-                .map_or(1.0, |frame| frame.environment.exposure),
-            settle_frames: 1,
-            tick: 0,
-            seed: 7,
-            marks: None,
-        };
-        // The caller requests this only once per measured mode. This reads the
-        // completed live image; it never asks capture() to render another frame.
-        let captured = renderer.capture_completed(&request)?;
-        Ok(Some(serde_json::json!({
-            "mode":expected.name(), "completed":true, "current":true,
-            "completedModeSource":"SceneView.raster_presentation",
-            "doc":editor.state.doc, "sourceRevision":editor.host.store().revision(),
-            "sceneHash":captured.metadata.scene_hash,
-            "size":[captured.image.width(),captured.image.height()],
-            "overdraw":captured.metadata.overdraw,
-            "readbackScope":"one requested completed native image; no re-render"
-        })))
-    }
 }
 
 #[cfg(test)]

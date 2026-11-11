@@ -35,16 +35,6 @@ impl Plan {
         }
     }
 }
-pub(super) fn name(name: &str) -> ara_ui::Result<()> {
-    if name.is_empty()
-        || matches!(name, "." | "..")
-        || name.contains(['/', '\\', ':'])
-        || name.chars().any(char::is_control)
-    {
-        return Err("Enter one file or folder name without path separators".into());
-    }
-    Ok(())
-}
 pub(crate) fn source(asset: &assets::Asset) -> ara_ui::Result<&str> {
     let path = asset
         .authored_path
@@ -162,17 +152,6 @@ pub(crate) fn duplicate(
         changes,
         true,
     ))
-}
-pub(super) fn folder(parent: &str, leaf: &str) -> ara_ui::Result<Plan> {
-    name(leaf)?;
-    let path = join(parent, leaf);
-    Ok(Plan {
-        title: "Create authored folder".into(),
-        calls: vec![json!({"cmd":"folder.create","args":{"path":path}})],
-        labels: vec![format!("Create {path}")],
-        changes: Vec::new(),
-        created: vec![path],
-    })
 }
 #[cfg(test)]
 mod tests {

@@ -3,9 +3,6 @@
 use crate::Editor;
 use ara_host::project_policy::{PREFERENCES, PREFERENCES_ID};
 use ara_proto::Endpoint;
-use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
-use ara_ui::{input::InputEvent, source::stable_id, widgets::Widget};
-use ara_ui_text::{Clipboard, EditEvent};
 use serde_json::{Value, json};
 use std::{
     path::PathBuf,
@@ -69,17 +66,6 @@ impl Drop for Project {
     }
 }
 
-#[derive(Default)]
-struct Clip(String);
-impl Clipboard for Clip {
-    fn read(&mut self) -> ara_ui_text::Result<String> {
-        Ok(self.0.clone())
-    }
-    fn write(&mut self, value: &str) -> ara_ui_text::Result<()> {
-        self.0 = value.into();
-        Ok(())
-    }
-}
 pub(super) fn agent(editor: &mut Editor) -> String {
     Endpoint::call(
         &mut editor.host,
@@ -105,5 +91,4 @@ pub(super) fn ticks(editor: &mut Editor) {
         editor.tick();
     }
 }
-
 

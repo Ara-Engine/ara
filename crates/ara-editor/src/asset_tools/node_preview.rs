@@ -11,8 +11,9 @@ use std::collections::BTreeMap;
 /// thumbnail image pool with the Assets grid.
 pub(crate) const MAX: usize = 16;
 
-/// A material with UV, noise, colour and world-space operations: the capture route's
-/// in-node preview showcase.
+/// A material with UV, noise, colour and world-space operations: the in-node preview
+/// tests' showcase.
+#[cfg(test)]
 pub(crate) const SHOWCASE: &str = "material Paint : surface budget 1 { param color : ColorLinear = linear(0.18, 0.42, 0.72); param roughness : float = 0.35; let tiling : vec2 = uv(); let scale : float = 6; let scaled : vec2 = mul(tiling, scale); let grain : float = noise(scaled); let dark : ColorLinear = linear(0.03, 0.05, 0.08); let tinted : ColorLinear = lerp(dark, color, grain); let n : vec3 = worldNormal(); let v : vec3 = viewDirection(); let power : float = 3; let rim : float = fresnel(n, v, power); output baseColor = tinted; output roughness = roughness; output clearCoat = rim; }";
 
 /// In-node preview bookkeeping for the open material (one per shell).

@@ -111,41 +111,6 @@ impl Thumbnails {
         }
         self.enqueue(path, path.into(), Source::File, Shot::surface(false), TILE);
     }
-    /// A larger view of a project asset (import preview), `pixels` square; returns
-    /// its image key. Like live previews it survives browser refreshes as last good.
-    pub fn request_sized(&mut self, path: &str, pixels: u32) -> String {
-        let key = format!("live:{pixels}:{path}");
-        if is_prefab(path) {
-            self.want_prefab(path, key.clone(), pixels);
-            return key;
-        }
-        self.enqueue(
-            path,
-            key.clone(),
-            Source::File,
-            Shot::surface(false),
-            pixels,
-        );
-        key
-    }
-    /// A preview of unsaved source (the material editor's live render); returns its key.
-    pub fn request_live(
-        &mut self,
-        path: &str,
-        source: Vec<u8>,
-        plane: bool,
-        pixels: u32,
-    ) -> String {
-        let key = format!("live:{}:{plane}:{pixels}", ara_asset::Digest::of(&source));
-        self.enqueue(
-            path,
-            key.clone(),
-            Source::Bytes(source),
-            Shot::surface(plane),
-            pixels,
-        );
-        key
-    }
     /// The key of a derived material's preview (a graph node's value); identical
     /// previews share it.
     pub fn material_key(material: &ara_material::Material, shot: Shot, pixels: u32) -> String {
@@ -181,40 +146,6 @@ impl Thumbnails {
         if self.requested.insert(key.clone()) {
             self.prefabs.push((path.into(), key, pixels));
         }
-    }
-    /// Prefab requests to extract now: (path, key, pixels).
-    pub fn take_prefabs(&mut self) -> Vec<(String, String, u32)> {
-        std::mem::take(&mut self.prefabs)
-    }
-    /// Render an extracted prefab `scene` under `key`; `digest` names its content for
-    /// the disk cache. A full queue forgets the request so the tile asks again.
-    pub fn request_scene(
-        &mut self,
-        path: &str,
-        key: String,
-        scene: ara_render::scene::Scene,
-        digest: String,
-        pixels: u32,
-    ) {
-        let request = Request {
-            path: path.into(),
-            key: key.clone(),
-            source: Source::Scene(Box::new(scene), digest),
-            shot: Shot::surface(false),
-            pixels: pixels.clamp(16, MASTER),
-        };
-        if !self
-            .send
-            .as_ref()
-            .is_some_and(|queue| queue.try_send(request).is_ok())
-        {
-            self.requested.remove(&key);
-        }
-    }
-    /// Forget a prefab request without rendering (nothing to draw yet): asked again
-    /// after the next invalidation.
-    pub fn skip_prefab(&mut self, key: &str) {
-        self.prefab_digests.remove(key);
     }
     fn enqueue(&mut self, path: &str, key: String, source: Source, shot: Shot, pixels: u32) {
         if self.requested.contains(&key) {
@@ -633,16 +564,6 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
     }
 }
 
-/// Whether the thumbnailer can draw `path`: source images (not cooked KTX2), models,
-/// materials, graphs and prefabs.
-pub(crate) fn has_thumbnail(path: &str) -> bool {
-    let extension = path.rsplit('.').next().unwrap_or_default();
-    (crate::names::is_texture(extension) && extension != "ktx2")
-        || matches!(
-            extension,
-            "glb" | "gltf" | "fbx" | "material" | "graph" | "prefab"
-        )
-}
 /// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
 pub(crate) fn image_name(slot: usize) -> String {
     format!("asset-thumbnail-{slot}")
@@ -694,15 +615,6 @@ pub(crate) fn image_id(slot: usize) -> u32 {
     ara_ui::source::stable_id(&image_name(slot)) as u32 & 0x7fff_ffff
 }
 
-/// A prefab's studio shot on a fresh renderer (GPU tests).
-#[cfg(test)]
-pub(super) fn prefab_shot(
-    root: &Path,
-    scene: ara_render::scene::Scene,
-    digest: &str,
-) -> anyhow::Result<RgbaImage> {
-    prefab(root, scene, digest, &mut None)
-}
 #[cfg(test)]
 #[path = "thumbnails/shutdown_tests.rs"]
 mod shutdown_tests;

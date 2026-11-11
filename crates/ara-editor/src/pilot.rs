@@ -219,10 +219,6 @@ impl Pilot {
     pub(crate) fn active(&self) -> bool {
         self.session.is_some()
     }
-    /// The piloted Camera's entity.
-    pub(crate) fn target(&self) -> Option<&str> {
-        self.session.as_ref().map(|s| s.guard.entity.as_str())
-    }
     /// What the last step has to say in the status bar, once.
     pub(crate) fn take_note(&mut self) -> Option<String> {
         self.note.take()

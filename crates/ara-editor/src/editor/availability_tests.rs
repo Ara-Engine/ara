@@ -1,10 +1,6 @@
 //! Missing authoring sources are view states, not panel or application failures.
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::{
-    catalog::Target,
-    world::{EditWorldView, SceneResolver},
-};
 use std::{
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
@@ -51,9 +47,6 @@ impl Drop for Project {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
-
-
-
 
 fn snapshot(editor: &Editor) -> Vec<(String, String)> {
     editor
@@ -171,5 +164,4 @@ fn failed_resource_initialization_or_later_batch_command_leaves_no_empty_documen
     assert_eq!(editor.host.store().revision(), revision);
     assert_eq!(editor.host.store().history().len(), history);
 }
-
 

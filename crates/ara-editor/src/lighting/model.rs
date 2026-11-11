@@ -1,6 +1,5 @@
 //! Read only the resolved engine components; camera influence uses the renderer's own blend math.
 use super::*;
-use ara_components::render::SceneLook;
 use ara_doc::prefab::Resolved;
 
 pub(crate) fn component(name: &str) -> bool {
@@ -193,18 +192,3 @@ pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
     result
 }
 
-pub(crate) fn blended(
-    entities: &Resolved,
-    editor: &Editor,
-) -> Option<ara_components::post::PostValues> {
-    let volumes = entities
-        .keys()
-        .filter(|id| !editor.state.hidden.contains(*id))
-        .filter_map(|id| volume(entities, id))
-        .collect();
-    SceneLook {
-        volumes,
-        ..Default::default()
-    }
-    .post_at(editor.state.camera.position().to_array())
-}

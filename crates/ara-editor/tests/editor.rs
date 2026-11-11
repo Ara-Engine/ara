@@ -4,8 +4,6 @@ use ara_editor::{
     world::{EditWorldView, gesture::transform_value},
 };
 use ara_proto::Endpoint;
-use ara_ui::input::InputEvent;
-use ara_ui_text::{Clipboard, EditEvent};
 use glam::Vec3;
 use serde_json::{Value, json};
 use std::{
@@ -59,17 +57,6 @@ impl Drop for Project {
 }
 fn write(path: &Path, value: Value) {
     std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap();
-}
-#[derive(Default)]
-struct MemoryClipboard(String);
-impl Clipboard for MemoryClipboard {
-    fn read(&mut self) -> ara_ui_text::Result<String> {
-        Ok(self.0.clone())
-    }
-    fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
-        self.0 = text.into();
-        Ok(())
-    }
 }
 fn x(editor: &Editor) -> f32 {
     transform_value(
@@ -127,8 +114,6 @@ fn only_scene_prefab_and_import_edits_reach_the_scene_through_its_views() {
         &scene
     ));
 }
-
-
 
 #[test]
 fn agent_batches_apply_immediately_with_attribution_and_undo() {
@@ -332,7 +317,6 @@ fn universal_handles_pick_the_operation_and_keep_transform_commands_typed() {
     }
 }
 
-
 #[test]
 fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_turn_undo() {
     let project = Project::new();
@@ -434,8 +418,6 @@ fn duplicate_reparent_and_reset_are_one_command_each_with_undo() {
     assert_eq!(x(&editor), 3.);
 }
 
-
-
 #[test]
 fn import_settings_are_typed_attributed_and_undoable() {
     let project = Project::new();
@@ -505,8 +487,6 @@ fn import_settings_are_typed_attributed_and_undoable() {
             .is_err()
     );
 }
-
-
 
 /// Tests never touch the owner's profile (%APPDATA%\Ara, %LOCALAPPDATA%\Ara): cargo
 /// gives every test and the editors it starts isolated directories under target/
@@ -892,5 +872,4 @@ fn one_entity_world_transform_matches_the_whole_scene() {
     }
     assert_eq!(all.len(), 4);
 }
-
 
