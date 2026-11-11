@@ -33,7 +33,7 @@ pub(crate) fn buffer(gpu: &mut GpuDevice, bytes: &[u8]) -> Result<Buffer> {
 }
 pub(crate) fn texture(
     gpu: &mut GpuDevice,
-    texture: &ara_render::scene::Texture,
+    texture: &ara_frame::scene::Texture,
 ) -> Result<(Image, u32)> {
     let [w, h] = texture.size;
     ensure!(

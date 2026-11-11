@@ -1,6 +1,6 @@
 //! Offline OBJ material conversion and UV-derived tangent frames.
 use anyhow::Result;
-use ara_render::scene::{Mesh, Scene, Texture};
+use ara_frame::scene::{Mesh, Scene, Texture};
 use glam::{Vec2, Vec3};
 use std::path::Path;
 
@@ -116,7 +116,7 @@ mod tests {
                 ([1., 0., 0.], [1., 0.]),
                 ([0., 0., 1.], [0., 1.]),
             ]
-            .map(|(position, uv)| ara_render::scene::Vertex {
+            .map(|(position, uv)| ara_frame::scene::Vertex {
                 position,
                 uv,
                 normal: [0., -1., 0.],

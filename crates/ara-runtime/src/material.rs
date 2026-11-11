@@ -78,7 +78,7 @@ pub struct DecalSurface {
 #[derive(Debug, Clone)]
 pub struct PaintLayer {
     /// Per channel R, G, B, A: 0 unused, 1 weight times the channel, 2 times one
-    /// minus it (`ara_render::scene::PaintWeight`). The layers' weights sum to one.
+    /// minus it (`ara_frame::scene::PaintWeight`). The layers' weights sum to one.
     pub terms: [u8; 4],
     /// The layer's surface factors and texture slots into the asset's `textures`.
     pub material: ModelMaterial,

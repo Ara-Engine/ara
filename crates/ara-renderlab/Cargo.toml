@@ -20,7 +20,20 @@ ara-runtime-render = { path = "../ara-runtime-render" }
 ara-material = { path = "../ara-material" }
 ara-vfx = { path = "../ara-vfx" }
 
-# Renderlab is Vulkan-only today; Apple targets keep Ara's renderer (`ARA_RENDERLAB_UNAVAILABLE`).
+# Foliage instance transforms, in the glam the extracted frame uses, and the colour
+# grade's vectors (`ara_render_fidelity::colour::Grading`): both arms map the frame.
+glam34 = { workspace = true }
+glam30 = { workspace = true }
+
+# Apple: Renderlab's ara-gpu backend, which renders on the presenter's own device
+# (Metal), from Renderlab PR #3 until it merges. Its ara-gpu is this workspace's
+# (the root manifest's `[patch]`), so the device it renders on is the presenter's type.
+# Cargo allows one source per dependency name, so this revision has its own name;
+# `lib.rs` brings it in as `renderlab`.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+renderlab_metal = { package = "renderlab", git = "https://github.com/Ara-Engine/renderlab", rev = "3adc69a2045048f8fad037722562238a10b560b7", features = ["backend-ara"] }
+
+# Elsewhere Renderlab renders through wgpu on its own Vulkan device.
 # Pinned: the engine builds against a frozen renderer while it is improved
 # behind `renderlab::engine`. Nothing outside this crate names a Renderlab type.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
@@ -28,19 +41,16 @@ ara-vfx = { path = "../ara-vfx" }
 # names opt-in #12, the adapter's TLAS limit #13, P-PIPE, P-SKY's filtered sky lookups with
 # `Background::ScaledSky` #16/#17 and `Settings::sky_light` #21) with one open PR merged on
 # top on `t3/ara-pin-curl`: the emitter curl's origin, birth-time phase and stepped prewarm
-# (Ara-Engine/renderlab#25). Repin to main when it merges.
-renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "a0094f6a6e423cd8fb12aa133dcb0def94f2dd81" }
+# (Ara-Engine/renderlab#25), merged with Renderlab main (views). Repin to main when #25 merges.
+renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
 # the ash that wgpu-hal itself binds. Neither appears in this crate's public surface.
 wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
 ash038 = { package = "ash", version = "0.38", default-features = false, features = ["std"] }
-# Foliage instance transforms, in the glam the extracted frame uses.
-glam34 = { workspace = true }
-# Ara's colour grade (`ara_render_fidelity::colour::Grading`) takes this glam's vectors.
-glam30 = { workspace = true }
 
 [dev-dependencies]
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 image = { workspace = true, features = ["png"] }

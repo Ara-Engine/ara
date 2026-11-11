@@ -308,7 +308,7 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
 mod tests {
     use super::*;
     use ara_gpu::vulkan::QueueGate;
-    use ara_render::scene::{CameraSpec, Material, Scene, Texture};
+    use ara_frame::scene::{CameraSpec, Material, Scene, Texture};
     use glam::Vec3;
 
     #[test]
@@ -345,7 +345,7 @@ mod tests {
                 vertical_fov: 55f32.to_radians(),
             },
             1.,
-            ara_render::capture::ViewMode::Lit,
+            ara_frame::capture::ViewMode::Lit,
         )?;
         renderer.submit_scene_frame(|_| Ok(()))?;
         renderer.wait_scene_frame()?;

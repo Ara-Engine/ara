@@ -1,5 +1,5 @@
 use super::*;
-use ara_render::instanced::Textures;
+use ara_frame::instanced::Textures;
 
 #[test]
 fn replacement_reuses_images_across_reordered_ids_and_keeps_rejected_content_live() -> Result<()> {

@@ -6,12 +6,12 @@ use crate::{
     ActivePath, Options, PathChoice,
     decals::Decals,
     effects::Effects,
-    environment,
     gaps::Gaps,
-    lighting::{self, Metering, SkySource},
+    lighting::{self, Metering},
     meter::Readbacks,
     scene::{MAX_GROUPS, Scene},
     shared::SharedHandoff,
+    sky::Skies,
     terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
@@ -19,9 +19,12 @@ use ara_gpu::{
     Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
-use renderlab::engine::{
-    Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery, Light,
-    Limits, RenderPath, Sky, Sun, headless_adapter,
+use renderlab::{
+    ViewId,
+    engine::{
+        Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, Limits, RenderPath,
+        Sun, ViewDesc, ViewLook, headless_adapter,
+    },
 };
 use std::time::{Duration, Instant};
 
@@ -49,9 +52,6 @@ struct Target {
 struct Applied {
     sun: Option<Sun>,
     lights: Vec<Light>,
-    sky: Option<Sky>,
-    /// The prepared sky map in use and the content key it was prepared from.
-    sky_map: Option<(u64, EnvironmentId)>,
     /// The colour grade baked into Renderlab's lookup table (`grade::key`).
     grade: Option<u64>,
 }
@@ -69,11 +69,16 @@ pub(crate) struct Bridge {
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
+    /// The one view the bridge renders (the presenter's, view 0), created on the first frame.
+    view: Option<ViewId>,
+    /// What the view is set to: its size and look (its colour table is baked, `Applied::grade`).
+    desc: ViewDesc,
+    /// The look last applied to the view without its table, so unchanged frames set nothing.
+    last_look: Option<ViewLook>,
     /// The GPU histogram passes in flight for the meter.
     readbacks: Readbacks,
     max_reflection_roughness: Option<f32>,
-    /// A sky image lights the scene as a constant of its mean radiance (`Options`).
-    constant_sky: bool,
+    skies: Skies,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
     gpu_ms: Option<f64>,
@@ -82,17 +87,6 @@ pub(crate) struct Bridge {
     cut: bool,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
-    /// The sky being prepared off the frame loop, if any.
-    sky_job: Option<SkyJob>,
-    /// Replaced sky maps waiting for the next sky change to be removed.
-    stale_maps: Vec<EnvironmentId>,
-}
-
-/// One sky image being prepared for `Sky::Map` on a worker thread.
-struct SkyJob {
-    /// Content key of the image (`environment::key`).
-    key: u64,
-    worker: std::thread::JoinHandle<Result<renderlab::engine::PreparedEnvironment>>,
 }
 
 impl Bridge {
@@ -165,16 +159,17 @@ impl Bridge {
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
+            view: None,
+            desc: ViewDesc::new(1, 1),
+            last_look: None,
             readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
-            constant_sky: options.constant_sky,
+            skies: Skies::new(options.constant_sky),
             cpu_copy: options.cpu_copy_handoff,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
             last_view: None,
-            sky_job: None,
-            stale_maps: Vec::new(),
         })
     }
 
@@ -206,7 +201,6 @@ impl Bridge {
             }
         }
         self.report_unsupported(view);
-        self.engine.resize(view.size[0], view.size[1])?;
         // Terrain tiles take at most three quarters of the mesh-material groups
         // (`TERRAIN_GROUPS`); entity draws and foliage share the rest. On the non-RT path foliage is capped by the largest
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
@@ -238,20 +232,37 @@ impl Bridge {
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
-        self.engine.set_settings(lighting::settings(
-            view,
-            stops,
-            self.max_reflection_roughness,
-            &mut self.gaps,
-        ))?;
+        let (settings, look) =
+            lighting::settings(view, stops, self.max_reflection_roughness, &mut self.gaps);
+        self.engine.set_settings(settings)?;
         let authored = crate::grade::authored(view);
         let grade = crate::grade::key(view.look, authored);
-        if self.applied.grade != Some(grade) {
-            self.engine
-                .set_colour_lut(crate::grade::lut(view.look, authored))?;
+        let regrade = self.applied.grade != Some(grade);
+        if regrade {
+            self.desc.look.colour_lut = crate::grade::lut(view.look, authored);
             self.applied.grade = Some(grade);
         }
-        self.apply_sky(view)?;
+        // The view: created on the first frame; a new size or look sets it (a size restarts its
+        // histories, as a resize did before views).
+        if self.view.is_none()
+            || regrade
+            || self.last_look.as_ref() != Some(&look)
+            || (self.desc.width, self.desc.height) != (view.size[0], view.size[1])
+        {
+            self.desc.look = ViewLook {
+                colour_lut: self.desc.look.colour_lut.take(),
+                ..look.clone()
+            };
+            (self.desc.width, self.desc.height) = (view.size[0], view.size[1]);
+            match self.view {
+                Some(id) => self.engine.set_view(id, &self.desc)?,
+                None => self.view = Some(self.engine.create_view(&self.desc)?),
+            }
+            self.last_look = Some(look);
+        }
+        let view_id = self.view.context("the view was created above")?;
+        self.skies
+            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
@@ -274,18 +285,21 @@ impl Bridge {
             self.last_view = Some(view);
         }
         if std::mem::take(&mut self.cut) {
-            self.engine.cut();
+            self.engine.cut_view(view_id);
             // As Ara resets its exposure history: the meter snaps to its target.
             self.metering.snap();
             // Readings in flight describe the old view.
             self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
-        let rendered = self.engine.render(&lighting::camera(frame)?)?.frame;
+        let rendered = self
+            .engine
+            .render_view(view_id, &lighting::camera(frame)?)?
+            .frame;
         let target = self.target.as_mut().context("target ensured above")?;
         // Shared: the copy into the shared slot queues behind the frame right away.
         if let Some(shared) = &mut target.shared {
-            shared.publish(&self.engine)?;
+            shared.publish(&self.engine, view_id)?;
         }
 
         // The meter: queue this frame's histogram pass when the meter asks (every frame while
@@ -294,7 +308,7 @@ impl Bridge {
         if let Some(meter) = metered
             && self.metering.due()
         {
-            let queued = self.engine.output().is_some_and(|output| {
+            let queued = self.engine.view_output(view_id).is_some_and(|output| {
                 self.readbacks.submit(
                     self.engine.device(),
                     self.engine.queue(),
@@ -344,7 +358,7 @@ impl Bridge {
             shared.deliver(gpu, target.image)?;
             target.image
         } else {
-            let read = self.engine.capture()?;
+            let read = self.engine.capture_view(view_id)?;
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
@@ -426,83 +440,6 @@ impl Bridge {
                 "only the sun lights the sky",
             );
         }
-    }
-
-    /// Sets the frame's sky when it changed. An environment map or gradient sky is
-    /// prepared once per content (`environment`) on a worker thread, a few hundred
-    /// milliseconds of filtering: the frame loop keeps the sky it has (a constant of
-    /// the image's mean before the first one) until the new one is ready. A capture or
-    /// a cut waits for it, so stills never show a sky in transition.
-    fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
-        let mut replaced = None;
-        let sky = match lighting::sky(view, &mut self.gaps) {
-            SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
-            SkySource::Map { size, pixels } if self.constant_sky => {
-                Sky::Uniform(environment::mean_radiance(size, &pixels))
-            }
-            SkySource::Map { size, pixels } => {
-                let key = environment::key(size, &pixels);
-                loop {
-                    // Take over a finished preparation (any, when waiting).
-                    if let Some(job) = self
-                        .sky_job
-                        .take_if(|job| self.cut || job.worker.is_finished())
-                    {
-                        let prepared = job
-                            .worker
-                            .join()
-                            .map_err(|_| anyhow!("the sky preparation thread panicked"))??;
-                        let map = self.engine.create_environment(&prepared)?;
-                        let previous = self.applied.sky_map.replace((job.key, map));
-                        // Two maps can finish between sky changes: all but the last go.
-                        if let Some(stale) = replaced.replace(previous.map(|(_, map)| map)) {
-                            self.stale_maps.extend(stale);
-                        }
-                    }
-                    let current = self.applied.sky_map.map(|(applied, _)| applied);
-                    if current == Some(key) || self.sky_job.is_some() {
-                        break;
-                    }
-                    let (owned, wait) = (pixels.to_vec(), self.cut);
-                    let worker = std::thread::Builder::new()
-                        .name("renderlab-sky".into())
-                        .spawn(move || environment::prepare(size, &owned))
-                        .context("sky preparation thread")?;
-                    self.sky_job = Some(SkyJob { key, worker });
-                    if !wait {
-                        break;
-                    }
-                }
-                let light = lighting::sky_light(view);
-                match self.applied.sky_map {
-                    Some((_, map)) => Sky::Map {
-                        map,
-                        rotation_y: 0.,
-                        intensity: light,
-                        background: if light == 1. {
-                            Background::Sky
-                        } else {
-                            Background::ScaledSky(1.)
-                        },
-                    },
-                    None => Sky::Uniform(environment::mean_radiance(size, &pixels)),
-                }
-            }
-        };
-        if self.applied.sky != Some(sky) {
-            self.engine.set_sky(sky)?;
-            self.applied.sky = Some(sky);
-        }
-        // Renderlab keeps the selected map alive until the sky changes: old ones go
-        // only after the new sky is set.
-        for map in replaced
-            .flatten()
-            .into_iter()
-            .chain(self.stale_maps.drain(..))
-        {
-            self.engine.remove_environment(map)?;
-        }
-        Ok(())
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {

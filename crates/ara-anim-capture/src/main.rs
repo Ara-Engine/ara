@@ -12,11 +12,8 @@ use ara_physics::{
     BodyDesc, Collider, PhysicsBackend, PhysicsConfig, PhysicsPose, RigidBody, Shape, Velocity,
 };
 use ara_physics_jolt::JoltWorld;
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-    scene::*,
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::*};
+use ara_render::{Renderer};
 use std::path::PathBuf;
 
 fn bone(mesh: &mut Mesh, a: Vec3, b: Vec3, width: f32) {

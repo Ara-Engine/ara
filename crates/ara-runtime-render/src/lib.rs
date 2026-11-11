@@ -39,11 +39,8 @@ pub mod two_d;
 pub mod vfx;
 
 use anyhow::{Context, Result, ensure};
-use ara_render::{
-    Renderer,
-    capture::{Capture, CaptureRequest, ViewMode},
-    scene::{self, CameraSpec, Scene, Vertex},
-};
+use ara_frame::{capture::{Capture, CaptureRequest, ViewMode}, scene::{self, CameraSpec, Scene, Vertex}};
+use ara_render::{Renderer};
 use ara_runtime::{
     components::Environment,
     extract::{Draw, Geometry, RenderFrame},
@@ -996,7 +993,7 @@ pub fn environment_at(
     frame: &RenderFrame,
     eye: glam30::Vec3,
 ) -> ara_render_fidelity::environment::FrameEnvironment {
-    use ara_render::look::atmosphere::{AtmosphereLight, LightAtmosphere};
+    use ara_frame::look::atmosphere::{AtmosphereLight, LightAtmosphere};
     let settings = |a: ara_runtime::extract::AtmosphereLightView| LightAtmosphere {
         disc_scale: a.disc_scale,
         per_pixel_transmittance: a.per_pixel_transmittance,

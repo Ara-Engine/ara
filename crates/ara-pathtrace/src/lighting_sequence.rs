@@ -29,12 +29,12 @@ fn display_luminance(image: &image::RgbaImage) -> Vec<f64> {
 }
 pub(crate) fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     let mut scene = content::load(&root.join(".sn/assets/sponza"))?;
-    scene.lights.push(ara_render::scene::Light {
+    scene.lights.push(ara_frame::scene::Light {
         position_range: [-1., 2.4, 0., 20.],
         color_lumens: [1., 0.62, 0.3, 0.],
         direction_outer: [0., -1., 0., -1.],
         parameters: [0., 1., 0., 1.],
-        ..ara_render::scene::Light::ZERO
+        ..ara_frame::scene::Light::ZERO
     });
     let camera = content::camera();
     let mut s = settings([640, 360], [640, 360]);

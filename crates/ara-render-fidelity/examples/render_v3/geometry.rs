@@ -1,5 +1,5 @@
 //! Shared native geometry: 4,000 bodies retain one model-space allocation.
-use ara_render::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
+use ara_frame::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
 use glam::{Mat4, Vec3};
 
 pub fn cube(triangles: u32) -> Geometry {

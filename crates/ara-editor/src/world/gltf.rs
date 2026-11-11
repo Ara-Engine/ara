@@ -1,6 +1,6 @@
 //! Cooked model access; the viewport never discovers or imports source glTF files.
 use anyhow::Context;
-use ara_render::scene::{Mesh, Vertex};
+use ara_frame::scene::{Mesh, Vertex};
 use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::collections::BTreeMap;
@@ -70,32 +70,6 @@ impl ModelCache {
             material,
         )
     }
-}
-
-/// One-shot thumbnail worker entry: the published generation of a source model,
-/// with its materials and textures, or `None` while its import has not published (a
-/// pending import is not an error; the caller asks again when import progress moves).
-/// Scene extraction uses its persistent cache instead.
-pub(crate) fn published(
-    path: &Path,
-) -> anyhow::Result<Option<std::sync::Arc<ara_runtime::model::Model>>> {
-    let root = path
-        .ancestors()
-        .find(|root| root.join("ara.project.json").is_file())
-        .context("model has no project root")?;
-    let mut sidecar = path.as_os_str().to_os_string();
-    sidecar.push(".import.json");
-    let value = ara_json::parse(&std::fs::read_to_string(sidecar)?)?;
-    let asset = value["id"]
-        .as_str()
-        .context("model sidecar has no asset ID")?;
-    let mut cache = ModelCache::new(root)?;
-    cache.revision();
-    let source = cache
-        .snapshot
-        .as_deref()
-        .map(|snapshot| snapshot as &dyn AssetSource);
-    Ok(cache.decoded.get(source, asset)?.cloned())
 }
 
 #[derive(Default)]

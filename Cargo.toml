@@ -129,6 +129,12 @@ codegen-units = 256
 [profile.hotpatch.package."*"]
 opt-level = 1
 
+# Renderlab's ara-gpu backend (`ara-renderlab` on Apple) names ara-gpu from this
+# repository by git revision. The build keeps one ara-gpu, this workspace's, so the
+# device Renderlab renders on is the presenter's own type.
+[patch."https://github.com/Ara-Engine/ara"]
+ara-gpu = { path = "crates/ara-gpu" }
+
 # Deterministic transport clock patches: crates/ara-net/vendor/PATCHES.md.
 [patch.crates-io]
 # stillkit vendors its UI Automation adapter; Cargo applies only root patches.

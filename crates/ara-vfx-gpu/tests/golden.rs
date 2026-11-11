@@ -2,7 +2,7 @@
 #[path = "../examples/support/mod.rs"]
 mod support;
 use ara_gpu::GpuDevice;
-use ara_render::capture::{CaptureRequest, ViewMode, compare};
+use ara_frame::capture::{CaptureRequest, ViewMode, compare};
 use ara_vfx::{CpuSystem, Effect};
 use ara_vfx_gpu::{GpuSystem, View};
 use std::path::Path;

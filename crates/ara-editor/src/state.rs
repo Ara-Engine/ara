@@ -115,15 +115,15 @@ impl Camera {
             ) * self.distance
     }
     /// Renderer-neutral view request.
-    pub fn spec(&self) -> ara_render::scene::CameraSpec {
+    pub fn spec(&self) -> ara_frame::scene::CameraSpec {
         if self.projection == CameraProjection::Orthographic {
-            return ara_render::scene::CameraSpec::OrthographicLookAt {
+            return ara_frame::scene::CameraSpec::OrthographicLookAt {
                 position: self.position(),
                 target: self.target,
                 vertical_size: self.orthographic_height,
             };
         }
-        ara_render::scene::CameraSpec::LookAt {
+        ara_frame::scene::CameraSpec::LookAt {
             position: self.position(),
             target: self.target,
             vertical_fov: self.fov_y_degrees.to_radians(),
@@ -218,7 +218,7 @@ impl Camera {
                 + right
                     * (ndc[0] * self.orthographic_height * size[0] as f32 / size[1] as f32 * 0.5)
                 + up * (ndc[1] * self.orthographic_height * 0.5)
-                + camera.forward * ara_render::scene::CameraSpec::ORTHOGRAPHIC_NEAR;
+                + camera.forward * ara_frame::scene::CameraSpec::ORTHOGRAPHIC_NEAR;
             return origin.is_finite().then_some((origin, camera.forward));
         }
         let inverse = (camera.projection * camera.view).inverse();
@@ -868,11 +868,11 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
         // wide enough for labels (about 360 px of a 1400 px window), as in Unity.
         "default" => split(
             H,
-            0.16,
+            0.135,
             area("outline", &["hierarchy"]),
             split(
                 H,
-                0.69,
+                0.66,
                 split(
                     V,
                     0.72,

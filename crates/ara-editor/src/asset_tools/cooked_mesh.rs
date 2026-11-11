@@ -1,9 +1,7 @@
 //! FBX thumbnail geometry comes from the isolated importer's checked ARAF output.
-use ara_asset::{
-    CacheBackend, Cancellation, FileCache, JobEvent, ProcessWorker, SourceAsset, TargetPlatform,
-};
-use ara_render::scene::{Mesh, Vertex};
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use ara_asset::{CacheBackend, FileCache, SourceAsset};
+use ara_frame::scene::{Mesh, Vertex};
+use std::path::Path;
 
 /// Resolve storage input against the same authored boundary used by snapshots.
 /// Thumbnail/cache workers supply physical keys from validated current projects.
@@ -20,90 +18,6 @@ fn source_path(root: &Path, storage: &str) -> anyhow::Result<String> {
         .map_err(anyhow::Error::msg)
 }
 
-/// Read the import settings belonging to an authored-relative preview source.
-fn settings(root: &Path, path: &str) -> Option<ara_asset::ImportSettings> {
-    std::fs::read_to_string(
-        root.join(ara_doc::AUTHORING_ROOT)
-            .join(format!("{path}.import.json")),
-    )
-    .ok()
-    .and_then(|text| {
-        let mut db = ara_schema::SchemaDb::new();
-        ara_asset::register_schema(&mut db);
-        ara_doc::read(&text, "thumbnail.import.json", &db, None)
-            .doc
-            .and_then(|doc| doc.record("i_settings").cloned())
-            .and_then(|record| {
-                serde_json::from_value::<ara_asset::ImportSettings>(serde_json::Value::Object(
-                    record,
-                ))
-                .ok()
-            })
-    })
-}
-
-/// Load a thumbnail from a project-relative storage path. The worker snapshots
-/// its media with an authored-relative SourceAsset path; sidecar I/O stays physical.
-pub(super) fn load(root: &Path, path: &str) -> anyhow::Result<Vec<Mesh>> {
-    let logical = source_path(root, path)?;
-    let settings = settings(root, &logical);
-    let importer = ara_importers::FbxImporter;
-    let source = SourceAsset {
-        id: "as_preview0".into(),
-        path: logical,
-        importer: "ara.fbx".into(),
-        version: settings
-            .as_ref()
-            .map(|s| s.version.clone())
-            .unwrap_or_else(|| ara_asset::Importer::version(&importer).into()),
-        settings: settings
-            .as_ref()
-            .map(|s| s.settings.clone())
-            .unwrap_or_else(|| serde_json::json!({})),
-        preset: Some(
-            settings
-                .as_ref()
-                .and_then(|s| s.preset)
-                .unwrap_or(ara_asset::CookPreset::Fast),
-        ),
-        thread_budget: 2,
-        target: TargetPlatform::Windows,
-        asset_dependencies: BTreeMap::new(),
-    };
-    let worker = ProcessWorker::new(std::env::current_exe()?).with_arguments(["--import-worker"]);
-    let cancellation = Cancellation::default();
-    let input = ara_asset::snapshot(root, &source, &worker, &cancellation)?;
-    let key = input.key()?;
-    let cache = FileCache::new(root)?;
-    let output = if let Some(hit) = cache.load(key)? {
-        hit.output
-    } else {
-        let mut job = worker.start(input)?;
-        loop {
-            match job.poll()? {
-                Some(JobEvent::Complete(output)) => {
-                    cache.store(key, &output)?;
-                    break output;
-                }
-                _ => std::thread::sleep(Duration::from_millis(4)),
-            }
-        }
-    };
-    let mut meshes = Vec::new();
-    for artifact in output
-        .artifacts
-        .iter()
-        .filter(|a| a.kind == ara_asset::ArtifactKind::Mesh)
-    {
-        meshes.push(decode(
-            &artifact.bytes,
-            meshes.len() as u64 + 1,
-            artifact.name.clone(),
-        )?);
-    }
-    anyhow::ensure!(!meshes.is_empty(), "imported FBX contains no mesh geometry");
-    Ok(meshes)
-}
 fn decode(bytes: &[u8], entity: u64, name: String) -> anyhow::Result<Mesh> {
     let mesh = ara_asset_format::Mesh::read(bytes)?;
     let bounds = mesh
@@ -261,22 +175,6 @@ mod tests {
         }
         Ok(())
     }
-    #[test]
-    fn fbx_preview_reads_the_authored_sidecar_settings() {
-        let root = crate::test_target()
-            .join("ara-editor/fbx-preview-paths")
-            .join(std::process::id().to_string());
-        let sidecar = root
-            .join(ara_doc::AUTHORING_ROOT)
-            .join("models/part.fbx.import.json");
-        std::fs::create_dir_all(sidecar.parent().expect("model folder")).expect("scratch");
-        std::fs::write(sidecar, r#"{"$schema":"ara://schema/import/1","id":"as_part","records":{"i_settings":{"importer":"ara.fbx","version":"preview-version","settings":{"scale":2},"preset":"fast"}}}"#)
-            .expect("non-default authored settings");
-        let imported = settings(&root, "models/part.fbx").expect("sidecar found under content");
-        assert_eq!(imported.version, "preview-version");
-        assert_eq!(imported.settings["scale"], 2);
-    }
-
     #[test]
     fn decodes_the_importers_finest_lod() {
         let input = vec![

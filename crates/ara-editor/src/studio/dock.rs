@@ -529,6 +529,18 @@ fn area_of(n: &DockNode, panel: &str) -> Option<String> {
     }
 }
 
+/// The width an area keeps in a side-by-side split, design px: the Hierarchy fits about 14
+/// characters of an indented name (the narrow default times the small-window zoom otherwise
+/// leaves "Terrain…"); other areas shrink freely.
+const HIERARCHY_MIN: f32 = 136.0;
+
+fn min_width(n: &DockNode) -> f32 {
+    match n {
+        DockNode::Area { tabs, .. } if tabs.iter().any(|t| t == "hierarchy") => HIERARCHY_MIN,
+        _ => 0.0,
+    }
+}
+
 fn node(s: &Studio, n: &DockNode, path: &mut Vec<u8>) -> El<Studio> {
     match n {
         DockNode::Area { id, tabs, active } => area(s, id, tabs, *active),
@@ -547,8 +559,12 @@ fn node(s: &Studio, n: &DockNode, path: &mut Vec<u8>) -> El<Studio> {
             path.pop();
             let ratio = ratio.clamp(0.1, 0.9);
             // A zero base size and grow by ratio: the children share exactly the split's room.
+            // The Hierarchy keeps its minimum however far the window zooms in.
             let (a, b) = if horizontal {
-                (a.w(0.0), b.w(0.0))
+                (
+                    a.w(0.0).min_w(min_width(first)),
+                    b.w(0.0).min_w(min_width(second)),
+                )
             } else {
                 (a.h(0.0), b.h(0.0))
             };
@@ -693,8 +709,9 @@ pub(super) fn area_holding(s: &Studio, panel: &str) -> Option<String> {
     })
 }
 
-/// Panels with no × on their tab: the studio's core. Window › a panel hides and shows them.
-pub(super) const CORE_PANELS: [&str; 4] = ["hierarchy", "inspector", "scene", "game"];
+/// Panels with no × on their tab: the studio's core and its Assets. Window › a panel hides
+/// and shows them (a tab's right-click menu still closes any tab).
+pub(super) const CORE_PANELS: [&str; 5] = ["hierarchy", "inspector", "scene", "game", "assets"];
 
 /// A panel's title and icon.
 pub(super) fn panel_title(id: &str) -> (&'static str, stillkit::icons::Icon) {

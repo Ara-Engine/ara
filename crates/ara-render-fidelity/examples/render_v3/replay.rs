@@ -1,7 +1,7 @@
 //! A3 ARACHG01 events are generated once and consumed by both renderer runs.
 use super::{contract::Case, fixture, geometry};
 use anyhow::{Result, ensure};
-use ara_render::instanced::{Instance, Scene, transport::*};
+use ara_frame::instanced::{Instance, Scene, transport::*};
 use std::{
     collections::BTreeSet,
     io::{Read, Write},

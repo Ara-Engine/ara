@@ -1,6 +1,6 @@
 use super::*;
 use ara_gpu::vulkan::{BufferPreparation, InitialData, ResourcePreparation};
-use ara_render::instanced::Textures;
+use ara_frame::instanced::Textures;
 use std::{sync::mpsc, time::Duration};
 
 fn wait(gpu: &mut GpuDevice, next: &mut NativeResidency, old: Option<&dyn Textures>) -> Result<()> {

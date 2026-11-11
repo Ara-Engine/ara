@@ -47,9 +47,9 @@ pub(crate) struct GpuFrame {
     /// Private row 9: x the light tables (`FidelityView::set_light_tables`; storage,
     /// zero none).
     lights: [u32; 4],
-    /// Private rows 10..: the sky atmosphere record (`ara_render::look::atmosphere::record`,
+    /// Private rows 10..: the sky atmosphere record (`ara_frame::look::atmosphere::record`,
     /// `atmosphereModel` in atmosphere.slangh).
-    sky: ara_render::look::atmosphere::Record,
+    sky: ara_frame::look::atmosphere::Record,
 }
 impl FidelityView {
     pub(crate) fn frame(&self, input: &FrameInput<'_>) -> Result<(GpuFrame, Mat4, Vec3)> {
@@ -190,7 +190,7 @@ impl FidelityView {
                 p.focus_distance,
                 p.f_number.map_or(p.aperture, |aperture| {
                     let fov = 2. * (1. / camera.projection.y_axis.y).atan();
-                    ara_render::look::DepthOfField {
+                    ara_frame::look::DepthOfField {
                         focus_distance: p.focus_distance,
                         aperture,
                         near: 1.,
@@ -288,17 +288,17 @@ impl FidelityView {
             },
             lights: [self.light_tables.map_or(0, |(_, index, _)| index), 0, 0, 0],
             sky: self.atmosphere.map_or(
-                [[0.; 4]; ara_render::look::atmosphere::RECORD_ROWS],
+                [[0.; 4]; ara_frame::look::atmosphere::RECORD_ROWS],
                 |a| {
                     let sun = a
                         .sun
-                        .map(|settings| ara_render::look::atmosphere::AtmosphereLight {
+                        .map(|settings| ara_frame::look::atmosphere::AtmosphereLight {
                             direction: self.scene.sun_direction,
                             lux: self.scene.sun_lux,
                             radius: self.sun_radius,
                             settings,
                         });
-                    ara_render::look::atmosphere::record(
+                    ara_frame::look::atmosphere::record(
                         &a.model,
                         a.sea_level,
                         sun,

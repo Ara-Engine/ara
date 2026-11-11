@@ -1,5 +1,5 @@
 //! Resolved assets at the presentation upload boundary.
-use ara_render::scene::{Material, Texture};
+use ara_frame::scene::{Material, Texture};
 use ara_render_fidelity::material::MaterialDetail;
 use ara_runtime::model::Model;
 use std::{collections::BTreeMap, sync::Arc};

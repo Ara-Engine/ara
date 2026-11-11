@@ -4,7 +4,7 @@
 //! UVs are remapped into the cell. Tiling materials (kit pieces, terrain, chain-link)
 //! keep their own textures. The largest surfaces get 1024² cells, the rest 512².
 use anyhow::Result;
-use ara_render::scene::{Material, Texture, Vertex};
+use ara_frame::scene::{Material, Texture, Vertex};
 use image::{RgbaImage, imageops};
 use std::collections::BTreeMap;
 

@@ -682,7 +682,11 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 "gi_debug" => "gi_diffuse".to_owned(),
                 snake => camel(snake),
             };
-            view(e, json!({"viewMode": mode}))
+            if super::unavailable::view_mode_available(&mode) {
+                view(e, json!({"viewMode": mode}))
+            } else {
+                Err(format!("{mode}: {}", super::unavailable::SOON).into())
+            }
         }
         id if id.starts_with("view.debug.") => {
             type Flip = fn(&mut ara_render::RenderDebug);
@@ -717,6 +721,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 _ => None,
             };
             match flip {
+                Some(_) if !super::unavailable::effect_available(id) => {
+                    Err(format!("{id}: {}", super::unavailable::SOON).into())
+                }
                 Some(flip) => {
                     super::scene_overlays::flip_effect(s, flip);
                     Ok(())
@@ -1486,7 +1493,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             act(e, "editor.layout.close", json!({"panel": panel}))
         }
         "file.exit" => {
-            s.local.quit = true;
+            super::quit::request(s);
             Ok(())
         }
         "file.new_project" | "file.open_project" => {
@@ -1723,23 +1730,8 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             s.local.game_captured = id == "game.capture";
             Ok(())
         }
-        "vfx.restart" => {
-            s.vfx.restart();
-            Ok(())
-        }
-        "vfx.step" => {
-            e.state.preview_playing = false;
-            s.vfx.step();
-            Ok(())
-        }
-        "vfx.rate" => match target {
-            Target::Text(rate) => rate
-                .trim_end_matches('%')
-                .parse()
-                .map_err(|_| "Rates are percentages".into())
-                .map(|rate| s.vfx.set_rate(rate)),
-            _ => Err("Choose a rate".into()),
-        },
+        // The effect preview has no renderer to run on yet.
+        "vfx.restart" | "vfx.step" | "vfx.rate" => Err(super::unavailable::SOON.into()),
         "vfx.emitter.collapse" | "vfx.emitter.hide" | "vfx.emitter.isolate" => match target {
             Target::Text(name) => {
                 use super::vfx::Emitter;

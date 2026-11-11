@@ -8,10 +8,11 @@
 //! reduced to at most `MAX_TEXTURE` texels a side. The table is rebuilt only when
 //! the decals or their materials change.
 use crate::gaps::Gaps;
+use crate::rl::Engine;
 use anyhow::Result;
 use ara_runtime::{decal::DecalView, extract::RenderFrame, model::TextureTransform};
 use renderlab::engine::{
-    Decal, DecalBlend, DecalTexture, DecalTextureKind, DecalTextures, Engine, Mat4, Vec3,
+    Decal, DecalBlend, DecalTexture, DecalTextureKind, DecalTextures, Mat4, Vec3,
 };
 use std::collections::HashMap;
 

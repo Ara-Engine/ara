@@ -1,6 +1,6 @@
 //! Read-only picking over the same retained native geometry the viewport presents.
 use super::SceneView;
-use ara_render::instanced::Scene;
+use ara_frame::instanced::Scene;
 use ara_ui::paint::Box2;
 use glam::Vec3;
 use std::collections::BTreeSet;
@@ -214,7 +214,7 @@ fn triangle_hit(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Opt
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use ara_render::instanced::{Geometry, Instance, Lod, Vertex};
+    use ara_frame::instanced::{Geometry, Instance, Lod, Vertex};
     use glam::Mat4;
     pub(super) fn scene(worlds: &[Mat4]) -> Scene {
         Scene {

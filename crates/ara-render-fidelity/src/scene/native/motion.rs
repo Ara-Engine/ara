@@ -1,6 +1,6 @@
 //! Dynamic snapshots retain immutable source pools and only publish after success.
 use super::*;
-use ara_render::instanced::Material as NativeMaterial;
+use ara_frame::instanced::Material as NativeMaterial;
 
 /// Changes published by a native frame update.
 #[derive(Debug, Default, Clone, Copy)]
@@ -31,7 +31,7 @@ pub(super) struct Motion {
     pub(super) current: Vec<glam::Mat4>,
     pub(super) presented: Vec<glam::Mat4>,
     materials: Vec<NativeMaterial>,
-    lights: Vec<ara_render::scene::Light>,
+    lights: Vec<ara_frame::scene::Light>,
     base: [u8; 32],
 }
 

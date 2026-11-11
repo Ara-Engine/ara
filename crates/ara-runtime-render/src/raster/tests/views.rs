@@ -4,7 +4,7 @@ const CAMERA: [f32; 3] = [0., 2., 5.];
 const FOV_DEGREES: f32 = 55.;
 
 /// A deterministic capture of `mode` at 96x64 from the scene's fixed camera.
-fn capture(renderer: &mut Renderer, mode: ViewMode) -> Result<ara_render::capture::Capture> {
+fn capture(renderer: &mut Renderer, mode: ViewMode) -> Result<ara_frame::capture::Capture> {
     let request = CaptureRequest {
         camera: CameraSpec::LookAt {
             position: glam30::Vec3::from_array(CAMERA),
@@ -152,7 +152,7 @@ fn overdraw_view_counts_every_fragment_before_depth_rejection() -> Result<()> {
     std::fs::create_dir_all(&root)?;
     capture.image.save(root.join("overdraw.png"))?;
     let stats = capture.metadata.overdraw.expect("overdraw statistics");
-    let expected = ara_render::capture::OverdrawStats::of(
+    let expected = ara_frame::capture::OverdrawStats::of(
         (0..64)
             .flat_map(|y| (0..96).map(move |x| [x, y]))
             .map(|p| ray_fragments(&boxes, p)),

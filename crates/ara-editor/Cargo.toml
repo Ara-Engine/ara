@@ -32,8 +32,6 @@ ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
 ara-material = { path = "../ara-material" }
 ara-vfx = { path = "../ara-vfx" }
-ara-vfx-gpu = { path = "../ara-vfx-gpu" }
-ara-shader-cook = { path = "../ara-shader-cook" }
 ara-anim = { path = "../ara-anim" }
 ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-ai = { path = "../ara-ai" }
@@ -57,6 +55,7 @@ ara-physics = { path = "../ara-physics" }
 ara-platform = { path = "../ara-platform" }
 ara-play-host = { path = "../ara-play-host" }
 ara-proto = { path = "../ara-proto" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-rpc = { path = "../ara-rpc" }
