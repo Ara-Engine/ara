@@ -9,7 +9,7 @@ use std::path::Path;
 
 impl SceneView {
     /// Only evaluated while a probe owner exists, before a path switch can drop it.
-    pub(in crate::app) fn probe_replacement_required(
+    pub(crate) fn probe_replacement_required(
         &self,
         renderer: &ara_render::Renderer,
         editor: &Editor,
@@ -90,11 +90,7 @@ impl SceneView {
     }
 
     /// Cheap provenance check used only while captures are active or a read is due.
-    pub(in crate::app) fn probe_source_matches(
-        &self,
-        editor: &Editor,
-        binding: &SceneBinding,
-    ) -> bool {
+    pub(crate) fn probe_source_matches(&self, editor: &Editor, binding: &SceneBinding) -> bool {
         self.validate_probe_frame(editor, &binding.doc, binding.source_revision)
             .is_ok()
             && self.raster.as_ref().is_some_and(|raster| {
@@ -106,14 +102,14 @@ impl SceneView {
             })
     }
 
-    pub(in crate::app) fn probe_has_binding(&self, cache_root: &Path) -> bool {
+    pub(crate) fn probe_has_binding(&self, cache_root: &Path) -> bool {
         self.raster
             .as_ref()
             .is_some_and(|raster| raster.probes().cache_root() == cache_root)
     }
 
     /// Call only after the owner has retired jobs for the previous document.
-    pub(in crate::app) fn bind_probe_scene(
+    pub(crate) fn bind_probe_scene(
         &mut self,
         editor: &Editor,
         cache_root: &Path,
@@ -129,7 +125,7 @@ impl SceneView {
         Ok(())
     }
 
-    pub(in crate::app) fn recapture_probes(
+    pub(crate) fn recapture_probes(
         &mut self,
         editor: &Editor,
         doc: &str,
@@ -175,7 +171,7 @@ impl SceneView {
     }
 
     /// Full listing; the Host cache applies caller filters and since locally.
-    pub(in crate::app) fn probe_snapshot(
+    pub(crate) fn probe_snapshot(
         &self,
         editor: &Editor,
     ) -> Result<(SceneBinding, ProbeSnapshot), Vec<Diagnostic>> {
@@ -198,20 +194,20 @@ impl SceneView {
     }
 
     /// These intentionally remain usable for the old Scene while it is retiring.
-    pub(in crate::app) fn probe_job(&self, job: ProbeJob) -> Option<ProbeJobStatus> {
+    pub(crate) fn probe_job(&self, job: ProbeJob) -> Option<ProbeJobStatus> {
         self.raster.as_ref()?.probes().job(job)
     }
-    pub(in crate::app) fn cancel_probe_job(&mut self, job: ProbeJob) -> Option<CancelOutcome> {
+    pub(crate) fn cancel_probe_job(&mut self, job: ProbeJob) -> Option<CancelOutcome> {
         self.raster.as_mut()?.probes_mut().cancel(job)
     }
-    pub(in crate::app) fn wake_probe_work(&mut self) {
+    pub(crate) fn wake_probe_work(&mut self) {
         self.remaining = self.remaining.max(2);
         self.convergence.reset();
     }
 
     /// Retain this exact raster owner until its bake/hash/cache work has retired.
     /// No submission, fence wait or filesystem work runs on this owner tick.
-    pub(in crate::app) fn probe_retirement_pending(
+    pub(crate) fn probe_retirement_pending(
         &mut self,
         renderer: &mut ara_render::Renderer,
     ) -> Result<bool, Diagnostic> {
@@ -232,7 +228,7 @@ impl SceneView {
     /// One explicit native-verification observation of the completed Scene image.
     /// Request metadata does not establish the mode: inspect the retained raster
     /// presentation and current source before reading its already completed output.
-    pub(in crate::app) fn completed_debug_view_observation(
+    pub(crate) fn completed_debug_view_observation(
         &self,
         renderer: &mut ara_render::Renderer,
         editor: &Editor,
