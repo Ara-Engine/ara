@@ -9,8 +9,8 @@ use glam::Vec3;
 use serde_json::{Value, json};
 
 use crate::Editor;
-use crate::studio::viewport;
 use crate::paint::{self as mesh_paint, Layer, PaintTool};
+use crate::studio::viewport;
 use crate::world::EditWorldView as _;
 
 /// A stroke in progress: the painted layers (with their entity) and the last dab.

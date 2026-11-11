@@ -3,7 +3,7 @@
 //! probes), as Unreal's Lighting views gather them. A row selects its entity (the Inspector
 //! edits it); Add creates a volume, fog or probe at the camera's pivot; Presets append
 //! override groups to the selected volumes. The rows and commands are `crate::lighting`'s
-//! (`model`, `authoring`), shared with the legacy window until it goes.
+//! (`model`, `authoring`).
 use ara_kit::icons;
 use ara_kit::ui::*;
 use stillkit::el::{Align, Axis, El, Justify, Side, col, el, icon, menu, row, text};

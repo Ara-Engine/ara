@@ -12,11 +12,11 @@ use ara_ui::paint::{Box2, DisplayList, Draw};
 use ara_ui::style::Color;
 
 use crate::Editor;
-use crate::studio::player::{PlayerView, player_texture};
-use crate::studio::game_preview::{self, GameHost, Preview};
-use crate::studio::viewport::SceneView;
 use crate::gpu::ui_device;
 use crate::state::Camera;
+use crate::studio::game_preview::{self, GameHost, Preview};
+use crate::studio::player::{PlayerView, player_texture};
+use crate::studio::viewport::SceneView;
 use crate::world::DocumentView;
 
 /// The Game view's native layer.

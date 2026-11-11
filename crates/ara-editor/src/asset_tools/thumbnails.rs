@@ -37,8 +37,8 @@ pub(crate) enum Done {
     /// The source's import has not published: show its pending state; it is asked
     /// again by [`Thumbnails::retry_pending`].
     Pending(String),
-    /// It cannot render: key, project path and a project-relative error.
-    Failed(String, String, String),
+    /// It cannot render: key and a project-relative error.
+    Failed(String, String),
 }
 struct Request {
     path: String,
@@ -47,13 +47,10 @@ struct Request {
     shot: Shot,
     pixels: u32,
 }
-/// What a request renders: the project file, unsaved bytes of it, a derived material,
-/// or a prefab's extracted scene with its content digest.
+/// What a request renders: the project file, or a derived material.
 enum Source {
     File,
-    Bytes(Vec<u8>),
     Material(Box<ara_material::Material>),
-    Scene(Box<ara_render::scene::Scene>, String),
 }
 pub(crate) struct Thumbnails {
     send: Option<SyncSender<Request>>,
@@ -158,7 +155,7 @@ impl Thumbnails {
             shot,
             pixels: pixels.clamp(16, MASTER),
         };
-        let queue = if matches!(request.source, Source::Material(_) | Source::Bytes(_)) {
+        let queue = if matches!(request.source, Source::Material(_)) {
             self.previews.as_ref()
         } else {
             self.send.as_ref()
@@ -295,18 +292,7 @@ fn cook_all(root: &Path, requests: &[Request]) {
 /// Renders one request into its result.
 fn finish(root: &Path, mut request: Request, renderer: &mut Option<Renderer>) -> Done {
     let image = match &mut request.source {
-        Source::Scene(scene, digest) => {
-            let scene = std::mem::replace(scene, Box::new(empty_scene()));
-            prefab(root, *scene, digest, renderer).map(Some)
-        }
         Source::Material(material) => derived(root, material, request.shot).map(Some),
-        Source::Bytes(bytes) => master(
-            root,
-            &request.path,
-            Some(bytes.as_slice()),
-            request.shot,
-            renderer,
-        ),
         Source::File => master(root, &request.path, None, request.shot, renderer),
     };
     match image {
@@ -315,11 +301,7 @@ fn finish(root: &Path, mut request: Request, renderer: &mut Option<Renderer>) ->
             image: present(&image, request.pixels),
         }),
         Ok(None) => Done::Pending(request.key.clone()),
-        Err(error) => Done::Failed(
-            request.key.clone(),
-            request.path.clone(),
-            relative(&error.to_string(), root),
-        ),
+        Err(error) => Done::Failed(request.key.clone(), relative(&error.to_string(), root)),
     }
 }
 
@@ -572,42 +554,6 @@ pub(crate) fn image_name(slot: usize) -> String {
 /// Prefabs render from their extracted scene ([`Thumbnails::request_scene`]).
 fn is_prefab(path: &str) -> bool {
     path.rsplit('.').next() == Some("prefab")
-}
-/// A prefab's studio shot, cached by its content digest like file masters.
-fn prefab(
-    root: &Path,
-    scene: ara_render::scene::Scene,
-    digest: &str,
-    renderer: &mut Option<Renderer>,
-) -> anyhow::Result<RgbaImage> {
-    let cache = root.join(".ara/cache/thumbnails");
-    std::fs::create_dir_all(&cache)?;
-    let key = ara_asset::Digest::of(format!("ara-prefab-v1-{MASTER}-{digest}").as_bytes());
-    let target = cache.join(format!("{key}.png"));
-    if target.exists() {
-        return Ok(image::open(target)?.to_rgba8());
-    }
-    anyhow::ensure!(!scene.meshes.is_empty(), "the prefab has no meshes to show");
-    let image = studio::shoot(
-        studio::Subject::scene(scene),
-        renderer,
-        &root.join(".ara/cache/thumbnail-gpu"),
-    )?;
-    image.save(&target)?;
-    Ok(image)
-}
-/// A placeholder left behind once a request's scene moves into its shot.
-fn empty_scene() -> ara_render::scene::Scene {
-    ara_render::scene::Scene {
-        meshes: Vec::new(),
-        materials: Vec::new(),
-        textures: Vec::new(),
-        lights: Vec::new(),
-        sun_direction: glam::Vec3::Y,
-        sun_lux: glam::Vec3::ZERO,
-        environment: Vec::new(),
-        environment_size: [0, 0],
-    }
 }
 
 /// The UI image handle of a slot (what `<image src>` resolves `image_name` to).

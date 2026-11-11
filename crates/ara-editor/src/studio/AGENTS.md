@@ -4,7 +4,7 @@ The editor window: one stillkit `Runtime<Studio>` drawn on the CPU and redrawn o
 something changed, with the Scene view as a native GPU layer under a hole. It is a client
 of `Editor` like any agent: navigation goes through `editor.*` actions and content through
 `cmd.apply` (`Studio::act`, `Studio::apply`), so every person's action has an agent
-equivalent. `--legacy-ui` opens the old `shell` window.
+equivalent.
 
 ## Files
 

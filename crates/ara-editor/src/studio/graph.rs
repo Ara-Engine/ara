@@ -1,5 +1,5 @@
 //! The Material and Animation tools: a material graph, or an animation controller's state
-//! machine, on the shared node canvas (`crate::graph::Canvas`, the legacy window's), drawn
+//! machine, on the shared node canvas (`crate::graph::Canvas`), drawn
 //! into the page's own native layer ([`PAGES`]) like the Scene. Drag nodes, drag from a port
 //! to connect, drag empty space to box-select, middle or right drag to pan, the wheel to
 //! zoom; F frames the graph; Space, Add Node, a right-click or a wire dropped on nothing
@@ -399,7 +399,7 @@ pub(super) fn previews(s: &mut Studio) -> bool {
                     ));
                     changed = true;
                 }
-                thumbnails::Done::Failed(key, _, error) => {
+                thumbnails::Done::Failed(key, error) => {
                     // Said once per cause (a missing toolchain fails them all alike).
                     if p.reported.as_deref() != Some(error.as_str()) {
                         failures.push(format!("In-node previews can't render: {error}"));

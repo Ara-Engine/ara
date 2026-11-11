@@ -1,8 +1,8 @@
 use crate::gpu::UiDevice as Gpu;
 use ara_editor_gpu::{NativeUi, PlaySurface};
-use std::time::{Duration, Instant};
 use ara_play_host::embed::Surfaces;
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 /// Quiet time after a change of the wanted size before the next resize goes out (the
 /// first change after a quiet spell goes at once, a lone dock change waits for nothing):

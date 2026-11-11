@@ -81,6 +81,7 @@ fn row(value: &PlayProfileTargetRow) -> Row {
     }
 }
 
+#[cfg(test)]
 fn scope(value: PlayProfileTarget) -> Scope {
     Scope {
         world: value.world,
@@ -103,7 +104,6 @@ fn request_to_play(value: Request) -> PlayProfileRequest {
             Action::Start => PlayProfileAction::Start,
             Action::Stop => PlayProfileAction::Stop,
             Action::Snapshot => PlayProfileAction::Snapshot,
-            Action::Freeze => PlayProfileAction::Freeze,
         },
         why: value.why,
     }
@@ -111,8 +111,6 @@ fn request_to_play(value: Request) -> PlayProfileRequest {
 
 fn status(value: PlayProfileStatus) -> Status {
     Status {
-        ticket: Ticket(value.ticket.0),
-        target: scope(value.target),
         finished: value.finished,
         outcome: value.outcome.map(|value| match value {
             PlayProfileOutcome::Completed => Outcome::Completed,

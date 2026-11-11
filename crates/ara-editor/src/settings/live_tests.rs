@@ -91,4 +91,3 @@ pub(super) fn ticks(editor: &mut Editor) {
         editor.tick();
     }
 }
-

@@ -70,7 +70,6 @@ impl Project {
         .unwrap();
         Self(root)
     }
-
 }
 impl Drop for Project {
     fn drop(&mut self) {
@@ -130,4 +129,3 @@ fn no_inspector_field_falls_back_to_raw_json() {
     // The fifteen list/map/struct fields this replaced, among them Material Overrides.
     assert!(compound >= 15, "{compound} compound fields");
 }
-

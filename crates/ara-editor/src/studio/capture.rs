@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 use stillkit::el::Runtime;
 
 use super::Studio;
-use crate::studio::viewport::SceneView;
 use crate::capture::{CaptureTask, Work, output_path};
+use crate::studio::viewport::SceneView;
 use crate::world::EditWorldView as _;
 
 /// Serves the next queued capture job, if there is one. `scene` is the renderer and the

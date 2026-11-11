@@ -1,5 +1,7 @@
 //! Same-device Scene quality seam. The raster view retains IDs and capture metadata.
-use crate::{Editor, gpu::NativeUi, overlay, world::EditWorldView};
+#[cfg(test)]
+use crate::world::EditWorldView;
+use crate::{Editor, gpu::NativeUi, overlay};
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, ViewMode},

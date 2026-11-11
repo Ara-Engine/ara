@@ -1,8 +1,8 @@
 use ara_diag::Diagnostic;
-#[cfg(test)]
-use serde_json::{Value, json};
 use ara_runtime_render::probes::{ProbeJob, ProbeJobStatus, ProbeSnapshot};
 use serde::Serialize;
+#[cfg(test)]
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
 

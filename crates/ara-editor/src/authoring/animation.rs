@@ -288,5 +288,4 @@ mod tests {
         assert_eq!(ticks(&json!("")), Ok(None));
         assert!(ticks(&json!(-1)).is_err());
     }
-
 }

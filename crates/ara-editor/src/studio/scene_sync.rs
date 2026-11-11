@@ -8,14 +8,13 @@
 use super::viewport::SceneView;
 use crate::Editor;
 use crate::world::EditWorldView as _;
-use ara_render::Renderer;
-use std::time::{Duration, Instant};
 use crate::world::{DocumentView, Patch};
+use ara_render::Renderer;
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 
 /// What a window previews in the Scene without committing: its Inspector drafts (compared
-/// to skip unchanged frames) and the records they make. The legacy shell and the studio
-/// each keep their own.
+/// to skip unchanged frames) and the records they make.
 pub(crate) trait Drafts {
     /// The drafts, keyed by what they edit; equal maps preview the same records.
     fn drafts(&self) -> &BTreeMap<String, String>;
@@ -89,8 +88,6 @@ pub(crate) struct SceneSync {
 /// How long a Scene update took, by stage (the responsiveness probe reports them).
 #[derive(Default)]
 pub(crate) struct Stages {
-    /// Whole-scene extraction, in milliseconds.
-    pub extract_ms: f64,
     /// The whole scene's upload, or a patch: extracting and uploading what moved.
     pub upload_ms: f64,
     /// Whether the change patched the renderer instead of replacing its geometry.
@@ -234,7 +231,6 @@ impl SceneSync {
                         upload_ms: at.elapsed().as_secs_f64() * 1000.,
                         patched: true,
                         native: true,
-                        ..Default::default()
                     };
                 }
                 Ok(false) => {}
@@ -285,14 +281,12 @@ impl SceneSync {
         // Read first: a publication adopted during extraction triggers another.
         self.models = editor.models.revision();
         self.publication = None;
-        let at = Instant::now();
         let scene = view.scene(
             editor.host.root(),
             &editor.state,
             editor.gesture.as_ref(),
             &mut editor.models,
         )?;
-        let extract_ms = at.elapsed().as_secs_f64() * 1000.;
         let at = Instant::now();
         renderer.update_geometry(scene)?;
         self.stale = None;
@@ -302,7 +296,6 @@ impl SceneSync {
             self.pose = Some(gesture.current.clone());
         }
         Ok(Stages {
-            extract_ms,
             upload_ms: at.elapsed().as_secs_f64() * 1000.,
             ..Default::default()
         })

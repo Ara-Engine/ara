@@ -164,4 +164,3 @@ fn failed_resource_initialization_or_later_batch_command_leaves_no_empty_documen
     assert_eq!(editor.host.store().revision(), revision);
     assert_eq!(editor.host.store().history().len(), history);
 }
-

@@ -43,7 +43,6 @@ pub(crate) enum Action {
     Start,
     Stop,
     Snapshot,
-    Freeze,
 }
 pub(crate) struct Request {
     pub session: String,
@@ -61,8 +60,6 @@ pub(crate) enum Outcome {
     Refused,
 }
 pub(crate) struct Status {
-    pub ticket: Ticket,
-    pub target: Scope,
     pub finished: bool,
     pub outcome: Option<Outcome>,
     pub recording: bool,

@@ -7,22 +7,17 @@ use std::collections::BTreeSet;
 mod snap;
 
 /// A native geometry hit and its source draw, borrowed from the presented scene snapshot.
-pub(crate) struct SurfaceHit<'a> {
+pub(crate) struct SurfaceHit {
     /// Presented instance identity, including primitives without an ordinary draw.
     pub entity: u64,
     /// Position on the nearest triangle, in world metres.
     pub position: [f32; 3],
     /// World-space geometric triangle normal.
     pub normal: [f32; 3],
-    /// Nearest triangle vertex, for vertex-snap gestures.
-    pub vertex: [f32; 3],
-    /// Exact primitive draw; terrain or foliage may have no ordinary entity draw.
-    pub draw: Option<&'a ara_runtime::extract::Draw>,
 }
 struct Pick {
     position: Vec3,
     normal: Vec3,
-    vertex: Vec3,
     entity: u64,
 }
 
@@ -49,7 +44,7 @@ impl SceneView {
         rect: Box2,
         pointer: [f32; 2],
         excluded: &BTreeSet<u64>,
-    ) -> Option<SurfaceHit<'_>> {
+    ) -> Option<SurfaceHit> {
         if ![rect.x, rect.y, rect.w, rect.h]
             .into_iter()
             .chain(pointer)
@@ -76,20 +71,14 @@ impl SceneView {
         origin: Vec3,
         direction: Vec3,
         excluded: &BTreeSet<u64>,
-    ) -> Option<SurfaceHit<'_>> {
+    ) -> Option<SurfaceHit> {
         let hit = pick_where(self.presented_scene()?, origin, direction, |id| {
             !excluded.contains(&id)
         })?;
-        let draw = self
-            .raster_frame
-            .as_ref()
-            .and_then(|frame| frame.draws.iter().find(|draw| draw.entity == hit.entity));
         Some(SurfaceHit {
             entity: hit.entity,
             position: hit.position.to_array(),
             normal: hit.normal.to_array(),
-            vertex: hit.vertex.to_array(),
-            draw,
         })
     }
 
@@ -160,17 +149,12 @@ fn pick_where(
                 let b = instance.world.transform_point3(Vec3::from(b.position));
                 let c = instance.world.transform_point3(Vec3::from(c.position));
                 let point = origin + direction * distance;
-                let vertex = [a, b, c].into_iter().min_by(|a, b| {
-                    a.distance_squared(point)
-                        .total_cmp(&b.distance_squared(point))
-                })?;
                 let normal = (b - a).cross(c - a).normalize_or_zero();
-                if point.is_finite() && normal.is_finite() && vertex.is_finite() {
+                if point.is_finite() && normal.is_finite() {
                     nearest = distance;
                     hit = Some(Pick {
                         position: point,
                         normal,
-                        vertex,
                         entity: instance.entity,
                     });
                 }
@@ -294,7 +278,7 @@ mod tests {
         let hit = pick(&scene, Vec3::ZERO, -Vec3::Z).unwrap();
         assert!((hit.position - Vec3::new(0., 0., -2.)).length() < 0.0001);
         assert_eq!(hit.entity, 1);
-        assert!(hit.normal.is_finite() && hit.vertex.is_finite());
+        assert!(hit.normal.is_finite());
         assert!(pick(&scene, Vec3::new(10., 0., 0.), -Vec3::Z).is_none());
     }
     #[test]

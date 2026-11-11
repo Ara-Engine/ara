@@ -2,11 +2,7 @@ use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope, authored_file
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-        mpsc::{self, Receiver},
-    },
+    sync::mpsc::{self, Receiver},
 };
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Asset {
@@ -126,7 +122,6 @@ pub(crate) struct Browser {
     pub error: Option<String>,
     pub(super) diagnostic: Option<ara_diag::Diagnostic>,
     pending: Receiver<(u64, Result<Snapshot, ara_diag::Diagnostic>)>,
-    scan_started: Arc<AtomicU64>,
     scan_completed: u64,
     refresh: mpsc::SyncSender<()>,
     optimistic: std::collections::BTreeMap<String, Option<Asset>>,
@@ -171,14 +166,11 @@ impl Browser {
         let schema = schema.clone();
         let (tx, pending) = mpsc::sync_channel(1);
         let (refresh, wake) = mpsc::sync_channel(1);
-        let scan_started = Arc::new(AtomicU64::new(0));
-        let worker_started = Arc::clone(&scan_started);
         std::thread::spawn(move || {
             let mut cache = std::collections::HashMap::new();
             let mut generation = 0_u64;
             loop {
                 generation = generation.saturating_add(1);
-                worker_started.store(generation, Ordering::Release);
                 let snapshot = scan(&root, &schema, &mut cache);
                 if tx.send((generation, snapshot)).is_err() {
                     break;
@@ -197,7 +189,6 @@ impl Browser {
             error: None,
             diagnostic: None,
             pending,
-            scan_started,
             scan_completed: 0,
             refresh,
             optimistic: Default::default(),

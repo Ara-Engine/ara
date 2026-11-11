@@ -950,9 +950,9 @@ Debug Hub and editor builds watch their CSS and the two theme files
 (`assets/themes/ara-{dark,light}.json`) in the checkout they were built from. A save
 is validated off the UI thread, then restyles the running window within about
 250 ms; an invalid save keeps the last good styles and prints why. The editor watches
-every `.css` under `crates/ara-editor/src/shell` (file names must stay unique) plus
-ara-ui's dialog and Select CSS. The Hub watches `hub.css` and the Select CSS. The
-editor's open-project and loading screens, and inline CSS constants, are not live.
+ara-ui's dialog and Select CSS (its studio window has no CSS). The Hub watches `hub.css`
+and the Select CSS. The editor's open-project screen and inline CSS constants are not
+live.
 
 `live` covers everything else. It rebuilds after Rust, manifest or embedded-resource
 saves (not the app's live CSS). When the executables changed, it stages a copy under

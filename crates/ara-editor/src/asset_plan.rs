@@ -3,35 +3,30 @@
 use serde_json::{Value, json};
 
 use crate::assets;
+/// One gesture's typed calls and its undo title.
 pub(crate) struct Plan {
+    /// The undo step's title.
     pub title: String,
+    /// The commands, applied as one transaction.
     pub calls: Vec<Value>,
-    pub labels: Vec<String>,
+    /// Each asset and where it goes (`None`: deleted), for tests.
+    #[cfg(test)]
     pub changes: Vec<(assets::Asset, Option<String>)>,
-    pub created: Vec<String>,
 }
 impl Plan {
+    /// A plan titled `title` of `calls`, moving or removing `changes`.
     pub fn new(
         title: &str,
         calls: Vec<Value>,
-        labels: Vec<String>,
         changes: Vec<(assets::Asset, Option<String>)>,
-        select_created: bool,
     ) -> Self {
-        let created = if select_created {
-            changes
-                .iter()
-                .filter_map(|(_, destination)| destination.clone())
-                .collect()
-        } else {
-            Vec::new()
-        };
+        #[cfg(not(test))]
+        let _ = changes;
         Self {
             title: title.into(),
             calls,
-            labels,
+            #[cfg(test)]
             changes,
-            created,
         }
     }
 }
@@ -57,24 +52,15 @@ pub(super) fn join(parent: &str, name: &str) -> String {
 }
 pub(crate) fn delete(sources: Vec<assets::Asset>) -> ara_ui::Result<Plan> {
     let mut calls = Vec::new();
-    let mut labels = Vec::new();
     let mut changes = Vec::new();
     for asset in sources {
         calls.push(json!({"cmd":"asset.delete","args":{"source":source(&asset)?}}));
-        labels.push(format!("Delete {}", asset.path));
         changes.push((asset, None));
     }
-    Ok(Plan::new(
-        "Delete selected assets",
-        calls,
-        labels,
-        changes,
-        false,
-    ))
+    Ok(Plan::new("Delete selected assets", calls, changes))
 }
 pub(crate) fn move_to(sources: Vec<assets::Asset>, folder: &str) -> ara_ui::Result<Plan> {
     let mut calls = Vec::new();
-    let mut labels = Vec::new();
     let mut changes = Vec::new();
     for asset in sources {
         let source = source(&asset)?;
@@ -91,16 +77,9 @@ pub(crate) fn move_to(sources: Vec<assets::Asset>, folder: &str) -> ara_ui::Resu
             return Err("The selected asset is already in this folder".into());
         }
         calls.push(json!({"cmd":"asset.move","args":{"source":source,"destination":destination}}));
-        labels.push(format!("Move {} to {destination}", asset.path));
         changes.push((asset, Some(destination)));
     }
-    Ok(Plan::new(
-        "Move selected assets",
-        calls,
-        labels,
-        changes,
-        false,
-    ))
+    Ok(Plan::new("Move selected assets", calls, changes))
 }
 pub(crate) fn duplicate(
     sources: Vec<assets::Asset>,
@@ -111,7 +90,6 @@ pub(crate) fn duplicate(
         .filter_map(|asset| asset.authored_path.clone())
         .collect();
     let mut calls = Vec::new();
-    let mut labels = Vec::new();
     let mut changes = Vec::new();
     for asset in sources {
         let source = source(&asset)?;
@@ -142,16 +120,9 @@ pub(crate) fn duplicate(
         calls.push(
             json!({"cmd":"asset.duplicate","args":{"source":source,"destination":destination}}),
         );
-        labels.push(format!("Duplicate {} as {destination}", asset.path));
         changes.push((asset, Some(destination)));
     }
-    Ok(Plan::new(
-        "Duplicate selected assets",
-        calls,
-        labels,
-        changes,
-        true,
-    ))
+    Ok(Plan::new("Duplicate selected assets", calls, changes))
 }
 #[cfg(test)]
 mod tests {

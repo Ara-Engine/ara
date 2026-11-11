@@ -23,8 +23,6 @@ pub(crate) struct NodePreviews {
     pub revision: Option<(String, u64)>,
     /// Node ID to its preview's cache key, derived material and shot.
     pub requests: BTreeMap<String, (String, Material, Shot)>,
-    /// Hidden by the toolbar toggle (`material.node_previews`).
-    pub hidden: bool,
     /// Preview keys that failed to render; their nodes keep a compact body.
     pub failed: std::collections::BTreeSet<String>,
 }

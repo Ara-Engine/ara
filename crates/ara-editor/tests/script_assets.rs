@@ -127,27 +127,3 @@ fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites
             .exists()
     );
 }
-
-#[test]
-#[ignore = "requires the built editor executable and .NET host; offscreen native route"]
-fn native_create_rename_compile_and_attach() {
-    let project = Project::new();
-    let target = std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
-    let output = target.join("evidence/assets-scripts");
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_ara-editor"))
-        .arg(&project.0)
-        .args(["--verify-assets", "--output"])
-        .arg(&output)
-        .status()
-        .unwrap();
-    assert!(status.success());
-    let report: Value =
-        serde_json::from_str(&std::fs::read_to_string(output.join("assets-scripts.json")).unwrap())
-            .unwrap();
-    assert_eq!(report["compiled"], true);
-    assert_eq!(report["attached"], true);
-    assert_eq!(report["hotCompiled"], true);
-}
-

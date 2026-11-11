@@ -104,9 +104,7 @@ pub(super) unsafe fn create(
         }
         other => {
             let _ = (ui, renderer, extent);
-            anyhow::bail!(
-                "the studio cannot present into {other:?} on this platform yet; run with --legacy-ui"
-            )
+            anyhow::bail!("the studio cannot present into {other:?} on this platform")
         }
     }
 }

@@ -2,7 +2,7 @@
 //! registry's `assets.*` commands): open, show in Finder, copy a reference or path,
 //! reimport, rename in place, duplicate, delete after confirming, show the asset's
 //! properties (the asset inspector), refresh. File changes are authored transactions on the
-//! project (`cmd.apply` on `ara.project.json`, the legacy window's plans) and show in Assets
+//! project (`cmd.apply` on `ara.project.json`, `crate::asset_plan`) and show in Assets
 //! at once, before the host's next scan.
 use serde_json::json;
 

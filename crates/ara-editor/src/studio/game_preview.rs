@@ -24,8 +24,7 @@ use ara_play_host::PublishedAssets;
 use super::viewport::{GamePreview, PreviewCamera, SceneView};
 use crate::{Editor, state::Camera, world::DocumentView};
 
-/// What the window holding the Game view tells its preview. The legacy shell and the
-/// studio each answer for their own Game view.
+/// What the window holding the Game view tells its preview.
 pub(crate) trait GameHost {
     /// The Game view's frame in physical pixels, or None while it is not laid out (another
     /// tab in front, or no Game view).

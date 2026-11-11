@@ -60,5 +60,4 @@ mod tests {
         assert_eq!(stem(".gitignore"), ".gitignore");
         assert_eq!(stem("README"), "README");
     }
-
 }

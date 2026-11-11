@@ -224,7 +224,6 @@ impl SceneView {
             )
         })
     }
-
 }
 
 #[cfg(test)]

@@ -22,18 +22,13 @@ pub(crate) fn apply_changes(
 
 pub(crate) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec<Value>> {
     let workspace = editor.host.store().workspace();
-    let mut patches =
-        BTreeMap::<String, (String, Value, Option<Option<ara_asset::CookPreset>>)>::new();
+    let mut patches = BTreeMap::<String, (String, Value)>::new();
     let mut project = serde_json::Map::new();
     let policy = policy(editor)?;
     let stored = serde_json::to_value(&policy.defaults)?;
 
     for change in changes {
         match &change {
-            Change::ProjectPreset(preset) => {
-                project.insert("preset".into(), json!(preset));
-                continue;
-            }
             Change::Reset(importer) => {
                 project.insert("resetType".into(), json!(type_key(importer)?));
                 continue;
@@ -61,7 +56,7 @@ pub(crate) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec
             _ => {}
         }
         let doc = match &change {
-            Change::Setting { doc, .. } | Change::Preset { doc, .. } => doc,
+            Change::Setting { doc, .. } => doc,
             _ => return Err("Unexpected import policy edit".into()),
         };
         if !patches.contains_key(doc) {
@@ -91,28 +86,20 @@ pub(crate) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec
                 Some(Value::Object(settings)) => Value::Object(settings.clone()),
                 _ => return Err("An import sidecar has malformed settings".into()),
             };
-            patches.insert(doc.clone(), (source.into(), current, None));
+            patches.insert(doc.clone(), (source.into(), current));
         }
-        let (_, current, preset) = patches.get_mut(doc).ok_or("Import patch disappeared")?;
+        let (_, current) = patches.get_mut(doc).ok_or("Import patch disappeared")?;
         match change {
             Change::Setting { field, value, .. } => {
                 current[&field] = value;
             }
-            Change::Preset { preset: value, .. } => *preset = Some(value),
             _ => return Err("Unexpected import policy edit".into()),
         }
     }
     let mut commands = patches
         .into_values()
-        .map(|(source, current, preset)| {
-            let mut args = json!({"source":source,"settings":current});
-            if let Some(preset) = preset {
-                match preset {
-                    Some(preset) => args["preset"] = json!(preset),
-                    None => args["useProjectPreset"] = json!(true),
-                }
-            }
-            json!({"cmd":"import.configure","args":args})
+        .map(|(source, current)| {
+            json!({"cmd":"import.configure","args":{"source":source,"settings":current}})
         })
         .collect::<Vec<_>>();
     if !project.is_empty() {
@@ -161,16 +148,11 @@ pub(crate) enum Change {
         field: String,
         value: Value,
     },
-    Preset {
-        doc: String,
-        preset: Option<ara_asset::CookPreset>,
-    },
     ProjectField {
         importer: String,
         field: String,
         value: Value,
     },
-    ProjectPreset(ara_asset::CookPreset),
     Reset(String),
 }
 

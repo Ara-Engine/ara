@@ -64,7 +64,6 @@ pub struct Editor {
     pub(crate) probe_captures: crate::probe_capture::Bridge,
     updates: Receiver<EditorState>,
     controls: Receiver<Control>,
-    pub(crate) command_schemas: BTreeMap<String, Value>,
     pub(crate) view_revision: u64,
     /// Bumped when navigation changes what the Scene view renders (`scene_changed`);
     /// other navigation changes only redraw the UI over the last Scene image.
@@ -131,16 +130,6 @@ impl Editor {
         crate::asset_tools::prepare(&mut project)?;
         crate::authoring::register(&mut project.registry, &mut project.db);
         crate::commands::register(&mut project.registry, &mut project.db);
-        let command_schemas = project
-            .registry
-            .infos()
-            .filter_map(|info| {
-                project
-                    .db
-                    .get(&info.params)
-                    .map(|ty| (info.name.to_owned(), project.db.type_json_schema(ty)))
-            })
-            .collect();
         if let Some(d) = project.db.verify().into_iter().find(|d| d.is_error()) {
             return Err(anyhow::anyhow!(d.to_string()));
         }
@@ -273,7 +262,6 @@ impl Editor {
             probe_captures,
             updates,
             controls,
-            command_schemas,
             view_revision: 0,
             scene_revision: 0,
             panels_revision: 0,

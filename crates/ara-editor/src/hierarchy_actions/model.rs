@@ -156,4 +156,3 @@ pub(crate) fn group_commands(
     }
     Ok(calls)
 }
-

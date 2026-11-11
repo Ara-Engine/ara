@@ -105,9 +105,7 @@ impl Pen {
         if color[3] <= 0.004 {
             return;
         }
-        let Some([from, to]) =
-            clip(self.matrix * a.extend(1.), self.matrix * b.extend(1.))
-        else {
+        let Some([from, to]) = clip(self.matrix * a.extend(1.), self.matrix * b.extend(1.)) else {
             return;
         };
         let (Some(from), Some(to)) = (self.screen(from), self.screen(to)) else {

@@ -192,4 +192,3 @@ fn append_remove_rename_and_invalid_paths_remain_typed_and_atomic() {
     );
     assert_eq!(record(&editor, "e_collect02"), before);
 }
-

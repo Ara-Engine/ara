@@ -872,4 +872,3 @@ fn one_entity_world_transform_matches_the_whole_scene() {
     }
     assert_eq!(all.len(), 4);
 }
-

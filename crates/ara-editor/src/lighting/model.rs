@@ -191,4 +191,3 @@ pub(crate) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
     });
     result
 }
-
