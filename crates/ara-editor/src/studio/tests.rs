@@ -3440,8 +3440,8 @@ fn sample_profile() -> ara_profile::Profile {
         start_ns: start,
         duration_ns: duration,
         self_ns: own,
-        allocated_bytes: 0,
-        self_allocated_bytes: 0,
+        allocated_bytes: own / 100,
+        self_allocated_bytes: own / 100,
     };
     let frames = (1..=90u64)
         .map(|i| {
@@ -3467,6 +3467,16 @@ fn sample_profile() -> ara_profile::Profile {
                         duration_ns,
                     })
                     .to_vec(),
+                // A heap growing 64 KB a frame, as a counting allocator reports it.
+                memory: ara_profile::Memory {
+                    cpu_heap: 180 * 1024 * 1024 + i * 64 * 1024,
+                    allocated_bytes: 96 * 1024,
+                    allocations: 140,
+                    gpu_textures: 412 * 1024 * 1024,
+                    gpu_buffers: 96 * 1024 * 1024,
+                    gpu_acceleration: 24 * 1024 * 1024,
+                    gpu_other: 8 * 1024 * 1024,
+                },
                 ..Default::default()
             }
         })
@@ -5244,5 +5254,46 @@ fn save_as_copies_the_open_scene_and_opens_the_copy() {
     assert!(
         rt.state().resolved.contains_key("e_box"),
         "the copy keeps the scene's entities"
+    );
+}
+
+#[test]
+fn the_profiler_shows_memory_and_what_each_scope_allocated() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    for wanted in [
+        "CPU heap",
+        "185.6 MB",
+        "+64.0 KB",
+        "GPU textures",
+        "412.0 MB",
+        "Alloc",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    // A capture without a counting allocator says so instead of zeros.
+    rt.update(|s| {
+        let mut bare = sample_profile();
+        for f in &mut bare.frames {
+            f.memory = ara_profile::Memory::default();
+        }
+        s.profile = std::sync::Arc::new(bare);
+    });
+    settle(&mut rt);
+    assert!(
+        rt.tree()
+            .into_iter()
+            .filter_map(|n| n.text)
+            .any(|t| t.starts_with("Not measured")),
+        "the module says why it is empty"
     );
 }
