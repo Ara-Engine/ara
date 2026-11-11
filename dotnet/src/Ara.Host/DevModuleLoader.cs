@@ -223,6 +223,7 @@ public sealed class DevModuleLoader : IModuleLoader
                 var relink = pe.Length == 0;
                 var (image, symbols) = relink ? (m.Pe, m.Pdb) : (pe, pdb);
                 if (image.Length == 0) throw new InvalidOperationException($"module `{m.Name}` has no image to relink");
+                DumpImage(m.Name, generation, image, relink);
                 var alc = new ModuleLoadContext($"{m.Name}#{generation}", Closure(m).Where(view.ContainsKey).ToDictionary(n => n, n => view[n]));
                 Interlocked.Increment(ref _created);
                 staged.Add((m, alc, null!, null!, relink, image, symbols));
@@ -449,6 +450,22 @@ public sealed class DevModuleLoader : IModuleLoader
     }
 
     /// <summary>A <see cref="MessageKind.Diagnostics"/>: report them; errors record a failed reload.</summary>
+    /// <summary>
+    /// With <c>ARA_DUMP_IMAGES=&lt;folder&gt;</c> every fresh image is also written there (<c>module-gN.dll</c>), so
+    /// <c>benchmarks/iteration/amsi_probe.cs</c> can measure what the operating system's scan of a real image costs. Off otherwise.
+    /// </summary>
+    static void DumpImage(string module, uint generation, byte[] image, bool relink)
+    {
+        if (relink || System.Environment.GetEnvironmentVariable("ARA_DUMP_IMAGES") is not { Length: > 0 } folder) return;
+        try
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, $"{module}-g{generation}.dll"), image);
+        }
+        catch (IOException) { /* diagnostics only */ }
+        catch (UnauthorizedAccessException) { }
+    }
+
     internal void OnDiagnostics(CompileClient client, Protocol.Reader r)
     {
         var (slot, errors, json, serverUs, origin) = (r.U32(), r.U32(), r.Str(), r.U64(), r.U32());
