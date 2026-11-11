@@ -4794,6 +4794,46 @@ fn the_game_view_plays_at_a_fixed_resolution_scaled_to_fit() {
 }
 
 #[test]
+fn emitters_add_duplicate_and_delete_but_one_stays() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/sparks.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let names = |rt: &Runtime<Studio>| -> Vec<String> {
+        effect_at(rt, "samples/sparks.graph")
+            .emitters
+            .into_iter()
+            .map(|e| e.name)
+            .collect()
+    };
+    let start = names(&rt).len();
+    press(&mut rt, "vfx/emitter/add");
+    assert_eq!(names(&rt).len(), start + 1, "added");
+    let first = names(&rt)[0].clone();
+    rt.update(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &first, "duplicate").unwrap());
+    assert_eq!(names(&rt).len(), start + 2, "duplicated");
+    for name in names(&rt).into_iter().skip(1) {
+        rt.update(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &name, "delete").unwrap());
+    }
+    assert_eq!(names(&rt), std::slice::from_ref(&first), "down to one");
+    let last = rt.touch(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &first, "delete"));
+    assert!(last.is_err(), "the last one stays");
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
