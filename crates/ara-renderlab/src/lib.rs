@@ -35,6 +35,8 @@ mod grade;
 #[cfg(not(target_vendor = "apple"))]
 mod lighting;
 #[cfg(not(target_vendor = "apple"))]
+mod meter;
+#[cfg(not(target_vendor = "apple"))]
 mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
