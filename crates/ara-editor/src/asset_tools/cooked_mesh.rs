@@ -1,6 +1,6 @@
 //! FBX thumbnail geometry comes from the isolated importer's checked ARAF output.
 use ara_asset::{CacheBackend, FileCache, SourceAsset};
-use ara_render::scene::{Mesh, Vertex};
+use ara_frame::scene::{Mesh, Vertex};
 use std::path::Path;
 
 /// Resolve storage input against the same authored boundary used by snapshots.

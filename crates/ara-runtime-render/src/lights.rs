@@ -1,6 +1,6 @@
 //! Extracted local lights (`ara_runtime::extract::LightView`) as renderer records
-//! (`ara_render::scene::Light`), the one conversion the raster and fidelity paths share.
-use ara_render::scene::{self, LIGHT_DISC, LIGHT_POINT, LIGHT_RECT, LIGHT_SHAPED, LIGHT_SPOT};
+//! (`ara_frame::scene::Light`), the one conversion the raster and fidelity paths share.
+use ara_frame::scene::{self, LIGHT_DISC, LIGHT_POINT, LIGHT_RECT, LIGHT_SHAPED, LIGHT_SPOT};
 use ara_runtime::{components::LightKind, extract::LightView, light_profile::LightProfile};
 
 /// The render record of `light`: its kind, cone, emitter size, barn doors and fog

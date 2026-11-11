@@ -75,7 +75,7 @@ impl FidelityView {
     /// Raster/Mobile require a bake with matching scene hash; no RT extensions execute.
     pub fn new(
         gpu: &mut GpuDevice,
-        scene: &ara_render::scene::Scene,
+        scene: &ara_frame::scene::Scene,
         settings: Settings,
         baked: Option<&BakedProbes>,
     ) -> Result<Self> {
@@ -95,7 +95,7 @@ impl FidelityView {
     /// transport, post processing and temporal reconstruction as legacy captures.
     pub fn new_native(
         gpu: &mut GpuDevice,
-        scene: &ara_render::instanced::Scene,
+        scene: &ara_frame::instanced::Scene,
         textures: ara_texture_stream::NativeResidency,
         settings: Settings,
         baked: Option<&BakedProbes>,
@@ -316,7 +316,7 @@ impl FidelityView {
     pub fn update_scene(
         &mut self,
         gpu: &mut GpuDevice,
-        scene: &ara_render::scene::Scene,
+        scene: &ara_frame::scene::Scene,
     ) -> Result<()> {
         self.scene.update(gpu, scene)
     }
@@ -326,7 +326,7 @@ impl FidelityView {
     pub fn update_native_scene(
         &mut self,
         gpu: &mut GpuDevice,
-        scene: &ara_render::instanced::Scene,
+        scene: &ara_frame::instanced::Scene,
     ) -> Result<crate::scene::NativeUpdate> {
         let update = self.scene.update_native(gpu, scene)?;
         if update.lighting {

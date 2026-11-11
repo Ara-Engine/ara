@@ -153,10 +153,10 @@ impl Benchmark {
             }
             let renderer = presenter.renderer_mut().context("video renderer")?;
             renderer.wait_scene_frame()?;
-            let capture = renderer.capture_completed(&ara_render::capture::CaptureRequest {
+            let capture = renderer.capture_completed(&ara_frame::capture::CaptureRequest {
                 camera: ara_runtime_render::camera(frame)?,
                 size: self.size,
-                mode: ara_render::capture::ViewMode::Lit,
+                mode: ara_frame::capture::ViewMode::Lit,
                 deterministic: false,
                 exposure: frame.environment.exposure,
                 settle_frames: 0,

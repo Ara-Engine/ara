@@ -1,36 +1,42 @@
 use super::*;
 use anyhow::{Result, ensure};
+use glam::Vec3;
 use std::collections::BTreeSet;
 
 /// A checked immutable borrow, shared by the publication and GPU upload layers.
 #[derive(Clone, Copy)]
-pub(crate) struct ValidatedScene<'a>(&'a Scene);
+pub struct ValidatedScene<'a>(&'a Scene);
 
 /// Owns the exact validated scene; no mutable access can invalidate the proof
 /// while a worker packs or allocates its publication.
-pub(crate) struct CheckedScene(Scene);
+pub struct CheckedScene(Scene);
 
 impl CheckedScene {
-    pub(crate) fn new(scene: Scene) -> Result<Self> {
+    /// Validates `scene` and keeps it. A failure leaves the caller holding the scene.
+    pub fn new(scene: Scene) -> Result<Self> {
         scene.validate()?;
         Ok(Self(scene))
     }
-    pub(crate) fn validated(&self) -> ValidatedScene<'_> {
+    /// A borrow of the checked scene for upload.
+    pub fn validated(&self) -> ValidatedScene<'_> {
         ValidatedScene(&self.0)
     }
-    pub(crate) fn into_scene(self) -> Scene {
+    /// Returns the scene. The check does not survive the move.
+    pub fn into_scene(self) -> Scene {
         self.0
     }
 }
 
 impl<'a> ValidatedScene<'a> {
-    pub(crate) fn scene(self) -> &'a Scene {
+    /// The scene this check covers.
+    pub fn scene(self) -> &'a Scene {
         self.0
     }
 }
 
 impl Scene {
-    pub(crate) fn validated(&self) -> Result<ValidatedScene<'_>> {
+    /// Borrows this scene after checking it.
+    pub fn validated(&self) -> Result<ValidatedScene<'_>> {
         self.validate()?;
         Ok(ValidatedScene(self))
     }

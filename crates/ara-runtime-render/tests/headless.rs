@@ -4,7 +4,7 @@
 use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
 use ara_doc::Workspace;
 use ara_input::{ActionValue, Injection, PlayerId};
-use ara_render::capture::{ViewMode, compare};
+use ara_frame::capture::{ViewMode, compare};
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::MemoryAssets, extract::RenderFrame, live::set_edit,
 };
@@ -456,9 +456,9 @@ fn still_camera_frames_hold_still() {
         for _ in 0..64 {
             presenter.present(&frame).unwrap();
         }
-        let request = ara_render::capture::CaptureRequest {
+        let request = ara_frame::capture::CaptureRequest {
             // Readback only: the completed frame keeps its own camera.
-            camera: ara_render::scene::CameraSpec::Orthographic {
+            camera: ara_frame::scene::CameraSpec::Orthographic {
                 centre: Default::default(),
                 world_size: Default::default(),
             },

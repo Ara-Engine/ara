@@ -2,7 +2,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{Device, GpuDevice};
 use ara_hotpatch::Hotpatch;
-use ara_render::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use glam::Vec3;
 use std::{

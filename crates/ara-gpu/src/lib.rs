@@ -174,7 +174,7 @@ pub struct HeapIndex {
 }
 
 /// A whole resource tracked by the graph and retirement system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Resource {
     /// Buffer storage.
     Buffer(Buffer),

@@ -2,12 +2,8 @@
 mod fidelity;
 use anyhow::{Context, Result, bail};
 use ara_gpu::{Access, GpuDevice, Resource};
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-    instanced::*,
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}, instanced::*, scene::CameraSpec};
+use ara_render::{Renderer, instanced::{GeometryGpu, GeometryUpload, LodRange, PreparedPose}};
 use glam::{Mat4, Vec3};
 use std::{
     path::PathBuf,

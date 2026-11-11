@@ -11,7 +11,7 @@ pub(crate) struct GamePreview {
 /// Camera, physical panel extent and raster quality selected by the Game panel.
 pub(crate) struct PreviewCamera<'a> {
     /// Gameplay camera, independent of the editor Scene camera.
-    pub camera: &'a ara_render::scene::CameraSpec,
+    pub camera: &'a ara_frame::scene::CameraSpec,
     /// Physical Game-panel pixels; zero extent skips work.
     pub size: [u32; 2],
     /// User choice, or None to inherit the project's rendering setting.

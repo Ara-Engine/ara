@@ -1,7 +1,7 @@
 //! Daylight landscape extraction and a night room illuminated only by emissive panels.
 use crate::scenes::{mat, quad};
 use anyhow::Result;
-use ara_render::scene::{CameraSpec, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{CameraSpec, Mesh, Scene, Texture, Vertex};
 use glam::Vec3;
 
 /// Apply the bounded gather preset and the landscape's explicit local probe field.

@@ -14,8 +14,9 @@ use std::{
 /// Which renderer draws the 3D scene.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
 pub(crate) enum RendererChoice {
-    /// Renderlab: hardware ray tracing where the GPU has it, else its non-RT path; Ara's
-    /// renderer draws where Renderlab cannot run (no Vulkan device it supports, Apple).
+    /// Renderlab: hardware ray tracing where the GPU has it, else its non-RT path; on
+    /// Apple, its ara-gpu backend on the presenter's Metal device (hardware RT only). Ara's
+    /// renderer draws where Renderlab cannot start.
     #[default]
     Renderlab,
     /// Ara's renderer (`ara-render`), frozen: kept for where Renderlab cannot run and for

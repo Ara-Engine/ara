@@ -561,6 +561,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-anim",
  "ara-anim-physics",
+ "ara-frame",
  "ara-physics",
  "ara-physics-jolt",
  "ara-render",
@@ -925,6 +926,7 @@ dependencies = [
  "ara-doc",
  "ara-editor-gpu",
  "ara-export",
+ "ara-frame",
  "ara-gpu",
  "ara-graph",
  "ara-host",
@@ -978,6 +980,7 @@ name = "ara-editor-gpu"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-platform",
  "ara-render",
@@ -1083,6 +1086,20 @@ dependencies = [
  "ara-schema",
  "ara-terrain",
  "bytemuck",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-frame"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-json",
+ "bytemuck",
+ "glam 0.30.10",
+ "image",
  "serde",
  "serde_json",
 ]
@@ -1219,6 +1236,7 @@ name = "ara-hotpatch-probe"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-render",
@@ -1424,6 +1442,7 @@ dependencies = [
  "ara-asset-format",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-material",
@@ -1614,6 +1633,7 @@ name = "ara-pathtrace"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-landscape",
  "ara-render",
@@ -1751,6 +1771,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-editor-gpu",
+ "ara-frame",
  "ara-gpu",
  "ara-graphics-settings",
  "ara-host",
@@ -1845,6 +1866,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-bvh",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-json",
@@ -1871,6 +1893,7 @@ dependencies = [
  "anyhow",
  "ara-asset-format",
  "ara-components",
+ "ara-frame",
  "ara-gpu",
  "ara-hotpatch",
  "ara-pathtrace",
@@ -1894,6 +1917,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-color",
+ "ara-frame",
  "ara-geo",
  "ara-gpu",
  "ara-importers",
@@ -1921,6 +1945,7 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-doc",
+ "ara-frame",
  "ara-gpu",
  "ara-import2d",
  "ara-json",
@@ -1945,6 +1970,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-components",
+ "ara-frame",
  "ara-gpu",
  "ara-material",
  "ara-render",
@@ -1956,8 +1982,8 @@ dependencies = [
  "glam 0.30.10",
  "glam 0.34.1",
  "image",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132)",
  "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81)",
+ "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d)",
  "wgpu",
 ]
 
@@ -2070,6 +2096,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-graphics-settings",
  "ara-importers",
@@ -2155,6 +2182,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-foliage",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-ops",
@@ -2351,6 +2379,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-asset-format",
+ "ara-frame",
  "ara-gpu",
  "ara-render",
  "ash 0.38.0+1.4.352",
@@ -2482,6 +2511,7 @@ name = "ara-vfx-gpu"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-frame",
  "ara-gpu",
  "ara-json",
  "ara-material",
@@ -11430,26 +11460,6 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132#2395c6bcdbacae93f61f40c0f62f373b007d0132"
-dependencies = [
- "anyhow",
- "ara-gpu",
- "ash 0.38.0+1.3.281",
- "bytemuck",
- "glam 0.30.10",
- "half",
- "naga",
- "pollster",
- "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132)",
- "serde_json",
- "sha2 0.10.9",
- "wgpu",
-]
-
-[[package]]
-name = "renderlab"
-version = "0.1.3"
 source = "git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81#a0094f6a6e423cd8fb12aa133dcb0def94f2dd81"
 dependencies = [
  "ash 0.38.0+1.3.281",
@@ -11463,14 +11473,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "renderlab-asset"
+name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132#2395c6bcdbacae93f61f40c0f62f373b007d0132"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d#b5d835fbe11dec60c167e9d646c79d13b214832d"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ash 0.38.0+1.3.281",
+ "bytemuck",
+ "glam 0.30.10",
+ "half",
+ "naga",
+ "pollster",
+ "rayon",
+ "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d)",
+ "serde_json",
+ "sha2 0.10.9",
+ "wgpu",
+]
 
 [[package]]
 name = "renderlab-asset"
 version = "0.1.3"
 source = "git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81#a0094f6a6e423cd8fb12aa133dcb0def94f2dd81"
+
+[[package]]
+name = "renderlab-asset"
+version = "0.1.3"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=b5d835fbe11dec60c167e9d646c79d13b214832d#b5d835fbe11dec60c167e9d646c79d13b214832d"
 
 [[package]]
 name = "reqwest"

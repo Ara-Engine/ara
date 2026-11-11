@@ -2,7 +2,7 @@
 use super::*;
 use anyhow::{Context, ensure};
 use ara_gpu::cooked::write_json;
-use ara_render::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use glam::Vec3;
 use std::collections::BTreeMap;
 

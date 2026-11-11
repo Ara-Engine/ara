@@ -5,7 +5,8 @@
 //! with one scattering event, so both show direct light only, at one locked EV100.
 //! Images go to `target/area-lights/`.
 use ara_doc::Workspace;
-use ara_render::{ReferenceTrace, RenderDebug, capture::ViewMode};
+use ara_frame::{capture::ViewMode};
+use ara_render::{ReferenceTrace, RenderDebug};
 use ara_runtime::{Runtime, RuntimeConfig, assets::MemoryAssets, extract::RenderFrame};
 use ara_runtime_render::Presenter;
 use std::path::Path;

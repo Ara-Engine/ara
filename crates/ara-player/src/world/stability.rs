@@ -2,7 +2,7 @@
 //! temporal resolve has had `frames` frames to converge. Flicker on thin or distant
 //! detail shows as 16x16 blocks whose luminance keeps changing.
 use anyhow::{Context, Result};
-use ara_render::capture::CaptureRequest;
+use ara_frame::capture::CaptureRequest;
 use ara_runtime::extract::RenderFrame;
 use ara_runtime_render::{Presenter, fidelity::native::Content};
 use std::path::Path;

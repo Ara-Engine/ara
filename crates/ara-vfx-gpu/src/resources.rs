@@ -5,7 +5,8 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk};
-use ara_render::{capture::ShaderMetadata, graph::State};
+use ara_frame::{capture::ShaderMetadata};
+use ara_render::{graph::State};
 use ara_vfx::Effect;
 use bytemuck::Zeroable;
 use std::path::Path;

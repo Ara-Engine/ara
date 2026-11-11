@@ -27,6 +27,12 @@ impl<T> PartialEq for Handle<T> {
     }
 }
 impl<T> Eq for Handle<T> {}
+/// Hashes the same identity `eq` compares, so handles can key maps.
+impl<T> std::hash::Hash for Handle<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self.owner, self.slot, self.generation).hash(state);
+    }
+}
 impl<T> fmt::Debug for Handle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Handle")
