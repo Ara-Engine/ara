@@ -5151,3 +5151,24 @@ fn the_game_scale_slider_zooms_live_and_keeps_the_scale_on_release() {
     assert!(kept.is_some_and(|v| (v - 4.0).abs() < 0.15), "{kept:?}");
     assert_eq!(super::game::zoom(rt.state()), kept.unwrap() as f32);
 }
+
+#[test]
+fn align_with_view_puts_the_selection_at_the_camera_facing_its_way() {
+    let mut rt = open();
+    rt.update(|s| s.select(vec!["e_lamp".into()], false));
+    rt.update(|s| super::commands::run(s, "transform.align_view", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let camera = rt.state().editor.state.camera;
+    let world = crate::world::world_transform(&rt.state().resolved, "e_lamp").unwrap();
+    let (_, rotation, position) = world.to_scale_rotation_translation();
+    assert!(
+        position.abs_diff_eq(camera.position(), 1e-3),
+        "{position} vs {}",
+        camera.position()
+    );
+    let forward = (camera.target - camera.position()).normalize();
+    assert!(
+        (rotation * glam::Vec3::NEG_Z).abs_diff_eq(forward, 1e-3),
+        "faces where the view looks"
+    );
+}

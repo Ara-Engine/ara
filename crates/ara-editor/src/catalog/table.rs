@@ -2999,10 +2999,10 @@ pub(crate) const COMMANDS: &[Command] = &[
     },
     Command {
         id: "transform.align_view",
-        title: "Align to View",
-        icon: "",
+        title: "Align with View",
+        icon: "video",
         keys: "",
-        summary: "Aligning rotation to the camera needs a view-matrix to Euler command.",
+        summary: "Move and turn the selection to the Scene camera's place and view.",
     },
     Command {
         id: "edit.transform.drop",
@@ -3287,7 +3287,6 @@ pub(crate) const UNBUILT: &[&str] = &[
     "file.export_selection",
     "file.close_project",
     "select.layer",
-    "transform.align_view",
     "view.environment",
     "view.layout_quad",
     "create.cylinder",

@@ -884,6 +884,46 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 .collect();
             apply(e, commands, &format!("Reset {field}"))
         }
+        // Unity's Align With View: each entity takes the Scene camera's place and turns to
+        // look where it looks (an entity faces -Z, as Cameras do), keeping its scale.
+        "transform.align_view" => {
+            let camera = e.state.camera;
+            let eye = camera.position();
+            let forward = (camera.target - eye).normalize_or_zero();
+            let right = forward
+                .cross(glam::Vec3::Y)
+                .try_normalize()
+                .unwrap_or(glam::Vec3::X);
+            let view = glam::Mat4::from_rotation_translation(
+                glam::Quat::from_mat3(&glam::Mat3::from_cols(
+                    right,
+                    right.cross(forward),
+                    -forward,
+                )),
+                eye,
+            );
+            let commands = target
+                .entities(&e.state)
+                .iter()
+                .map(|id| {
+                    let parent = s
+                        .resolved
+                        .get(id)
+                        .and_then(|entity| entity.parent.as_deref())
+                        .and_then(|p| crate::world::world_transform(&s.resolved, p))
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let (_, rotation, position) =
+                        (parent.inverse() * view).to_scale_rotation_translation();
+                    let (x, y, z) = rotation.to_euler(glam::EulerRot::XYZ);
+                    json!({"cmd": "transform.set", "args": {
+                        "entities": [id],
+                        "position": position.to_array(),
+                        "rotation": [x.to_degrees(), y.to_degrees(), z.to_degrees()],
+                    }})
+                })
+                .collect();
+            apply(e, commands, "Align with view")
+        }
         "transform.move_to_view" => {
             let p = e.state.camera.target;
             let commands = crate::inspector::edit_commands(

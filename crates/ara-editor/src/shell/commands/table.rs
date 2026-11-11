@@ -785,7 +785,7 @@ fn build() -> Vec<Spec> {
         cmd("transform.reset_position", "Reset Position", "rotate-ccw", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
         cmd("transform.reset_rotation", "Reset Rotation", "rotate-ccw", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
         cmd("transform.reset_scale", "Reset Scale", "rotate-ccw", "", "Reset scale to the default or prefab value.", |_, e, t| transform_reset(e, t, "scale")).when(has_entity),
-        later("transform.align_view", "Align to View", "", "", "Aligning rotation to the camera needs a view-matrix to Euler command."),
+        cmd("transform.align_view", "Align with View", "video", "", "Move and turn the selection to the Scene camera's place and view.", |_, _, _| Ok(())).when(|_| Avail::Blocked("Align with View is in the new editor; open it without --legacy-ui.".into())),
         cmd("transform.move_to_view", "Move to View", "video", "", "Move the selection to the camera's focus point.", |_, e, t| {
             let p = e.state.camera.target;
             let commands = crate::inspector::edit_commands(&t.entities(&e.state), "Transform.position", &json!([p.x, p.y, p.z]));
