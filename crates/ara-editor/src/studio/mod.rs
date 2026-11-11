@@ -234,6 +234,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
+    let mut probe_report_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
     let (mut profile_at, mut was_recording) = (Instant::now(), false);
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
@@ -905,6 +906,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         if rt.touch(|s| s.local.agent_setups.poll()) {
             rt.update(|_| {});
+        }
+        // The Lighting page reads the renderer's probe report while it shows, so Recapture
+        // knows whether this quality can capture (and says why when it cannot).
+        if probe_report_at.elapsed() >= Duration::from_secs(1)
+            && rt.find("lighting/probe/refresh").is_some()
+        {
+            probe_report_at = Instant::now();
+            let version = |s: &Studio| s.local.probe_status.as_ref().map(|r| r.version);
+            let before = version(rt.state());
+            if rt.touch(|s| lighting::refresh_probes(s).is_ok()) && version(rt.state()) != before {
+                rt.update(|_| {});
+            }
         }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
