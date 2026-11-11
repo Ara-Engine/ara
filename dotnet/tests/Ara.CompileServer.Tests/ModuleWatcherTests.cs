@@ -112,3 +112,74 @@ public sealed class ModuleWatcherTests : IDisposable
         Directory.Delete(_directory, recursive: true);
     }
 }
+
+/// <summary>The kqueue file watches stay within their budget and give every descriptor back.</summary>
+public sealed class VnodeEventsTests : IDisposable
+{
+    readonly string _directory = InstalledTools.Scratch("vnode-events");
+
+    string Make(string name)
+    {
+        var path = Path.Combine(_directory, name);
+        File.WriteAllText(path, "x");
+        return path;
+    }
+
+    [Fact]
+    public void The_watch_budget_caps_the_descriptors_it_holds_and_releases_them_on_dispose()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var events = new VnodeEvents((_, _) => { }, maxFiles: 5);
+        foreach (var i in Enumerable.Range(0, 20)) events.Add(0, Make($"F{i}.cs"));
+        Assert.Equal(5, events.WatchedCount);
+        Assert.Equal(5, events.DescriptorCount);
+        events.Dispose();
+        Assert.Equal(0, events.WatchedCount);
+        Assert.Equal(0, events.DescriptorCount);
+    }
+
+    [Fact]
+    public void Deleting_and_replacing_files_does_not_leak_descriptors()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
+        using var events = new VnodeEvents((_, path) => seen.Add(path));
+        for (var i = 0; i < 40; i++)
+        {
+            var path = Make("Churn.cs");
+            events.Add(0, path);
+            if (i % 2 == 0) File.Delete(path);
+            else
+            {
+                File.WriteAllText(path + ".tmp", "y");
+                File.Move(path + ".tmp", path, overwrite: true); // an atomic save replaces the watched inode
+                File.Delete(path);
+            }
+            // The watch drops itself when the delete or rename event arrives.
+            var deadline = System.Environment.TickCount64 + 2000;
+            while (events.Watching(path) && System.Environment.TickCount64 < deadline) Thread.Sleep(2);
+            Assert.False(events.Watching(path), $"watch of replaced file kept (iteration {i})");
+        }
+        Assert.Equal(0, events.WatchedCount);
+        Assert.Equal(0, events.DescriptorCount);
+    }
+
+    [Fact]
+    public void A_throwing_callback_does_not_end_the_watcher()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var calls = 0;
+        using var events = new VnodeEvents((_, _) => { Interlocked.Increment(ref calls); throw new InvalidOperationException("boom"); });
+        var path = Make("Throw.cs");
+        events.Add(0, path);
+        File.WriteAllText(path, "y");
+        var deadline = System.Environment.TickCount64 + 2000;
+        while (Volatile.Read(ref calls) < 1 && System.Environment.TickCount64 < deadline) Thread.Sleep(5);
+        File.WriteAllText(path, "z");
+        deadline = System.Environment.TickCount64 + 2000;
+        while (Volatile.Read(ref calls) < 2 && System.Environment.TickCount64 < deadline) Thread.Sleep(5);
+        Assert.True(calls >= 2, "the watcher stopped after the first callback threw");
+    }
+
+    public void Dispose() => Directory.Delete(_directory, recursive: true);
+}
