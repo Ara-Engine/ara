@@ -56,7 +56,9 @@ group table slot is `flags >> 2`). Overlays read only ids: gizmos and icons are 
 occluded and nothing reads scene depth. `Repacked` (debug, Metal only; Vulkan refuses
 it) rewrites a Direct image as Packed on the GPU first (shader mode 12), so a Direct
 frame and a Repacked frame must match pixel for pixel: `tests/packed_ids_scene.rs`;
-`tests/packed_ids.rs` feeds chosen packed bytes (any backend). Packed images must be
+`tests/packed_ids.rs` feeds chosen packed bytes (any backend); `tests/packed_ids_goldens.rs`
+checks overlays over a packed image it builds itself against `tests/goldens/packed-ids/`
+(`ARA_UPDATE_GOLDENS=1` on Metal rewrites them from the proven-equal direct path). Packed images must be
 UNORM, never sRGB views, and are only ever fetched, never sampled or blended.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
 The editor draws mode-5 outlines only when the Scene is not raster (a raster Scene draws its own: ara-render `Outlines`). Outlines and hover (mode 5) group channels through an optional table
