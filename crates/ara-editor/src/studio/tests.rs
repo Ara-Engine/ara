@@ -1406,6 +1406,8 @@ fn the_assets_footer_names_the_selection_or_the_folder() {
         folder.contains(" items") || folder.contains(" item"),
         "{folder}"
     );
+    // The footer says the count (and the folder below the root), not "Project" again.
+    assert!(!folder.contains("Project"), "{folder}");
     let path = rt
         .state()
         .assets
@@ -3611,7 +3613,7 @@ fn a_fields_menu_copies_its_path() {
     let mut rt = open();
     let label = rt.find("field/Transform.position/0").unwrap();
     // The row's label column, left of the value cells.
-    rt.right_click(label.left - 120.0, label.center().y);
+    rt.right_click(label.left - 40.0, label.center().y);
     rt.frame(FRAME);
     let item = rt
         .find("field/Transform.position/path")
@@ -6959,41 +6961,62 @@ fn a_failed_import_is_in_the_problems_panel_after_an_unattended_open() {
     );
 }
 
-/// The Assets toolbar at the width of a 960 px window: the breadcrumb keeps its label whole
-/// and the search box sits beside it, never over it.
+/// The Assets toolbar at the widths of small windows: the path bar's root step and the search
+/// box sit side by side, never one over the other, and the search keeps a usable width where
+/// the panel has room for one.
 #[test]
-fn the_assets_breadcrumb_and_search_share_the_row_at_narrow_widths() {
+fn the_assets_path_bar_and_search_share_the_row_at_narrow_widths() {
     for width in [960_u32, 720, 560, 480] {
         let mut rt = open_sized((width, 600));
         settle(&mut rt);
-        let nodes = rt.tree();
-        let search = nodes
-            .iter()
-            .find(|n| {
-                n.key
-                    .as_ref()
-                    .is_some_and(|k| k.to_string() == "assets/search")
-            })
-            .map(|n| n.rect)
-            .expect("the search box shows");
-        // The "Project" text on the search box's row (the tree's own folder row is elsewhere).
-        let label = nodes
-            .iter()
-            .filter(|n| n.text.as_deref() == Some("Project"))
-            .map(|n| n.rect)
-            .find(|r| (r.top - search.top).abs() < 12.0)
-            .expect("the breadcrumb label shows");
+        let search = rt.find("assets/search").expect("the search box shows");
+        let root = rt
+            .find("assets/crumb/root")
+            .expect("the path bar's root shows");
         assert!(
-            label.right <= search.left + 0.5,
-            "{width}px: the label {label:?} runs under the search box {search:?}"
+            root.right <= search.left + 0.5,
+            "{width}px: the path bar {root:?} runs under the search box {search:?}"
         );
         assert!(
             width < 720 || search.width() >= 90.0,
             "{width}px: the search box keeps a usable width, {search:?}"
         );
-        assert!(
-            label.width() > 20.0,
-            "{width}px: the label survives, {label:?}; search {search:?}"
+    }
+}
+
+/// The type filters are one row (never a wrapped grid), and "Project" is said once in the panel
+/// (the tree's root), not again by the path bar or the footer.
+#[test]
+fn assets_filters_are_one_row_and_project_is_said_once() {
+    for width in [1280_u32, 1000] {
+        let mut rt = open_sized((width, 720));
+        scan(&mut rt);
+        settle(&mut rt);
+        let tops: std::collections::BTreeSet<i32> = rt
+            .tree()
+            .into_iter()
+            .filter(|n| {
+                n.key
+                    .as_ref()
+                    .is_some_and(|k| k.to_string().starts_with("assets/filter/"))
+            })
+            .map(|n| n.rect.top as i32)
+            .collect();
+        assert_eq!(
+            tops.len(),
+            1,
+            "{width}px: the filters share one row, {tops:?}"
+        );
+        let said: Vec<String> = rt
+            .tree()
+            .into_iter()
+            .filter_map(|n| n.text.map(|t| t.to_string()))
+            .filter(|t| t.contains("Project"))
+            .collect();
+        assert_eq!(
+            said,
+            ["Project"],
+            "{width}px: the root is named once, by the tree"
         );
     }
 }

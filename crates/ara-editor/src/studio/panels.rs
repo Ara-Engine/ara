@@ -209,12 +209,13 @@ fn assets(s: &Studio) -> El<Studio> {
         .get("assets")
         .cloned()
         .unwrap_or_default();
-    let mut crumbs = row().gap(2.0).align(Align::Center).min_w(44.0).child(crumb(
-        l,
-        "Project",
-        String::new(),
-        folder.is_empty(),
-    ));
+    // The path starts at the project's root, drawn as its icon: the tree beside it already
+    // names "Project", and the path bar need not say it again.
+    let mut crumbs = row()
+        .gap(2.0)
+        .align(Align::Center)
+        .min_w(24.0)
+        .child(root_crumb(l, folder.is_empty()));
     let mut at = String::new();
     for part in folder.split('/').filter(|p| !p.is_empty()) {
         if !at.is_empty() {
@@ -348,51 +349,56 @@ fn assets(s: &Studio) -> El<Studio> {
             .on_press(|s: &mut Studio| {
                 super::commands::run(s, "assets.search.save", &crate::catalog::Target::None)
             })
-        }))
-        .child(sizes)
-        .child(view_menu(s));
-    // Type filters (Unreal's filter bar): one type across the whole project. A narrow
-    // panel wraps them onto another line rather than hiding the last ones past its edge.
+        }));
+    // Type filters (Unreal's filter bar): one type across the whole project. Each is its
+    // category's coloured icon; the chosen one also says its name. One row that scrolls
+    // sideways when the panel is narrow, with the view controls at its end (never a grid
+    // of wrapped chips).
     let mut chips = row()
-        .min_w(0.0)
-        .pad_x(6.0)
-        .pad_y(2.0)
-        .gap(3.0)
+        .gap(2.0)
         .align(Align::Center)
-        .flow_wrap()
         .focus_group(stillkit::el::Orientation::Horizontal);
     for (id, label, glyph) in FILTERS {
         let on = view.filter == Some(id);
         let tint = category_tint(l, id);
         let hover = c.hover_surface.0;
-        chips = chips.child(
-            super::style::chosen(l, row(), on)
-                .key(format!("assets/filter/{id}"))
-                .h(20.0)
-                .pad_x(7.0)
-                .gap(5.0)
-                .align(Align::Center)
-                .radius(10.0)
-                .label(label)
-                .selected(on)
-                .hovered(move |e| if on { e } else { e.fill(hover) })
-                .on_press(move |s: &mut Studio| {
-                    let f = &mut s.local.assets_view.filter;
-                    *f = if *f == Some(id) { None } else { Some(id) };
-                })
-                .child(el().size(6.0).radius(3.0).fill(tint))
-                .child(icon(glyph).size(12.0).color(if on {
-                    c.foreground.0
-                } else {
-                    c.muted_foreground.0
-                }))
-                .child(text(label).text_size(11.0).color(if on {
-                    c.foreground.0
-                } else {
-                    c.muted_foreground.0
-                })),
-        );
+        let mut chip = super::style::chosen(l, row(), on)
+            .key(format!("assets/filter/{id}"))
+            .h(22.0)
+            .min_w(24.0)
+            .pad_x(5.0)
+            .gap(5.0)
+            .align(Align::Center)
+            .justify(Justify::Center)
+            .radius(11.0)
+            .label(label)
+            .tooltip(label)
+            .selected(on)
+            .hovered(move |e| if on { e } else { e.fill(hover) })
+            .on_press(move |s: &mut Studio| {
+                let f = &mut s.local.assets_view.filter;
+                *f = if *f == Some(id) { None } else { Some(id) };
+            })
+            .child(icon(glyph).size(13.0).min_w(13.0).color(tint));
+        if on {
+            chip = chip.child(
+                text(label)
+                    .text_size(11.0)
+                    .color(c.foreground.0)
+                    .wrap(1)
+                    .min_w(0.0),
+            );
+        }
+        chips = chips.child(chip);
     }
+    let chips = row()
+        .pad_x(6.0)
+        .pad_y(2.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .child(chips.scroll(Axis::Horizontal).grow(1.0).min_w(0.0))
+        .child(sizes)
+        .child(view_menu(s));
     let toolbar = col().child(toolbar).child(chips);
     let Some(browser) = s.assets.as_ref() else {
         return col().grow(1.0).child(toolbar).child(
@@ -601,12 +607,17 @@ fn assets_footer(s: &Studio, folder: &str, shown: usize) -> El<Studio> {
     let (glyph, line) = match s.editor.state.asset_path.as_deref() {
         Some(path) if !path.is_empty() => (icons::FILE, path.to_owned()),
         _ => {
-            let place = if folder.is_empty() { "Project" } else { folder };
             let items = match shown {
                 1 => "1 item".to_owned(),
                 n => format!("{n} items"),
             };
-            (icons::FOLDER, format!("{place} · {items}"))
+            // The project root is already the tree's "Project": just the count there.
+            let line = if folder.is_empty() {
+                items
+            } else {
+                format!("{folder} · {items}")
+            };
+            (icons::FOLDER, line)
         }
     };
     row()
@@ -621,7 +632,6 @@ fn assets_footer(s: &Studio, folder: &str, shown: usize) -> El<Studio> {
         .child(
             text(line)
                 .text_size(11.0)
-                .family(mono())
                 .wrap(1)
                 .color(c.muted_foreground.0)
                 .grow(1.0)
@@ -1261,7 +1271,7 @@ fn folder_tree(s: &Studio, browser: &crate::assets::Browser, current: &str) -> E
             || current.starts_with(&format!("{d}/"))
     };
     let mut tree = col()
-        .w(200.0)
+        .w(176.0)
         .min_w(160.0)
         .pad(4.0)
         .gap(0.0)
@@ -1374,6 +1384,30 @@ fn folder_row(
         .child(disclosure)
         .child(icon(glyph).size(13.0).color(folder_ink))
         .child(text(name.to_owned()).text_size(12.0).grow(1.0))
+}
+
+/// The path bar's first step: the project root, by its icon (its name is the tree's).
+fn root_crumb(l: &ara_kit::look::Look, current: bool) -> El<Studio> {
+    let c = &l.c;
+    let hover = c.foreground.0;
+    row()
+        .key("assets/crumb/root")
+        .size(24.0)
+        .min_w(24.0)
+        .align(Align::Center)
+        .justify(Justify::Center)
+        .radius(l.radius.xs)
+        .color(if current {
+            c.foreground.0
+        } else {
+            c.muted_foreground.0
+        })
+        .cascade_ink()
+        .label("Project")
+        .tooltip("Project")
+        .hovered(move |e| e.color(hover))
+        .on_press(|s: &mut Studio| open_folder(s, ""))
+        .child(icon(icons::BOX).size(14.0))
 }
 
 fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> El<Studio> {
