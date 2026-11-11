@@ -7555,3 +7555,106 @@ fn placeholder_captures() {
         shoot(&mut rt, "assets-tiles");
     }
 }
+
+/// The title bar's parts (device px) in a Windows window `width` logical px wide on a display
+/// scaled by `platform`: drawn caption buttons, no inset, and the zoom the window would use.
+fn title_bar_parts(width: u32, platform: f32) -> (Vec<(String, stillkit::Rect)>, f32) {
+    let zoom = super::zoom::for_width(width as f32);
+    let scale = platform * zoom;
+    let device = (width as f32 * platform) as u32;
+    let height = (632.0 * platform) as u32;
+    let mut studio = open_studio((
+        (device as f32 / scale) as u32,
+        (height as f32 / scale) as u32,
+    ));
+    // A long name, as a project can have: wider text must never push a caption button out.
+    studio.editor.state.settings.insert(
+        "project.name".into(),
+        json!("An Unreasonably Long Project Name"),
+    );
+    studio.frame = super::state::Frame {
+        inset: 0.0,
+        controls: Some(false),
+    };
+    let theme = studio.look.theme.clone();
+    let mut rt = Runtime::new(studio, chrome::view, theme, (device, height), scale).unwrap();
+    settle(&mut rt);
+    let keys = [
+        "title/logo",
+        "menu/File",
+        "menu/Edit",
+        "menu/View",
+        "menu/Create",
+        "menu/Window",
+        "menu/Help",
+        "title/play",
+        "title/project",
+        "launcher",
+        "window/minimize",
+        "window/maximize",
+        "window/close",
+    ];
+    let parts = keys
+        .iter()
+        .filter_map(|k| rt.find(k).map(|r| ((*k).to_owned(), r)))
+        .collect();
+    (parts, device as f32)
+}
+
+/// At every window width the studio can have (below and above the zoom step, the minimum
+/// window, 125% and 150% displays), the title bar's parts lie inside the window and apart, in
+/// order. The order of sacrifice is explicit: the project name collapses first, then the search
+/// box to its icon; the logo, menus, Play controls and the three caption buttons never give way
+/// (a window must stay closable, maximizable and draggable).
+#[test]
+fn the_title_bar_fits_the_window_at_every_zoom_step() {
+    let minimum = super::MIN_WINDOW.0 - 16; // Windows' client area inside the minimum window
+    for platform in [1.0f32, 1.25, 1.5] {
+        for width in [minimum, 1024, 1099, 1100, 1280, 1600] {
+            let (parts, w) = title_bar_parts(width, platform);
+            let at = format!("{width}px at {platform}x");
+            let by = |k: &str| parts.iter().find(|(n, _)| n == k).map(|(_, r)| *r);
+            for always in [
+                "title/logo",
+                "menu/File",
+                "menu/Help",
+                "title/play",
+                "window/minimize",
+                "window/maximize",
+                "window/close",
+            ] {
+                assert!(
+                    by(always).is_some_and(|r| r.width() > 8.0),
+                    "{always} shows at {at}"
+                );
+            }
+            // Present parts (a collapsed name or search has no width) lie inside the window.
+            let shown: Vec<_> = parts.iter().filter(|(_, r)| r.width() >= 1.0).collect();
+            for (name, r) in &shown {
+                assert!(
+                    r.left >= -0.5 && r.right <= w + 0.5,
+                    "{name} {r:?} is outside the window at {at}"
+                );
+            }
+            for (i, (a, ra)) in shown.iter().enumerate() {
+                for (b, rb) in shown.iter().skip(i + 1) {
+                    assert!(
+                        ra.right <= rb.left + 0.5 || rb.right <= ra.left + 0.5,
+                        "{a} {ra:?} overlaps {b} {rb:?} at {at}"
+                    );
+                }
+            }
+            // The caption buttons keep the window's right edge, the logo its left.
+            let close = by("window/close").unwrap();
+            assert!(w - close.right < 1.5, "close is at the edge at {at}");
+            assert!(
+                by("title/logo").unwrap().left >= 5.0,
+                "the logo is on the window at {at}"
+            );
+            // At the minimum, the name and search have given way before any caption button.
+            if width == minimum {
+                assert!(by("window/maximize").is_some() && by("window/minimize").is_some());
+            }
+        }
+    }
+}

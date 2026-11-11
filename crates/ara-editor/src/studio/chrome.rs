@@ -204,8 +204,8 @@ fn title_bar(s: &Studio) -> El<Studio> {
     let c = &l.c;
     // The engine's mark, as the legacy editor's chrome and the loading screen show it.
     let mark = match ara_kit::brand::mark(ara_kit::brand::Mark::Engine, 60) {
-        Some(mark) => stillkit::el::image(mark).size(20.0),
-        None => el().size(20.0),
+        Some(mark) => stillkit::el::image(mark).size(20.0).min_w(20.0),
+        None => el().size(20.0).min_w(20.0),
     };
     // The menu bar is one Tab stop; Left and Right move between its menus.
     let menus = row()
@@ -220,8 +220,8 @@ fn title_bar(s: &Studio) -> El<Studio> {
                 menu_button(s, m.title, m.items)
             }
         }));
-    let lead = vec![mark.label("Ara"), menus];
-    let play = play_controls(s);
+    let lead = vec![mark.label("Ara").key("title/logo"), menus];
+    let play = play_controls(s).key("title/play");
     let workspace = s.editor.host.store().workspace();
     let scene = workspace
         .path_of(&s.editor.state.doc)
@@ -234,9 +234,12 @@ fn title_bar(s: &Studio) -> El<Studio> {
         .to_owned();
     let project = super::loading::project_name(&s.editor);
     let hover = super::style::tones(l).hover;
+    // The search box and the project name give way first when the window is narrow: the box
+    // down to its icon, the name to an ellipsis (`the_title_bar_fits_the_window_at_every_zoom_step`).
     let launcher = row()
         .key("launcher")
         .w(220.0)
+        .min_w(36.0)
         .h(26.0)
         .pad_x(8.0)
         .gap(8.0)
@@ -252,10 +255,18 @@ fn title_bar(s: &Studio) -> El<Studio> {
             tx.focus("palette/query");
         })
         .child(icon(icons::SEARCH).size(13.0))
-        .child(text("Search or run…").text_size(12.0).grow(1.0))
+        .child(
+            text("Search or run…")
+                .text_size(12.0)
+                .wrap(1)
+                .min_w(0.0)
+                .grow(1.0),
+        )
         .child(kbd(l, launcher_chord()));
     // Always a little air from the run controls, however narrow the window.
     let crumb = row()
+        .key("title/project")
+        .min_w(0.0)
         .gap(6.0)
         .pad_x(8.0)
         .align(Align::Center)
@@ -263,14 +274,22 @@ fn title_bar(s: &Studio) -> El<Studio> {
             text(project)
                 .text_size(12.0)
                 .weight(560)
-                .color(c.foreground.0),
+                .color(c.foreground.0)
+                .wrap(1)
+                .min_w(0.0),
         )
         .child(
             icon(icons::CHEVRON_RIGHT)
                 .size(12.0)
                 .color(c.muted_foreground.0),
         )
-        .child(text(scene).text_size(12.0).color(c.muted_foreground.0));
+        .child(
+            text(scene)
+                .text_size(12.0)
+                .color(c.muted_foreground.0)
+                .wrap(1)
+                .min_w(0.0),
+        );
     // Menus, Play, project, search and the window buttons; the theme is in Settings.
     ara_kit::ui::title_bar_flush(
         l,
