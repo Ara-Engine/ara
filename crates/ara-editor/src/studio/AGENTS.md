@@ -12,6 +12,11 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   `Editor::tick`, keeps the renderer in sync (`SceneSync`), renders and composites the
   Scene when it is dirty, resolves picks, polls Assets and the diagnostics bus, applies
   `Local::focus` requests, and sleeps until the next timer (idle costs nothing).
+- `loading.rs`: the import gate. While a project's imports settle, a modal card shows the last
+  source to finish, N of M, the clock and every failed import with its error, and the host
+  loop keeps the native views hidden (`native_rect`), so a half-imported scene is never
+  presented as finished. Clean imports open it by itself; "Open now" (after 3 s) and "Open
+  project" (on failures) let a person in.
 - `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
 - `game.rs`: the Game view's own layer (`GAME_LAYER`): the gameplay camera's preview outside
   Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during

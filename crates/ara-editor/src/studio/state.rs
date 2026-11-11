@@ -404,6 +404,11 @@ pub struct Local {
     pub device: String,
     /// About Ara or System Info, open.
     pub(crate) about: Option<super::about::Page>,
+    /// What the import gate shows while the project's imports settle (`loading::Gate`); the
+    /// host loop writes it. `None` once the gate has opened.
+    pub(crate) import_gate: Option<super::loading::Standing>,
+    /// A person let themselves in before the imports settled ("Open now", "Open project").
+    pub(crate) import_released: bool,
     /// Mesh Paint input from the Scene view for the host to run (it holds the renderer's
     /// scene): presses, drags and releases, at places across the view (0..1).
     pub paint_input: Vec<PaintInput>,

@@ -30,6 +30,7 @@ mod hierarchy;
 mod inspector;
 mod layer;
 mod lighting;
+mod loading;
 mod material_stats;
 mod mesh_paint;
 mod panels;
@@ -220,6 +221,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The last native-layer failure reported, so a recurring one is said once.
     let mut layer_failure: Option<String> = None;
     let mut scene_dirty = true;
+    // The import gate: held until the project's imports settle (see `loading`).
+    let mut gate = Some(rt.touch(|s| loading::Gate::new(&s.editor)));
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -301,6 +304,25 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|_| {});
             scene_dirty = true;
         }
+        // The import card shows while imports settle, and the native views stay hidden so a
+        // half-imported scene is never presented as finished. A person can let themselves in.
+        if let Some(g) = gate.as_mut() {
+            let standing = if rt.state().local.import_released {
+                None
+            } else {
+                g.step()
+            };
+            if rt.state().local.import_gate != standing {
+                let next = standing.clone();
+                rt.update(|s| s.local.import_gate = next);
+            }
+            if standing.is_none() {
+                gate = None;
+                scene_dirty = true;
+                composite = true;
+            }
+        }
+        let gated = gate.is_some();
         // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
         // pass boundary through the same handlers as the menus.
         // A preset or rebind changed in Settings: menus and the palette show it.
@@ -423,11 +445,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.mark("scene sync");
         pass.phase("studio.scene");
         // The Scene view: render where its element shows and present into its layer.
-        let rect = rt
-            .natives()
-            .into_iter()
-            .find(|(n, _)| &**n == SCENE_LAYER)
-            .map(|(_, r)| r);
+        let rect = native_rect(&rt, SCENE_LAYER, gated);
         surface.place_native_layer(SCENE_LAYER, rect);
         composite |= shown_again(&mut placed, SCENE_LAYER, rect.is_some());
         // A hidden (minimized) window shows no frames: render none. A covered one skips
@@ -703,11 +721,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.paint_ring = None);
         }
         // The Game view: the gameplay camera's picture, or Play's frames, in its own layer.
-        let game_rect = rt
-            .natives()
-            .into_iter()
-            .find(|(n, _)| &**n == game::GAME_LAYER)
-            .map(|(_, r)| r);
+        let game_rect = native_rect(&rt, game::GAME_LAYER, gated);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
         if shown_again(&mut placed, game::GAME_LAYER, game_rect.is_some()) {
             game.redraw();
@@ -781,11 +795,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // The Material and Animation pages' canvases, each in its own layer.
         for (domain, name) in graph::PAGES {
-            let rect = rt
-                .natives()
-                .into_iter()
-                .find(|(n, _)| &**n == name)
-                .map(|(_, r)| r);
+            let rect = native_rect(&rt, name, gated);
             surface.place_native_layer(name, rect);
             if shown_again(&mut placed, name, rect.is_some()) {
                 graph_extent = ("", [0, 0]);
@@ -913,6 +923,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let next = [
             rt.wake_at().map(|at| started + at),
             busy.then(|| Instant::now() + Duration::from_millis(8)),
+            // The card's clock and the import feed are read on this wake while it holds.
+            gated.then(|| Instant::now() + Duration::from_millis(100)),
             sizing.map(|(_, at)| at + Duration::from_millis(125)),
             Some(Instant::now() + Duration::from_millis(500)),
         ]
@@ -932,6 +944,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         .destroy(&mut renderer)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
+}
+
+/// Where native layer `name` shows: its element's rect, or nowhere while the import gate
+/// holds, so a half-imported scene is never presented as finished.
+fn native_rect(rt: &Runtime<Studio>, name: &str, gated: bool) -> Option<stillkit::Rect> {
+    if gated {
+        return None;
+    }
+    rt.natives()
+        .into_iter()
+        .find(|(n, _)| &**n == name)
+        .map(|(_, rect)| rect)
 }
 
 /// Records whether native layer `name` is placed this pass; true when it was not on the

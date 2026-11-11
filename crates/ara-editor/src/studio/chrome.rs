@@ -41,7 +41,9 @@ pub fn view(s: &Studio) -> El<Studio> {
         .overlay(super::preferences::overlay(s))
         .overlay(prompt(s))
         .overlay(why(s))
-        .overlay(super::about::overlay(s));
+        .overlay(super::about::overlay(s))
+        // Last: the import card sits over everything while the gate holds.
+        .overlay(super::loading::overlay(s));
     palette(s, root)
 }
 
