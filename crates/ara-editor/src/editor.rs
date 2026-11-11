@@ -76,6 +76,8 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::catalog::Target)>,
+    /// The studio's import gate, shared with the protocol (`editor.imports`).
+    pub(crate) import_gate: crate::import_gate::Shared,
     pub(crate) extensions: crate::extensions::Catalog,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,
@@ -197,6 +199,7 @@ impl Editor {
         let (changes, updates) = mpsc::channel();
         let (control_send, controls) = mpsc::channel();
         let interaction = crate::interaction::Interaction::default();
+        let import_gate = crate::import_gate::Shared::default();
         host.register(Box::new(EditorService {
             navigation,
             settings,
@@ -209,6 +212,7 @@ impl Editor {
             frame_aspect: 16. / 9.,
             extensions: crate::extensions::Extensions::new(root, interaction.clone())
                 .map_err(|d| anyhow::anyhow!(d.to_string()))?,
+            import_gate: import_gate.clone(),
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
@@ -280,6 +284,7 @@ impl Editor {
             review_revision: 0,
             extraction_revision: 0,
             queued_commands: Vec::new(),
+            import_gate,
             extensions: Default::default(),
             activity,
             play_surfaces,

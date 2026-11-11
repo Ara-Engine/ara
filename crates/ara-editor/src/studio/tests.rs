@@ -6385,7 +6385,7 @@ fn feed(done: usize, pending: &[&str], failed: &[(&str, &str)]) -> ara_play_host
 /// A gate over the open project whose pipeline reports only what the test feeds it, started
 /// `ago` ago.
 fn silent_gate(rt: &mut Runtime<Studio>, ago: Duration) -> super::loading::Gate {
-    rt.touch(|s| super::loading::Gate::new(&s.editor))
+    rt.touch(|s| super::loading::Gate::new(&s.editor, false))
         .without_feed()
         .started_ago(ago)
 }
@@ -6620,7 +6620,7 @@ fn open_with_imports(sources: &[(&str, &str, &[u8])]) -> Runtime<Studio> {
 fn a_project_with_a_failing_import_reaches_the_review_with_the_real_error() {
     use super::loading::Stage;
     let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
-    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor));
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, false));
     let started = std::time::Instant::now();
     let review = loop {
         rt.touch(|s| s.editor.tick());
@@ -6644,6 +6644,72 @@ fn a_project_with_a_failing_import_reaches_the_review_with_the_real_error() {
         "the import's error is shown"
     );
     assert!(gate.step().is_some(), "a failure keeps the gate closed");
+    // The console says it, so a real import can be checked without a screenshot.
+    let log = gate.take_log();
+    assert!(
+        log.iter()
+            .any(|l| l.starts_with("imports: review with 1 failure: ")
+                && l.contains("models/crate.gltf")),
+        "{log:?}"
+    );
+    // An agent reads the same list over the protocol, and can open the gate.
+    let said = rt.touch(|s| s.editor.action("editor.imports", json!({})).unwrap());
+    assert_eq!(said["stage"], "review", "{said}");
+    assert!(
+        said["failed"][0]["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("models/crate.gltf")
+    );
+    assert!(
+        !said["failed"][0]["error"]
+            .as_str()
+            .unwrap()
+            .trim()
+            .is_empty()
+    );
+    assert!(!rt.state().editor.import_gate.take_release());
+    rt.touch(|s| {
+        s.editor
+            .action("editor.imports", json!({"release": true}))
+            .unwrap()
+    });
+    assert!(
+        rt.state().editor.import_gate.take_release(),
+        "release reaches the window"
+    );
+    gate.release("an agent");
+    assert_eq!(gate.step(), None);
+    let log = gate.take_log();
+    assert_eq!(log, ["imports: opened (an agent), 1 failed"], "{log:?}");
+}
+
+/// The real pipeline with no one at the window: the gate opens on the failed import and says
+/// what failed, so a studio started for an agent is never held on a review.
+#[test]
+fn an_unattended_gate_on_a_project_with_a_failing_import_opens_by_itself() {
+    let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, true));
+    let started = std::time::Instant::now();
+    while gate.step().is_some() {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the gate never opened"
+        );
+        rt.touch(|s| s.editor.tick());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let log = gate.take_log();
+    assert!(
+        log.iter()
+            .any(|l| l.starts_with("imports: review with 1 failure: ")),
+        "{log:?}"
+    );
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("imports: opened (no one at the window), 1 failed"),
+        "{log:?}"
+    );
 }
 
 /// The real pipeline's success path: a valid image imports and the gate opens by itself.
@@ -6661,7 +6727,7 @@ fn a_project_whose_imports_succeed_opens_the_gate_by_itself() {
         eprintln!("skipped: no ara-import-worker at {}", worker.display());
         return;
     }
-    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor));
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, false));
     let started = std::time::Instant::now();
     let mut last = None;
     while let Some(standing) = gate.step() {
@@ -6678,4 +6744,86 @@ fn a_project_whose_imports_succeed_opens_the_gate_by_itself() {
         started.elapsed() < Duration::from_secs(10),
         "opened by giving up: {last:?}"
     );
+    let log = gate.take_log();
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("imports: opened (all imported), 0 failed"),
+        "{log:?}"
+    );
+}
+
+#[test]
+fn an_unattended_gate_opens_when_imports_settle_even_with_failures() {
+    let mut rt = open();
+    let mut gate = rt
+        .touch(|s| super::loading::Gate::new(&s.editor, true))
+        .without_feed()
+        .started_ago(Duration::from_secs(1));
+    let a = (
+        "models/a.gltf",
+        "ARA4302 missing buffer\nimport-worker exited",
+    );
+    gate.observe(feed(1, &["models/b.gltf"], &[a]));
+    assert!(gate.step().is_some(), "still importing: held");
+    gate.observe(feed(1, &[], &[a, ("models/b.gltf", "not a model")]));
+    assert_eq!(
+        gate.step(),
+        None,
+        "settled with failures and no one there: open"
+    );
+    assert_eq!(
+        gate.take_log(),
+        [
+            "imports: importing 1 of 3",
+            "imports: review with 2 failures: models/a.gltf: ARA4302 missing buffer; models/b.gltf: not a model",
+            "imports: opened (no one at the window), 2 failed",
+        ]
+    );
+}
+
+#[test]
+fn an_attended_gate_logs_each_stage_once_and_opens_when_released() {
+    let mut rt = open();
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(1));
+    gate.observe(feed(0, &["a", "b"], &[]));
+    for _ in 0..3 {
+        gate.step();
+    }
+    gate.observe(feed(1, &[], &[("b", "bad")]));
+    for _ in 0..3 {
+        assert!(gate.step().is_some(), "an attended review waits");
+    }
+    gate.release("a person");
+    assert_eq!(gate.step(), None);
+    assert_eq!(gate.step(), None);
+    assert_eq!(
+        gate.take_log(),
+        [
+            "imports: importing 0 of 2",
+            "imports: review with 1 failure: b: bad",
+            "imports: opened (a person), 1 failed",
+        ],
+        "each stage once"
+    );
+}
+
+#[test]
+fn enter_takes_the_cards_button_once_it_is_offered() {
+    let mut rt = open();
+    // Importing, before Open now is offered: Enter does nothing.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(2));
+    gate.observe(feed(0, &["models/a.gltf"], &[]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    assert!(!rt.state().local.import_released, "no button yet");
+    // A review: Enter is Open project.
+    let mut gate = silent_gate(&mut rt, Duration::from_secs(2));
+    gate.observe(feed(1, &[], &[("models/a.gltf", "bad")]));
+    let standing = gate.step();
+    rt.update(|s| s.local.import_gate = standing);
+    settle(&mut rt);
+    rt.key(stillkit::el::KeyCode::ENTER.0);
+    assert!(rt.state().local.import_released, "Enter opens the project");
 }

@@ -232,7 +232,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut layer_failure: Option<String> = None;
     let mut scene_dirty = true;
     // The import gate: held until the project's imports settle (see `loading`).
-    let mut gate = Some(rt.touch(|s| loading::Gate::new(&s.editor)));
+    let mut gate = Some(rt.touch(|s| loading::Gate::new(&s.editor, options.unattended())));
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -333,11 +333,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // The import card shows while imports settle, and the native views stay hidden so a
         // half-imported scene is never presented as finished. A person can let themselves in.
         if let Some(g) = gate.as_mut() {
-            let standing = if rt.state().local.import_released {
-                None
-            } else {
-                g.step()
-            };
+            if rt.state().local.import_released {
+                g.release("a person");
+            }
+            if rt.state().editor.import_gate.take_release() {
+                g.release("an agent");
+            }
+            let standing = g.step();
+            for line in g.take_log() {
+                eprintln!("ara-editor: {line}");
+            }
             if rt.state().local.import_gate != standing {
                 let next = standing.clone();
                 rt.update(|s| s.local.import_gate = next);
@@ -349,6 +354,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             }
         }
         let gated = gate.is_some();
+        rt.state().editor.import_gate.set_holding(gated);
         // Commands queued by `editor.command` (agents over MCP) and `--play`: run at this
         // pass boundary through the same handlers as the menus.
         // A preset or rebind changed in Settings: menus and the palette show it.
