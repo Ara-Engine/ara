@@ -7,7 +7,7 @@ use ara_gpu::{
     commands::{Attachment, Command},
     vk,
 };
-use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
+use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use std::{collections::BTreeMap, path::Path};
 /// How a material is photographed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -448,7 +448,7 @@ pub(super) fn capture(
         .map(|v| f32::from_le_bytes(*v) as u32)
         .collect();
     let request = CaptureRequest {
-        camera: ara_render::scene::CameraSpec::LookAt {
+        camera: ara_frame::scene::CameraSpec::LookAt {
             position: glam::Vec3::new(2.8, 1.7, 3.8),
             target: glam::Vec3::ZERO,
             vertical_fov: 0.62,

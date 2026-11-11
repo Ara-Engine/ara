@@ -4,7 +4,7 @@
 //! finish on a worker (`crate::capture::Work`). `--screenshot` takes the `window` picture
 //! through the same code ([`screenshot`]).
 use ara_render::Renderer;
-use ara_render::capture::{CaptureRequest, ViewMode};
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use serde_json::{Value, json};
 use stillkit::el::Runtime;
 

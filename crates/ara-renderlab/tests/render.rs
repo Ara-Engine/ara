@@ -8,7 +8,7 @@
 //! is Renderlab's ara-gpu backend on the presenter's own Metal device.
 
 use ara_asset_format::{TextureFormat, write_ktx2};
-use ara_render::capture::{CaptureRequest, ViewMode};
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use ara_renderlab::{Options, PathChoice, Renderlab};
 use ara_runtime::{
     components::{LightKind, MeshShape},

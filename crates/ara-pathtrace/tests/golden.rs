@@ -2,7 +2,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::GpuDevice;
 use ara_pathtrace::scenes;
-use ara_render::capture::compare;
+use ara_frame::capture::compare;
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::Path;
 

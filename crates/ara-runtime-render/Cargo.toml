@@ -23,6 +23,7 @@ ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-gpu = { path = "../ara-gpu" }
 ara-landscape = { path = "../ara-landscape" }
 ara-diag = { path = "../ara-diag" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-render2d = { path = "../ara-render2d" }
 ara-runtime = { path = "../ara-runtime" }

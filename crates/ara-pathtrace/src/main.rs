@@ -63,7 +63,7 @@ fn main() -> Result<()> {
                 aperture: 4.,
                 ..post()
             })?;
-            let moving_camera = ara_render::scene::CameraSpec::LookAt {
+            let moving_camera = ara_frame::scene::CameraSpec::LookAt {
                 position: glam::Vec3::new(0.4, 1.6, 6.5),
                 target: glam::Vec3::new(0., 1.2, -0.4),
                 vertical_fov: 0.9,
@@ -115,7 +115,7 @@ fn settings(render_size: [u32; 2], display_size: [u32; 2]) -> Settings {
         post: post(),
     }
 }
-fn input(camera: &ara_render::scene::CameraSpec, tick: u32, reset: bool) -> FrameInput<'_> {
+fn input(camera: &ara_frame::scene::CameraSpec, tick: u32, reset: bool) -> FrameInput<'_> {
     FrameInput {
         camera,
         tick,

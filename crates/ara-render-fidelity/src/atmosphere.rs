@@ -1,8 +1,8 @@
 //! The physical sky atmosphere and local participating-medium controls, in metres.
 use anyhow::{Result, ensure};
-use ara_render::look::atmosphere::{Atmosphere as Model, AtmosphereLight, LightAtmosphere};
+use ara_frame::look::atmosphere::{Atmosphere as Model, AtmosphereLight, LightAtmosphere};
 
-/// The shared LUT sky atmosphere (`ara_render::look::atmosphere`, the same model and
+/// The shared LUT sky atmosphere (`ara_frame::look::atmosphere`, the same model and
 /// shader as the raster look) plus exponential height fog.
 /// Disabled views retain their extracted environment. With `physical_sky` the sky
 /// LUT also replaces the environment map for transport and display; without it the
@@ -104,7 +104,7 @@ mod tests {
     fn the_atmosphere_shader_is_the_raster_copy() {
         assert_eq!(
             include_str!("../shaders/atmosphere-model.slangh"),
-            ara_render::look::atmosphere::shader_source(),
+            ara_frame::look::atmosphere::shader_source(),
             "copy shaders/atmosphere-model.slangh into crates/ara-render-fidelity/shaders/"
         );
     }

@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{GpuDevice, cooked::write_json};
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 use ara_render_geo::{DebugView, GeometryView, View};
 use ara_texture_stream::Residency;
 use glam::Vec3;

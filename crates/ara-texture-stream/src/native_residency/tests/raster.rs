@@ -1,10 +1,6 @@
 use super::*;
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-    instanced,
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::CameraSpec};
+use ara_render::{Renderer, instanced};
 use glam::{Mat4, Vec3};
 
 #[test]
@@ -41,7 +37,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
     textures.register_view([1; 32], Arc::clone(&source), NativeView::Raw)?;
     let mut left = instanced::Material::default();
     left.pbr.textures[0] = 0;
-    left.pbr.flags[1] = ara_render::scene::BASE_COLOR_DECODE_SRGB;
+    left.pbr.flags[1] = ara_frame::scene::BASE_COLOR_DECODE_SRGB;
     left.extras.uv[0].tex_coord = 1;
     let mut right = left;
     right.extras.uv[0].tex_coord = 0;

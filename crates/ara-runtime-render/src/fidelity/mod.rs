@@ -1,7 +1,7 @@
 //! Engine-owned conversion of a runtime frame into a fidelity scene snapshot.
 //! Asset resolution is completed by the caller; conversion has no project or sample paths.
 use anyhow::Result;
-use ara_render::scene::{self, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{self, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::{
     extract::{Geometry, RenderFrame},
     model::{Model, Primitive},

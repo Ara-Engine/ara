@@ -10,10 +10,7 @@ use super::{
 };
 use anyhow::{Context, Result};
 use ara_gpu::GpuDevice;
-use ara_render::{
-    capture::{CaptureRequest, ViewMode},
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::CameraSpec};
 use ara_render_fidelity::{
     FidelityView, FrameInput, PostSettings,
     environment::FrameEnvironment,

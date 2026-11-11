@@ -23,6 +23,7 @@ ara-rpc.workspace = true
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
 ara-pathtrace = { path = "../ara-pathtrace" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-runtime = { path = "../ara-runtime" }

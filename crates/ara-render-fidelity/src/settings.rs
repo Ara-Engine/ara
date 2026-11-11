@@ -2,7 +2,7 @@
 use crate::colour::{AutoExposure, Grading, ToneMapper};
 use anyhow::{Result, ensure};
 use ara_gpu::Image;
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 
 /// Capability tier, independent of the operating system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,4 +1,5 @@
 use super::*;
+use glam::{Mat4, Vec3};
 
 fn triangle() -> Scene {
     Scene {

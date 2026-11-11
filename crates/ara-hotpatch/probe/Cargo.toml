@@ -14,6 +14,7 @@ hotpatch = ["ara-hotpatch/runtime", "ara-render/hotpatch", "ara-render-fidelity/
 ara-gpu = { path = "../../ara-gpu" }
 anyhow.workspace = true
 ara-hotpatch = { path = ".." }
+ara-frame = { path = "../../ara-frame" }
 ara-render = { path = "../../ara-render" }
 ara-render-fidelity = { path = "../../ara-render-fidelity" }
 glam.workspace = true
