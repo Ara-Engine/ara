@@ -1486,7 +1486,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             act(e, "editor.layout.close", json!({"panel": panel}))
         }
         "file.exit" => {
-            s.local.quit = true;
+            super::quit::request(s);
             Ok(())
         }
         "file.new_project" | "file.open_project" => {

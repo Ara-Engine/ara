@@ -44,6 +44,7 @@ mod preferences;
 mod present;
 pub(crate) mod probes;
 mod profiler;
+mod quit;
 mod rect_tool;
 mod references;
 mod running;
@@ -59,8 +60,10 @@ mod style;
 #[cfg(test)]
 mod tests;
 mod trace;
+mod unavailable;
 mod vfx;
 pub(crate) mod viewport;
+mod zoom;
 
 use std::time::{Duration, Instant};
 
@@ -105,36 +108,31 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         prefix: "ara-editor",
         desktop_classes: &[],
     });
-    let title = format!(
-        "Ara | {}",
-        editor
-            .host
-            .root()
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-    );
+    let title = format!("Ara | {}", loading::project_name(&editor));
     // Native layers need a GPU UI surface: DirectComposition over child HWNDs on Windows,
     // a Vulkan surface over Wayland subsurfaces on Linux.
     #[cfg(any(windows, target_os = "linux"))]
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
-    let scale = surface.scale();
+    let platform = surface.scale();
     let (sw, sh) = stillkit::platform::current::host::screen_size();
     // A bounded run opens at the requested size in device pixels (`--size`); otherwise the
     // studio's own.
     let (want_w, want_h) = if options.bounded() {
         (options.size[0] as f32, options.size[1] as f32)
     } else {
-        (1600.0 * scale, 1000.0 * scale)
+        (1600.0 * platform, 1000.0 * platform)
     };
     let w = (want_w as i32).min(sw - 40);
     let h = (want_h as i32).min(sh - 80);
     surface.place(((sw - w) / 2, (sh - h) / 2, w, h));
     let size = surface.client_size();
+    // A small window shows the UI a little larger (`zoom`): the runtime's scale is the
+    // platform's times that zoom, and the layout sees the window in design px at that scale.
+    let scale = platform * zoom::for_width(size.0 as f32 / platform);
     let mut studio = Studio::new(editor, (size.0 as f32 / scale, size.1 as f32 / scale));
-    studio.frame = frame(&surface);
+    studio.frame = frame(&surface, scale);
     studio.local.scene.message = "Preparing the scene renderer…".into();
     let theme = studio.look.theme.clone();
     let background = studio.look.c.background.0;
@@ -1286,10 +1284,9 @@ pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
 }
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.
-fn frame(surface: &Surface) -> state::Frame {
-    let s = surface.scale();
+fn frame(surface: &Surface, scale: f32) -> state::Frame {
     state::Frame {
-        inset: surface.system_controls().map_or(0.0, |r| r.right / s),
+        inset: surface.system_controls().map_or(0.0, |r| r.right / scale),
         controls: (!cfg!(target_os = "macos")).then(|| surface.is_maximized()),
     }
 }
@@ -1386,19 +1383,25 @@ fn pump(
             trace::log(|| format!("event {event:?}"));
         }
         match event {
-            Event::Close => return Ok(true),
+            Event::Close => rt.update(quit::request),
             Event::Resized(w, h) => {
+                // The zoom follows the window's width (`zoom`).
+                let platform = surface.scale();
+                rt.set_scale(platform * zoom::for_width(w as f32 / platform));
                 rt.resize((w, h));
                 let (size, frame) = (
                     (w as f32 / rt.scale(), h as f32 / rt.scale()),
-                    frame(surface),
+                    frame(surface, rt.scale()),
                 );
                 rt.update(|s| {
                     s.size = size;
                     s.frame = frame;
                 });
             }
-            Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
+            Event::DpiChanged(dpi) => {
+                let platform = dpi as f32 / 96.0;
+                rt.set_scale(platform * zoom::for_width(rt.size().0 as f32 / platform));
+            }
             // A person activated a window opened in the background: it behaves as usual.
             Event::Activated => rt.touch(|s| s.local.background = false),
             // Files from another app import into the folder Assets shows.
@@ -1497,6 +1500,9 @@ fn pump(
         keys.push("game/area".into());
         // The Assets body's height: tiles step down to fit it (`panels::fitting`).
         keys.push("assets/body".into());
+        // The path bar's room: folders that do not fit fold into "…" (`panels::crumbs_fit`).
+        keys.push("assets/crumbs".into());
+        keys.push("assets/search".into());
         keys.push("vfx/stacks".into());
         keys.extend(
             scene_overlays::OVERLAYS
@@ -1527,12 +1533,16 @@ fn pump(
                 })
             })
             .collect();
-        // The Assets panel's tile size follows its measured height: a measurement that
-        // changes what fits redraws it (a `touch` alone would leave the old tiles up).
+        // The Assets panel's tile size and path bar follow their measured room: a measurement
+        // that changes what fits redraws it (a `touch` alone would leave the old one up).
         let tiles = |s: &Studio| {
-            panels::fitting(
-                s.local.assets_view.size,
-                s.local.rects.get("assets/body").map(|r| r.height()),
+            (
+                panels::fitting(
+                    s.local.assets_view.size,
+                    s.local.rects.get("assets/body").map(|r| r.height()),
+                ),
+                ["assets/crumbs", "assets/search"]
+                    .map(|k| s.local.rects.get(k).map(|r| r.width().round() as i32)),
             )
         };
         let before = tiles(rt.state());

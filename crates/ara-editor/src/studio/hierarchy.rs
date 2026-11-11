@@ -15,9 +15,12 @@ use stillkit::el::{
 use super::Studio;
 
 const ROW: f32 = super::style::ROW;
-/// One level of nesting, and the room before the first level.
-const INDENT: f32 = 10.0;
-const LEAD: f32 = 4.0;
+/// One level of nesting, the room before the first level, and the disclosure column every
+/// row keeps (so sibling icons line up). Tight on purpose: the left of the tree is for the
+/// names.
+const INDENT: f32 = 8.0;
+const LEAD: f32 = 0.0;
+const DISCLOSURE: f32 = 10.0;
 
 /// One visible row.
 struct Row {
@@ -232,7 +235,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .collect()
         })
         .grow(1.0)
-        .pad_x(4.0)
+        .pad_x(2.0)
         // One Tab stop for the whole tree, on its selected row: the rows' own arrows move
         // through it (the WAI tree pattern), as Unity's and VS Code's trees do.
         .focus_group(stillkit::el::Orientation::Vertical)
@@ -272,8 +275,8 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .h(22.0)
         .grow(1.0)
-        .pad_x(8.0)
-        .gap(6.0)
+        .pad_x(6.0)
+        .gap(5.0)
         .align(Align::Center)
         .radius(super::style::RADIUS)
         .fill(super::style::tones(l).band)
@@ -297,12 +300,12 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .gap(3.0)
         .child(
             row()
-                .pad_x(4.0)
+                .pad_x(2.0)
                 .gap(2.0)
                 .child(search.h(22.0).grow(1.0))
                 .child(filter_menu(s)),
         )
-        .child(row().pad_x(4.0).child(root))
+        .child(row().pad_x(2.0).child(root))
         .child(body)
 }
 
@@ -458,8 +461,8 @@ fn row_el(
     let disclosure = if r.children {
         let id = id.clone();
         let open = r.open;
-        el().size(16.0)
-            .min_w(16.0)
+        el().size(DISCLOSURE)
+            .min_w(DISCLOSURE)
             .align(Align::Center)
             .justify(Justify::Center)
             .color(muted)
@@ -478,10 +481,10 @@ fn row_el(
                 } else {
                     icons::CHEVRON_RIGHT
                 })
-                .size(12.0),
+                .size(9.0),
             )
     } else {
-        el().size(16.0).min_w(16.0)
+        el().size(DISCLOSURE).min_w(DISCLOSURE)
     };
     let name: El<Studio> = match rename.filter(|(rid, _)| *rid == r.id) {
         Some((_, draft)) => {
@@ -609,7 +612,7 @@ fn row_el(
     super::style::chosen(l, row(), selected)
         .key(format!("row/{}", r.id))
         .h(ROW)
-        .gap(4.0)
+        .gap(2.0)
         .align(Align::Center)
         .radius(4.0)
         .border(
