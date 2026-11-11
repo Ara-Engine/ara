@@ -91,11 +91,10 @@ impl Outlines {
         view: &DocumentView,
         revision: u64,
         state: &EditorState,
-        renderer: &ara_render::Renderer,
+        entities: &[(u64, String)],
         changed: &std::collections::BTreeMap<u64, &str>,
         selection: bool,
     ) {
-        let entities = renderer.entities();
         self.channels.update(view.entities(), revision, entities);
         let key = state
             .selection
@@ -605,7 +604,8 @@ pub fn build(
     view: &DocumentView,
     state: &EditorState,
     rect: Box2,
-    renderer: &ara_render::Renderer,
+    entities: &[(u64, String)],
+    output_width: u32,
     changed: &std::collections::BTreeMap<u64, &str>,
     gizmo: GizmoState,
     outlines: &mut Outlines,
@@ -658,7 +658,7 @@ pub fn build(
         view,
         revision,
         state,
-        renderer,
+        entities,
         changed,
         show("viewport.outline"),
     );
@@ -674,7 +674,7 @@ pub fn build(
             outlines.pending = Some(ara_render::Outlines {
                 channels: outlines.channel_groups.clone(),
                 colours,
-                width: renderer.size()[0] as f32 / rect.w.max(1.),
+                width: output_width as f32 / rect.w.max(1.),
                 hidden: 0.35,
             });
         }

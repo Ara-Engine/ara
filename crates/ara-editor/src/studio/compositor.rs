@@ -9,6 +9,7 @@ use ara_ui::style::Color;
 use ara_ui_render::atlas::TextMode;
 use ara_ui_render::gpu::Renderer as UiRenderer;
 
+use super::viewport::IdHost;
 use crate::gpu::{IdHit, IdPick, NativeUi, ui_device};
 use crate::overlay::{self, GizmoState, Outlines};
 use crate::state::EditorState;
@@ -89,26 +90,26 @@ impl Compositor {
     /// (Drop to Surface reads what the rays hit through it).
     pub fn channels(
         &mut self,
-        renderer: &ara_render::Renderer,
+        entities: &[(u64, String)],
         view: &DocumentView,
         revision: u64,
     ) -> &crate::world::channels::Channels {
         self.outlines.channels.update(
             crate::world::EditWorldView::entities(view),
             revision,
-            renderer.entities(),
+            entities,
         );
         &self.outlines.channels
     }
 
     /// The renderer entity the click at physical pixel `at` lands on, through the
     /// channel map (a model's parts and a terrain's tiles pick their entity). `host`
-    /// answers from its own id image (Renderlab's); without one the click reads the id
-    /// source the overlays read: ara-render's, or the repacked debug image.
+    /// answers from the Scene's own ids (Renderlab's frame); without one the click reads
+    /// the id source the overlays read: ara-render's, or the repacked debug image.
     pub fn pick(
         &mut self,
         renderer: &mut ara_render::Renderer,
-        host: Option<&mut dyn IdPick>,
+        host: Option<IdHost<'_>>,
         view: &DocumentView,
         revision: u64,
         at: [u32; 2],
@@ -116,10 +117,11 @@ impl Compositor {
         self.outlines.channels.update(
             crate::world::EditWorldView::entities(view),
             revision,
-            renderer.entities(),
+            host.as_ref()
+                .map_or_else(|| renderer.entities(), |host| host.entities),
         );
         let id = match host {
-            Some(host) => hit_entity(host.id_at(at)?, renderer.entities()),
+            Some(mut host) => hit_entity(host.id_at(at)?, host.entities),
             None if self.ids == overlay::IdMode::Repacked => {
                 hit_entity(self.repacked_hit(at)?, renderer.entities())
             }
@@ -190,7 +192,8 @@ impl Compositor {
             view,
             state,
             rect,
-            renderer,
+            scene.entities(renderer),
+            renderer.size()[0],
             changed,
             gizmo,
             &mut self.outlines,
@@ -206,7 +209,13 @@ impl Compositor {
             .upload(&mut self.paint, &mut self.ui)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         self.ui.set_dpi(scale)?;
-        self.ui.overlays(rect, self.ids.source(), overlays);
+        // A Renderlab Scene reads the packed ids rasterised beside its image.
+        let source = if scene.id_host().is_some() {
+            crate::gpu::IdSource::Packed(overlay::ENTITY_IMAGE)
+        } else {
+            self.ids.source()
+        };
+        self.ui.overlays(rect, source, overlays);
         let list = DisplayList {
             commands: vec![Draw::Image {
                 node: 1,

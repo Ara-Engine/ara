@@ -476,7 +476,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         });
         match wanted {
             Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
-                let channels = compositor.channels(&renderer, &view, revision);
+                let channels = compositor.channels(scene_view.entities(&renderer), &view, revision);
                 let entities = view.entities();
                 let rotation = rect_tool::frame_rotation(entities, &selection);
                 let bounds = scene_view
@@ -627,13 +627,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     ((pick.u * size[0] as f32) as u32).min(size[0].saturating_sub(1)),
                     ((pick.v * size[1] as f32) as u32).min(size[1].saturating_sub(1)),
                 ];
-                let entity = match compositor.pick(&mut renderer, None, &view, revision, at) {
-                    Ok(entity) => entity,
-                    Err(error) => {
-                        rt.touch(|s| s.editor.report_failure(&*error));
-                        None
-                    }
-                };
+                let entity =
+                    match compositor.pick(&mut renderer, scene_view.id_host(), &view, revision, at)
+                    {
+                        Ok(entity) => entity,
+                        Err(error) => {
+                            rt.touch(|s| s.editor.report_failure(&*error));
+                            None
+                        }
+                    };
                 rt.update(|s| {
                     use crate::catalog::{Target, menus::Context};
                     match (&entity, pick.context) {
@@ -685,7 +687,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.phase("studio.game");
         // A move with vertex or surface snapping: the presented geometry answers it.
         if let Some(request) = rt.touch(|s| s.local.snap.take()) {
-            let channels = compositor.channels(&renderer, &view, revision);
+            let channels = compositor.channels(scene_view.entities(&renderer), &view, revision);
             let target_of = |id: u64| channels.target_of(id).map(str::to_owned);
             rt.update(|s| {
                 if snap.as_ref().is_none_or(|c| !c.live(&s.editor, &view)) {
@@ -717,7 +719,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         // Drop to Surface (End): the presented geometry answers its rays.
         if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
-            let channels = compositor.channels(&renderer, &view, revision);
+            let channels = compositor.channels(scene_view.entities(&renderer), &view, revision);
             rt.update(|s| {
                 let planned =
                     crate::surface_drop::plan(&s.editor, &scene_view, |id| channels.target_of(id));

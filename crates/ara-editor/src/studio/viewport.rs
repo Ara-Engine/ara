@@ -14,15 +14,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Binds the renderer's output and entity channel as the UI adapter's external images
-/// (the Scene view's picture and its pick buffer). `color` replaces the picture when
-/// Renderlab drew it (`renderlab`).
+/// Binds the Scene view's picture and its pick buffer as the UI adapter's external images:
+/// the renderer's output and entity channel, or Renderlab's image and the packed ids
+/// rasterised beside it (`renderlab`: the picture, then the ids).
 fn attach(
     gpu: &mut NativeUi,
     renderer: &Renderer,
-    color: Option<ara_gpu::Image>,
+    renderlab: Option<(ara_gpu::Image, ara_gpu::Image)>,
 ) -> anyhow::Result<()> {
-    let color = color.unwrap_or_else(|| renderer.output());
+    let (color, ids) = renderlab.unwrap_or_else(|| (renderer.output(), renderer.entity_channel()));
     // SAFETY: Both views belong to the shared live renderer, stay valid through UI
     // submission, and finish CopySource.
     unsafe {
@@ -33,8 +33,8 @@ fn attach(
         )?;
         gpu.external_image(
             overlay::ENTITY_IMAGE,
-            renderer.gpu().native_image(renderer.entity_channel())?,
-            renderer.gpu().image_view(renderer.entity_channel())?,
+            renderer.gpu().native_image(ids)?,
+            renderer.gpu().image_view(ids)?,
         )?;
     }
     Ok(())
@@ -48,6 +48,7 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod bounds;
 mod content;
 mod convergence;
+mod ids;
 mod picking;
 mod preview;
 mod probes;
@@ -56,6 +57,7 @@ mod renderlab;
 #[cfg(test)]
 mod scene_switch;
 mod startup;
+pub(super) use ids::IdHost;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(crate) use startup::prepare_renderer;
 
@@ -1122,6 +1124,20 @@ impl SceneView {
                     self.fidelity.is_some() && self.remaining > 0
                 } || self.preview_needs_frame())
     }
+    /// The ids and channels of the Renderlab frame on screen: the click and the overlays
+    /// read them (`IdSource::Packed`) in place of the renderer's.
+    pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
+        self.renderlab
+            .as_ref()
+            .filter(|r| r.image().is_some())
+            .and_then(renderlab::RenderlabScene::id_host)
+    }
+    /// The channels (draw `n` is `n + 1`) the Scene's ids name: Renderlab's draws when it
+    /// shows the Scene, else the renderer's entities.
+    pub(super) fn entities<'a>(&'a self, renderer: &'a Renderer) -> &'a [(u64, String)] {
+        self.id_host()
+            .map_or_else(|| renderer.entities(), |host| host.entities)
+    }
     pub fn attach(
         &self,
         gpu: &mut NativeUi,
@@ -1134,7 +1150,7 @@ impl SceneView {
                 renderer,
                 self.renderlab
                     .as_ref()
-                    .and_then(renderlab::RenderlabScene::image),
+                    .and_then(|r| r.image().zip(r.id_image())),
             )?;
         } else {
             gpu.forget_external(overlay::viewport_image());

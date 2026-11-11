@@ -4,6 +4,7 @@
 //! compositor shows that image in place of `ara-render`'s colour. `ara-render` still renders the
 //! frame beside it: it keeps the entity-ID image, picking, outlines and the frame tags working
 //! until Renderlab's id output replaces them. Off by default.
+use super::ids::{IdHost, Ids};
 use anyhow::{Context, Result};
 use ara_gpu::{GpuDevice, Image};
 use ara_render_fidelity::environment::FrameEnvironment;
@@ -32,6 +33,8 @@ pub(super) struct RenderlabScene {
     content: Option<(Revision, Content)>,
     /// The completed image, a copy the compositor can sample while the next frame renders.
     published: Option<PresentationImage>,
+    /// The Scene's object ids, rasterised from the frame beside the image.
+    ids: Ids,
 }
 
 impl RenderlabScene {
@@ -47,6 +50,7 @@ impl RenderlabScene {
             engine: Box::new(renderlab),
             content: None,
             published: None,
+            ids: Ids::default(),
         })
     }
 
@@ -85,7 +89,18 @@ impl RenderlabScene {
             },
         )?;
         PresentationImage::publish(&mut self.published, gpu, rendered.image, size)?;
+        self.ids.update(gpu, frame, size)?;
         Ok(())
+    }
+
+    /// The packed id image for the same frame as [`Self::image`] (`IdSource::Packed`).
+    pub(super) fn id_image(&self) -> Option<Image> {
+        self.ids.image()
+    }
+
+    /// The ids' channels and texels, for clicks, hover and the channel map.
+    pub(super) fn id_host(&self) -> Option<IdHost<'_>> {
+        self.ids.host()
     }
 
     /// The last completed image, for the compositor.
@@ -111,6 +126,7 @@ impl RenderlabScene {
         if let Some(image) = self.published.take() {
             image.destroy(gpu)?;
         }
+        self.ids.release(gpu)?;
         self.engine.release(gpu)
     }
 }
