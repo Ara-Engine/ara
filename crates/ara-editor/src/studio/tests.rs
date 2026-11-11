@@ -3755,6 +3755,78 @@ fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
 }
 
 #[test]
+fn delete_removes_picked_states_and_transitions_but_keeps_the_entry() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/walk.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let controller = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+    };
+    let before = controller(&rt);
+    let transition = before.transitions[0].clone();
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition.id));
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(
+        controller(&rt).transitions.is_empty(),
+        "the transition went"
+    );
+    // A state other than the entry goes; the entry is refused.
+    let node = |rt: &Runtime<Studio>, state: &str| {
+        let graph = rt.state().graph.shown_graph().unwrap();
+        graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.payload["state"] == state)
+            .map(|(id, _)| id.clone())
+            .unwrap()
+    };
+    let entry = before.initial.clone();
+    let other = before.states.keys().find(|k| **k != entry).unwrap().clone();
+    let id = node(&rt, &other);
+    rt.update(|s| {
+        s.graph.pick(id);
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(!controller(&rt).states.contains_key(&other), "{other} went");
+    let id = node(&rt, &entry);
+    rt.update(|s| {
+        s.graph.pick(id);
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(
+        controller(&rt).states.contains_key(&entry),
+        "the entry stays"
+    );
+}
+
+#[test]
 fn right_clicking_an_asset_offers_its_actions_and_a_press_outside_closes_them() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));

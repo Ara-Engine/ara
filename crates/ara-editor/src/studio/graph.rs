@@ -82,6 +82,10 @@ impl Page {
     pub(super) fn shown_graph(&self) -> Option<&ara_graph::Graph> {
         self.shown.as_ref().map(|g| g.canvas.graph())
     }
+    /// The document the canvas shows.
+    pub(super) fn shown_doc(&self) -> Option<&str> {
+        self.shown.as_ref().map(|g| g.doc.as_str())
+    }
     /// What is picked on the canvas: nodes, wires (transition arrows), comments.
     pub(super) fn selection(&self) -> std::collections::BTreeSet<String> {
         self.shown
@@ -620,8 +624,13 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 s.local.focus = Some("material/add/search");
                 Handled::Yes
             }
-            // Delete and Backspace remove the selected nodes (one undo step).
-            0x2E | 0x08 if !animation => {
+            // Delete and Backspace remove the selected nodes (one undo step); on the
+            // Animation page, the picked states and transitions.
+            0x2E | 0x08 if animation => {
+                super::animator::delete_selection(s);
+                Handled::Yes
+            }
+            0x2E | 0x08 => {
                 delete_selection(s);
                 Handled::Yes
             }
