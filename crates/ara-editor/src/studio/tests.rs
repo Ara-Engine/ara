@@ -219,6 +219,16 @@ fn a_value_that_differs_across_the_selection_shows_a_dash_and_takes_one_for_all(
 }
 
 #[test]
+fn the_tools_overlay_selects_without_a_gizmo_and_moves_with_one() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/view.tool.select");
+    assert!(rt.state().editor.state.hide_gizmos, "Select shows no gizmo");
+    press(&mut rt, "scene/view.tool.move");
+    assert!(!rt.state().editor.state.hide_gizmos, "Move brings it back");
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);
