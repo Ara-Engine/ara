@@ -1217,6 +1217,10 @@ fn pump(
         if rt.state().local.tab_drag.is_some() {
             keys.extend(dock::all_drag_keys(rt.state()));
         }
+        // While a component is dragged: the Inspector sections it can drop among.
+        if rt.state().local.component_drag.is_some() {
+            keys.extend(inspector::drop_keys(rt.state()));
+        }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {
             keys.extend(panels::drop_keys(rt.state()));
