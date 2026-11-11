@@ -29,6 +29,32 @@ pub fn chosen<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
     }
 }
 
+/// The keyboard's row in a popup list (the palette, Add Component, Create): the ink's
+/// tone at 8%, which shows against the Float material in either theme (Raised, `chosen`,
+/// is the same white as a light popup and near the dark one's tone).
+pub fn active<S: 'static>(l: &Look, el: El<S>, on: bool) -> El<S> {
+    if on { el.fill(active_fill(l)) } else { el }
+}
+
+/// [`active`]'s fill, for rows that set their own.
+pub fn active_fill(l: &Look) -> stillkit::Rgba {
+    l.c.foreground.0.with_alpha(0.08)
+}
+
+/// Catalog prose (diagnostic summaries and causes): `backticked` spans set as inline code,
+/// the rest plain, as a wrapping paragraph. Size, wrap and colour it like `text`.
+pub fn prose<S: 'static>(s: &str) -> El<S> {
+    stillkit::el::rich_text(
+        s.split('`')
+            .enumerate()
+            .filter(|(_, part)| !part.is_empty())
+            .map(|(i, part)| match i % 2 {
+                1 => stillkit::el::Run::new(part.to_owned()).code(),
+                _ => stillkit::el::Run::new(part.to_owned()),
+            }),
+    )
+}
+
 /// A popup's panel (menus, the palette, the Create browser, dialogs): the Float material.
 pub fn float<S: 'static>(l: &Look, el: El<S>) -> El<S> {
     Material::Float.paint(l, el)

@@ -123,6 +123,39 @@ internal static class EditClassifier
         return new(Escalation.None, c.Bodies, c.Inserts);
     }
 
+    /// <summary>Primary parameters can become fields when any partial part captures them; their owning types require full generation.</summary>
+    internal static bool PrimaryConstructorsAffect(IEnumerable<SyntaxNode> bodies, Compilation compilation)
+    {
+        var checkedOwners = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var group in bodies.GroupBy(body => body.SyntaxTree))
+        {
+            var model = compilation.GetSemanticModel(group.Key);
+            foreach (var body in group)
+            {
+                if (body is BaseFieldDeclarationSyntax field)
+                {
+                    foreach (var variable in field.Declaration.Variables)
+                        if (Affected(model.GetDeclaredSymbol(variable))) return true;
+                }
+                else if (Affected(model.GetDeclaredSymbol(body))) return true;
+            }
+        }
+        return false;
+
+        bool Affected(ISymbol? symbol)
+        {
+            var owner = symbol?.ContainingType;
+            if (owner is null) return true; // Unresolved ownership cannot prove a body-only change.
+            for (; owner is not null; owner = owner.ContainingType)
+            {
+                if (!checkedOwners.Add(owner)) continue;
+                if (owner.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     /// <summary>
     /// True if any doc comment or its attachment changed. Doc comments are trivia (invisible to the member
     /// diff) but the generator turns them into schema docs, so the compile server checks
@@ -379,7 +412,7 @@ internal static class EditClassifier
     }
 
     /// <summary>The members of a container, in declaration order.</summary>
-    static IEnumerable<SyntaxNode> Members(SyntaxNode node) => node switch
+    internal static IEnumerable<SyntaxNode> Members(SyntaxNode node) => node switch
     {
         CompilationUnitSyntax cu => cu.Members,
         BaseNamespaceDeclarationSyntax ns => ns.Members,
@@ -388,7 +421,7 @@ internal static class EditClassifier
     };
 
     /// <summary>A container without its members: what must stay equal for its members to be diffed.</summary>
-    static SyntaxNode Header(SyntaxNode node) => node switch
+    internal static SyntaxNode Header(SyntaxNode node) => node switch
     {
         CompilationUnitSyntax cu => cu.WithMembers(default),
         BaseNamespaceDeclarationSyntax ns => ns.WithMembers(default),
@@ -397,7 +430,7 @@ internal static class EditClassifier
     };
 
     /// <summary>Members keyed by kind, name and parameter types; repeats get an occurrence suffix.</summary>
-    static List<(string Key, SyntaxNode Node)> Keyed(IEnumerable<SyntaxNode> members)
+    internal static List<(string Key, SyntaxNode Node)> Keyed(IEnumerable<SyntaxNode> members)
     {
         var seen = new Dictionary<string, int>();
         var list = new List<(string, SyntaxNode)>();
@@ -450,7 +483,7 @@ internal static class EditClassifier
         n.DescendantNodes().Any(d => d is AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax or QueryExpressionSyntax);
 
     /// <summary>The member with bodies replaced; with <paramref name="stripCtors"/>, constructor bodies and initializers too.</summary>
-    static SyntaxNode Strip(SyntaxNode node, bool stripCtors) => new BodyStripper(stripCtors).Visit(node);
+    internal static SyntaxNode Strip(SyntaxNode node, bool stripCtors) => new BodyStripper(stripCtors).Visit(node);
 
     /// <summary>Replaces bodies with a fixed placeholder; block and expression bodies normalize to the same shape.</summary>
     sealed class BodyStripper(bool stripCtors) : CSharpSyntaxRewriter

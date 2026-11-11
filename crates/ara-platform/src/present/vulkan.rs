@@ -1,4 +1,4 @@
-//! Vulkan presentation: an SDL Vulkan surface and swapchain, blitting completed
+//! Vulkan presentation: SDL or native HWND surfaces and swapchains, blitting completed
 //! engine images. The native `new`/`display`/`destroy` API takes the Vulkan context
 //! and raw images (the editor UI); the backend-neutral methods at the end take
 //! `GpuDevice` and image handles, matching the Metal `Present`.
@@ -53,6 +53,10 @@ pub struct Present {
     /// Present mode wish (`set_vsync`) and the one the current swapchain was built with.
     vsync: bool,
     built_vsync: bool,
+    /// Native-layer size, also used to recover an out-of-date child swapchain.
+    native_size: Option<[u32; 2]>,
+    pending_size: Option<[u32; 2]>,
+    wait_ns: u64,
 }
 
 impl Present {
@@ -78,6 +82,7 @@ impl Present {
         output: OutputSettings,
     ) -> Result<Self> {
         ensure!(output.valid(), "Invalid HDR paper-white/peak luminance");
+        let size = window.size()?;
         // SAFETY: Instance and SDL window remain live; all swapchain operations are
         // serialized on the graphics queue. Surface format/usage are queried.
         unsafe {
@@ -95,6 +100,56 @@ impl Present {
             // Both dispatchable/non-dispatchable SDL Vulkan handles use pointer
             // representation on this 64-bit Windows target; ash wraps their bits.
             let surface = vk::SurfaceKHR::from_raw(surface as u64);
+            Self::from_surface(gpu, surface, size, output)
+        }
+    }
+    /// Create an SDR presentation for a live child HWND without SDL ownership.
+    /// Acquiring or reusing an image waits at most one millisecond per wait.
+    /// # Safety
+    /// `hwnd` must belong to this thread and outlive the presentation. `gpu` must
+    /// enable VK_KHR_surface and VK_KHR_win32_surface and outlive teardown.
+    #[cfg(windows)]
+    pub unsafe fn from_hwnd(
+        gpu: &Gpu,
+        hwnd: std::num::NonZeroIsize,
+        size: [u32; 2],
+    ) -> Result<Self> {
+        ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
+        }
+        // SAFETY: the caller retains this live HWND on its owner thread. -6 is
+        // GWLP_HINSTANCE, the module that registered the window's class.
+        let instance = unsafe { GetWindowLongPtrW(hwnd.get(), -6) };
+        ensure!(instance != 0, "HWND has no owning module");
+        let loader = ash::khr::win32_surface::Instance::load(&gpu._entry, &gpu.instance);
+        // SAFETY: live instance/window/module, retained by the caller. Construction
+        // takes ownership of the surface even if swapchain creation fails.
+        unsafe {
+            let surface = loader.create_win32_surface(
+                &vk::Win32SurfaceCreateInfoKHR::default()
+                    .hinstance(instance)
+                    .hwnd(hwnd.get()),
+                None,
+            )?;
+            let mut present = Self::from_surface(gpu, surface, size, OutputSettings::default())?;
+            present.native_size = Some(size);
+            present.wait_ns = 1_000_000;
+            Ok(present)
+        }
+    }
+    /// Takes ownership of a newly created surface, including on construction failure.
+    /// # Safety
+    /// The surface belongs to `gpu` and its native window remains live.
+    unsafe fn from_surface(
+        gpu: &Gpu,
+        surface: vk::SurfaceKHR,
+        size: [u32; 2],
+        output: OutputSettings,
+    ) -> Result<Self> {
+        // SAFETY: forwarded native-owner contract; the guard cleans partial resources.
+        unsafe {
             let mut guard = Construction {
                 gpu,
                 surface,
@@ -125,7 +180,7 @@ impl Present {
                 &loader,
                 &surface_loader,
                 surface,
-                window,
+                size,
                 vk::SwapchainKHR::null(),
                 &shape,
             )?;
@@ -176,6 +231,9 @@ impl Present {
                 oversized: false,
                 vsync: true,
                 built_vsync: true,
+                native_size: None,
+                pending_size: None,
+                wait_ns: PRESENT_WAIT_NS,
             })
         }
     }
@@ -201,7 +259,44 @@ impl Present {
         reach: Option<[u32; 2]>,
     ) -> Result<bool> {
         ara_gpu::cpu_scope!("Platform.resize");
-        let size = window.size()?;
+        // SAFETY: forwarded native-owner contract.
+        unsafe { self.resize_extent(gpu, window.size()?, reach) }
+    }
+    /// Recreate a native presentation at an explicit pixel extent. False retries
+    /// later when the preceding blit has not retired within its bounded wait.
+    /// # Safety
+    /// `gpu` created this presentation; the native window and device remain live,
+    /// and this thread serializes graphics-queue access.
+    pub unsafe fn resize_to(&mut self, gpu: &Gpu, size: [u32; 2]) -> Result<bool> {
+        ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
+        // SAFETY: forwarded native-owner contract.
+        let resized = unsafe { self.resize_extent(gpu, size, None)? };
+        if resized {
+            self.pending_size = None;
+            if self.native_size.is_some() {
+                self.native_size = Some(size);
+            }
+        }
+        Ok(resized)
+    }
+    /// Queue a native-layer resize for the next display call, which has the GPU
+    /// context. Repeated requests coalesce; no raw device pointer is retained.
+    #[cfg(windows)]
+    pub fn request_resize(&mut self, size: [u32; 2]) -> Result<()> {
+        ensure!(self.native_size.is_some(), "Not a native HWND presentation");
+        ensure!(size.into_iter().all(|v| v > 0), "Empty presentation size");
+        self.pending_size = Some(size);
+        Ok(())
+    }
+    /// Shared explicit-size recreation for SDL and native layers.
+    /// # Safety
+    /// Same live native owners and exclusive queue access as `resize_to`.
+    unsafe fn resize_extent(
+        &mut self,
+        gpu: &Gpu,
+        size: [u32; 2],
+        reach: Option<[u32; 2]>,
+    ) -> Result<bool> {
         let reach = reach
             .filter(|_| self.scaling.is_some())
             .map(|r| [r[0].max(size[0]), r[1].max(size[1])]);
@@ -221,7 +316,7 @@ impl Present {
         };
         for slot in 0..SLOTS {
             // SAFETY: forwarded caller contract.
-            if !unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? } {
+            if !unsafe { self.retire_slot(gpu, slot, self.wait_ns)? } {
                 return Ok(false);
             }
         }
@@ -235,7 +330,7 @@ impl Present {
                 &self.loader,
                 &self.surface_loader,
                 self.surface,
-                window,
+                size,
                 old,
                 &shape,
             );
@@ -304,7 +399,7 @@ impl Present {
             unsafe {
                 self.loader.acquire_next_image(
                     self.swapchain,
-                    PRESENT_WAIT_NS,
+                    self.wait_ns,
                     semaphore,
                     vk::Fence::null(),
                 )
@@ -570,13 +665,25 @@ impl Present {
             self.swapchain != vk::SwapchainKHR::null(),
             "Presentation has been destroyed"
         );
+        if let Some(size) = self.pending_size {
+            // SAFETY: display and recreation share the caller's native owners.
+            if !unsafe { self.resize_to(gpu, size)? } {
+                return Ok(());
+            }
+            self.pending_size = None;
+        }
         let slot = self.next;
         // A stalled presentation engine skips frames rather than blocking the caller.
         // SAFETY: this presentation was created on `gpu`.
-        if !unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? } {
+        if !unsafe { self.retire_slot(gpu, slot, self.wait_ns)? } {
             return Ok(());
         }
-        let Some(index) = self.acquire(gpu, self.slots[slot].acquire)? else {
+        let acquired = self.acquire(gpu, self.slots[slot].acquire);
+        if self.native_size.is_some() && acquired.as_ref().is_err_and(is_out_of_date) {
+            self.pending_size = self.native_size;
+            return Ok(());
+        }
+        let Some(index) = acquired? else {
             return Ok(());
         };
         let cmd = gpu.commands(false)?;
@@ -604,7 +711,11 @@ impl Present {
                 self.slots[slot].fence,
             )?;
         }
-        let result = self.present(gpu, index);
+        let mut result = self.present(gpu, index);
+        if self.native_size.is_some() && result.as_ref().is_err_and(is_out_of_date) {
+            self.pending_size = self.native_size;
+            result = Ok(());
+        }
         // The slot's next use waits its fence (`retire_slot`).
         self.slots[slot].command = Some(cmd);
         if self.frames_in_flight {
@@ -614,7 +725,7 @@ impl Present {
         // Synchronous: the blit completes before returning, unless the presentation
         // engine stalls; then the slot stays busy rather than blocking the caller.
         // SAFETY: this presentation was created on `gpu`.
-        unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? };
+        unsafe { self.retire_slot(gpu, slot, self.wait_ns)? };
         result
     }
 }
@@ -692,7 +803,7 @@ unsafe fn build_swapchain(
     loader: &ash::khr::swapchain::Device,
     surface_loader: &ash::khr::surface::Instance,
     surface: vk::SurfaceKHR,
-    window: &Window,
+    size: [u32; 2],
     old: vk::SwapchainKHR,
     shape: &Shape,
 ) -> Result<(vk::SwapchainKHR, vk::Extent2D, vk::SurfaceFormatKHR)> {
@@ -711,10 +822,9 @@ unsafe fn build_swapchain(
         let format = select_format(&formats, output.mode)
             .with_context(|| format!("Requested {:?} output unavailable; enable Windows HDR and use an HDR display. Advertised formats: {formats:?}", output.mode))?;
         let extent = if caps.current_extent.width == u32::MAX {
-            let size = window.size()?;
             vk::Extent2D {
-                width: size[0],
-                height: size[1],
+                width: size[0].clamp(caps.min_image_extent.width, caps.max_image_extent.width),
+                height: size[1].clamp(caps.min_image_extent.height, caps.max_image_extent.height),
             }
         } else {
             caps.current_extent
@@ -878,4 +988,9 @@ impl Present {
         // SAFETY: forwarded caller contract.
         unsafe { self.destroy(gpu.context()) }
     }
+}
+
+/// Resize races are retried by native layers on their next display pass.
+fn is_out_of_date(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<vk::Result>() == Some(&vk::Result::ERROR_OUT_OF_DATE_KHR)
 }

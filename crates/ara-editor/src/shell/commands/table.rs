@@ -2253,6 +2253,22 @@ fn build() -> Vec<Spec> {
             |_, e, _| act(e, "editor.layout.next", json!({})),
         ),
         cmd(
+            "window.dock",
+            "Dock Panel in Main Window",
+            "panel-bottom",
+            "",
+            "Put a floating panel back where the default layout keeps it.",
+            |s, e, t| {
+                let panel = panel_target(s, e, t);
+                let slot = crate::state::home_slot(&panel);
+                act(
+                    e,
+                    "editor.layout.move",
+                    json!({"panel": panel, "slot": slot}),
+                )
+            },
+        ),
+        cmd(
             "window.gather",
             "Gather Floating Windows",
             "minimize",

@@ -104,6 +104,26 @@ fn native_floating(s: &Studio) -> Vec<El<Studio>> {
                             .wrap(1),
                     ),
                 );
+            // Dock back: every panel of the window where the default layout keeps it (the
+            // way back where dragging between windows can't work, as on Wayland).
+            let home = panels.clone();
+            bar = bar.child(
+                icon_button(
+                    l,
+                    Tone::Ghost,
+                    Size::Sm,
+                    icons::PANEL_BOTTOM,
+                    "Dock in main window",
+                )
+                .size(20.0)
+                .key(format!("float/{id}/dock"))
+                .on_press(move |s: &mut Studio| {
+                    for panel in &home {
+                        let target = crate::catalog::Target::Panel(panel.clone());
+                        super::commands::run(s, "window.dock", &target);
+                    }
+                }),
+            );
             // macOS draws its own close (the traffic lights, in the inset).
             if !cfg!(target_os = "macos") {
                 bar = bar.child(
@@ -709,11 +729,14 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
         .or(tabs.first())
         .cloned()
         .unwrap_or_default();
+    // One Tab stop per strip, on its open tab; Left and Right move along it.
     let strip = row()
         .h(style::STRIP)
         .pad_x(2.0)
         .gap(1.0)
         .align(Align::End)
+        .role(stillkit::Role::TabList)
+        .focus_group(stillkit::el::Orientation::Horizontal)
         .children(tabs.iter().enumerate().map(|(i, tab)| {
             let on = i == active;
             let (title, glyph) = panel_title(tab);
