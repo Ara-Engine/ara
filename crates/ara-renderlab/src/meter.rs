@@ -7,7 +7,9 @@
 //! blocking read's was, and a slower GPU only makes it later, which the meter's own
 //! adaptation (Ara's rate of 2 per second) hides. A pass that never finishes is reported
 //! and given up on (`STUCK_FRAMES`); its slot stays busy until it does.
+#[cfg(not(target_vendor = "apple"))]
 use crate::gaps::Gaps;
+#[cfg(not(target_vendor = "apple"))]
 use std::{
     collections::VecDeque,
     sync::{Arc, OnceLock},
@@ -19,19 +21,24 @@ pub(crate) const BINS: usize = 512;
 /// The log of the darkest luminance the meter tells apart (1e-4, as Ara's meter floors it).
 pub(crate) const LOG_DARKEST: f32 = -9.210_34;
 /// Pixels between samples on each axis: a quarter of the frame is binned.
-const STRIDE: u32 = 2;
+pub(crate) const STRIDE: u32 = 2;
 /// Readback slots made at start; usually one or two are in flight.
+#[cfg(not(target_vendor = "apple"))]
 const SLOTS: usize = 3;
 /// The most slots ever made, stuck ones included.
+#[cfg(not(target_vendor = "apple"))]
 const MAX_SLOTS: usize = 8;
 /// Frames a pass may stay in flight before it is called stuck (a pass finishes within the
 /// frame it follows, which the bridge waits for, so one or two is normal).
+#[cfg(not(target_vendor = "apple"))]
 const STUCK_FRAMES: u32 = 8;
 /// Consecutive refused submits before it is reported.
+#[cfg(not(target_vendor = "apple"))]
 const REFUSED_FRAMES: u32 = 60;
 
 /// The reduction: each invocation bins one sampled pixel's luminance (the output is sRGB, so
 /// the load decodes to linear light).
+#[cfg(not(target_vendor = "apple"))]
 fn shader() -> String {
     format!(
         "@group(0) @binding(0) var image: texture_2d<f32>;
@@ -51,15 +58,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
 }
 
 /// The bin of luminance `l` (0 to 1), as the shader bins it.
-#[cfg(test)]
+#[cfg(any(test, target_vendor = "apple"))]
 pub(crate) fn bin_of(l: f32) -> usize {
     let x = (l.max(1e-4).ln() - LOG_DARKEST) / -LOG_DARKEST;
     ((x * BINS as f32).floor().clamp(0., BINS as f32 - 1.)) as usize
 }
 
 /// The histogram the shader would build for `rgba8` (display-encoded, `width` pixels wide):
-/// the same sampled pixels and bins, on the CPU. For tests.
-#[cfg(test)]
+/// the same sampled pixels and bins, on the CPU. The tests' reference, and on Apple the
+/// meter itself (`bridge_metal`), which reads the displayed image back on metered frames.
+#[cfg(any(test, target_vendor = "apple"))]
 pub(crate) fn histogram_of_rgba8(rgba8: &[u8], width: usize) -> Vec<u32> {
     let decode = |v: u8| {
         let s = f32::from(v) / 255.;
@@ -105,14 +113,17 @@ pub(crate) fn log_mean(histogram: &[u32], low: f32, high: f32) -> Option<f32> {
 }
 
 /// One finished look at a frame: the meter and stops it was rendered with, and its histogram.
+#[cfg(not(target_vendor = "apple"))]
 pub(crate) struct Reading {
     pub meter: f32,
     pub stops: f32,
     pub histogram: Vec<u32>,
 }
 
+#[cfg(not(target_vendor = "apple"))]
 type Mapped = Arc<OnceLock<Result<(), wgpu::BufferAsyncError>>>;
 
+#[cfg(not(target_vendor = "apple"))]
 struct Pending {
     meter: f32,
     stops: f32,
@@ -124,12 +135,14 @@ struct Pending {
     stuck: bool,
 }
 
+#[cfg(not(target_vendor = "apple"))]
 struct Slot {
     bins: wgpu::Buffer,
     staging: wgpu::Buffer,
     pending: Option<Pending>,
 }
 
+#[cfg(not(target_vendor = "apple"))]
 struct Pipeline {
     pipeline: wgpu::ComputePipeline,
     layout: wgpu::BindGroupLayout,
@@ -137,6 +150,7 @@ struct Pipeline {
 
 /// The histogram passes in flight on one device. The pipeline and the first `SLOTS` buffer
 /// pairs are made at construction, so the first metered frame pays for neither.
+#[cfg(not(target_vendor = "apple"))]
 pub(crate) struct Readbacks {
     pipeline: Pipeline,
     slots: Vec<Slot>,
@@ -148,6 +162,7 @@ pub(crate) struct Readbacks {
     refused: u32,
 }
 
+#[cfg(not(target_vendor = "apple"))]
 impl Readbacks {
     pub fn new(device: &wgpu::Device) -> Self {
         Self {
@@ -327,6 +342,7 @@ impl Readbacks {
     }
 }
 
+#[cfg(not(target_vendor = "apple"))]
 impl Pipeline {
     fn new(device: &wgpu::Device) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -376,6 +392,7 @@ impl Pipeline {
     }
 }
 
+#[cfg(not(target_vendor = "apple"))]
 impl Slot {
     fn new(device: &wgpu::Device) -> Self {
         let size = (BINS * 4) as u64;
@@ -416,7 +433,7 @@ impl Slot {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_vendor = "apple")))]
 mod tests {
     use super::*;
 

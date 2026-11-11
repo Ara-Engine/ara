@@ -310,7 +310,9 @@ fn review_line(failed: &[(String, String)]) -> String {
 }
 
 /// The project's name as people read it: `name` in `ara.project.json`, else its folder's.
-fn project_name(editor: &Editor) -> String {
+/// The one source: the window title, the title bar, the Assets path bar and this card all
+/// show it.
+pub(super) fn project_name(editor: &Editor) -> String {
     editor
         .state
         .settings

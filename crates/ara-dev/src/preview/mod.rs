@@ -56,7 +56,12 @@ impl Runner for Native {
             Ok(())
         };
         if gpu {
-            crate::gpu::locked(3600, operation)
+            // The installed-package smoke is a pass/fail acceptance, not a measurement, so it
+            // takes the machine's GPU lock without the quiet-machine verdict: on a workstation
+            // the always-on tools (chat, helper and relay processes, background downloads) keep
+            // foreign CPU above the guard's 10% and invalidated every run, after the smoke had
+            // passed or failed on its own merits.
+            crate::gpu::locked_unmeasured(3600, operation)
         } else {
             operation()
         }

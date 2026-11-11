@@ -1,11 +1,12 @@
 # ara-renderlab
 
-Renderlab (`github.com/Ara-Engine/renderlab`) as an Ara renderer. Provisional: D35.
+Renderlab (`github.com/Ara-Engine/renderlab`) as Ara's default renderer (D35, D39).
 `Renderlab` implements `ara_runtime_render::ExternalRenderer`; a host installs it
 with `Presenter::set_external_renderer`, and presents, captures and perf runs then
 draw the extracted `RenderFrame` through Renderlab's `Engine`. The player's switch is
-`--renderer ara|renderlab|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`).
-`ara-render` stays the default.
+`--renderer renderlab|ara|renderlab-rt|renderlab-nonrt` (or `ARA_RENDERER`); `renderlab` is the
+default. `ara-render` is frozen and draws where Renderlab cannot start, and the editor's Scene
+view, until Renderlab has more than one view per engine.
 
 This is the only crate that names a Renderlab or wgpu type. Keep it that way: the
 GPU layer under Renderlab is being measured against `ara-gpu`, and a swap must touch
@@ -13,8 +14,8 @@ this crate alone.
 
 ## API
 
-- `Renderlab::new(&Options)`: creates Renderlab's engine on its own Vulkan device.
-  Fails with `ARA_RENDERLAB_UNAVAILABLE` (no adapter, missing features, a Mac); hosts keep Ara's renderer.
+- `Renderlab::new(&Options)`: Renderlab's engine on its own Vulkan device, or on Apple on the
+  presenter's Metal device (ara-gpu backend, RT only). `ARA_RENDERLAB_UNAVAILABLE` keeps Ara's.
 - `PathChoice::{Auto, HardwareRt, NonRt}`: `Auto` prefers hardware RT. The non-RT
   path prints `ARA_RENDERLAB_NONRT_PATENT` (open patent question on its sun-shadow method).
 - `Renderlab::path()`: the path in use.
@@ -27,7 +28,9 @@ this crate alone.
   batches per material, and which (last resort) are left out.
 - `texture.rs`: cooked KTX2 (BC7/BC5) to Renderlab's RGBA8 mip chains.
 - `lighting.rs`: camera, sun, sky source, local lights, exposure and display settings.
-- `meter.rs`: the exposure meter's look at a frame: a compute pass on Renderlab's device bins the output's log luminance (512 bins), mapped on a later frame so no frame waits for it. The bridge takes the readings at the start of each frame, when the previous frame's (which it waited for) is done, so a cut's snap lands one frame on, as it did with a blocking read; a pass stuck past 8 frames is reported and gets a new slot.
+- `sky.rs`: the frame's sky on either engine; a sky image prepared off the frame loop.
+- `rl.rs`: the mapping's `Engine`: wgpu's, or on Apple the backend's (`renderlab_metal`, Renderlab#3; the root manifest patches its ara-gpu to ours).
+- `meter.rs` (on Apple: a readback on metered frames, binned by the pass's CPU twin): the exposure meter's look at a frame: a compute pass on Renderlab's device bins the output's log luminance (512 bins), mapped on a later frame so no frame waits for it. The bridge takes the readings at the start of each frame, when the previous frame's (which it waited for) is done, so a cut's snap lands one frame on, as it did with a blocking read; a pass stuck past 8 frames is reported and gets a new slot.
 - `environment.rs`: HDRI and gradient skies prepared for `Sky::Map` (CPU, once per sky, on a
   worker thread: 0.4 s for the gradient sky, 1.4 s for a 2k HDRI on twelve threads).
 - `decals.rs`: `DecalView` to `Engine::set_decals`.
@@ -36,6 +39,7 @@ this crate alone.
 - `terrain.rs`: resident terrain tiles and foliage instances as meshes; `splat.rs`:
   the tiles' layer maps (atlas, weights and the splat program).
 - `bridge.rs`: the frame loop and the image handoff; `shared.rs`: the shared ring.
+  `bridge_metal.rs`: Apple's loop, on the presenter's device (nothing crosses); backend refusals go to `gaps`.
 - `gaps.rs`: `ARA_RENDERLAB_UNSUPPORTED`/`ARA_RENDERLAB_LIMIT` reporting.
 
 ## Image handoff
@@ -44,8 +48,11 @@ Renderlab renders on its own device (D35: for weeks, until its passes move onto
 `ara-gpu`). On Windows the frame crosses through a ring of images the two devices
 share (`shared.rs`): Renderlab's device exports them exactly as `ara-gpu`'s
 `ExportRing` does, wgpu copies the output into slot 0, and the presenter's device
-copies it out with `ImportedSurface::copy_out_image`. Elsewhere, or when the two
-devices are different adapters, the frame is read back and uploaded (the CPU copy,
+copies it out with `ImportedSurface::copy_out_image`. A second ring of the same
+size carries the object-id image (`set_id` with an RGBA8 UNORM `COPY_SRC` texture,
+copied inside `publish`, read with `deliver_id` before the next publish); both
+releases share one fence. Elsewhere, or when the two devices are different
+adapters, the frame is read back and uploaded (the CPU copy,
 3.3 to 4.1 ms at 1080p); the bridge prints once why. `ARA_RENDERLAB_HANDOFF=copy`
 forces the copy. `PresentStats::external_handoff_ms` reports the cost either way.
 
@@ -60,12 +67,12 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 |---|---|---|---|---|
 | Frame cost | On Showcase at 1080p (RTX 4070 SUPER, Renderlab `4652ea3`): 33 ms (RT) and 62 ms (non-RT) against 3.0 ms for `ara-render` at Epic; about 15 and 50 ms with `ARA_RENDERLAB_SKY=constant`. Radeon 760M, Renderlab `f820af9`, RT: 150.0 ms with a constant sky, 172.7 ms with the image-map sky, the +22.7 ms almost all in the shading pass (94.8 to 116.3 ms) | Renderlab's own work, not the bridge's. The bridge prepares the sky once per content (one preparation, upload and `set_sky` in a 180-frame capture), and the radiance cube's face size does not matter (faces 16, 32 and 64: 171.2 to 172.7 ms); Renderlab's suspects are in its `docs/design-sky-map-cost.md`. P-SKY (Renderlab#16, pinned) halves the map's shading premium on the Radeon: filtered cube-array lookups and a miss-only sky lookup, 16.5 to 8.5 ms on RT and 17.4 to 9.4 ms on non-RT in Renderlab's Showcase-like scene, and 4 to 5 ms off its atmosphere sky; the rest is the lookups themselves. The rest of the frame is glossy reflections and the GI cache | Yes | Renderlab build thread (P-SKY by the Linux thread, awaiting the RTX timing) |
 | Large levels on the non-RT path | Outpost renders on both paths. Renderlab's non-RT shadows slow sharply with caster triangles (on the Radeon 760M, Outpost's ten million foliage triangles outlived the driver's 10 s timer; 2 million render at 406 ms a frame, 4 million do not), so non-RT foliage keeps at most 2 million triangles and fits the 32-bit ids of those shadows; the rest is reported (`ARA_RENDERLAB_LIMIT`). Alpha cuts hold at most four times their source triangles | Non-RT virtual shadows that scale with caster triangles, and 64-bit ids, in Renderlab; foliage levels of detail | Yes | Renderlab (shadow scaling, 64-bit ids); Linux thread (bridge budgets) |
-| More than 256 mesh-material groups | Past 256, opaque static groups that share a material merge into one world-space batch per material, fewest objects first (`batch.rs`); a batch whose members move is rebuilt each frame. Draws are left out only when merging still does not fit (more distinct materials than the limit). Terrain tiles take at most half the groups. Both report `ARA_RENDERLAB_LIMIT` | Renderlab#2 raised `TRACED_DRAWS` from 64 to 256 at no cost when unused on non-RT and 1 to 2% on RT (Radeon 760M). Beyond that: growable per-draw tables in Renderlab, or its virtual geometry | No: nothing is left out below 256 distinct materials | Linux thread |
-| Terrain and foliage levels of detail, foliage wind | Foliage density follows the user's graphics tier as in Ara's renderer (`ExternalView::foliage_percent`, the same stable selection). Resident tiles draw as full-resolution meshes (at most 128: Outpost leaves 16 of 144 out). Layers shade as Ara's `terrainSurface` does (`splat.rs`): colour maps flattened against their tile-scale mean under Ara's breakup noise, side projections on steep slopes, and roughness (metal/roughness green) and normal maps within the user's terrain detail distance (`ExternalView::terrain_detail`), faded beyond it as Ara fades them; metalness uses its map's mean; occlusion and emission maps, rotated maps and negative scales are reported. A layer whose material has not resolved stays on the defaults without shifting the layers after it; a map that cannot be decoded costs that map only. Decoded 512² quadrants are cached by material digest and slot, so a changed detail tier re-uploads the atlases without decoding the maps again; the first build still decodes each map at full size on the frame thread. Ara's terrains hold at most four layers, as the splat does. Foliage instances draw their rule's model parts, standing still, at most 60,000 parts | Renderlab mesh LODs or its virtual geometry for distance and the tile cap; a vertex hook for wind | Yes | Linux thread |
+| More than 256 mesh-material groups | Past 256, opaque static groups that share a material merge into one world-space batch per material, fewest objects first (`batch.rs`); a batch whose members move is rebuilt each frame. Draws are left out only when merging still does not fit (more distinct materials than the limit). Terrain tiles take at most three quarters of the groups (192; each tile is its own group, never merged: its own weights texture). Both report `ARA_RENDERLAB_LIMIT` | Renderlab#2 raised `TRACED_DRAWS` from 64 to 256 at no cost when unused on non-RT and 1 to 2% on RT (Radeon 760M). Beyond that: growable per-draw tables in Renderlab, or its virtual geometry | No: nothing is left out below 256 distinct materials | Linux thread |
+| Terrain and foliage levels of detail, foliage wind | Foliage density follows the user's graphics tier as in Ara's renderer (`ExternalView::foliage_percent`, the same stable selection). Resident tiles draw as full-resolution meshes (at most 192, one group each: Outpost has 144 resident tiles; past 192, merge neighbouring tiles into chunk meshes with one weights atlas, a gutter of one replicated texel, rebuilt per chunk as tiles become resident). Layers shade as Ara's `terrainSurface` does (`splat.rs`): colour maps flattened against their tile-scale mean under Ara's breakup noise, side projections on steep slopes, and roughness (metal/roughness green) and normal maps within the user's terrain detail distance (`ExternalView::terrain_detail`), faded beyond it as Ara fades them; metalness uses its map's mean; occlusion and emission maps, rotated maps and negative scales are reported. A layer whose material has not resolved stays on the defaults without shifting the layers after it; a map that cannot be decoded costs that map only. Decoded 512² quadrants are cached by material digest and slot, so a changed detail tier re-uploads the atlases without decoding the maps again; the first build still decodes each map at full size on the frame thread. Ara's terrains hold at most four layers, as the splat does. Foliage instances draw their rule's model parts, standing still, at most 60,000 parts | Renderlab mesh LODs or its virtual geometry for distance and the tile cap; a vertex hook for wind | Yes | Linux thread |
 | A sky light strength other than 1 in fog | The sky lights the scene at `Environment.skyLight` and is drawn at 1: HDRI and gradient skies through `Sky::Map`'s intensity with `Background::ScaledSky` (Renderlab#17), the physical atmosphere through `Settings::sky_light` (#21). On `levels/skylight.scene` (0.25) the sky's brightness is unchanged on all three renderers and the sky-lit shade falls to 0.78x on Ara's renderer and 0.68x on Renderlab's (its shade holds more sky light). The atmosphere's fog keeps its full sky light, which Ara scales too | Sky light in Renderlab's fog in-scattering | No | Linux thread |
 | VFX graph effects | Library effects draw on Renderlab emitters (`effects.rs`): rates and first-tick bursts, point, sphere, box and cone spawns, per-axis velocity, gravity, drag, curl noise, one vortex and one attractor, a bounce plane, four-key colour and size curves, Ara's procedural sprite sheets played over each life (fire with its heat ramp, twice as tall), camera-, velocity- and ground-aligned sprites, and emitter lights as point lights (they light the scene too; Ara's light only particles). New effects start warmed by 2.5 s, as Ara's composite warms each effect before its first frame; steps follow simulation ticks. Reported and left out: mesh-surface spawns, depth collisions, ribbons and mesh particles, events, material flipbook atlases, smoke lighting gradients, velocity shutter, more than 2,048 particles per emitter. Curl noise acts in the effect's space, phased by birth time, and prewarms step through the forces (Renderlab#25), so plumes drift as Ara's do; lit smoke still reads paler than Ara's (Renderlab's near-isotropic particle lighting; no lighting gradients) | Ribbons, mesh particles, depth collisions and events in Renderlab's emitters; a phase function for lit particles; multi-workgroup sort past 2,048 | Yes: ribbons, mesh particles and events | Linux thread |
 | Decal emission and ambient occlusion, distance fade, renderers that refuse decals, decal maps above 512 texels | Base colour, roughness, metalness and normal are projected; the rest is left out, every opaque surface in the box receives, larger maps are reduced | Emission and occlusion channels and a per-object mask in Renderlab's decals; fade in the bridge | Yes: per-object opt-out | PC integration thread |
-| macOS and Metal | Ara's renderer draws (`ARA_RENDERLAB_UNAVAILABLE`); the Renderlab path has never rendered on Metal. What excludes it: (1) the bridge is compiled out on Apple (`cfg(not(target_vendor = "apple"))` on every module, on the `renderlab`/`wgpu`/`ash` dependencies and on `tests/render.rs`, so the Mac runs 0 GPU tests); (2) Renderlab opens `wgpu::Backends::VULKAN` only. Against wgpu 30's Metal backend: binding arrays with non-uniform indexing need MSL 3 and argument-buffer tier 2, 64-bit atomic min/max need Apple9 (or Apple8 with Mac2), `SHADER_PER_VERTEX` needs Apple10 (the M5 has it), ray queries need macOS 15, and `EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`, which the RT path requires, is never offered on Metal. Renderlab's development-only Vulkan program compiler (`program_vulkan.rs`) and the bridge's shared-image handoff are Vulkan-only (the bridge falls back to its CPU copy) | Renderlab: open Metal and fetch hit vertices from its own buffers instead of hit-vertex return; then lift the bridge's `cfg` and run `tests/render.rs` on the M5. Or port Renderlab's passes onto `ara-gpu` (D35; the Mac GPU thread's paused draft Renderlab#3) | Yes | Mac ara-gpu thread (paused tonight) |
+| macOS and Metal | Renders through Renderlab's ara-gpu backend on the presenter's own Metal device (`bridge_metal.rs`; RT only): `tests/render.rs` passes on the M5. Skies go through `Sky::Map` as on wgpu (`sky.rs`, shared); normal maps draw. Skinned meshes draw (posed on the CPU). Showcase at 1280x720 on the M5 Pro (Renderlab `2395c6b`): 49 ms GPU, 75 ms wall a frame. The backend refuses, and the bridge reports: particles, decals, volumetric fog, the colour LUT; the meter reads the image back on metered frames | Renderlab#3's plan: those features in order, then merge it and pin main | Yes: until the refusals close | Mac ara-gpu thread |
 | Editor Scene view and multi-view | Not routed: one view per engine. The play process's presented image (windows, the embedded Game view, captures) works | More than one view per Renderlab `Engine` | Yes | Unassigned |
 | Entity marks in captures, debug view modes, rendering debug switches, the path-traced reference | Captures have no legend; debug views and the reference fail with `ARA_VIEW_MODE_UNAVAILABLE`; switches are reported and ignored | An ID target and view modes in Renderlab's `Engine` output | Yes: agents and the editor pick through them | Unassigned |
 | Automatic exposure: Ara's HDR histogram and highlight headroom | The bridge meters the displayed image as Ara does: the log mean between the look's low and high percentiles, steered to middle grey, plus its compensation and Ara's compensation curve at the metered scene EV100, within its EV100 limits; it adapts at the look's rate over a fixed 1/60 s per rendered frame, as Ara's renderer does (no tick or wall clock, so a paused game still adapts), and snaps after a cut, as Ara's history reset does, until it settles or is pinned at a limit. It meters every frame while snapping and one in 16 while adapting, toward the last target in between. The look is a GPU histogram of the output (`meter.rs`) that arrives by the next frame and is never waited for: no frame blocks on the meter, on either route (Outpost: within a quarter stop of Ara). Ara meters the HDR scene with a highlight headroom; the bridge meters the tone-mapped image | An `Exposure::Auto` in Renderlab: an HDR histogram with Ara's headroom, and no readback | Yes | Linux thread |
@@ -96,15 +103,11 @@ fastest of four runs on a shared machine, spread up to 10%; Ara's renderer: 58.2
 The premium is map against `ARA_RENDERLAB_SKY=constant` in the same round. The RTX 4070 SUPER
 before P-SKY: non-RT 40.5 ms GPU, shading 33.4 (82%), against 3.0 ms on Ara's renderer.
 
-Not a Renderlab gap either: Outpost's ground at dusk. Ara's renderer lights the compound
-with direct sun, but the sun stands 4 degrees up behind a 67 m dune 184 m away (20 degrees
-up from the compound), so Renderlab's shadow there is physically right and Ara's
-renderer misses the dune's shadow. A sunlit dusk needs the sun moved in the sample.
+Not a Renderlab gap either: Outpost's ground at dusk. Ara's renderer lights the compound with direct sun, but the sun stands 4 degrees up behind a 67 m dune 184 m away (20 degrees
+up from the compound), so Renderlab's shadow there is physically right and Ara's renderer misses the dune's shadow. A sunlit dusk needs the sun moved in the sample.
 
-Reflection probes are not a gap: Renderlab traces reflections on both paths. Its
-glossy band could leave bright speckles on glossy surfaces before `4652ea3` (a renderer
-defect, since fixed there); `Options::max_reflection_roughness` (`ARA_RENDERLAB_REFLECTION_ROUGHNESS`
-in the player) limits tracing, 0.05 keeping mirrors only.
+Reflection probes are not a gap: Renderlab traces reflections on both paths. Its glossy band could leave bright speckles on glossy surfaces before `4652ea3` (a renderer
+defect, since fixed there); `Options::max_reflection_roughness` (`ARA_RENDERLAB_REFLECTION_ROUGHNESS` in the player) limits tracing, 0.05 keeping mirrors only.
 
 Captures list Renderlab's own passes as `External.Pass.*` beside `External.Frame.Gpu`;
 the rest of that span is its GI cache. Renderlab's profile of Showcase found no bridge

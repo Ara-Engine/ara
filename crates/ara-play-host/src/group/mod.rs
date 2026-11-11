@@ -60,6 +60,12 @@ pub(crate) fn spawn(
         .arg(&config.gpu_cache)
         .arg("--size")
         .arg(format!("{}x{}", config.size[0], config.size[1]))
+        .args(
+            config
+                .renderer
+                .iter()
+                .flat_map(|renderer| ["--renderer", renderer.as_str()]),
+        )
         .arg(format!("--prewarm-ray-tracing={}", rendering.ray_tracing))
         .env(TOKEN_ENV, token)
         .env("ARA_CRASH_DIR", config.logs.join("crashes"))

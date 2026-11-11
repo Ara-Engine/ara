@@ -409,6 +409,9 @@ pub struct PoolConfig {
     pub windowed: usize,
     /// Window size for windowed players.
     pub size: [u32; 2],
+    /// The player's `--renderer` (`renderlab`, `ara`, `renderlab-rt`, `renderlab-nonrt`); `None`
+    /// leaves the player's own default (Renderlab). Tests of the frozen `ara-render` name it.
+    pub renderer: Option<String>,
 }
 
 /// The pool and the live-link listener.
@@ -573,6 +576,12 @@ impl Pool {
             .arg(&self.config.gpu_cache)
             .arg("--size")
             .arg(format!("{}x{}", self.config.size[0], self.config.size[1]))
+            .args(
+                self.config
+                    .renderer
+                    .iter()
+                    .flat_map(|renderer| ["--renderer", renderer.as_str()]),
+            )
             .env(TOKEN_ENV, &self.token)
             .env("ARA_CRASH_DIR", self.config.logs.join("crashes"))
             .stdin(Stdio::null())

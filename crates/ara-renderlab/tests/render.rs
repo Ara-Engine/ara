@@ -4,8 +4,8 @@
 //! Renderlab path this machine's adapter supports. It checks that a still capture
 //! and a live present both deliver a lit image of the scene on the presenter's
 //! device, and that a moved object moves. Images go under the test's target
-//! directory. A path the adapter cannot run is skipped with a note.
-#![cfg(not(target_vendor = "apple"))]
+//! directory. A path the adapter cannot run is skipped with a note. On Apple the route
+//! is Renderlab's ara-gpu backend on the presenter's own Metal device.
 
 use ara_asset_format::{TextureFormat, write_ktx2};
 use ara_render::capture::{CaptureRequest, ViewMode};
@@ -195,11 +195,13 @@ fn check(path: PathChoice, name: &str) {
         presenter.present(&right).unwrap();
     }
     assert!(presenter.output().is_some());
+    // A crossing between two devices takes time; on Apple the frame is drawn on the
+    // presenter's own device, and nothing crosses.
     assert!(
         presenter
             .stats()
             .external_handoff_ms
-            .is_some_and(|ms| ms > 0.)
+            .is_some_and(|ms| ms > 0. || cfg!(target_vendor = "apple"))
     );
     assert_eq!(presenter.output_size(), SIZE);
     let moved = presenter
