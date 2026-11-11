@@ -44,8 +44,11 @@ fn contract(result: ara_gpu::Result<ara_gpu::HeapIndex>) -> bool {
 
 /// Layer l of a 4x4 image holds l + 1. A cube-array view over all twelve layers samples
 /// face `i % 6` of cube `i / 6` along that face's axis, and a compute stage stores the
-/// twelve results in the layers of a second image through its 2D-array storage view;
-/// reading that image back gives 1 to 12 in order. A storage cube view, a view of a
+/// twelve results in the layers of a second image through its 2D-array storage view.
+/// The same command buffer then samples that second image as cubes, the layers it has
+/// just written, into a third (Renderlab's case: an environment written face by face
+/// and sampled by direction in one frame); reading the third back gives 1 to 12 in
+/// order. A storage cube view, a view of a
 /// non-square image and a view that is not whole cubes are contract errors.
 ///
 /// Where the device does not report `imageCubeArray`, the view and the pipeline (its
@@ -98,12 +101,14 @@ fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
     assert!(contract(gpu.sampled_view(oblong, cubes)));
 
     let pipeline = gpu.create_pipeline(&metadata, &cooked).unwrap();
-    let target = gpu
-        .create_texture(&TextureDesc {
+    // Two 1x1 images of twelve layers: `relay` is written through its 2D-array view and
+    // then sampled through its cube-array view; `target` takes the second pass.
+    let single = |gpu: &mut VulkanDevice, sampled: bool| {
+        gpu.create_texture(&TextureDesc {
             image: ImageDesc {
                 size: [1, 1],
                 format: Format::Rgba32Float,
-                sampled: false,
+                sampled,
                 storage: true,
                 attachment: false,
                 copy_source: true,
@@ -114,16 +119,16 @@ fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
                 ..Default::default()
             },
         })
-        .unwrap();
-    let layers = gpu
-        .storage_view(
-            target,
-            ImageViewDesc {
-                dimension: ViewDimension::D2Array,
-                ..cubes
-            },
-        )
-        .unwrap();
+        .unwrap()
+    };
+    let (relay, target) = (single(&mut gpu, true), single(&mut gpu, false));
+    let flat = ImageViewDesc {
+        dimension: ViewDimension::D2Array,
+        ..cubes
+    };
+    let relay_layers = gpu.storage_view(relay, flat).unwrap();
+    let relay_cubes = gpu.sampled_view(relay, cubes).unwrap();
+    let layers = gpu.storage_view(target, flat).unwrap();
     let sampler = gpu
         .sampler(&SamplerDesc {
             min: Filter::Nearest,
@@ -154,6 +159,7 @@ fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
             Access::Undefined,
             Access::CopyDestination,
         ),
+        edge(Resource::Image(relay), Access::Undefined, Access::Storage),
         edge(Resource::Image(target), Access::Undefined, Access::Storage),
     ]);
     rec.push(Command::UploadImage {
@@ -167,7 +173,26 @@ fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
     )]);
     rec.push(Command::Pipeline(pipeline));
     rec.push(Command::Constants(RootConstants {
-        words: [slot.index, layers.index, sampler.index, 0, 0, 0, 0, 0],
+        words: [slot.index, relay_layers.index, sampler.index, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 12]));
+    // The layers just written, now read as cubes.
+    rec.barriers([edge(
+        Resource::Image(relay),
+        Access::Storage,
+        Access::ShaderRead,
+    )]);
+    rec.push(Command::Constants(RootConstants {
+        words: [
+            relay_cubes.index,
+            layers.index,
+            sampler.index,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
     }));
     rec.push(Command::Dispatch([1, 1, 12]));
     rec.barriers([edge(
@@ -193,7 +218,7 @@ fn cube_array_views_sample_faces_by_direction_and_cubes_by_index() {
         .map(|texel| texel[0])
         .collect();
     assert_eq!(read, (1..=12).map(|v| v as f32).collect::<Vec<_>>());
-    for image in [source, stored, oblong, target] {
+    for image in [source, stored, oblong, relay, target] {
         Device::retire(&mut gpu, Resource::Image(image)).unwrap();
     }
     Device::retire_pipeline(&mut gpu, pipeline).unwrap();
