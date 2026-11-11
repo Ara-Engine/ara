@@ -1,13 +1,13 @@
-//! The scene device is opened on a worker; the renderer borrows it. The UI
-//! adopts both. Drop the renderer before the device (`let (device, renderer)`).
+//! The scene device is opened on a worker. The renderer holds a lease on it,
+//! so the pair can move to the UI thread and either owner can drop first.
 use super::*;
 use std::{ffi::CString, thread::JoinHandle};
 
 /// Keep pumping the loading window/authority while cold PSOs and initial scene
 /// resources are created. No Vulkan owner is shared across these threads.
 ///
-/// The device is the first element so a `let (device, renderer)` binding drops
-/// the renderer first.
+/// The device is the first element. Both values hold a lease, so a binding
+/// that drops one of them does not free the device while the other remains.
 pub(crate) fn prepare_renderer(
     scene: ara_frame::scene::Scene,
     size: [u32; 2],
@@ -27,11 +27,8 @@ pub(crate) fn prepare_renderer(
             if ray_tracing {
                 anyhow::ensure!(!scene.meshes.is_empty(), "Scene has no geometry");
             }
-            let mut device = ara_runtime_render::PresentationDevice::open(&extensions, cache)?;
-            let ptr = device.gpu_mut() as *mut ara_gpu::GpuDevice;
-            // SAFETY: `device` boxes the GpuDevice, so `ptr` stays valid when the
-            // pair moves to the UI thread. The caller drops the renderer first.
-            let mut renderer = unsafe { Renderer::on_device(scene, size, ptr)? };
+            let device = ara_runtime_render::PresentationDevice::open(&extensions, cache)?;
+            let mut renderer = Renderer::on_device(scene, size, device.lease())?;
             if !ray_tracing {
                 let plan = Plan::resolve(
                     quality,

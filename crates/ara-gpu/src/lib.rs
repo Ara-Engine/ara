@@ -9,6 +9,7 @@ pub mod cooked;
 mod cpu;
 pub mod descriptors;
 pub mod hit_geometry;
+mod lease;
 #[cfg(target_os = "macos")]
 pub mod metal;
 pub mod raster;
@@ -23,6 +24,7 @@ pub mod tunables;
 pub mod vulkan;
 
 pub use ash::vk;
+pub use lease::GpuLease;
 
 /// The platform's native backend (D12): Vulkan 1.3, except Metal 4 on macOS. A
 /// cfg-selected alias, so callers stay monomorphic: off Apple platforms this *is*
