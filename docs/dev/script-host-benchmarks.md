@@ -39,6 +39,12 @@ boundary; L2: 90–120 ms of 145 is the full-module analyzer run (emit is 3 ms);
 The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on macOS delivers events 11 ms
 (median) after the write, a third of an L1 save→visible.
 
+## File-watcher latency per OS
+`dotnet run benchmarks/iteration/watch_latency.cs` times how late `FileSystemWatcher` (the compile server's settings)
+reports an in-place save and an atomic save (write a temp file, rename it over the source), median / p95 / max in ms.
+Mac (FSEvents): 11.3 / 12.4 ms in place, 11.7 / 12.5 atomic. Linux (inotify, Linux gate): 0.08 ms in place, 0.14 ms atomic,
+so Linux has no fixed delay. Run it on Windows to see whether ReadDirectoryChangesW adds one (none is expected).
+
 ## One-command timing (any OS)
 `dotnet run benchmarks/iteration/reload_timing.cs` builds `dotnet/Ara.slnx` (Release) and the `reload_bench`
 example, runs the bench in fresh processes and prints median / p95 of launch to first tick and of save → visible
@@ -48,3 +54,13 @@ processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-buil
 `target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
 each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
 mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
+
+## Where launch and compile time go (`--trace`)
+`dotnet run benchmarks/iteration/reload_timing.cs -- --trace` sets `ARA_TRACE=1` for the bench and the compile server. Both print
+`[ara-trace] <unix ms> ...` lines on stderr (kept as `run-*.trace.txt`): the bench's own steps (`main`, host start, first image
+loaded), the server's (process start, runtime, whether Roslyn's assemblies are ReadyToRun, `main` entered, pipe connected, hello,
+first `Watch`, first compile) each with JIT count and time, GC counts and pause, and CPU; and one line per unit of compile work
+with the same counters as deltas. The summary prints the launch timeline (median ms after the bench starts) and, per compile
+outcome (initial, L1, L2, L3), what the slowest 10% did that the rest did not: GC pauses over 5 ms, gen2 collections, JIT'd methods.
+On the Mac this showed an L3 compile spending 44 ms of its 122 ms in GC pause (about 10 gen0, 3 gen1 and 1 gen2 collection) and the
+initial compile 135 ms.

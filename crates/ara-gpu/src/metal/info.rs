@@ -54,6 +54,7 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         present_scaling: false,
         buffer_int64_atomics: buffer_int64_atomics(device),
         fragment_barycentrics: device.supportsShaderBarycentricCoordinates(),
+        cube_arrays: true,
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
         max_image_dimension: MAX_IMAGE_DIMENSION,

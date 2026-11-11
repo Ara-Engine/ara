@@ -124,6 +124,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 super::commands::run(s, "lighting.probe.cancel", &crate::catalog::Target::None)
             })
     } else {
+        let unavailable = probes_unavailable(s);
         enabled(
             button(
                 l,
@@ -133,11 +134,14 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 "Recapture",
             )
             .key("lighting/probe/recapture")
-            .tooltip("Capture the selected reflection probes again")
+            .tooltip(match unavailable {
+                Some(why) => format!("Not available: {why}"),
+                None => "Capture the selected reflection probes again".to_owned(),
+            })
             .on_press(|s: &mut Studio| {
                 super::commands::run(s, "lighting.probe.recapture", &crate::catalog::Target::None)
             }),
-            !probes(s, None).is_empty(),
+            !probes(s, None).is_empty() && unavailable.is_none(),
         )
     };
     let toolbar = row()
@@ -229,9 +233,19 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         }
         list
     };
+    // Said next to the button rather than only in its tooltip: a quality without probe
+    // captures (Auto on an integrated GPU) is the usual reason Recapture is off.
+    let unavailable = probes_unavailable(s).map(|why| {
+        text(format!("Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."))
+            .key("lighting/probe/unavailable")
+            .text_size(11.0)
+            .color(c.muted_foreground.0)
+            .pad_x(10.0)
+    });
     col()
         .grow(1.0)
         .child(toolbar)
+        .children(unavailable)
         .child(body)
         .child(el().h(4.0))
 }
@@ -471,6 +485,15 @@ pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<
     if entities.is_empty() {
         return Err("Select one or more Reflection Probes to recapture".into());
     }
+    // Ask the renderer first: a quality without reflection captures (Auto on an integrated
+    // GPU) would start a job that can only fail. With no renderer report yet, try.
+    let _ = refresh_probes(s);
+    if let Some(why) = probes_unavailable(s) {
+        return Err(format!(
+            "Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."
+        )
+        .into());
+    }
     for id in &entities {
         let value = s
             .resolved
@@ -517,6 +540,22 @@ pub(super) fn refresh_probes(s: &mut Studio) -> ara_ui::Result<()> {
     }
     s.local.probe_status = Some(snapshot);
     Ok(())
+}
+
+/// Why the renderer cannot capture reflection probes at its current quality, from its last
+/// report; `None` when it can, or has not said. The host's "no snapshot yet" placeholder
+/// (version 0: the Scene has not rendered, or just changed) is not a report, so a transient
+/// wait never reads as a quality problem.
+pub(super) fn probes_unavailable(s: &Studio) -> Option<&str> {
+    let report = s.local.probe_status.as_ref().filter(|r| r.version > 0)?;
+    if report.capabilities.reflection_probes {
+        return None;
+    }
+    report
+        .capabilities
+        .reasons
+        .get("reflectionProbes")
+        .map(String::as_str)
 }
 
 /// What the renderer last said of `entity`'s probe capture, in a few words.

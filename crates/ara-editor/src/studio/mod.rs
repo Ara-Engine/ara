@@ -9,12 +9,14 @@
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
 mod about;
+mod agent_work;
 mod agents;
 mod animator;
 mod asset_create;
 mod asset_inspector;
 mod asset_ops;
 mod build_page;
+mod capture;
 mod chrome;
 mod commands;
 mod components;
@@ -36,7 +38,9 @@ mod panels;
 mod portals;
 mod preferences;
 mod present;
+pub(crate) mod probes;
 mod profiler;
+mod rect_tool;
 mod references;
 mod running;
 mod scene;
@@ -69,6 +73,11 @@ const VERTEX_KEY: u16 = 0x56;
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
 
+/// How long closing waits for running probe work to retire (it is cancelled first, so this
+/// is normally the time its in-flight GPU work needs). Past it the GPU objects are left to
+/// the process exit rather than destroyed under that work.
+const CLOSE_DRAIN: Duration = Duration::from_secs(5);
+
 /// Open the project in the studio and run until its window closes.
 pub fn run(options: Options) -> anyhow::Result<()> {
     let user_settings = settings::user_settings_path()?;
@@ -96,8 +105,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
-    // Windows child HWND viewports require a DirectComposition UI surface.
-    #[cfg(windows)]
+    // Native layers need a GPU UI surface: DirectComposition over child HWNDs on Windows,
+    // a Vulkan surface over Wayland subsurfaces on Linux.
+    #[cfg(any(windows, target_os = "linux"))]
     stillkit::platform::set_render(stillkit::platform::Render::Gpu);
     let mut surface = Surface::new(Kind::App { min: (1024, 640) }, &title, Role::Window)?;
     surface.set_caption(Caption::Compact);
@@ -203,6 +213,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut shown_tag = u64::MAX;
     // The running drag's snap source, captured at its first snapped move.
     let mut snap: Option<snapping::Snap> = None;
+    // The selection the Rect tool's bounds were last read for.
+    let mut rect_for: Option<Vec<String>> = None;
     // The graph canvas's size when last drawn.
     let mut graph_extent = ("", [0, 0]);
     // A composite is owed (something changed) but has not presented yet.
@@ -210,11 +222,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
+    // Derived probe jobs (`render.probe.*`): served against the Scene view rendered here.
+    let mut probe_owner = probes::Owner::default();
+    // Native layers placed on the last pass: one shown again presents at once (on Wayland
+    // a hidden layer loses its picture).
+    let mut placed: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    // The last native-layer failure reported, so a recurring one is said once.
+    let mut layer_failure: Option<String> = None;
     let mut scene_dirty = true;
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
+    let mut probe_report_at = Instant::now() - Duration::from_secs(1);
     let mut last_fly = Instant::now();
     let (mut profile_at, mut was_recording) = (Instant::now(), false);
     // `--panel NAME`: open it the studio's way (tool pages dock in the centre).
@@ -231,9 +251,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         ));
     });
     loop {
-        // Windows uses separate Scene/UI queues: finish external reads before recycling images.
-        #[cfg(windows)]
+        // Vulkan's Scene may run on its own queue: finish external reads before recycling images.
+        #[cfg(any(windows, target_os = "linux"))]
         if !compositor.scene_ready(&renderer)? {
+            // Cancelling a bake must not wait for the GPU reads this gate waits on.
+            rt.touch(|s| {
+                server.pump(&mut s.editor);
+                agent_work::deliver_cancellations(&mut s.editor, &mut probe_owner, &mut scene_view);
+            });
             if pump(
                 &mut rt,
                 &mut surface,
@@ -242,6 +267,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 Some(&mut game),
             )? {
                 break;
+            }
+            // The authority keeps serving (protocol, imports, agents, Play) while the
+            // Scene's images are still being read; only GPU work waits.
+            let synced = rt.touch(|s| {
+                server.pump(&mut s.editor);
+                s.editor.tick();
+                s.editor.sync()
+            });
+            if synced {
+                rt.update(|_| {});
+                scene_dirty = true;
             }
             std::thread::sleep(Duration::from_millis(1));
             continue;
@@ -270,8 +306,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
         let (changed, sync_changed) = rt.touch(|s| {
+            // A Scene switch reaches the probe jobs before requests about the new one.
+            for _ in 0..2 {
+                if !probe_owner.invalidate_scene(&mut s.editor) {
+                    break;
+                }
+                s.editor.tick();
+            }
             server.pump(&mut s.editor);
             s.editor.tick();
+            // Cancellation reaches a running bake before the next Scene GPU work.
+            scene_dirty |=
+                probe_owner.poll_cancellations(&mut s.editor, &mut scene_view, &mut renderer);
             (
                 s.editor.host.store().revision() != revision,
                 s.editor.sync(),
@@ -370,6 +416,36 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }) {
             scene_dirty = true;
         }
+        // The Rect tool's bounds: the selection's presented geometry (selected parents take
+        // their children's), read again when the scene or the selection changes.
+        let wanted = rt.touch(|s| {
+            let st = &s.editor.state;
+            (st.tool == crate::state::Tool::Rect
+                && !st.hide_gizmos
+                && !st.selection.is_empty()
+                && s.local.rect_drag.is_none())
+            .then(|| st.selection.clone())
+        });
+        match wanted {
+            Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
+                let channels = compositor.channels(&renderer, &view, revision);
+                let entities = view.entities();
+                let rotation = rect_tool::frame_rotation(entities, &selection);
+                let bounds = scene_view
+                    .bounds_in(
+                        channels,
+                        |address| crate::world::bounds::selected(entities, address, &selection),
+                        rotation,
+                    )
+                    .map(|[min, max]| rect_tool::RectBounds { rotation, min, max });
+                rect_for = Some(selection);
+                if rt.state().local.rect_bounds != bounds {
+                    rt.update(|s| s.local.rect_bounds = bounds);
+                }
+            }
+            Some(_) => {}
+            None => rect_for = None,
+        }
         pass.mark("scene sync");
         pass.phase("studio.scene");
         // The Scene view: render where its element shows and present into its layer.
@@ -379,13 +455,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .find(|(n, _)| &**n == SCENE_LAYER)
             .map(|(_, r)| r);
         surface.place_native_layer(SCENE_LAYER, rect);
+        composite |= shown_again(&mut placed, SCENE_LAYER, rect.is_some());
         // A hidden (minimized) window shows no frames: render none. A covered one skips
         // presents on its own (the 1 ms present wait).
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         let shown = surface.is_visible();
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
         let shown = true;
-        if let Some(rect) = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0) {
+        let on_screen = rect.filter(|r| shown && r.width() >= 8.0 && r.height() >= 8.0);
+        let scene_presented = on_screen.is_some();
+        if let Some(rect) = on_screen {
             let actual = [rect.width() as u32, rect.height() as u32];
             // Reallocating the renderer's targets takes hundreds of milliseconds, so a live
             // resize keeps the last frame (the layer stretches it) and the renderer follows
@@ -414,13 +493,13 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 renderer
                     .resize(extent)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let Err(error) = rt.touch(|s| {
-                    // Frames carry the drag pose they show (`SceneView::shown_frame`).
-                    scene_view.gizmo_offset = gizmo_state(s).offset;
-                    scene_view.render(&mut renderer, &s.editor, &view, 1)
-                }) {
-                    rt.touch(|s| s.editor.report_failure(&*error));
-                }
+                agent_work::render(
+                    &mut rt,
+                    &mut probe_owner,
+                    &mut scene_view,
+                    &mut renderer,
+                    &view,
+                );
             }
             pass.mark(if render {
                 "scene render"
@@ -431,8 +510,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;
             composite |= render || restyled || landed;
-            if composite && renderer.presentation_ready() {
-                let layer = present::target(surface.native_layer(SCENE_LAYER)?)?;
+            let layer = (composite && renderer.presentation_ready())
+                .then(|| layer_target(&surface, SCENE_LAYER, &mut rt, &mut layer_failure))
+                .flatten();
+            if let Some(layer) = layer {
                 let scale = rt.scale();
                 let shown = rt.touch(|s| {
                     // Overlays draw with the camera and drag pose of the frame on screen,
@@ -494,9 +575,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             if render {
                 scene_dirty = false;
             }
-            // A click in the view: the entity under it through the channel map.
             pass.mark("composite");
-            pass.phase("studio.game");
+            // A click in the view: the entity under it through the channel map.
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
                 let size = renderer.size();
                 let at = [
@@ -527,7 +607,38 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     }
                 });
             }
+        } else if agent_work::needs_unpresented_render(&probe_owner, shown_extent) {
+            // A probe bake advances only through Scene renders. With the Scene covered (the
+            // Lighting page in front) or the window hidden, render at the size last shown and
+            // present nothing; the frame shows if the Scene comes back.
+            if scene_dirty || scene_view.needs_frame(rt.state().editor.state.quality) {
+                renderer
+                    .resize(shown_extent)
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                agent_work::render(
+                    &mut rt,
+                    &mut probe_owner,
+                    &mut scene_view,
+                    &mut renderer,
+                    &view,
+                );
+                scene_dirty = false;
+            }
+            pass.mark("scene unpresented");
         }
+        // Probe jobs and agents' captures are served every pass, the Scene shown or not.
+        pass.phase("studio.agents");
+        // The Scene is "presented" once a frame of it has been composited into its layer.
+        let presented = shown_extent != [0, 0] && scene_presented;
+        scene_dirty |= agent_work::serve(
+            &mut rt,
+            &mut probe_owner,
+            &mut scene_view,
+            &mut renderer,
+            presented,
+        );
+        pass.mark("agents");
+        pass.phase("studio.game");
         // A move with vertex or surface snapping: the presented geometry answers it.
         if let Some(request) = rt.touch(|s| s.local.snap.take()) {
             let channels = compositor.channels(&renderer, &view, revision);
@@ -656,9 +767,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             .find(|(n, _)| &**n == game::GAME_LAYER)
             .map(|(_, r)| r);
         surface.place_native_layer(game::GAME_LAYER, game_rect);
-        #[cfg(any(windows, target_os = "macos"))]
+        if shown_again(&mut placed, game::GAME_LAYER, game_rect.is_some()) {
+            game.redraw();
+        }
+        #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         let visible = surface.is_visible();
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
         if let Some(r) = game_rect.filter(|r| r.width() >= 64.0 && r.height() >= 64.0) {
@@ -685,10 +799,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         let game_layer =
             match game_rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) {
-                Some(r) => Some((
-                    present::target(surface.native_layer(game::GAME_LAYER)?)?,
-                    [r.width() as u32, r.height() as u32],
-                )),
+                Some(r) => layer_target(&surface, game::GAME_LAYER, &mut rt, &mut layer_failure)
+                    .map(|layer| (layer, [r.width() as u32, r.height() as u32])),
                 None => None,
             };
         if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view))
@@ -696,6 +808,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let scale = rt.scale();
             // Input goes to the client Play's controls act on.
             game.client = rt.state().play.client;
+            game.zoom = game::zoom(rt.state());
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
@@ -732,6 +845,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 .find(|(n, _)| &**n == name)
                 .map(|(_, r)| r);
             surface.place_native_layer(name, rect);
+            if shown_again(&mut placed, name, rect.is_some()) {
+                graph_extent = ("", [0, 0]);
+            }
             let Some(r) = rect.filter(|r| visible && r.width() >= 8.0 && r.height() >= 8.0) else {
                 continue;
             };
@@ -740,15 +856,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
+                && let Some(layer) = layer_target(&surface, name, &mut rt, &mut layer_failure)
             {
-                let layer = present::target(surface.native_layer(name)?)?;
                 let scale = rt.scale();
                 // SAFETY: the layer is the page's own, alive while the window is.
                 let drawn = rt.touch(|s| unsafe {
                     graph::draw(s, &mut graph_layer, &renderer, layer, extent, scale)
                 });
                 match drawn {
-                    Ok(()) => graph_extent = (name, extent),
+                    Ok(true) => graph_extent = (name, extent),
+                    Ok(false) => {}
                     Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
                 }
             }
@@ -794,6 +911,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         if rt.touch(|s| s.local.agent_setups.poll()) {
             rt.update(|_| {});
+        }
+        // The Lighting page reads the renderer's probe report while it shows, so Recapture
+        // knows whether this quality can capture (and says why when it cannot).
+        if probe_report_at.elapsed() >= Duration::from_secs(1)
+            && rt.find("lighting/probe/refresh").is_some()
+        {
+            probe_report_at = Instant::now();
+            let version = |s: &Studio| s.local.probe_status.as_ref().map(|r| r.version);
+            let before = version(rt.state());
+            if rt.touch(|s| lighting::refresh_probes(s).is_ok()) && version(rt.state()) != before {
+                rt.update(|_| {});
+            }
         }
         let vfx_visible = rt.find("vfx/preview").is_some();
         if rt.touch(|s| vfx::update(s, vfx_visible)) {
@@ -848,6 +977,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
             || composite
+            // A job wakes the loop only while the Scene can render for it.
+            || agent_work::needs_unpresented_render(&probe_owner, shown_extent)
             || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
@@ -864,6 +995,46 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // Sleep until an event, that wake, or an animation frame: never spin.
         wait();
     }
+    // Probe work retires with the Scene view it read, before the renderer goes. The window
+    // goes first so the wait is never an unresponsive window, and it is bounded.
+    surface.hide();
+    rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
+    let draining = Instant::now();
+    let mut retired = true;
+    loop {
+        let done = rt.touch(|s| -> ara_ui::Result<bool> {
+            server.pump(&mut s.editor);
+            s.editor.tick();
+            probe_owner.poll(&mut s.editor, &mut scene_view, &mut renderer)?;
+            s.editor.tick();
+            Ok(!probe_owner.busy() && !s.editor.probe_captures.busy())
+        });
+        match done {
+            Ok(true) => break,
+            Ok(false) if draining.elapsed() < CLOSE_DRAIN => {
+                std::thread::sleep(Duration::from_millis(8))
+            }
+            Ok(false) => {
+                eprintln!(
+                    "ara-editor: probe work did not retire: {}",
+                    ara_json::to_canonical_string(&probe_owner.resource_report())
+                );
+                retired = false;
+                break;
+            }
+            Err(error) => {
+                eprintln!("ara-editor: probe work failed while closing: {error}");
+                retired = false;
+                break;
+            }
+        }
+    }
+    if !retired {
+        // A bake still has work on the GPU: destroying its renderer under it is worse than
+        // leaving the GPU objects to the process exit, which follows at once.
+        std::mem::forget((scene_view, graph_layer, compositor, game, renderer));
+        return Ok(());
+    }
     renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
     graph_layer.retire(&renderer);
@@ -872,6 +1043,57 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     scene_view
         .destroy(&mut renderer)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(())
+}
+
+/// Records whether native layer `name` is placed this pass; true when it was not on the
+/// last one (shown again: present it now, since a Wayland layer loses its picture while
+/// hidden).
+fn shown_again(
+    placed: &mut std::collections::BTreeSet<&'static str>,
+    name: &'static str,
+    now: bool,
+) -> bool {
+    match now {
+        true => placed.insert(name),
+        false => {
+            placed.remove(name);
+            false
+        }
+    }
+}
+
+/// Native layer `name` to present into, or `None` when the platform can't give it now (a
+/// full compositor socket, say): that pass skips it, and the failure is reported once,
+/// never ending the editor.
+fn layer_target(
+    surface: &Surface,
+    name: &str,
+    rt: &mut Runtime<Studio>,
+    reported: &mut Option<String>,
+) -> Option<present::Target> {
+    match surface.native_layer(name).and_then(present::target) {
+        Ok(layer) => {
+            *reported = None;
+            Some(layer)
+        }
+        Err(error) => {
+            let said = format!("{error:#}");
+            if reported.as_deref() != Some(said.as_str()) {
+                rt.touch(|s| s.editor.report_failure(&*anyhow::anyhow!("{name}: {said}")));
+                *reported = Some(said);
+            }
+            None
+        }
+    }
+}
+
+/// Whether this session can show the studio's views (native layers) before anything opens:
+/// on Linux it connects to the Wayland compositor and checks for subsurfaces; elsewhere the
+/// platform always can. The error says what is missing.
+pub fn can_host() -> anyhow::Result<()> {
+    #[cfg(target_os = "linux")]
+    stillkit::platform::current::surface::native_layer_support()?;
     Ok(())
 }
 
@@ -951,6 +1173,42 @@ fn overlays_key(s: &Studio) -> u64 {
     )
         .hash(&mut h);
     h.finish()
+}
+
+/// How far the pointer may stray during a press that still counts as a click (design px).
+const CLICK_SLOP: f32 = 4.0;
+/// How long a press may be held and still count as a click.
+const CLICK_TIME: Duration = Duration::from_millis(500);
+
+/// Whether press `e` ends as a click rather than a drag, decided as Unity does: by the
+/// farthest the pointer went while the button was down (a drag that comes back to its
+/// start is still a drag) and how long it was held, never by where it let go. Feed it every
+/// phase of a press; it answers on the release.
+pub(super) fn click(s: &mut Studio, e: &stillkit::el::PointerEvent) -> bool {
+    use stillkit::el::PointerPhase;
+    let travel = e.travel().x.abs() + e.travel().y.abs();
+    match e.phase {
+        PointerPhase::Down => {
+            s.local.press = Some((Instant::now(), 0.0));
+            false
+        }
+        PointerPhase::Move => {
+            if let Some((_, far)) = s.local.press.as_mut() {
+                *far = far.max(travel);
+            }
+            false
+        }
+        PointerPhase::Up => s
+            .local
+            .press
+            .take()
+            .is_some_and(|(at, far)| far.max(travel) < CLICK_SLOP && at.elapsed() < CLICK_TIME),
+        PointerPhase::Cancel => {
+            s.local.press = None;
+            false
+        }
+        PointerPhase::Hover => false,
+    }
 }
 
 /// Shows `message` in the status bar for a few seconds (what a request did).
@@ -1102,7 +1360,7 @@ fn pump(
                 rt.preedit(&text, at);
             }
             Event::SettingChanged => rt.set_reduced_motion(reduced_motion()),
-            #[cfg(any(windows, target_os = "macos"))]
+            #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
             Event::VisibilityChanged => rt.set_visible(surface.is_visible()),
             Event::Invoke(hit) => match surface.take_accessibility_action(hit) {
                 Some(action) => {
@@ -1171,6 +1429,10 @@ fn pump(
         // While a tab is dragged: every area and tab, to drop it among.
         if rt.state().local.tab_drag.is_some() {
             keys.extend(dock::all_drag_keys(rt.state()));
+        }
+        // While a component is dragged: the Inspector sections it can drop among.
+        if rt.state().local.component_drag.is_some() {
+            keys.extend(inspector::drop_keys(rt.state()));
         }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {

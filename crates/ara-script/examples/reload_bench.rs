@@ -10,7 +10,7 @@
 //! ```sh
 //! dotnet build dotnet/Ara.slnx -c Release
 //! cargo run -p ara-script --release --example reload_bench -- [--edits 60] [--lines 5000] [--verbose]
-//! # Optional: --single-file --dotnet-bin /absolute/projects-bin --output target/reload.json
+//! # Optional: --single-file --atomic-save --dotnet-bin /absolute/projects-bin --output target/reload.json
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -200,10 +200,23 @@ impl Drop for EditorDone {
     }
 }
 
+/// `[ara-trace] <unix ms> bench <label>` on stderr when `ARA_TRACE=1`, for `reload_timing.cs --trace`.
+fn trace(label: &str) {
+    if std::env::var("ARA_TRACE").is_ok_and(|v| v == "1") {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis());
+        eprintln!("[ara-trace] {now} bench {label}");
+    }
+}
+
 fn main() {
+    trace("main");
     let edits = arg("--edits", 60);
     let lines_target = arg("--lines", 5000);
     let single_file = std::env::args().any(|arg| arg == "--single-file");
+    // Save by writing a temp file and renaming it over the source (JetBrains safe write, vim, …).
+    let atomic_save = std::env::args().any(|arg| arg == "--atomic-save");
     let sdk_bin = option("--dotnet-bin")
         .map(PathBuf::from)
         .unwrap_or_else(|| dotnet().join("artifacts/bin"));
@@ -213,7 +226,7 @@ fn main() {
         path: PathBuf::from(path),
         data: json!({"schema": 1, "completed": false,
             "timing_acceptance": "external controller required", "configured_edits": edits,
-            "configured_filler_lines": lines_target, "single_file": single_file,
+            "configured_filler_lines": lines_target, "single_file": single_file, "atomic_save": atomic_save,
             "simulation_entities": 20_000, "probe_entities": 1, "tick_hz": 60,
             "sdk_bin": sdk_bin, "host_bin": host_bin, "compile_server": compile_server,
             "sample_directory": dotnet().join("samples/Outpost.Sample"),
@@ -290,11 +303,14 @@ fn main() {
     }));
     config.compile_server = Some(compile_server);
     let t0 = Instant::now();
+    trace("host start begins");
     let mut host = ScriptHost::start(config, db, &engine, &mut world).expect("host");
     let host_start_ms = t0.elapsed().as_secs_f64() * 1e3;
+    trace("host started, loading modules");
     host.load_modules(&mut world, &[ModuleSpec::from_dir(&dir).expect("module")])
         .expect("initial compile");
     let startup_ms = t0.elapsed().as_secs_f64() * 1e3;
+    trace("first image loaded");
     println!("start + initial compile: {startup_ms:.0} ms (host start {host_start_ms:.0} ms)");
     if let Some(output) = output.as_mut() {
         output.data["startup_ms"] = json!(startup_ms);
@@ -365,7 +381,13 @@ fn main() {
                     text = text.replace(from, to);
                     long = !long;
                 }
-                if let Err(error) = std::fs::write(&file, &text) {
+                let saved_ok = if atomic_save {
+                    let temp = file.with_extension("cs.tmp");
+                    std::fs::write(&temp, &text).and_then(|()| std::fs::rename(&temp, &file))
+                } else {
+                    std::fs::write(&file, &text)
+                };
+                if let Err(error) = saved_ok {
                     results.push(Edit {
                         index: e as usize,
                         kind,

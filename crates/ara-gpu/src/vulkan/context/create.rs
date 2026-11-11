@@ -287,6 +287,8 @@ impl Gpu {
                 // Optional: the bindless material sampler filters anisotropically
                 // when the device allows it (heap.rs reads this feature back).
                 .sampler_anisotropy(core_supported.sampler_anisotropy != 0)
+                // Optional: cube-array views of square layered images.
+                .image_cube_array(core_supported.image_cube_array != 0)
                 .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
@@ -432,6 +434,7 @@ impl Gpu {
                 present_scaling,
                 buffer_int64_atomics,
                 fragment_barycentrics,
+                cube_arrays: core_supported.image_cube_array != 0,
                 shader_integer_dot_product,
                 packed_integer_dot_accelerated: shader_integer_dot_product
                     && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,

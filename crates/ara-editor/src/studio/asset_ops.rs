@@ -198,15 +198,73 @@ pub(super) fn poll_jobs(s: &mut Studio) -> bool {
             continue;
         }
         ended = true;
+        let opens = s.local.open_after.as_ref().is_some_and(|(j, _)| *j == job);
         if !status.succeeded() {
             s.editor
                 .report_failure(&*anyhow::anyhow!("{why}: {}", status.summary()));
+        } else if opens && let Some((_, scene)) = s.local.open_after.take() {
+            open_scene(s, &scene);
+        }
+        if opens {
+            s.local.open_after = None;
         }
     }
     if ended && let Some(b) = s.assets.as_ref() {
         b.refresh();
     }
     ended
+}
+
+/// Save Scene As: copies the open scene (as it is now, new IDs) to `destination`, a file
+/// inside the content root (`.scene` added when missing), in one undo step, and opens the
+/// copy once its file job lands. The scene saves in place when `destination` is itself.
+pub(super) fn save_as(s: &mut Studio, destination: &std::path::Path) -> anyhow::Result<()> {
+    let root = ara_doc::AUTHORING_ROOT;
+    let store = s.editor.host.store();
+    let source = store
+        .workspace()
+        .path_of(&s.editor.state.doc)
+        .ok_or_else(|| anyhow::anyhow!("Save As: open a scene first"))?;
+    let source = source
+        .strip_prefix(&format!("{root}/"))
+        .ok_or_else(|| anyhow::anyhow!("Save As: {source} is not authored content"))?
+        .to_owned();
+    let content = s.editor.host.root().join(root);
+    let relative = destination
+        .strip_prefix(&content)
+        .map_err(|_| anyhow::anyhow!("Save As: choose a place inside {}", content.display()))?;
+    let mut scene = relative
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    if !scene.ends_with(".scene") {
+        scene.push_str(".scene");
+    }
+    if scene == source {
+        s.editor.host.flush();
+        return Ok(());
+    }
+    // Save As makes a new scene; it never replaces one (the dialog may have offered to).
+    if content.join(&scene).exists() {
+        anyhow::bail!("Save As: {scene} already exists; choose a new name");
+    }
+    let jobs = s.local.asset_jobs.len();
+    transact(
+        s,
+        vec![json!({"cmd": "asset.duplicate", "args": {"source": source, "destination": scene}})],
+        &format!("Save {source} as {scene}"),
+    )?;
+    match s.local.asset_jobs.get(jobs) {
+        Some((job, _)) => s.local.open_after = Some((job.clone(), scene)),
+        None => open_scene(s, &scene),
+    }
+    Ok(())
+}
+
+/// Opens `scene` (a content path) in the Scene view.
+fn open_scene(s: &mut Studio, scene: &str) {
+    s.act("editor.scene.open", json!({"scene": scene}));
 }
 
 fn duplicate(s: &mut Studio, a: Asset) -> anyhow::Result<()> {
