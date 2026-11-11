@@ -13,6 +13,8 @@ pub(crate) struct Lane {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Fade {
+    /// The transition fading (its index in the program), whose blend curve shapes it.
+    pub transition: u32,
     pub target: Lane,
     pub elapsed: u32,
     pub duration: u32,
@@ -335,7 +337,7 @@ impl Animator {
             } else {
                 self.state.lane.time
             };
-            if let Some(t) = controller.transitions.iter().find(|t| {
+            if let Some((index, t)) = controller.transitions.iter().enumerate().find(|(_, t)| {
                 t.from == self.state.lane.state
                     && t.exit_tick
                         .is_none_or(|exit| self.state.lane.time >= u64::from(exit))
@@ -363,6 +365,7 @@ impl Animator {
                     self.state.lane = lane;
                 } else {
                     self.state.fade = Some(Fade {
+                        transition: index as u32,
                         target: lane,
                         elapsed: 0,
                         duration: t.duration,

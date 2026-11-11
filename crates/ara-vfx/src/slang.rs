@@ -24,6 +24,83 @@ fn line(out: &mut String, args: std::fmt::Arguments<'_>) {
     out.push('\n');
 }
 
+/// `target = curve(t)` in Slang: `t` brought into the keyed span by the curve's
+/// extrapolation, then each segment's polynomial (`Curve::polynomial`), as the CPU's
+/// `Curve::evaluate` computes it.
+fn curve_lines(out: &mut String, target: &str, curve: &ara_curve::Curve) {
+    use ara_curve::Extrapolation;
+    let (Some(first), Some(last)) = (curve.keys.first(), curve.keys.last()) else {
+        line(out, format_args!("{target}=0.0;"));
+        return;
+    };
+    // Straight, clamped segments lower as they always have (generated shaders unchanged).
+    if curve
+        .keys
+        .iter()
+        .all(|k| k.interpolation == ara_curve::Interpolation::Linear)
+        && (curve.before, curve.after) == (Extrapolation::Clamp, Extrapolation::Clamp)
+    {
+        line(out, format_args!("{target}={};", f(first.value)));
+        for pair in curve.keys.windows(2) {
+            line(
+                out,
+                format_args!(
+                    "{target}=lerp({target},{},saturate((t-{})/{}));",
+                    f(pair[1].value),
+                    f(pair[0].time),
+                    f(pair[1].time - pair[0].time)
+                ),
+            );
+        }
+        return;
+    }
+    let (start, length) = (first.time, last.time - first.time);
+    line(out, format_args!("{{float ct=t;"));
+    for (mode, test) in [
+        (curve.before, format!("ct<{}", f(start))),
+        (curve.after, format!("ct>{}", f(last.time))),
+    ] {
+        if length <= 0.0 {
+            break;
+        }
+        let (s, l) = (f(start), f(length));
+        match mode {
+            Extrapolation::Clamp => {}
+            Extrapolation::Loop => line(
+                out,
+                format_args!("if({test}){{float x=ct-{s};ct={s}+x-{l}*floor(x/{l});}}"),
+            ),
+            Extrapolation::PingPong => line(
+                out,
+                format_args!(
+                    "if({test}){{float x=ct-{s};float ph=x-2.0*{l}*floor(x/(2.0*{l}));ct={s}+(ph>{l}?2.0*{l}-ph:ph);}}"
+                ),
+            ),
+        }
+    }
+    line(
+        out,
+        format_args!("if(ct<{}){{{target}={};}}", f(start), f(first.value)),
+    );
+    for (i, pair) in curve.keys.windows(2).enumerate() {
+        let [c0, c1, c2, c3] = curve.polynomial(i);
+        line(
+            out,
+            format_args!(
+                "else if(ct<{}){{float u=(ct-{})/{};{target}={}+u*({}+u*({}+u*{}));}}",
+                f(pair[1].time),
+                f(pair[0].time),
+                f(pair[1].time - pair[0].time),
+                f(c0),
+                f(c1),
+                f(c2),
+                f(c3)
+            ),
+        );
+    }
+    line(out, format_args!("else{{{target}={};}}}}", f(last.value)));
+}
+
 /// Generate specialized module functions for the GPU runtime's Particle contract.
 /// This is pure source generation; cook it in an external background worker (D20).
 pub fn generate(effect: &Effect) -> Result<String, Diagnostic> {
@@ -181,20 +258,7 @@ pub fn generate(effect: &Effect) -> Result<String, Diagnostic> {
                         );
                     }
                 }
-                Module::SizeOverLife { keys } => {
-                    line(&mut out, format_args!("p.size={};", f(keys[0].value)));
-                    for pair in keys.windows(2) {
-                        line(
-                            &mut out,
-                            format_args!(
-                                "p.size=lerp(p.size,{},saturate((t-{})/{}));",
-                                f(pair[1].value),
-                                f(pair[0].t),
-                                f(pair[1].t - pair[0].t)
-                            ),
-                        );
-                    }
-                }
+                Module::SizeOverLife { curve } => curve_lines(&mut out, "p.size", curve),
                 Module::PlaneCollision {
                     normal,
                     offset,

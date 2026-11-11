@@ -229,6 +229,9 @@ pub struct Transition {
     pub exit_tick: Option<u32>,
     /// Typed AND predicates; empty means unconditional.
     pub conditions: Vec<Condition>,
+    /// How the cross-fade's weight rises: the target's weight (0 to 1) over the fade's
+    /// progress (0 to 1). None is a straight line.
+    pub blend: Option<ara_curve::Curve>,
 }
 
 /// Canonical controller source, lowered to an immutable program by Controller.

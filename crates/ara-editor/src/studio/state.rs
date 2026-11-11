@@ -204,6 +204,23 @@ impl std::fmt::Debug for Previews {
     }
 }
 
+/// Floating windows as native ones: whether they are, and what the host measured of them.
+/// Their layout rects are then desktop design px (window frames), not main-window ones.
+#[derive(Debug, Default)]
+pub struct Desktop {
+    /// Set by the host; off (headless tests), floating windows sit inside the main one.
+    pub on: bool,
+    /// The main window's client top-left on the desktop (design px).
+    pub origin: (f32, f32),
+    /// Each floating window's client size (design px), as its native window has it.
+    pub sizes: std::collections::BTreeMap<String, (f32, f32)>,
+    /// How far in from a floating window's left its title bar starts: the system's window
+    /// controls (macOS's traffic lights) sit there.
+    pub inset: f32,
+    /// The pointer on the desktop (design px) while a tab is dragged: where it tears out to.
+    pub pointer: Option<(f32, f32)>,
+}
+
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
@@ -407,8 +424,14 @@ pub struct Local {
     pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
+    /// A curve key or tangent handle being dragged (`studio::curve`).
+    pub curve_drag: Option<super::curve::CurveDrag>,
+    /// The picked key of a curve editor: its key (`curve/{field}`) and the key's index.
+    pub curve_pick: Option<(String, usize)>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
+    /// Floating windows as native windows of their own (`studio::portals`).
+    pub desktop: Desktop,
     /// Each Scene overlay's length along its edge when last shown expanded (design px), so
     /// one squeezed to its icon knows when it fits again.
     pub overlay_lengths: std::collections::BTreeMap<&'static str, f32>,
@@ -514,6 +537,8 @@ pub enum WindowRequest {
     Minimize,
     /// Maximize it, or restore it when it is.
     Maximize,
+    /// Full screen, or back to a window when it is (View › Full Screen, F11).
+    Fullscreen,
 }
 
 /// The studio's runtime state.

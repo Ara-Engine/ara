@@ -99,10 +99,17 @@ impl Animator {
         target: Option<(Lane, Lane)>,
         emit: &mut impl FnMut(Event<'a>),
     ) -> Result<RootMotion, Error> {
-        let weight = self
-            .state
-            .fade
-            .map_or(0.0, |f| f.elapsed as f32 / f.duration as f32);
+        let weight = self.state.fade.map_or(0.0, |f| {
+            let progress = f.elapsed as f32 / f.duration as f32;
+            match c
+                .transitions
+                .get(f.transition as usize)
+                .and_then(|t| t.blend.as_ref())
+            {
+                Some(curve) => curve.evaluate(progress).clamp(0.0, 1.0),
+                None => progress,
+            }
+        });
         let mut root = self.evaluate(c, skeleton, previous, current)?;
         let node = c.states[current.state].node;
         self.output.copy_from(&self.scratch[node].pose)?;

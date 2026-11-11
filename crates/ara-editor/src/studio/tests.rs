@@ -284,6 +284,88 @@ fn scene_overlays_move_to_another_edge_collapse_and_hide() {
 }
 
 #[test]
+fn a_scene_overlay_floats_as_a_panel_switches_layout_and_docks_back() {
+    use super::scene_overlays::{Edge, Layout};
+    let mut rt = open();
+    settle(&mut rt);
+    let dock = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    let drag_grip = |rt: &mut Runtime<Studio>, to: (f32, f32)| {
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        let grip = rt.find("scene/overlay/tools/grip").expect("its grip");
+        rt.pointer_move(grip.center().x, grip.center().y);
+        rt.frame(FRAME);
+        rt.pointer_down(grip.center().x, grip.center().y);
+        for step in 1..=8 {
+            let t = step as f32 / 8.0;
+            rt.pointer_move(
+                grip.center().x + (to.0 - grip.center().x) * t,
+                grip.center().y + (to.1 - grip.center().y) * t,
+            );
+            rt.frame(FRAME);
+        }
+        rt.pointer_up(to.0, to.1);
+        settle(rt);
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        settle(rt);
+    };
+    let view = rt.find("scene/view").expect("the Scene view");
+    // Let go in the middle of the view: it floats there, as a titled panel.
+    drag_grip(&mut rt, (view.center().x, view.center().y));
+    let f = dock(&rt).float.expect("floating");
+    assert_eq!(f.layout, Layout::Panel);
+    let shown = rt.find("scene/overlay/tools").expect("shown");
+    assert!(
+        shown.left > view.left + 40.0 && shown.top > view.top + 40.0,
+        "where it was let go: {shown:?} in {view:?}"
+    );
+    // Its menu lays it out vertically, in place.
+    rt.update(|s| s.local.overlay_menu = Some(("tools", (shown.left + 4.0, shown.top + 4.0))));
+    settle(&mut rt);
+    press(&mut rt, "scene/overlay/tools/vertical");
+    let g = dock(&rt).float.expect("still floating");
+    assert_eq!((g.layout, g.at), (Layout::Vertical, f.at));
+    let tall = rt.find("scene/overlay/tools").expect("shown");
+    assert!(tall.height() > tall.width(), "a column: {tall:?}");
+    // The saved form reads back the same.
+    let text = dock(&rt).text();
+    assert_eq!(
+        super::scene_overlays::Dock::parse(&text),
+        Some(dock(&rt)),
+        "{text}"
+    );
+    // Dragged to the right edge, it docks there again.
+    drag_grip(&mut rt, (view.right - 14.0, view.center().y));
+    let d = dock(&rt);
+    assert_eq!((d.float, d.edge), (None, Edge::Right), "{d:?}");
+}
+
+#[test]
+fn a_saved_layout_brings_its_scene_overlays_back() {
+    let mut rt = open();
+    settle(&mut rt);
+    let tools = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    rt.update(|s| {
+        super::scene_overlays::update(s, "tools", |d| {
+            d.float = Some(super::scene_overlays::Float {
+                at: (160.0, 120.0),
+                layout: super::scene_overlays::Layout::Panel,
+            })
+        });
+        s.act("editor.layout.save", json!({"name": "Overlays"}));
+        super::scene_overlays::reset(s);
+    });
+    settle(&mut rt);
+    assert!(tools(&rt).float.is_none(), "reset docks it");
+    rt.update(|s| s.act("editor.layout.apply", json!({"name": "Overlays"})));
+    settle(&mut rt);
+    assert_eq!(
+        tools(&rt).float.map(|f| f.at),
+        Some((160.0, 120.0)),
+        "as saved with the layout"
+    );
+}
+
+#[test]
 fn the_draw_mode_menu_switches_view_modes_and_effects() {
     let mut rt = open();
     settle(&mut rt);
@@ -1789,6 +1871,12 @@ fn named_targets_run_as_agents_and_the_palette_send_them() {
         rt.state().local.window,
         Some(super::state::WindowRequest::Minimize)
     );
+    // View › Full Screen (F11) asks the window for full screen.
+    run(&mut rt, "view.fullscreen", Target::None);
+    assert_eq!(
+        rt.state().local.window,
+        Some(super::state::WindowRequest::Fullscreen)
+    );
     assert_eq!(failures(&mut rt), before, "nothing failed");
 }
 
@@ -2323,6 +2411,110 @@ fn a_panel_floats_in_its_own_window_that_moves_and_docks_back() {
 }
 
 #[test]
+fn a_native_floating_window_shows_its_region_and_its_tab_docks_back_or_tears_out() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    // The host's native windows: the main window at (200, 100) on the desktop.
+    rt.update(|s| {
+        s.local.desktop.on = true;
+        s.local.desktop.origin = (200.0, 100.0);
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let floating = |rt: &Runtime<Studio>| rt.state().editor.state.floating.clone();
+    let window = floating(&rt);
+    assert_eq!(window.len(), 1, "Console floats");
+    let id = window[0].id.clone();
+    assert!(
+        window[0].rect[0] >= 200 && window[0].rect[1] >= 100,
+        "opened on the desktop over the main window: {:?}",
+        window[0].rect
+    );
+    // It lays out in its region, beyond the main window, and shows there alone.
+    let region = super::dock::region(rt.state(), 0, &id, window[0].rect);
+    rt.set_portals(&[region]);
+    settle(&mut rt);
+    let bar = rt.find(&format!("float/{id}/bar")).expect("its title bar");
+    let (w, _) = rt.state().size;
+    assert!(
+        bar.left >= w && bar.left >= region.left,
+        "{bar:?} in {region:?}"
+    );
+    let image = rt.snap_region(region).unwrap();
+    assert_eq!(
+        (image.width, image.height),
+        (region.width() as u32, region.height() as u32)
+    );
+    // Its tab drags back into the Scene's strip: the host sends the pointer to the main
+    // window once the desktop point is over it, and the native window goes.
+    let keys = super::dock::all_drag_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    let scene = super::dock::area_holding(rt.state(), "scene").unwrap();
+    let strip = rt.find(&format!("area/{scene}")).unwrap();
+    let tab = rt.find("tab/console").unwrap();
+    assert!(tab.left >= region.left, "the tab is in the region");
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(strip.right - 40.0, strip.top + 10.0);
+    rt.frame(FRAME);
+    rt.pointer_up(strip.right - 40.0, strip.top + 10.0);
+    settle(&mut rt);
+    assert!(floating(&rt).is_empty(), "the emptied window closes");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console"),
+        Some(scene.clone())
+    );
+    // Dragged out past the main window's edge, the tab tears out where the pointer is on
+    // the desktop (a second monitor's, say).
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    let tab = rt.find("tab/console").unwrap();
+    let (w, h) = rt.state().size;
+    rt.pointer_move(tab.center().x, tab.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tab.center().x, tab.center().y);
+    rt.pointer_move(tab.center().x + 20.0, tab.center().y + 20.0);
+    rt.pointer_move(w + 300.0, h / 2.0);
+    rt.touch(|s| s.local.desktop.pointer = Some((2400.0, 500.0)));
+    rt.frame(FRAME);
+    rt.pointer_up(w + 300.0, h / 2.0);
+    settle(&mut rt);
+    let torn = floating(&rt);
+    assert_eq!(torn.len(), 1, "a window of its own");
+    assert_eq!(super::dock::tabs_of(&torn[0].root), ["console"]);
+    let [x, y, ..] = torn[0].rect;
+    assert!(
+        (x - 2400).abs() < 100 && (y - 500).abs() < 40,
+        "under the pointer: {:?}",
+        torn[0].rect
+    );
+}
+
+#[test]
+fn a_desktop_point_maps_into_the_topmost_window_under_it() {
+    use super::portals::{Placement, locate};
+    let main = Placement {
+        client: [0.0, 0.0, 1000.0, 800.0],
+        origin: (0.0, 0.0),
+    };
+    let float = Placement {
+        client: [900.0, 100.0, 400.0, 300.0],
+        origin: (100_000.0, 0.0),
+    };
+    let windows = [float, main];
+    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_050.0, 50.0)));
+    assert_eq!(locate(&windows, (500.0, 500.0)), Some((500.0, 500.0)));
+    assert_eq!(locate(&windows, (2000.0, 500.0)), None);
+}
+
+#[test]
 fn a_tab_menu_adds_tabs_beside_it_and_the_open_tab_closes_from_its_cross() {
     let mut rt = open();
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
@@ -2549,7 +2741,16 @@ fn captures() {
     });
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
-    for light in [false, true] {
+    // Every shot in both themes, at 1x and at 2x (`@2x` in the name).
+    let design = rt.state().size;
+    for (light, scale) in [(false, 1.0), (true, 1.0), (false, 2.0), (true, 2.0)] {
+        rt.set_scale(scale);
+        rt.resize(((design.0 * scale) as u32, (design.1 * scale) as u32));
+        let theme = format!(
+            "{}{}",
+            if light { "light" } else { "dark" },
+            if scale > 1.0 { "@2x" } else { "" }
+        );
         rt.update(|s| s.editor.state.light = light);
         if rt.touch(Studio::sync_look) {
             let theme = rt.state().look.theme.clone();
@@ -2583,23 +2784,91 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-{panel}.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-{panel}.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
             )
             .unwrap();
         }
+        // The Size over Life curve in the VFX Selection, a key picked (its handles shown).
+        if !light && scale == 1.0 {
+            rt.touch(|s| {
+                let doc = s
+                    .editor
+                    .action(
+                        "editor.resource.create",
+                        json!({"path": "samples/capture.graph", "domain": "vfx"}),
+                    )
+                    .unwrap()["doc"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                s.act("editor.workspace", json!({"resource": doc}));
+            });
+        }
+        rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+        let effect = effect_at(&rt, "samples/capture.graph");
+        if let Some((emitter, module, curve)) = effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        }) {
+            let mut shaped = curve;
+            shaped.keys[0].interpolation = ara_curve::Interpolation::Cubic;
+            rt.update(|s| {
+                s.editor.state.resource_item = Some(format!("{emitter}|update|{module}"));
+                s.local.curve_pick = Some((format!("curve/vfx/{emitter}/update/{module}"), 1));
+                s.local.curve_drag = Some(super::curve::CurveDrag {
+                    field: format!("curve/vfx/{emitter}/update/{module}"),
+                    frame: super::curve::Frame::of(&shaped, Some((0.0, 1.0))),
+                    curve: shaped,
+                    grab: super::curve::Grab::Key(1),
+                });
+            });
+            host_feedback(&mut rt);
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{theme}-vfx-curve.png");
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+            rt.update(|s| s.local.curve_drag = None);
+        }
+        // Scene overlays floating: Tools as a titled panel, Snapping as a column.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "scene"}));
+            s.act(
+                "editor.settings.set",
+                json!({"key": "viewport.overlays", "value": {
+                    "tools": "float:120:140:panel",
+                    "snapping": "float:420:120:vertical",
+                }}),
+            );
+        });
+        host_feedback(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-overlays-float.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(super::scene_overlays::reset);
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-hover.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-hover.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2611,11 +2880,7 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!(
-                "{}-menu-{}.png",
-                if light { "light" } else { "dark" },
-                menu.to_lowercase()
-            );
+            let name = format!("{theme}-menu-{}.png", menu.to_lowercase());
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2630,7 +2895,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-menu-cascade.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-menu-cascade.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2645,10 +2910,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2664,7 +2926,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-profiler-tree.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-profiler-tree.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2679,10 +2941,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-inspector-debug.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-inspector-debug.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2695,7 +2954,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-scene-menu.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-scene-menu.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2708,7 +2967,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-context.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-context.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2725,7 +2984,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-play.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-play.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2744,7 +3003,7 @@ fn captures() {
             for _ in 0..10 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-tabdrag.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-tabdrag.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2771,10 +3030,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-profiler-compare.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-profiler-compare.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2796,7 +3052,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-floating.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2817,7 +3073,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-create.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-create.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2829,7 +3085,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-settings.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-settings.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2841,7 +3097,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-palette.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2852,10 +3108,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-palette-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-palette-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2869,7 +3122,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-add-component.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-add-component.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2892,10 +3145,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-asset-inspector.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-asset-inspector.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3811,6 +4061,228 @@ fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
     assert_eq!(
         ara_json::to_value(&edited.module).unwrap()[&key],
         json!(7.0)
+    );
+}
+
+#[test]
+fn the_size_over_life_curve_takes_a_key_and_a_dragged_one_in_one_step() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/fire.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let size_curve = |rt: &Runtime<Studio>| {
+        let effect = effect_at(rt, "samples/fire.graph");
+        effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        })
+    };
+    let (emitter, module, curve) = size_curve(&rt).expect("a Size over Life module");
+    press(&mut rt, &format!("vfx/module/{emitter}|update|{module}"));
+    let plot = rt
+        .find(&format!("curve/vfx/{emitter}/update/{module}"))
+        .expect("the curve shows in the Selection");
+    let (w, h) = (plot.width(), plot.height());
+    let frame = super::curve::Frame::of(&curve, Some((0.0, 1.0)));
+    let at = |(x, y): (f32, f32)| (plot.left + x, plot.top + y);
+    // A double-click on the plot adds a key there.
+    let (x, y) = at(frame.place((0.5, curve.evaluate(0.5) * 0.5), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    let pointer = stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.handle(&stillkit::Event::DoubleClick(
+        pointer,
+        stillkit::Button::Left,
+    ));
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    let (_, _, added) = size_curve(&rt).expect("still there");
+    assert_eq!(added.keys.len(), curve.keys.len() + 1, "a key added");
+    let undo_depth = rt.state().editor.host.store().history().len();
+    // The first key dragged up: higher, saved once on release.
+    let first = added.keys[0];
+    let frame = super::curve::Frame::of(&added, Some((0.0, 1.0)));
+    let (x, y) = at(frame.place((first.time, first.value), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x, y - 6.0 * step as f32);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth,
+        "nothing saved mid-drag"
+    );
+    rt.pointer_up(x, y - 24.0);
+    settle(&mut rt);
+    let (_, _, dragged) = size_curve(&rt).expect("still there");
+    assert!(
+        dragged.keys[0].value > first.value,
+        "{} > {}",
+        dragged.keys[0].value,
+        first.value
+    );
+    assert_eq!(dragged.keys[0].time, 0.0, "kept at the start of life");
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth + 1,
+        "one undo step"
+    );
+}
+
+#[test]
+fn a_transition_s_blend_curve_shapes_it_and_straightens_back() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/run.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let blend = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .blend
+            .clone()
+    };
+    let transition = {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .id
+            .clone()
+    };
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition))
+    });
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "straight to start");
+    let plot = rt
+        .find(&format!("curve/animation/{transition}"))
+        .expect("the blend curve shows with the transition");
+    let (w, h) = (plot.width(), plot.height());
+    let straight = ara_curve::Preset::Linear.curve();
+    let frame = super::curve::Frame::of(&straight, Some((0.0, 1.0)));
+    let (kx, ky) = frame.place((0.0, 0.0), (w, h));
+    let (x, y) = (plot.left + kx, plot.top + ky);
+    // Pick the first key, then pull its leaving handle flat: the fade eases in.
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "picking a key changes nothing");
+    // The handle lies along the straight line, 36 px out.
+    let (ex, ey) = frame.place((1.0, 1.0), (w, h));
+    let len = ((ex - kx).powi(2) + (ey - ky).powi(2)).sqrt();
+    let handle = (x + (ex - kx) / len * 36.0, y + (ey - ky) / len * 36.0);
+    rt.pointer_move(handle.0, handle.1);
+    rt.frame(FRAME);
+    rt.pointer_down(handle.0, handle.1);
+    rt.pointer_move(handle.0 + 10.0, y);
+    rt.frame(FRAME);
+    rt.pointer_up(handle.0 + 10.0, y);
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let shaped = blend(&rt).expect("shaped");
+    assert!(
+        shaped.evaluate(0.25) < 0.2,
+        "eases in: {}",
+        shaped.evaluate(0.25)
+    );
+    press(&mut rt, "animation/transition/blend/reset");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    assert_eq!(blend(&rt), None, "straight again");
+}
+
+#[test]
+fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspector() {
+    let mut rt = open();
+    settle(&mut rt);
+    let mut stops: Vec<(String, String)> = Vec::new();
+    for _ in 0..60 {
+        rt.key(0x09);
+        rt.frame(FRAME);
+        if let Some(n) = rt.tree().into_iter().find(|n| n.focused) {
+            let key = n.key.map(|k| k.to_string()).unwrap_or_default();
+            stops.push((key, n.label.map(|l| l.to_string()).unwrap_or_default()));
+        }
+    }
+    // Within one pass round the window (60 Tabs cover more than one here).
+    let pass = stops
+        .iter()
+        .skip(1)
+        .position(|s| *s == stops[0])
+        .map_or(stops.len(), |at| at + 1);
+    let stops = &stops[..pass];
+    let count = |prefix: &str| stops.iter().filter(|(k, _)| k.starts_with(prefix)).count();
+    assert_eq!(count("menu/"), 1, "the menu bar is one stop: {stops:?}");
+    assert_eq!(
+        count("row/"),
+        1,
+        "the Hierarchy is one stop, on its selected row"
+    );
+    assert_eq!(
+        count("scene/view.tool."),
+        1,
+        "the Tools overlay is one stop"
+    );
+    assert!(
+        !stops.iter().any(|(k, _)| k.ends_with("/scrub")),
+        "scrub labels are drag handles, not stops"
+    );
+    let position: Vec<&str> = stops
+        .iter()
+        .filter(|(k, _)| k.starts_with("field/Transform.position/"))
+        .map(|(_, l)| l.as_str())
+        .collect();
+    assert_eq!(
+        position,
+        ["Position X", "Position Y", "Position Z"],
+        "field to field, named"
     );
 }
 
