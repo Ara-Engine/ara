@@ -621,22 +621,31 @@ fn a_saved_layout_brings_its_scene_overlays_back() {
 }
 
 #[test]
-fn the_draw_mode_menu_switches_view_modes_and_effects() {
+fn the_draw_mode_menu_keeps_every_entry_and_offers_what_the_renderer_has() {
+    use super::unavailable::{effect_available, view_mode_available};
     let mut rt = open();
     settle(&mut rt);
     press(&mut rt, "scene/draw-mode");
     assert!(
-        rt.find("scene/draw-mode/overdraw").is_some(),
-        "every mode is offered"
+        rt.find("scene/draw-mode/overdraw").is_some() && rt.find("scene/effect/Shadows").is_some(),
+        "every mode and effect keeps its entry"
     );
+    // An entry the renderer does not offer is disabled: pressing it changes nothing.
+    assert!(!view_mode_available("wireframe") && !effect_available("Shadows"));
     press(&mut rt, "scene/draw-mode/wireframe");
-    assert_eq!(rt.state().editor.state.view_mode, "wireframe");
-    press(&mut rt, "scene/draw-mode");
+    assert_ne!(rt.state().editor.state.view_mode, "wireframe");
     press(&mut rt, "scene/effect/Shadows");
     assert!(
-        !rt.state().editor.state.render_debug.shadows,
-        "Shadows turned off"
+        rt.state().editor.state.render_debug.shadows,
+        "Shadows stay on"
     );
+    // An offered one works.
+    assert!(view_mode_available("lit"));
+    press(&mut rt, "scene/draw-mode/lit");
+    assert!(matches!(
+        rt.state().editor.state.view_mode.as_str(),
+        "" | "lit"
+    ));
 }
 
 #[test]
@@ -1793,12 +1802,12 @@ fn view_selection_and_transform_commands_run_in_the_studio() {
         rt.update(|s| super::commands::run(s, id, &crate::catalog::Target::None));
         settle(rt);
     };
+    // The renderer's view modes and effects refuse until it offers them (`unavailable`).
     run(&mut rt, "view.mode.lit_wireframe");
-    assert_eq!(rt.state().editor.state.view_mode, "litWireframe");
+    assert_ne!(rt.state().editor.state.view_mode, "litWireframe");
     run(&mut rt, "view.debug.shadows");
-    assert!(!rt.state().editor.state.render_debug.shadows);
-    run(&mut rt, "view.debug.reset");
     assert!(rt.state().editor.state.render_debug.shadows);
+    run(&mut rt, "view.mode.lit");
     run(&mut rt, "view.show.grid");
     assert_eq!(
         rt.state().editor.state.settings["viewport.grid"],
@@ -2525,7 +2534,7 @@ fn mesh_paint_sets_its_brush_and_sends_scene_presses_to_the_host() {
 }
 
 #[test]
-fn lighting_recaptures_probes_and_applies_look_presets() {
+fn lighting_applies_look_presets_to_a_volume() {
     use crate::catalog::Target;
     let mut rt = open();
     rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
@@ -2537,18 +2546,7 @@ fn lighting_recaptures_probes_and_applies_look_presets() {
     );
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
     settle(&mut rt);
-    press(&mut rt, "lighting/probe/recapture");
-    rt.update(|s| {
-        s.poll_logs();
-    });
-    // Queued for the renderer, or (no renderer here) refused with its reason.
-    let s = rt.state();
-    let queued = super::lighting::capturing(s);
-    let refused = s
-        .logs
-        .iter()
-        .any(|r| r.severity == ara_diag::Severity::Error);
-    assert!(queued || refused, "the recapture ran or said why not");
+    // Recapture waits for a renderer that can capture probes (`recapturing_probes_says_...`).
     // A look preset appends override groups to the selected volume.
     let before = rt.state().resolved["e_post"].record["PostProcessVolume"].clone();
     rt.update(|s| s.select(vec!["e_post".into()], false));
@@ -4189,7 +4187,7 @@ fn the_material_source_view_edits_the_graph_as_text_and_wires_reroute() {
             .is_empty()
     );
     // Typed text applies to the document; the graph follows.
-    let showcase = crate::asset_tools::node_preview::SHOWCASE.to_owned();
+    let showcase = SHOWCASE.to_owned();
     rt.update(|s| s.graph.source = Some(showcase.clone()));
     settle(&mut rt);
     press(&mut rt, "material/source/apply");
@@ -4713,7 +4711,7 @@ fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspec
 }
 
 #[test]
-fn the_material_page_shows_each_operation_s_value_in_its_node() {
+fn the_material_page_says_in_node_previews_are_not_available() {
     let mut rt = open();
     rt.touch(|s| {
         let doc = s
@@ -4729,7 +4727,7 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
         s.editor
             .apply_to(
                 &doc,
-                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                vec![json!({"cmd": "material.text.apply", "args": {"text": SHOWCASE}})],
                 "Showcase",
             )
             .unwrap();
@@ -4737,22 +4735,13 @@ fn the_material_page_shows_each_operation_s_value_in_its_node() {
     });
     rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
     settle(&mut rt);
-    // The previews render on their own worker on this GPU: wait for them to land.
-    let started = std::time::Instant::now();
-    while rt.state().graph.previewed() < 3
-        && started.elapsed() < std::time::Duration::from_secs(120)
-    {
-        rt.touch(|s| super::graph::sync(s, "material"));
-        rt.touch(super::graph::previews);
-        if let Some(error) = rt.state().graph.preview_error() {
-            panic!("the previews can't render here: {error}");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
     assert!(
-        rt.state().graph.previewed() >= 3,
-        "operation nodes show their values ({} rendered)",
-        rt.state().graph.previewed()
+        rt.tree()
+            .iter()
+            .any(|n| n.text.as_deref() == Some("In-node previews are not available yet.")),
+        "the Details say what is missing"
     );
 }
 
@@ -5500,105 +5489,6 @@ fn stack_frames_outside_the_project_never_open() {
 }
 
 #[test]
-fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
-    let mut rt = open();
-    let doc = rt.touch(|s| {
-        let doc = s
-            .editor
-            .action(
-                "editor.resource.create",
-                json!({"path": "samples/cycle.graph", "domain": "material"}),
-            )
-            .unwrap()["doc"]
-            .as_str()
-            .unwrap()
-            .to_owned();
-        s.editor
-            .apply_to(
-                &doc,
-                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
-                "Showcase",
-            )
-            .unwrap();
-        s.act("editor.workspace", json!({"resource": doc.clone()}));
-        doc
-    });
-    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
-    // Every previewed node shows the picture of its own current key, once renders land.
-    let settle_previews = |rt: &mut Runtime<Studio>| {
-        let started = std::time::Instant::now();
-        loop {
-            rt.touch(|s| super::graph::sync(s, "material"));
-            rt.touch(super::graph::previews);
-            if let Some(error) = rt.state().graph.preview_error() {
-                panic!("the previews can't render here: {error}");
-            }
-            let slots = rt.state().graph.preview_slots();
-            if !slots.is_empty()
-                && slots
-                    .iter()
-                    .all(|(_, _, shown, own)| own.is_some() && shown == own)
-            {
-                return slots;
-            }
-            assert!(
-                started.elapsed() < std::time::Duration::from_secs(120),
-                "previews never settled: {slots:?}"
-            );
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-    };
-    // By key: a text edit gives the nodes new ids, but an unchanged node keeps its key.
-    let by_key = |slots: Vec<(String, String, Option<u32>, Option<u32>)>| {
-        slots
-            .into_iter()
-            .map(|(_, key, shown, _)| (key, shown))
-            .collect::<std::collections::BTreeMap<_, _>>()
-    };
-    let mut before = by_key(settle_previews(&mut rt));
-    // The `scale` constant (6) feeds three previewed nodes; the four others (uv, normal,
-    // view, rim) never change. Its value is edited in place, as the canvas does, so node
-    // ids stay; enough edits to go round every slot several times.
-    let scale_node = {
-        let graph = rt.state().graph.shown_graph().expect("the material shows");
-        graph
-            .nodes
-            .iter()
-            .find(|(_, n)| n.payload["name"] == "scale")
-            .map(|(id, _)| id.clone())
-            .unwrap_or_else(|| panic!("the scale constant: {:?}", graph.nodes))
-    };
-    for scale in 7..19 {
-        rt.touch(|s| {
-            s.editor
-                .apply_to(
-                    &doc,
-                    vec![json!({"cmd": "editor.material.value.set", "args": {"node": scale_node, "value": [scale as f64]}})],
-                    "Scale",
-                )
-                .unwrap();
-        });
-        let now = by_key(settle_previews(&mut rt));
-        let unchanged: Vec<_> = now
-            .iter()
-            .filter(|(key, _)| before.contains_key(*key))
-            .collect();
-        assert_eq!(
-            unchanged.len(),
-            4,
-            "scale {scale}: {now:?} before {before:?}"
-        );
-        for (key, shown) in unchanged {
-            assert_eq!(
-                before[key], *shown,
-                "scale {scale}: {key} keeps its own picture"
-            );
-        }
-        before = now;
-    }
-}
-
-#[test]
 fn agents_capture_the_studio_window_and_its_layout() {
     let mut rt = open();
     settle(&mut rt);
@@ -5726,236 +5616,31 @@ fn the_editor_capture_says_the_scene_is_not_in_it() {
     );
 }
 
-/// One host-loop pass for agents' work with the Scene hidden: the editor's jobs tick and its
-/// state syncs (a setting applied through an action reaches `editor.state` here, as in the
-/// loop), the Scene renders only when `render` (a bake needs it), the probe owner and
-/// captures are served, and the Lighting page's job list is polled.
-fn hidden_pass(
-    rt: &mut Runtime<Studio>,
-    owner: &mut super::probes::Owner,
-    scene_view: &mut crate::studio::viewport::SceneView,
-    renderer: &mut ara_render::Renderer,
-    view: &crate::world::DocumentView,
-    render: bool,
-) {
-    rt.touch(|s| {
-        s.editor.tick();
-        s.editor.sync();
-    });
-    if render {
-        super::agent_work::render(rt, owner, scene_view, renderer, view);
-    }
-    super::agent_work::serve(rt, owner, scene_view, renderer, false);
-    rt.touch(|s| s.editor.tick());
-    rt.touch(super::asset_ops::poll_jobs);
-    std::thread::sleep(Duration::from_millis(10));
-}
-
-/// A Scene on this GPU with Window > Lighting in front of it, a Reflection Probe selected,
-/// and the Scene quality set to `quality` the way the quality menu sets it (the
-/// `viewport.quality` setting: `editor.state.render_quality` is rebuilt from settings and
-/// each incoming state, so assigning it directly does not reach the renderer). Renders
-/// unpresented until the retained frame exists and the probe report has been read.
-struct HiddenScene {
-    rt: Runtime<Studio>,
-    renderer: ara_render::Renderer,
-    view: crate::world::DocumentView,
-    scene_view: crate::studio::viewport::SceneView,
-    owner: super::probes::Owner,
-}
-impl HiddenScene {
-    fn new(quality: &str) -> Self {
-        use crate::catalog::Target;
-        use crate::world::EditWorldView as _;
-        let mut rt = open();
-        rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
-        rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
-        rt.update(|s| {
-            s.act(
-                "editor.settings.set",
-                json!({"key": "viewport.quality", "value": quality}),
-            )
-        });
-        settle(&mut rt);
-        assert!(
-            rt.natives().iter().all(|(n, _)| &**n != super::SCENE_LAYER),
-            "the Lighting page covers the Scene"
-        );
-        let root = rt.state().editor.host.root().to_owned();
-        let scene = rt.touch(|s| {
-            s.editor
-                .view()
-                .unwrap()
-                .scene(
-                    s.editor.host.root(),
-                    &s.editor.state,
-                    None,
-                    &mut s.editor.models,
-                )
-                .unwrap()
-        });
-        let (_device, mut renderer) = crate::studio::viewport::prepare_renderer(
-            scene,
-            [320, 240],
-            super::present_extensions(),
-            root.join(".ara/gpu"),
-            false,
-            Default::default(),
-            |_| Ok(true),
-        )
-        .unwrap()
-        .expect("the renderer starts on this GPU");
-        let view = rt.touch(|s| s.editor.view()).unwrap();
-        let mut scene_view = crate::studio::viewport::SceneView::default();
-        let mut owner = super::probes::Owner::default();
-        // Render until the Scene's content is published and the host has the probe report
-        // (the Lighting page reads it as the loop does, once a second).
-        let warm = std::time::Instant::now();
-        loop {
-            hidden_pass(
-                &mut rt,
-                &mut owner,
-                &mut scene_view,
-                &mut renderer,
-                &view,
-                true,
-            );
-            let ready = rt.touch(|s| scene_view.probe_snapshot(&s.editor).map(drop));
-            let reported = rt.touch(|s| super::lighting::refresh_probes(s).is_ok())
-                && rt
-                    .state()
-                    .local
-                    .probe_status
-                    .as_ref()
-                    .is_some_and(|report| report.version > 0);
-            match (ready, reported) {
-                (Ok(()), true) => break,
-                (ready, _) => assert!(
-                    warm.elapsed() < Duration::from_secs(60),
-                    "the Scene never published a frame or a probe report: {ready:?}"
-                ),
-            }
-        }
-        Self {
-            rt,
-            renderer,
-            view,
-            scene_view,
-            owner,
-        }
-    }
-    fn pass(&mut self, render: bool) {
-        hidden_pass(
-            &mut self.rt,
-            &mut self.owner,
-            &mut self.scene_view,
-            &mut self.renderer,
-            &self.view,
-            render,
-        );
-    }
-    /// What the renderer is running at, for failure messages.
-    fn quality(&self) -> String {
-        let quality = self.renderer.quality();
-        format!(
-            "choice {:?}, high_tier {}, captures {}",
-            self.rt.state().editor.state.render_choice(),
-            quality.high_tier,
-            quality.reflection_captures.is_some()
-        )
-    }
-    fn finish(mut self) {
-        self.scene_view.destroy(&mut self.renderer).unwrap();
-    }
-}
-
 /// Window > Lighting in front of the Scene at High: Recapture starts a bake, which only
 /// advances through Scene renders. Polling alone leaves it running; the unpresented render
 /// the loop runs for it completes it.
 #[test]
-fn a_recapture_started_from_the_lighting_page_completes_with_the_scene_hidden_on_this_gpu() {
-    let mut scene = HiddenScene::new("high");
+fn recapturing_probes_says_it_is_not_available_and_starts_no_job() {
+    use crate::catalog::Target;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
     assert!(
-        super::lighting::probes_unavailable(scene.rt.state()).is_none(),
-        "High captures reflection probes ({}): {:?}",
-        scene.quality(),
-        scene
-            .rt
-            .state()
-            .local
-            .probe_status
-            .as_ref()
-            .map(|r| &r.capabilities)
+        rt.find("lighting/probe/unavailable").is_some(),
+        "the page says so beside the button"
     );
-    press(&mut scene.rt, "lighting/probe/recapture");
     assert!(
-        super::lighting::capturing(scene.rt.state()),
-        "the recapture started ({})",
-        scene.quality()
+        rt.find("lighting/probe/recapture").is_some(),
+        "the button keeps its place"
     );
-    let job = scene.rt.state().local.asset_jobs.last().unwrap().0.clone();
-    // Serving without rendering does not advance the bake: this was the stuck button.
-    for _ in 0..30 {
-        scene.pass(false);
-    }
-    let early = scene
-        .rt
-        .touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
-    assert!(
-        super::lighting::capturing(scene.rt.state()),
-        "a bake does not finish without a Scene render ({}): {early} {}",
-        scene.quality(),
-        scene.owner.resource_report()
-    );
-    let started = std::time::Instant::now();
-    while super::lighting::capturing(scene.rt.state()) {
-        assert!(
-            started.elapsed() < Duration::from_secs(60),
-            "the recapture never completed ({}): {}",
-            scene.quality(),
-            scene.owner.resource_report()
-        );
-        scene.pass(true);
-    }
-    let status = scene
-        .rt
-        .touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
-    assert_eq!(status["status"], "done", "{status}");
-    scene.finish();
+    // Disabled: pressing it, or running the command, starts nothing.
+    press(&mut rt, "lighting/probe/recapture");
+    rt.update(|s| super::commands::run(s, "lighting.probe.recapture", &Target::None));
+    settle(&mut rt);
+    assert!(!super::lighting::capturing(rt.state()), "no capture job");
 }
 
-/// At a quality without reflection captures (Auto on an integrated GPU is one), the Lighting
-/// page says so and starts no job that could only fail, on every GPU.
-#[test]
-fn recapture_at_a_quality_without_reflection_captures_says_why_and_starts_no_job_on_this_gpu() {
-    let mut scene = HiddenScene::new("medium");
-    let why = super::lighting::probes_unavailable(scene.rt.state())
-        .map(str::to_owned)
-        .unwrap_or_else(|| panic!("the renderer reports why ({})", scene.quality()));
-    assert!(why.contains("High and Epic"), "{why}");
-    // The page says it beside the button, and the button is off.
-    settle(&mut scene.rt);
-    assert!(
-        scene.rt.find("lighting/probe/unavailable").is_some(),
-        "the page says why"
-    );
-    press(&mut scene.rt, "lighting/probe/recapture");
-    assert!(
-        !super::lighting::capturing(scene.rt.state()),
-        "no job was started"
-    );
-    // The command refuses with the same reason, for a keyboard shortcut or the palette.
-    let refused = scene
-        .rt
-        .touch(|s| super::lighting::recapture(s, None))
-        .expect_err("the command refuses");
-    assert!(refused.to_string().contains("High and Epic"), "{refused}");
-    assert!(scene.rt.state().local.asset_jobs.is_empty());
-    scene.finish();
-}
-
-/// The host's "no snapshot yet" answer (version 0) is a wait, not a quality problem: the
-/// Lighting page keeps Recapture on and does not tell the user to change the quality.
 #[test]
 fn a_placeholder_probe_report_is_not_a_quality_problem() {
     let mut rt = open();
@@ -7663,4 +7348,210 @@ fn the_unavailable_tile_says_what_is_missing() {
         ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
     )
     .unwrap();
+}
+
+/// The narrow default times the small-window zoom must not cut a child's name: at 900x560 (a
+/// 818 px wide layout) the Hierarchy still fits about 14 characters of an indented name.
+#[test]
+fn the_hierarchy_keeps_room_for_an_indented_name_in_a_small_window() {
+    let mut rt = open_sized((818, 509));
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![
+                    json!({"cmd":"entity.create","args":{"id":"e_ter","name":"Terrain","components":{"Transform":{}}}}),
+                    json!({"cmd":"entity.create","args":{"id":"e_chunk","name":"Terrain chunk","parent":"e_ter","components":{"Transform":{}}}}),
+                ],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let outline = rt.find("area/outline").expect("the Hierarchy area");
+    assert!(outline.width() >= 136.0, "{}px wide", outline.width());
+    let name = rt
+        .tree()
+        .into_iter()
+        .find(|n| n.text.as_deref() == Some("Terrain chunk"))
+        .expect("the child's name shows");
+    assert!(
+        name.rect.right <= outline.right && name.rect.width() >= 13.0 * 5.5,
+        "the name is {}px wide inside a {}px panel",
+        name.rect.width(),
+        outline.width()
+    );
+}
+
+/// A material with UV, noise, colour and world-space operations: the material page tests' showcase.
+const SHOWCASE: &str = "material Paint : surface budget 1 { param color : ColorLinear = linear(0.18, 0.42, 0.72); param roughness : float = 0.35; let tiling : vec2 = uv(); let scale : float = 6; let scaled : vec2 = mul(tiling, scale); let grain : float = noise(scaled); let dark : ColorLinear = linear(0.03, 0.05, 0.08); let tinted : ColorLinear = lerp(dark, color, grain); let n : vec3 = worldNormal(); let v : vec3 = viewDirection(); let power : float = 3; let rim : float = fresnel(n, v, power); output baseColor = tinted; output roughness = roughness; output clearCoat = rim; }";
+
+#[test]
+fn the_game_view_outside_play_says_its_preview_is_not_available() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.local.game.camera = true;
+        s.act("editor.layout.show", json!({"panel": "game"}));
+    });
+    settle(&mut rt);
+    assert!(
+        rt.find("game/preview-unavailable").is_some(),
+        "the tile shows"
+    );
+    assert!(
+        rt.tree().iter().any(|n| n
+            .text
+            .as_deref()
+            .is_some_and(|t| t.starts_with("The Game preview is not available yet"))),
+        "and says what is missing"
+    );
+}
+
+/// Review shots of each placeholder that stands in for the old renderer's output, at 1280x720
+/// and 1000x630 (zoom applied as in the window): the Game preview, the VFX page, the Material
+/// page's Details, the Lighting page, the disabled draw modes and effects, and Assets tiles
+/// without pictures for models and materials. Written to `target/studio-captures/previews/`.
+#[test]
+#[ignore = "writes review captures under target/"]
+fn placeholder_captures() {
+    let out =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures/previews");
+    std::fs::create_dir_all(&out).unwrap();
+    for (w, h) in [(1280u32, 720u32), (1000, 630)] {
+        let zoom = super::zoom::for_width(w as f32);
+        let size = format!("{w}x{h}");
+        let shoot = |rt: &mut Runtime<Studio>, name: &str| {
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            std::fs::write(
+                out.join(format!("{size}-{name}.png")),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+        };
+        let fresh = || {
+            let mut rt = open_sized(((w as f32 / zoom) as u32, (h as f32 / zoom) as u32));
+            rt.set_scale(zoom);
+            rt.resize((w, h));
+            rt
+        };
+        // The Game view outside Play.
+        let mut rt = fresh();
+        rt.update(|s| {
+            s.local.game.camera = true;
+            s.act("editor.layout.show", json!({"panel": "game"}));
+        });
+        shoot(&mut rt, "game-preview");
+        // The draw-mode menu: modes and effects the renderer lacks are disabled.
+        let mut rt = fresh();
+        host_feedback(&mut rt);
+        if rt.find("scene/draw-mode").is_some() {
+            press(&mut rt, "scene/draw-mode");
+        } else {
+            // A narrow window folds the Scene's view group; the command opens the menu anyway.
+            rt.update(|s| {
+                super::commands::run(s, "window.render_debug", &crate::catalog::Target::None)
+            });
+        }
+        shoot(&mut rt, "draw-modes");
+        // The VFX page.
+        let mut rt = fresh();
+        rt.touch(|s| {
+            let doc = s
+                .editor
+                .action(
+                    "editor.resource.create",
+                    json!({"path": "samples/fx.graph", "domain": "vfx"}),
+                )
+                .unwrap()["doc"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            s.act("editor.workspace", json!({"resource": doc}));
+        });
+        rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+        shoot(&mut rt, "vfx");
+        // The Material page's Details.
+        let mut rt = fresh();
+        rt.touch(|s| {
+            let doc = s
+                .editor
+                .action(
+                    "editor.resource.create",
+                    json!({"path": "samples/paint.graph", "domain": "material"}),
+                )
+                .unwrap()["doc"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            s.editor
+                .apply_to(
+                    &doc,
+                    vec![json!({"cmd": "material.text.apply", "args": {"text": SHOWCASE}})],
+                    "Showcase",
+                )
+                .unwrap();
+            s.act("editor.workspace", json!({"resource": doc}));
+        });
+        rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+        rt.update(|s| super::graph::sync(s, "material"));
+        shoot(&mut rt, "material");
+        // The Lighting page with a Reflection Probe.
+        let mut rt = fresh();
+        rt.update(|s| super::commands::run(s, "create.light.probe", &crate::catalog::Target::None));
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+        shoot(&mut rt, "lighting");
+        // Assets: a texture gets its picture; models and materials keep their glyph.
+        let mut rt = fresh();
+        let root = rt.state().editor.host.root().to_owned();
+        let content = root.join(ara_doc::AUTHORING_ROOT);
+        std::fs::create_dir_all(content.join("kit")).unwrap();
+        image::RgbaImage::from_fn(64, 64, |x, y| {
+            image::Rgba([(x * 4) as u8, (y * 4) as u8, 160, 255])
+        })
+        .save(content.join("kit/panel.png"))
+        .unwrap();
+        std::fs::write(
+            content.join("kit/crate.gltf"),
+            r#"{"asset":{"version":"2.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            content.join("kit/paint.material"),
+            "material Paint : surface { }",
+        )
+        .unwrap();
+        scan(&mut rt);
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+        rt.update(|s| {
+            s.act(
+                "editor.workspace",
+                json!({"folder": "content/kit", "asset": ""}),
+            )
+        });
+        settle(&mut rt);
+        rt.update(|s| s.previews.want(&root, ["kit/panel.png"]));
+        for _ in 0..100 {
+            rt.update(|s| {
+                s.previews.poll();
+            });
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // The host feeds back the Assets body's size, so tiles step down to fit it.
+        let scale = rt.scale();
+        if let Some(body) = rt.find("assets/body") {
+            let body = stillkit::Rect::new(
+                body.left / scale,
+                body.top / scale,
+                body.width() / scale,
+                body.height() / scale,
+            );
+            rt.update(|s| {
+                s.local.rects.insert("assets/body".into(), body);
+            });
+        }
+        shoot(&mut rt, "assets-tiles");
+    }
 }
