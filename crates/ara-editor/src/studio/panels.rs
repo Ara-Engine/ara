@@ -72,6 +72,15 @@ pub enum TileSize {
 }
 
 impl TileSize {
+    /// The room a row of tiles needs to show whole (picture, strip, two lines of name,
+    /// padding and the grid's own), design px; a list row is its own 22.
+    fn row_height(self) -> f32 {
+        match self {
+            TileSize::List => 22.0,
+            size => size.tile().1 + 47.0 + 6.0,
+        }
+    }
+
     /// A tile's width and its picture's size, design px.
     fn tile(self) -> (f32, f32) {
         match self {
@@ -80,6 +89,21 @@ impl TileSize {
             TileSize::Large => (120.0, 84.0),
         }
     }
+}
+
+/// The size tiles are drawn at: the chosen one, or the largest smaller one whose row shows
+/// whole in the `room` the body has (a tile never shows without its name; the list always
+/// fits). With no measurement yet, the chosen size.
+pub(super) fn fitting(chosen: TileSize, room: Option<f32>) -> TileSize {
+    let Some(room) = room else {
+        return chosen;
+    };
+    // The chosen size and each smaller one; a List choice has none and stays the list.
+    [TileSize::Large, TileSize::Medium, TileSize::Small]
+        .into_iter()
+        .skip_while(|size| *size != chosen)
+        .find(|size| size.row_height() <= room)
+        .unwrap_or(TileSize::List)
 }
 
 /// Assets' window-only view state: layout, type filter, folder history, the Add menu.
@@ -209,13 +233,29 @@ fn assets(s: &Studio) -> El<Studio> {
         .get("assets")
         .cloned()
         .unwrap_or_default();
-    // The path starts at the project's root, drawn as its icon: the tree beside it already
-    // names "Project", and the path bar need not say it again.
+    // The path starts at the project's root: its icon and the project's own name (the tree
+    // beside it says "Project", the path bar need not), then each folder below it.
+    let project = s
+        .editor
+        .state
+        .settings
+        .get("project.name")
+        .and_then(Value::as_str)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            s.editor
+                .host
+                .root()
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "Project".into());
     let mut crumbs = row()
         .gap(2.0)
         .align(Align::Center)
-        .min_w(24.0)
-        .child(root_crumb(l, folder.is_empty()));
+        .min_w(44.0)
+        .child(root_crumb(l, &project, folder.is_empty()));
     let mut at = String::new();
     for part in folder.split('/').filter(|p| !p.is_empty()) {
         if !at.is_empty() {
@@ -496,7 +536,11 @@ fn assets(s: &Studio) -> El<Studio> {
     } else {
         let selected = s.editor.state.asset_path.clone();
         let counts = contents(browser);
-        let size = s.local.assets_view.size;
+        // Tiles step down (to the list) in a short panel, so none shows without its name.
+        let size = fitting(
+            s.local.assets_view.size,
+            s.local.rects.get("assets/body").map(|r| r.height()),
+        );
         let tiles: Vec<El<Studio>> = items
             .into_iter()
             .map(|a| {
@@ -526,6 +570,7 @@ fn assets(s: &Studio) -> El<Studio> {
             .collect();
         let here = folder.clone();
         col()
+            .key("assets/body")
             .grow(1.0)
             .min_h(0.0)
             .scroll(Axis::Vertical)
@@ -1386,16 +1431,17 @@ fn folder_row(
         .child(text(name.to_owned()).text_size(12.0).grow(1.0))
 }
 
-/// The path bar's first step: the project root, by its icon (its name is the tree's).
-fn root_crumb(l: &ara_kit::look::Look, current: bool) -> El<Studio> {
+/// The path bar's first step: the project root, its icon and the project's name.
+fn root_crumb(l: &ara_kit::look::Look, project: &str, current: bool) -> El<Studio> {
     let c = &l.c;
     let hover = c.foreground.0;
     row()
         .key("assets/crumb/root")
-        .size(24.0)
+        .h(24.0)
         .min_w(24.0)
+        .pad_x(6.0)
+        .gap(5.0)
         .align(Align::Center)
-        .justify(Justify::Center)
         .radius(l.radius.xs)
         .color(if current {
             c.foreground.0
@@ -1403,11 +1449,18 @@ fn root_crumb(l: &ara_kit::look::Look, current: bool) -> El<Studio> {
             c.muted_foreground.0
         })
         .cascade_ink()
-        .label("Project")
-        .tooltip("Project")
+        .label(project.to_owned())
+        .tooltip("The project's root folder")
         .hovered(move |e| e.color(hover))
         .on_press(|s: &mut Studio| open_folder(s, ""))
-        .child(icon(icons::BOX).size(14.0))
+        .child(icon(icons::BOX).size(14.0).min_w(14.0))
+        .child(
+            text(project.to_owned())
+                .text_size(12.0)
+                .weight(if current { 600 } else { 500 })
+                .wrap(1)
+                .min_w(0.0),
+        )
 }
 
 fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> El<Studio> {

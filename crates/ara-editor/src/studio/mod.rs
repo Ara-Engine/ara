@@ -1489,6 +1489,8 @@ fn pump(
         keys.push("graph/view".into());
         keys.push("vfx/preview".into());
         keys.push("game/area".into());
+        // The Assets body's height: tiles step down to fit it (`panels::fitting`).
+        keys.push("assets/body".into());
         keys.push("vfx/stacks".into());
         keys.extend(
             scene_overlays::OVERLAYS
@@ -1519,10 +1521,22 @@ fn pump(
                 })
             })
             .collect();
+        // The Assets panel's tile size follows its measured height: a measurement that
+        // changes what fits redraws it (a `touch` alone would leave the old tiles up).
+        let tiles = |s: &Studio| {
+            panels::fitting(
+                s.local.assets_view.size,
+                s.local.rects.get("assets/body").map(|r| r.height()),
+            )
+        };
+        let before = tiles(rt.state());
         rt.touch(|s| {
             s.local.rects = rects;
             scene_overlays::measure(s);
         });
+        if tiles(rt.state()) != before {
+            rt.update(|_| {});
+        }
     }
     rt.sync_text_input(surface);
     if !portals.set_cursor(rt) {

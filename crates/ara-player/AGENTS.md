@@ -9,7 +9,7 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
   See [graphics settings](../../docs/dev/graphics-settings.md) and `tests/graphics.rs`.
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
-[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]] [--renderer ara|renderlab|renderlab-rt|renderlab-nonrt]` (`renderer.rs`; `ARA_RENDERER`; D35).
+[--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]] [--renderer renderlab|ara|renderlab-rt|renderlab-nonrt]` (`renderer.rs`; `ARA_RENDERER`; D35, D39: `renderlab` is the default on every platform, hardware ray tracing where the GPU has it, else its non-RT path, and on macOS Renderlab's ara-gpu backend on Metal; `ara-render`, frozen, draws where Renderlab cannot start, with one line saying so).
 Without `--owner`, loads `ara-launch.json` in the sibling `data/` (legacy flat and
 macOS `Contents/Resources` roots remain readable; `--root DIR` accepts either),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game

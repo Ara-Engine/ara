@@ -3,48 +3,46 @@
 //! `Presenter::set_external_renderer` and every present and capture draws the
 //! extracted frame through Renderlab's `Engine`.
 //!
-//! This crate is the only place that names a Renderlab (or wgpu) type. Renderlab
-//! owns its own device today (D35); its image reaches the presenter's device through
-//! images the two devices share where they can, and by a CPU copy otherwise. Every
-//! frame reports the crossing's cost (`ExternalFrame::handoff_ms`). When Renderlab's
-//! passes move onto `ara-gpu`, that change stays inside this crate.
+//! This crate is the only place that names a Renderlab (or wgpu) type. Where Renderlab
+//! opens Vulkan through wgpu (`bridge`) it owns its own device (D35), and its image
+//! reaches the presenter's device through images the two devices share where they
+//! can, and by a CPU copy otherwise; every frame reports the crossing's cost
+//! (`ExternalFrame::handoff_ms`). On Apple (`bridge_metal`) Renderlab's ara-gpu backend
+//! renders on the presenter's own device, so nothing crosses. Both map the extracted
+//! frame with the same modules, through `rl::Engine`.
 //!
 //! What Ara renders that this path does not yet is in `AGENTS.md`; each such
 //! feature reports `ARA_RENDERLAB_UNSUPPORTED` once when a frame uses it.
 #![warn(missing_docs)]
 
-#[cfg(not(target_vendor = "apple"))]
+// On Apple, Renderlab's ara-gpu backend is a separate revision (Cargo.toml); it is
+// `renderlab` to every module, as the wgpu revision is elsewhere.
+#[cfg(target_vendor = "apple")]
+extern crate renderlab_metal as renderlab;
+
 mod atmosphere;
-#[cfg(not(target_vendor = "apple"))]
 mod batch;
-#[cfg(not(target_vendor = "apple"))]
 mod cutout;
-#[cfg(not(target_vendor = "apple"))]
 mod decals;
-#[cfg(not(target_vendor = "apple"))]
 mod effects;
-#[cfg(not(target_vendor = "apple"))]
+// On Apple the backend has no environment maps yet: only `mean_radiance` is used there.
 mod environment;
-#[cfg(not(target_vendor = "apple"))]
 mod gaps;
+mod rl;
 
 #[cfg(not(target_vendor = "apple"))]
 mod bridge;
-#[cfg(not(target_vendor = "apple"))]
+#[cfg(target_vendor = "apple")]
+mod bridge_metal;
 mod grade;
-#[cfg(not(target_vendor = "apple"))]
 mod lighting;
-#[cfg(not(target_vendor = "apple"))]
 mod meter;
-#[cfg(not(target_vendor = "apple"))]
 mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
-#[cfg(not(target_vendor = "apple"))]
+mod sky;
 mod splat;
-#[cfg(not(target_vendor = "apple"))]
 mod terrain;
-#[cfg(not(target_vendor = "apple"))]
 mod texture;
 
 use anyhow::Result;
@@ -97,36 +95,25 @@ pub struct Renderlab {
     #[cfg(not(target_vendor = "apple"))]
     bridge: bridge::Bridge,
     #[cfg(target_vendor = "apple")]
-    never: std::convert::Infallible,
+    bridge: bridge_metal::Bridge,
 }
 
 impl Renderlab {
-    /// Creates Renderlab's engine on its own device. Fails with `ARA_RENDERLAB_UNAVAILABLE` when this
-    /// machine cannot run the requested path; the host then keeps Ara's renderer.
+    /// Creates Renderlab's engine: on its own Vulkan device through wgpu, or on Apple
+    /// on the presenter's Metal device through Renderlab's ara-gpu backend. Fails with
+    /// `ARA_RENDERLAB_UNAVAILABLE` when this machine cannot run the requested path; the
+    /// host then keeps Ara's renderer.
     pub fn new(options: &Options) -> Result<Self> {
         #[cfg(not(target_vendor = "apple"))]
-        {
-            Ok(Self {
-                bridge: bridge::Bridge::new(options)?,
-            })
-        }
+        let bridge = bridge::Bridge::new(options)?;
         #[cfg(target_vendor = "apple")]
-        {
-            let _ = options;
-            anyhow::bail!(
-                "ARA_RENDERLAB_UNAVAILABLE: Renderlab has no Metal path yet (it renders through Vulkan only)"
-            )
-        }
+        let bridge = bridge_metal::Bridge::new(options)?;
+        Ok(Self { bridge })
     }
 
     /// The path in use.
     pub fn path(&self) -> ActivePath {
-        #[cfg(not(target_vendor = "apple"))]
-        {
-            self.bridge.path()
-        }
-        #[cfg(target_vendor = "apple")]
-        match self.never {}
+        self.bridge.path()
     }
 }
 
@@ -139,19 +126,10 @@ impl ExternalRenderer for Renderlab {
     }
 
     fn render(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<ExternalFrame> {
-        #[cfg(not(target_vendor = "apple"))]
-        {
-            self.bridge.render(gpu, view)
-        }
-        #[cfg(target_vendor = "apple")]
-        {
-            let _ = (gpu, view);
-            match self.never {}
-        }
+        self.bridge.render(gpu, view)
     }
 
     fn cut(&mut self) {
-        #[cfg(not(target_vendor = "apple"))]
         self.bridge.cut();
     }
 
@@ -162,14 +140,6 @@ impl ExternalRenderer for Renderlab {
     }
 
     fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
-        #[cfg(not(target_vendor = "apple"))]
-        {
-            self.bridge.release(gpu)
-        }
-        #[cfg(target_vendor = "apple")]
-        {
-            let _ = gpu;
-            Ok(())
-        }
+        self.bridge.release(gpu)
     }
 }

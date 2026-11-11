@@ -6,12 +6,12 @@ use crate::{
     ActivePath, Options, PathChoice,
     decals::Decals,
     effects::Effects,
-    environment,
     gaps::Gaps,
-    lighting::{self, Metering, SkySource},
+    lighting::{self, Metering},
     meter::Readbacks,
     scene::{MAX_GROUPS, Scene},
     shared::SharedHandoff,
+    sky::Skies,
     terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
@@ -22,14 +22,18 @@ use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::{
     ViewId,
     engine::{
-        Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery,
-        Light, Limits, RenderPath, Sky, Sun, ViewDesc, ViewLook, headless_adapter,
+        Capabilities, Engine, EngineDescriptor, ExperimentalRayQuery, Light, Limits, RenderPath,
+        Sun, ViewDesc, ViewLook, headless_adapter,
     },
 };
 use std::time::{Duration, Instant};
 
 /// Longest a present waits for its frame before reading it back regardless.
 const FRAME_WAIT: Duration = Duration::from_secs(5);
+/// Mesh-material groups terrain tiles may take; each resident tile is its own group (its own
+/// weights texture, so tiles never merge by material). Outpost's 144 tiles need 144; entity
+/// draws and foliage get `MAX_GROUPS - TERRAIN_GROUPS`, merged by material when they exceed it.
+const TERRAIN_GROUPS: usize = MAX_GROUPS * 3 / 4;
 
 /// The presenter-device image each frame lands in, and how it gets there.
 struct Target {
@@ -48,9 +52,6 @@ struct Target {
 struct Applied {
     sun: Option<Sun>,
     lights: Vec<Light>,
-    sky: Option<Sky>,
-    /// The prepared sky map in use and the content key it was prepared from.
-    sky_map: Option<(u64, EnvironmentId)>,
     /// The colour grade baked into Renderlab's lookup table (`grade::key`).
     grade: Option<u64>,
 }
@@ -77,8 +78,7 @@ pub(crate) struct Bridge {
     /// The GPU histogram passes in flight for the meter.
     readbacks: Readbacks,
     max_reflection_roughness: Option<f32>,
-    /// A sky image lights the scene as a constant of its mean radiance (`Options`).
-    constant_sky: bool,
+    skies: Skies,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
     gpu_ms: Option<f64>,
@@ -87,17 +87,6 @@ pub(crate) struct Bridge {
     cut: bool,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
-    /// The sky being prepared off the frame loop, if any.
-    sky_job: Option<SkyJob>,
-    /// Replaced sky maps waiting for the next sky change to be removed.
-    stale_maps: Vec<EnvironmentId>,
-}
-
-/// One sky image being prepared for `Sky::Map` on a worker thread.
-struct SkyJob {
-    /// Content key of the image (`environment::key`).
-    key: u64,
-    worker: std::thread::JoinHandle<Result<renderlab::engine::PreparedEnvironment>>,
 }
 
 impl Bridge {
@@ -175,14 +164,12 @@ impl Bridge {
             last_look: None,
             readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
-            constant_sky: options.constant_sky,
+            skies: Skies::new(options.constant_sky),
             cpu_copy: options.cpu_copy_handoff,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
             last_view: None,
-            sky_job: None,
-            stale_maps: Vec::new(),
         })
     }
 
@@ -214,8 +201,8 @@ impl Bridge {
             }
         }
         self.report_unsupported(view);
-        // Terrain tiles take at most half the mesh-material groups; entity draws and
-        // foliage share the rest. On the non-RT path foliage is capped by the largest
+        // Terrain tiles take at most three quarters of the mesh-material groups
+        // (`TERRAIN_GROUPS`); entity draws and foliage share the rest. On the non-RT path foliage is capped by the largest
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
         // foliage is rebuilt for it before the frame renders.
         let nonrt = self.path == ActivePath::NonRt;
@@ -224,7 +211,7 @@ impl Bridge {
             let (tiles, assumed) = self.terrain.sync(
                 &mut self.engine,
                 view,
-                MAX_GROUPS / 2,
+                TERRAIN_GROUPS,
                 nonrt.then_some(known),
                 &mut self.gaps,
             )?;
@@ -274,7 +261,8 @@ impl Bridge {
             self.last_look = Some(look);
         }
         let view_id = self.view.context("the view was created above")?;
-        self.apply_sky(view)?;
+        self.skies
+            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
@@ -452,83 +440,6 @@ impl Bridge {
                 "only the sun lights the sky",
             );
         }
-    }
-
-    /// Sets the frame's sky when it changed. An environment map or gradient sky is
-    /// prepared once per content (`environment`) on a worker thread, a few hundred
-    /// milliseconds of filtering: the frame loop keeps the sky it has (a constant of
-    /// the image's mean before the first one) until the new one is ready. A capture or
-    /// a cut waits for it, so stills never show a sky in transition.
-    fn apply_sky(&mut self, view: &ExternalView<'_>) -> Result<()> {
-        let mut replaced = None;
-        let sky = match lighting::sky(view, &mut self.gaps) {
-            SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
-            SkySource::Map { size, pixels } if self.constant_sky => {
-                Sky::Uniform(environment::mean_radiance(size, &pixels))
-            }
-            SkySource::Map { size, pixels } => {
-                let key = environment::key(size, &pixels);
-                loop {
-                    // Take over a finished preparation (any, when waiting).
-                    if let Some(job) = self
-                        .sky_job
-                        .take_if(|job| self.cut || job.worker.is_finished())
-                    {
-                        let prepared = job
-                            .worker
-                            .join()
-                            .map_err(|_| anyhow!("the sky preparation thread panicked"))??;
-                        let map = self.engine.create_environment(&prepared)?;
-                        let previous = self.applied.sky_map.replace((job.key, map));
-                        // Two maps can finish between sky changes: all but the last go.
-                        if let Some(stale) = replaced.replace(previous.map(|(_, map)| map)) {
-                            self.stale_maps.extend(stale);
-                        }
-                    }
-                    let current = self.applied.sky_map.map(|(applied, _)| applied);
-                    if current == Some(key) || self.sky_job.is_some() {
-                        break;
-                    }
-                    let (owned, wait) = (pixels.to_vec(), self.cut);
-                    let worker = std::thread::Builder::new()
-                        .name("renderlab-sky".into())
-                        .spawn(move || environment::prepare(size, &owned))
-                        .context("sky preparation thread")?;
-                    self.sky_job = Some(SkyJob { key, worker });
-                    if !wait {
-                        break;
-                    }
-                }
-                let light = lighting::sky_light(view);
-                match self.applied.sky_map {
-                    Some((_, map)) => Sky::Map {
-                        map,
-                        rotation_y: 0.,
-                        intensity: light,
-                        background: if light == 1. {
-                            Background::Sky
-                        } else {
-                            Background::ScaledSky(1.)
-                        },
-                    },
-                    None => Sky::Uniform(environment::mean_radiance(size, &pixels)),
-                }
-            }
-        };
-        if self.applied.sky != Some(sky) {
-            self.engine.set_sky(sky)?;
-            self.applied.sky = Some(sky);
-        }
-        // Renderlab keeps the selected map alive until the sky changes: old ones go
-        // only after the new sky is set.
-        for map in replaced
-            .flatten()
-            .into_iter()
-            .chain(self.stale_maps.drain(..))
-        {
-            self.engine.remove_environment(map)?;
-        }
-        Ok(())
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
