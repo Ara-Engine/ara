@@ -274,32 +274,13 @@ fn title_bar(s: &Studio) -> El<Studio> {
                 .color(c.muted_foreground.0),
         )
         .child(text(scene).text_size(12.0).color(c.muted_foreground.0));
-    let theme = icon_button(
-        l,
-        Tone::Ghost,
-        Size::Sm,
-        if s.editor.state.light {
-            icons::MOON
-        } else {
-            icons::SUN
-        },
-        "Toggle theme",
-    )
-    .key("theme")
-    .on_press(|s: &mut Studio| {
-        let id = if s.editor.state.light {
-            "view.theme.dark"
-        } else {
-            "view.theme.light"
-        };
-        commands::run(s, id, &Target::None);
-    });
-    ara_kit::ui::title_bar(
+    // Menus, Play, project, search and the window buttons; the theme is in Settings.
+    ara_kit::ui::title_bar_flush(
         l,
         s.frame.inset,
         lead,
         vec![play],
-        vec![crumb, launcher, theme],
+        vec![crumb, launcher],
         s.frame.controls,
     )
 }
@@ -373,6 +354,25 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
             Item::Separator => out.push(Line::Separator),
             // Only what the editor runs; a context menu, only what applies to what was
             // clicked (the menu bar keeps every entry).
+            // Window › a core panel: checked while shown, and a press hides or shows it (its
+            // tab has no ×).
+            Item::Command(id @ ("window.hierarchy" | "window.inspector" | "window.game"))
+                if *target == Target::None =>
+            {
+                let panel = id.trim_start_matches("window.");
+                let shown = crate::state::panel_visible(&s.editor.state, panel);
+                let title = super::dock::panel_title(panel).0.to_owned();
+                out.push(if shown {
+                    Line::Entry(
+                        title,
+                        "window.close_panel",
+                        Target::Panel(panel.to_owned()),
+                        Some(true),
+                    )
+                } else {
+                    Line::Entry(title, id, Target::None, Some(false))
+                });
+            }
             Item::Command(id)
                 if crate::catalog::get(id).is_some()
                     && (*target == Target::None || commands::applies(s, id, target)) =>

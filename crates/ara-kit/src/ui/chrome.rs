@@ -33,6 +33,31 @@ pub fn title_bar<S: 'static>(
     trail: Vec<El<S>>,
     controls: Option<bool>,
 ) -> El<S> {
+    title_bar_ruled(l, inset, lead, middle, trail, controls, true)
+}
+
+/// [`title_bar`] without the hairline under it, for a window whose panels sit on the same
+/// surface as the bar (the studio): the top reads as one piece.
+pub fn title_bar_flush<S: 'static>(
+    l: &Look,
+    inset: f32,
+    lead: Vec<El<S>>,
+    middle: Vec<El<S>>,
+    trail: Vec<El<S>>,
+    controls: Option<bool>,
+) -> El<S> {
+    title_bar_ruled(l, inset, lead, middle, trail, controls, false)
+}
+
+fn title_bar_ruled<S: 'static>(
+    l: &Look,
+    inset: f32,
+    lead: Vec<El<S>>,
+    middle: Vec<El<S>>,
+    trail: Vec<El<S>>,
+    controls: Option<bool>,
+    rule: bool,
+) -> El<S> {
     let c = &l.c;
     let mut bar = row()
         .key(TITLE_BAR)
@@ -63,7 +88,7 @@ pub fn title_bar<S: 'static>(
     col()
         .w_full()
         .child(bar)
-        .child(el().h(1.0).w_full().fill(c.border.0))
+        .children(rule.then(|| el().h(1.0).w_full().fill(c.border.0)))
 }
 
 /// Minimize, maximize (restore when `maximized`) and close, Windows-sized (46 x 40); close

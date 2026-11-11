@@ -7011,3 +7011,59 @@ fn the_status_hint_and_the_launcher_box_use_the_same_platform_chord() {
         assert!(hint.contains("Ctrl K") && !hint.contains('⌘'), "{hint}");
     }
 }
+
+// The UI pass: title bar, panel tabs.
+
+#[test]
+fn the_title_bar_has_no_theme_button_and_no_rule_under_it() {
+    let mut rt = open();
+    settle(&mut rt);
+    assert!(rt.find("theme").is_none(), "the theme lives in Settings");
+    assert!(rt.find("launcher").is_some() && rt.find("menu/Window").is_some());
+    // No hairline between the bar and the panels: the pixel row under the bar is the
+    // bar's own surface.
+    let bar = rt
+        .find("title-bar")
+        .or_else(|| rt.find(ara_kit::ui::TITLE_BAR))
+        .expect("the bar");
+    let shot = rt.snap().unwrap();
+    let at = |x: u32, y: u32| {
+        let i = ((y * shot.width + x) * 4) as usize;
+        shot.pixels[i..i + 4].to_vec()
+    };
+    let (x, below) = (shot.width / 2, (bar.bottom * rt.scale()) as u32);
+    assert_eq!(at(x, below - 1), at(x, below), "one surface, no line");
+}
+
+#[test]
+fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
+    let mut rt = open();
+    settle(&mut rt);
+    for panel in ["hierarchy", "inspector", "scene", "game"] {
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
+        settle(&mut rt);
+        assert!(
+            rt.find(&format!("tab/{panel}/close")).is_none(),
+            "{panel} has no ×"
+        );
+    }
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
+    settle(&mut rt);
+    assert!(
+        rt.find("tab/console/close").is_some(),
+        "other panels keep their ×"
+    );
+    // Window › Hierarchy is checked while shown; pressing it hides the panel, and again shows it.
+    for (shown_after, key) in [
+        (false, "cmd/window.close_panel/Hierarchy"),
+        (true, "cmd/window.hierarchy/Hierarchy"),
+    ] {
+        press(&mut rt, "menu/Window");
+        press(&mut rt, key);
+        assert_eq!(
+            crate::state::panel_visible(&rt.state().editor.state, "hierarchy"),
+            shown_after
+        );
+        settle(&mut rt);
+    }
+}
