@@ -5717,6 +5717,134 @@ fn a_mixed_rotation_selection_grows_only_each_objects_axis_nearest_the_drag() {
     }
 }
 
+/// The box corners of `ids`, in the plane and frame of `shown`, as (min, max).
+fn committed_extent(
+    rt: &Runtime<Studio>,
+    ids: &[&str],
+    shown: &super::rect_tool::Frame,
+) -> (glam::Vec2, glam::Vec2) {
+    let (mut min, mut max) = (glam::Vec2::MAX, glam::Vec2::MIN);
+    for id in ids {
+        let world = crate::world::world_transform(&rt.state().resolved, id).unwrap();
+        for i in 0..8 {
+            let corner = glam::Vec3::new(
+                [-0.5, 0.5][i & 1],
+                [-0.5, 0.5][(i >> 1) & 1],
+                [-0.5, 0.5][(i >> 2) & 1],
+            );
+            let p = world.transform_point3(corner) - shown.origin;
+            let at = glam::Vec2::new(p.dot(shown.axes[0]), p.dot(shown.axes[1]));
+            min = min.min(at);
+            max = max.max(at);
+        }
+    }
+    (min, max)
+}
+
+#[test]
+fn objects_sharing_a_rotation_resize_as_the_rect_shows() {
+    let mut rt = open();
+    rect_boxes(
+        &mut rt,
+        &[
+            ("e_left", 45.0, [-2.0, 0.0, 0.0]),
+            ("e_right", 45.0, [2.0, 1.0, 1.0]),
+        ],
+    );
+    let ids = ["e_left", "e_right"];
+    let turned = glam::Quat::from_rotation_y(45f32.to_radians());
+    let frame = super::rect_tool::frame_rotation(&rt.state().resolved, &ids.map(String::from));
+    assert!(
+        frame.dot(turned).abs() > 0.9999,
+        "the rect is in their shared frame"
+    );
+    let shown = drag_rect_edge(&mut rt);
+    let (min, max) = committed_extent(&rt, &ids, &shown);
+    assert!(
+        min.abs_diff_eq(shown.min, 1e-3) && max.abs_diff_eq(shown.max, 1e-3),
+        "committed {min}..{max}, shown {}..{}",
+        shown.min,
+        shown.max
+    );
+}
+
+#[test]
+fn undoing_a_rect_drag_restores_position_rotation_and_scale() {
+    let mut rt = open();
+    rect_boxes(&mut rt, &[("e_turned", 45.0, [1.0, 0.0, 0.0])]);
+    let before = rt.state().resolved["e_turned"].record["Transform"].clone();
+    drag_rect_edge(&mut rt);
+    rt.update(|s| s.resolve());
+    assert_ne!(rt.state().resolved["e_turned"].record["Transform"], before);
+    rt.touch(|s| s.editor.action("history.undo", json!({})).unwrap());
+    rt.update(|s| s.resolve());
+    assert_eq!(
+        rt.state().resolved["e_turned"].record["Transform"],
+        before,
+        "one undo puts the whole pose back"
+    );
+}
+
+/// A gesture over the selected `e_turned`, as the Rect tool begins one.
+fn rect_gesture(rt: &mut Runtime<Studio>) -> crate::world::gesture::Gesture {
+    rt.touch(|s| {
+        crate::world::gesture::Gesture::begin_tool(
+            &s.resolved,
+            &s.editor.state,
+            0,
+            crate::state::Tool::Rect,
+        )
+        .unwrap()
+    })
+}
+
+#[test]
+fn a_plain_rect_move_keeps_a_skewed_childs_rotation_and_scale() {
+    let mut rt = open();
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![
+                    json!({"cmd":"entity.create","args":{"id":"e_rig","name":"Rig","components":{"Transform":{"rotation":[0,30,0],"scale":[2,1,0.5]}}}}),
+                    json!({"cmd":"entity.create","args":{"id":"e_kid","name":"Kid","parent":"e_rig","components":{"Transform":{"position":[1,0,0],"rotation":[0,20,0]},"MeshRenderer":{"shape":"box"}}}}),
+                ],
+                "Create",
+                None,
+            )
+            .unwrap();
+    });
+    rt.update(|s| {
+        s.resolve();
+        s.select(vec!["e_kid".into()], false);
+    });
+    let mut gesture = rect_gesture(&mut rt);
+    let (start_scale, start_rotation, _) = gesture.initial["e_kid"].to_scale_rotation_translation();
+    let parent = crate::world::world_transform(&rt.state().resolved, "e_rig").unwrap();
+    let before = crate::world::world_transform(&rt.state().resolved, "e_kid").unwrap();
+    let by = glam::Vec3::new(0.5, 0.0, 0.25);
+    gesture.rect_resize(
+        glam::Mat4::from_translation(by),
+        [glam::Vec3::X, glam::Vec3::Y],
+        glam::Vec2::ONE,
+    );
+    let (scale, rotation, _) = gesture.current["e_kid"].to_scale_rotation_translation();
+    assert!(
+        scale.abs_diff_eq(start_scale, 1e-4),
+        "scale kept: {scale} vs {start_scale}"
+    );
+    assert!(
+        rotation.dot(start_rotation).abs() > 0.99999,
+        "rotation kept: {rotation:?} vs {start_rotation:?}"
+    );
+    let after = parent * gesture.current["e_kid"];
+    assert!(
+        after
+            .transform_point3(glam::Vec3::ZERO)
+            .abs_diff_eq(before.transform_point3(glam::Vec3::ZERO) + by, 1e-4),
+        "it moved by the drag in the world"
+    );
+}
+
 #[test]
 fn align_with_view_moves_a_selected_parent_and_its_selected_child_follows() {
     let mut rt = open();
