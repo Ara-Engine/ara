@@ -373,3 +373,20 @@ debug build: synchronization validation is what detects a missing or mismatched
 transfer, and the byte read-back cannot, because both families share memory. It is
 ignored on macOS like the other Vulkan hardware probes, so it compiles on the Mac but
 has not run: the first native result comes from the Linux and Windows gates.
+
+## Fragment barycentrics (found by Renderlab's first Vulkan run)
+
+Renderlab's lit, receiver and glass fragment stages read per-vertex attributes, so
+their SPIR-V declares `FragmentBarycentricKHR`. The Vulkan device never enabled
+`VK_KHR_fragment_shader_barycentric`, and under validation every such module failed
+at `vkCreateShaderModule` (nine Renderlab backend tests on RADV). The device now
+enables the extension and its feature whenever the driver reports both, and
+`DeviceInfo::fragment_barycentrics` says whether it did; every Metal 4 GPU reports
+it through `supportsShaderBarycentricCoordinates`. A caller must not create a
+pipeline whose fragment stage declares barycentrics where the flag is false.
+
+Nothing in `ara-gpu`'s own cohort uses barycentrics, so the proof is Renderlab's
+backend suite under validation on a Vulkan device, which has not been rerun yet.
+Ray-query position fetch is deliberately not enabled: hit positions come from
+retained geometry (`hit_geometry`), and Renderlab's modules no longer declare the
+SPIR-V extension.
