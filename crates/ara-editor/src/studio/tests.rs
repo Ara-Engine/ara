@@ -5082,6 +5082,78 @@ fn click_cost() {
     }
 }
 
+/// The Linux studio path end to end: a GPU stillkit window, a native layer (a Wayland
+/// subsurface), and a studio layer presenting into it at three sizes.
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "needs a Wayland session and a Vulkan GPU (the Linux gate)"]
+fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
+    use crate::world::EditWorldView as _;
+    use anyhow::Context;
+    let mut rt = open();
+    stillkit::platform::set_render(stillkit::platform::Render::Gpu);
+    let surface = stillkit::Surface::new(
+        stillkit::Kind::App { min: (320, 240) },
+        "native layer test",
+        stillkit::Role::Window,
+    )?;
+    let target = super::present::target(surface.native_layer("test")?)?;
+    assert!(
+        matches!(target, super::present::Target::Wayland { .. }),
+        "{target:?}"
+    );
+    let scene = rt.touch(|s| -> anyhow::Result<_> {
+        let view = s.editor.view()?;
+        view.scene(
+            s.editor.host.root(),
+            &s.editor.state,
+            None,
+            &mut s.editor.models,
+        )
+    })?;
+    let cache = rt.state().editor.host.root().join(".ara/gpu");
+    let renderer = crate::app::viewport::prepare_renderer(
+        scene,
+        [64, 64],
+        super::present_extensions(),
+        cache,
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .map_err(|e| anyhow::anyhow!("{e}"))?
+    .context("the renderer started")?;
+    // SAFETY: the renderer outlives the layer (retired below); this thread submits.
+    let mut layer = unsafe { super::layer::Layer::new(&renderer, [])? };
+    let list = ara_ui::paint::DisplayList {
+        commands: Vec::new(),
+        glyphs: Vec::new(),
+    };
+    let result = (|| -> anyhow::Result<()> {
+        for extent in [[200, 120], [260, 160], [128, 96]] {
+            let rect = stillkit::Rect::new(10.0, 10.0, extent[0] as f32, extent[1] as f32);
+            surface.place_native_layer("test", Some(rect));
+            for frame in 0..3 {
+                let started = std::time::Instant::now();
+                while !layer.ready(&renderer)? {
+                    anyhow::ensure!(
+                        started.elapsed() < Duration::from_secs(5),
+                        "frame {frame} at {extent:?} never left the GPU"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                // SAFETY: the layer's subsurface is live until released below.
+                unsafe { layer.draw(&renderer, target, extent, 1.0, &list, &[])? };
+            }
+        }
+        surface.place_native_layer("test", None);
+        Ok(())
+    })();
+    layer.retire(&renderer);
+    surface.release_native_layer("test");
+    result
+}
+
 #[test]
 fn the_rect_tool_resizes_from_an_edge_keeping_the_opposite_one_in_one_undo_step() {
     let mut rt = open();

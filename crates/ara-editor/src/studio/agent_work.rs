@@ -5,7 +5,7 @@ use ara_render::Renderer;
 use stillkit::el::Runtime;
 
 use super::{Studio, capture, gizmo_state, probes};
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use crate::Editor;
 use crate::app::viewport::SceneView;
 use crate::world::DocumentView;
@@ -79,7 +79,7 @@ pub(super) fn serve(
 /// Cancellations reach a running bake even while the loop is not rendering (the Windows
 /// gate that waits for the Scene's GPU reads to finish): requests are pumped and the owner
 /// told. This submits no GPU work.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub(super) fn deliver_cancellations(
     editor: &mut Editor,
     probe_owner: &mut probes::Owner,
