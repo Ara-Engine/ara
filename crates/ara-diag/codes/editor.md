@@ -57,6 +57,7 @@ An editor window, the Scene view or a preview failed to render a frame. The edit
 Causes:
 - The GPU device was lost or a shader pipeline failed.
 - The scene uses more GPU resources than the view supports.
+- The renderer does not offer the operation yet (reflection probe capture, effect and material previews): the editor says "not available yet" and nothing else is wrong.
 
 Fixes:
 - Switch the Scene view to Lit · Raster (View > View Mode) and check `ara doctor` for GPU driver problems.
