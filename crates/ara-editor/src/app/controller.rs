@@ -205,7 +205,9 @@ impl Controller {
         let camera = editor.state.camera;
         let snap = if editor.state.snapping {
             match drag.handle.tool(editor.state.tool) {
-                crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                crate::state::Tool::Translate
+                | crate::state::Tool::Universal
+                | crate::state::Tool::Rect => {
                     format!(" · snap {}", editor.state.move_snap)
                 }
                 crate::state::Tool::Rotate => format!(" · snap {}°", editor.state.rotate_snap),
@@ -226,9 +228,9 @@ impl Controller {
                 let movement = Vec2::from(position) - Vec2::from(drag.start);
                 let amount = movement.dot(drag.vector) / drag.vector.length_squared().max(0.01);
                 let amount = match gesture.tool {
-                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
-                        typed.unwrap_or(amount * drag.length)
-                    }
+                    crate::state::Tool::Translate
+                    | crate::state::Tool::Universal
+                    | crate::state::Tool::Rect => typed.unwrap_or(amount * drag.length),
                     crate::state::Tool::Rotate => typed.unwrap_or_else(|| {
                         if let (Some((pivot, normal, start)), Some(rect)) = (drag.rotation, rect) {
                             overlay::plane_point(&camera, rect, position, pivot, normal)
@@ -247,7 +249,9 @@ impl Controller {
                 let mut delta = Vec3::ZERO;
                 delta[axis] = amount;
                 let value = match gesture.tool {
-                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                    crate::state::Tool::Translate
+                    | crate::state::Tool::Universal
+                    | crate::state::Tool::Rect => {
                         format!("{} {:+.3} m", names[axis], amount)
                     }
                     crate::state::Tool::Rotate => format!("{} {:+.1}°", names[axis], amount),

@@ -313,7 +313,15 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                         .pad(8.0)
                         .align(Align::Start)
                         .child(scopes(s, profile, frame).w(0.0).grow(3.0))
-                        .child(gpu(s, profile, frame).w(0.0).grow(2.0)),
+                        .child(
+                            col()
+                                .gap(12.0)
+                                .w(0.0)
+                                .grow(2.0)
+                                .child(gpu(s, profile, frame))
+                                .child(memory(s, profile, frame))
+                                .child(counters(s, frame)),
+                        ),
                 ),
         )
 }
@@ -638,23 +646,26 @@ fn call_tree(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
 fn flat(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let mut merged: BTreeMap<u32, (u32, u64, u64)> = BTreeMap::new();
+    let mut merged: BTreeMap<u32, (u32, u64, u64, u64)> = BTreeMap::new();
     for span in &frame.spans {
         let e = merged.entry(span.label).or_default();
         e.0 += 1;
         e.1 += span.duration_ns;
         e.2 += span.self_ns;
+        e.3 += span.self_allocated_bytes;
     }
     let mut ranked: Vec<_> = merged.into_iter().collect();
-    ranked.sort_by_key(|(_, (_, _, own))| std::cmp::Reverse(*own));
-    let mut table = col().gap(1.0).child(header(
-        l,
-        if s.editor.profile_baseline.is_some() && !s.local.profiler_hide_compare {
-            &["Scope", "Calls", "Total", "Self", "vs base"]
-        } else {
-            &["Scope", "Calls", "Total", "Self"]
-        },
-    ));
+    ranked.sort_by_key(|(_, (_, _, own, _))| std::cmp::Reverse(*own));
+    // Unity's GC Alloc: bytes each scope asked for itself, when the allocator counts.
+    let counted = frame.memory.allocations > 0;
+    let mut titles = vec!["Scope", "Calls", "Total", "Self"];
+    if counted {
+        titles.push("Alloc");
+    }
+    if s.editor.profile_baseline.is_some() && !s.local.profiler_hide_compare {
+        titles.push("vs base");
+    }
+    let mut table = col().gap(1.0).child(header(l, &titles));
     // With a baseline: each scope's mean self time now against the baseline's.
     let compare = s
         .editor
@@ -662,7 +673,7 @@ fn flat(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
         .as_ref()
         .filter(|_| !s.local.profiler_hide_compare)
         .map(|base| (means(profile), means(base)));
-    for (label, (calls, total, own)) in ranked.into_iter().take(24) {
+    for (label, (calls, total, own, alloc)) in ranked.into_iter().take(24) {
         let name = profile
             .labels
             .get(label as usize)
@@ -686,6 +697,7 @@ fn flat(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
                 .child(num(l, calls.to_string()))
                 .child(num(l, ms(total)))
                 .child(num(l, ms(own)))
+                .children(counted.then(|| num(l, bytes(alloc))))
                 .children(compare.as_ref().map(|(now, base)| {
                     let name = profile
                         .labels
@@ -783,6 +795,158 @@ fn gpu(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
         );
     }
     out
+}
+
+/// Unity's Memory module for the picked frame: the live heap (and its change since the
+/// frame before), what the frame allocated, and GPU memory by kind. What a capture did not
+/// measure (no counting allocator, no GPU accounting) says so, never 0.
+fn memory(s: &Studio, profile: &Profile, frame: &Frame) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let m = &frame.memory;
+    let before = profile
+        .frames
+        .iter()
+        .take_while(|f| f.id != frame.id)
+        .last()
+        .map(|f| f.memory.cpu_heap);
+    let gpu = m.gpu_textures + m.gpu_buffers + m.gpu_acceleration + m.gpu_other;
+    let size = |v: u64, measured: bool| if measured { bytes(v) } else { "—".into() };
+    let heap = m.cpu_heap > 0;
+    let change = before.filter(|b| heap && *b > 0).map(|b| {
+        let delta = m.cpu_heap as i64 - b as i64;
+        let tint = match delta {
+            d if d > 0 => c.warning_foreground.0,
+            d if d < 0 => c.success_foreground.0,
+            _ => c.muted_foreground.0,
+        };
+        (
+            format!(
+                "{}{}",
+                if delta >= 0 { "+" } else { "−" },
+                bytes(delta.unsigned_abs())
+            ),
+            tint,
+        )
+    });
+    let line = |name: &str, value: String, note: Option<(String, Rgba)>| {
+        row()
+            .h(22.0)
+            .gap(8.0)
+            .pad_x(6.0)
+            .align(Align::Center)
+            .child(
+                text(name.to_owned())
+                    .text_size(12.0)
+                    .color(c.foreground.0)
+                    .w(0.0)
+                    .grow(1.0),
+            )
+            .child(match note {
+                Some((note, tint)) => row()
+                    .w(56.0)
+                    .justify(Justify::End)
+                    .child(text(note).text_size(11.5).family(mono()).color(tint)),
+                None => el().w(56.0),
+            })
+            .child(num(l, value))
+    };
+    let note = |message: &str| {
+        row().pad(6.0).child(
+            text(message.to_owned())
+                .text_size(11.5)
+                .color(c.muted_foreground.0)
+                .wrap(3),
+        )
+    };
+    let out = col()
+        .gap(1.0)
+        .key("profiler/memory")
+        .child(header(l, &["Memory", "Change", "Size"]));
+    if !heap && m.allocations == 0 && gpu == 0 {
+        return out.child(note(
+            "Not measured in this capture. Build the editor with the \
+             `memory-profile` feature to count heap allocations.",
+        ));
+    }
+    let out = out
+        .child(line("CPU heap", size(m.cpu_heap, heap), change))
+        .child(line(
+            "Allocated this frame",
+            size(m.allocated_bytes, m.allocations > 0),
+            None,
+        ))
+        .child(line(
+            "Allocations",
+            if m.allocations > 0 {
+                m.allocations.to_string()
+            } else {
+                "—".into()
+            },
+            None,
+        ));
+    if gpu == 0 {
+        return out.child(note("GPU memory is not reported by this capture."));
+    }
+    out.child(line("GPU textures", bytes(m.gpu_textures), None))
+        .child(line("GPU buffers", bytes(m.gpu_buffers), None))
+        .child(line(
+            "GPU acceleration structures",
+            bytes(m.gpu_acceleration),
+            None,
+        ))
+        .child(line("GPU other", bytes(m.gpu_other), None))
+}
+
+/// Unity's Rendering module and its kin: what the frame drew and ran.
+fn counters(s: &Studio, frame: &Frame) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let k = &frame.counters;
+    let rows = [
+        ("Entities", k.entities.to_string()),
+        ("Draws", k.draws.to_string()),
+        ("Triangles", k.triangles.to_string()),
+        ("Particles", k.particles.to_string()),
+        ("Audio voices", k.voices.to_string()),
+        ("Physics bodies", k.physics_bodies.to_string()),
+        ("Network in", bytes(k.net_received)),
+        ("Network out", bytes(k.net_sent)),
+    ];
+    col()
+        .gap(1.0)
+        .key("profiler/counters")
+        .child(header(l, &["Counters", "Value"]))
+        .children(rows.into_iter().map(|(name, value)| {
+            row()
+                .h(22.0)
+                .gap(8.0)
+                .pad_x(6.0)
+                .align(Align::Center)
+                .child(
+                    text(name)
+                        .text_size(12.0)
+                        .color(c.foreground.0)
+                        .w(0.0)
+                        .grow(1.0),
+                )
+                .child(num(l, value))
+        }))
+}
+
+/// A byte count in the largest unit that keeps it above 1 (1 KB = 1024 B).
+fn bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut v = n as f64;
+    let mut unit = 0;
+    while v >= 1024.0 && unit + 1 < UNITS.len() {
+        v /= 1024.0;
+        unit += 1;
+    }
+    match unit {
+        0 => format!("{n} B"),
+        _ => format!("{v:.1} {}", UNITS[unit]),
+    }
 }
 
 fn header(l: &ara_kit::look::Look, titles: &[&str]) -> El<Studio> {
