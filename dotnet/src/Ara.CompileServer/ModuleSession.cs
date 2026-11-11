@@ -322,22 +322,25 @@ internal sealed partial class ModuleSession
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         _disk.Clear();
+        // Trees go to the compilation in file order: a hash map enumerates in per-process random order
+        // (randomized string hashing), and tree order reaches the emitted metadata.
+        var ordered = new List<SyntaxTree>(files.Length);
         foreach (var path in files)
         {
             var full = ProjectInventory.ProjectPath(path);
             var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
             _disk[full] = text;
             texts[full] = text;
-            trees[full] = ModuleCompiler.Parse(full, text);
+            ordered.Add(trees[full] = ModuleCompiler.Parse(full, text));
         }
         var hot = (LoadedHot ?? _startHot) && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
-        var user = _compiler.Create([.. trees.Values, Usings], hot, refs.Values);
+        var user = _compiler.Create([.. ordered, Usings], hot, refs.Values);
         var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
             null, hot, 0, null, surfaces, refs);
         p.Parse = p.Mark();
         var kind = Loaded ? AbiConst.ReloadL3 : AbiConst.ReloadInitial;
-        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, [.. trees.Values], null, ctx, true, ct);
+        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, ordered, null, ctx, true, ct);
     }
 
     /// <summary>A full image of the committed state, hot or cold (heat change, or the host asked for one).</summary>
@@ -497,6 +500,11 @@ internal sealed partial class ModuleSession
         var escalation = !ctx.Enc || !s.Hot ? Escalation.Cold : Escalation.None;
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
         if (cls is not null) escalation = cls.Escalation;
+        if (escalation == Escalation.None && cls is not null
+            && ((cls.Bodies.Count > 0 && EditClassifier.PrimaryConstructorsAffect(cls.Bodies.Select(body => body.Old), s.Final))
+                || (cls.Inserts.Count > 0 && EditClassifier.PrimaryConstructorsAffect(
+                    cls.Inserts.Where(insert => insert.Node is not BaseTypeDeclarationSyntax and not DelegateDeclarationSyntax).Select(insert => insert.Node), next))))
+            escalation = Escalation.Constructor;
         p.Parse = p.Mark();
         var docsChanged = escalation == Escalation.None && cls is not null && !cls.Additive && EditClassifier.DocsChanged(changes);
         (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, SourceText>)? reuse = null;
@@ -519,11 +527,15 @@ internal sealed partial class ModuleSession
             nextState = nextState with { Final = final };
             // Declarations can change policy on another partial file. Accessor edits
             // can also synthesize backing fields; directives may alter declarations.
-            var ordinaryBodies = !_diagnosticReferencesChanged && !cls.Additive && cls.Bodies.Count > 0 && !docsChanged
-                && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
+            var stable = !_diagnosticReferencesChanged && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
                 && cls.Bodies.All(body => body.New is MethodDeclarationSyntax method && !method.Modifiers.Any(SyntaxKind.PartialKeyword))
                 && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true);
-            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : [.. nextState.Trees.Values];
+            var ordinaryBodies = stable && !cls.Additive && cls.Bodies.Count > 0 && !docsChanged;
+            // An additive edit on a module whose analysis was clean can only change results in the files it
+            // touches and the files that spell its new names (AnalysisScope); null means the whole module.
+            var scoped = stable && cls.Additive && s.AnalyzerClean
+                ? AnalysisScope.Trees(changes, changed, nextState.Trees.Values) : null;
+            IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : scoped ?? [.. nextState.Trees.Values];
             if (cls.Bodies.Count == 0 && !cls.Additive)
             {
                 var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, out var triviaClean, ct, module: true);
@@ -543,7 +555,7 @@ internal sealed partial class ModuleSession
             }
             p.Emit = p.Mark();
             var bodies = ordinaryBodies && s.AnalyzerClean ? cls.Bodies.Select(body => (MethodDeclarationSyntax)body.New).ToArray() : null;
-            var problems = Problems(final, [], errors, analyze, out var clean, ct, module: !ordinaryBodies, bodies: bodies);
+            var problems = Problems(final, [], errors, analyze, out var clean, ct, module: !ordinaryBodies && scoped is null, bodies: bodies);
             p.Analyze = p.Mark();
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
@@ -558,7 +570,7 @@ internal sealed partial class ModuleSession
                     ValidatedInputs = true,
                     Timing = p,
                     Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces,
-                        AnalyzerClean = clean && (!ordinaryBodies || s.AnalyzerClean) },
+                        AnalyzerClean = clean && (!(ordinaryBodies || scoped is not null) || s.AnalyzerClean) },
                 };
             }
             escalation = Escalation.EmitFailed;
@@ -571,7 +583,12 @@ internal sealed partial class ModuleSession
             nextState = nextState with { User = next, Hot = true };
             reuse = null; // new options: the generator runs for the Debug-IL compilation
         }
-        return Build(next, nextState, AbiConst.ReloadL3, escalation, p, changed, reuse, ctx, false, ct);
+        // The same proof as above scopes an L3's analysis: on a clean module with unchanged references and no
+        // directives, only the touched files and the files spelling a changed declaration can change.
+        var rebuildScope = s.AnalyzerClean && !_diagnosticReferencesChanged && s.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Reference(pair.Key)))
+            && changes.All(change => change.Old?.GetRoot(ct).ContainsDirectives != true && change.New?.GetRoot(ct).ContainsDirectives != true)
+            ? AnalysisScope.Trees(changes, changed, nextState.Trees.Values) : null;
+        return Build(next, nextState, AbiConst.ReloadL3, escalation, p, changed, reuse, ctx, false, ct, rebuildScope);
     }
 
     static TComp Apply<TComp>(TComp c, FileChange change) where TComp : Compilation => (change.Old, change.New) switch
@@ -631,13 +648,13 @@ internal sealed partial class ModuleSession
 
     /// <summary>
     /// Generator (unless reused), full emit and all user-tree analyzers (in parallel
-    /// with the emit), then the EnC baseline. <paramref name="start"/> is the next
+    /// with the emit; only <paramref name="scope"/> when the caller proved the rest unaffected), then the EnC baseline. <paramref name="start"/> is the next
     /// state without its compilations, image facts and generation.
     /// </summary>
     Outcome Build(CSharpCompilation user, ModuleState start, uint kind, Escalation escalation, Phases p,
         IReadOnlyCollection<SyntaxTree> analyze,
         (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated)? reuse,
-        ICompileContext ctx, bool surface, CancellationToken ct)
+        ICompileContext ctx, bool surface, CancellationToken ct, IReadOnlyCollection<SyntaxTree>? scope = null)
     {
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
         p.Generate += p.Mark();
@@ -646,7 +663,8 @@ internal sealed partial class ModuleSession
         // Validate the exact candidate snapshot, including committed-code rebuilds.
         var analysisTrees = start.Trees.Values.ToArray();
         var analysis = _analysis is not null && analysisTrees.Length > 0
-            ? new PendingAnalysis(token => _analysis.AnalyzeModule(final, analysisTrees, Profile, token), ct) : null;
+            ? new PendingAnalysis(token => scope is null ? _analysis.AnalyzeModule(final, analysisTrees, Profile, token)
+                : _analysis.Analyze(final, scope, Profile, token), ct) : null;
         Outcome? evaluated = null;
         Exception? primary = null;
         try

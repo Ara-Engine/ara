@@ -11,7 +11,7 @@ use std::sync::Arc;
 use ara_kit::icons;
 use ara_kit::ui::*;
 use serde_json::{Value, json};
-use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, row, text};
+use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, menu, row, text};
 
 use super::Studio;
 use crate::asset_tools::vfx_stream::VfxStream;
@@ -242,17 +242,18 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .rects
         .get("vfx/preview")
         .map_or(360.0, |r| (r.width() - 20.0).clamp(160.0, 720.0));
+    // Before its first frame: the worker is starting, or the effect has to compile first.
+    let waiting = match &fx {
+        Ok(_) => "Starting the preview…",
+        Err(_) => "The preview starts once the effect compiles.",
+    };
     let preview = match &s.vfx.frame {
         Some(frame) => image(frame.clone()).size(size),
         None => el()
             .size(size)
             .align(Align::Center)
             .justify(Justify::Center)
-            .child(
-                text("Compiling the effect…")
-                    .text_size(12.0)
-                    .color(c.muted_foreground.0),
-            ),
+            .child(text(waiting).text_size(12.0).color(c.muted_foreground.0)),
     };
     let seconds = s.vfx.tick as f32 / s.vfx.hz.max(1) as f32;
     let status = match &fx {
@@ -331,15 +332,30 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         // Niagara's graph paper behind the emitter cards.
         .fill(mix(c.card.0, c.raised.0, 0.35))
-        .child(heading(
-            l,
-            icons::SPARKLES,
-            "System Overview",
-            fx.as_ref().ok().map(|e| match e.emitters.len() {
-                1 => "1 emitter".to_owned(),
-                n => format!("{n} emitters"),
+        .child(
+            heading(
+                l,
+                icons::SPARKLES,
+                "System Overview",
+                fx.as_ref().ok().map(|e| match e.emitters.len() {
+                    1 => "1 emitter".to_owned(),
+                    n => format!("{n} emitters"),
+                }),
+            )
+            .child({
+                let doc = doc.clone();
+                icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "Add emitter")
+                    .size(22.0)
+                    .key("vfx/emitter/add")
+                    .on_press(move |s: &mut Studio| {
+                        if let Err(error) =
+                            crate::vfx_edit::emitter_edit(&mut s.editor, &doc, "", "add")
+                        {
+                            s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                        }
+                    })
             }),
-        ))
+        )
         .child(overview);
     let right = match &fx {
         Ok(effect) => selection(s, &doc, effect),
@@ -357,6 +373,47 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(left)
         .child(middle)
         .child(right)
+}
+
+/// An emitter's ⋯ menu: Duplicate and Delete (one undo step each).
+fn emitter_menu(s: &Studio, doc: &str, name: &str) -> El<Studio> {
+    let l = &s.look;
+    let key = format!("vfx/emitter/{name}/more");
+    let open = s.local.select.as_deref() == Some(key.as_str());
+    let toggle = key.clone();
+    let mut more = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key(key.clone())
+        .on_press(move |s: &mut Studio| {
+            s.local.select =
+                (s.local.select.as_deref() != Some(toggle.as_str())).then(|| toggle.clone());
+        });
+    if open {
+        let item = |op: &'static str, glyph, label: &str| {
+            let (doc, name) = (doc.to_owned(), name.to_owned());
+            menu_item(l, &format!("{key}/{op}"), Some(glyph), label, None, false).on_press(
+                move |s: &mut Studio| {
+                    s.local.select = None;
+                    if let Err(error) =
+                        crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &name, op)
+                    {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                },
+            )
+        };
+        more = more.overlay(
+            menu(menu_panel(
+                l,
+                vec![
+                    item("duplicate", icons::COPY, "Duplicate emitter"),
+                    item("delete", icons::TRASH, "Delete emitter"),
+                ],
+            ))
+            .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    more
 }
 
 /// A panel's title row: its glyph, title and a muted note.
@@ -460,7 +517,8 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
             )
             .size(22.0)
             .on_press(move |s: &mut Studio| s.vfx.emitter(&n3, Emitter::Isolate)),
-        );
+        )
+        .child(emitter_menu(s, doc, &emitter.name));
     let mut out = col()
         .w(CARD)
         .radius(6.0)
@@ -542,13 +600,11 @@ fn stack(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> Vec<El<Studio>> {
     out
 }
 
-/// A module's title: its name, or its kind in words when it is named after it.
-fn module_title(module: &ara_vfx::StackModule, kind: &str) -> String {
-    if module.name == kind {
-        crate::names::sentence(kind)
-    } else {
-        module.name.clone()
-    }
+/// A module's title: its name in words (`hearth_light` reads "Hearth light"), so a stack
+/// reads one way whether its modules are named after their kinds or not. Keys keep the
+/// name itself.
+fn module_title(module: &ara_vfx::StackModule) -> String {
+    crate::names::sentence(&module.name)
 }
 
 /// A module in its stage: its checkbox and name, as Niagara lists them; picking it shows it
@@ -564,9 +620,7 @@ fn module_row(
     let c = &l.c;
     let item = format!("{emitter}|{stage}|{}", module.name);
     let picked = s.editor.state.resource_item.as_deref() == Some(item.as_str());
-    let value = ara_json::to_value(&module.module).unwrap_or_default();
-    let kind = value["op"].as_str().unwrap_or("module").to_owned();
-    let title = module_title(module, &kind);
+    let title = module_title(module);
     let (doc_pick, item_pick) = (doc.to_owned(), item.clone());
     let hover = c.hover_surface.0;
     super::style::chosen(l, row(), picked)
@@ -675,7 +729,7 @@ fn selection(s: &Studio, doc: &str, effect: &ara_vfx::Effect) -> El<Studio> {
                         .grow(1.0)
                         .gap(2.0)
                         .child(
-                            text(module_title(module, &kind))
+                            text(module_title(module))
                                 .text_size(13.0)
                                 .weight(600)
                                 .color(c.foreground.0),
@@ -746,6 +800,35 @@ fn settings(
                 }
             }
         };
+        // Size over Life's keys are a curve: drawn and edited as one, full width.
+        if let ara_vfx::Module::SizeOverLife { curve } = &module.module {
+            let item = format!("vfx/{emitter}/{stage}/{}", module.name);
+            out.push(
+                col()
+                    .pad_x(10.0)
+                    .pad_y(6.0)
+                    .gap(6.0)
+                    .child(
+                        text("Size over life (m)")
+                            .text_size(11.5)
+                            .color(c.muted_foreground.0),
+                    )
+                    .child(super::curve::editor(
+                        s,
+                        &item,
+                        curve,
+                        Some((0.0, 1.0)),
+                        2,
+                        move |s: &mut Studio, curve| {
+                            let saved =
+                                ara_json::to_value(&ara_vfx::Module::SizeOverLife { curve })
+                                    .unwrap_or_default();
+                            set(s, saved["keys"].clone());
+                        },
+                    )),
+            );
+            continue;
+        }
         let editor: El<Studio> = match v {
             Value::Bool(on) => {
                 let on = *on;
