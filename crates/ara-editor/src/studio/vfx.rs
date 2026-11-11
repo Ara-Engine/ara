@@ -11,7 +11,7 @@ use std::sync::Arc;
 use ara_kit::icons;
 use ara_kit::ui::*;
 use serde_json::{Value, json};
-use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, row, text};
+use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, menu, row, text};
 
 use super::Studio;
 use crate::asset_tools::vfx_stream::VfxStream;
@@ -332,15 +332,30 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .min_h(0.0)
         // Niagara's graph paper behind the emitter cards.
         .fill(mix(c.card.0, c.raised.0, 0.35))
-        .child(heading(
-            l,
-            icons::SPARKLES,
-            "System Overview",
-            fx.as_ref().ok().map(|e| match e.emitters.len() {
-                1 => "1 emitter".to_owned(),
-                n => format!("{n} emitters"),
+        .child(
+            heading(
+                l,
+                icons::SPARKLES,
+                "System Overview",
+                fx.as_ref().ok().map(|e| match e.emitters.len() {
+                    1 => "1 emitter".to_owned(),
+                    n => format!("{n} emitters"),
+                }),
+            )
+            .child({
+                let doc = doc.clone();
+                icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "Add emitter")
+                    .size(22.0)
+                    .key("vfx/emitter/add")
+                    .on_press(move |s: &mut Studio| {
+                        if let Err(error) =
+                            crate::vfx_edit::emitter_edit(&mut s.editor, &doc, "", "add")
+                        {
+                            s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                        }
+                    })
             }),
-        ))
+        )
         .child(overview);
     let right = match &fx {
         Ok(effect) => selection(s, &doc, effect),
@@ -358,6 +373,47 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(left)
         .child(middle)
         .child(right)
+}
+
+/// An emitter's ⋯ menu: Duplicate and Delete (one undo step each).
+fn emitter_menu(s: &Studio, doc: &str, name: &str) -> El<Studio> {
+    let l = &s.look;
+    let key = format!("vfx/emitter/{name}/more");
+    let open = s.local.select.as_deref() == Some(key.as_str());
+    let toggle = key.clone();
+    let mut more = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key(key.clone())
+        .on_press(move |s: &mut Studio| {
+            s.local.select =
+                (s.local.select.as_deref() != Some(toggle.as_str())).then(|| toggle.clone());
+        });
+    if open {
+        let item = |op: &'static str, glyph, label: &str| {
+            let (doc, name) = (doc.to_owned(), name.to_owned());
+            menu_item(l, &format!("{key}/{op}"), Some(glyph), label, None, false).on_press(
+                move |s: &mut Studio| {
+                    s.local.select = None;
+                    if let Err(error) =
+                        crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &name, op)
+                    {
+                        s.editor.report_failure(&*anyhow::anyhow!("{error}"));
+                    }
+                },
+            )
+        };
+        more = more.overlay(
+            menu(menu_panel(
+                l,
+                vec![
+                    item("duplicate", icons::COPY, "Duplicate emitter"),
+                    item("delete", icons::TRASH, "Delete emitter"),
+                ],
+            ))
+            .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
+    more
 }
 
 /// A panel's title row: its glyph, title and a muted note.
@@ -461,7 +517,8 @@ fn emitter_card(s: &Studio, doc: &str, emitter: &ara_vfx::Emitter) -> El<Studio>
             )
             .size(22.0)
             .on_press(move |s: &mut Studio| s.vfx.emitter(&n3, Emitter::Isolate)),
-        );
+        )
+        .child(emitter_menu(s, doc, &emitter.name));
     let mut out = col()
         .w(CARD)
         .radius(6.0)
