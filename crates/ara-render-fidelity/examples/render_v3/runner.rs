@@ -1,10 +1,10 @@
-use super::{contract::*, coverage, fixture, metrics, replay};
+use super::{contract::*, coverage, fixture, replay};
 use anyhow::{Result, ensure};
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use ara_gpu::{Device, GpuDevice};
-use ara_frame::{capture::{CaptureRequest, ViewMode}};
-use ara_render::{Renderer};
+use ara_render::Renderer;
 use ara_render_fidelity::{
-    FidelityView, Mode, PostSettings, Settings, Tier, ToneMapper, Upscaler, presets::QualityPreset,
+    FidelityView, Mode, PostSettings, Settings, Tier, Upscaler, presets::QualityPreset,
 };
 use std::{
     collections::BTreeMap,
@@ -125,7 +125,7 @@ fn run(
         timing_valid:std::env::var("ARA_RENDER_V3_TIMING_VALID").is_ok_and(|v|v=="1"),reference_samples:samples,reference_bounces:8,reference_converged:false,reference_white:1./f64::from(exposure),
         notes:vec!["Control uncapped mode raises VSM redraws to the API's 256-page maximum and local redraws to all allocated faces. VSM and other hidden limits remain; this is not true uncapped demand. Stage demand, debt and deadlines remain n/a.".into(),
             "Startup probe surfaces are acquired offline with the existing fidelity baker, then relit by today's raster renderer. The runtime host's asynchronous CPU surface reacquisition is not connected: geometry/material changes retain their startup surfaces. This is a renderer-core control, not a complete Play-host/G3 control; no discovery/repair timing or correctness is claimed.".into(),
-            "Finite-budget undenoised ara-pathtrace references are not certified exact solutions. Exact max-error gate stays n/a until convergence evidence is supplied.".into(),
+            "The path-traced reference left with ara-pathtrace. Exact max-error stays n/a.".into(),
             "gpu_frame_ms spans the update and render submissions, including GPU gaps. Pass sums and CPU update/render wall time are separate; CPU critical-path attribution is unavailable.".into(),
             "Fixture motions are deterministic scripted stress, not a physics simulation; foliage uses moving leaf cards. Polar loads the real pinned model and cooked textures in a controlled finite-range light rig.".into()],frames:Vec::new()};
     for _ in 0..16 {
@@ -133,11 +133,6 @@ fn run(
     }
     renderer.set_unseen(false);
     let mut previous: Option<Previous> = None;
-    let mut reference_gpu = if mode == RunKind::Capped {
-        Some(GpuDevice::new(&[], output.join("reference-cache"))?)
-    } else {
-        None
-    };
     for frame in &script {
         renderer.gpu_mut().reset_timing_window();
         let started = Instant::now();
@@ -251,62 +246,13 @@ fn run(
             let (_, radiance) = renderer.lab_radiance()?;
             let capture_path = output.join(format!("frame-{:04}.png", frame.frame));
             save_png(&capture.image, &capture_path)?;
-            let (image, reference) = reference(
-                &f,
-                reference_gpu
-                    .as_mut()
-                    .expect("capped runs own a reference device"),
-                size,
-                samples,
-            )?;
-            let ref_path = output.join(format!("reference-{:04}.png", frame.frame));
-            save_png(&image, &ref_path)?;
-            let reference_root = std::env::var_os("ARA_LAB_REFERENCES")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| "D:/AraBench/report/images".into());
-            let archived = reference_root
-                .join("render-v3")
-                .join(&result.revision)
-                .join(format!("{}-{}x{}-{samples}spp", case.id, size[0], size[1]));
-            fs::create_dir_all(&archived)?;
-            let name = format!("reference-{:04}.png", frame.frame);
-            fs::copy(&ref_path, archived.join(name))?;
-            ara_gpu::cooked::write_json(
-                &archived.join("provenance.json"),
-                &serde_json::json!({"case":case,"worker_sha256":result.revision,"size":size,"samples":samples,"bounces":8,"ev100":f.ev100,"finite_range_window":true,"convergence_certified":false,"textures_blake3":f.textures.iter().map(|(key,_)|key).collect::<Vec<_>>()}),
-            )?;
-            let temporal = previous
-                .as_ref()
-                .filter(|p| p.frame + 1 == frame.frame)
-                .map(|p| (p.test.as_slice(), p.reference.as_slice()));
-            row.quality = metrics::compare(
-                size,
-                &radiance,
-                &reference,
-                result.reference_white,
-                temporal,
-            )?;
-            let flip = ara_pathtrace::flip::flip(
-                &image,
-                &capture.image,
-                ara_pathtrace::flip::PIXELS_PER_DEGREE,
-            )?;
-            row.quality.region_flip = metrics::regions(&flip.errors, size);
-            let err = radiance
-                .iter()
-                .zip(&reference)
-                .flat_map(|(a, b)| {
-                    (0..3).map(move |i| f64::from((a[i] - b[i]).abs()) / result.reference_white)
-                })
-                .fold(0., f64::max);
             row.evidence
-                .insert("finite_reference_max_error_white".into(), err);
+                .insert("path_traced_reference_removed".into(), 1.);
             row.capture = Some(capture_path.to_string_lossy().into());
-            row.reference = Some(ref_path.to_string_lossy().into());
             previous = Some(Previous {
                 frame: frame.frame,
                 test: radiance,
-                reference,
+                reference: Vec::new(),
             });
         }
         result.frames.push(row);
@@ -320,43 +266,6 @@ fn run(
     renderer.gpu_mut().collect()?;
     renderer.gpu().assert_clean()?;
     Ok(result)
-}
-
-fn reference(
-    f: &fixture::Fixture,
-    gpu: &mut GpuDevice,
-    size: [u32; 2],
-    samples: u32,
-) -> Result<(image::RgbaImage, Vec<[f32; 4]>)> {
-    let settings = Settings {
-        render_size: size,
-        display_size: size,
-        tier: Tier::Rt,
-        mode: Mode::Reference {
-            samples,
-            bounces: 8,
-        },
-        upscaler: Upscaler::Taau,
-        probe_ray_budget: 64,
-        reflection_cutoff: 1.,
-        post: PostSettings {
-            ev100: Some(f.ev100),
-            tone_mapper: ToneMapper::PbrNeutral,
-            bloom: 0.,
-            fog_density: 0.,
-            aperture: 0.,
-            shutter: 0.,
-            ..Default::default()
-        },
-    };
-    let residency = super::polar::residency(f)?;
-    let view = FidelityView::new_native(gpu, &f.scene, residency, settings, None)?;
-    let mut reference = ara_pathtrace::Reference::from_view(view)?;
-    reference.converge(gpu, &f.camera)?;
-    let image = reference.capture(gpu)?;
-    let data = reference.radiance(gpu)?;
-    reference.destroy(gpu)?;
-    Ok((image, data))
 }
 
 /// Maximize the existing API's work allowances without changing allocation or quality.
