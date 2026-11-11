@@ -1912,32 +1912,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-render-geo"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-asset",
- "ara-asset-format",
- "ara-color",
- "ara-frame",
- "ara-geo",
- "ara-gpu",
- "ara-importers",
- "ara-platform",
- "ara-render",
- "ara-schema",
- "ara-texture-stream",
- "ara-vsm",
- "bytemuck",
- "glam 0.30.10",
- "gltf",
- "half",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-render2d"
 version = "0.0.1-alpha"
 dependencies = [
