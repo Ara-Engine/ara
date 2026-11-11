@@ -18,6 +18,15 @@ impl NativeUi {
                     .command_buffer_count(1),
             )?[0];
             self.fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
+            #[cfg(windows)]
+            {
+                let mut timeline = vk::SemaphoreTypeCreateInfo::default()
+                    .semaphore_type(vk::SemaphoreType::TIMELINE);
+                self.completion = device.create_semaphore(
+                    &vk::SemaphoreCreateInfo::default().push(&mut timeline),
+                    None,
+                )?;
+            }
             self.sampler = device.create_sampler(
                 &vk::SamplerCreateInfo::default()
                     .mag_filter(vk::Filter::LINEAR)
