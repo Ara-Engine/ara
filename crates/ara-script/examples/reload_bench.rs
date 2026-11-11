@@ -200,7 +200,18 @@ impl Drop for EditorDone {
     }
 }
 
+/// `[ara-trace] <unix ms> bench <label>` on stderr when `ARA_TRACE=1`, for `reload_timing.cs --trace`.
+fn trace(label: &str) {
+    if std::env::var("ARA_TRACE").is_ok_and(|v| v == "1") {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis());
+        eprintln!("[ara-trace] {now} bench {label}");
+    }
+}
+
 fn main() {
+    trace("main");
     let edits = arg("--edits", 60);
     let lines_target = arg("--lines", 5000);
     let single_file = std::env::args().any(|arg| arg == "--single-file");
@@ -292,11 +303,14 @@ fn main() {
     }));
     config.compile_server = Some(compile_server);
     let t0 = Instant::now();
+    trace("host start begins");
     let mut host = ScriptHost::start(config, db, &engine, &mut world).expect("host");
     let host_start_ms = t0.elapsed().as_secs_f64() * 1e3;
+    trace("host started, loading modules");
     host.load_modules(&mut world, &[ModuleSpec::from_dir(&dir).expect("module")])
         .expect("initial compile");
     let startup_ms = t0.elapsed().as_secs_f64() * 1e3;
+    trace("first image loaded");
     println!("start + initial compile: {startup_ms:.0} ms (host start {host_start_ms:.0} ms)");
     if let Some(output) = output.as_mut() {
         output.data["startup_ms"] = json!(startup_ms);

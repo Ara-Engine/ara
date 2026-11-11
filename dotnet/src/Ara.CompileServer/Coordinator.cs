@@ -438,7 +438,18 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         }
     }
 
+    /// <summary>Runs one unit of work; with <c>ARA_TRACE=1</c> it also reports its time and the runtime's GC and JIT activity meanwhile.</summary>
     void Run(Work w, CancellationToken ct)
+    {
+        if (!StartupTrace.Enabled) { RunCore(w, ct); return; }
+        StartupTrace.Mark($"work begin {w.Kind}");
+        var before = StartupTrace.Counters.Now();
+        var clock = Stopwatch.StartNew();
+        try { RunCore(w, ct); }
+        finally { StartupTrace.Work(w.Kind.ToString(), clock.Elapsed.TotalMilliseconds, before); }
+    }
+
+    void RunCore(Work w, CancellationToken ct)
     {
         if (w.Kind == WorkKind.Recover)
         {
@@ -539,6 +550,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     void Handle(Outcome o, uint origin, CancellationToken cancellation)
     {
         var m = o.Module;
+        StartupTrace.Outcome($"{o.Kind}/{(o.ReloadKind == AbiConst.ReloadL1 ? "L1" : o.ReloadKind == AbiConst.ReloadL2 ? "L2" : o.ReloadKind == AbiConst.ReloadL3 ? "L3" : o.ReloadKind == AbiConst.ReloadInitial ? "initial" : o.ReloadKind.ToString())}");
         switch (o.Kind)
         {
             case OutcomeKind.None:
