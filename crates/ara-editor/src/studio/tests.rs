@@ -307,6 +307,82 @@ fn a_vector_that_differs_shows_a_dash_per_axis_and_each_keeps_its_others() {
     );
 }
 
+/// A right press at `from`, moved through `path`, released at its last point.
+fn right_drag(rt: &mut Runtime<Studio>, from: (f32, f32), path: &[(f32, f32)]) {
+    let pointer = |(x, y): (f32, f32)| stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.pointer_move(from.0, from.1);
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Press(
+        pointer(from),
+        stillkit::Button::Right,
+    ));
+    for at in path {
+        rt.handle(&stillkit::Event::Move(pointer(*at)));
+        rt.frame(FRAME);
+    }
+    let end = path.last().copied().unwrap_or(from);
+    rt.handle(&stillkit::Event::Release(
+        pointer(end),
+        stillkit::Button::Right,
+    ));
+    settle(rt);
+}
+
+#[test]
+fn a_right_drag_that_comes_back_is_not_a_right_click() {
+    let mut rt = open();
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let (x, y) = (view.center().x, view.center().y);
+    // Look around and come back to where it began: no menu.
+    // (The host opens the menu from the pick a right click leaves.)
+    let asks_for_menu = |rt: &Runtime<Studio>| {
+        rt.state()
+            .local
+            .pick
+            .as_ref()
+            .is_some_and(|p| p.context.is_some())
+    };
+    right_drag(
+        &mut rt,
+        (x, y),
+        &[(x + 30.0, y), (x + 60.0, y + 20.0), (x + 30.0, y), (x, y)],
+    );
+    assert!(!asks_for_menu(&rt), "a drag opens no menu");
+    // A still right click does.
+    right_drag(&mut rt, (x, y), &[]);
+    assert!(asks_for_menu(&rt), "a click opens the menu");
+    // The Material canvas pans on a right drag and searches nodes on a right click.
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/drag.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let canvas = rt.find("graph/view").expect("the canvas");
+    let (x, y) = (canvas.center().x, canvas.center().y);
+    right_drag(&mut rt, (x, y), &[(x + 40.0, y + 10.0), (x, y)]);
+    assert!(rt.state().graph.adding.is_none(), "a pan opens no search");
+    right_drag(&mut rt, (x, y), &[]);
+    assert!(
+        rt.state().graph.adding.is_some(),
+        "a click opens the search"
+    );
+}
+
 #[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
@@ -739,13 +815,13 @@ fn why_profiler_baseline_and_floating_windows_run_from_their_menus() {
     );
     assert_eq!(order(&rt).last(), Some(&first), "in front");
     // Commands not built yet say why instead of failing.
-    run(&mut rt, "file.save_as", Target::None);
+    run(&mut rt, "file.revert", Target::None);
     assert!(
         rt.state()
             .local
             .note
             .as_ref()
-            .is_some_and(|(n, _)| n.starts_with("Save As"))
+            .is_some_and(|(n, _)| n.starts_with("Revert"))
     );
 }
 
@@ -3028,6 +3104,24 @@ fn captures() {
         )
         .unwrap();
         rt.update(super::scene_overlays::reset);
+        // The Rect tool round the box (bounds as the host publishes them), its right edge lit.
+        rt.update(|s| {
+            super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None);
+            s.local.rect_bounds = Some([glam::Vec3::splat(-0.5), glam::Vec3::splat(0.5)]);
+            s.local.rect_hover = Some(super::rect_tool::Grip { u: 1, v: 0 });
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-rect.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            super::commands::run(s, "view.tool.move", &crate::catalog::Target::None);
+            s.local.rect_hover = None;
+        });
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
@@ -3346,8 +3440,8 @@ fn sample_profile() -> ara_profile::Profile {
         start_ns: start,
         duration_ns: duration,
         self_ns: own,
-        allocated_bytes: 0,
-        self_allocated_bytes: 0,
+        allocated_bytes: own / 100,
+        self_allocated_bytes: own / 100,
     };
     let frames = (1..=90u64)
         .map(|i| {
@@ -3373,6 +3467,16 @@ fn sample_profile() -> ara_profile::Profile {
                         duration_ns,
                     })
                     .to_vec(),
+                // A heap growing 64 KB a frame, as a counting allocator reports it.
+                memory: ara_profile::Memory {
+                    cpu_heap: 180 * 1024 * 1024 + i * 64 * 1024,
+                    allocated_bytes: 96 * 1024,
+                    allocations: 140,
+                    gpu_textures: 412 * 1024 * 1024,
+                    gpu_buffers: 96 * 1024 * 1024,
+                    gpu_acceleration: 24 * 1024 * 1024,
+                    gpu_other: 8 * 1024 * 1024,
+                },
                 ..Default::default()
             }
         })
@@ -4840,6 +4944,47 @@ fn emitters_add_duplicate_and_delete_but_one_stays() {
 }
 
 #[test]
+fn assets_hide_their_folder_tree_for_one_column() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    scan(&mut rt);
+    settle(&mut rt);
+    assert!(rt.find("assets/tree/").is_some(), "the tree shows");
+    press(&mut rt, "assets/menu");
+    press(&mut rt, "assets/menu/tree");
+    assert!(rt.find("assets/tree/").is_none(), "one column");
+    press(&mut rt, "assets/menu");
+    press(&mut rt, "assets/menu/tree");
+    assert!(rt.find("assets/tree/").is_some(), "back again");
+}
+
+#[test]
+fn the_hierarchy_sorts_by_name_on_request() {
+    let mut rt = open();
+    settle(&mut rt);
+    let order = |rt: &Runtime<Studio>| {
+        let mut rows: Vec<(f32, &str)> = ["e_box", "e_lamp", "e_sun", "e_post"]
+            .into_iter()
+            .map(|id| (rt.find(&format!("row/{id}")).unwrap().top, id))
+            .collect();
+        rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+        rows.into_iter().map(|(_, id)| id).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        order(&rt),
+        ["e_box", "e_lamp", "e_sun", "e_post"],
+        "authored order"
+    );
+    press(&mut rt, "hierarchy/filters");
+    press(&mut rt, "hierarchy/filters/alphabetical");
+    assert_eq!(
+        order(&rt),
+        ["e_box", "e_lamp", "e_post", "e_sun"],
+        "by name"
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
@@ -5007,6 +5152,228 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
     layer.retire(&renderer);
     surface.release_native_layer("test");
     result
+}
+
+#[test]
+fn the_rect_tool_resizes_from_an_edge_keeping_the_opposite_one_in_one_undo_step() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None));
+    assert_eq!(rt.state().editor.state.tool, crate::state::Tool::Rect);
+    // The host publishes the presented bounds; here, the unit box's.
+    rt.update(|s| s.local.rect_bounds = Some([glam::Vec3::splat(-0.5), glam::Vec3::splat(0.5)]));
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let size = (view.width(), view.height());
+    let c = super::rect_tool::corners(rt.state(), size).expect("the rect shows");
+    // The edge from corner 1 to 2 is the high side of the first axis; drag it outward.
+    let mid = (c[1] + c[2]) * 0.5;
+    let out = (mid - (c[0] + c[2]) * 0.5).normalize();
+    let at = |d: f32| (view.left + mid.x + out.x * d, view.top + mid.y + out.y * d);
+    let before = rt.state().editor.host.store().revision();
+    rt.pointer_move(at(0.0).0, at(0.0).1);
+    rt.frame(FRAME);
+    assert!(rt.state().local.rect_hover.is_some(), "the edge lights");
+    rt.pointer_down(at(0.0).0, at(0.0).1);
+    for step in 1..=6 {
+        rt.pointer_move(at(step as f32 * 10.0).0, at(step as f32 * 10.0).1);
+        rt.frame(FRAME);
+    }
+    assert!(
+        rt.state().local.rect_drag.is_some(),
+        "the drag holds the edge"
+    );
+    rt.pointer_up(at(60.0).0, at(60.0).1);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        before + 1,
+        "one transaction"
+    );
+    let record = &rt.state().resolved["e_box"].record["Transform"];
+    let scale: Vec<f64> = (0..3)
+        .map(|i| record["scale"][i].as_f64().unwrap())
+        .collect();
+    let position: Vec<f64> = (0..3)
+        .map(|i| record["position"][i].as_f64().unwrap())
+        .collect();
+    let axis = (0..3)
+        .find(|&i| (scale[i] - 1.0).abs() > 0.05)
+        .expect("one axis grew");
+    assert!(scale[axis] > 1.0, "{scale:?}");
+    assert_eq!(
+        (0..3).filter(|&i| (scale[i] - 1.0).abs() > 1e-4).count(),
+        1,
+        "{scale:?}"
+    );
+    // The opposite edge stays: the centre moves by half the growth, toward the dragged side.
+    assert!(
+        (position[axis].abs() - (scale[axis] - 1.0) * 0.5).abs() < 1e-3,
+        "{position:?} {scale:?}"
+    );
+}
+
+#[test]
+fn the_game_scale_slider_zooms_live_and_keeps_the_scale_on_release() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.game", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert_eq!(super::game::zoom(rt.state()), 1.0);
+    let track = rt.find("game/scale").expect("the Scale slider shows");
+    let (y, from) = (track.center().y, track.left + 1.0);
+    rt.pointer_move(from, y);
+    rt.frame(FRAME);
+    rt.pointer_down(from, y);
+    let to = track.left + track.width() * 0.75;
+    rt.pointer_move(to, y);
+    rt.frame(FRAME);
+    let live = super::game::zoom(rt.state());
+    assert!((live - 4.0).abs() < 0.15, "live while dragging: {live}");
+    assert_eq!(
+        rt.state().editor.state.settings["game.scale"].as_f64(),
+        Some(1.0),
+        "written only on the release"
+    );
+    rt.pointer_up(to, y);
+    settle(&mut rt);
+    let kept = rt.state().editor.state.settings["game.scale"].as_f64();
+    assert!(kept.is_some_and(|v| (v - 4.0).abs() < 0.15), "{kept:?}");
+    assert_eq!(super::game::zoom(rt.state()), kept.unwrap() as f32);
+}
+
+#[test]
+fn align_with_view_puts_the_selection_at_the_camera_facing_its_way() {
+    let mut rt = open();
+    rt.update(|s| s.select(vec!["e_lamp".into()], false));
+    rt.update(|s| super::commands::run(s, "transform.align_view", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let camera = rt.state().editor.state.camera;
+    let world = crate::world::world_transform(&rt.state().resolved, "e_lamp").unwrap();
+    let (_, rotation, position) = world.to_scale_rotation_translation();
+    assert!(
+        position.abs_diff_eq(camera.position(), 1e-3),
+        "{position} vs {}",
+        camera.position()
+    );
+    let forward = (camera.target - camera.position()).normalize();
+    assert!(
+        (rotation * glam::Vec3::NEG_Z).abs_diff_eq(forward, 1e-3),
+        "faces where the view looks"
+    );
+}
+
+#[test]
+fn dragging_a_component_header_reorders_the_sections_without_folding() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.inspector", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let order = |rt: &Runtime<Studio>| -> Vec<String> {
+        let mut shown = vec!["Transform".to_owned(), "MeshRenderer".to_owned()];
+        super::inspector::sort_components(rt.state(), &mut shown);
+        shown
+    };
+    assert_eq!(order(&rt), ["Transform", "MeshRenderer"]);
+    let mesh = rt
+        .find("component/MeshRenderer")
+        .expect("the section shows");
+    let top = rt.find("component/Transform").unwrap();
+    rt.pointer_move(mesh.center().x, mesh.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(mesh.center().x, mesh.center().y);
+    rt.frame(FRAME);
+    // The host publishes the headers' rects while a component drags.
+    track(&mut rt, &["component/Transform", "component/MeshRenderer"]);
+    for step in 1..=6 {
+        let y = mesh.center().y + (top.top - mesh.center().y) * step as f32 / 6.0;
+        rt.pointer_move(mesh.center().x, y);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().local.component_drag,
+        Some((
+            "MeshRenderer".into(),
+            Some(super::inspector::Slot::Before("Transform".into()))
+        )),
+        "the slot follows the pointer"
+    );
+    rt.pointer_up(mesh.center().x, top.top);
+    settle(&mut rt);
+    assert_eq!(order(&rt), ["MeshRenderer", "Transform"]);
+    assert!(
+        rt.state().local.folded.is_empty(),
+        "the drop folded nothing"
+    );
+    // A plain click still folds.
+    press(&mut rt, "component/Transform");
+    assert!(rt.state().local.folded.contains("Transform"));
+}
+
+#[test]
+fn save_as_copies_the_open_scene_and_opens_the_copy() {
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    let content = root.join(ara_doc::AUTHORING_ROOT);
+    let original = rt.state().editor.state.doc.clone();
+    let outside = rt.touch(|s| super::asset_ops::save_as(s, &root.join("elsewhere")));
+    assert!(
+        outside.is_err_and(|e| e.to_string().contains("inside")),
+        "a place outside the content folder is refused"
+    );
+    rt.touch(|s| super::asset_ops::save_as(s, &content.join("levels").join("copy")))
+        .expect("queued");
+    let file = content.join("levels/copy.scene");
+    finish_file_jobs(&mut rt, &file);
+    settle(&mut rt);
+    let state = &rt.state().editor;
+    assert_ne!(state.state.doc, original, "the copy is open");
+    assert_eq!(
+        state.host.store().workspace().path_of(&state.state.doc),
+        Some(format!("{}/levels/copy.scene", ara_doc::AUTHORING_ROOT).as_str())
+    );
+    assert!(
+        rt.state().resolved.contains_key("e_box"),
+        "the copy keeps the scene's entities"
+    );
+}
+
+#[test]
+fn the_profiler_shows_memory_and_what_each_scope_allocated() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.profile = std::sync::Arc::new(sample_profile());
+        super::commands::run(s, "window.profiler", &crate::catalog::Target::None);
+    });
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    for wanted in [
+        "CPU heap",
+        "185.6 MB",
+        "+64.0 KB",
+        "GPU textures",
+        "412.0 MB",
+        "Alloc",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
+    }
+    // A capture without a counting allocator says so instead of zeros.
+    rt.update(|s| {
+        let mut bare = sample_profile();
+        for f in &mut bare.frames {
+            f.memory = ara_profile::Memory::default();
+        }
+        s.profile = std::sync::Arc::new(bare);
+    });
+    settle(&mut rt);
+    assert!(
+        rt.tree()
+            .into_iter()
+            .filter_map(|n| n.text)
+            .any(|t| t.starts_with("Not measured")),
+        "the module says why it is empty"
+    );
 }
 
 #[test]
@@ -5231,6 +5598,212 @@ fn agents_capture_the_studio_window_and_its_layout() {
     }
 }
 
+/// Starts a capture job of `target` with no Scene on screen and serves it as the host loop
+/// does; returns its final status.
+fn capture_without_scene(rt: &mut Runtime<Studio>, target: &str) -> Value {
+    let job = rt.touch(|s| {
+        s.editor
+            .action(
+                "capture",
+                json!({"target": target, "path": format!(".ara/captures/{target}-hidden.png")}),
+            )
+            .unwrap()["job"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    });
+    super::capture::serve(rt, None);
+    let started = std::time::Instant::now();
+    loop {
+        let status = rt.touch(|s| {
+            s.editor.tick();
+            s.editor.action("jobs.status", json!({"job": job})).unwrap()
+        });
+        if status["status"] != "running" {
+            return status;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{target}: {status}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn a_viewport_capture_with_the_scene_hidden_fails_saying_so() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
+    let status = capture_without_scene(&mut rt, "viewport");
+    assert_ne!(status["status"], "done", "{status}");
+    assert!(
+        status.to_string().contains("Scene view is not shown"),
+        "the failure names the cause: {status}"
+    );
+    // The other targets do not need the Scene.
+    for target in ["editor", "layout"] {
+        let status = capture_without_scene(&mut rt, target);
+        assert_eq!(status["status"], "done", "{target}: {status}");
+    }
+}
+
+#[test]
+fn captures_of_the_window_and_its_layout_complete_while_it_is_minimised() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.set_visible(false);
+    rt.frame(FRAME);
+    for target in ["editor", "layout"] {
+        let status = capture_without_scene(&mut rt, target);
+        assert_eq!(status["status"], "done", "{target}: {status}");
+    }
+    let status = capture_without_scene(&mut rt, "viewport");
+    assert!(
+        status.to_string().contains("Scene view is not shown"),
+        "{status}"
+    );
+}
+
+/// The `editor` capture says the native views are not in its picture.
+#[test]
+fn the_editor_capture_says_the_scene_is_not_in_it() {
+    let mut rt = open();
+    settle(&mut rt);
+    let status = capture_without_scene(&mut rt, "editor");
+    assert!(
+        status.to_string().contains("native GPU layers"),
+        "the result points at `viewport`: {status}"
+    );
+}
+
+/// One host-loop pass for agents' work with the Scene hidden: the editor's jobs tick, the
+/// Scene renders only when `render` (a bake needs it), the probe owner and captures are
+/// served, and the Lighting page's job list is polled.
+fn hidden_pass(
+    rt: &mut Runtime<Studio>,
+    owner: &mut super::probes::Owner,
+    scene_view: &mut crate::studio::viewport::SceneView,
+    renderer: &mut ara_render::Renderer,
+    view: &crate::world::DocumentView,
+    render: bool,
+) {
+    rt.touch(|s| s.editor.tick());
+    if render {
+        super::agent_work::render(rt, owner, scene_view, renderer, view);
+    }
+    super::agent_work::serve(rt, owner, scene_view, renderer, false);
+    rt.touch(|s| s.editor.tick());
+    rt.touch(super::asset_ops::poll_jobs);
+    std::thread::sleep(Duration::from_millis(10));
+}
+
+/// Window > Lighting in front of the Scene: Recapture starts a bake, which only advances
+/// through Scene renders. Polling alone leaves it running; the unpresented render the loop
+/// runs for it completes it.
+#[test]
+fn a_recapture_started_from_the_lighting_page_completes_with_the_scene_hidden_on_this_gpu() {
+    use crate::catalog::Target;
+    use crate::world::EditWorldView as _;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
+    assert!(
+        rt.natives().iter().all(|(n, _)| &**n != super::SCENE_LAYER),
+        "the Lighting page covers the Scene"
+    );
+    let root = rt.state().editor.host.root().to_owned();
+    let scene = rt.touch(|s| {
+        s.editor
+            .view()
+            .unwrap()
+            .scene(
+                s.editor.host.root(),
+                &s.editor.state,
+                None,
+                &mut s.editor.models,
+            )
+            .unwrap()
+    });
+    let mut renderer = crate::studio::viewport::prepare_renderer(
+        scene,
+        [320, 240],
+        super::present_extensions(),
+        root.join(".ara/gpu"),
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .unwrap()
+    .expect("the renderer starts on this GPU");
+    let view = rt.touch(|s| s.editor.view()).unwrap();
+    let mut scene_view = crate::studio::viewport::SceneView::default();
+    let mut owner = super::probes::Owner::default();
+    // The Scene renders until its content is published and the probe snapshot exists.
+    let warm = std::time::Instant::now();
+    loop {
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            true,
+        );
+        let ready = rt.touch(|s| scene_view.probe_snapshot(&s.editor).map(drop));
+        match ready {
+            Ok(()) => break,
+            Err(why) => assert!(
+                warm.elapsed() < Duration::from_secs(60),
+                "the Scene never published a frame: {why:?}"
+            ),
+        }
+    }
+    press(&mut rt, "lighting/probe/recapture");
+    assert!(
+        super::lighting::capturing(rt.state()),
+        "the recapture started"
+    );
+    let job = rt.state().local.asset_jobs.last().unwrap().0.clone();
+    // Serving without rendering does not advance the bake: this was the stuck button.
+    for _ in 0..30 {
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            false,
+        );
+    }
+    let early = rt.touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
+    assert!(
+        super::lighting::capturing(rt.state()),
+        "a bake does not finish without a Scene render: {early} {}",
+        owner.resource_report()
+    );
+    let started = std::time::Instant::now();
+    while super::lighting::capturing(rt.state()) {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the recapture never completed: {}",
+            owner.resource_report()
+        );
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            true,
+        );
+    }
+    let status = rt.touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
+    assert_eq!(status["status"], "done", "{status}");
+    scene_view.destroy(&mut renderer).unwrap();
+}
+
 #[test]
 fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     use crate::world::EditWorldView as _;
@@ -5286,4 +5859,100 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     assert!(root.join(".ara/captures/scene.png").is_file());
     assert!(root.join(".ara/captures/scene.entities.json").is_file());
     view.destroy(&mut renderer).unwrap();
+}
+
+#[test]
+fn a_rect_drag_on_a_rotated_object_commits_the_pose_it_previewed() {
+    let mut rt = open();
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_turned","name":"Turned","components":{"Transform":{"position":[0,0,0],"rotation":[0,45,0]},"MeshRenderer":{"shape":"box"}}}})],
+                "Create",
+                None,
+            )
+            .unwrap();
+    });
+    rt.update(|s| {
+        s.select(vec!["e_turned".into()], false);
+        super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None);
+        // The box turned 45° about Y spans ±0.71 in X and Z (world handles).
+        let half = glam::Vec3::new(0.7072, 0.5, 0.7072);
+        s.local.rect_bounds = Some([-half, half]);
+    });
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let c = super::rect_tool::corners(rt.state(), (view.width(), view.height()))
+        .expect("the rect shows");
+    let mid = (c[1] + c[2]) * 0.5;
+    let out = (mid - (c[0] + c[2]) * 0.5).normalize();
+    let at = |d: f32| (view.left + mid.x + out.x * d, view.top + mid.y + out.y * d);
+    rt.pointer_move(at(0.0).0, at(0.0).1);
+    rt.frame(FRAME);
+    rt.pointer_down(at(0.0).0, at(0.0).1);
+    for step in 1..=6 {
+        rt.pointer_move(at(step as f32 * 10.0).0, at(step as f32 * 10.0).1);
+        rt.frame(FRAME);
+    }
+    // The pose the Scene shows at the end of the drag (no parent: local is world).
+    let previewed = rt
+        .state()
+        .editor
+        .gesture
+        .as_ref()
+        .and_then(|g| g.current.get("e_turned").copied())
+        .expect("the drag previews");
+    rt.pointer_up(at(60.0).0, at(60.0).1);
+    rt.frame(FRAME);
+    let committed = crate::world::world_transform(&rt.state().resolved, "e_turned").unwrap();
+    let (scale, rotation, _) = committed.to_scale_rotation_translation();
+    assert!(
+        committed.abs_diff_eq(previewed, 1e-3),
+        "committed {committed:?} != previewed {previewed:?}"
+    );
+    let turned = glam::Quat::from_rotation_y(45f32.to_radians());
+    assert!(
+        rotation.dot(turned).abs() > 0.9999,
+        "the rotation stays 45° about Y: {rotation:?}"
+    );
+    assert!(
+        (scale - glam::Vec3::ONE).abs().max_element() > 0.05,
+        "it resized: {scale}"
+    );
+}
+
+#[test]
+fn align_with_view_moves_a_selected_parent_and_its_selected_child_follows() {
+    let mut rt = open();
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_bulb","name":"Bulb","parent":"e_lamp","components":{"Transform":{"position":[0,1,0]}}}})],
+                "Create",
+                None,
+            )
+            .unwrap();
+    });
+    rt.update(|s| s.resolve());
+    assert_eq!(
+        rt.state().resolved["e_bulb"].parent.as_deref(),
+        Some("e_lamp")
+    );
+    rt.update(|s| s.select(vec!["e_lamp".into(), "e_bulb".into()], false));
+    rt.update(|s| super::commands::run(s, "transform.align_view", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let camera = rt.state().editor.state.camera;
+    let lamp = crate::world::world_transform(&rt.state().resolved, "e_lamp").unwrap();
+    assert!(
+        lamp.w_axis.truncate().abs_diff_eq(camera.position(), 1e-3),
+        "the parent is at the camera"
+    );
+    let bulb: Vec<f64> = (0..3)
+        .map(|i| {
+            rt.state().resolved["e_bulb"].record["Transform"]["position"][i]
+                .as_f64()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(bulb, [0.0, 1.0, 0.0], "the child keeps its place under it");
 }

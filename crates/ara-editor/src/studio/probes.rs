@@ -330,6 +330,13 @@ impl Owner {
         self.poll_retirement(editor, scene, renderer)
     }
 
+    /// Tells the backend about cancel intents recorded since the last poll; no retirement
+    /// check or GPU work (for passes that do not render).
+    #[cfg(windows)]
+    pub(crate) fn deliver_cancellations(&mut self, editor: &mut Editor, scene: &mut SceneView) {
+        self.cancel_eligible(editor, scene);
+    }
+
     fn poll_retirement(
         &mut self,
         editor: &mut Editor,

@@ -3,7 +3,7 @@
 //! Problems (errors and warnings now, grouped by file). An unknown panel says so.
 use ara_kit::icons;
 use ara_kit::ui::*;
-use serde_json::json;
+use serde_json::{Value, json};
 use stillkit::el::{Align, Axis, El, Justify, col, el, icon, row, text, virtual_list};
 
 use super::Studio;
@@ -541,10 +541,18 @@ fn assets(s: &Studio) -> El<Studio> {
         .children(import_strip(s))
         .child(body)
         .child(footer);
+    // The folder tree beside the grid, unless hidden (one column, as Unity can).
+    let tree = s
+        .editor
+        .state
+        .settings
+        .get("assets.folderTree")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
     let mut root = row()
         .grow(1.0)
         .min_h(0.0)
-        .child(folder_tree(s, browser, &folder))
+        .children(tree.then(|| folder_tree(s, browser, &folder)))
         .child(right);
     if let Some(dialog) = conflicts_dialog(s).or_else(|| move_dialog(s, browser)) {
         root = root.overlay(dialog);
@@ -637,6 +645,13 @@ fn view_menu(s: &Studio) -> El<Studio> {
             super::commands::run(s, id, &crate::catalog::Target::None);
         }
     };
+    let tree = s
+        .editor
+        .state
+        .settings
+        .get("assets.folderTree")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
     let items = vec![
         menu_item(
             l,
@@ -662,6 +677,13 @@ fn view_menu(s: &Studio) -> El<Studio> {
             s.editor.state.asset_search_folder_only,
         )
         .on_press(run("assets.search.scope")),
+        menu_check(l, "assets/menu/tree", "Folder Tree", tree).on_press(move |s: &mut Studio| {
+            s.local.assets_view.menu = false;
+            s.act(
+                "editor.settings.set",
+                json!({"key": "assets.folderTree", "value": !tree}),
+            );
+        }),
         menu_separator(l),
         menu_item(
             l,

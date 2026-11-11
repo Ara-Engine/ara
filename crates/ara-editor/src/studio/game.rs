@@ -252,6 +252,21 @@ pub(super) fn resolution(aspect: &str) -> Option<[u32; 2]> {
 }
 
 /// The Game view's toolbar (Unity's): aspect, Maximize on Play, statistics.
+/// The Game view's zoom: the Scale slider's value while it drags, else `game.scale`.
+pub(super) fn zoom(s: &super::Studio) -> f32 {
+    let value = match s.local.setting_drag {
+        Some(("game.scale", v)) => v,
+        _ => s
+            .editor
+            .state
+            .settings
+            .get("game.scale")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(1.0),
+    };
+    value.clamp(1.0, 5.0) as f32
+}
+
 fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
     use ara_kit::{icons, ui::*};
     use stillkit::el::{Align, row};
@@ -318,6 +333,7 @@ fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
         .gap(6.0)
         .align(Align::Center)
         .child(trigger)
+        .child(scale_control(s))
         .child(stillkit::el::el().grow(1.0))
         .child(flag(
             "game.maximize_on_play",
@@ -326,6 +342,48 @@ fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
             "Maximize on Play",
         ))
         .child(flag("game.stats", "game.stats", icons::GAUGE, "Statistics"))
+}
+
+/// Unity's Scale slider: 1x to 5x, live while it drags, kept on release (`game.scale`).
+fn scale_control(s: &super::Studio) -> stillkit::el::El<super::Studio> {
+    use stillkit::el::{Align, row, text};
+    let l = &s.look;
+    let zoom = zoom(s);
+    row()
+        .gap(6.0)
+        .align(Align::Center)
+        .child(text("Scale").text_size(11.5).color(l.c.muted_foreground.0))
+        .child(
+            super::style::slider(
+                l,
+                "game/scale".into(),
+                zoom,
+                (1.0, 5.0),
+                false,
+                move |s: &mut super::Studio, v, done| {
+                    let v = (f64::from(v) * 10.0).round() / 10.0;
+                    match done {
+                        false => s.local.setting_drag = Some(("game.scale", v)),
+                        true => {
+                            s.local.setting_drag = None;
+                            s.act(
+                                "editor.settings.set",
+                                serde_json::json!({"key": "game.scale", "value": v}),
+                            );
+                        }
+                    }
+                },
+            )
+            .w(80.0)
+            .tooltip("Zoom into the picture"),
+        )
+        .child(
+            text(format!("{zoom:.1}x"))
+                .key("game/scale/value")
+                .w(30.0)
+                .text_size(11.5)
+                .color(l.c.foreground.0),
+        )
 }
 
 /// What the Game view shows, for its panel's notices.
@@ -414,9 +472,11 @@ pub(super) struct Game {
     players: Vec<(String, usize, PlayerView)>,
     /// The player the keyboard and mouse go to (`PlayControls::client`).
     pub client: usize,
+    /// How far the picture is zoomed (`game.scale`, live while its slider drags).
+    pub zoom: f32,
     host: Host,
-    /// The image last presented and at what size: an unchanged one is not drawn again.
-    shown: Option<(u32, [u32; 2])>,
+    /// The image last presented, at what size and zoom: an unchanged one is not drawn again.
+    shown: Option<(u32, [u32; 2], u32)>,
     /// Keys held while input goes to the game (only transitions are sent).
     held: std::collections::BTreeSet<u16>,
     /// Where the pointer was, for relative motion while captured.
@@ -440,6 +500,7 @@ impl Game {
             preview: Preview::default(),
             players: Vec::new(),
             client: 0,
+            zoom: 1.0,
             host: Host::default(),
             shown: None,
             held: Default::default(),
@@ -592,9 +653,18 @@ impl Game {
             return Ok(status);
         };
         // A player's frame changes every pass; a preview only when it re-attaches.
-        if self.shown == Some((image, extent)) && !self.host.live && !self.preview_changed() {
+        let shown = (image, extent, self.zoom.to_bits());
+        if self.shown == Some(shown) && !self.host.live && !self.preview_changed() {
             return Ok(status);
         }
+        // The Scale slider zooms about the view's centre; the layer clips what spills.
+        let (zoom, centre) = (
+            self.zoom.max(1.0),
+            [
+                extent[0] as f32 / scale / 2.0,
+                extent[1] as f32 / scale / 2.0,
+            ],
+        );
         let list = DisplayList {
             commands: images
                 .iter()
@@ -602,10 +672,10 @@ impl Game {
                 .map(|(i, (image, r))| Draw::Image {
                     node: 1 + i as u64,
                     rect: Box2 {
-                        x: r[0],
-                        y: r[1],
-                        w: r[2],
-                        h: r[3],
+                        x: centre[0] + (r[0] - centre[0]) * zoom,
+                        y: centre[1] + (r[1] - centre[1]) * zoom,
+                        w: r[2] * zoom,
+                        h: r[3] * zoom,
                     },
                     image: *image,
                     tint: Color(255, 255, 255, 255),
@@ -619,7 +689,7 @@ impl Game {
                 .draw(renderer, layer, extent, scale, &list, &[])?
         };
         // One that didn't reach the screen draws again on the next pass.
-        self.shown = landed.then_some((image, extent));
+        self.shown = landed.then_some(shown);
         if self.host.live {
             let (since, count, _) = &mut self.presents;
             *count += 1;

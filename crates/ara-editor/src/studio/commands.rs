@@ -322,11 +322,16 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         }
         "view.frame" => act(e, "editor.frame", json!({})),
         "view.frame_all" => act(e, "editor.frame", json!({"all": true})),
-        "view.tool.move" | "view.tool.rotate" | "view.tool.scale" | "view.tool.universal" => {
+        "view.tool.move"
+        | "view.tool.rotate"
+        | "view.tool.scale"
+        | "view.tool.rect"
+        | "view.tool.universal" => {
             let tool = match id {
                 "view.tool.move" => "translate",
                 "view.tool.rotate" => "rotate",
                 "view.tool.scale" => "scale",
+                "view.tool.rect" => "rect",
                 _ => "universal",
             };
             view(e, json!({"gizmos": true}))
@@ -879,6 +884,74 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 .collect();
             apply(e, commands, &format!("Reset {field}"))
         }
+        // Unity's Align With View: each entity takes the Scene camera's place and turns to
+        // look where it looks (an entity faces -Z, as Cameras do), keeping its scale.
+        "transform.align_view" => {
+            let camera = e.state.camera;
+            let eye = camera.position();
+            let forward = (camera.target - eye).normalize_or_zero();
+            let right = forward
+                .cross(glam::Vec3::Y)
+                .try_normalize()
+                .unwrap_or(glam::Vec3::X);
+            let view = glam::Mat4::from_rotation_translation(
+                glam::Quat::from_mat3(&glam::Mat3::from_cols(
+                    right,
+                    right.cross(forward),
+                    -forward,
+                )),
+                eye,
+            );
+            let selected = target.entities(&e.state);
+            // A selected entity under another selected one follows it, as in Unity.
+            let ancestor_selected = |id: &str| {
+                let mut at = s.resolved.get(id).and_then(|entity| entity.parent.clone());
+                while let Some(parent) = at {
+                    if selected.contains(&parent) {
+                        return true;
+                    }
+                    at = s
+                        .resolved
+                        .get(&parent)
+                        .and_then(|entity| entity.parent.clone());
+                }
+                false
+            };
+            let mut skipped = 0;
+            let commands: Vec<Value> = selected
+                .iter()
+                .filter(|id| !ancestor_selected(id))
+                .filter_map(|id| {
+                    let parent = s
+                        .resolved
+                        .get(id)
+                        .and_then(|entity| entity.parent.as_deref())
+                        .and_then(|p| crate::world::world_transform(&s.resolved, p))
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let (_, rotation, position) =
+                        (parent.inverse() * view).to_scale_rotation_translation();
+                    let (x, y, z) = rotation.to_euler(glam::EulerRot::XYZ);
+                    // A parent scaled to nothing has no inverse: nothing to place under it.
+                    if !(position.is_finite() && x.is_finite() && y.is_finite() && z.is_finite()) {
+                        skipped += 1;
+                        return None;
+                    }
+                    Some(json!({"cmd": "transform.set", "args": {
+                        "entities": [id],
+                        "position": position.to_array(),
+                        "rotation": [x.to_degrees(), y.to_degrees(), z.to_degrees()],
+                    }}))
+                })
+                .collect();
+            if skipped > 0 {
+                super::note(
+                    s,
+                    format!("Align with View skipped {skipped} under a parent scaled to zero"),
+                );
+            }
+            let e = &mut s.editor;
+            apply(e, commands, "Align with view")
+        }
         "transform.move_to_view" => {
             let p = e.state.camera.target;
             let commands = crate::inspector::edit_commands(
@@ -1378,6 +1451,23 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 view.category = Some("Networking & Play");
             }
             Ok(())
+        }
+        // Unity's Save Scene As: a save dialog in the content folder, then a copy opened.
+        "file.save_as" => {
+            let content = e.host.root().join(ara_doc::AUTHORING_ROOT);
+            let name = e
+                .host
+                .store()
+                .workspace()
+                .path_of(&e.state.doc)
+                .and_then(|p| p.rsplit('/').next())
+                .map_or("Untitled.scene".to_owned(), |n| {
+                    n.replace(".scene", " Copy.scene")
+                });
+            match stillkit::dialog::save_file("Save Scene As", Some(&content), &name) {
+                Some(destination) => super::asset_ops::save_as(s, &destination).map_err(Into::into),
+                None => Ok(()),
+            }
         }
         "file.new_scene" => {
             super::asset_create::create(s, "scene");

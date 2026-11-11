@@ -12,6 +12,10 @@ equivalent.
   `Editor::tick`, keeps the renderer in sync (`SceneSync`), renders and composites the
   Scene when it is dirty, resolves picks, polls Assets and the diagnostics bus, applies
   `Local::focus` requests, and sleeps until the next timer (idle costs nothing).
+- `agent_work.rs`: what runs every pass whether or not the Scene is on screen: the probe
+  owner's poll (`probes.rs`) and queued captures (`capture.rs`), plus the unpresented Scene
+  render a probe bake needs (a bake advances only through Scene renders). A `viewport`
+  capture without a presented Scene fails saying so; `editor` and `layout` never need it.
 - `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
 - `game.rs`: the Game view's own layer (`GAME_LAYER`): the gameplay camera's preview outside
   Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during
@@ -37,6 +41,12 @@ equivalent.
   Layout rects are then desktop frames (design px); system moves settle into `editor.window`.
   Headless tests leave `Local::desktop.on` off: floats draw inside the main window.
   `window.dock` (title-bar button, tab menu) returns a panel to its `state::home_slot`.
+- `rect_tool.rs`: the Rect tool (T): a rect round `Local::rect_bounds` (the host reads them
+  from the presented scene) in the handle plane facing the camera; edges and corners resize
+  (`Gesture::map_world`), the inside moves. `overlay::handles_in` shows no axes for it.
+- Click against drag: feed every phase of a press to `studio::click` and act on its answer
+  at release. It decides by the farthest the pointer went and how long it was held; never
+  decide from `e.travel()` at release (a drag that returns would count as a click).
 - `layer.rs`: a native layer with its own GPU UI adapter (`Layer::draw` of a display list);
   the Game view and the graph canvas each own one.
 - `graph.rs`: the Material and Animation pages: the shared node canvas

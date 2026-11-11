@@ -1090,9 +1090,15 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
                     gizmos && st.tool == Tool::Scale,
                 ))
                 .child(tool(
+                    "view.tool.rect",
+                    icons::SCAN,
+                    "Rect (T)",
+                    gizmos && st.tool == Tool::Rect,
+                ))
+                .child(tool(
                     "view.tool.universal",
                     icons::MOVE,
-                    "Universal (T)",
+                    "Universal (Y)",
                     gizmos && st.tool == Tool::Universal,
                 ))
         }

@@ -1,5 +1,11 @@
 use std::path::PathBuf;
 
+/// With `memory-profile`, every allocation is counted for the Profiler's Memory module.
+#[cfg(feature = "memory-profile")]
+#[global_allocator]
+static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
+    ara_profile::CountingAllocator(std::alloc::System);
+
 fn main() -> ara_ui::Result<()> {
     #[cfg(feature = "hotpatch")]
     // SAFETY: This is process entry, before worker threads and native runtimes.

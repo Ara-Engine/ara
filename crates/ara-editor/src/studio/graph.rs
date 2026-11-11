@@ -1355,6 +1355,8 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         h: e.size.1,
     };
     let p = [e.local.x, e.local.y];
+    // Click or drag: by the farthest the pointer went, not where it let go.
+    let clicked = super::click(s, e);
     let Some(shown) = s.graph.shown.as_mut() else {
         return false;
     };
@@ -1388,7 +1390,7 @@ fn pointer(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el:
         PointerPhase::Move if s.graph.dragging => shown.canvas.motion(p),
         PointerPhase::Up if s.graph.dragging => {
             s.graph.dragging = false;
-            let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
+            let still = clicked;
             // A wire dropped where no pin is: search for the node to feed (or be fed by).
             let dropped = shown
                 .canvas

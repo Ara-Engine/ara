@@ -373,7 +373,8 @@ pub fn moved_handles_in(
     rect: Box2,
     offset: glam::Mat4,
 ) -> Option<Handles> {
-    if state.hide_gizmos || state.game_view {
+    // The Rect tool draws its own rectangle (`studio::rect_tool`), not axis handles.
+    if state.hide_gizmos || state.game_view || state.tool == Tool::Rect {
         return None;
     }
     // Only the selection's transforms: composing the whole scene cost ~0.5 ms a frame.

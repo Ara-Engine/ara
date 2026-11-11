@@ -102,8 +102,10 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     }
     // The order Move Up and Move Down set, then Transform first, then record order.
     sort_components(s, &mut order);
+    let last = order.last().cloned();
     for component in order {
-        page = page.child(section(s, &component, &by_component[&component]));
+        let section = section(s, &component, &by_component[&component]);
+        page = page.child(section.children(drop_line(s, &component, last.as_ref())));
     }
     page = page.children(paste_as_new(s));
     page = page.child(super::components::button_and_picker(s));
@@ -498,7 +500,15 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
         .cascade_ink()
         .label(component.to_owned())
         .expanded(!folded)
+        .on_pointer({
+            let name = name.clone();
+            move |s: &mut Studio, e, _| drag_component(s, &name, e)
+        })
         .on_press(move |s: &mut Studio| {
+            // The release that ends a reorder is not a fold.
+            if std::mem::take(&mut s.local.component_dropped) {
+                return;
+            }
             if !s.local.folded.remove(&name) {
                 s.local.folded.insert(name.clone());
             }
@@ -1477,22 +1487,19 @@ pub(super) fn sort_components(s: &Studio, components: &mut [String]) {
     });
 }
 
-/// Moves `component` one place up (or down) among the inspected selection's sections,
-/// saved as the user's component order; whether it moved.
-pub(super) fn move_component(s: &mut Studio, component: &str, down: bool) -> bool {
-    let selection = s.inspected();
+/// The inspected selection's sections in the order the Inspector shows them (unfiltered).
+fn shown_components(s: &Studio) -> Vec<String> {
     let Some(doc) = s.editor.host.store().workspace().doc(&s.editor.state.doc) else {
-        return false;
+        return Vec::new();
     };
     let changes = s.editor.agent_fields();
     let fields = crate::inspector::fields(
         s.editor.host.store().schema(),
         doc,
         &s.resolved,
-        selection,
+        s.inspected(),
         &changes,
     );
-    // The sections as the Inspector shows them, unfiltered.
     let mut shown: Vec<String> = Vec::new();
     for f in &fields {
         let component = f.path.split('.').next().unwrap_or("");
@@ -1501,20 +1508,128 @@ pub(super) fn move_component(s: &mut Studio, component: &str, down: bool) -> boo
         }
     }
     sort_components(s, &mut shown);
+    shown
+}
+
+/// Where a dragged component lands: before another section, or after the last.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Slot {
+    /// Above this component's section.
+    Before(String),
+    /// Below every section.
+    End,
+}
+
+/// Puts `component` at `slot`, saved as the user's component order; whether it moved.
+fn place_component(s: &mut Studio, component: &str, slot: &Slot) -> bool {
+    let mut shown = shown_components(s);
+    let before = shown.clone();
     let Some(at) = shown.iter().position(|c| c == component) else {
         return false;
     };
-    let to = match down {
-        true if at + 1 < shown.len() => at + 1,
-        false if at > 0 => at - 1,
-        _ => return false,
+    let moving = shown.remove(at);
+    let to = match slot {
+        Slot::Before(other) => match shown.iter().position(|c| c == other) {
+            Some(to) => to,
+            None => return false,
+        },
+        Slot::End => shown.len(),
     };
-    shown.swap(at, to);
+    shown.insert(to, moving);
+    if shown == before {
+        return false;
+    }
     s.act(
         "editor.settings.set",
         json!({"key": "inspector.componentOrder", "value": shown}),
     );
     true
+}
+
+/// Moves `component` one place up (or down) among the inspected selection's sections,
+/// saved as the user's component order; whether it moved.
+pub(super) fn move_component(s: &mut Studio, component: &str, down: bool) -> bool {
+    let shown = shown_components(s);
+    let Some(at) = shown.iter().position(|c| c == component) else {
+        return false;
+    };
+    let slot = match down {
+        true if at + 2 < shown.len() => Slot::Before(shown[at + 2].clone()),
+        true if at + 1 < shown.len() => Slot::End,
+        false if at > 0 => Slot::Before(shown[at - 1].clone()),
+        _ => return false,
+    };
+    place_component(s, component, &slot)
+}
+
+/// The section headers a dragged component can drop among, while one is dragged.
+pub(super) fn drop_keys(s: &Studio) -> Vec<String> {
+    shown_components(s)
+        .iter()
+        .map(|c| format!("component/{c}"))
+        .collect()
+}
+
+/// The line showing where a dragged component lands, appended to `component`'s section (so
+/// the headers under the held pointer keep their place in the tree): along its top, or
+/// under the last section for the End slot.
+fn drop_line(s: &Studio, component: &str, last: Option<&String>) -> Option<El<Studio>> {
+    let slot = s.local.component_drag.as_ref()?.1.as_ref()?;
+    let line = || el().h(2.0).w_full().radius(1.0).fill(s.look.c.primary.0);
+    match slot {
+        Slot::Before(c) if c == component => Some(line().absolute(0.0, -2.5)),
+        Slot::End if last.is_some_and(|l| l == component) => Some(line()),
+        _ => None,
+    }
+}
+
+/// A component header's drag, as Unity's: past a few px it reorders, the slot following
+/// the pointer between the sections' middles; the release places it.
+fn drag_component(s: &mut Studio, component: &str, e: &stillkit::el::PointerEvent) -> bool {
+    use stillkit::el::PointerPhase;
+    if e.button != stillkit::Button::Left {
+        return false;
+    }
+    match e.phase {
+        PointerPhase::Down => {
+            s.local.component_drag = Some((component.to_owned(), None));
+            // A drop released off its header left this set; this press is a new one.
+            s.local.component_dropped = false;
+            false
+        }
+        PointerPhase::Move => {
+            if e.travel().x.abs() + e.travel().y.abs() < 4.0 {
+                return false;
+            }
+            let shown = shown_components(s);
+            let slot = shown
+                .iter()
+                .find(|c| {
+                    s.local
+                        .rects
+                        .get(&format!("component/{c}"))
+                        .is_some_and(|r| e.at.y < (r.top + r.bottom) / 2.0)
+                })
+                .map_or(Slot::End, |c| Slot::Before(c.clone()));
+            match s.local.component_drag.as_mut() {
+                Some((_, now)) if now.as_ref() != Some(&slot) => {
+                    *now = Some(slot);
+                    true
+                }
+                _ => false,
+            }
+        }
+        PointerPhase::Up => match s.local.component_drag.take() {
+            Some((dragged, Some(slot))) => {
+                s.local.component_dropped = true;
+                place_component(s, &dragged, &slot);
+                true
+            }
+            _ => false,
+        },
+        PointerPhase::Cancel => s.local.component_drag.take().is_some(),
+        PointerPhase::Hover => false,
+    }
 }
 
 /// A component's ⋯ menu: reset it, copy and paste its values, fold the others, remove it.

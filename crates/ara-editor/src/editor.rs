@@ -585,10 +585,18 @@ impl Editor {
             self.host.store().revision(),
             tool,
         )?);
-        let field = match tool {
-            crate::state::Tool::Translate | crate::state::Tool::Universal => "Transform.position",
-            crate::state::Tool::Rotate => "Transform.rotation",
-            crate::state::Tool::Scale => "Transform.scale",
+        let fields: &[&str] = match tool {
+            crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                &["Transform.position"]
+            }
+            crate::state::Tool::Rotate => &["Transform.rotation"],
+            crate::state::Tool::Scale => &["Transform.scale"],
+            // Its commit writes the whole pose (`Gesture::commands`).
+            crate::state::Tool::Rect => &[
+                "Transform.position",
+                "Transform.rotation",
+                "Transform.scale",
+            ],
         };
         let entities: Vec<_> = self
             .gesture
@@ -597,7 +605,9 @@ impl Editor {
             .flat_map(|g| g.initial.keys().cloned())
             .collect();
         for entity in entities {
-            self.field_gesture(&entity, field, true)?;
+            for field in fields {
+                self.field_gesture(&entity, field, true)?;
+            }
         }
         Ok(())
     }
