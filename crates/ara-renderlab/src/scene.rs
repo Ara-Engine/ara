@@ -84,9 +84,8 @@ pub(crate) struct Scene {
     /// Key of the static draws last placed (`sync`'s `static_key`).
     static_key: Option<u64>,
     palette: Vec<Mat4>,
-    /// The emissive programs once tried, without and with an emissive map:
-    /// `Some(None)` when Renderlab rejected one.
-    emissive: [Option<Option<ProgramId>>; 2],
+    /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
+    emissive: Option<Option<ProgramId>>,
     /// Mean linear colour of each emissive map packed so far, by its content key.
     glow_means: HashMap<u64, [f32; 3]>,
     /// Triangles of the largest mesh uploaded so far (`largest_triangles`).
@@ -142,27 +141,25 @@ const GLOW_IN_BASE: [(usize, usize); 1] = [(3, 2)];
 /// The base-colour alpha of an opaque emissive material, which Renderlab's opaque
 /// shading never reads. Renderlab shades a reflection ray's hit with the reflecting
 /// surface's program and the hit's material, so an emissive surface's reflections
-/// would show every object glowing with its `glow`; the emissive programs glow only on
+/// would show every object glowing with its `glow`; the emissive program glows only on
 /// a material that carries this mark.
 const GLOW_MARK: f32 = 0.737;
 
 /// Renderlab's standard program with a `glow` parameter (cd/m²) that the surface
-/// both shows and, through the `emission` hook, sends into global illumination. With
-/// `mapped`, the glow is multiplied by the emissive map packed into the material's
-/// textures. The map is read in `surface`, for the pixels the camera sees. Global
-/// illumination calls `emission` at its own hits, where a texture lookup does not
-/// return the material's texels, so it gets `bounce`, the glow averaged over the map,
-/// as a second parameter. None when the standard program no longer has the shape
-/// these edits expect.
-fn emissive_source(mapped: bool) -> Option<String> {
+/// both shows and, through the `emission` hook, sends into global illumination. Where
+/// the `mapped` parameter is one, the glow is multiplied by the emissive map packed
+/// into the material's textures; where it is zero the glow is uniform. One program
+/// serves both: every program is another set of pipelines to compile on a cold start
+/// and another pass in Renderlab's shading. The map is read in `surface`, for the
+/// pixels the camera sees. Global illumination calls `emission` at its own hits, where
+/// a texture lookup does not return the material's texels, so it gets `bounce`, the
+/// glow averaged over the map, as a second parameter. None when the standard program
+/// no longer has the shape these edits expect.
+fn emissive_source() -> Option<String> {
     const FIELDS: &str = "alpha:f32 };";
     const BUILT: &str = "decal_mr.x,alpha);";
     const RETURN: &str = "    return exposed;";
-    let map = if mapped {
-        "*vec3<f32>(mr.r,mr.a,sampled.a)*vec3<f32>(mr.r,mr.a,sampled.a)"
-    } else {
-        ""
-    };
+    const MAP: &str = "vec3<f32>(mr.r,mr.a,sampled.a)*vec3<f32>(mr.r,mr.a,sampled.a)";
     let standard = renderlab::STANDARD_PROGRAM;
     let fits = [FIELDS, BUILT, RETURN]
         .iter()
@@ -171,7 +168,7 @@ fn emissive_source(mapped: bool) -> Option<String> {
     // `everywhere` lifts the mark for see-through materials, whose alpha is coverage.
     fits.then(|| {
         format!(
-            "struct Parameters {{ glow:vec3<f32>, everywhere:f32, bounce:vec3<f32>, spare:f32 }};\n\
+            "struct Parameters {{ glow:vec3<f32>, everywhere:f32, bounce:vec3<f32>, mapped:f32 }};\n\
              const DEFAULT_PARAMETERS:Parameters = \
              Parameters(vec3<f32>(0.0),0.0,vec3<f32>(0.0),0.0);\n\
              fn ara_glows(input:SurfaceInput) -> bool {{ return params.everywhere>0.5 || \
@@ -185,7 +182,9 @@ fn emissive_source(mapped: bool) -> Option<String> {
                     BUILT,
                     &format!(
                         "decal_mr.x,alpha,select(vec3<f32>(0.0),\
-                         max(params.glow,vec3<f32>(0.0)){map},ara_glows(input)));"
+                         max(params.glow,vec3<f32>(0.0))\
+                         *mix(vec3<f32>(1.0),{MAP},clamp(params.mapped,0.0,1.0)),\
+                         ara_glows(input)));"
                     ),
                 )
                 .replace(
@@ -943,7 +942,7 @@ impl Scene {
                     "those materials do not emit or glow",
                 ),
                 Some((map, base, data)) => {
-                    if let Some(program) = self.emissive_program(engine, true, gaps) {
+                    if let Some(program) = self.emissive_program(engine, gaps) {
                         let (base, data, mean) = self.glow_textures(engine, map, base, data)?;
                         desc.base_color_texture = Some(base);
                         desc.metallic_roughness_texture = Some(data);
@@ -952,17 +951,19 @@ impl Scene {
                             ("glow", Value::Vec3(glow)),
                             ("bounce", Value::Vec3(bounce)),
                             ("everywhere", everywhere),
+                            ("mapped", Value::F32(1.)),
                         ];
                         desc.program = Some(program);
                         desc.parameters = &parameters;
                     }
                 }
                 None => {
-                    if let Some(program) = self.emissive_program(engine, false, gaps) {
+                    if let Some(program) = self.emissive_program(engine, gaps) {
                         parameters = [
                             ("glow", Value::Vec3(glow)),
                             ("bounce", Value::Vec3(glow)),
                             ("everywhere", everywhere),
+                            ("mapped", Value::F32(0.)),
                         ];
                         desc.program = Some(program);
                         desc.parameters = &parameters;
@@ -975,26 +976,15 @@ impl Scene {
         Ok(id)
     }
 
-    /// The program emissive materials shade with (`mapped`: with an emissive map),
+    /// The program emissive materials shade with, with or without an emissive map,
     /// composed on first use; None (and one report) when Renderlab rejects it.
-    fn emissive_program(
-        &mut self,
-        engine: &mut Engine,
-        mapped: bool,
-        gaps: &mut Gaps,
-    ) -> Option<ProgramId> {
-        let slot = usize::from(mapped);
-        if self.emissive[slot].is_none() {
-            let name = if mapped {
-                "ara-standard-emissive-map"
-            } else {
-                "ara-standard-emissive"
-            };
-            let created = emissive_source(mapped)
+    fn emissive_program(&mut self, engine: &mut Engine, gaps: &mut Gaps) -> Option<ProgramId> {
+        if self.emissive.is_none() {
+            let created = emissive_source()
                 .ok_or_else(|| "its standard program changed shape".to_owned())
                 .and_then(|source| {
                     engine
-                        .create_program(name, &source)
+                        .create_program("ara-standard-emissive", &source)
                         .map_err(|error| error.to_string())
                 });
             if let Err(error) = &created {
@@ -1003,9 +993,9 @@ impl Scene {
                     &format!("they do not emit or glow ({error})"),
                 );
             }
-            self.emissive[slot] = Some(created.ok());
+            self.emissive = Some(created.ok());
         }
-        self.emissive[slot].flatten()
+        self.emissive.flatten()
     }
 
     /// The base-colour and metallic-roughness textures of a material with emissive
@@ -1274,17 +1264,17 @@ mod tests {
 
     #[test]
     fn emissive_program_extends_the_pinned_standard_program() {
-        for mapped in [false, true] {
-            let source = emissive_source(mapped).expect("the standard program ends as expected");
-            assert!(source.contains("fn emission(") && source.contains("params.glow"));
-            assert!(!source.contains("    return exposed;"));
-            // Only the mapped program reads the map from the material's textures.
-            assert_eq!(source.contains("mr.r,mr.a,sampled.a"), mapped);
-            // Global illumination gets the averaged glow, never a texture lookup, and
-            // both glow only on the marked material.
-            assert!(source.contains("max(params.bounce,vec3<f32>(0.0)),ara_glows(input))"));
-            assert!(source.contains("base_color.a-0.737)<0.002"));
-        }
+        let source = emissive_source().expect("the standard program ends as expected");
+        assert!(source.contains("fn emission(") && source.contains("params.glow"));
+        assert!(!source.contains("    return exposed;"));
+        // The one program reads the map from the material's textures only as far as
+        // its `mapped` parameter says.
+        assert!(source.contains("mr.r,mr.a,sampled.a"));
+        assert!(source.contains("clamp(params.mapped,0.0,1.0)"));
+        // Global illumination gets the averaged glow, never a texture lookup, and the
+        // program glows only on the marked material.
+        assert!(source.contains("max(params.bounce,vec3<f32>(0.0)),ara_glows(input))"));
+        assert!(source.contains("base_color.a-0.737)<0.002"));
     }
 
     #[test]

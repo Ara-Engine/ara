@@ -142,6 +142,7 @@ field at 3 m, f/0.8). From that folder:
   matters (Renderlab#15).
 - A Renderlab program gets its material's texels in `surface` only. At reflection hits
   on other objects (shaded with the reflecting surface's program) and at GI hits a
-  lookup returns something else: the emissive programs read their map in `surface`,
-  pass global illumination a plain parameter, and glow only on a material marked in
-  its base-colour alpha (`GLOW_MARK`).
+  lookup returns something else: the emissive program reads its map in `surface`,
+  passes global illumination a plain parameter, and glows only on a material marked in
+  its base-colour alpha (`GLOW_MARK`). One program serves mapped and unmapped
+  materials (`mapped` parameter): every program is more pipelines and a shading pass.
