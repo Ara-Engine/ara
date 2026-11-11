@@ -433,6 +433,19 @@ internal sealed partial class ModuleSession
     static bool SourcesMatch(ImmutableDictionary<string, string> texts, string[] files) =>
         files.Length == texts.Count && files.All(path => texts.TryGetValue(path, out var text) && ModuleSource.ReadWithRetry(path, text) == text);
 
+    /// <summary>
+    /// Current source files whose bytes differ from what this module last compiled, plus compiled files that no
+    /// longer exist. Compares actual text (no parsing, no timestamps); empty before anything has compiled.
+    /// </summary>
+    internal string[] DriftedSources()
+    {
+        if (ReadOnlyPublished || (_state?.Texts ?? LoadedTexts) is not { } texts) return [];
+        var files = SourceFiles().ToArray();
+        var drifted = files.Where(path => !texts.TryGetValue(path, out var text) || ModuleSource.ReadWithRetry(path, text) != text).ToList();
+        drifted.AddRange(texts.Keys.Where(path => !files.Contains(path, ModuleState.Paths)));
+        return [.. drifted];
+    }
+
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
     internal static string? ReadWithRetry(string path) => ModuleSource.ReadWithRetry(path, null);
 
