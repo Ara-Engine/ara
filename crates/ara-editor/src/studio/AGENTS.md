@@ -37,9 +37,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   Layout rects are then desktop frames (design px); system moves settle into `editor.window`.
   Headless tests leave `Local::desktop.on` off: floats draw inside the main window.
   `window.dock` (title-bar button, tab menu) returns a panel to its `state::home_slot`.
-- `rect_tool.rs`: the Rect tool (T): a rect round `Local::rect_bounds` (the host reads them
-  from the presented scene) in the handle plane facing the camera; edges and corners resize
-  (`Gesture::map_world`), the inside moves. `overlay::handles_in` shows no axes for it.
+- `rect_tool.rs`: the Rect tool (T): a rect round `Local::rect_bounds`, which the host
+  reads from the presented scene in the selection's frame (`frame_rotation`: shared
+  rotation, else world). `Gesture::rect_resize` scales each object's axis nearest a dragged
+  one; `overlay::handles_in` shows no axes for it.
 - Click against drag: feed every phase of a press to `studio::click` and act on its answer
   at release. It decides by the farthest the pointer went and how long it was held; never
   decide from `e.travel()` at release (a drag that returns would count as a click).
