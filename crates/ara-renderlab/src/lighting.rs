@@ -386,9 +386,6 @@ pub(crate) fn settings(
                 max_radius_px: (0.02 * view.size[1] as f32).clamp(1., 32.),
             }
         });
-    if look.lut.is_some() {
-        gaps.unsupported("colour lookup tables", "the grade is not applied");
-    }
     let defaults = Settings::default();
     Settings {
         exposure: Exposure::Manual { stops },
@@ -409,7 +406,7 @@ pub(crate) fn settings(
             tonemapper: Tonemapper::Filmic,
             depth_of_field,
             // The grade itself is baked into the colour lookup table (`grade`).
-            lut_strength: if crate::grade::lut_needed(look) {
+            lut_strength: if crate::grade::lut_needed(look, crate::grade::authored(view)) {
                 1.
             } else {
                 0.

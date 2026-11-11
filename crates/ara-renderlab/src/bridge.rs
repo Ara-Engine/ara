@@ -221,9 +221,11 @@ impl Bridge {
             self.max_reflection_roughness,
             &mut self.gaps,
         ))?;
-        let grade = crate::grade::key(view.look);
+        let authored = crate::grade::authored(view);
+        let grade = crate::grade::key(view.look, authored);
         if self.applied.grade != Some(grade) {
-            self.engine.set_colour_lut(crate::grade::lut(view.look))?;
+            self.engine
+                .set_colour_lut(crate::grade::lut(view.look, authored))?;
             self.applied.grade = Some(grade);
         }
         self.apply_sky(view)?;
