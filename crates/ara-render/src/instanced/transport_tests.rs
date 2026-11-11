@@ -1,6 +1,6 @@
 use crate::instanced::transport::{flags, BodyClass, NativeChangeFeed};
 use crate::instanced::{
-    Changes, Geometry, Instance, Lod, Material, Scene, Textures, Vertex,
+    Changes, Geometry, Instance, Lod, Material, Scene, Vertex,
 };
 use anyhow::Result;
 use glam::{Mat4, Vec3};
