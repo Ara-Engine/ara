@@ -14,7 +14,7 @@
 //! settings and pose, content, lighting, environment); it never hashes process-local
 //! counters.
 use ara_diag::{Diagnostic, codes};
-pub use ara_render::capture::RenderCapabilities;
+pub use ara_frame::capture::RenderCapabilities;
 use ara_runtime::extract::RenderFrame;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

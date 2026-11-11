@@ -1,7 +1,7 @@
 //! Optional material layers over the unchanged `ara-render::scene::Material` ABI.
 use anyhow::{Result, ensure};
 
-pub(crate) fn has_layers(materials: &[ara_render::scene::Material]) -> bool {
+pub(crate) fn has_layers(materials: &[ara_frame::scene::Material]) -> bool {
     materials.iter().any(|m| {
         m.flags[3] == 0x4152_4132 && ((m.flags[1] & 0xff00ff) != 0 || (m.flags[2] & 0xffffff) != 0)
     })
@@ -42,7 +42,7 @@ impl Default for MaterialDetail {
 }
 impl MaterialDetail {
     /// Encode validated linear parameters into the snapshot's reserved words.
-    pub fn apply(self, material: &mut ara_render::scene::Material) -> Result<()> {
+    pub fn apply(self, material: &mut ara_frame::scene::Material) -> Result<()> {
         ensure!(
             [self.clearcoat, self.transmission, self.specular]
                 .into_iter()
@@ -54,7 +54,7 @@ impl MaterialDetail {
         );
         let byte = |v: f32| (v * 255.).round() as u32;
         let color_decode = material.flags[1]
-            & (ara_render::scene::BASE_COLOR_DECODE_SRGB | ara_render::scene::EMISSIVE_DECODE_SRGB);
+            & (ara_frame::scene::BASE_COLOR_DECODE_SRGB | ara_frame::scene::EMISSIVE_DECODE_SRGB);
         material.flags[1] = color_decode
             | byte(self.clearcoat)
             | (byte(self.coat_roughness) << 8)
@@ -74,10 +74,10 @@ mod tests {
     use super::*;
     #[test]
     fn tagged_layers_preserve_alpha_contract_and_reject_invalid_energy() {
-        let mut m = ara_render::scene::Material::default();
+        let mut m = ara_frame::scene::Material::default();
         m.flags[0] = 1;
         m.flags[1] =
-            ara_render::scene::BASE_COLOR_DECODE_SRGB | ara_render::scene::EMISSIVE_DECODE_SRGB;
+            ara_frame::scene::BASE_COLOR_DECODE_SRGB | ara_frame::scene::EMISSIVE_DECODE_SRGB;
         MaterialDetail {
             transmission: 0.25,
             ..MaterialDetail::default()
@@ -87,8 +87,8 @@ mod tests {
         assert_eq!(m.flags[0], 1);
         assert_eq!(m.flags[3], 0x4152_4132);
         assert_eq!((m.flags[1] >> 16) & 255, 64);
-        assert_ne!(m.flags[1] & ara_render::scene::BASE_COLOR_DECODE_SRGB, 0);
-        assert_ne!(m.flags[1] & ara_render::scene::EMISSIVE_DECODE_SRGB, 0);
+        assert_ne!(m.flags[1] & ara_frame::scene::BASE_COLOR_DECODE_SRGB, 0);
+        assert_ne!(m.flags[1] & ara_frame::scene::EMISSIVE_DECODE_SRGB, 0);
         assert!(
             MaterialDetail {
                 clearcoat: f32::NAN,

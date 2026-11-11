@@ -2,7 +2,7 @@
 //! fixture geometry is made of tessellated boxes, so the hit is analytic.
 use super::fixture::Fixture;
 use anyhow::Result;
-use ara_render::capture::Capture;
+use ara_frame::capture::Capture;
 use glam::{Mat4, Vec3, Vec4};
 use std::collections::BTreeMap;
 
@@ -29,7 +29,7 @@ pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<Coverage> {
         .map(|l| l.position_range[3])
         .fold(0.1, f32::max);
     let key = |p: Vec3| (p / cell).floor().as_ivec3().to_array();
-    let mut grid = BTreeMap::<[i32; 3], Vec<&ara_render::scene::Light>>::new();
+    let mut grid = BTreeMap::<[i32; 3], Vec<&ara_frame::scene::Light>>::new();
     for l in &f.scene.lights {
         grid.entry(key(Vec3::from_slice(&l.position_range)))
             .or_default()

@@ -2,10 +2,7 @@ use super::{
     contract::{Case, FrameScript},
     geometry::{add, cube, material},
 };
-use ara_render::{
-    instanced::Scene,
-    scene::{CameraSpec, Light},
-};
+use ara_frame::{instanced::Scene, scene::{CameraSpec, Light}};
 use glam::{Mat4, Quat, Vec3};
 
 pub struct Fixture {

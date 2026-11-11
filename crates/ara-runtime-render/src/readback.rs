@@ -1,7 +1,8 @@
 //! Explicit capture-only readback of a completed native presenter image.
 use anyhow::{Context, Result};
 use ara_gpu::{Access, Barrier, Device, Image, Queue, Resource, commands::Command, vk};
-use ara_render::{Renderer, capture::Capture};
+use ara_frame::{capture::Capture};
+use ara_render::{Renderer};
 
 /// Reads a completed `CopySource` RGBA8 image of `size` as tightly packed rows.
 pub fn read_rgba8(gpu: &mut ara_gpu::GpuDevice, image: Image, size: [u32; 2]) -> Result<Vec<u8>> {

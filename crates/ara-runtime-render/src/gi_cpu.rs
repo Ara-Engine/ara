@@ -13,13 +13,10 @@
 //! with [`bounce_albedo`]; alpha-tested and blended surfaces let rays through by the
 //! [`Cutout`] texel each hit lands on.
 use anyhow::{Context, Result, ensure};
-use ara_render::{
-    instanced::{Geometry, Scene},
-    look::gi::{
+use ara_frame::{instanced::{Geometry, Scene}, look::gi::{
         MOMENT_VECTORS, ProbeLattice, ProbeLayout, ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS,
         moment_limit, pack_moments,
-    },
-};
+    }};
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{
@@ -1370,7 +1367,7 @@ fn probe(
             (n.x * 1023.).round() as u32
                 | ((n.y * 1023.).round() as u32) << 10
                 | (ray as u32) << 20
-                | ara_render::look::gi::log_distance(parallax) << 24,
+                | ara_frame::look::gi::log_distance(parallax) << 24,
             rgb9e5(emissive),
             mask | half_bits(distance) << 16,
         ];
@@ -1382,7 +1379,7 @@ fn probe(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ara_render::instanced::{Instance, Lod, NO_TEXTURE, Vertex};
+    use ara_frame::instanced::{Instance, Lod, NO_TEXTURE, Vertex};
 
     #[test]
     fn allocation_layout_precedes_a_blocked_bake_and_matches_the_delivered_payload() -> Result<()> {
@@ -1575,7 +1572,7 @@ mod tests {
             v.terrain_weights = u32::from_le_bytes([64, 192, 0, 0]);
         }
         let mut scene = scene(vec![ground]);
-        let mut terrain = ara_render::instanced::Material::default();
+        let mut terrain = ara_frame::instanced::Material::default();
         terrain.extras.terrain_layers = 2;
         terrain.extras.layer_materials = [1, 2, NO_TEXTURE, NO_TEXTURE];
         scene.materials = vec![terrain, Default::default(), Default::default()];

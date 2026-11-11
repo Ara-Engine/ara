@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Presenter, QualityChoice, QualityPreset};
-use ara_render::capture::ViewMode;
+use ara_frame::capture::ViewMode;
 use ara_runtime::extract::EffectView;
 
 #[test]

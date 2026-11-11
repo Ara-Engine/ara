@@ -17,12 +17,9 @@
 //! what it needs and [`Job::run`] traces.
 use crate::gi_cpu::{Mesh, Shading};
 use anyhow::{Context, Result};
-use ara_render::{
-    instanced::{
+use ara_frame::{instanced::{
         Geometry, Lod, Material, NO_TEXTURE, Scene, TextureSlot, TextureTransform, Vertex,
-    },
-    scene::{EMISSIVE_DECODE_SRGB, LIGHT_DISC, LIGHT_RECT, Light},
-};
+    }, scene::{EMISSIVE_DECODE_SRGB, LIGHT_DISC, LIGHT_RECT, Light}};
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -33,7 +30,7 @@ use std::{
 /// Emitted radiance (mean luminance, cd/m2) above which a material lights the
 /// scene directly; dimmer glow stays in the probe volume. Shared with the renderer,
 /// whose screen probes then skip that emission.
-use ara_render::look::EMITTER_RADIANCE;
+use ara_frame::look::EMITTER_RADIANCE;
 /// Flux (lumens) below which a lobe is too dim to be a light.
 const MIN_FLUX: f32 = 1.;
 /// Illuminance (lux) at which a light's influence ends.
@@ -887,7 +884,7 @@ impl Part {
             ],
             // Unshadowed, so kept out of fog in-scattering (w: no volumetric scattering).
             parameters: [f32::from(u8::from(spot)), 1., self.radius, 0.],
-            ..ara_render::scene::Light::ZERO
+            ..ara_frame::scene::Light::ZERO
         }
     }
 }
@@ -922,7 +919,7 @@ fn cluster(parts: &[Part], cell: f32) -> Vec<Part> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ara_render::instanced::Instance;
+    use ara_frame::instanced::Instance;
 
     fn part(x: f32, flux: f32, direction: Vec3) -> Part {
         Part {

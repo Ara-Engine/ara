@@ -5,7 +5,7 @@
 //! and foliage) by depth instead, so the presenter adds these draws only to frames it
 //! presents.
 use crate::geometry::Source;
-use ara_render::scene;
+use ara_frame::scene;
 use ara_runtime::{model::ModelVertex, terrain::TerrainData};
 use ara_terrain::{Tile, TileCoord};
 use glam::Vec3;

@@ -5,7 +5,7 @@ pub(super) fn check(
     gpu: &mut GpuDevice,
     view: &mut FidelityView,
     scene: &mut NativeScene,
-    camera: &ara_render::scene::CameraSpec,
+    camera: &ara_frame::scene::CameraSpec,
     size: [u32; 2],
     output: &std::path::Path,
 ) -> Result<()> {

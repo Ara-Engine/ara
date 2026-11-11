@@ -124,7 +124,7 @@ pub(super) fn pack_motion(
 
 /// Glass and other transmissive materials (KHR_materials_transmission): ray queries
 /// resolve them in the non-opaque traversal, and shadow rays pass through them.
-fn transmissive(material: &ara_render::instanced::Material) -> bool {
+fn transmissive(material: &ara_frame::instanced::Material) -> bool {
     material.extras.transmission_factor > 0.
 }
 
@@ -213,7 +213,7 @@ fn emitters(scene: &NativeScene, out: &mut Vec<u8>) -> Result<(u32, u32, f32)> {
                 instance.material as u32,
                 0,
             ]));
-            let cached = if m.textures[3] == ara_render::instanced::NO_TEXTURE {
+            let cached = if m.textures[3] == ara_frame::instanced::NO_TEXTURE {
                 [
                     m.emissive_roughness[0],
                     m.emissive_roughness[1],

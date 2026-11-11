@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, Barrier, Device, GpuDevice, Queue, Resource, vk, vulkan::Command};
 use ara_render::graph::State;
-use ara_render::scene::{CameraSpec, Mesh, Vertex};
+use ara_frame::scene::{CameraSpec, Mesh, Vertex};
 use ara_render_fidelity::{
     FidelityView, FrameInput, ImageInput, Mode, PostSettings, Settings, SunShadowSource, Tier,
     Upscaler,

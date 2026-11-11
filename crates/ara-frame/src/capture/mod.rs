@@ -131,7 +131,7 @@ impl ViewMode {
         }
     }
     /// The debug view ID shaders read (`Frame.temporal.z`): lit modes are 0.
-    pub(crate) fn shader_mode(self) -> u32 {
+    pub fn shader_mode(self) -> u32 {
         if self.lit() { 0 } else { self as u32 }
     }
 }
@@ -250,11 +250,17 @@ pub struct ShaderMetadata {
     /// Hash of the shared native-backend binding contract.
     pub binding_layout_hash: String,
 }
-pub(crate) struct CaptureContext<'a> {
+/// Names, provenance and timings a capture is assembled from.
+pub struct CaptureContext<'a> {
+    /// Entity id and label pairs, in render-id order.
     pub names: &'a [(u64, String)],
+    /// Content hash of the captured scene.
     pub hash: &'a str,
+    /// The device that produced the image.
     pub device: &'a DeviceInfo,
+    /// Pass timings for the captured frame.
     pub timings: &'a [PassTiming],
+    /// Shader cohort that drew it.
     pub shaders: &'a ShaderMetadata,
 }
 /// Owned capture channels with stable pixel-to-entity lookup.
@@ -303,7 +309,8 @@ impl Capture {
             },
         )
     }
-    pub(crate) fn from_render(
+    /// Assemble a capture from a renderer readback.
+    pub fn from_render(
         rgba: Vec<u8>,
         ids: Vec<u32>,
         request: &CaptureRequest,

@@ -1,7 +1,7 @@
 //! The scene's authored look (`ara_components::render`: `SkyAtmosphere`, `HeightFog`,
 //! and the post-process volumes blended for the camera) mapped onto fidelity view
 //! inputs, and the matching approximation for the raster renderer
-//! (`ara_render::look::Look`): the same GPU sky, fog, exposure, grading and tone mapper.
+//! (`ara_frame::look::Look`): the same GPU sky, fog, exposure, grading and tone mapper.
 //!
 //! Hosts call [`FrameEnvironment::resolve`] each frame with the position of the camera
 //! they draw from (volumes blend by it), then [`FidelityView::set_environment`]
@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 use ara_components::render::{ExposureMode, SceneLook, SkyAtmosphere, ToneMapping};
-use ara_render::look::atmosphere::{Atmosphere as SkyModel, AtmosphereLight, LightAtmosphere};
+use ara_frame::look::atmosphere::{Atmosphere as SkyModel, AtmosphereLight, LightAtmosphere};
 use glam::Vec3;
 
 /// Fidelity atmosphere and post controls derived from a scene look. Lens and
@@ -32,8 +32,8 @@ pub struct FrameEnvironment {
     /// Automatic metering limits.
     pub auto_exposure: AutoExposure,
     /// Automatic exposure's compensation by metered brightness (raster renderer,
-    /// `ara_render::look::AutoExposure::compensation_curve`); all zero adds none.
-    pub compensation_curve: [[f32; 2]; ara_render::look::EXPOSURE_CURVE_KEYS],
+    /// `ara_frame::look::AutoExposure::compensation_curve`); all zero adds none.
+    pub compensation_curve: [[f32; 2]; ara_frame::look::EXPOSURE_CURVE_KEYS],
     /// Display curve.
     pub tone_mapper: ToneMapper,
     /// Bloom energy fraction.
@@ -43,11 +43,11 @@ pub struct FrameEnvironment {
     /// Display-space lift, gamma and gain after the tone curve (raster renderer).
     pub display: [[f32; 3]; 3],
     /// Chromatic aberration, depth of field and motion blur (raster renderer).
-    pub lens: ara_render::look::Lens,
+    pub lens: ara_frame::look::Lens,
     /// Screen-space ambient occlusion tuning over the preset's (raster renderer).
-    pub ao: ara_render::look::AoTuning,
+    pub ao: ara_frame::look::AoTuning,
     /// Screen-space reflection tuning over the preset's (raster renderer).
-    pub ssr: ara_render::look::SsrTuning,
+    pub ssr: ara_frame::look::SsrTuning,
     /// The colour lookup table graded through last: an index into the resolved
     /// `SceneLook::luts` (raster renderer, `Renderer::set_color_lut`).
     pub lut: Option<u32>,
@@ -109,7 +109,7 @@ impl FrameEnvironment {
                 compensation: 0.,
                 adaptation: 2.,
                 auto_exposure: AutoExposure::default(),
-                compensation_curve: [[0.; 2]; ara_render::look::EXPOSURE_CURVE_KEYS],
+                compensation_curve: [[0.; 2]; ara_frame::look::EXPOSURE_CURVE_KEYS],
                 tone_mapper: ToneMapper::Filmic,
                 bloom: 0.04,
                 grading: Grading::default(),
@@ -137,7 +137,7 @@ impl FrameEnvironment {
                 maximum_ev100: high.min(32.).max(low.max(-24.) + 0.01),
                 ..AutoExposure::default()
             },
-            compensation_curve: ara_render::look::AutoExposure::curve(
+            compensation_curve: ara_frame::look::AutoExposure::curve(
                 &p.compensation_curve
                     .iter()
                     .map(|k| [k.ev100, k.stops])
@@ -164,11 +164,11 @@ impl FrameEnvironment {
                 p.gain.map(|c| c.clamp(0., 10.)),
             ],
             lens: lens(&p),
-            ao: ara_render::look::AoTuning {
+            ao: ara_frame::look::AoTuning {
                 intensity: p.ao_intensity.clamp(0., 4.),
                 radius: over_preset(p.ao_radius),
             },
-            ssr: ara_render::look::SsrTuning {
+            ssr: ara_frame::look::SsrTuning {
                 intensity: p.reflection_intensity.clamp(0., 1.),
                 distance: over_preset(p.reflection_distance),
             },
@@ -265,10 +265,10 @@ impl FrameEnvironment {
 
     /// The same look for the raster renderer (`ara_render::Renderer::set_look`):
     /// the physical sky (with its cloud layer) and height fog run on the GPU there too.
-    pub fn raster(&self) -> ara_render::look::Look {
-        use ara_render::look::{
-            AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
-        };
+    pub fn raster(&self) -> ara_frame::look::Look {
+        use ara_frame::look::{
+                    AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
+                };
         let a = self.auto_exposure;
         Look {
             curve: match self.tone_mapper {
@@ -328,7 +328,7 @@ impl FrameEnvironment {
                     tint: a.fog_tint,
                     albedo: a.fog_albedo,
                     anisotropy: a.fog_anisotropy,
-                    volumetric: a.fog_volumetric.then_some(ara_render::look::VolumetricFog {
+                    volumetric: a.fog_volumetric.then_some(ara_frame::look::VolumetricFog {
                         distance: a.fog_volumetric_distance,
                         emissive: a.fog_emissive,
                         extinction_scale: a.fog_extinction_scale,
@@ -358,11 +358,11 @@ impl FidelityView {
 /// The scene's local fog volumes for the raster renderer
 /// (`ara_render::Renderer::set_fog_volumes`), seen from `camera` (world position):
 /// the highest priority first, then the nearest (distance to each box's surface),
-/// ties in entity order; at most `ara_render::look::MAX_FOG_VOLUMES`. Volumes with
+/// ties in entity order; at most `ara_frame::look::MAX_FOG_VOLUMES`. Volumes with
 /// non-finite poses or no extent are skipped; values clamp into their ranges.
-pub fn fog_volumes(look: &SceneLook, camera: Vec3) -> Vec<ara_render::look::FogVolume> {
+pub fn fog_volumes(look: &SceneLook, camera: Vec3) -> Vec<ara_frame::look::FogVolume> {
     use ara_components::render::FogVolumeShape;
-    use ara_render::look::{FogVolume, FogVolumeShape as Shape, MAX_FOG_VOLUMES};
+    use ara_frame::look::{FogVolume, FogVolumeShape as Shape, MAX_FOG_VOLUMES};
     let clean = |c: f32| if c.is_finite() { c.max(0.) } else { 0. };
     let mut volumes: Vec<(i32, f32, FogVolume)> = look
         .fog_volumes
@@ -411,11 +411,11 @@ pub fn fog_volumes(look: &SceneLook, camera: Vec3) -> Vec<ara_render::look::FogV
 
 /// A volume blend's lens effects: depth of field where the focus distance is positive,
 /// motion blur for an open shutter (angle over 360°).
-fn lens(p: &ara_components::post::PostValues) -> ara_render::look::Lens {
-    ara_render::look::Lens {
+fn lens(p: &ara_components::post::PostValues) -> ara_frame::look::Lens {
+    ara_frame::look::Lens {
         chromatic_aberration: p.chromatic_aberration.clamp(0., 1.),
         depth_of_field: (p.focus_distance > 0. && p.focus_distance.is_finite()).then(|| {
-            ara_render::look::DepthOfField {
+            ara_frame::look::DepthOfField {
                 focus_distance: p.focus_distance,
                 aperture: p.aperture.clamp(0.7, 32.),
                 near: p.near_blur.clamp(0., 1.),
@@ -427,9 +427,9 @@ fn lens(p: &ara_components::post::PostValues) -> ara_render::look::Lens {
 }
 
 /// A volume blend's preset-relative value (finite, non-negative share).
-fn over_preset(v: ara_components::post::PresetBlend) -> ara_render::look::OverPreset {
+fn over_preset(v: ara_components::post::PresetBlend) -> ara_frame::look::OverPreset {
     let finite = |x: f32, or: f32| if x.is_finite() { x } else { or };
-    ara_render::look::OverPreset {
+    ara_frame::look::OverPreset {
         keep: finite(v.keep, 1.).max(0.),
         add: finite(v.add, 0.),
     }

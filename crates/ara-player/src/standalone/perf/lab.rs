@@ -73,7 +73,7 @@ pub(super) struct TemporalRequest {
     config: Value,
 }
 struct Captured {
-    image: ara_render::capture::Capture,
+    image: ara_frame::capture::Capture,
     render_ms: f64,
     #[cfg(feature = "fidelity-lab")]
     transform: std::result::Result<display::Transform, String>,
@@ -111,7 +111,7 @@ impl Capture {
                     &image.image,
                     ara_pathtrace::flip::PIXELS_PER_DEGREE,
                 )?;
-                let compare = ara_render::capture::compare(&image.image, &reference, 2.)?;
+                let compare = ara_frame::capture::compare(&image.image, &reference, 2.)?;
                 let diff = self.directory.join(format!("{shot}-diff.png"));
                 compare.diff.save(&diff)?;
                 metrics["ldr_secondary"] = json!({"flip":flip.mean,"ssim":1.-compare.score,"diff":diff,"reference_resized":resized});

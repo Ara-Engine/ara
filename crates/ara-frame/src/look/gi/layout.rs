@@ -24,7 +24,7 @@ impl ProbeLattice {
     }
 
     /// Shading's surface bias for this lattice's probes, in metres.
-    pub(crate) fn bias(&self) -> f32 {
+    pub fn bias(&self) -> f32 {
         (self.spacing.iter().copied().fold(f32::INFINITY, f32::min) * 0.2).min(0.15)
     }
 }

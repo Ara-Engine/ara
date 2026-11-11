@@ -21,7 +21,7 @@ use super::{
     render::{Options, camera},
 };
 use anyhow::{Context, Result};
-use ara_render::capture::{CaptureRequest, ViewMode};
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use ara_render_fidelity::{environment::FrameEnvironment, settings::exposure_from_ev100};
 use ara_runtime::extract::{CameraView, RenderFrame};
 use ara_runtime_render::Presenter;

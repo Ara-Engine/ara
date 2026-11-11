@@ -102,7 +102,7 @@ impl BakedProbes {
     /// classification keeps out of shading, on the automatic lattice an RT view of
     /// the scene would use and under its provenance. For Raster/Mobile views of scenes
     /// no RT view baked, such as goldens on devices without RT-tier fidelity.
-    pub fn unbaked(scene: &ara_render::scene::Scene) -> Result<Self> {
+    pub fn unbaked(scene: &ara_frame::scene::Scene) -> Result<Self> {
         let (scene_hash, [min, max]) = crate::scene::fingerprint(scene)?;
         let volume = ProbeVolume::automatic(min, max)?;
         Ok(Self {

@@ -38,7 +38,7 @@ fn native_ui_matches_the_cpu_reference() -> ara_ui::Result<()> {
         actual.save(output.join(format!("gpu-{name}.png")))?;
         reference.save(output.join(format!("cpu-{name}.png")))?;
         // The GPU/CPU contract: local SSIM loss <= 0.01.
-        let comparison = ara_render::capture::compare(&reference, &actual, 0.01)?;
+        let comparison = ara_frame::capture::compare(&reference, &actual, 0.01)?;
         comparison
             .diff
             .save(output.join(format!("gpu-cpu-{name}.diff.png")))?;
@@ -102,7 +102,7 @@ fn satin_materials_and_glass_match_the_cpu_reference() -> ara_ui::Result<()> {
         .ok_or("CPU reference extent")?;
     actual.save(output.join("gpu-satin.png"))?;
     reference.save(output.join("cpu-satin.png"))?;
-    let comparison = ara_render::capture::compare(&reference, &actual, 0.01)?;
+    let comparison = ara_frame::capture::compare(&reference, &actual, 0.01)?;
     comparison
         .diff
         .save(output.join("gpu-cpu-satin.diff.png"))?;

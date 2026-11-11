@@ -1,5 +1,5 @@
 //! Deterministic branch/leaf geometry over the exact landscape height function.
-use ara_render::scene::{Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{Mesh, Scene, Texture, Vertex};
 use glam::Vec3;
 
 pub(crate) fn populate(scene: &mut Scene) -> anyhow::Result<()> {
