@@ -18,6 +18,9 @@ use crate::inspector::{Field, Provenance, Widget};
 
 /// The label column's share of a row (Unity's 40/60 split).
 const LABEL: f32 = 0.4;
+/// A vector row's label share: its editor is three cells wide and needs the room in a narrow
+/// Inspector (a number cut at its left edge is worse than a shorter label column).
+const VECTOR_LABEL: f32 = 0.22;
 /// A field row's height.
 const ROW: f32 = super::style::ROW;
 
@@ -599,10 +602,14 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
         Provenance::Override => c.info.0,
         _ => c.primary.0.with_alpha(0.7),
     };
+    let share = match &f.widget {
+        Widget::Vector { color: false, .. } => VECTOR_LABEL,
+        _ => LABEL,
+    };
     let mut label = row()
         .w(0.0)
-        .grow(LABEL)
-        .min_w(84.0)
+        .grow(share)
+        .min_w(if share < LABEL { 64.0 } else { 84.0 })
         .h(ROW)
         .gap(6.0)
         .align(Align::Center)
@@ -642,7 +649,7 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
         out = out.overlay(field_menu(s, f, value).at(*x, *y));
     }
     out.child(label)
-        .child(editor(s, f).w(0.0).grow(1.0 - LABEL).min_w(0.0))
+        .child(editor(s, f).w(0.0).grow(1.0 - share).min_w(0.0))
 }
 
 /// A label that scrubs a number: 8 px per step to the right, Shift for a tenth, Alt for ten.
@@ -946,7 +953,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 let path = f.path.clone();
                 let tag = scrubbable(
                     el().key(format!("field/{}/{axis}/scrub", f.path))
-                        .w(14.0)
+                        .w(8.0)
+                        .min_w(8.0)
                         .h(22.0)
                         .align(Align::Center)
                         .justify(Justify::Center)
@@ -968,7 +976,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                         .grow(1.0)
                         .w(0.0)
                         .h(ROW)
-                        .pad_x(2.0)
+                        .pad_x(1.0)
                         .align(Align::Center)
                         .radius(l.radius.xs)
                         .fill(l.well())
@@ -985,6 +993,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                                 move |s, v| commit_number(s, &path, Some(axis), v),
                             )
                             .grow(1.0)
+                            // The cell is narrow in a small window: the digits get the room.
+                            .pad_x(1.0)
                             .fill(stillkit::Rgba::TRANSPARENT)
                             .border(0.0, stillkit::Rgba::TRANSPARENT),
                         ),
