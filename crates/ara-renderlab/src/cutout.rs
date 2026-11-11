@@ -33,6 +33,41 @@ pub(crate) fn coverage(size: [u32; 2], rgba: &[u8], factor: u32) -> AlphaMask {
     }
 }
 
+/// What a base-colour map's alpha does over the surface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Alpha {
+    /// Every texel is there: the surface is opaque whatever its blend mode says.
+    Opaque,
+    /// Texels are there or not, with soft edges at most: a cut-out.
+    Binary,
+    /// Much of what shows is partly there: glass, smoke, a decal's fade.
+    Partial,
+}
+
+/// A texel at or above this alpha is fully there, and at or below `CLEAR` it is gone.
+const SOLID: u8 = 243;
+const CLEAR: u8 = 12;
+/// A map is `Partial` when more than this share of its visible texels is partly there.
+/// A cut-out's soft edges stay under it; a pane of glass is all of it.
+const PARTIAL_SHARE: f32 = 0.15;
+
+/// The class of a map's alpha from its `rgba` texels.
+pub(crate) fn alpha(rgba: &[u8]) -> Alpha {
+    let (mut visible, mut partly, mut least) = (0usize, 0usize, u8::MAX);
+    for a in rgba.iter().skip(3).step_by(4) {
+        least = least.min(*a);
+        visible += usize::from(*a > CLEAR);
+        partly += usize::from(*a > CLEAR && *a < SOLID);
+    }
+    if least >= SOLID {
+        Alpha::Opaque
+    } else if partly as f32 > PARTIAL_SHARE * visible as f32 {
+        Alpha::Partial
+    } else {
+        Alpha::Binary
+    }
+}
+
 /// Whether a mask of `rgba` texels over `vertices` passes everywhere: a masked material
 /// whose map is opaque throughout. Such a mesh is drawn as it is; cutting it would
 /// only multiply its triangles along the grid.
@@ -113,6 +148,25 @@ pub(crate) fn tangents(vertices: &[Vertex], indices: &[u32]) -> Option<TangentSt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_map_is_opaque_cut_out_or_partly_there_by_its_texels() {
+        let map = |alphas: &[u8]| -> Vec<u8> { alphas.iter().flat_map(|a| [9, 9, 9, *a]).collect() };
+        // No alpha at all (a JPG under a BLEND material): opaque.
+        assert_eq!(alpha(&map(&[255; 64])), Alpha::Opaque);
+        // A leaf card: gone or there, with a soft edge on one texel in sixteen.
+        let mut leaf = [0u8; 64];
+        leaf[32..].fill(255);
+        leaf[30] = 128;
+        leaf[31] = 128;
+        assert_eq!(alpha(&map(&leaf)), Alpha::Binary);
+        // A pane of glass: partly there everywhere.
+        assert_eq!(alpha(&map(&[80; 64])), Alpha::Partial);
+        // A decal that fades over a third of what shows.
+        let mut fade = [255u8; 64];
+        fade[..24].fill(120);
+        assert_eq!(alpha(&map(&fade)), Alpha::Partial);
+    }
 
     /// A unit quad facing +Z with u to the right and v down the image, as glTF maps it.
     fn quad() -> (Vec<Vertex>, Vec<u32>) {

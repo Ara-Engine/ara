@@ -91,6 +91,36 @@ pub(crate) struct Scene {
     glow_means: HashMap<u64, [f32; 3]>,
     /// Triangles of the largest mesh uploaded so far (`largest_triangles`).
     largest: usize,
+    /// What each blended material's base-colour map does with its alpha.
+    coverage: Coverage,
+}
+
+/// The alpha class (`cutout::Alpha`) of base-colour maps already looked at, by the
+/// identity of their KTX2 bytes. Each entry keeps a weak handle on those bytes, so an
+/// address is never reused while its entry lives; `prune` drops entries of freed maps.
+#[derive(Default)]
+struct Coverage {
+    known: HashMap<(usize, usize), (std::sync::Weak<[u8]>, cutout::Alpha)>,
+}
+
+impl Coverage {
+    /// The class of `texture`'s alpha, decoded on first sight. A map that does not
+    /// decode counts as opaque here; uploading it reports the error.
+    fn of(&mut self, texture: &ModelTexture) -> cutout::Alpha {
+        let key = (texture.ktx2.as_ptr() as usize, texture.ktx2.len());
+        self.known
+            .entry(key)
+            .or_insert_with(|| {
+                let class = ara_runtime_render::decode_texture(&texture.ktx2)
+                    .map_or(cutout::Alpha::Opaque, |decoded| cutout::alpha(&decoded.rgba));
+                (std::sync::Arc::downgrade(&texture.ktx2), class)
+            })
+            .1
+    }
+
+    fn prune(&mut self) {
+        self.known.retain(|_, (bytes, _)| bytes.strong_count() > 0);
+    }
 }
 
 /// Where a material's textures carry its emissive map (`texture::with_glow`): red in
@@ -181,34 +211,57 @@ struct Cut<'a> {
     cutoff: f32,
 }
 
-/// The cut a draw's material asks for: an alpha mask over a base-colour map. None for
-/// opaque materials and for blended ones, which are see-through instead.
-fn cut(draw: &Draw) -> Option<Cut<'_>> {
+/// The cut a draw's material asks for: an alpha mask over a base-colour map, or a
+/// blended material whose map is there-or-not (`cutout::Alpha::Binary`), cut at half
+/// coverage. Both stay in the opaque path. None for opaque materials and for blended
+/// ones that are really see-through (`blends`).
+fn cut<'a>(draw: &'a Draw, coverage: &mut Coverage) -> Option<Cut<'a>> {
     let (m, textures) = source(draw)?;
-    (m.alpha_mode == 1).then_some(())?;
+    let texture = textures.get(m.base_color_texture?)?;
+    let opacity = m.base_color[3] * draw.color[3];
+    let cutoff = match m.alpha_mode {
+        1 => m.alpha_cutoff,
+        2 if opacity >= 1. && coverage.of(texture) == cutout::Alpha::Binary => 0.5,
+        _ => return None,
+    };
     Some(Cut {
-        texture: textures.get(m.base_color_texture?)?,
-        opacity: m.base_color[3] * draw.color[3],
-        cutoff: m.alpha_cutoff,
+        texture,
+        opacity,
+        cutoff,
     })
 }
 
-/// Whether a material blends: by an alpha factor below one, or by its base-colour
-/// map's alpha (an opacity map). Renderlab's transparent pass takes both as coverage.
-fn blends(m: &ModelMaterial, opacity: f32) -> bool {
-    m.alpha_mode == 2 && (opacity < 1. || m.base_color_texture.is_some())
+/// Whether a material blends: by an alpha factor below one, or by a base-colour map
+/// with partial coverage (an opacity map; `cutout::Alpha::Partial`). Renderlab's
+/// transparent pass takes both as coverage. A blended material whose map has no alpha
+/// is opaque, and one whose map is there-or-not is cut (`cut`): transparency costs
+/// Renderlab milliseconds a frame, so only what is seen through pays for it.
+fn blends(
+    m: &ModelMaterial,
+    textures: &[ModelTexture],
+    opacity: f32,
+    coverage: &mut Coverage,
+) -> bool {
+    m.alpha_mode == 2
+        && (opacity < 1.
+            || m.base_color_texture
+                .and_then(|index| textures.get(index))
+                .is_some_and(|map| coverage.of(map) == cutout::Alpha::Partial))
 }
 
 /// Whether the draw can be seen through (as `Scene::material` decides): such draws
 /// sort per object and never join a static batch.
-fn see_through(draw: &Draw) -> bool {
+fn see_through(draw: &Draw, coverage: &mut Coverage) -> bool {
     match source(draw) {
-        Some((m, _)) => m.transmission_factor > 0. || blends(m, m.base_color[3] * draw.color[3]),
+        Some((m, textures)) => {
+            m.transmission_factor > 0.
+                || blends(m, textures, m.base_color[3] * draw.color[3], coverage)
+        }
         None => draw.color[3] < 1.,
     }
 }
 
-fn geometry_key(draw: &Draw) -> u64 {
+fn geometry_key(draw: &Draw, coverage: &mut Coverage) -> u64 {
     let hash = match &draw.geometry {
         Geometry::Shape { shape, size } => size.iter().fold(fnv(FNV, &[*shape as u8]), |h, v| {
             fnv(h, &v.to_bits().to_le_bytes())
@@ -221,7 +274,7 @@ fn geometry_key(draw: &Draw) -> u64 {
     let hash = fnv(hash, &[u8::from(normal_mapped(draw))]);
     // Cut geometry belongs to its mask as much as to its triangles: the material key
     // names the mask's texture, opacity and cutoff.
-    match cut(draw) {
+    match cut(draw, coverage) {
         Some(_) => fnv(hash, &material_key(draw).to_le_bytes()),
         None => hash,
     }
@@ -402,6 +455,7 @@ impl Scene {
     ) -> Result<()> {
         let budget = MAX_GROUPS.saturating_sub(reserved);
         let settled = self.static_key == Some(static_key);
+        self.coverage.prune();
         // Each draw's group, and the groups in order of first appearance.
         let mut keyed = Vec::with_capacity(frame.draws.len() + static_draws.len());
         let mut index: HashMap<(MeshKey, u64), usize> = HashMap::new();
@@ -420,7 +474,7 @@ impl Scene {
             let (mesh, material) = placed.unwrap_or_else(|| {
                 let mesh = match draw.skin {
                     Some(_) => MeshKey::Skinned(draw.entity),
-                    None => MeshKey::Static(geometry_key(draw)),
+                    None => MeshKey::Static(geometry_key(draw, &mut self.coverage)),
                 };
                 (mesh, material_key(draw))
             });
@@ -429,8 +483,8 @@ impl Scene {
                     material,
                     // Cut geometry comes from its own upload, so it never joins a batch.
                     mergeable: matches!(mesh, MeshKey::Static(_))
-                        && !see_through(draw)
-                        && cut(draw).is_none(),
+                        && !see_through(draw, &mut self.coverage)
+                        && cut(draw, &mut self.coverage).is_none(),
                     objects: 0,
                 });
                 groups.len() - 1
@@ -520,7 +574,7 @@ impl Scene {
             let content = members
                 .iter()
                 .fold(fnv(FNV, &material.to_le_bytes()), |h, draw| {
-                    let h = fnv(h, &geometry_key(draw).to_le_bytes());
+                    let h = fnv(h, &geometry_key(draw, &mut self.coverage).to_le_bytes());
                     draw.world
                         .to_cols_array()
                         .iter()
@@ -608,7 +662,8 @@ impl Scene {
                 }
                 (MeshKey::Skinned(_), joints) => {
                     let joints = joints.unwrap_or(0);
-                    let (id, tangents) = skinned_mesh(engine, draw, joints, gaps)?;
+                    let (id, tangents) =
+                        skinned_mesh(engine, draw, joints, &mut self.coverage, gaps)?;
                     (id, Some((id, joints)), tangents)
                 }
             };
@@ -703,7 +758,7 @@ impl Scene {
         let (mut source, mut indices) = triangles(draw)?;
         let label = format!("`{}`", draw.label);
         // A mask that hides nothing is no cut: the mesh uploads as it is, below.
-        if let Some(c) = cut(draw)
+        if let Some(c) = cut(draw, &mut self.coverage)
             && let Some(cut) = cut_mesh(engine, &label, &source, &indices, &c, wanted, gaps)?
         {
             self.largest = self.largest.max(cut.triangles);
@@ -811,11 +866,12 @@ impl Scene {
                     "occlusion comes from traced GI only",
                 );
             }
-            // A blended material is see-through, by its alpha factor and its base-colour
-            // map's alpha (`blends`). An alpha mask is cut into the geometry (`cut`);
-            // the material itself is then opaque.
-            blend = blends(m, desc.base_color[3]);
-            if m.alpha_mode == 1 && m.base_color_texture.is_some() {
+            // A blended material is see-through by its alpha factor or by a base-colour
+            // map with partial coverage (`blends`). An alpha mask, or a blended map
+            // that is there-or-not, is cut into the geometry (`cut`); the material
+            // itself is then opaque.
+            blend = blends(m, textures, desc.base_color[3], &mut self.coverage);
+            if !blend && m.base_color_texture.is_some() {
                 desc.base_color[3] = 1.;
             }
             // glTF transmission belongs to the dielectric part only: a metal does not
@@ -1160,9 +1216,10 @@ fn skinned_mesh(
     engine: &mut Engine,
     draw: &Draw,
     joints: usize,
+    coverage: &mut Coverage,
     gaps: &mut Gaps,
 ) -> Result<(MeshId, bool)> {
-    if cut(draw).is_some() {
+    if cut(draw, coverage).is_some() {
         gaps.unsupported(
             "alpha masks on skinned meshes",
             "those primitives draw opaque, without cutouts",
