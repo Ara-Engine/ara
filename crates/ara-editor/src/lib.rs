@@ -29,6 +29,7 @@ pub(crate) mod hierarchy_actions;
 pub(crate) mod hub_launch;
 pub(crate) mod ide;
 pub(crate) mod import_edit;
+pub(crate) mod import_gate;
 mod interaction;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;

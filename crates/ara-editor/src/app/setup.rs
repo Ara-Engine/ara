@@ -118,6 +118,14 @@ impl Options {
             || self.headless
     }
 
+    /// Nobody is at the window: a background start (`--background`, `ARA_EDITOR_BACKGROUND=1`)
+    /// or any bounded, captured or headless run. The studio's import gate opens by itself
+    /// for these once the imports settle, so an agent's captures are never held for a person
+    /// to press Open project.
+    pub fn unattended(&self) -> bool {
+        self.background || self.offscreen()
+    }
+
     /// Bounded runs never touch the owner's profile and start from fresh preferences
     /// (captures must not depend on an earlier run): preferences (`ARA_CONFIG_DIR`)
     /// and crash reports (`ARA_CRASH_DIR`) go to `<output>/.ara-profile`, and the

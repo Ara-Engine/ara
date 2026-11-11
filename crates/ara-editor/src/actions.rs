@@ -33,6 +33,8 @@ pub(crate) struct EditorService {
     /// Last human Scene viewport aspect ratio; protocol callers may override it per Frame.
     pub frame_aspect: f32,
     pub extensions: crate::extensions::Extensions,
+    /// The studio's import gate, shared with the window.
+    pub import_gate: crate::import_gate::Shared,
 }
 pub(crate) enum Control {
     ProfileFreeze {
@@ -251,6 +253,11 @@ impl Service for EditorService {
                 "editor.layout.next",
                 "Activate the next tab in the document area.",
             ),
+            Method::new::<EditorImports>(
+                db,
+                "editor.imports",
+                "Where the project's imports stand (stage, counts, every failed import with its error) and whether the studio's import gate still holds its views; `release: true` opens it without a person, for a studio an agent started.",
+            ),
             Method::new::<EditorWindow>(
                 db,
                 "editor.window",
@@ -309,6 +316,21 @@ impl EditorService {
     fn dispatch(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         if method == "editor.state" {
             return Ok(json!({"state":self.navigation.state}));
+        }
+        if method == "editor.imports" {
+            let p: EditorImports = parse(params)?;
+            if p.release.unwrap_or(false) {
+                self.import_gate.request_release();
+            }
+            let paths = crate::import_gate::source_paths(cx.store().workspace());
+            let imports = ara_play_host::PublishedAssets::for_project(cx.root())
+                .ok()
+                .and_then(|feed| feed.progress())
+                .map(|progress| crate::import_gate::imports(&progress, &paths));
+            return Ok(crate::import_gate::report(
+                imports.as_ref(),
+                self.import_gate.holding(),
+            ));
         }
         if method == "editor.history" {
             return Ok(json!({"items":self.navigation.history()}));
