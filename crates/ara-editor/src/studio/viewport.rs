@@ -107,6 +107,9 @@ pub(crate) struct SceneView {
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
     failed: Option<(u64, u64, u64, u64)>,
+    /// The raster Scene's first render error since a frame last reached the screen, and when
+    /// it began (`Self::stalled`, `Self::presented`).
+    failure: Option<(std::time::Instant, String)>,
     tick: u32,
     remaining: u32,
     convergence: convergence::Convergence,
@@ -354,6 +357,8 @@ impl SceneView {
         if matches!(plan.path, RenderPath::Raster(_)) {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
+                self.failure
+                    .get_or_insert_with(|| (std::time::Instant::now(), error.to_string()));
                 self.remaining = 0;
                 self.convergence.failed();
                 self.frame_pending = renderer.scene_frame_pending();
@@ -1126,6 +1131,19 @@ impl SceneView {
     }
     /// The ids and channels of the Renderlab frame on screen: the click and the overlays
     /// read them (`IdSource::Packed`) in place of the renderer's.
+    /// A Scene frame reached the screen: earlier render errors no longer matter.
+    pub(super) fn presented(&mut self) {
+        self.failure = None;
+    }
+    /// The Scene's render error when no frame has reached the screen for at least `after`
+    /// since it: a bounded run (`--frames`, `--screenshot`) ends with it rather than wait
+    /// for frames a failed device (a counted validation error stays counted) never presents.
+    pub(super) fn stalled(&self, after: std::time::Duration) -> Option<&str> {
+        self.failure
+            .as_ref()
+            .filter(|(since, _)| since.elapsed() >= after)
+            .map(|(_, error)| error.as_str())
+    }
     pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
         self.renderlab
             .as_ref()
