@@ -1982,8 +1982,7 @@ dependencies = [
  "glam 0.30.10",
  "glam 0.34.1",
  "image",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=3adc69a2045048f8fad037722562238a10b560b7)",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3)",
+ "renderlab",
  "wgpu",
 ]
 
@@ -11460,7 +11459,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=3adc69a2045048f8fad037722562238a10b560b7#3adc69a2045048f8fad037722562238a10b560b7"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=69baaf100991a3f6d299d0785c76e2634220bf41#69baaf100991a3f6d299d0785c76e2634220bf41"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -11471,36 +11470,16 @@ dependencies = [
  "naga",
  "pollster",
  "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=3adc69a2045048f8fad037722562238a10b560b7)",
+ "renderlab-asset",
  "serde_json",
  "sha2 0.10.9",
  "wgpu",
 ]
 
 [[package]]
-name = "renderlab"
-version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3#78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3"
-dependencies = [
- "ash 0.38.0+1.3.281",
- "glam 0.30.10",
- "naga",
- "pollster",
- "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3)",
- "sha2 0.10.9",
- "wgpu",
-]
-
-[[package]]
 name = "renderlab-asset"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=3adc69a2045048f8fad037722562238a10b560b7#3adc69a2045048f8fad037722562238a10b560b7"
-
-[[package]]
-name = "renderlab-asset"
-version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3#78b3531b0d9ed3116a2e3c99e6c2da8bdb08a4d3"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=69baaf100991a3f6d299d0785c76e2634220bf41#69baaf100991a3f6d299d0785c76e2634220bf41"
 
 [[package]]
 name = "reqwest"
