@@ -38,3 +38,9 @@ A 90-edit run (first versus last 30 edits per level) shows the delay knob matter
 boundary; L2: 90–120 ms of 145 is the full-module analyzer run (emit is 3 ms); L3: 150–290 ms is the full emit.
 The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on macOS delivers events 11 ms
 (median) after the write, a third of an L1 save→visible.
+
+## File-watcher latency per OS
+`dotnet run benchmarks/iteration/watch_latency.cs` times how late `FileSystemWatcher` (the compile server's settings)
+reports an in-place save and an atomic save (write a temp file, rename it over the source), median / p95 / max in ms.
+Mac (FSEvents): 11.3 / 12.4 ms in place, 11.7 / 12.5 atomic. Run it on Windows and Linux to see whether their watchers
+add a fixed delay (none is expected: ReadDirectoryChangesW and inotify report at once).
