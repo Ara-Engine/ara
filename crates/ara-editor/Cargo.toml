@@ -87,6 +87,10 @@ accesskit = { workspace = true, features = ["serde"] }
 [dev-dependencies]
 ara-ui-test = { path = "../ara-ui-test" }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Wayland subsurface viewports require stillkit's GPU (Vulkan) surfaces.
+stillkit = { workspace = true, features = ["gpu"] }
+
 [target.'cfg(windows)'.dependencies]
 # Windows child HWND viewports require stillkit DirectComposition GPU surfaces.
 stillkit = { workspace = true, features = ["gpu"] }

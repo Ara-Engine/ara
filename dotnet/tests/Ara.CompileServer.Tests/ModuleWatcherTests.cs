@@ -289,6 +289,32 @@ public sealed class VnodeEventsTests : IDisposable
         Assert.Equal(0, events.DescriptorCount);
     }
 
+    /// <summary>
+    /// A descriptor number is reused as soon as it is closed. Replacing a watch while its file keeps raising events must never
+    /// let an event queued for the old registration remove the new one.
+    /// </summary>
+    [MacOnlyFact]
+    public void Replacing_a_watch_while_its_file_changes_never_loses_the_new_watch()
+    {
+        var path = Make("Hammer.cs");
+        var events = 0;
+        using var watcher = new VnodeEvents((_, _) => Interlocked.Increment(ref events));
+        watcher.Add(0, path);
+        for (var i = 0; i < 400; i++)
+        {
+            File.WriteAllText(path, $"class H {{ int v{i}; }}"); // raises an event for the current registration
+            watcher.Replace(0, path);                          // closes it and opens the next, usually the same number
+        }
+        Assert.True(watcher.Watching(path));
+        Assert.Equal(watcher.WatchedCount, watcher.DescriptorCount);
+        Thread.Sleep(100);
+        var before = Volatile.Read(ref events);
+        File.WriteAllText(path, "class H { int last; }");
+        var deadline = System.Environment.TickCount64 + 2000;
+        while (Volatile.Read(ref events) == before && System.Environment.TickCount64 < deadline) Thread.Sleep(2);
+        Assert.True(Volatile.Read(ref events) > before, "the replaced watch no longer reports writes");
+    }
+
     [MacOnlyFact]
     public void A_throwing_callback_does_not_end_the_watcher()
     {

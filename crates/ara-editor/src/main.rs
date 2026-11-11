@@ -37,9 +37,9 @@ fn main() -> ara_ui::Result<()> {
         background: std::env::var_os("ARA_EDITOR_BACKGROUND").is_some_and(|v| v == "1"),
         ..Default::default()
     };
-    // The studio (D31) is the interactive editor on macOS and Windows; the legacy window
-    // keeps the verify routes, headless captures and Linux, whose Scene layer is not yet in.
-    let mut legacy = !cfg!(any(target_os = "macos", windows));
+    // The studio (D31) is the interactive editor everywhere; the legacy window keeps only
+    // the verify routes and headless captures until it is removed.
+    let mut legacy = false;
     let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -176,6 +176,18 @@ fn main() -> ara_ui::Result<()> {
             None
         }
     };
+    // The studio's views are native layers (Wayland subsurfaces on Linux): where this
+    // session can't host them (X11, no or a dead compositor, no wl_subcompositor), the
+    // previous window, which runs on X11, opens instead, saying why.
+    if !legacy
+        && !options.offscreen()
+        && let Err(why) = ara_editor::studio::can_host()
+    {
+        eprintln!(
+            "ara-editor: the new editor can't show its views here ({why:#}), so the previous editor window opens"
+        );
+        legacy = true;
+    }
     if legacy || options.offscreen() || options.frames.is_some() {
         return ara_editor::run(options);
     }

@@ -226,6 +226,26 @@ public sealed class VnodeFolderTests : IDisposable
         Assert.All(_contents, content => Assert.Equal(Whole, content));
     }
 
+    /// <summary>A checkout adding hundreds of source files must cost the scan thread one settle, not one per file.</summary>
+    [MacOnlyFact]
+    public void Hundreds_of_new_files_are_reported_after_one_settle_not_one_per_file()
+    {
+        Make("A.cs");
+        var watcher = Watch(_root);
+        var names = Enumerable.Range(0, 300).Select(i => $"New{i:D3}.cs").ToArray();
+        var seen = new HashSet<string>();
+        var start = Stopwatch.GetTimestamp();
+        foreach (var name in names) File.WriteAllText(Path.Combine(_root, name), "class C { int x; }");
+        var deadline = Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency;
+        while (seen.Count < names.Length && Stopwatch.GetTimestamp() < deadline)
+            if (_sets.TryTake(out var set, 20)) foreach (var path in set.Paths) seen.Add(Path.GetFileName(path));
+        var elapsed = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        Assert.True(names.All(seen.Contains), $"{names.Count(seen.Contains)} of {names.Length} reported");
+        // One ~3-12 ms settle per scan; a per-file settle (3 ms x 300) would take over 900 ms on the scan thread alone.
+        Assert.True(elapsed < 600, $"{elapsed:F0} ms to report 300 new files");
+        Assert.True(watcher.VnodeWatching(Path.Combine(_root, names[^1])));
+    }
+
     static void Spin(double ms)
     {
         var until = Stopwatch.GetTimestamp() + (long)(ms * Stopwatch.Frequency / 1000);
