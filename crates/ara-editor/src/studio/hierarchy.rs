@@ -15,7 +15,9 @@ use stillkit::el::{
 use super::Studio;
 
 const ROW: f32 = super::style::ROW;
-const INDENT: f32 = 14.0;
+/// One level of nesting, and the room before the first level.
+const INDENT: f32 = 10.0;
+const LEAD: f32 = 4.0;
 
 /// One visible row.
 struct Row {
@@ -457,6 +459,7 @@ fn row_el(
         let id = id.clone();
         let open = r.open;
         el().size(16.0)
+            .min_w(16.0)
             .align(Align::Center)
             .justify(Justify::Center)
             .color(muted)
@@ -478,7 +481,7 @@ fn row_el(
                 .size(12.0),
             )
     } else {
-        el().size(16.0)
+        el().size(16.0).min_w(16.0)
     };
     let name: El<Studio> = match rename.filter(|(rid, _)| *rid == r.id) {
         Some((_, draft)) => {
@@ -544,40 +547,52 @@ fn row_el(
                         )
                         .child(piece(&r.name[end..]).color(tint))
                 }
-                None => text(r.name.clone()).text_size(12.0).grow(1.0).color(tint),
+                // The one part of a row that gives way: it takes what the fixed parts leave
+                // and ends in an ellipsis at the row's real edge.
+                None => text(r.name.clone())
+                    .text_size(12.0)
+                    .wrap(1)
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .color(tint),
             }
         }
     };
+    // A toggle takes room only while it is set or the pointer is on the row; otherwise the
+    // name has the width (and the row has no Tab stop for it).
     let toggle = |glyph, label: &str, on: bool, method: &'static str, key: String| {
         let id = id.clone();
-        // Unset off the hovered row it isn't shown: a plain spacer, not a Tab stop on
-        // every row of the tree.
         if !on && !hovered {
-            return el().size(18.0);
+            return None;
         }
-        el().key(key)
-            .size(18.0)
-            .align(Align::Center)
-            .justify(Justify::Center)
-            .radius(4.0)
-            .color(muted)
-            .cascade_ink()
-            .label(label)
-            .tooltip(label)
-            // Shown while set, and on the row under the pointer; faint there when unset.
-            .opacity(match (on, hovered) {
-                (true, _) => 1.0,
-                (false, true) => 0.55,
-                (false, false) => 0.0,
-            })
-            .hovered(move |e| e.opacity(1.0).color(ink))
-            .on_press(move |s: &mut Studio| s.act(method, json!({"entity": id, "enabled": !on})))
-            .child(icon(glyph).size(13.0))
+        Some(
+            el().key(key)
+                .size(18.0)
+                .min_w(18.0)
+                .align(Align::Center)
+                .justify(Justify::Center)
+                .radius(4.0)
+                .color(muted)
+                .cascade_ink()
+                .label(label)
+                .tooltip(label)
+                // Shown while set, and on the row under the pointer; faint there when unset.
+                .opacity(match (on, hovered) {
+                    (true, _) => 1.0,
+                    (false, true) => 0.55,
+                    (false, false) => 0.0,
+                })
+                .hovered(move |e| e.opacity(1.0).color(ink))
+                .on_press(move |s: &mut Studio| {
+                    s.act(method, json!({"entity": id, "enabled": !on}))
+                })
+                .child(icon(glyph).size(13.0)),
+        )
     };
     let pid = r.id.clone();
     // Where a drag would land: a line between rows, or this row as the new parent.
     use ara_ui::drag_drop::Placement;
-    let indent = 10.0 + r.depth as f32 * INDENT;
+    let indent = LEAD + r.depth as f32 * INDENT;
     let (fill, line) = match drop {
         Some(Placement::Inside) => (c.primary.0.with_alpha(0.22), None),
         Some(Placement::Before) => (fill, Some(0.0)),
@@ -716,22 +731,26 @@ fn row_el(
             let rows = rows.clone();
             move |s: &mut Studio, key, tx| navigate(s, &rows, at, key.0, tx)
         })
-        .child(el().w(10.0 + r.depth as f32 * INDENT))
+        .child(
+            el().w(LEAD + r.depth as f32 * INDENT)
+                .min_w(LEAD + r.depth as f32 * INDENT),
+        )
         .child(disclosure)
         .child(
             icon(r.glyph)
                 .size(14.0)
+                .min_w(14.0)
                 .color(if selected { ink } else { muted }),
         )
         .child(name)
-        .child(toggle(
+        .children(toggle(
             if hidden { icons::EYE_OFF } else { icons::EYE },
             if hidden { "Show" } else { "Hide" },
             hidden,
             "editor.visibility",
             format!("row/{}/visibility", r.id),
         ))
-        .child(toggle(
+        .children(toggle(
             if locked {
                 icons::LOCK
             } else {
@@ -742,7 +761,7 @@ fn row_el(
             "editor.lock",
             format!("row/{}/lock", r.id),
         ))
-        .child(el().w(2.0))
+        .child(el().w(2.0).min_w(2.0))
 }
 
 /// The tree's keyboard (WAI tree pattern): Up and Down move through visible rows, Right

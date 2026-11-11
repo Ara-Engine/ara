@@ -7067,3 +7067,88 @@ fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
         settle(&mut rt);
     }
 }
+
+/// The left edge of the text `label` in the tree.
+fn text_left(rt: &Runtime<Studio>, label: &str) -> f32 {
+    rt.tree()
+        .into_iter()
+        .find(|n| n.text.as_deref() == Some(label))
+        .unwrap_or_else(|| panic!("{label} shows"))
+        .rect
+        .left
+}
+
+/// Siblings at one depth line up whatever their names are: a row whose name overflows used to
+/// squeeze its own (shrinkable) indent and icon slot, leaving the row whose name fit looking
+/// pushed right ("Bulkhead").
+#[test]
+fn hierarchy_siblings_at_one_depth_start_their_names_at_the_same_x() {
+    let mut rt = open_sized((1000, 630));
+    let long = "Outpost floor with a name much longer than the row";
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![
+                    json!({"cmd":"entity.create","args":{"id":"e_long","name":long,"components":{"Transform":{}}}}),
+                    json!({"cmd":"entity.create","args":{"id":"e_bulk","name":"Bulkhead","components":{"Transform":{}}}}),
+                ],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let bulk = text_left(&rt, "Bulkhead");
+    let lamp = text_left(&rt, "Lamp");
+    let overflowing = rt
+        .tree()
+        .into_iter()
+        .find(|n| {
+            n.text
+                .as_deref()
+                .is_some_and(|t| t.starts_with("Outpost floor"))
+        })
+        .expect("the long name shows (cut at the edge)")
+        .rect
+        .left;
+    assert_eq!(bulk, lamp, "Bulkhead lines up with Lamp");
+    assert_eq!(
+        overflowing, lamp,
+        "an overflowing name starts where the others do"
+    );
+}
+
+/// Names use the row's width and end only at its real edge (past the visibility and lock
+/// toggles a row only reserves room for while they are set or the pointer is on it).
+#[test]
+fn hierarchy_names_run_to_the_row_edge() {
+    let mut rt = open_sized((1000, 630));
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_long","name":"A very long entity name that has to be cut somewhere","components":{"Transform":{}}}})],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let row = rt.find("row/e_long").expect("the row");
+    let name = rt
+        .tree()
+        .into_iter()
+        .find(|n| {
+            n.text
+                .as_deref()
+                .is_some_and(|t| t.starts_with("A very long"))
+        })
+        .expect("the name")
+        .rect;
+    assert!(
+        row.right - name.right <= 8.0,
+        "the name ends {}px short of the row's edge: {name:?} in {row:?}",
+        row.right - name.right
+    );
+}
