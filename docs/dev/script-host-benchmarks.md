@@ -54,3 +54,13 @@ processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-buil
 `target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
 each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
 mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
+
+## Where launch and compile time go (`--trace`)
+`dotnet run benchmarks/iteration/reload_timing.cs -- --trace` sets `ARA_TRACE=1` for the bench and the compile server. Both print
+`[ara-trace] <unix ms> ...` lines on stderr (kept as `run-*.trace.txt`): the bench's own steps (`main`, host start, first image
+loaded), the server's (process start, runtime, whether Roslyn's assemblies are ReadyToRun, `main` entered, pipe connected, hello,
+first `Watch`, first compile) each with JIT count and time, GC counts and pause, and CPU; and one line per unit of compile work
+with the same counters as deltas. The summary prints the launch timeline (median ms after the bench starts) and, per compile
+outcome (initial, L1, L2, L3), what the slowest 10% did that the rest did not: GC pauses over 5 ms, gen2 collections, JIT'd methods.
+On the Mac this showed an L3 compile spending 44 ms of its 122 ms in GC pause (about 10 gen0, 3 gen1 and 1 gen2 collection) and the
+initial compile 135 ms.
