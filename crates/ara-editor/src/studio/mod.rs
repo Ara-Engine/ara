@@ -37,6 +37,7 @@ mod portals;
 mod preferences;
 mod present;
 mod profiler;
+mod rect_tool;
 mod references;
 mod running;
 mod scene;
@@ -203,6 +204,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut shown_tag = u64::MAX;
     // The running drag's snap source, captured at its first snapped move.
     let mut snap: Option<snapping::Snap> = None;
+    // The selection the Rect tool's bounds were last read for.
+    let mut rect_for: Option<Vec<String>> = None;
     // The graph canvas's size when last drawn.
     let mut graph_extent = ("", [0, 0]);
     // A composite is owed (something changed) but has not presented yet.
@@ -369,6 +372,31 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             )
         }) {
             scene_dirty = true;
+        }
+        // The Rect tool's bounds: the selection's presented geometry (selected parents take
+        // their children's), read again when the scene or the selection changes.
+        let wanted = rt.touch(|s| {
+            let st = &s.editor.state;
+            (st.tool == crate::state::Tool::Rect
+                && !st.hide_gizmos
+                && !st.selection.is_empty()
+                && s.local.rect_drag.is_none())
+            .then(|| st.selection.clone())
+        });
+        match wanted {
+            Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
+                let channels = compositor.channels(&renderer, &view, revision);
+                let entities = view.entities();
+                let bounds = scene_view.bounds_where(channels, |address| {
+                    crate::world::bounds::selected(entities, address, &selection)
+                });
+                rect_for = Some(selection);
+                if rt.state().local.rect_bounds != bounds {
+                    rt.update(|s| s.local.rect_bounds = bounds);
+                }
+            }
+            Some(_) => {}
+            None => rect_for = None,
         }
         pass.mark("scene sync");
         pass.phase("studio.scene");
@@ -696,6 +724,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let scale = rt.scale();
             // Input goes to the client Play's controls act on.
             game.client = rt.state().play.client;
+            game.zoom = game::zoom(rt.state());
             let status = rt.touch(|s| {
                 let (resolved, revision) = (s.resolved.clone(), s.editor.host.store().revision());
                 // SAFETY: the layer is the Game view's own, alive while the window is.
@@ -953,6 +982,42 @@ fn overlays_key(s: &Studio) -> u64 {
     h.finish()
 }
 
+/// How far the pointer may stray during a press that still counts as a click (design px).
+const CLICK_SLOP: f32 = 4.0;
+/// How long a press may be held and still count as a click.
+const CLICK_TIME: Duration = Duration::from_millis(500);
+
+/// Whether press `e` ends as a click rather than a drag, decided as Unity does: by the
+/// farthest the pointer went while the button was down (a drag that comes back to its
+/// start is still a drag) and how long it was held, never by where it let go. Feed it every
+/// phase of a press; it answers on the release.
+pub(super) fn click(s: &mut Studio, e: &stillkit::el::PointerEvent) -> bool {
+    use stillkit::el::PointerPhase;
+    let travel = e.travel().x.abs() + e.travel().y.abs();
+    match e.phase {
+        PointerPhase::Down => {
+            s.local.press = Some((Instant::now(), 0.0));
+            false
+        }
+        PointerPhase::Move => {
+            if let Some((_, far)) = s.local.press.as_mut() {
+                *far = far.max(travel);
+            }
+            false
+        }
+        PointerPhase::Up => s
+            .local
+            .press
+            .take()
+            .is_some_and(|(at, far)| far.max(travel) < CLICK_SLOP && at.elapsed() < CLICK_TIME),
+        PointerPhase::Cancel => {
+            s.local.press = None;
+            false
+        }
+        PointerPhase::Hover => false,
+    }
+}
+
 /// Shows `message` in the status bar for a few seconds (what a request did).
 pub(super) fn note(s: &mut Studio, message: impl Into<String>) {
     s.local.note = Some((message.into(), Instant::now()));
@@ -1171,6 +1236,10 @@ fn pump(
         // While a tab is dragged: every area and tab, to drop it among.
         if rt.state().local.tab_drag.is_some() {
             keys.extend(dock::all_drag_keys(rt.state()));
+        }
+        // While a component is dragged: the Inspector sections it can drop among.
+        if rt.state().local.component_drag.is_some() {
+            keys.extend(inspector::drop_keys(rt.state()));
         }
         // While an asset is dragged: the folders it can drop on.
         if rt.state().local.asset_drag.is_some() {

@@ -58,6 +58,16 @@ impl SceneView {
         selection: &[String],
         channels: &Channels,
     ) -> Option<[Vec3; 2]> {
+        self.bounds_where(channels, |address| {
+            selection.iter().any(|selected| selected == address)
+        })
+    }
+    /// World-space bounds of the presented primitives whose entity address `keep` takes.
+    pub(crate) fn bounds_where(
+        &self,
+        channels: &Channels,
+        keep: impl Fn(&str) -> bool,
+    ) -> Option<[Vec3; 2]> {
         let scene = self
             .raster
             .as_ref()
@@ -67,8 +77,7 @@ impl SceneView {
             .instances
             .iter()
             .filter_map(|instance| {
-                let address = channels.target_of(instance.entity)?;
-                if !selection.iter().any(|selected| selected == address) {
+                if !keep(channels.target_of(instance.entity)?) {
                     return None;
                 }
                 let bounds = instance.bounds(scene.geometry.get(instance.geometry)?);

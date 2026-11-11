@@ -192,6 +192,10 @@ pub struct DeviceInfo {
     /// reports it, and every Metal 4 GPU. A pipeline whose fragment stage declares
     /// them must not be created where this is false.
     pub fragment_barycentrics: bool,
+    /// Square layered images can be published as `ViewDimension::CubeArray` and
+    /// shaders may sample cube arrays: Vulkan's `imageCubeArray`, enabled whenever the
+    /// device reports it, and every Metal 4 GPU.
+    pub cube_arrays: bool,
     /// Largest storage-buffer binding range in bytes.
     pub max_storage_buffer_range: u32,
     /// Compute and fragment shaders support subgroup (wave) basic, vote, ballot and
@@ -466,6 +470,7 @@ pub(crate) fn test_info() -> DeviceInfo {
         present_scaling: false,
         buffer_int64_atomics: false,
         fragment_barycentrics: false,
+        cube_arrays: false,
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
         name: String::new(),
