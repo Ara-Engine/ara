@@ -95,22 +95,41 @@ internal sealed class ModuleCompiler
         CSharpGeneratorDriver.Create([new Ara.Generators.ModuleGenerator().AsSourceGenerator()], parseOptions: ParseOptions);
 
     /// <summary>
-    /// Compiles a small component and system once, with the generator and a debug-IL emit, to load Roslyn's cold paths
-    /// (type loading, framework reference metadata, generator driver) while the server waits for its first module.
+    /// Loads Roslyn's cold paths while the server waits for its first module, on two threads at once: one runs the Ara
+    /// generator over a small component and system (the real compile runs it first), the other binds and emits a plain
+    /// debug-IL module with a PDB (the real compile emits after the generator, so by then those paths are warm).
     /// Failures are ignored (false): this only warms.
     /// </summary>
     internal static bool WarmUp()
     {
-        try
+        var generator = Task.Run(() =>
         {
-            var compiler = new ModuleCompiler("Ara.Warmup", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
-            var source = Parse("Warmup.cs", "namespace Warmup;\n/// <summary>Warm.</summary>\n[Component] public partial struct Warm { /// <summary>V.</summary>\n public int V; }\n"
-                + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
-            var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
-            Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out _);
-            return Emit(final).Image is not null;
-        }
-        catch (Exception) { return false; /* a failed warm-up costs nothing */ }
+            try
+            {
+                var compiler = new ModuleCompiler("Ara.Warmup.Generator", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
+                var source = Parse("Warmup.cs", "namespace Warmup;\n/// <summary>Warm.</summary>\n[Component] public partial struct Warm { /// <summary>V.</summary>\n public int V; }\n"
+                    + "public static partial class WarmSystems { [Query] static void Run(ref Warm w) { w.V += 1; } static int Helper(int x) => x * 2; }");
+                var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
+                Driver().RunGeneratorsAndUpdateCompilation(user, out var final, out var diagnostics);
+                return !diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error) && final.SyntaxTrees.Count() > 2;
+            }
+            catch (Exception) { return false; }
+        });
+        var emit = Task.Run(() =>
+        {
+            try
+            {
+                var compiler = new ModuleCompiler("Ara.Warmup.Emit", [typeof(Ara.Hosting.AbiConst).Assembly.Location]);
+                var source = Parse("WarmEmit.cs", "namespace WarmEmit;\npublic struct P { public int V; public float W; }\n"
+                    + "public static class S { public static int Run(List<int> xs, string t) { var total = 0; foreach (var x in xs) total += x * 2; "
+                    + "var q = xs.Where(v => v > 1).Select(v => v + 1).ToArray(); return total + q.Length + t.Length + Math.Abs(-total); } "
+                    + "public static P Make(int v) { var p = new P { V = v }; p.W = v * 0.5f; return p; } }");
+                var user = compiler.Create([source, Parse("<ara-global-usings>.cs", GlobalUsings)], true, []);
+                return Emit(user).Image is not null;
+            }
+            catch (Exception) { return false; }
+        });
+        return Task.WhenAll(generator, emit).GetAwaiter().GetResult().All(ok => ok);
     }
 
     /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
