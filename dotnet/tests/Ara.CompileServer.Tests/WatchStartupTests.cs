@@ -109,6 +109,94 @@ public sealed class WatchStartupTests : IDisposable
         _modules.Server.StartWatching(0, _assemblies, watch: true);
     }
 
+    /// <summary>Throws on the first <paramref name="failures"/> calls, then creates the real watcher.</summary>
+    static Func<string, string, FileSystemWatcher> FailingFactory(int failures, Action? onCall = null)
+    {
+        var calls = 0;
+        return (directory, file) =>
+        {
+            onCall?.Invoke();
+            if (Interlocked.Increment(ref calls) <= failures) throw new IOException("no inotify instances left (injected)");
+            return new FileSystemWatcher(directory, file);
+        };
+    }
+
+    /// <summary>A fresh coordinator whose failures are injected before <c>Watch</c>, so the real background start meets them.</summary>
+    Modules Fresh(Action<Coordinator> inject)
+    {
+        var modules = new Modules();
+        inject(modules.Server);
+        var dir = Path.Combine(modules.Root, "Game");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Code.cs"), Game);
+        modules.Server.Watch(0, "Game", dir, true, _assemblies, [], "gameplay", watch: true);
+        modules.Server.WaitForWatchStarts();
+        return modules;
+    }
+
+    [Fact]
+    public void A_reference_watcher_that_fails_once_is_retried_and_the_start_ends_with_one_of_each()
+    {
+        using var modules = Fresh(server => server.ReferenceWatcherFactory = FailingFactory(1));
+        Assert.Equal(1, modules.Server.ModuleWatcherCount);   // not watched twice by the retry
+        Assert.Equal(1, modules.Server.ReferenceWatcherCount); // the retry created it (the failure did not record it as watched)
+        Assert.Single(modules.Sink.Logs, log => log.Contains("retrying", StringComparison.Ordinal));
+        // A later start for the same module changes nothing.
+        modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.Equal(1, modules.Server.ModuleWatcherCount);
+        Assert.Equal(1, modules.Server.ReferenceWatcherCount);
+    }
+
+    [Fact]
+    public void A_reference_watcher_that_fails_twice_is_logged_and_can_still_be_started_later()
+    {
+        using var modules = Fresh(server => server.ReferenceWatcherFactory = FailingFactory(2));
+        Assert.Equal(1, modules.Server.ModuleWatcherCount);
+        Assert.Equal(0, modules.Server.ReferenceWatcherCount);
+        Assert.Contains(modules.Sink.Logs, log => log.Contains("will not reload until the project reopens", StringComparison.Ordinal));
+        // The failures did not poison the set: the next start creates the watcher, and still only one folder watcher exists.
+        modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.Equal(1, modules.Server.ModuleWatcherCount);
+        Assert.Equal(1, modules.Server.ReferenceWatcherCount);
+    }
+
+    [Fact]
+    public void A_folder_watcher_that_fails_once_is_retried_without_watching_the_folder_twice()
+    {
+        var calls = 0;
+        using var modules = Fresh(server => server.ModuleWatchStart = (watcher, slot, directory) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) throw new IOException("injected");
+            watcher.Watch(slot, directory);
+        });
+        Assert.Equal(2, calls);
+        Assert.Equal(1, modules.Server.ModuleWatcherCount);
+        Assert.Equal(1, modules.Server.ReferenceWatcherCount);
+    }
+
+    /// <summary>A first compile that failed (syntax error) committed no state; the sources it read are what it compiled.</summary>
+    [Fact]
+    public void A_fix_saved_while_the_watcher_starts_is_found_when_the_first_compile_had_failed()
+    {
+        using var modules = new Modules();
+        var dir = Path.Combine(modules.Root, "Broken");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "Code.cs");
+        File.WriteAllText(path, Game.Replace("c.Value += 1;", "c.Value += ;", StringComparison.Ordinal));
+        modules.Server.Watch(0, "Broken", dir, true, _assemblies, [], "gameplay", watch: false);
+        modules.Idle();
+        Assert.True(modules.Sink.Next().Diagnostics().Errors > 0);
+        Assert.Null(modules.Server.Dependency("Broken")); // nothing committed
+        File.WriteAllText(path, Game.Replace("c.Value += 1;", "c.Value += 5;", StringComparison.Ordinal));
+        modules.Server.StartWatching(0, _assemblies, watch: true);
+        var deadline = Stopwatch.GetTimestamp() + 30 * Stopwatch.Frequency;
+        while (modules.Server.Dependency("Broken") is not { } state || !state.Texts.Values.Any(text => text.Contains("c.Value += 5;", StringComparison.Ordinal)))
+        {
+            Assert.True(Stopwatch.GetTimestamp() < deadline, "the fix was never compiled");
+            Thread.Sleep(50);
+        }
+    }
+
     [Fact]
     public void Disposing_while_the_watchers_start_does_not_hang_or_throw()
     {

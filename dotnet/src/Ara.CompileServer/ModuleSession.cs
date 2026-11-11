@@ -435,12 +435,16 @@ internal sealed partial class ModuleSession
 
     /// <summary>
     /// Current source files whose bytes differ from what this module last compiled, plus compiled files that no
-    /// longer exist. Compares actual text (no parsing, no timestamps); empty before anything has compiled.
+    /// longer exist. Compares actual text (no parsing, no timestamps).
     /// </summary>
     internal string[] DriftedSources()
     {
-        if (ReadOnlyPublished || (_state?.Texts ?? LoadedTexts) is not { } texts) return [];
+        if (ReadOnlyPublished) return [];
         var files = SourceFiles().ToArray();
+        // A first compile that failed has no committed state; the texts it read are what it compiled. If it read
+        // nothing (it failed before reading), every file is unverified and one more compile is the honest answer.
+        IReadOnlyDictionary<string, string>? texts = _state is { } state ? state.Texts : LoadedTexts is { } loaded ? loaded : _disk.Count > 0 ? _disk : null;
+        if (texts is null) return files;
         var drifted = files.Where(path => !texts.TryGetValue(path, out var text) || ModuleSource.ReadWithRetry(path, text) != text).ToList();
         drifted.AddRange(texts.Keys.Where(path => !files.Contains(path, ModuleState.Paths)));
         return [.. drifted];
