@@ -53,7 +53,10 @@ the Windows AMSI image scan, register). Needs only the .NET 10 SDK and Rust. Opt
 processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-build`, `--output <dir>` (default
 `target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
 each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
-mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
+mirrored order. `--env VARIANT:KEY=VALUE` sets an environment variable for one variant's runs only, so one build can be compared with
+itself under a knob (`--variant on=<bin> --variant off=<bin> --env off:ARA_WARMUP=0`; `ARA_WARMUP=0|1` forces the compile server's
+start-up warm-up off or on). Per level it also prints the host side (transfer, load, pre-JIT, register, apply, wait for the tick
+boundary, first tick) and the first image's phases. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
 
 ## Windows image scan (AMSI) probe
 `ARA_DUMP_IMAGES=<folder>` makes the C# host also write every fresh module image there (`module-gN.dll`); then
@@ -73,4 +76,5 @@ first `Watch`, first compile) each with JIT count and time, GC counts and pause,
 with the same counters as deltas. The summary prints the launch timeline (median ms after the bench starts) and, per compile
 outcome (initial, L1, L2, L3), what the slowest 10% did that the rest did not: GC pauses over 5 ms, gen2 collections, JIT'd methods.
 On the Mac this showed an L3 compile spending 44 ms of its 122 ms in GC pause (about 10 gen0, 3 gen1 and 1 gen2 collection) and the
-initial compile 135 ms.
+initial compile 135 ms. With `--trace` the summary also says why an L3 happened (`Image/L3 happened because: Structural 8, Cold 2`:
+the server's escalation reason).

@@ -3,6 +3,7 @@
 //   dotnet run benchmarks/iteration/reload_timing.cs
 //   dotnet run benchmarks/iteration/reload_timing.cs -- --runs 20 --edits 45 --lines 5000
 //   dotnet run benchmarks/iteration/reload_timing.cs -- --skip-build --variant before=C:\sdk-before --variant after=C:\sdk-after
+//   dotnet run benchmarks/iteration/reload_timing.cs -- --skip-build --variant on=<bin> --variant off=<bin> --env off:ARA_WARMUP=0   (same build, one knob)
 //
 // It builds dotnet/Ara.slnx (Release) and the `reload_bench` example unless --skip-build, then runs
 // `reload_bench` in fresh processes (variants in mirrored order, A B B A, so drift hits all of them alike) and
@@ -54,7 +55,8 @@ for (var round = 0; round < options.Runs; round += 2)
         Console.Write($"run {runs.Count + 1}/{options.Runs * variants.Count} ({name}) ... ");
         var code = Repo.Run(exe, ["--dotnet-bin", sdk, "--edits", options.Edits.ToString(CultureInfo.InvariantCulture),
             "--lines", options.Lines.ToString(CultureInfo.InvariantCulture), "--output", file], root, options.Trace ? ("ARA_TRACE", "1") : null,
-            check: false, quiet: true, stderrTo: options.Trace ? Path.ChangeExtension(file, ".trace.txt") : null);
+            check: false, quiet: true, stderrTo: options.Trace ? Path.ChangeExtension(file, ".trace.txt") : null,
+            more: options.Env.Where(e => e.Variant == name).Select(e => (e.Key, e.Value)));
         var result = File.Exists(file) ? JsonNode.Parse(File.ReadAllText(file)) : null;
         if (code != 0 || result is null || result["success"]?.GetValue<bool>() != true)
         {
@@ -100,6 +102,23 @@ foreach (var (name, _) in variants)
             ["analyzers_ms"] = Stats.Node(Phase("analyze_us")), ["generators_ms"] = Stats.Node(Phase("generate_us")),
             ["amsi_load_ms"] = Stats.Node(Phase("load_us")), ["register_ms"] = Stats.Node(Phase("register_us")) };
         text.AppendLine($"  {label,-6}{edits.Length,5}  {Stats.Format(total),-16}{Stats.Format(Phase("emit_us")),-14}{Stats.Format(Phase("analyze_us")),-14}{Stats.Format(Phase("generate_us")),-14}{Stats.Format(Phase("load_us")),-14}{Stats.Format(Phase("register_us")),-14}");
+        // After the server: sending the result, loading or applying it in the game process (a delta is applied, an image loaded and
+        // scanned), waiting for the next tick boundary, and the first tick running the new code. Medians.
+        double[] Boundary() => edits.Select(e => Math.Max(0, (e!["report"]!["t_applied_ns"]!.GetValue<double>() - e["report"]!["t_staged_ns"]!.GetValue<double>()) / 1e6 - e["report"]!["apply_us"]!.GetValue<double>() / 1e3)).ToArray();
+        text.AppendLine($"  {"",-6}{"",5}  host side, median ms: transfer {Stats.Median(Phase("transfer_us")):F1}, load {Stats.Median(Phase("load_us")):F1}, pre-JIT {Stats.Median(Phase("prejit_us")):F1}, register {Stats.Median(Phase("register_us")):F1}, "
+            + $"apply (state migration / delta) {Stats.Median(Phase("apply_us")):F1}, wait for boundary {Stats.Median(Boundary()):F1}, first tick {Stats.Median(edits.Select(e => e!["first_tick_ms"]?.GetValue<double>() ?? double.NaN).ToArray()):F1}");
+        entry[label]!["host_side_median_ms"] = new JsonObject { ["transfer"] = Stats.Median(Phase("transfer_us")), ["load"] = Stats.Median(Phase("load_us")), ["prejit"] = Stats.Median(Phase("prejit_us")),
+            ["register"] = Stats.Median(Phase("register_us")), ["apply"] = Stats.Median(Phase("apply_us")), ["wait_for_boundary"] = Stats.Median(Boundary()) };
+    }
+    // The first image: what the server did and what the host did with it (launch to first tick is these plus process start and the pipe).
+    var initial = mine.Select(r => r["raw_reports"]?.AsArray().FirstOrDefault(x => x!["report"]!["kind"]!.GetValue<int>() == 0)?["report"]).Where(r => r is not null).ToArray();
+    if (initial.Length > 0)
+    {
+        double[] Init(string key) => initial.Select(r => r![key]!.GetValue<double>() / 1000).ToArray();
+        text.AppendLine($"  first image, median ms: server parse {Stats.Median(Init("parse_us")):F0}, generators {Stats.Median(Init("generate_us")):F0}, emit {Stats.Median(Init("emit_us")):F0}, analyzers {Stats.Median(Init("analyze_us")):F0}; "
+            + $"host transfer {Stats.Median(Init("transfer_us")):F0}, load {Stats.Median(Init("load_us")):F0}, pre-JIT {Stats.Median(Init("prejit_us")):F0}, register {Stats.Median(Init("register_us")):F0}, apply {Stats.Median(Init("apply_us")):F0}");
+        entry["first_image_median_ms"] = new JsonObject { ["parse"] = Stats.Median(Init("parse_us")), ["generators"] = Stats.Median(Init("generate_us")), ["emit"] = Stats.Median(Init("emit_us")),
+            ["load"] = Stats.Median(Init("load_us")), ["prejit"] = Stats.Median(Init("prejit_us")), ["register"] = Stats.Median(Init("register_us")) };
     }
     cells[name] = entry;
 }
@@ -112,13 +131,14 @@ Console.Write(text);
 Console.WriteLine($"\nraw runs and summary: {options.Output}");
 
 /// <summary>Command line.</summary>
-sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string CargoJobs, string Output, List<(string Name, string Sdk)> Variants, bool Trace)
+sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string CargoJobs, string Output, List<(string Name, string Sdk)> Variants, bool Trace, List<(string Variant, string Key, string Value)> Env)
 {
     internal static Options Parse(string[] args)
     {
         int runs = 10, edits = 45, lines = 5000;
         var skip = false;
         var trace = false;
+        var env = new List<(string, string, string)>();
         var jobs = "2";
         var output = "";
         var variants = new List<(string, string)>();
@@ -133,6 +153,13 @@ sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string Car
                 case "--cargo-jobs": jobs = Next(); break;
                 case "--skip-build": skip = true; break;
                 case "--trace": trace = true; break;
+                case "--env":
+                    var item = Next();
+                    var colon = item.IndexOf(':');
+                    var equals = item.IndexOf('=');
+                    if (colon <= 0 || equals < colon) throw new ArgumentException("--env takes VARIANT:KEY=VALUE (set for that variant's runs only)");
+                    env.Add((item[..colon], item[(colon + 1)..equals], item[(equals + 1)..]));
+                    break;
                 case "--output": output = Path.GetFullPath(Next()); break;
                 case "--variant":
                     var spec = Next();
@@ -145,7 +172,7 @@ sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string Car
         }
         if (edits < 6) throw new ArgumentException("--edits must be at least 6 so every level is measured");
         output = output.Length > 0 ? output : Path.Combine(Repo.Root(), "target", "reload-timing", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        return new(Math.Max(runs, 1), edits, lines, skip, jobs, output, variants, trace);
+        return new(Math.Max(runs, 1), edits, lines, skip, jobs, output, variants, trace, env);
     }
 }
 
@@ -160,11 +187,12 @@ static class Repo
     }
 
     /// <summary>Runs a program and returns its exit code; throws on failure when <paramref name="check"/>.</summary>
-    internal static int Run(string program, string[] args, string cwd, (string Key, string Value)? env = null, bool check = true, bool quiet = false, string? stderrTo = null)
+    internal static int Run(string program, string[] args, string cwd, (string Key, string Value)? env = null, bool check = true, bool quiet = false, string? stderrTo = null, IEnumerable<(string Key, string Value)>? more = null)
     {
         var psi = new ProcessStartInfo(program) { WorkingDirectory = cwd, UseShellExecute = false, RedirectStandardOutput = quiet, RedirectStandardError = quiet };
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         if (env is { } pair) psi.Environment[pair.Key] = pair.Value;
+        foreach (var (key, value) in more ?? []) psi.Environment[key] = value;
         using var process = Process.Start(psi) ?? throw new InvalidOperationException($"cannot start {program}");
         if (quiet)
         {
@@ -222,7 +250,7 @@ static class Stats
 static class Trace
 {
     static readonly System.Text.RegularExpressions.Regex Line = new(@"^\[ara-trace\] (\d+) (bench|server|work) (.*)$");
-    static readonly System.Text.RegularExpressions.Regex Work = new(@"^(\w+) outcome=(\S+) ms=([\d.]+) gcDelta=(\d+)/(\d+)/(\d+) pauseDeltaMs=([-\d.]+) jitDelta=(\d+)/([-\d.]+)ms cpuDeltaMs=([-\d.]+)");
+    static readonly System.Text.RegularExpressions.Regex Work = new(@"^(\w+) outcome=(\S+)(?: escalation=(\S+))? ms=([\d.]+) gcDelta=(\d+)/(\d+)/(\d+) pauseDeltaMs=([-\d.]+) jitDelta=(\d+)/([-\d.]+)ms cpuDeltaMs=([-\d.]+)");
 
     internal static void Summarize(string output, IEnumerable<string> variants, StringBuilder text, JsonObject summary)
     {
@@ -233,6 +261,7 @@ static class Trace
             var offsets = new Dictionary<string, List<double>>();
             var order = new List<string>();
             var works = new List<(string Outcome, double Ms, int Gen2, double Pause, long Jit, double JitMs, double Cpu)>();
+            var reasons = new Dictionary<(string Outcome, string Escalation), int>();
             string[] firstDescribe = [];
             foreach (var file in files)
             {
@@ -251,7 +280,11 @@ static class Trace
                     {
                         var w = Work.Match(rest);
                         if (w.Success)
-                            works.Add((w.Groups[2].Value, D(w, 3), int.Parse(w.Groups[6].Value, CultureInfo.InvariantCulture), D(w, 7), long.Parse(w.Groups[8].Value, CultureInfo.InvariantCulture), D(w, 9), D(w, 10)));
+                            {
+                            works.Add((w.Groups[2].Value, D(w, 4), int.Parse(w.Groups[7].Value, CultureInfo.InvariantCulture), D(w, 8), long.Parse(w.Groups[9].Value, CultureInfo.InvariantCulture), D(w, 10), D(w, 11)));
+                            var reason = (w.Groups[2].Value, w.Groups[3].Value);
+                            reasons[reason] = reasons.TryGetValue(reason, out var seen) ? seen + 1 : 1;
+                        }
                         continue;
                     }
                     if (start is null) continue;
@@ -289,6 +322,8 @@ static class Trace
                 tail[group.Key] = new JsonObject { ["n"] = all.Length, ["median_ms"] = Stats.Median(all.Select(w => w.Ms).ToArray()), ["p95_ms"] = Stats.Percentile(all.Select(w => w.Ms).ToArray(), 0.95),
                     ["slowest_pct_with_gc_pause_over_5ms"] = Pct(w => w.Pause > 5, slow), ["slowest_pct_with_gen2"] = Pct(w => w.Gen2 > 0, slow), ["slowest_pct_with_jit_over_100"] = Pct(w => w.Jit > 100, slow) };
             }
+            foreach (var outcome in reasons.Keys.Select(k => k.Outcome).Distinct().Where(o => o.StartsWith("Image/", StringComparison.Ordinal) && o != "Image/initial").Order())
+                text.AppendLine($"  {outcome} happened because: " + string.Join(", ", reasons.Where(r => r.Key.Outcome == outcome).OrderByDescending(r => r.Value).Select(r => $"{r.Key.Escalation} {r.Value}")));
             ((JsonObject)summary["trace_" + variant]!)["compiles"] = tail;
         }
     }

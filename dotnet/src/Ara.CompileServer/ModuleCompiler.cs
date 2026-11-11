@@ -106,8 +106,15 @@ internal sealed class ModuleCompiler
     /// first real compile for a few hundred ms, so on a small machine it competes with it: measured with the machine limited to
     /// about two cores, the median improved 3% but the 95th percentile worsened from 1.6 s to 2.4 s. From 8 cores up it
     /// shortened both (665 ms against 786 ms median, p95 690 against 817).
+    /// <paramref name="setting"/> is the <c>ARA_WARMUP</c> value: "0" or "1" force it off or on (a measurement switch, to compare
+    /// launch with and without the warm-up on one machine); anything else keeps the core-count rule.
     /// </summary>
-    internal static bool ShouldWarmUp(int logicalCores) => logicalCores >= 8;
+    internal static bool ShouldWarmUp(int logicalCores, string? setting = null) => setting switch
+    {
+        "0" => false,
+        "1" => true,
+        _ => logicalCores >= 8,
+    };
 
     /// <summary>
     /// Loads Roslyn's cold paths while the server waits for its first module, on two dedicated low-priority threads (not the

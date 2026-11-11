@@ -13,6 +13,7 @@ internal static class StartupTrace
     internal static readonly bool Enabled = System.Environment.GetEnvironmentVariable("ARA_TRACE") == "1";
 
     [ThreadStatic] static string? _outcome;
+    [ThreadStatic] static string? _escalation;
 
     /// <summary>The runtime's counters at one moment, to subtract around a piece of work.</summary>
     internal readonly record struct Counters(int Gen0, int Gen1, int Gen2, double PauseMs, long Jit, double JitMs, double CpuMs)
@@ -57,15 +58,22 @@ internal static class StartupTrace
     }
 
     /// <summary>The outcome the current work produced (set while the work runs; read when it ends).</summary>
-    internal static void Outcome(string text) { if (Enabled) _outcome = text; }
+    internal static void Outcome(string text, object? escalation = null)
+    {
+        if (!Enabled) return;
+        _outcome = text;
+        _escalation = escalation?.ToString();
+    }
 
     /// <summary>One line per unit of compile work: how long it took and what the runtime did meanwhile.</summary>
     internal static void Work(string kind, double elapsedMs, Counters before)
     {
         var after = Counters.Now();
         var outcome = _outcome ?? "-";
+        var escalation = _escalation ?? "-";
         _outcome = null;
-        Console.Error.WriteLine($"[ara-trace] {UnixMs()} work {kind} outcome={outcome} ms={elapsedMs:F1} gcDelta={after.Gen0 - before.Gen0}/{after.Gen1 - before.Gen1}/{after.Gen2 - before.Gen2} "
+        _escalation = null;
+        Console.Error.WriteLine($"[ara-trace] {UnixMs()} work {kind} outcome={outcome} escalation={escalation} ms={elapsedMs:F1} gcDelta={after.Gen0 - before.Gen0}/{after.Gen1 - before.Gen1}/{after.Gen2 - before.Gen2} "
             + $"pauseDeltaMs={after.PauseMs - before.PauseMs:F1} jitDelta={after.Jit - before.Jit}/{after.JitMs - before.JitMs:F0}ms cpuDeltaMs={after.CpuMs - before.CpuMs:F0}");
     }
 }

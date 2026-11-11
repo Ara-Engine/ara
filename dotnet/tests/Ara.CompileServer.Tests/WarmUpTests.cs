@@ -30,6 +30,16 @@ public sealed class WarmUpTests
     public void The_warm_up_only_runs_where_it_does_not_compete_with_the_first_compile(int cores, bool expected) =>
         Assert.Equal(expected, ModuleCompiler.ShouldWarmUp(cores));
 
+    /// <summary>ARA_WARMUP=0/1 overrides the core rule in either direction; other values leave it alone.</summary>
+    [Theory]
+    [InlineData(16, "0", false)]
+    [InlineData(2, "1", true)]
+    [InlineData(16, "", true)]
+    [InlineData(2, "yes", false)]
+    [InlineData(16, null, true)]
+    public void The_warm_up_setting_overrides_the_core_rule(int cores, string? setting, bool expected) =>
+        Assert.Equal(expected, ModuleCompiler.ShouldWarmUp(cores, setting));
+
     [Fact]
     public void The_warm_up_compile_generates_and_emits()
     {
