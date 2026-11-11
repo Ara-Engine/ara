@@ -449,7 +449,6 @@ public sealed class DevModuleLoader : IModuleLoader
         });
     }
 
-    /// <summary>A <see cref="MessageKind.Diagnostics"/>: report them; errors record a failed reload.</summary>
     /// <summary>
     /// With <c>ARA_DUMP_IMAGES=&lt;folder&gt;</c> every fresh image is also written there (<c>module-gN.dll</c>), so
     /// <c>benchmarks/iteration/amsi_probe.cs</c> can measure what the operating system's scan of a real image costs. Off otherwise.
@@ -466,6 +465,7 @@ public sealed class DevModuleLoader : IModuleLoader
         catch (UnauthorizedAccessException) { }
     }
 
+    /// <summary>A <see cref="MessageKind.Diagnostics"/>: report them; errors record a failed reload.</summary>
     internal void OnDiagnostics(CompileClient client, Protocol.Reader r)
     {
         var (slot, errors, json, serverUs, origin) = (r.U32(), r.U32(), r.Str(), r.U64(), r.U32());
