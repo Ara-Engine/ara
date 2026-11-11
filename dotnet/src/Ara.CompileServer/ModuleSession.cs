@@ -322,22 +322,25 @@ internal sealed partial class ModuleSession
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         _disk.Clear();
+        // Trees go to the compilation in file order: a hash map enumerates in per-process random order
+        // (randomized string hashing), and tree order reaches the emitted metadata.
+        var ordered = new List<SyntaxTree>(files.Length);
         foreach (var path in files)
         {
             var full = ProjectInventory.ProjectPath(path);
             var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
             _disk[full] = text;
             texts[full] = text;
-            trees[full] = ModuleCompiler.Parse(full, text);
+            ordered.Add(trees[full] = ModuleCompiler.Parse(full, text));
         }
         var hot = (LoadedHot ?? _startHot) && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
-        var user = _compiler.Create([.. trees.Values, Usings], hot, refs.Values);
+        var user = _compiler.Create([.. ordered, Usings], hot, refs.Values);
         var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
             null, hot, 0, null, surfaces, refs);
         p.Parse = p.Mark();
         var kind = Loaded ? AbiConst.ReloadL3 : AbiConst.ReloadInitial;
-        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, [.. trees.Values], null, ctx, true, ct);
+        return Build(user, start, kind, Loaded ? Escalation.Requested : Escalation.None, p, ordered, null, ctx, true, ct);
     }
 
     /// <summary>A full image of the committed state, hot or cold (heat change, or the host asked for one).</summary>
