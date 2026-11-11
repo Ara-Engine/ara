@@ -232,11 +232,11 @@ mod completed_debug_tests {
     fn debug_mode_names_cannot_fall_back_to_lit() {
         assert_eq!(
             super::super::view_mode("gi_diffuse"),
-            ara_render::capture::ViewMode::GiDiffuse
+            ara_frame::capture::ViewMode::GiDiffuse
         );
         assert_eq!(
             super::super::view_mode("overdraw"),
-            ara_render::capture::ViewMode::Overdraw
+            ara_frame::capture::ViewMode::Overdraw
         );
     }
 }

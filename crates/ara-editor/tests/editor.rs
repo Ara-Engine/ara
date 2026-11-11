@@ -692,7 +692,7 @@ fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
         .action("editor.camera", json!({"fovYDegrees": 54}))
         .unwrap();
     assert_eq!(set["camera"]["fovYDegrees"], 54.);
-    let ara_render::scene::CameraSpec::LookAt { vertical_fov, .. } = editor.state.camera.spec()
+    let ara_frame::scene::CameraSpec::LookAt { vertical_fov, .. } = editor.state.camera.spec()
     else {
         panic!("the Scene view is a perspective camera")
     };

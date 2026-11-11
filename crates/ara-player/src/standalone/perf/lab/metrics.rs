@@ -63,7 +63,7 @@ pub(super) fn regions(
                 ara_pathtrace::flip::PIXELS_PER_DEGREE,
             )?
             .compare(prepared_actual.as_ref().context("prepared crop")?)?;
-            let ssim = 1. - ara_render::capture::compare(&actual, &truth, 2.)?.score;
+            let ssim = 1. - ara_frame::capture::compare(&actual, &truth, 2.)?.score;
             let reference_png = output.join(format!("{shot}-{name}-reference.png"));
             truth.save(&reference_png)?;
             value["reference_png"] = json!(reference_png);

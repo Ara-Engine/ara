@@ -64,7 +64,7 @@ impl NativeResidency {
     pub fn preallocate(
         &mut self,
         gpu: &mut GpuDevice,
-        previous: Option<&dyn ara_render::instanced::Textures>,
+        previous: Option<&dyn ara_frame::instanced::Textures>,
     ) -> Result<bool> {
         ensure!(
             self.table.is_none(),

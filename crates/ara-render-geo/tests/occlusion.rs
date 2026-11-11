@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use ara_geo::{Settings, cook, sample};
 use ara_gpu::GpuDevice;
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 use ara_render_geo::{DebugView, GeometryView, Instance, View};
 use glam::Vec3;
 use std::path::Path;

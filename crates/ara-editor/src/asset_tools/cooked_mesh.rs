@@ -2,7 +2,7 @@
 use ara_asset::{
     CacheBackend, Cancellation, FileCache, JobEvent, ProcessWorker, SourceAsset, TargetPlatform,
 };
-use ara_render::scene::{Mesh, Vertex};
+use ara_frame::scene::{Mesh, Vertex};
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
 /// Resolve storage input against the same authored boundary used by snapshots.

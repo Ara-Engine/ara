@@ -61,8 +61,8 @@ pub fn plan(
                 reflections.high_tier || post.high_tier || shadows.high_tier || gi.high_tier;
             quality.upscaler = match settings.upscaler {
                 Upscaler::Preset => group(groups.anti_aliasing).upscaler,
-                Upscaler::Taau => ara_render::Upscaler::Taau,
-                Upscaler::Tsr => ara_render::Upscaler::Tsr,
+                Upscaler::Taau => ara_frame::look::Upscaler::Taau,
+                Upscaler::Tsr => ara_frame::look::Upscaler::Tsr,
             };
             if let Some(scale) = settings.resolution_scale {
                 raster.render_size =

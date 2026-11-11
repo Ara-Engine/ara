@@ -1,7 +1,7 @@
 //! Model-space geometry (procedural shapes, decoded primitives) and the per-frame
 //! transform to world space, with CPU linear-blend skinning for skinned primitives.
 //! GPU skinning needs a skinned vertex ABI in the cooked shaders (M3).
-use ara_render::scene::Vertex;
+use ara_frame::scene::Vertex;
 use ara_runtime::{components::MeshShape, model::ModelVertex};
 use glam::{Mat3, Mat4, Vec3};
 use std::f32::consts::{FRAC_PI_2, TAU};

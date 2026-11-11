@@ -9,6 +9,7 @@ publish.workspace = true
 anyhow = { workspace = true }
 ara-geo = { path = "../ara-geo" }
 ara-gpu = { path = "../ara-gpu" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-vsm = { path = "../ara-vsm" }
 ara-color = { path = "../ara-color" }

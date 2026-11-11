@@ -3,7 +3,7 @@
 pub mod fixtures;
 use anyhow::{Result, ensure};
 use ara_2d::{Camera2d, Sprite, SpriteRegion};
-use ara_render::capture::{CaptureRequest, ViewMode};
+use ara_frame::capture::{CaptureRequest, ViewMode};
 use ara_render2d::{AtlasImage, Scene2d, SpriteDraw};
 use ara_schema::{AssetRef, SchemaDb};
 use std::{collections::BTreeMap, path::Path};
@@ -15,7 +15,7 @@ pub const TICKS: u32 = 120;
 
 pub fn request(size: [u32; 2]) -> CaptureRequest {
     CaptureRequest {
-        camera: ara_render::scene::CameraSpec::Orthographic {
+        camera: ara_frame::scene::CameraSpec::Orthographic {
             centre: glam::Vec2::ZERO,
             world_size: glam::Vec2::ONE,
         },

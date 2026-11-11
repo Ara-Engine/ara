@@ -7,17 +7,14 @@
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{Access, Device, Queue, Resource, commands::Command, vk};
 use ara_landscape::{Landscape, View, sample::LandscapeData};
-use ara_render::{
-    Renderer,
-    capture::{Capture, CaptureRequest},
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{Capture, CaptureRequest}, scene::CameraSpec};
+use ara_render::{Renderer};
 use ara_runtime::{extract::RenderFrame, terrain::TerrainData};
 use ara_terrain::TileCoord;
 use image::RgbaImage;
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
-/// The scene renderer's near plane (`ara_render::scene`).
+/// The scene renderer's near plane (`ara_frame::scene`).
 const NEAR: f32 = 0.1;
 
 fn cooked_root() -> PathBuf {

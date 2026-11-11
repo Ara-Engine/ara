@@ -81,7 +81,7 @@ impl Service for CaptureService {
 /// encodes and saves it on a worker.
 pub(crate) enum Work {
     /// The Scene with numbered entity marks, and the render-id to entity map.
-    Viewport(Box<ara_render::capture::Capture>, std::path::PathBuf, Value),
+    Viewport(Box<ara_frame::capture::Capture>, std::path::PathBuf, Value),
     /// The editor window as a PNG, and its layout report.
     Editor(Vec<u8>, std::path::PathBuf, Value),
     /// Only the layout report.

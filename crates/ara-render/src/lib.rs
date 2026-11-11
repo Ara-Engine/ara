@@ -1,14 +1,15 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Ara's render graph, PBR baseline and deterministic visual feedback API.
-pub mod capture;
+//! Scene, instanced content, look and capture records live in `ara-frame` and are re-exported.
+pub use ara_frame::capture;
 pub mod graph;
 pub mod instanced;
 #[cfg(feature = "fidelity-lab")]
 pub mod lab;
 pub mod look;
 pub mod renderer;
-pub mod scene;
+pub use ara_frame::scene;
 mod tsr;
 pub use look::reflect::{ReflectionCounters, SoftwareReflections};
 pub use look::transport::solve::{

@@ -2,7 +2,7 @@
 //! exposure running as in Play) while the camera travels and turns linearly, one PNG
 //! per 60 Hz frame, for side-by-side comparisons (`ffmpeg -framerate 60 -i %05d.png`).
 use anyhow::{Context, Result};
-use ara_render::capture::CaptureRequest;
+use ara_frame::capture::CaptureRequest;
 use ara_runtime::extract::RenderFrame;
 use ara_runtime_render::{Presenter, fidelity::native::Content};
 use std::path::Path;

@@ -32,10 +32,10 @@ impl Worker {
                     let result = (|| {
                         let mut capture = presenter.capture_with(
                             &request.frame,
-                            &ara_render::capture::CaptureRequest {
+                            &ara_frame::capture::CaptureRequest {
                                 camera: ara_runtime_render::camera(&request.frame)?,
                                 size: [1920, 1080],
-                                mode: ara_render::capture::ViewMode::Lit,
+                                mode: ara_frame::capture::ViewMode::Lit,
                                 deterministic: true,
                                 exposure: request.frame.environment.exposure,
                                 settle_frames: 16,

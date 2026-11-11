@@ -1,10 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use ara_gpu::GpuDevice;
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-    scene::{Material, Scene, Texture, sphere},
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::{Material, Scene, Texture, sphere}};
+use ara_render::{Renderer};
 use ara_vfx_gpu::{GpuSystem, SceneColor, SceneDepth, View};
 use glam::Vec3;
 use std::path::Path;

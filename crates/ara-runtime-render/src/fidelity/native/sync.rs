@@ -38,7 +38,7 @@ pub(super) struct Bindings {
     lights: Vec<ara_runtime::extract::LightView>,
     /// Decal identities (`decals::identity`) and whether each drew.
     decals: Vec<(super::decals::Identity, bool)>,
-    scratch: Vec<ara_render::scene::Vertex>,
+    scratch: Vec<ara_frame::scene::Vertex>,
     live: bool,
 }
 
@@ -346,7 +346,7 @@ fn update_skin(
     geometry: &mut render::Geometry,
     source: &[ModelVertex],
     palette: &[glam::Mat4],
-    scratch: &mut Vec<ara_render::scene::Vertex>,
+    scratch: &mut Vec<ara_frame::scene::Vertex>,
 ) -> f32 {
     crate::geometry::transform(source, glam::Mat4::IDENTITY, Some(palette), scratch);
     let mut bounds = [

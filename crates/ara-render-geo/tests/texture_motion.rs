@@ -3,7 +3,7 @@ mod support;
 use anyhow::{Result, ensure};
 use ara_geo::{SourceMesh, Vertex};
 use ara_gpu::{GpuDevice, cooked::write_json};
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 use ara_render_geo::{DebugView, GeometryView, Instance, View};
 use ara_texture_stream::{Catalog, Residency, Source};
 use glam::Vec3;

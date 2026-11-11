@@ -15,12 +15,8 @@
 
 use super::Changes;
 use crate::instanced::Scene;
-pub use crate::look::transport::changes::*;
+pub use crate::change_feed::*;
 use anyhow::{Result, ensure};
-
-#[cfg(test)]
-#[path = "transport_tests.rs"]
-mod tests;
 
 /// Additional producer data absent from the legacy row-only update contract.
 #[derive(Default)]

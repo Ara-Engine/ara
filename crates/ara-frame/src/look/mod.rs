@@ -1,0 +1,690 @@
+//! Authored look and quality budgets. GPU passes that apply them stay in `ara-render`.
+//!
+//! Hosts map the scene's authored look onto [`Look`]. The renderer applies it at a
+//! frame boundary. The defaults reproduce the M1 baseline: manual exposure, the ACES
+//! fit, no bloom, no sky and no fog.
+
+pub mod atmosphere;
+pub mod captures;
+pub mod gi;
+mod lens;
+pub mod placement;
+pub mod volumetric;
+
+pub use lens::{
+    AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
+};
+pub use volumetric::{
+    FogVolume, FogVolumeShape, VolumetricFog, VolumetricFogQuality, MAX_FOG_VOLUMES,
+};
+
+/// Display curve applied after exposure. The values match `ara_render_fidelity::ToneMapper`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ToneCurve {
+    /// Narkowicz's per-channel ACES fit (the M1 curve).
+    #[default]
+    AcesFit = 0,
+    /// Khronos PBR Neutral.
+    Neutral = 1,
+    /// Hill's fitted ACES RRT+ODT, pre-scaled to keep 18% grey.
+    Filmic = 2,
+    /// AgX as Blender 5.1 ships it.
+    Agx = 3,
+    /// AgX with Blender's "Punchy" look.
+    AgxPunchy = 4,
+    /// AgX with Blender's "Medium High Contrast" look.
+    AgxMediumHighContrast = 5,
+}
+
+/// The raster renderer's temporal upscaler. Both resolve into the same display history.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Upscaler {
+    /// Ara's temporal antialiasing and upscaling.
+    #[default]
+    Taau,
+    /// Ara TSR, beside TAAU.
+    Tsr,
+}
+
+impl Upscaler {
+    /// The `ARA_UPSCALER` environment variable (`tsr` or `taau`, any case) for A/B
+    /// runs; unset or anything else selects TAAU.
+    pub fn from_env() -> Self {
+        Self::forced().unwrap_or_default()
+    }
+    /// The upscaler `ARA_UPSCALER` forces over the preset's, if set.
+    pub fn forced() -> Option<Self> {
+        match std::env::var("ARA_UPSCALER") {
+            Ok(value) if value.eq_ignore_ascii_case("tsr") => Some(Self::Tsr),
+            Ok(value) if value.eq_ignore_ascii_case("taau") => Some(Self::Taau),
+            _ => None,
+        }
+    }
+}
+
+/// Mean emitted luminance (cd/m2) above which hosts promote a material's emission to
+/// emitter lights (`Quality::emitter_lights`; ara-runtime-render's emitters): that
+/// light then reaches the scene directly, so screen probe GI drops such emission
+/// where its rays hit it, and probe bakes zero it.
+pub const EMITTER_RADIANCE: f32 = 5.;
+
+/// Per-preset raster budgets (`Renderer::set_quality`); independent of the
+/// authored look. The default is the M1 configuration.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Quality {
+    /// Sun shadow cascades.
+    pub shadows: Shadows,
+    /// Screen-space ambient occlusion (GTAO at half resolution; with `high_tier`, a
+    /// visibility bitmask that also bounces last frame's colour from geometry within
+    /// the radius); `None` keeps only material occlusion.
+    pub ambient_occlusion: Option<AmbientOcclusion>,
+    /// Screen-space reflections (half resolution) over probe and environment
+    /// reflections; `None` keeps only those.
+    pub reflections: Option<Reflections>,
+    /// Probe GI caches relit per frame; the rest carry their irradiance forward.
+    pub gi_budget: u32,
+    /// Run the bloom pyramid when the look asks for bloom.
+    pub bloom: bool,
+    /// Local lights emissive surfaces become (patches cluster until they fit),
+    /// within the scene's `MAX_LOCAL_LIGHTS`.
+    pub emitter_lights: u32,
+    /// Projected geometric error, in pixels, a selected LOD may show; larger
+    /// values pick coarser LODs.
+    pub lod_pixels: f32,
+    /// Projected bound radius, in pixels, below which an instance is culled.
+    pub min_pixels: f32,
+    /// The High/Epic tier's lighting and forward PSOs (`lighting_high`,
+    /// `native_forward_high`): tier-only shading (reflection captures, soft shadows,
+    /// ambient bounce) is compiled into those variants alone, so lower presets pay
+    /// nothing for its code.
+    pub high_tier: bool,
+    /// The temporal upscaler (`renderer::set_quality` applies it unless
+    /// `ARA_UPSCALER` forces one for A/B runs): Ara TSR on High and Epic, TAAU below.
+    pub upscaler: Upscaler,
+    /// Local reflection captures (`look::captures`), baked off the hot path and read
+    /// by the High/Epic PSOs (`high_tier`) under screen-space reflections; `None`
+    /// keeps probe and sky reflections.
+    pub reflection_captures: Option<ReflectionCaptures>,
+    /// Cached shadows for the brightest local lights in view; `None` leaves
+    /// local lights unshadowed.
+    pub local_shadows: Option<LocalShadows>,
+    /// Distance in metres to which terrain splat layers sample their normal and
+    /// metal/roughness maps; beyond it (blended over a quarter more) they keep
+    /// colour maps and the metal/roughness maps' means. Zero: none, anywhere, and
+    /// no side projections on steep slopes either: the G-buffer binds the native
+    /// PSO compiled without them (layers keep the top projection).
+    pub terrain_detail: f32,
+    /// Heightfield horizon shadows and sky visibility for distant terrain
+    /// (`look::horizon`): texels per side of the top-down capture over the content
+    /// (a power of two, 256 to 4096). `None` leaves distance to the cascades and
+    /// far map.
+    pub horizon: Option<u32>,
+    /// Virtual shadow maps for the sun (`look::vsm`): cached clipmap pages wherever
+    /// pixels need them, sampled before the cascades and far map (which remain the
+    /// fallback while pages render). `None` keeps the cascades alone.
+    pub virtual_shadows: Option<VirtualShadows>,
+    /// Depth of field where a look asks for it (half-resolution gather before the
+    /// temporal resolve); `None` ignores looks' focus blur.
+    pub depth_of_field: Option<DepthOfFieldQuality>,
+    /// Motion blur where a look asks for it (the post pass's motion variant; needs the
+    /// native renderer's motion vectors); `None` ignores looks' shutter.
+    pub motion_blur: Option<MotionBlurQuality>,
+    /// Hardware ray queries of the hybrid path (D29; `renderer::rt`), set only under
+    /// the ray-tracing opt-in:
+    /// deterministic mirror and glossy reflections below a roughness cut, which
+    /// replace screen-space reflections there. They run only on native content on
+    /// devices with ray queries; other devices keep the raster path of the same
+    /// preset. `None`: raster only.
+    pub ray_queries: Option<RayQueries>,
+    /// The near-field froxel volume of volumetric fog (`look::volumetric`): sun
+    /// shafts, lamp cones and local fog volumes at screen-tile resolution up to the
+    /// fog's volumetric distance, temporally accumulated. `None` keeps the coarse
+    /// 4 km fog grid alone (still shadowed, at 40-pixel columns).
+    pub volumetric_fog: Option<VolumetricFogQuality>,
+    /// Screen probe GI (`look::screen_gi`; read by the High/Epic lighting PSOs,
+    /// `high_tier`): probes on the visible surfaces trace fixed directions through a
+    /// Hi-Z pyramid of the frame's depth, shade hits from last frame's colour and
+    /// continue misses into the probe volume, so diffuse and rough specular indirect
+    /// light come from what the screen shows (multi-bounce, emissive surfaces, near
+    /// occlusion). `None` keeps the probe volume's lighting alone.
+    pub screen_gi: Option<ScreenGi>,
+}
+
+/// Screen probe GI budgets (`Quality::screen_gi`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenGi {
+    /// Render pixels per probe tile side (8, 16 or 32): one probe of 64 rays per tile.
+    pub tile: u32,
+    /// Hi-Z traversal steps per ray (8 to 128); rays that run out fall back to the
+    /// probe volume.
+    pub steps: u32,
+    /// Longest screen trace in metres; what lies further comes from the probe volume.
+    pub distance: f32,
+}
+
+/// Hybrid ray-query budgets (`Quality::ray_queries`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RayQueries {
+    /// Surfaces at most this rough trace one reflection ray per pixel (the GGX
+    /// lobe's dominant direction, cone-filtered by roughness and hit distance);
+    /// rougher ones use `rough_roughness`.
+    pub reflection_roughness: f32,
+    /// Rougher surfaces, up to this, trace four rays per 2x2 pixels inside the lobe
+    /// (half resolution): the share of the lobe that local geometry blocks takes
+    /// that geometry's radiance over the probe and sky reflections (ray-traced
+    /// specular occlusion); at least `reflection_roughness`, at most one.
+    pub rough_roughness: f32,
+    /// Longest reflection ray in metres; misses see the sky.
+    pub distance: f32,
+}
+
+/// Virtual shadow map budgets (`look::vsm`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VirtualShadows {
+    /// Physical 128-texel pages in the atlas (a multiple of 32, 256 to 4096).
+    pub pages: u32,
+    /// Pages rendered per frame at most; the rest wait while shading falls back.
+    pub budget: u32,
+    /// Clipmap level bias: positive values sample coarser (fewer) pages.
+    pub bias: f32,
+}
+impl Default for Quality {
+    fn default() -> Self {
+        Self {
+            shadows: Shadows::default(),
+            ambient_occlusion: None,
+            reflections: None,
+            gi_budget: 2048,
+            bloom: true,
+            emitter_lights: 8,
+            lod_pixels: 1.,
+            min_pixels: 1.5,
+            high_tier: false,
+            upscaler: Upscaler::Taau,
+            reflection_captures: None,
+            terrain_detail: 150.,
+            local_shadows: None,
+            horizon: None,
+            virtual_shadows: None,
+            depth_of_field: None,
+            motion_blur: None,
+            ray_queries: None,
+            volumetric_fog: None,
+            screen_gi: None,
+        }
+    }
+}
+
+/// Cached local-light shadows (`look::local`): one D32 atlas of face tiles.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalShadows {
+    /// Lights shadowed at once: the brightest at the camera among those in view.
+    pub lights: u32,
+    /// Texels per face side (power of two, 128 to 1024).
+    pub resolution: u32,
+    /// Faces redrawn per frame at most (moved lights, changed casters, new
+    /// lights); a light shades unshadowed until all its faces are drawn.
+    pub redraws: u32,
+    /// Probe GI relight and the froxel fog sample these shadows too, so shadowed
+    /// local lights stop leaking through walls into bounce light and fog.
+    pub in_gi_and_fog: bool,
+}
+
+/// Local reflection capture budgets (`look::captures`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReflectionCaptures {
+    /// Level-0 texels per side of each capture's octahedral map (a power of two,
+    /// 64 to 512), unless a capture asks for its own; its faces render at this size.
+    pub resolution: u32,
+    /// Captures kept at most (1 to `captures::MAX_CAPTURES`), by priority, then size.
+    pub captures: u32,
+    /// Whether a scene that authors no reflection probe gets captures placed over its
+    /// content (`captures::auto_place`); authored probes bake either way.
+    pub automatic: bool,
+}
+
+/// Ground-truth-based ambient occlusion (horizon search per screen slice).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AmbientOcclusion {
+    /// World-space search radius in metres.
+    pub radius: f32,
+    /// Screen slices per pixel, one to four.
+    pub slices: u32,
+    /// Horizon steps per slice side, two to sixteen.
+    pub steps: u32,
+}
+impl Default for AmbientOcclusion {
+    fn default() -> Self {
+        Self {
+            radius: 1.,
+            slices: 2,
+            steps: 6,
+        }
+    }
+}
+
+/// Screen-space reflections: one deterministic mirror ray per half-resolution
+/// pixel; roughness widens them through a colour pyramid instead of noise.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reflections {
+    /// Surfaces rougher than this keep probe and environment reflections only.
+    pub max_roughness: f32,
+    /// Longest reflection ray in metres.
+    pub distance: f32,
+    /// March steps per ray (each followed by a five-step refinement on a hit).
+    pub steps: u32,
+}
+impl Default for Reflections {
+    fn default() -> Self {
+        Self {
+            max_roughness: 0.5,
+            distance: 30.,
+            steps: 24,
+        }
+    }
+}
+
+/// Cascaded sun shadows: up to four square cascades in a 2x2 D32 atlas, split
+/// with a practical (log/linear) scheme and stabilised to whole texels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shadows {
+    /// Cascades, one to four.
+    pub cascades: u32,
+    /// Texels per cascade side (power of two, 256 to 4096).
+    pub resolution: u32,
+    /// Cascaded view distance in metres; the last tenth blends into `far`.
+    pub distance: f32,
+    /// Distant shadows beyond the cascades; without one they fade to unshadowed.
+    pub far: Option<FarShadows>,
+}
+impl Default for Shadows {
+    fn default() -> Self {
+        Self {
+            cascades: 4,
+            resolution: 512,
+            distance: 100.,
+            far: None,
+        }
+    }
+}
+
+/// One cached shadow map for distant terrain and buildings past the cascades: a
+/// square region around the camera, recentred only when the camera travels a
+/// quarter of `distance`, and redrawn only when the sun turns, the region
+/// recentres or casters inside it change.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FarShadows {
+    /// Texels per side (power of two, 256 to 4096).
+    pub resolution: u32,
+    /// Shadowed view distance in metres (beyond the cascades).
+    pub distance: f32,
+}
+
+impl Quality {
+    /// Rejects budgets the renderer cannot allocate.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.reflection_captures.is_none_or(|r| {
+                r.resolution.is_power_of_two()
+                    && (64..=512).contains(&r.resolution)
+                    && (1..=captures::MAX_CAPTURES as u32).contains(&r.captures)
+            }),
+            "Invalid reflection capture budget"
+        );
+        let s = &self.shadows;
+        anyhow::ensure!(
+            (1..=4).contains(&s.cascades)
+                && s.resolution.is_power_of_two()
+                && (256..=4096).contains(&s.resolution)
+                && s.distance.is_finite()
+                && s.distance > 1.
+                && s.far.is_none_or(|far| {
+                    far.resolution.is_power_of_two()
+                        && (256..=4096).contains(&far.resolution)
+                        && far.distance.is_finite()
+                        && far.distance > s.distance
+                })
+                && self.gi_budget > 0
+                && self.lod_pixels.is_finite()
+                && self.lod_pixels > 0.
+                && self.min_pixels.is_finite()
+                && self.min_pixels >= 0.
+                && self.local_shadows.is_none_or(|l| {
+                    (1..=16).contains(&l.lights) // local::MAX_FACES
+                        && l.resolution.is_power_of_two()
+                        && (128..=1024).contains(&l.resolution)
+                        && l.redraws > 0
+                })
+                && self.reflections.is_none_or(|r| {
+                    (0.0..=1.0).contains(&r.max_roughness)
+                        && r.distance.is_finite()
+                        && r.distance > 0.
+                        && (4..=128).contains(&r.steps)
+                })
+                && self.ambient_occlusion.is_none_or(|a| {
+                    a.radius.is_finite()
+                        && a.radius > 0.
+                        && (1..=4).contains(&a.slices)
+                        && (2..=16).contains(&a.steps)
+                })
+                && self
+                    .horizon
+                    .is_none_or(|h| h.is_power_of_two() && (256..=4096).contains(&h))
+                && self.virtual_shadows.is_none_or(|v| {
+                    v.pages % 32 == 0
+                        && (256..=4096).contains(&v.pages)
+                        && (1..=256).contains(&v.budget)
+                        && (-2.0..=4.0).contains(&v.bias)
+                })
+                && self.depth_of_field.is_none_or(|d| {
+                    (8..=96).contains(&d.samples) && (0.005..=0.05).contains(&d.max_radius)
+                })
+                && self.motion_blur.is_none_or(|m| {
+                    (4..=32).contains(&m.samples) && (4.0..=32.0).contains(&m.max_length)
+                })
+                && self.ray_queries.is_none_or(|r| {
+                    r.reflection_roughness > 0.
+                        && r.reflection_roughness <= r.rough_roughness
+                        && r.rough_roughness <= 1.
+                        && r.distance.is_finite()
+                        && r.distance > 0.
+                })
+                && self.volumetric_fog.is_none_or(|v| v.valid())
+                && self.screen_gi.is_none_or(|s| {
+                    matches!(s.tile, 8 | 16 | 32)
+                        && (8..=128).contains(&s.steps)
+                        && s.distance.is_finite()
+                        && s.distance > 0.
+                }),
+            "Invalid raster quality"
+        );
+        Ok(())
+    }
+}
+
+/// Scene look applied by the raster renderer.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Look {
+    /// Display curve applied after exposure and grading.
+    pub curve: ToneCurve,
+    /// Histogram metering; `None` uses the manual exposure passed to `render` (and
+    /// the capture request's). Captures meter too: their first settle frame snaps
+    /// to the metered target, so results stay deterministic.
+    pub auto_exposure: Option<AutoExposure>,
+    /// Energy fraction redistributed to the bloom kernel, from zero to 0.25.
+    pub bloom: f32,
+    /// Scene-linear grading after exposure.
+    pub grading: Grading,
+    /// Physical sky replacing the environment map for lighting and display.
+    pub sky: Option<Sky>,
+    /// Exponential height fog.
+    pub fog: Option<Fog>,
+    /// Chromatic aberration, depth of field and motion blur.
+    pub lens: Lens,
+    /// Screen-space ambient occlusion strength and radius (where the quality runs it).
+    pub ao: AoTuning,
+    /// Screen-space reflection strength and reach (where the quality runs them).
+    pub ssr: SsrTuning,
+    /// Scale of the light the sky casts into the scene (its ambient light,
+    /// reflections, probe bounce and fog ambient) relative to the sky drawn in the
+    /// background; 1 is physical. Unreal's sky light intensity.
+    pub sky_light: f32,
+    /// Scale of the sun's in-scattering in fog particles (its light's volumetric
+    /// scattering intensity; 1 physical, 0 none). Clear air scatters it regardless.
+    pub sun_scattering: f32,
+}
+impl Default for Look {
+    fn default() -> Self {
+        Self {
+            curve: ToneCurve::AcesFit,
+            auto_exposure: None,
+            bloom: 0.,
+            grading: Grading::default(),
+            sky: None,
+            fog: None,
+            lens: Lens::default(),
+            ao: AoTuning::default(),
+            ssr: SsrTuning::default(),
+            sky_light: 1.,
+            sun_scattering: 1.,
+        }
+    }
+}
+
+/// Percentile-trimmed histogram metering towards 18% grey.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AutoExposure {
+    /// Lowest permitted EV100.
+    pub minimum_ev100: f32,
+    /// Highest permitted EV100.
+    pub maximum_ev100: f32,
+    /// Fraction of darkest histogram samples ignored, from zero to one.
+    pub low_percentile: f32,
+    /// Fraction of samples below the brightest ignored, from zero to one.
+    pub high_percentile: f32,
+    /// Exposure compensation in stops.
+    pub compensation: f32,
+    /// Adaptation rate in inverse seconds (frames are taken as 1/60 s).
+    pub adaptation: f32,
+    /// Extra compensation by the metered scene EV100 (Unreal's exposure compensation
+    /// curve): (EV100, stops) keys in rising EV order, linear between them and flat
+    /// beyond the ends. Build it with [`AutoExposure::curve`]; all zero adds none.
+    pub compensation_curve: [[f32; 2]; EXPOSURE_CURVE_KEYS],
+}
+/// Keys an exposure compensation curve holds ([`AutoExposure::compensation_curve`]).
+pub const EXPOSURE_CURVE_KEYS: usize = 8;
+impl AutoExposure {
+    /// A compensation curve from (EV100, stops) keys in any order: sorted, the first
+    /// [`EXPOSURE_CURVE_KEYS`] kept, the rest of the table repeating the last key.
+    pub fn curve(keys: &[[f32; 2]]) -> [[f32; 2]; EXPOSURE_CURVE_KEYS] {
+        let mut sorted: Vec<[f32; 2]> = keys
+            .iter()
+            .copied()
+            .filter(|k| k[0].is_finite() && k[1].is_finite())
+            .collect();
+        sorted.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        let last = sorted.get(EXPOSURE_CURVE_KEYS.min(sorted.len()).wrapping_sub(1));
+        let mut table = [last.copied().unwrap_or([0.; 2]); EXPOSURE_CURVE_KEYS];
+        for (slot, key) in table.iter_mut().zip(&sorted) {
+            *slot = *key;
+        }
+        table
+    }
+}
+impl Default for AutoExposure {
+    fn default() -> Self {
+        Self {
+            minimum_ev100: -6.,
+            maximum_ev100: 20.,
+            low_percentile: 0.05,
+            high_percentile: 0.95,
+            compensation: 0.,
+            adaptation: 2.,
+            compensation_curve: [[0.; 2]; EXPOSURE_CURVE_KEYS],
+        }
+    }
+}
+
+/// Scene-linear white balance, contrast, saturation and vignette, then display-space
+/// lift, gamma and gain after the tone curve.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Grading {
+    /// Per-channel white-balance gain (neutral is one).
+    pub white_balance_gain: [f32; 3],
+    /// Power contrast about 18% grey (neutral is one).
+    pub contrast: f32,
+    /// Saturation (neutral is one, zero is greyscale).
+    pub saturation: f32,
+    /// Vignette strength from zero to one.
+    pub vignette: f32,
+    /// Display-space colour raising the shadows, fading out toward white (neutral is zero).
+    pub lift: [f32; 3],
+    /// Display-space per-channel midtone power (neutral is one).
+    pub gamma: [f32; 3],
+    /// Display-space per-channel multiplier (neutral is one).
+    pub gain: [f32; 3],
+    /// Share of the colour lookup table applied last (`Renderer::set_color_lut`),
+    /// from zero to one.
+    pub lut_contribution: f32,
+}
+impl Default for Grading {
+    fn default() -> Self {
+        Self {
+            white_balance_gain: [1.; 3],
+            contrast: 1.,
+            saturation: 1.,
+            vignette: 0.,
+            lift: [0.; 3],
+            gamma: [1.; 3],
+            gain: [1.; 3],
+            lut_contribution: 1.,
+        }
+    }
+}
+
+/// Physical sky atmosphere (`atmosphere::Atmosphere`: Unreal's SkyAtmosphere in SI
+/// units) lit by the sun and an optional second atmosphere light, with a planar cloud
+/// layer.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sky {
+    /// World-space altitude of the planet's surface (sea level), in metres.
+    pub sea_level: f32,
+    /// The planet and its atmosphere's media and art direction.
+    pub atmosphere: atmosphere::Atmosphere,
+    /// How the sun (`Renderer::set_sun`, the shadowed directional light) meets the
+    /// atmosphere; `None` keeps it out: no sky scattering, disc or transmittance
+    /// (Unreal's atmosphere sun light off).
+    pub sun: Option<atmosphere::LightAtmosphere>,
+    /// The sun is the second atmosphere light (Unreal's atmosphere light index 1): a
+    /// moon lighting the scene while the first is below the horizon.
+    pub sun_is_second: bool,
+    /// The other atmosphere light (a moon, a second sun, or the set sun at night): it
+    /// scatters in the sky and the aerial perspective, draws its disc and lights the
+    /// sky's image-based lighting. It does not light surfaces directly.
+    pub other_light: Option<atmosphere::AtmosphereLight>,
+    /// Angular radius of the sun disk in radians.
+    pub sun_radius: f32,
+    /// Planar cloud cover from zero (clear) to one; clouds also shade the sun.
+    pub cloud_coverage: f32,
+    /// World altitude of the cloud layer in metres.
+    pub cloud_height: f32,
+}
+impl Default for Sky {
+    fn default() -> Self {
+        Self {
+            sea_level: 0.,
+            atmosphere: atmosphere::Atmosphere::EARTH,
+            sun: Some(atmosphere::LightAtmosphere::default()),
+            sun_is_second: false,
+            other_light: None,
+            sun_radius: 0.00465,
+            cloud_coverage: 0.,
+            cloud_height: 2200.,
+        }
+    }
+}
+
+/// Exponential height fog lit by the sun, sky and local lights.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fog {
+    /// Extinction at `base`, in inverse metres (zero to 0.1).
+    pub extinction: f32,
+    /// Density scale height above `base`, in metres.
+    pub height: f32,
+    /// World altitude with full `extinction`, in metres.
+    pub base: f32,
+    /// Linear scattering colour, zero to one per channel.
+    pub tint: [f32; 3],
+    /// Single-scattering albedo from zero to one; multiplies `tint`.
+    pub albedo: f32,
+    /// Henyey-Greenstein anisotropy, from zero to 0.9.
+    pub anisotropy: f32,
+    /// Volumetric lighting: sun and local-light shadows cut shafts into the fog,
+    /// local lights scatter in it, and the near field renders in the froxel volume
+    /// where the quality runs it (`Quality::volumetric_fog`). `None` is plain height
+    /// fog: unshadowed sun in-scattering and ambient light only.
+    pub volumetric: Option<VolumetricFog>,
+}
+impl Default for Fog {
+    fn default() -> Self {
+        Self {
+            extinction: 0.0008,
+            height: 90.,
+            base: 0.,
+            tint: [1.; 3],
+            albedo: 0.9,
+            anisotropy: 0.3,
+            volumetric: Some(VolumetricFog::default()),
+        }
+    }
+}
+
+impl Look {
+    /// Rejects values the shaders cannot represent.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        let finite = |v: &[f32]| v.iter().all(|x| x.is_finite());
+        let g = &self.grading;
+        anyhow::ensure!(
+            (0.0..=0.25).contains(&self.bloom)
+                && self.sky_light.is_finite()
+                && self.sky_light >= 0.
+                && (0.0..=16.0).contains(&self.sun_scattering)
+                && finite(&g.white_balance_gain)
+                && g.white_balance_gain.iter().all(|x| *x >= 0.)
+                && (0.25..=4.0).contains(&g.contrast)
+                && (0.0..=4.0).contains(&g.saturation)
+                && (0.0..=1.0).contains(&g.vignette)
+                && finite(&g.lift)
+                && finite(&g.gain)
+                && (0.0..=1.0).contains(&g.lut_contribution)
+                && g.gamma.iter().all(|x| x.is_finite() && *x > 0.),
+            "Invalid look grading, bloom or sky light"
+        );
+        self.lens.validate(&self.ao, &self.ssr)?;
+        if let Some(a) = self.auto_exposure {
+            anyhow::ensure!(
+                finite(&[a.minimum_ev100, a.maximum_ev100, a.compensation])
+                    && a.minimum_ev100 < a.maximum_ev100
+                    && 0. <= a.low_percentile
+                    && a.low_percentile < a.high_percentile
+                    && a.high_percentile <= 1.
+                    && a.adaptation > 0.
+                    && a.adaptation.is_finite()
+                    && a.compensation_curve.iter().flatten().all(|v| v.is_finite())
+                    && a.compensation_curve.windows(2).all(|k| k[0][0] <= k[1][0]),
+                "Invalid automatic exposure"
+            );
+        }
+        if let Some(s) = self.sky {
+            s.atmosphere.validate()?;
+            anyhow::ensure!(
+                s.sea_level.is_finite()
+                    && s.other_light.is_none_or(|l| {
+                        l.direction.is_finite()
+                            && l.direction.length_squared() > 1e-8
+                            && l.lux.is_finite()
+                            && (0.0..=0.2).contains(&l.radius)
+                    })
+                    && (0.0..=0.2).contains(&s.sun_radius)
+                    && (0.0..=1.0).contains(&s.cloud_coverage)
+                    && s.cloud_height.is_finite(),
+                "Invalid sky"
+            );
+        }
+        if let Some(f) = self.fog {
+            anyhow::ensure!(
+                (0.0..=0.1).contains(&f.extinction)
+                    && f.height >= 1.
+                    && f.height.is_finite()
+                    && f.base.is_finite()
+                    && f.tint.iter().all(|c| (0.0..=1.0).contains(c))
+                    && (0.0..=1.0).contains(&f.albedo)
+                    && (0.0..=0.9).contains(&f.anisotropy)
+                    && f.volumetric.is_none_or(|v| v.valid()),
+                "Invalid fog"
+            );
+        }
+        Ok(())
+    }
+}

@@ -2,7 +2,7 @@
 //! `native` moves an instance, and `native-skin` updates one independent skin.
 use ara_gpu::Device;
 use ara_gpu::GpuDevice;
-use ara_render::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::{path::Path, time::Instant};
 
@@ -67,8 +67,8 @@ fn quantile(values: &mut [f64], percent: usize) -> f64 {
     values.sort_by(f64::total_cmp);
     values[(values.len() * percent / 100).min(values.len() - 1)]
 }
-fn native(skin: bool) -> ara_render::instanced::Scene {
-    use ara_render::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
+fn native(skin: bool) -> ara_frame::instanced::Scene {
+    use ara_frame::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
     Scene {
         geometry: (0..if skin { 2 } else { 1 })
             .map(|index| Geometry {

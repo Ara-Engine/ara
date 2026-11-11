@@ -12,8 +12,8 @@ fn configure(gpu: &mut GpuDevice, view: &mut FidelityView, name: &str) -> Result
 fn cases() -> Result<
     Vec<(
         &'static str,
-        ara_render::scene::Scene,
-        ara_render::scene::CameraSpec,
+        ara_frame::scene::Scene,
+        ara_frame::scene::CameraSpec,
         f32,
     )>,
 > {
@@ -107,7 +107,7 @@ pub fn quality(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
         }
         {
             let result =
-                ara_render::capture::compare(&hybrid, &image::open(&golden)?.to_rgba8(), 0.005)?;
+                ara_frame::capture::compare(&hybrid, &image::open(&golden)?.to_rgba8(), 0.005)?;
             anyhow::ensure!(result.passed, "{name}: golden error {}", result.score);
         }
         println!(
