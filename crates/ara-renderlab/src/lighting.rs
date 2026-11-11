@@ -172,28 +172,111 @@ pub(crate) fn lights<'a>(
 
 /// A display-referred meter for frames Ara would meter automatically: Renderlab has
 /// manual exposure only, so the bridge steers its stops until the image's log-mean
-/// luminance sits at middle grey.
+/// luminance sits at middle grey. Each rendered frame adapts toward the target the
+/// last frame read back measured (`next`); frames are read back every frame while the
+/// meter snaps and every `READBACK_EVERY`th otherwise (`due`, `observe`).
 pub(crate) struct Metering {
+    /// The meter: exposure stops before the compensation and its curve.
     stops: Option<f32>,
+    /// Where the meter adapts to: the last frame read back's meter plus its error,
+    /// within the EV100 limits (the meter itself inside the dead band).
+    target: Option<f32>,
+    /// Snap to the meter's target instead of adapting, until the image settles or the
+    /// meter is pinned at an EV100 limit: the first frame and every cut, as Ara resets
+    /// its exposure history.
+    snapping: bool,
+    /// Frames until the meter next wants a frame read back.
+    wait: u32,
+}
+
+/// The time each rendered frame adapts by, as Ara's renderer (`FRAME_SECONDS` in
+/// ara-render's look): it has no wall clock and does not follow the simulation tick, so
+/// a paused game or a redrawn tick still adapts.
+const FRAME_SECONDS: f32 = 1. / 60.;
+
+/// Frames per readback once the meter adapts or rests; between readbacks it adapts
+/// toward the last target, so a two-stop change costs a handful of readbacks.
+const READBACK_EVERY: u32 = 16;
+
+/// Ara's compensation curve at scene EV100 `ev` (`exposureCurve`, shaders/look.slangh):
+/// stops from (EV100, stops) keys, linear between them and held past both ends. All-zero
+/// keys add none.
+fn compensation_curve(look: &FrameEnvironment, ev: f32) -> f32 {
+    let keys = &look.compensation_curve;
+    let mut a = keys[0];
+    let (mut stops, mut done) = (a[1], ev <= a[0]);
+    for b in keys {
+        if !done && ev <= b[0] {
+            let t = ((ev - a[0]) / (b[0] - a[0]).max(1e-6)).clamp(0., 1.);
+            stops = a[1] + (b[1] - a[1]) * t;
+            done = true;
+        }
+        if !done {
+            stops = b[1];
+        }
+        a = *b;
+    }
+    stops
+}
+
+/// The scene EV100 a meter of `stops` exposes for: Ara's exposure is 1 / (1.2 * 2^EV).
+fn scene_ev(stops: f32) -> f32 {
+    -stops - 1.2f32.log2()
+}
+
+/// The share of the way to its target Ara's exposure adapts over `seconds` at `rate`
+/// per second (`exposureMain`: `1 - exp(-seconds * rate)`).
+fn adaptation(rate: f32, seconds: f32) -> f32 {
+    1. - (-(rate.max(0.) * seconds.max(0.))).exp()
 }
 
 impl Metering {
     pub fn new() -> Self {
-        Self { stops: None }
+        Self {
+            stops: None,
+            target: None,
+            snapping: true,
+            wait: 0,
+        }
     }
 
-    /// The stops to render the next frame with: the meter (`fallback` seeds the first)
-    /// plus the look's exposure compensation.
-    pub fn stops(&self, fallback: f32, look: &FrameEnvironment) -> f32 {
-        self.stops.unwrap_or(fallback) + look.compensation
+    /// After a cut: the next frames are read back and snap to the meter's target until
+    /// it settles.
+    pub fn snap(&mut self) {
+        self.snapping = true;
+        self.wait = 0;
     }
 
-    /// Feeds the frame rendered with `stops` (display-encoded RGBA8) back, metering as
-    /// Ara's automatic exposure does: the log mean of the luminance between the look's
-    /// low and high percentiles, steered to middle grey before compensation and kept
-    /// within its EV100 limits. Returns whether the meter moved (false inside its dead
-    /// band).
-    pub fn observe(&mut self, look: &FrameEnvironment, stops: f32, rgba8: &[u8]) -> bool {
+    /// Advances the meter by one rendered frame and returns the meter for it (`fallback`
+    /// seeds the first) and the stops to render it with: the meter plus the look's
+    /// compensation and, as Ara's automatic exposure, its compensation curve at the
+    /// scene EV100 the meter exposes for. Call once per rendered frame.
+    pub fn next(&mut self, fallback: f32, look: &FrameEnvironment) -> (f32, f32) {
+        let mut meter = self.stops.unwrap_or(fallback);
+        if let Some(target) = self.target.filter(|_| !self.snapping) {
+            // Ara adapts the exposure multiplier itself: lerp(old, target, a).
+            let share = adaptation(look.adaptation, FRAME_SECONDS);
+            meter += (1. + ((target - meter).exp2() - 1.) * share).log2();
+            self.stops = Some(meter);
+        }
+        let curve = compensation_curve(look, scene_ev(meter));
+        (meter, meter + look.compensation + curve)
+    }
+
+    /// Whether the frame just rendered should be read back for `observe`: every frame
+    /// while the meter snaps, then every `READBACK_EVERY`th. Call once per frame.
+    pub fn due(&mut self) -> bool {
+        let due = self.wait == 0;
+        self.wait = self.wait.saturating_sub(1);
+        due
+    }
+
+    /// Feeds back the frame rendered with `stops` from `meter` (display-encoded RGBA8),
+    /// metering as Ara's automatic exposure does: the log mean of the luminance between
+    /// the look's low and high percentiles, steered to middle grey before the
+    /// compensation and its curve, within its EV100 limits. Sets the target `next` adapts
+    /// toward, or snaps to it after a cut.
+    pub fn observe(&mut self, look: &FrameEnvironment, meter: f32, stops: f32, rgba8: &[u8]) {
         // Every 37th pixel: a few thousand samples of a 1080p frame.
         let mut samples: Vec<f32> = rgba8
             .as_chunks::<4>()
@@ -208,7 +291,7 @@ impl Metering {
             })
             .collect();
         if samples.is_empty() {
-            return false;
+            return;
         }
         samples.sort_by(f32::total_cmp);
         let limits = &look.auto_exposure;
@@ -220,22 +303,30 @@ impl Metering {
         );
         let trimmed = &samples[low..high.min(samples.len())];
         let mean = (trimmed.iter().sum::<f32>() / trimmed.len().max(1) as f32).exp();
-        // Meter without the compensation the frame was rendered with.
-        let meter = stops - look.compensation;
-        let error = (0.18 / (mean / look.compensation.exp2())).log2();
-        // A dead band keeps a settled image (and its temporal history) still.
-        let step = if error.abs() < 0.15 {
-            0.
-        } else {
-            (0.5 * error).clamp(-1., 1.)
-        };
+        // The meter's error, without the compensation and curve the frame was rendered with.
+        let error = (0.18 / (mean / (stops - meter).exp2())).log2();
         let stops_at = |ev: f32| ara_render_fidelity::settings::exposure_from_ev100(ev, 0.).log2();
         let (darkest, brightest) = (
             stops_at(limits.maximum_ev100),
             stops_at(limits.minimum_ev100),
         );
-        self.stops = Some((meter + step).clamp(darkest.min(brightest), brightest.max(darkest)));
-        step != 0.
+        // How far the limits let the meter go: a meter pinned at a limit has settled as
+        // far as it can, so a snap ends there too.
+        let reach = (meter + error).clamp(darkest.min(brightest), brightest.max(darkest)) - meter;
+        self.stops = Some(meter);
+        if reach.abs() < 0.15 {
+            // A dead band keeps a settled image (and its temporal history) still.
+            self.target = Some(meter);
+            self.snapping = false;
+        } else if self.snapping {
+            // The display curve compresses: a few frames reach the target.
+            let snapped = meter + reach.clamp(-4., 4.);
+            self.stops = Some(snapped);
+            self.target = Some(snapped);
+        } else {
+            self.target = Some(meter + reach);
+        }
+        self.wait = if self.snapping { 0 } else { READBACK_EVERY - 1 };
     }
 }
 
@@ -246,19 +337,23 @@ impl Metering {
 const GREY_MATCH_STOPS: f32 = -0.467;
 
 /// Exposure stops for the frame: Ara's manual EV100, matched for the display curve,
-/// else the meter (which steers the displayed image and needs no matching).
-pub(crate) fn exposure_stops(view: &ExternalView<'_>, metering: &Metering) -> (f32, bool) {
+/// else the meter's (which steer the displayed image and need no matching), with the
+/// meter they came from.
+pub(crate) fn exposure_stops(
+    view: &ExternalView<'_>,
+    metering: &mut Metering,
+) -> (f32, Option<f32>) {
     let fallback = view.frame.environment.exposure.max(1e-9).log2();
     let grey = match view.look.tone_mapper {
         ToneMapper::AcesFit => 0.,
         _ => GREY_MATCH_STOPS,
     };
     match view.look.ev100 {
-        Some(_) => (
-            view.look.manual_exposure(1.).max(1e-12).log2() + grey,
-            false,
-        ),
-        None => (metering.stops(fallback, view.look), true),
+        Some(_) => (view.look.manual_exposure(1.).max(1e-12).log2() + grey, None),
+        None => {
+            let (meter, stops) = metering.next(fallback, view.look);
+            (stops, Some(meter))
+        }
     }
 }
 
@@ -352,6 +447,133 @@ pub(crate) fn settings(
 mod tests {
     use super::*;
 
+    fn look() -> FrameEnvironment {
+        FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.)
+    }
+
+    /// A flat grey frame whose display luminance is `grey` (display-encoded RGBA8).
+    fn frame(grey: f32) -> Vec<u8> {
+        let v = (grey.powf(1. / 2.2) * 255.).round() as u8;
+        [v, v, v, 255].repeat(64 * 64)
+    }
+
+    /// As Ara's `exposureCurve`: held past both ends, linear between keys, none when
+    /// every key is zero.
+    #[test]
+    fn the_compensation_curve_reads_as_aras() {
+        let mut look = look();
+        assert_eq!(compensation_curve(&look, 3.), 0.);
+        look.compensation_curve = ara_render::look::AutoExposure::curve(&[[4., -1.], [-2., 1.]]);
+        assert_eq!(compensation_curve(&look, -5.), 1.);
+        assert!(compensation_curve(&look, 1.).abs() < 1e-6);
+        assert_eq!(compensation_curve(&look, 10.), -1.);
+    }
+
+    /// Renders frames until the meter stops snapping, each read back and showing
+    /// `shown(stops)`; returns how many it took.
+    fn settle(meter: &mut Metering, look: &FrameEnvironment, shown: impl Fn(f32) -> f32) -> u32 {
+        let mut frames = 0;
+        while meter.snapping {
+            let (m, stops) = meter.next(-6., look);
+            assert!(meter.due(), "a snapping meter reads every frame back");
+            meter.observe(look, m, stops, &frame(shown(stops)));
+            frames += 1;
+            assert!(frames < 6, "the snap converges");
+        }
+        frames
+    }
+
+    /// After a cut the meter snaps to middle grey within a few frames; once settled it
+    /// adapts by Ara's share per rendered frame.
+    #[test]
+    fn the_meter_snaps_after_a_cut_then_adapts_at_aras_rate() {
+        let look = look();
+        let mut meter = Metering::new();
+        // A scene whose display luminance is the exposure itself: 0.18 at stops log2(0.18).
+        let shown = |stops: f32| stops.exp2().min(1.);
+        settle(&mut meter, &look, shown);
+        let (m, stops) = meter.next(-6., &look);
+        assert!((stops - 0.18f32.log2()).abs() < 0.2, "{stops}");
+        // The scene brightens by two stops: the next frame moves Ara's share of the way.
+        meter.observe(&look, m, stops, &frame(shown(stops + 2.)));
+        let moved = m - meter.next(-6., &look).0;
+        let a = adaptation(look.adaptation, FRAME_SECONDS);
+        let expected = -(1. + ((-2f32).exp2() - 1.) * a).log2();
+        assert!((moved - expected).abs() < 0.01, "{moved} vs {expected}");
+    }
+
+    /// The meter takes no clock from the simulation: frames rendered while the tick
+    /// stands still (a paused game, a redraw) adapt as any others, as Ara's renderer
+    /// adapts per frame. A second of frames covers 1 - exp(-rate) of the way.
+    #[test]
+    fn the_meter_adapts_while_the_tick_stands_still() {
+        let look = look();
+        let mut meter = Metering::new();
+        let shown = |stops: f32| stops.exp2().min(1.);
+        settle(&mut meter, &look, shown);
+        let (m, stops) = meter.next(-6., &look);
+        meter.observe(&look, m, stops, &frame(shown(stops + 2.)));
+        for _ in 0..59 {
+            meter.next(-6., &look);
+        }
+        let covered = (1. - (meter.next(-6., &look).0 - m).exp2()) / (1. - (-2f32).exp2());
+        let expected = 1. - (-look.adaptation).exp();
+        assert!((covered - expected).abs() < 0.02, "{covered} vs {expected}");
+    }
+
+    /// A scene the EV100 limits cannot expose pins the meter at the limit and ends the
+    /// snap: a later change is followed at Ara's rate, not snapped.
+    #[test]
+    fn a_meter_pinned_at_a_limit_stops_snapping() {
+        let mut look = look();
+        // EV100 8 at the brightest: about -8.26 stops, far short of this dark scene.
+        look.auto_exposure.minimum_ev100 = 8.;
+        let limit = ara_render_fidelity::settings::exposure_from_ev100(8., 0.).log2();
+        let mut meter = Metering::new();
+        let dark = |stops: f32| (stops - 6.).exp2().min(1.);
+        settle(&mut meter, &look, dark);
+        let (m, stops) = meter.next(-6., &look);
+        assert!((m - limit).abs() < 1e-4, "pinned: {m} vs {limit}");
+        // The lights come on, two stops past middle grey at the limit.
+        let lit = |s: f32| (0.72 * (s - stops).exp2()).min(1.);
+        meter.observe(&look, m, stops, &frame(lit(stops)));
+        assert!(!meter.snapping);
+        let moved = m - meter.next(-6., &look).0;
+        assert!(moved > 0. && moved < 0.1, "adapts, does not snap: {moved}");
+    }
+
+    /// While the meter adapts it reads back one frame in `READBACK_EVERY`, adapting
+    /// toward the last target in between: a two-stop change settles over two seconds
+    /// of frames with no more readbacks than that.
+    #[test]
+    fn adapting_reads_back_one_frame_in_sixteen() {
+        let look = look();
+        let mut meter = Metering::new();
+        let mut brightness = 0.;
+        let shown = |stops: f32, b: f32| (stops + b).exp2().min(1.);
+        settle(&mut meter, &look, |s| shown(s, 0.));
+        brightness += 2.;
+        let mut readbacks = 0;
+        let mut last = 0.;
+        for _ in 0..120 {
+            let (m, stops) = meter.next(-6., &look);
+            last = stops;
+            if meter.due() {
+                meter.observe(&look, m, stops, &frame(shown(stops, brightness)));
+                readbacks += 1;
+            }
+        }
+        assert!(
+            readbacks <= 120 / READBACK_EVERY + 1,
+            "{readbacks} readbacks"
+        );
+        let displayed = shown(last, brightness);
+        assert!(
+            (displayed / 0.18).log2().abs() < 0.25,
+            "settles: {displayed}"
+        );
+    }
+
     #[test]
     fn sun_points_away_from_ara_direction_and_dark_suns_are_none() {
         let mut frame = RenderFrame::default();
@@ -405,20 +627,22 @@ mod tests {
     fn metering_steers_toward_middle_grey_and_rests_in_its_dead_band() {
         let mut look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
         let mut metering = Metering::new();
-        assert_eq!(metering.stops(-3., &look), -3.);
-        metering.observe(&look, -3., &[255; 4 * 64]);
-        assert!(metering.stops(0., &look) < -3., "a white frame stops down");
+        assert_eq!(metering.next(-3., &look), (-3., -3.));
+        metering.observe(&look, -3., -3., &[255; 4 * 64]);
+        assert!(metering.next(0., &look).1 < -3., "a white frame stops down");
         // sRGB 118 is about 18% linear: no change.
-        metering.observe(&look, -5., &[118; 4 * 64]);
-        assert_eq!(metering.stops(0., &look), -5.);
+        metering.stops = Some(-5.);
+        metering.observe(&look, -5., -5., &[118; 4 * 64]);
+        assert_eq!(metering.next(0., &look).1, -5.);
         // Compensation renders brighter, and the meter does not fight it.
         look.compensation = 1.;
-        assert_eq!(metering.stops(0., &look), -4.);
-        metering.observe(&look, -4., &[160; 4 * 64]);
-        assert_eq!(metering.stops(0., &look), -4.);
+        assert_eq!(metering.next(0., &look), (-5., -4.));
+        metering.observe(&look, -5., -4., &[160; 4 * 64]);
+        assert_eq!(metering.next(0., &look), (-5., -4.));
         // The EV100 limits bound the meter: EV100 5 is about -5.3 stops.
         look.auto_exposure.maximum_ev100 = 5.;
-        metering.observe(&look, -4., &[255; 4 * 64]);
-        assert!(metering.stops(0., &look) - look.compensation >= -5.27 - 1e-3);
+        metering.snap();
+        metering.observe(&look, -5., -4., &[255; 4 * 64]);
+        assert!(metering.next(0., &look).0 >= -5.27 - 1e-3);
     }
 }
