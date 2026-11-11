@@ -207,17 +207,22 @@ impl Gesture {
         true
     }
     /// The Rect tool's resize and move of every root from its pose at pointer-down: its
-    /// position goes through the world map `map`; for each rect axis in `axes` that the drag
-    /// scaled by `scale` (≠ 1), only the root's own axis closest to it scales by that much,
-    /// and its rotation is kept. In a rectangle drawn in the root's own frame that is
-    /// exactly the rectangle's change; in a world rectangle over mixed rotations no axis the
-    /// drag didn't scale grows. The preview is the exact TRS the commit writes, and an
-    /// identity map leaves every pose untouched. A non-finite map changes nothing.
+    /// position goes through the world map `map`; each rect axis in `axes` that the drag
+    /// scaled by `scale` (≠ 1) scales one of the root's own axes by that much (see
+    /// [`stretch`]: a different own axis for each, the closest fit), and its rotation is
+    /// kept. In a rectangle drawn in the root's own frame that is exactly the rectangle's
+    /// change; in a world rectangle over mixed rotations no axis the drag didn't scale grows,
+    /// though an object turned away from the dragged axis changes extent along the other
+    /// rect axis too. A move that scales nothing is exact under any parent (the pose keeps
+    /// its rotation and scale even under a turned, non-uniformly scaled parent). The preview
+    /// is the exact TRS the commit writes, and an identity map leaves every pose untouched.
+    /// A non-finite map changes nothing.
     pub fn rect_resize(&mut self, map: Mat4, axes: [Vec3; 2], scale: glam::Vec2) -> bool {
         if !map.is_finite() || !scale.is_finite() {
             return false;
         }
         let still = map.abs_diff_eq(Mat4::IDENTITY, 1e-6);
+        let moves_only = (scale - glam::Vec2::ONE).abs().max_element() <= 1e-6;
         for (id, start) in &self.initial {
             let (Some(current), Some(parent)) = (self.current.get_mut(id), self.parents.get(id))
             else {
@@ -227,26 +232,22 @@ impl Gesture {
                 *current = *start;
                 continue;
             }
-            let (size, rotation, position) = (*parent * *start).to_scale_rotation_translation();
-            let own = [rotation * Vec3::X, rotation * Vec3::Y, rotation * Vec3::Z];
-            let mut stretch = Vec3::ONE;
-            for (axis, by) in axes.iter().zip([scale.x, scale.y]) {
-                if (by - 1.0).abs() <= 1e-6 {
-                    continue;
-                }
-                let closest = (0..3)
-                    .max_by(|&a, &b| own[a].dot(*axis).abs().total_cmp(&own[b].dot(*axis).abs()))
-                    .unwrap_or(0);
-                stretch[closest] *= by;
-            }
-            let world = Mat4::from_scale_rotation_translation(
-                size * stretch,
-                rotation,
-                map.transform_point3(position),
-            );
+            let local = if moves_only {
+                // Moving in the world is a translation in the parent's space: no
+                // decomposition of `parent * start`, whose shear a TRS cannot hold.
+                parent.inverse() * map * *parent * *start
+            } else {
+                let (size, rotation, position) = (*parent * *start).to_scale_rotation_translation();
+                let own = [rotation * Vec3::X, rotation * Vec3::Y, rotation * Vec3::Z];
+                let world = Mat4::from_scale_rotation_translation(
+                    size * stretch(own, axes, scale),
+                    rotation,
+                    map.transform_point3(position),
+                );
+                parent.inverse() * world
+            };
             // Kept as the TRS `commands` will write, so what shows is what commits.
-            let (size, rotation, position) =
-                (parent.inverse() * world).to_scale_rotation_translation();
+            let (size, rotation, position) = local.to_scale_rotation_translation();
             let next = Mat4::from_scale_rotation_translation(size, rotation, position);
             if next.is_finite() {
                 *current = next;
@@ -297,6 +298,44 @@ impl Gesture {
         *transforms = super::transforms_with(entities, Some(&self.current));
     }
 }
+/// How a Rect drag stretches an object whose own axes, as world directions, are `own`: each
+/// rect axis in `axes` that `scale` changes stretches one own axis by its factor. When both
+/// change they take different own axes, the pairing with the best total fit; on a tie the
+/// earlier axes win, so the result is deterministic and never multiplies one axis twice.
+fn stretch(own: [Vec3; 3], axes: [Vec3; 2], scale: glam::Vec2) -> Vec3 {
+    let by = [scale.x, scale.y];
+    let changed: Vec<usize> = (0..2).filter(|&r| (by[r] - 1.0).abs() > 1e-6).collect();
+    let fit = |axis: usize, rect: usize| own[axis].dot(axes[rect]).abs();
+    let mut stretch = Vec3::ONE;
+    match changed.as_slice() {
+        [rect] => {
+            let best = (1..3).fold(0, |best, a| {
+                if fit(a, *rect) > fit(best, *rect) {
+                    a
+                } else {
+                    best
+                }
+            });
+            stretch[best] = by[*rect];
+        }
+        [first, second] => {
+            let (mut pair, mut top) = ((0, 1), f32::MIN);
+            for a in 0..3 {
+                for b in (0..3).filter(|&b| b != a) {
+                    let total = fit(a, *first) + fit(b, *second);
+                    if total > top {
+                        (pair, top) = ((a, b), total);
+                    }
+                }
+            }
+            stretch[pair.0] = by[*first];
+            stretch[pair.1] = by[*second];
+        }
+        _ => {}
+    }
+    stretch
+}
+
 /// Read a vector field with core Transform defaults; useful for unit-entry and multi-edit.
 pub fn transform_value(record: &ara_doc::Record, field: &str) -> Vec3 {
     vector(
@@ -307,4 +346,49 @@ pub fn transform_value(record: &ara_doc::Record, field: &str) -> Vec3 {
             Vec3::ZERO
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// However the object is turned, a drag of both rect axes scales two different own
+    /// axes (by 1.5 each) and leaves the third: never 2.25 on one.
+    #[test]
+    fn a_corner_drag_stretches_two_different_own_axes_at_any_rotation() {
+        let steps = [0.0_f32, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0];
+        for x in steps {
+            for y in steps {
+                for z in steps {
+                    let turn = Quat::from_euler(
+                        EulerRot::XYZ,
+                        x.to_radians(),
+                        y.to_radians(),
+                        z.to_radians(),
+                    );
+                    let own = [turn * Vec3::X, turn * Vec3::Y, turn * Vec3::Z];
+                    let got = stretch(own, [Vec3::X, Vec3::Z], glam::Vec2::splat(1.5));
+                    let mut sorted = got.to_array();
+                    sorted.sort_by(f32::total_cmp);
+                    assert!(
+                        (sorted[0] - 1.0).abs() < 1e-6
+                            && (sorted[1] - 1.5).abs() < 1e-6
+                            && (sorted[2] - 1.5).abs() < 1e-6,
+                        "rotation {x} {y} {z}: {got}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// One dragged rect axis scales the own axis nearest it; the others stay.
+    #[test]
+    fn one_dragged_axis_stretches_the_nearest_own_axis() {
+        let turn = Quat::from_rotation_y(30f32.to_radians());
+        let own = [turn * Vec3::X, turn * Vec3::Y, turn * Vec3::Z];
+        let got = stretch(own, [Vec3::X, Vec3::Z], glam::Vec2::new(2.0, 1.0));
+        assert_eq!(got, Vec3::new(2.0, 1.0, 1.0));
+        let got = stretch(own, [Vec3::X, Vec3::Z], glam::Vec2::new(1.0, 3.0));
+        assert_eq!(got, Vec3::new(1.0, 1.0, 3.0));
+    }
 }
