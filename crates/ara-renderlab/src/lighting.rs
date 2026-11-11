@@ -2,7 +2,6 @@
 //! Renderlab engine values. Pure conversions; `bridge` applies them.
 use crate::gaps::Gaps;
 use anyhow::Result;
-use ara_render_fidelity::ToneMapper;
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{
     components::LightKind,
@@ -317,26 +316,16 @@ impl Metering {
     }
 }
 
-/// Stops that put middle grey where Ara's display curves put it. Ara's Filmic, Neutral
-/// and AgX curves keep 18% grey at 18%; Renderlab's filmic curve (Narkowicz's ACES
-/// fit, which is also Ara's `AcesFit`) lifts it to about 27%, so a scene exposed for
-/// Ara would display about half a stop brighter.
-const GREY_MATCH_STOPS: f32 = -0.467;
-
-/// Exposure stops for the frame: Ara's manual EV100, matched for the display curve,
-/// else the meter's (which steer the displayed image and need no matching), with the
-/// meter they came from.
+/// Exposure stops for the frame: Ara's manual EV100 (the colour table maps Renderlab's
+/// curve to the look's, so exposure needs no matching), else the meter's, with the meter
+/// they came from.
 pub(crate) fn exposure_stops(
     view: &ExternalView<'_>,
     metering: &mut Metering,
 ) -> (f32, Option<f32>) {
     let fallback = view.frame.environment.exposure.max(1e-9).log2();
-    let grey = match view.look.tone_mapper {
-        ToneMapper::AcesFit => 0.,
-        _ => GREY_MATCH_STOPS,
-    };
     match view.look.ev100 {
-        Some(_) => (view.look.manual_exposure(1.).max(1e-12).log2() + grey, None),
+        Some(_) => (view.look.manual_exposure(1.).max(1e-12).log2(), None),
         None => {
             let (meter, stops) = metering.next(fallback, view.look);
             (stops, Some(meter))
@@ -384,15 +373,6 @@ pub(crate) fn settings(
                 max_radius_px: (0.02 * view.size[1] as f32).clamp(1., 32.),
             }
         });
-    if look.lut.is_some() {
-        gaps.unsupported("colour lookup tables", "the grade is not applied");
-    }
-    if !matches!(look.tone_mapper, ToneMapper::Filmic | ToneMapper::AcesFit) {
-        gaps.unsupported(
-            "the Neutral and AgX tone mappers",
-            "the display curve is Renderlab's filmic, exposed so middle grey matches",
-        );
-    }
     let defaults = Settings::default();
     Settings {
         exposure: Exposure::Manual { stops },
@@ -413,7 +393,7 @@ pub(crate) fn settings(
             tonemapper: Tonemapper::Filmic,
             depth_of_field,
             // The grade itself is baked into the colour lookup table (`grade`).
-            lut_strength: if crate::grade::lut_needed(look) {
+            lut_strength: if crate::grade::lut_needed(look, crate::grade::authored(view)) {
                 1.
             } else {
                 0.
@@ -667,13 +647,6 @@ mod tests {
         ));
         assert!(matches!(out[1], Light::Spot { source_radius, .. } if source_radius == 0.5));
         assert!(gaps.reported("rect and disc lights"));
-    }
-
-    #[test]
-    fn grey_match_puts_18_percent_grey_at_18_percent_on_renderlabs_filmic_curve() {
-        let x = 0.18 * 2f32.powf(GREY_MATCH_STOPS);
-        let displayed = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
-        assert!((displayed - 0.18).abs() < 2e-3, "{displayed}");
     }
 
     #[test]
