@@ -31,6 +31,8 @@ pub enum Tool {
     Scale,
     /// Move, rotate or scale with the handle grabbed in the combined gizmo.
     Universal,
+    /// Resize and move by a rectangle round the selection, in the plane facing the view.
+    Rect,
 }
 /// Projection used by the editor's scene camera.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
