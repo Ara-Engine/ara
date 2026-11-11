@@ -214,10 +214,11 @@ fn raw_record(s: &Studio) -> Option<El<Studio>> {
         return None;
     };
     let record = &s.resolved.get(id)?.record;
-    let shown = serde_json::to_string_pretty(record).ok()?;
+    // The canonical writer's text, as files and agents read it (short arrays inline).
+    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
+    let shown = copy.trim_end().to_owned();
     let l = &s.look;
     let c = &l.c;
-    let copy = ara_json::to_canonical_string(&serde_json::to_value(record).ok()?);
     Some(
         col()
             .key("inspector/record")
@@ -646,7 +647,9 @@ fn scrubbable(
     max: Option<f64>,
 ) -> El<Studio> {
     let step = if step > 0.0 { step } else { 0.01 };
+    // A drag handle: the field beside it is the keyboard's stop, as in Unity.
     label
+        .skip_tab()
         .cursor(Cursor::ResizeHorizontal)
         .on_pointer(move |s: &mut Studio, e, _| {
             match e.phase {
@@ -791,11 +794,27 @@ impl crate::app::scene_sync::Drafts for Preview {
     }
 }
 
+/// Axis `axis` of vector `path` when every inspected entity has the same value there
+/// (`None` where they differ: the field shows "—" for that axis).
+fn shared_axis(s: &Studio, path: &str, axis: usize) -> Option<f64> {
+    let (component, field) = path.split_once('.')?;
+    let mut values = s.inspected().iter().map(|id| {
+        s.resolved
+            .get(id)
+            .and_then(|e| e.record.get(component)?.get(field)?.get(axis)?.as_f64())
+    });
+    let first = values.next()??;
+    values.all(|v| v == Some(first)).then_some(first)
+}
+
 /// Commits a number (one channel of a vector when `axis` is set) to every selected entity.
 pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, value: f64) {
-    // A linked scale moves every axis by the same ratio (equal values from a zero axis).
+    // A linked scale moves every axis by the same ratio (equal values from a zero axis),
+    // when the selection shares one scale; scales that differ set the one axis.
+    let shared = (0..3).all(|a| shared_axis(s, path, a).is_some()) || s.inspected().len() < 2;
     if let Some(a) = axis
         && s.local.scale_linked
+        && shared
         && path.ends_with(".scale")
         && let Some(id) = s.inspected().first()
     {
@@ -857,18 +876,30 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let path = f.path.clone();
-    if f.mixed {
+    // Values that differ across the selection show "—" and, as in Unity, take a new value
+    // for all of them; a vector, axis by axis (each entity keeps its other axes).
+    let scalar = matches!(
+        f.widget,
+        Widget::Number { .. }
+            | Widget::Bool
+            | Widget::Enum { .. }
+            | Widget::Text
+            | Widget::Vector { color: false, .. }
+    );
+    if f.mixed && !scalar {
         return text("—").text_size(12.0).color(c.muted_foreground.0);
     }
     match &f.widget {
         Widget::Number { .. } => {
             let shown = match &s.local.draft {
                 Some((p, v)) if *p == f.path => v.as_f64().unwrap_or(0.0),
+                _ if f.mixed => f64::NAN,
                 _ => f.value.as_f64().unwrap_or(0.0),
             };
             number(
                 l,
                 &format!("field/{}", f.path),
+                &sentence(&f.label),
                 shown,
                 f.unit.as_deref(),
                 f.read_only,
@@ -894,6 +925,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                     (Some((p, v)), _) if *p == f.path => {
                         v.get(axis).and_then(Value::as_f64).unwrap_or(0.0)
                     }
+                    _ if f.mixed => shared_axis(s, &f.path, axis).unwrap_or(f64::NAN),
                     _ => f
                         .channels
                         .get(axis)
@@ -935,6 +967,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                             number(
                                 l,
                                 &format!("field/{}/{axis}", f.path),
+                                // Announced by its field and axis ("Position X").
+                                &format!("{} {}", sentence(&f.label), axes[axis]),
                                 value,
                                 None,
                                 f.read_only,
@@ -975,7 +1009,8 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             ..
         } => color_field(s, f, *count, *hdr),
         Widget::Bool => {
-            let on = f.value.as_bool().unwrap_or(false);
+            // Mixed reads as off: a press turns it on for all.
+            let on = !f.mixed && f.value.as_bool().unwrap_or(false);
             let p = f.path.clone();
             row().child(
                 checkbox(l, format!("field/{}", f.path), &f.label, on)
@@ -983,7 +1018,10 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             )
         }
         Widget::Enum { options } => {
-            let current = f.value.as_str().unwrap_or("").to_owned();
+            let current = match f.mixed {
+                true => "—".to_owned(),
+                false => f.value.as_str().unwrap_or("").to_owned(),
+            };
             let key = format!("field/{}", f.path);
             let open = s.local.select.as_deref() == Some(key.as_str());
             let k = key.clone();
@@ -1019,7 +1057,9 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
         }
         Widget::Text => {
             let p = f.path.clone();
+            let mixed = f.mixed;
             let shown = match &f.value {
+                _ if mixed => String::new(),
                 Value::String(s) => s.clone(),
                 Value::Null => String::new(),
                 other => other.to_string(),
@@ -1029,9 +1069,16 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 Size::Sm,
                 format!("field/{}", f.path),
                 None,
-                "",
+                if mixed { "—" } else { "" },
                 &shown,
-                move |x| x.on_submit(move |s: &mut Studio, t| commit(s, &p, json!(t), "Edit text")),
+                move |x| {
+                    x.on_submit(move |s: &mut Studio, t| {
+                        // Enter on an untouched mixed field keeps each value.
+                        if !(mixed && t.is_empty()) {
+                            commit(s, &p, json!(t), "Edit text")
+                        }
+                    })
+                },
             )
         }
         Widget::Asset { .. } | Widget::Entity if !f.read_only => {
@@ -1212,22 +1259,30 @@ fn parse_hex(text: &str) -> Option<[f32; 3]> {
     Some([byte(0)?, byte(2)?, byte(4)?].map(|b| f32::from(b) / 255.0))
 }
 
-/// A number box: the value to edit, its unit after it as a quiet label (not part of what
-/// you type, as in Unreal); a new value on Enter.
+/// A number box announced as `name`: the value to edit (NaN shows "—", values that differ
+/// across the selection), its unit after it as a quiet label (not part of what you type, as
+/// in Unreal); a new value on Enter.
 fn number(
     l: &ara_kit::look::Look,
     key: &str,
+    name: &str,
     value: f64,
     unit: Option<&str>,
     read_only: bool,
     commit: impl Fn(&mut Studio, f64) + 'static,
 ) -> El<Studio> {
-    let shown = show(value);
+    // NaN: values that differ across the selection.
+    let shown = if value.is_nan() {
+        "—".to_owned()
+    } else {
+        show(value)
+    };
     let unit = unit.filter(|u| !u.is_empty()).map(str::to_owned);
     let label = unit
         .clone()
         .map(|u| text(u).text_size(10.5).color(l.c.muted_foreground.0));
     let mut f = text_input(key.to_owned())
+        .label(name.to_owned())
         .focus_ring(false)
         .grow(1.0)
         .value(shown.clone())
@@ -1265,7 +1320,23 @@ fn number(
 /// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.
 /// The inspected entities' field `path`, as the Inspector shows it.
 pub(super) fn field_of(s: &Studio, path: &str) -> Option<Field> {
-    let doc = s.editor.host.store().workspace().doc(&s.editor.state.doc)?;
+    shown_fields(s).into_iter().find(|f| f.path == path)
+}
+
+/// The inspected entities' editable asset fields (drop targets for a dragged asset).
+pub(super) fn asset_fields(s: &Studio) -> Vec<String> {
+    shown_fields(s)
+        .into_iter()
+        .filter(|f| matches!(f.widget, Widget::Asset { .. }) && !f.read_only)
+        .map(|f| f.path)
+        .collect()
+}
+
+/// Every field the Inspector shows for the inspected entities.
+fn shown_fields(s: &Studio) -> Vec<Field> {
+    let Some(doc) = s.editor.host.store().workspace().doc(&s.editor.state.doc) else {
+        return Vec::new();
+    };
     let changes = s.editor.agent_fields();
     crate::inspector::fields(
         s.editor.host.store().schema(),
@@ -1274,8 +1345,6 @@ pub(super) fn field_of(s: &Studio, path: &str) -> Option<Field> {
         s.inspected(),
         &changes,
     )
-    .into_iter()
-    .find(|f| f.path == path)
 }
 
 /// Why field `f` has its value: authored here, the schema's default, its prefab's, an

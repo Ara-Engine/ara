@@ -61,9 +61,9 @@ pub(crate) fn sun(frame: &RenderFrame) -> Option<Sun> {
     })
 }
 
-/// The strength of a map sky's light over the sky drawn (Ara's `Environment.skyLight`):
-/// Renderlab's `Sky::Map` lights at this intensity and draws the map at 1
-/// (`Background::ScaledSky`) when it differs from 1.
+/// The strength of the sky's light over the sky drawn (Ara's `Environment.skyLight`):
+/// Renderlab's atmosphere takes it as `Settings::sky_light`; a `Sky::Map` lights at this
+/// intensity and draws the map at 1 (`Background::ScaledSky`) when it differs from 1.
 pub(crate) fn sky_light(view: &ExternalView<'_>) -> f32 {
     let light = view.frame.environment.sky_light;
     if light.is_finite() { light.max(0.) } else { 1. }
@@ -83,16 +83,11 @@ pub(crate) enum SkySource<'a> {
 
 /// The sky that lights and backs the frame. An authored physical sky maps to
 /// Renderlab's atmosphere with its medium (`atmosphere::medium`); an environment map
-/// or the gradient sky is drawn as it is and lights the scene at `sky_light`.
+/// or the gradient sky is drawn as it is. Both light the scene at `sky_light`
+/// (`Settings::sky_light` for the atmosphere, `Sky::Map`'s intensity for a map).
 pub(crate) fn sky<'a>(view: &ExternalView<'a>, gaps: &mut Gaps) -> SkySource<'a> {
     let frame = view.frame;
     if let Some(sky) = &frame.look.sky {
-        if frame.environment.sky_light != 1. {
-            gaps.unsupported(
-                "a sky light strength other than 1 under a physical sky",
-                "the sky lights the scene as brightly as it looks",
-            );
-        }
         return SkySource::Atmosphere(crate::atmosphere::medium(sky, gaps));
     }
     match view.environment {
@@ -319,6 +314,8 @@ pub(crate) fn settings(
     let defaults = Settings::default();
     Settings {
         exposure: Exposure::Manual { stops },
+        // Only the atmosphere reads it; a map's strength rides on `Sky::Map` (`bridge`).
+        sky_light: sky_light(view),
         aerial_perspective: frame.look.sky.is_some(),
         height_fog: fog.map(|(height, _)| height),
         volumetric_fog: fog.and_then(|(_, volumetric)| volumetric),

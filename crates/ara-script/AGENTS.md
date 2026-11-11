@@ -140,6 +140,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   5.2k-line module, by content (random bytes of the same size: 5 ms), cached by content (a
   relink of the same bytes: ~1 ms). Loading from a file pays Defender's on-access scan
   instead (same cost). Only smaller modules, L1/L2, or a Defender exclusion (the user's call) avoid it.
+- `Ara.CompileServer` builds ReadyToRun (a build-time publish into `obj/`, needs the crossgen2 NuGet pack for the host RID); `-p:AraReadyToRun=false` opts out and restores the no-tiering config.
 - NativeAOT publish needs `vswhere.exe` on PATH (`tests/support::publish_aot` adds it).
 - `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
 - Tags are 1 byte in C#. Native views retain codec wire/journal bytes; variable-value access

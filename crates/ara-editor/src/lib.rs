@@ -21,6 +21,7 @@ pub(crate) mod catalog;
 pub mod codes;
 mod commands;
 mod editor;
+pub(crate) mod exception_stack;
 mod extensions;
 mod fixes;
 pub mod graph;

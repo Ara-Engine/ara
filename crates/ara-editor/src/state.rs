@@ -811,6 +811,25 @@ fn add_tab(dock: &mut DockLayout, area: &str, panel: &str) -> ara_ui::Result<()>
     *dock = DockLayout::with_floating(root, floating)?;
     Ok(())
 }
+/// Where the default layout keeps `panel`, as an `editor.layout.move` slot (`left`,
+/// `right`, `bottom`, else `view`): where Dock Panel in Main Window puts it back.
+pub fn home_slot(panel: &str) -> &'static str {
+    fn area_of(n: &DockNode, panel: &str) -> Option<String> {
+        match n {
+            DockNode::Area { id, tabs, .. } => tabs.iter().any(|t| t == panel).then(|| id.clone()),
+            DockNode::Split { first, second, .. } => {
+                area_of(first, panel).or_else(|| area_of(second, panel))
+            }
+        }
+    }
+    match area_of(&default_layout(), panel).as_deref() {
+        Some("outline") => "left",
+        Some("right") => "right",
+        Some("bottom") => "bottom",
+        _ => "view",
+    }
+}
+
 /// The registered default arrangement; IDs are stable protocol and persistence keys.
 pub fn default_layout() -> DockNode {
     preset_layout("default").unwrap_or_else(|| area("view", &["scene"]))
@@ -1079,6 +1098,22 @@ fn layout_text(state: &EditorState) -> anyhow::Result<String> {
 /// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
     Ok(crate::persist::write_text(path, &layout_text(state)?)?)
+}
+/// Save a named layout with the Scene view's overlay arrangement (`sceneOverlays`, the
+/// `viewport.overlays` setting), so applying it puts them back as Unity's layouts do.
+pub(crate) fn write_named_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
+    let mut saved: serde_json::Value = ara_json::parse(&layout_text(state)?)?;
+    if let Some(overlays) = state
+        .settings
+        .get("viewport.overlays")
+        .filter(|v| v.as_object().is_some_and(|m| !m.is_empty()))
+    {
+        saved["sceneOverlays"] = overlays.clone();
+    }
+    Ok(crate::persist::write_text(
+        path,
+        &ara_json::to_canonical_string(&saved),
+    )?)
 }
 /// Project-local saved layouts, by file stem.
 pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {
