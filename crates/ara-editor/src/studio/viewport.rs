@@ -48,7 +48,6 @@ mod probes;
 mod recovery;
 #[cfg(test)]
 mod scene_switch;
-pub(super) mod selection;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(crate) use startup::prepare_renderer;
