@@ -4849,6 +4849,32 @@ fn assets_hide_their_folder_tree_for_one_column() {
 }
 
 #[test]
+fn the_hierarchy_sorts_by_name_on_request() {
+    let mut rt = open();
+    settle(&mut rt);
+    let order = |rt: &Runtime<Studio>| {
+        let mut rows: Vec<(f32, &str)> = ["e_box", "e_lamp", "e_sun", "e_post"]
+            .into_iter()
+            .map(|id| (rt.find(&format!("row/{id}")).unwrap().top, id))
+            .collect();
+        rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+        rows.into_iter().map(|(_, id)| id).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        order(&rt),
+        ["e_box", "e_lamp", "e_sun", "e_post"],
+        "authored order"
+    );
+    press(&mut rt, "hierarchy/filters");
+    press(&mut rt, "hierarchy/filters/alphabetical");
+    assert_eq!(
+        order(&rt),
+        ["e_box", "e_lamp", "e_post", "e_sun"],
+        "by name"
+    );
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
