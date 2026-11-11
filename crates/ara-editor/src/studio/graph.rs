@@ -49,36 +49,7 @@ pub struct Page {
     /// The Material page shows its source (the material as DSL text) instead of the graph:
     /// the text being edited, unapplied.
     pub source: Option<String>,
-    /// The Material page's in-node previews ([`previews`]).
-    previews: Previews,
 }
-
-/// In-node previews (Shader Graph style): each operation node's value rendered on its own
-/// worker (`asset_tools::node_preview`), uploaded into the page layer's image slots as
-/// renders land. Until a node's render lands its tile says so; one that fails keeps a
-/// compact body.
-#[derive(Default)]
-struct Previews {
-    /// Requests for the shown material and their failures.
-    nodes: crate::asset_tools::node_preview::NodePreviews,
-    /// The render worker, started with the first preview.
-    queue: Option<crate::asset_tools::thumbnails::Thumbnails>,
-    /// Each rendered preview key's image slot.
-    slots: std::collections::HashMap<String, usize>,
-    /// The next slot to reuse when every slot holds a live key (they cycle).
-    next: usize,
-    /// The shader toolchain as last seen, and when, while renders fail: a change (a
-    /// converter installed, say) clears the failures so they render again.
-    toolchain: Option<(String, std::time::Instant)>,
-    /// Images landed since the layer last drew, by image id.
-    uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
-    /// The last render failure reported, so a cause shared by every node is said once.
-    reported: Option<String>,
-}
-
-/// Image slots for in-node previews: twice the most a graph derives, so a revision's new
-/// renders don't evict the ones still shown.
-const PREVIEW_SLOTS: usize = 2 * crate::asset_tools::node_preview::MAX;
 
 impl Page {
     /// The graph the canvas shows (its last loaded revision).
@@ -95,40 +66,6 @@ impl Page {
             .as_ref()
             .map(|g| g.canvas.selection.clone())
             .unwrap_or_default()
-    }
-    /// How many nodes show a rendered in-node preview (tests).
-    #[cfg(test)]
-    pub(super) fn previewed(&self) -> usize {
-        self.shown.as_ref().map_or(0, |g| g.canvas.previews.len())
-    }
-    /// Each previewed node's key and shown image against the image of the slot holding
-    /// that key: (node, key, shown, own). They differ while a render is on its way (tests).
-    #[cfg(test)]
-    pub(super) fn preview_slots(&self) -> Vec<(String, String, Option<u32>, Option<u32>)> {
-        let Some(shown) = self.shown.as_ref() else {
-            return Vec::new();
-        };
-        self.previews
-            .nodes
-            .requests
-            .iter()
-            .map(|(node, (key, ..))| {
-                (
-                    node.clone(),
-                    key.clone(),
-                    shown.canvas.previews.get(node).copied(),
-                    self.previews
-                        .slots
-                        .get(key)
-                        .map(|s| crate::asset_tools::thumbnails::image_id(*s)),
-                )
-            })
-            .collect()
-    }
-    /// Why the in-node previews couldn't render, once the worker said (tests).
-    #[cfg(test)]
-    pub(super) fn preview_error(&self) -> Option<&str> {
-        self.previews.reported.as_deref()
     }
     /// Picks `id` alone on the canvas (a transition from the Details' list).
     pub(super) fn pick(&mut self, id: String) {
@@ -275,208 +212,6 @@ pub(super) fn sync(s: &mut Studio, domain: &'static str) {
     page.dirty = true;
 }
 
-/// Keeps the Material page's in-node previews current: derives them when the material
-/// changes, asks the worker for those not rendered, and takes the renders that landed.
-/// Whether the canvas changed (it needs drawing).
-pub(super) fn previews(s: &mut Studio) -> bool {
-    use crate::asset_tools::{node_preview, thumbnails};
-    let root = s.editor.host.root().to_owned();
-    let revision = s.editor.host.store().revision();
-    let page = &mut s.graph;
-    let (Some(shown), Some(text)) = (page.shown.as_mut(), page.text.as_mut()) else {
-        return false;
-    };
-    if shown.domain != "material" {
-        return false;
-    }
-    let p = &mut page.previews;
-    let pixels = (2.0 * crate::graph::PREVIEW) as u32;
-    let identity = (shown.doc.clone(), revision);
-    if p.nodes.revision.as_ref() != Some(&identity) {
-        p.nodes.revision = Some(identity);
-        p.nodes.requests.clear();
-        if let Ok(material) = ara_material::Material::from_graph(shown.canvas.graph()) {
-            let nodes: Vec<String> = shown
-                .canvas
-                .preview_nodes()
-                .take(node_preview::MAX)
-                .map(str::to_owned)
-                .collect();
-            for node in nodes {
-                if let Some((derived, shot)) = node_preview::derive(&material, &node) {
-                    let key = thumbnails::Thumbnails::material_key(&derived, shot, pixels);
-                    p.nodes.requests.insert(node, (key, derived, shot));
-                }
-            }
-        }
-    }
-    let mut changed = false;
-    let mut failures = Vec::new();
-    // A failure is retried once the toolchain it needed changes.
-    if !p.nodes.failed.is_empty() {
-        let due = p
-            .toolchain
-            .as_ref()
-            .is_none_or(|(_, at)| at.elapsed() >= std::time::Duration::from_secs(2));
-        if due {
-            let now = toolchain();
-            if p.toolchain.as_ref().is_some_and(|(was, _)| *was != now) {
-                for key in std::mem::take(&mut p.nodes.failed) {
-                    if let Some(queue) = p.queue.as_mut() {
-                        queue.invalidate(&key);
-                    }
-                }
-                p.reported = None;
-                changed = true;
-            }
-            p.toolchain = Some((now, std::time::Instant::now()));
-        }
-    }
-    // Keys the material no longer asks for give their slots back; asked again later, they
-    // render again.
-    let live: std::collections::BTreeSet<String> = p
-        .nodes
-        .requests
-        .values()
-        .map(|(key, ..)| key.clone())
-        .collect();
-    let queue = &mut p.queue;
-    p.slots.retain(|key, _| {
-        let keep = live.contains(key);
-        if !keep && let Some(queue) = queue.as_mut() {
-            queue.invalidate(key);
-        }
-        keep
-    });
-    // Renders that landed take a free slot (one no node shows first) and upload on the
-    // next draw; a render for a key no longer asked for is dropped.
-    if let Some(queue) = p.queue.as_mut() {
-        for done in queue.poll() {
-            match done {
-                thumbnails::Done::Image(thumb) if !live.contains(&thumb.key) => {
-                    queue.invalidate(&thumb.key);
-                }
-                thumbnails::Done::Image(thumb) => {
-                    let slot = match p.slots.get(&thumb.key) {
-                        Some(slot) => *slot,
-                        None => {
-                            let used: std::collections::BTreeSet<usize> =
-                                p.slots.values().copied().collect();
-                            let showing: std::collections::BTreeSet<u32> =
-                                shown.canvas.previews.values().copied().collect();
-                            let free = (0..PREVIEW_SLOTS).filter(|s| !used.contains(s));
-                            let slot = free
-                                .clone()
-                                .find(|s| !showing.contains(&thumbnails::image_id(*s)))
-                                .or_else(|| free.clone().next())
-                                .unwrap_or_else(|| {
-                                    let slot = p.next % PREVIEW_SLOTS;
-                                    p.next += 1;
-                                    slot
-                                });
-                            // Whatever held the slot is evicted: its key may be asked
-                            // again, and no node keeps showing its picture.
-                            p.slots.retain(|key, s| {
-                                let evicted = *s == slot;
-                                if evicted {
-                                    queue.invalidate(key);
-                                }
-                                !evicted
-                            });
-                            let id = thumbnails::image_id(slot);
-                            shown.canvas.previews.retain(|_, shown| *shown != id);
-                            p.slots.insert(thumb.key.clone(), slot);
-                            slot
-                        }
-                    };
-                    p.uploads.push((
-                        thumbnails::image_id(slot),
-                        ara_ui_render::gpu::Image {
-                            width: thumb.image.width(),
-                            height: thumb.image.height(),
-                            rgba: thumb.image.into_raw(),
-                        },
-                    ));
-                    changed = true;
-                }
-                thumbnails::Done::Failed(key, error) => {
-                    // Said once per cause (a missing toolchain fails them all alike).
-                    if p.reported.as_deref() != Some(error.as_str()) {
-                        failures.push(format!("In-node previews can't render: {error}"));
-                        p.reported = Some(error);
-                    }
-                    p.nodes.failed.insert(key);
-                    changed = true;
-                }
-                thumbnails::Done::Pending(_) => {}
-            }
-        }
-    }
-    // Tiles for nodes with a render shown or on its way; the rest keep a compact body.
-    let previewed = p
-        .nodes
-        .requests
-        .iter()
-        .filter(|(_, (key, ..))| !p.nodes.failed.contains(key))
-        .map(|(node, _)| node.clone())
-        .collect();
-    shown.canvas.set_previewed(previewed, text);
-    let path = s
-        .editor
-        .host
-        .store()
-        .workspace()
-        .path_of(&shown.doc)
-        .unwrap_or("material")
-        .to_owned();
-    for (node, (key, derived, shot)) in &p.nodes.requests {
-        if p.nodes.failed.contains(key) {
-            continue;
-        }
-        match p.slots.get(key) {
-            Some(slot) => {
-                let id = thumbnails::image_id(*slot);
-                if shown.canvas.previews.insert(node.clone(), id) != Some(id) {
-                    changed = true;
-                }
-            }
-            // Until its new render lands a node keeps its last picture, whose slot no
-            // live key holds: the eviction above drops it before the slot is reused.
-            None => p
-                .queue
-                .get_or_insert_with(|| thumbnails::Thumbnails::new(&root))
-                .request_material(&path, key, derived, *shot, pixels),
-        }
-    }
-    if changed {
-        page.dirty = true;
-    }
-    for failure in failures {
-        s.editor.report_failure(&*anyhow::anyhow!(failure));
-    }
-    changed
-}
-
-/// What the in-node previews' shader toolchain is found from (`ara_shader_cook`'s
-/// discovery: its environment variables and install folders), to notice it changing.
-fn toolchain() -> String {
-    let converter = format!("metal-shaderconverter{}", std::env::consts::EXE_SUFFIX);
-    let installed: Vec<bool> = [
-        "/opt/metal-shaderconverter/bin",
-        "/usr/local/bin",
-        r"C:\Program Files\Metal Shader Converter\bin",
-    ]
-    .iter()
-    .map(|dir| std::path::Path::new(dir).join(&converter).is_file())
-    .collect();
-    format!(
-        "{:?} {:?} {:?} {installed:?}",
-        std::env::var_os("ARA_METAL_SHADERCONVERTER"),
-        std::env::var_os("VULKAN_SDK"),
-        std::env::var_os("PATH"),
-    )
-}
-
 /// Draws the canvas into the page's layer (`extent` in physical pixels); whether it
 /// reached the screen.
 /// # Safety
@@ -502,9 +237,6 @@ pub(super) unsafe fn draw(
     };
     if std::mem::take(&mut shown.fresh) {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
-    }
-    for (id, image) in page.previews.uploads.drain(..) {
-        target.image(id, image)?;
     }
     let mut list = DisplayList::default();
     shown.canvas.paint(&mut list, rect, theme);
@@ -1129,7 +861,11 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
                 ),
             );
         }
-        return out;
+        // The canvas draws plain nodes until the renderer can render their values.
+        return out.child(super::unavailable::note(
+            l,
+            "In-node previews are not available yet.",
+        ));
     }
     for id in selection {
         let Some(node) = graph.nodes.get(id) else {

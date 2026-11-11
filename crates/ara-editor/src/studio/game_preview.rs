@@ -77,6 +77,10 @@ impl Preview {
     /// The camera and size a preview would render now, if the Game view (in the main
     /// window or a floating one) wants one.
     fn want(editor: &Editor, host: &mut dyn GameHost) -> Option<(Camera, [u32; 2])> {
+        // Until the renderer can draw a second camera there is no preview (`unavailable`).
+        if !crate::studio::unavailable::game_preview_available() {
+            return None;
+        }
         let target = host.game_frame().filter(|t| t.iter().all(|v| *v >= 64))?;
         if editor.state.playing.is_some() || host.game_live() {
             return None;

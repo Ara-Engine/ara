@@ -109,7 +109,7 @@ pub struct ScenePointer {
     pub window: (f32, f32),
 }
 
-/// Asset tile pictures: the legacy pipeline's off-thread renders (cached by content under
+/// Asset tile pictures: texture thumbnails decoded off-thread (cached by content under
 /// `.ara/cache/thumbnails`), turned into stillkit images as they land.
 #[derive(Default)]
 pub(crate) struct Previews {
@@ -128,10 +128,9 @@ pub(crate) struct Previews {
 impl Previews {
     /// Whether a file of `kind` has a picture worth rendering.
     pub fn previewable(kind: &str) -> bool {
-        matches!(
-            kind,
-            "png" | "jpg" | "jpeg" | "hdr" | "exr" | "glb" | "gltf" | "fbx" | "material" | "graph"
-        )
+        // Textures only: models, materials and effects have no picture until the renderer can
+        // draw them, and their tiles show the type's glyph.
+        matches!(kind, "png" | "jpg" | "jpeg" | "hdr" | "exr")
     }
 
     /// Asks for `paths` not asked for yet.

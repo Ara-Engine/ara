@@ -65,7 +65,10 @@ fn title_bar_ruled<S: 'static>(
         .w_full()
         .align(Align::Center)
         .fill(c.chrome.0)
-        .child(el().w(if inset > 0.0 { inset + 8.0 } else { 10.0 }))
+        .child({
+            let edge = if inset > 0.0 { inset + 8.0 } else { 10.0 };
+            el().w(edge).min_w(edge)
+        })
         .child(row().gap(4.0).align(Align::Center).children(lead))
         .child(
             row()
@@ -76,11 +79,14 @@ fn title_bar_ruled<S: 'static>(
                 .children(middle),
         )
         .child(
+            // The trail (project name, search) shrinks when the window is narrow; the lead,
+            // the middle and the window buttons never do.
             row()
+                .min_w(0.0)
                 .gap(4.0)
                 .align(Align::Center)
                 .children(trail)
-                .child(el().w(8.0)),
+                .child(el().w(8.0).min_w(8.0)),
         );
     if let Some(maximized) = controls {
         bar = bar.child(window_controls(l, maximized));
