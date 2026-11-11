@@ -73,7 +73,9 @@ const VERTEX_KEY: u16 = 0x56;
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
 
-/// How long closing waits for running probe work to retire before leaving it.
+/// How long closing waits for running probe work to retire (it is cancelled first, so this
+/// is normally the time its in-flight GPU work needs). Past it the GPU objects are left to
+/// the process exit rather than destroyed under that work.
 const CLOSE_DRAIN: Duration = Duration::from_secs(5);
 
 /// Open the project in the studio and run until its window closes.
@@ -980,6 +982,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     surface.hide();
     rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
     let draining = Instant::now();
+    let mut retired = true;
     loop {
         let done = rt.touch(|s| -> ara_ui::Result<bool> {
             server.pump(&mut s.editor);
@@ -998,13 +1001,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     "ara-editor: probe work did not retire: {}",
                     ara_json::to_canonical_string(&probe_owner.resource_report())
                 );
+                retired = false;
                 break;
             }
             Err(error) => {
                 eprintln!("ara-editor: probe work failed while closing: {error}");
+                retired = false;
                 break;
             }
         }
+    }
+    if !retired {
+        // A bake still has work on the GPU: destroying its renderer under it is worse than
+        // leaving the GPU objects to the process exit, which follows at once.
+        std::mem::forget((scene_view, graph_layer, compositor, game, renderer));
+        return Ok(());
     }
     renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));
