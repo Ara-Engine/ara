@@ -5526,6 +5526,212 @@ fn agents_capture_the_studio_window_and_its_layout() {
     }
 }
 
+/// Starts a capture job of `target` with no Scene on screen and serves it as the host loop
+/// does; returns its final status.
+fn capture_without_scene(rt: &mut Runtime<Studio>, target: &str) -> Value {
+    let job = rt.touch(|s| {
+        s.editor
+            .action(
+                "capture",
+                json!({"target": target, "path": format!(".ara/captures/{target}-hidden.png")}),
+            )
+            .unwrap()["job"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    });
+    super::capture::serve(rt, None);
+    let started = std::time::Instant::now();
+    loop {
+        let status = rt.touch(|s| {
+            s.editor.tick();
+            s.editor.action("jobs.status", json!({"job": job})).unwrap()
+        });
+        if status["status"] != "running" {
+            return status;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{target}: {status}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn a_viewport_capture_with_the_scene_hidden_fails_saying_so() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
+    let status = capture_without_scene(&mut rt, "viewport");
+    assert_ne!(status["status"], "done", "{status}");
+    assert!(
+        status.to_string().contains("Scene view is not shown"),
+        "the failure names the cause: {status}"
+    );
+    // The other targets do not need the Scene.
+    for target in ["editor", "layout"] {
+        let status = capture_without_scene(&mut rt, target);
+        assert_eq!(status["status"], "done", "{target}: {status}");
+    }
+}
+
+#[test]
+fn captures_of_the_window_and_its_layout_complete_while_it_is_minimised() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.set_visible(false);
+    rt.frame(FRAME);
+    for target in ["editor", "layout"] {
+        let status = capture_without_scene(&mut rt, target);
+        assert_eq!(status["status"], "done", "{target}: {status}");
+    }
+    let status = capture_without_scene(&mut rt, "viewport");
+    assert!(
+        status.to_string().contains("Scene view is not shown"),
+        "{status}"
+    );
+}
+
+/// The `editor` capture says the native views are not in its picture.
+#[test]
+fn the_editor_capture_says_the_scene_is_not_in_it() {
+    let mut rt = open();
+    settle(&mut rt);
+    let status = capture_without_scene(&mut rt, "editor");
+    assert!(
+        status.to_string().contains("native GPU layers"),
+        "the result points at `viewport`: {status}"
+    );
+}
+
+/// One host-loop pass for agents' work with the Scene hidden: the editor's jobs tick, the
+/// Scene renders only when `render` (a bake needs it), the probe owner and captures are
+/// served, and the Lighting page's job list is polled.
+fn hidden_pass(
+    rt: &mut Runtime<Studio>,
+    owner: &mut super::probes::Owner,
+    scene_view: &mut crate::app::viewport::SceneView,
+    renderer: &mut ara_render::Renderer,
+    view: &crate::world::DocumentView,
+    render: bool,
+) {
+    rt.touch(|s| s.editor.tick());
+    if render {
+        super::agent_work::render(rt, owner, scene_view, renderer, view);
+    }
+    super::agent_work::serve(rt, owner, scene_view, renderer, false);
+    rt.touch(|s| s.editor.tick());
+    rt.touch(super::asset_ops::poll_jobs);
+    std::thread::sleep(Duration::from_millis(10));
+}
+
+/// Window > Lighting in front of the Scene: Recapture starts a bake, which only advances
+/// through Scene renders. Polling alone leaves it running; the unpresented render the loop
+/// runs for it completes it.
+#[test]
+fn a_recapture_started_from_the_lighting_page_completes_with_the_scene_hidden_on_this_gpu() {
+    use crate::catalog::Target;
+    use crate::world::EditWorldView as _;
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "create.light.probe", &Target::None));
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "lighting"})));
+    settle(&mut rt);
+    assert!(
+        rt.natives().iter().all(|(n, _)| &**n != super::SCENE_LAYER),
+        "the Lighting page covers the Scene"
+    );
+    let root = rt.state().editor.host.root().to_owned();
+    let scene = rt.touch(|s| {
+        s.editor
+            .view()
+            .unwrap()
+            .scene(
+                s.editor.host.root(),
+                &s.editor.state,
+                None,
+                &mut s.editor.models,
+            )
+            .unwrap()
+    });
+    let mut renderer = crate::app::viewport::prepare_renderer(
+        scene,
+        [320, 240],
+        super::present_extensions(),
+        root.join(".ara/gpu"),
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .unwrap()
+    .expect("the renderer starts on this GPU");
+    let view = rt.touch(|s| s.editor.view()).unwrap();
+    let mut scene_view = crate::app::viewport::SceneView::default();
+    let mut owner = super::probes::Owner::default();
+    // The Scene renders until its content is published and the probe snapshot exists.
+    let warm = std::time::Instant::now();
+    loop {
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            true,
+        );
+        let ready = rt.touch(|s| scene_view.probe_snapshot(&s.editor).map(drop));
+        match ready {
+            Ok(()) => break,
+            Err(why) => assert!(
+                warm.elapsed() < Duration::from_secs(60),
+                "the Scene never published a frame: {why:?}"
+            ),
+        }
+    }
+    press(&mut rt, "lighting/probe/recapture");
+    assert!(
+        super::lighting::capturing(rt.state()),
+        "the recapture started"
+    );
+    let job = rt.state().local.asset_jobs.last().unwrap().0.clone();
+    // Serving without rendering does not advance the bake: this was the stuck button.
+    for _ in 0..30 {
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            false,
+        );
+    }
+    let early = rt.touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
+    assert!(
+        super::lighting::capturing(rt.state()),
+        "a bake does not finish without a Scene render: {early} {}",
+        owner.resource_report()
+    );
+    let started = std::time::Instant::now();
+    while super::lighting::capturing(rt.state()) {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the recapture never completed: {}",
+            owner.resource_report()
+        );
+        hidden_pass(
+            &mut rt,
+            &mut owner,
+            &mut scene_view,
+            &mut renderer,
+            &view,
+            true,
+        );
+    }
+    let status = rt.touch(|s| s.editor.action("jobs.status", json!({"job": job})).unwrap());
+    assert_eq!(status["status"], "done", "{status}");
+    scene_view.destroy(&mut renderer).unwrap();
+}
+
 #[test]
 fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     use crate::world::EditWorldView as _;

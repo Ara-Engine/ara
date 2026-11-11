@@ -103,7 +103,8 @@ impl Work {
                 std::fs::write(&path, png)?;
                 let layout = path.with_extension("layout.json");
                 std::fs::write(&layout, ara_json::to_canonical_string(&report))?;
-                Ok(json!({"path":path,"layout":layout,"target":"editor"}))
+                Ok(json!({"path":path,"layout":layout,"target":"editor",
+                    "note":"The Scene, Game and graph views are native GPU layers: this PNG shows their place as a hole, not their picture. Capture target `viewport` for the Scene."}))
             }
             Self::Layout(path, report) => {
                 std::fs::write(&path, ara_json::to_canonical_string(&report))?;
@@ -111,7 +112,8 @@ impl Work {
             }
         }
     }
-    /// Finishes `prepared` for `job` on a worker thread and reports it to the host.
+    /// Finishes `prepared` for `job` on a worker thread and reports it to the host. A panic
+    /// in the worker (an encoder, the disk) fails the job instead of leaving it pending.
     pub fn finish(
         prepared: anyhow::Result<Self>,
         job: String,
@@ -120,9 +122,11 @@ impl Work {
         match prepared {
             Ok(work) => {
                 std::thread::spawn(move || {
-                    let result = work
-                        .write()
-                        .map_err(|e| vec![crate::invalid(e.to_string())]);
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        work.write()
+                            .map_err(|e| vec![crate::invalid(e.to_string())])
+                    }))
+                    .unwrap_or_else(|_| Err(vec![crate::invalid("the capture worker panicked")]));
                     let _ = completed.send(CaptureCompletion { job, result });
                 });
             }
