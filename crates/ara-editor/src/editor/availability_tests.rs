@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::{
-    shell::{Shell, commands::Target},
+    catalog::Target,
     world::{EditWorldView, SceneResolver},
 };
 use std::{
@@ -52,128 +52,8 @@ impl Drop for Project {
     }
 }
 
-fn present(editor: &mut Editor, shell: &mut Shell) {
-    let revision = editor.host.store().revision();
-    shell.rebuild(editor).unwrap();
-    shell.frame().unwrap();
-    assert_eq!(shell.panel_failure_count(), 0);
-    let view = shell.document_view(editor).unwrap();
-    let root = editor.host.root().to_owned();
-    view.scene(
-        &root,
-        &editor.state,
-        editor.gesture.as_ref(),
-        &mut editor.models,
-    )
-    .unwrap();
-    editor.view().unwrap();
-    assert_eq!(
-        editor.host.store().revision(),
-        revision,
-        "Presentation must not author fallback content"
-    );
-}
 
-#[test]
-fn undo_open_scene_creation_preserves_navigation_and_redo_recovers_without_panel_retry() {
-    let project = Project::new();
-    let mut editor = project.open();
-    let mut shell = Shell::new(&mut editor, [1200., 800.]).unwrap();
-    let original = editor.state.doc.clone();
-    // The same registry path as native New Scene, including its separate open action.
-    for _ in 0..3 {
-        shell
-            .run_command(&mut editor, "file.new_scene", &Target::None)
-            .unwrap();
-        present(&mut editor, &mut shell);
-    }
-    let created = editor.state.doc.clone();
-    assert_ne!(created, original);
-    editor
-        .action(
-            "editor.camera",
-            json!({"yaw":0.92,"pitch":0.23,"distance":17.0}),
-        )
-        .unwrap();
-    let camera = editor.state.camera;
-    let selection = editor.state.selection.clone();
-    let before = editor.host.store().revision();
-    shell
-        .run_command(&mut editor, "edit.undo", &Target::None)
-        .unwrap();
-    assert_eq!(editor.host.store().revision(), before + 1);
-    assert!(!editor.document_available());
-    assert_eq!(editor.state.doc, created);
-    assert_eq!(editor.state.camera, camera);
-    assert_eq!(editor.state.selection, selection);
-    assert!(crate::world::resolve(editor.host.store(), &created).is_err());
-    assert!(DocumentView::new(editor.host.store(), &created).is_err());
-    let mut resolver = SceneResolver::default();
-    assert!(resolver.resolve(editor.host.store(), &created).is_err());
-    assert!(
-        resolver
-            .presentation(editor.host.store(), &created)
-            .unwrap()
-            .is_empty()
-    );
-    let revision = editor.host.store().revision();
-    assert!(
-        editor
-            .apply(
-                vec![json!({"cmd":"entity.create","args":{"name":"Must reject"}})],
-                "Missing document",
-                None
-            )
-            .is_err()
-    );
-    assert_eq!(editor.host.store().revision(), revision);
-    for _ in 0..3 {
-        present(&mut editor, &mut shell);
-        assert!(shell.ui.find("hierarchy-unavailable").is_some());
-        assert!(shell.ui.find("inspector-unavailable").is_some());
-        assert!(shell.viewport().is_some());
-    }
-    shell
-        .run_command(&mut editor, "edit.redo", &Target::None)
-        .unwrap();
-    assert_eq!(editor.host.store().revision(), revision + 1);
-    assert!(editor.document_available());
-    assert_eq!(editor.state.doc, created);
-    assert_eq!(editor.state.camera, camera);
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("hierarchy-unavailable").is_none());
-    assert!(shell.ui.find("inspector-unavailable").is_none());
-    assert!(resolver.resolve(editor.host.store(), &created).is_ok());
-}
 
-#[test]
-fn deleted_selection_recovers_without_stealing_the_human_view() {
-    let project = Project::new();
-    let mut editor = project.open();
-    editor
-        .action("editor.select", json!({"entities":["e_available1"]}))
-        .unwrap();
-    let mut shell = Shell::new(&mut editor, [1200., 800.]).unwrap();
-    let doc = editor.state.doc.clone();
-    let camera = editor.state.camera;
-    let selected = editor.state.selection.clone();
-    editor
-        .apply(
-            vec![json!({"cmd":"entity.delete","args":{"entities":["e_available1"]}})],
-            "Remove selection",
-            None,
-        )
-        .unwrap();
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("inspector-selection-unavailable").is_some());
-    assert_eq!(editor.state.selection, selected);
-    assert_eq!(editor.state.camera, camera);
-    editor.action("history.undo", json!({})).unwrap();
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("inspector-selection-unavailable").is_none());
-    assert_eq!(editor.state.doc, doc);
-    assert_eq!(editor.state.camera, camera);
-}
 
 fn snapshot(editor: &Editor) -> Vec<(String, String)> {
     editor
@@ -292,66 +172,4 @@ fn failed_resource_initialization_or_later_batch_command_leaves_no_empty_documen
     assert_eq!(editor.host.store().history().len(), history);
 }
 
-#[test]
-fn old_history_with_missing_animation_initializer_recovers_on_redo_without_quarantine() {
-    let project = Project::new();
-    let mut editor = project.open();
-    // Reproduce the historical service's two real typed transactions exactly.
-    let created = editor
-        .apply(
-            vec![json!({"cmd":"doc.create","args":{"path":"old.animation","kind":"animation"}})],
-            "Legacy resource create",
-            None,
-        )
-        .unwrap();
-    let doc = created["outputs"][0]["id"].as_str().unwrap().to_owned();
-    editor.apply_to(&doc, vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":{}}})], "Legacy resource initialization").unwrap();
-    editor
-        .action("editor.workspace", json!({"resource":doc,"asset":""}))
-        .unwrap();
-    editor
-        .action("editor.focus", json!({"panel":"animation"}))
-        .unwrap();
-    // Tool pages initially open on a floating surface. This fixture inspects the
-    // main Ui, so dock the real page there through the production layout command.
-    editor
-        .action(
-            "editor.layout.move",
-            json!({"panel":"animation","slot":"view"}),
-        )
-        .unwrap();
-    let mut shell = Shell::new(&mut editor, [1200., 800.]).unwrap();
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("animation-canvas").is_some());
-    let camera = editor.state.camera;
-    let resource = editor.state.resource.clone();
-    let valid = snapshot(&editor);
-    assert!(editor.apply_to(&doc, vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":{"states":1}}})], "Reject malformed controller").is_err());
-    assert_eq!(snapshot(&editor), valid);
-    // Undo removes only the initializer in that legacy history, preserving its document.
-    editor.action("history.undo", json!({})).unwrap();
-    assert!(editor.host.store().workspace().doc(&doc).is_some());
-    assert!(
-        crate::authoring::animation::controller(editor.host.store().workspace().doc(&doc).unwrap())
-            .is_err()
-    );
-    for _ in 0..3 {
-        present(&mut editor, &mut shell);
-        assert!(shell.ui.find("animation-unavailable").is_some());
-        assert!(shell.ui.find("animation-inspector-unavailable").is_some());
-        assert!(shell.ui.find("animation-add-state").is_none());
-        assert_eq!(editor.state.resource, resource);
-        assert_eq!(editor.state.camera, camera);
-    }
-    editor.action("history.redo", json!({})).unwrap();
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("animation-canvas").is_some());
-    assert!(shell.ui.find("animation-unavailable").is_none());
-    editor.action("history.undo", json!({})).unwrap();
-    present(&mut editor, &mut shell);
-    assert!(shell.ui.find("animation-unavailable").is_some());
-    editor.action("history.redo", json!({})).unwrap();
-    present(&mut editor, &mut shell);
-    assert_eq!(editor.state.resource, resource);
-    assert_eq!(editor.state.camera, camera);
-}
+

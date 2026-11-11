@@ -166,7 +166,7 @@ fn a_move_with_surface_or_vertex_snapping_asks_the_host_instead_of_stepping() {
     rt.frame(FRAME);
     assert!(rt.state().local.snap.is_some_and(|r| r.vertex));
     // Until the Scene presents this scene, the host has no geometry to snap to.
-    let scene = crate::app::viewport::SceneView::default();
+    let scene = crate::studio::viewport::SceneView::default();
     let view = rt.state().editor.view().unwrap();
     let capture =
         super::snapping::Snap::capture(&rt.state().editor, &view, &scene, &|_| None, &request);
@@ -813,7 +813,7 @@ fn drop_to_surface_asks_the_host_and_waits_for_presented_geometry() {
         "the host drops it next pass"
     );
     // Before the Scene has presented this scene, the planner refuses rather than guess.
-    let scene = crate::app::viewport::SceneView::default();
+    let scene = crate::studio::viewport::SceneView::default();
     let planned = crate::surface_drop::plan(&rt.state().editor, &scene, |_| None);
     assert!(planned.is_err_and(|e| e.to_string().contains("waiting")));
 }
@@ -4967,7 +4967,7 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
         )
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
-    let renderer = crate::app::viewport::prepare_renderer(
+    let renderer = crate::studio::viewport::prepare_renderer(
         scene,
         [64, 64],
         super::present_extensions(),

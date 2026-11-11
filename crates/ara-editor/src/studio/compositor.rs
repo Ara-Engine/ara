@@ -130,7 +130,7 @@ impl Compositor {
     pub unsafe fn frame(
         &mut self,
         renderer: &mut ara_render::Renderer,
-        scene: &mut crate::app::viewport::SceneView,
+        scene: &mut crate::studio::viewport::SceneView,
         view: &DocumentView,
         state: &EditorState,
         changed: &std::collections::BTreeMap<u64, &str>,

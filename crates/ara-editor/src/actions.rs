@@ -690,7 +690,7 @@ impl EditorService {
             "editor.view" => {
                 let p: EditorView = parse(params)?;
                 if let Some(mode) = p.view_mode {
-                    if !crate::app::viewport::VIEW_MODES
+                    if !crate::studio::viewport::VIEW_MODES
                         .iter()
                         .any(|(name, ..)| *name == mode)
                     {

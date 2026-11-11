@@ -765,7 +765,7 @@ impl Preview {
     }
 }
 
-impl crate::app::scene_sync::Drafts for Preview {
+impl crate::studio::scene_sync::Drafts for Preview {
     fn drafts(&self) -> &BTreeMap<String, String> {
         &self.key
     }

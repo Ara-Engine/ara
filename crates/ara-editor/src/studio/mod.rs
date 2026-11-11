@@ -24,6 +24,8 @@ mod create;
 mod curve;
 mod dock;
 mod game;
+mod game_preview;
+pub mod headless;
 mod gizmo;
 mod graph;
 mod hierarchy;
@@ -32,6 +34,7 @@ mod layer;
 mod lighting;
 mod material_stats;
 mod mesh_paint;
+mod player;
 mod panels;
 mod portals;
 mod preferences;
@@ -40,7 +43,9 @@ mod profiler;
 mod references;
 mod running;
 mod scene;
+pub(crate) mod scene_sync;
 mod scene_overlays;
+pub(crate) mod setup;
 mod scripts;
 mod shortcuts;
 mod snapping;
@@ -50,6 +55,7 @@ mod style;
 mod tests;
 mod trace;
 mod vfx;
+pub(crate) mod viewport;
 
 use std::time::{Duration, Instant};
 
@@ -57,7 +63,9 @@ use stillkit::el::{Runtime, SystemClipboard};
 use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
 use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
 
-use crate::app::{Options, scene_sync::SceneSync, viewport::SceneView};
+pub use setup::Options;
+use scene_sync::SceneSync;
+use viewport::SceneView;
 use crate::transport::Server;
 use crate::world::EditWorldView as _;
 use crate::{Editor, settings};
@@ -77,7 +85,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         Some(user_settings),
         ara_host::HostConfig::default(),
     )?;
-    crate::app::setup::prepare(&mut editor, &options).map_err(|e| anyhow::anyhow!("{e}"))?;
+    setup::prepare(&mut editor, &options).map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
         "Ara editor authority listening on 127.0.0.1:{}",
@@ -156,7 +164,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
     let mut quit = false;
-    let renderer = crate::app::viewport::prepare_renderer(
+    let renderer = viewport::prepare_renderer(
         scene,
         extent,
         present_extensions(),

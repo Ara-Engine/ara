@@ -9,7 +9,7 @@ use glam::Vec3;
 use serde_json::{Value, json};
 
 use crate::Editor;
-use crate::app::viewport;
+use crate::studio::viewport;
 use crate::paint::{self as mesh_paint, Layer, PaintTool};
 use crate::world::EditWorldView as _;
 

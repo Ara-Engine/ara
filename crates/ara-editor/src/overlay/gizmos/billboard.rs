@@ -10,32 +10,31 @@ use super::*;
 
 /// Disc radius at 100 % icon size, in logical pixels.
 const RADIUS: f32 = 11.;
-/// Glyphs the icons use; each rasterizes as `gizmo-<name>`.
-const GLYPHS: &[&str] = &[
-    "lightbulb",
-    "flashlight",
-    "sun",
-    "square",
-    "circle",
-    "video",
-    "volume-2",
-    "audio-lines",
-    "ear",
-    "circle-dot",
-    "layers",
-    "cloud-fog",
-    "sun-dim",
-    "globe",
-    "sparkles",
+/// Glyphs the icons use, with their bundled Lucide SVGs; each rasterizes as `gizmo-<name>`.
+const GLYPHS: &[(&str, &str)] = &[
+    ("lightbulb", include_str!("../../../assets/icons/lightbulb.svg")),
+    ("flashlight", include_str!("../../../assets/icons/flashlight.svg")),
+    ("sun", include_str!("../../../assets/icons/sun.svg")),
+    ("square", include_str!("../../../assets/icons/square.svg")),
+    ("circle", include_str!("../../../assets/icons/circle.svg")),
+    ("video", include_str!("../../../assets/icons/video.svg")),
+    ("volume-2", include_str!("../../../assets/icons/volume-2.svg")),
+    ("audio-lines", include_str!("../../../assets/icons/audio-lines.svg")),
+    ("ear", include_str!("../../../assets/icons/ear.svg")),
+    ("circle-dot", include_str!("../../../assets/icons/circle-dot.svg")),
+    ("layers", include_str!("../../../assets/icons/layers.svg")),
+    ("cloud-fog", include_str!("../../../assets/icons/cloud-fog.svg")),
+    ("sun-dim", include_str!("../../../assets/icons/sun-dim.svg")),
+    ("globe", include_str!("../../../assets/icons/globe.svg")),
+    ("sparkles", include_str!("../../../assets/icons/sparkles.svg")),
 ];
 
 /// Rasterize the gizmo glyphs (white, bolder strokes) for `dpi`, sized for the
 /// largest default icon so they never magnify.
 pub(crate) fn install(renderer: &mut ara_ui_render::gpu::Renderer, dpi: f32) -> ara_ui::Result<()> {
     let size = (36. * dpi.max(1.)).ceil() as u32;
-    for name in GLYPHS {
-        let svg = crate::shell::icons::svg(name)
-            .ok_or_else(|| format!("gizmo glyph {name} is not bundled"))?
+    for (name, svg) in GLYPHS {
+        let svg = svg
             .replace("currentColor", "#ffffff")
             .replace("stroke-width=\"2\"", "stroke-width=\"2.4\"");
         let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default())?;

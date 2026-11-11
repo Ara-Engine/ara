@@ -1,5 +1,4 @@
 //! Grid/handle projection and picking use the actual renderer camera and ID channel.
-pub(crate) mod diagnostics;
 mod gizmo;
 pub(crate) mod gizmos;
 #[cfg(test)]

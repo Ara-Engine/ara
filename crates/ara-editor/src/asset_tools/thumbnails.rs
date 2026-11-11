@@ -456,7 +456,7 @@ fn master(
     }
     let extension = source.extension().and_then(|s| s.to_str()).unwrap_or("");
     let image = match extension {
-        ext if crate::shell::is_texture(ext) && ext != "ktx2" => {
+        ext if crate::names::is_texture(ext) && ext != "ktx2" => {
             texture(&image::open(&source)?.to_rgba8())
         }
         "fbx" => studio::shoot(
@@ -637,7 +637,7 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
 /// materials, graphs and prefabs.
 pub(crate) fn has_thumbnail(path: &str) -> bool {
     let extension = path.rsplit('.').next().unwrap_or_default();
-    (crate::shell::is_texture(extension) && extension != "ktx2")
+    (crate::names::is_texture(extension) && extension != "ktx2")
         || matches!(
             extension,
             "glb" | "gltf" | "fbx" | "material" | "graph" | "prefab"
