@@ -1022,6 +1022,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         Some((&mut renderer, &scene_view)),
                         &options.output,
                     )?;
+                    // The window picture has no overlays; the composed Scene frame does.
+                    let overlays = options.output.join("editor-scene-overlays.png");
+                    match compositor.save_frame(&overlays) {
+                        Ok(()) => {
+                            eprintln!("ara-editor: scene overlays written: {}", overlays.display())
+                        }
+                        Err(error) => eprintln!("ara-editor: no scene overlays capture: {error:#}"),
+                    }
                 }
                 break;
             }
