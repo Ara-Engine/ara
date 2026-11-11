@@ -123,6 +123,7 @@ impl PlayConfig {
                 headless: 2,
                 windowed: 0,
                 size: [1280, 720],
+                renderer: None,
             },
             import_worker: sibling("ara-import-worker", "ARA_IMPORT_WORKER"),
             tick_hz: 60,

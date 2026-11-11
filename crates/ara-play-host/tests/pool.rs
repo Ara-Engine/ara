@@ -17,6 +17,8 @@ fn players_that_exit_before_hello_back_off_without_blocking_the_tick() {
         headless: 1,
         windowed: 0,
         size: [64, 64],
+        // Not a player at all (this test binary stands in for one): no renderer to name.
+        renderer: None,
     };
     let mut pool = Pool::new(config, "token".into()).unwrap();
     let (mut failures, mut worst) = (0, Duration::ZERO);

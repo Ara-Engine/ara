@@ -45,6 +45,7 @@ fn shared_network_worlds_patch_only_the_authority_and_adopt_control_from_replica
             headless: 0,
             windowed: 0,
             size: [64, 64],
+            renderer: Some("ara".to_owned()),
         },
         "shared-network-test".into(),
     )
@@ -163,6 +164,7 @@ fn shared_players_have_one_pid_and_independent_ticks_input_ecs_and_navigation() 
             headless: 0,
             windowed: 0,
             size: [64, 64],
+            renderer: Some("ara".to_owned()),
         },
         "shared-isolation-test".into(),
     )

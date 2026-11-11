@@ -130,7 +130,7 @@ Fixes:
 owner: ara-renderlab
 shown as: ARA_RENDERLAB_UNAVAILABLE
 
-The launch selected the Renderlab renderer (`--renderer renderlab*` or `ARA_RENDERER`), but it could not start on this machine. The view renders with Ara's own renderer instead, which is complete on every device.
+The launch uses the Renderlab renderer (the default, or `--renderer renderlab*` or `ARA_RENDERER`), but it could not start on this machine. The view renders with Ara's own renderer (`ara-render`, frozen) instead, which is complete on every device, and the player says so once (`Ara presentation: ara-render draws (...)`).
 
 Causes:
 - No Vulkan adapter, or the GPU lacks the features the requested Renderlab path needs (hardware ray queries for `renderlab-rt`; 64-bit storage atomics and descriptor indexing for `renderlab-nonrt`).
