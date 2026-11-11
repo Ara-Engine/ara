@@ -135,13 +135,18 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             )
             .key("lighting/probe/recapture")
             .tooltip(match unavailable {
+                _ if !super::unavailable::probe_capture_available() => {
+                    super::unavailable::SOON.to_owned()
+                }
                 Some(why) => format!("Not available: {why}"),
                 None => "Capture the selected reflection probes again".to_owned(),
             })
             .on_press(|s: &mut Studio| {
                 super::commands::run(s, "lighting.probe.recapture", &crate::catalog::Target::None)
             }),
-            !probes(s, None).is_empty() && unavailable.is_none(),
+            !probes(s, None).is_empty()
+                && unavailable.is_none()
+                && super::unavailable::probe_capture_available(),
         )
     };
     let toolbar = row()
@@ -235,13 +240,20 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
     };
     // Said next to the button rather than only in its tooltip: a quality without probe
     // captures (Auto on an integrated GPU) is the usual reason Recapture is off.
-    let unavailable = probes_unavailable(s).map(|why| {
-        text(format!("Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."))
-            .key("lighting/probe/unavailable")
-            .text_size(11.0)
-            .color(c.muted_foreground.0)
-            .pad_x(10.0)
-    });
+    let unavailable = if super::unavailable::probe_capture_available() {
+        probes_unavailable(s).map(|why| {
+            text(format!("Reflection probes can't capture: {why}. Choose High or Epic in the Scene's quality menu."))
+                .key("lighting/probe/unavailable")
+                .text_size(11.0)
+                .color(c.muted_foreground.0)
+                .pad_x(10.0)
+        })
+    } else {
+        Some(
+            super::unavailable::note(l, "Reflection probe capture is not available yet.")
+                .key("lighting/probe/unavailable"),
+        )
+    };
     col()
         .grow(1.0)
         .child(toolbar)
@@ -481,6 +493,9 @@ fn probes(s: &Studio, entity: Option<&str>) -> Vec<String> {
 /// Queues a fresh capture of the selected Reflection Probes (derived data: the scene is
 /// unchanged); the host loop follows the job, a failure says why.
 pub(super) fn recapture(s: &mut Studio, entity: Option<&str>) -> ara_ui::Result<()> {
+    if !super::unavailable::probe_capture_available() {
+        return Err(format!("Reflection probe capture: {}", super::unavailable::SOON).into());
+    }
     let entities = probes(s, entity);
     if entities.is_empty() {
         return Err("Select one or more Reflection Probes to recapture".into());
