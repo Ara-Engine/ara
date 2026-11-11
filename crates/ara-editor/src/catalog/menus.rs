@@ -525,6 +525,7 @@ pub(crate) const MENUS: &[Menu] = &[
             Sub("Tools", TOOLS),
             S,
             C("window.float"),
+            C("window.dock"),
             Sub(
                 "Move Panel To",
                 &[
@@ -808,6 +809,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             Sub("Add Tab", &[Item::Dynamic(Dynamic::AddTab)]),
             S,
             C("window.float"),
+            C("window.dock"),
             Sub(
                 "Move To",
                 &[
