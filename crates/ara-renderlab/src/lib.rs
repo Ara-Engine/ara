@@ -35,6 +35,8 @@ mod bridge;
 #[cfg(target_vendor = "apple")]
 mod bridge_metal;
 mod grade;
+#[cfg(all(test, not(target_vendor = "apple")))]
+mod id_slot;
 mod lighting;
 mod meter;
 mod scene;

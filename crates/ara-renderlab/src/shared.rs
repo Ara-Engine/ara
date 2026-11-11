@@ -11,10 +11,18 @@
 //! the other touches the slot. Only slot 0 is ever written: the presenter copies it
 //! out and hands it back within the frame, so there is nothing to rotate.
 //!
-//! Slot 0 is also a wgpu texture, so the frame is copied into it by wgpu (which
-//! tracks it in `COPY_DST`, that is `TRANSFER_DST_OPTIMAL`); the ownership barriers
-//! around that copy are raw Vulkan on the same queue and leave the image in the
-//! layout wgpu expects.
+//! A second ring, the same size and format, carries the object-id image. It is
+//! copied and released in the same submissions as the colour slot, on one fence, so
+//! the presenter never reads ids from a different frame than the colour it copies.
+//! [`SharedHandoff::set_id`] is the writer's entry: pass Renderlab's id texture
+//! (RGBA8 UNORM, `COPY_SRC`, the view size) and [`SharedHandoff::publish`] copies it
+//! beside the colour output. [`SharedHandoff::deliver_id`] copies that image out,
+//! and it must run before the next publish.
+//!
+//! Slot 0 of each ring is also a wgpu texture, so the frame is copied into it by
+//! wgpu (which tracks it in `COPY_DST`, that is `TRANSFER_DST_OPTIMAL`); the
+//! ownership barriers around that copy are raw Vulkan on the same queue and leave
+//! the image in the layout wgpu expects.
 use anyhow::{Context as _, Result, bail};
 use ara_gpu::{
     GpuDevice, Image,
@@ -57,29 +65,213 @@ impl Drop for Slot {
     }
 }
 
-/// The shared ring on Renderlab's device and its import on the presenter's.
-pub(crate) struct SharedHandoff {
-    raw: ash::Device,
-    queue: vk::Queue,
-    family: u32,
-    pool: vk::CommandPool,
-    /// Recorded per frame: the slot's acquire before the copy, its release after.
-    acquire: vk::CommandBuffer,
-    release: vk::CommandBuffer,
-    fence: vk::Fence,
-    /// Slot 0 as wgpu sees it; wgpu destroys the slot when it destroys the texture.
+/// One exported ring: colour or ids. The import drops before the texture, so the
+/// presenter's view of the memory is gone before the export frees it.
+struct SharedImage {
+    imported: ImportedSurface,
+    /// Slot 0 as wgpu sees it; wgpu destroys that slot when it destroys the texture.
     texture: wgpu::Texture,
     image: vk::Image,
     /// The ring's other slots: imported, never written.
     _spare: Vec<Slot>,
     _handles: Vec<Handle>,
     _surface: SharedSurface,
-    imported: ImportedSurface,
+}
+
+/// The shared rings on Renderlab's device and their imports on the presenter's.
+pub(crate) struct SharedHandoff {
+    raw: ash::Device,
+    queue: vk::Queue,
+    family: u32,
+    pool: vk::CommandPool,
+    /// Recorded per frame: acquire before the copies, release after.
+    acquire: vk::CommandBuffer,
+    release: vk::CommandBuffer,
+    fence: vk::Fence,
+    colour: SharedImage,
+    /// Object ids for the same frame as [`Self::colour`].
+    id: SharedImage,
+    /// Copied beside the colour output when set. See [`Self::set_id`].
+    id_source: Option<wgpu::Texture>,
     extent: wgpu::Extent3d,
-    /// Slot 0 rests with the presenter's side: the next frame acquires it first.
+    /// Colour slot 0 rests with the presenter's side: the next frame acquires it first.
     handed_over: bool,
+    /// Id slot 0 rests with the presenter's side.
+    id_handed_over: bool,
     /// A release was submitted and not yet waited for.
     in_flight: bool,
+    /// The release fence was waited; a copy-out may still be owed.
+    frame_latched: bool,
+    /// The waited frame's colour has not been copied out.
+    colour_owed: bool,
+    /// The waited frame's id has not been copied out. False when that frame had no id.
+    id_owed: bool,
+}
+
+/// What both rings are exported from.
+#[derive(Clone, Copy)]
+struct RingExport<'a> {
+    device: &'a wgpu::Device,
+    raw: &'a ash::Device,
+    win32: &'a ash::khr::external_memory_win32::Device,
+    memory: &'a vk::PhysicalDeviceMemoryProperties,
+    identity: DeviceIdentity,
+    gpu: &'a GpuDevice,
+    size: [u32; 2],
+    extent: wgpu::Extent3d,
+}
+
+/// One [`SLOTS`]-image ring, imported on `gpu`, with slot 0 wrapped for wgpu copies.
+fn export_ring(
+    ctx: &RingExport<'_>,
+    hal: &impl std::ops::Deref<Target = wgpu::hal::vulkan::Device>,
+    label: &'static str,
+) -> Result<SharedImage> {
+    let RingExport {
+        device,
+        raw,
+        win32,
+        memory: memory_properties,
+        identity,
+        gpu,
+        size,
+        extent,
+    } = *ctx;
+    let mut slots = Vec::with_capacity(SLOTS);
+    let mut handles = Vec::with_capacity(SLOTS);
+    let mut described = Vec::with_capacity(SLOTS);
+    for _ in 0..SLOTS {
+        let mut slot = Slot {
+            device: raw.clone(),
+            image: vk::Image::null(),
+            memory: vk::DeviceMemory::null(),
+        };
+        // SAFETY: Creation follows the queried requirements; `slot` frees partial
+        // work. The parameters equal `ara_gpu`'s shared images, as opaque handles
+        // require of both sides.
+        let (bytes, memory_type, handle) = unsafe {
+            let mut external =
+                vk::ExternalMemoryImageCreateInfo::default().handle_types(HANDLE_TYPE);
+            slot.image = raw.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(FORMAT)
+                    .extent(vk::Extent3D {
+                        width: size[0],
+                        height: size[1],
+                        depth: 1,
+                    })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .tiling(vk::ImageTiling::OPTIMAL)
+                    .usage(
+                        vk::ImageUsageFlags::TRANSFER_SRC
+                            | vk::ImageUsageFlags::TRANSFER_DST
+                            | vk::ImageUsageFlags::SAMPLED,
+                    )
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .push_next(&mut external),
+                None,
+            )?;
+            let requirements = raw.get_image_memory_requirements(slot.image);
+            let memory_type = (0..memory_properties.memory_type_count)
+                .find(|i| {
+                    requirements.memory_type_bits & (1 << i) != 0
+                        && memory_properties.memory_types[*i as usize]
+                            .property_flags
+                            .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                })
+                .context("no device-local memory for a shared image")?;
+            let mut export = vk::ExportMemoryAllocateInfo::default().handle_types(HANDLE_TYPE);
+            let mut dedicated = vk::MemoryDedicatedAllocateInfo::default().image(slot.image);
+            slot.memory = raw.allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(requirements.size)
+                    .memory_type_index(memory_type)
+                    .push_next(&mut export)
+                    .push_next(&mut dedicated),
+                None,
+            )?;
+            raw.bind_image_memory(slot.image, slot.memory, 0)?;
+            let handle = win32.get_memory_win32_handle(
+                &vk::MemoryGetWin32HandleInfoKHR::default()
+                    .memory(slot.memory)
+                    .handle_type(HANDLE_TYPE),
+            )?;
+            (requirements.size, memory_type, handle)
+        };
+        if handle == 0 {
+            bail!("the driver returned a null memory handle");
+        }
+        described.push(SlotDesc {
+            handle: handle as u64,
+            size: bytes,
+            memory_type,
+        });
+        handles.push(own(handle));
+        slots.push(slot);
+    }
+    let surface = SharedSurface::duplicate_local(&SurfaceDesc {
+        generation: 1,
+        width: size[0],
+        height: size[1],
+        format: SurfaceFormat::Rgba8Unorm,
+        device: identity,
+        process: std::process::id(),
+        slots: described,
+    })?;
+    // SAFETY: `gpu` outlives the import (`Bridge::release` drops the handoff first),
+    // and the presenter's thread is the only user of its graphics queue.
+    let imported = unsafe { ImportedSurface::create(gpu, &surface)? };
+
+    // Slot 0 becomes a wgpu texture; wgpu drops the slot when it destroys it.
+    let first = slots.remove(0);
+    let image = first.image;
+    // SAFETY: `image` is a live RGBA8 image of `extent` on this device with
+    // TRANSFER_DST usage, in UNDEFINED layout as `UNINITIALIZED` states, and its
+    // memory is released by the drop callback only.
+    let texture = unsafe {
+        let hal_texture = hal.texture_from_raw(
+            image,
+            &wgpu::hal::TextureDescriptor {
+                label: Some(label),
+                size: extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUses::COPY_DST,
+                memory_flags: wgpu::hal::MemoryFlags::empty(),
+                view_formats: Vec::new(),
+            },
+            Some(Box::new(move || drop(first))),
+            wgpu::hal::vulkan::TextureMemory::External,
+        );
+        device.create_texture_from_hal::<wgpu::hal::api::Vulkan>(
+            hal_texture,
+            &wgpu::TextureDescriptor {
+                label: Some(label),
+                size: extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            wgpu::TextureUses::UNINITIALIZED,
+        )
+    };
+    Ok(SharedImage {
+        imported,
+        texture,
+        image,
+        _spare: slots,
+        _handles: handles,
+        _surface: surface,
+    })
 }
 
 fn subresource() -> vk::ImageSubresourceRange {
@@ -108,14 +300,23 @@ fn barrier(
 }
 
 impl SharedHandoff {
-    /// Exports a ring of `size` on the engine's device and imports it on `gpu`.
+    /// Exports both rings of `size` on the engine's device and imports them on `gpu`.
     /// Fails (the caller falls back to the CPU copy) off Windows, when the two
     /// devices are different adapters, or when the driver cannot share RGBA8 images.
     pub fn new(engine: &Engine, gpu: &GpuDevice, size: [u32; 2]) -> Result<Self> {
+        Self::on_device(engine.device(), gpu, size)
+    }
+
+    /// Exports both rings on `device` and imports them on `gpu`. `device` is
+    /// Renderlab's, or another wgpu device on the same adapter (the id-slot test).
+    pub(crate) fn on_device(
+        device: &wgpu::Device,
+        gpu: &GpuDevice,
+        size: [u32; 2],
+    ) -> Result<Self> {
         if !cfg!(windows) {
             bail!("shared images use opaque NT handles (Windows only)");
         }
-        let device = engine.device();
         // SAFETY: The handle is used only to read the device's raw objects while the
         // engine (and so the device) is alive; nothing is destroyed through it.
         let hal = unsafe { device.as_hal::<wgpu::hal::api::Vulkan>() }
@@ -146,138 +347,23 @@ impl SharedHandoff {
         };
 
         let win32 = ash::khr::external_memory_win32::Device::new(instance, &raw);
-        let mut slots = Vec::with_capacity(SLOTS);
-        let mut handles = Vec::with_capacity(SLOTS);
-        let mut described = Vec::with_capacity(SLOTS);
-        for _ in 0..SLOTS {
-            let mut slot = Slot {
-                device: raw.clone(),
-                image: vk::Image::null(),
-                memory: vk::DeviceMemory::null(),
-            };
-            // SAFETY: Creation follows the queried requirements; `slot` frees partial
-            // work. The parameters equal `ara_gpu`'s shared images, as opaque handles
-            // require of both sides.
-            let (bytes, memory_type, handle) = unsafe {
-                let mut external =
-                    vk::ExternalMemoryImageCreateInfo::default().handle_types(HANDLE_TYPE);
-                slot.image = raw.create_image(
-                    &vk::ImageCreateInfo::default()
-                        .image_type(vk::ImageType::TYPE_2D)
-                        .format(FORMAT)
-                        .extent(vk::Extent3D {
-                            width: size[0],
-                            height: size[1],
-                            depth: 1,
-                        })
-                        .mip_levels(1)
-                        .array_layers(1)
-                        .samples(vk::SampleCountFlags::TYPE_1)
-                        .tiling(vk::ImageTiling::OPTIMAL)
-                        .usage(
-                            vk::ImageUsageFlags::TRANSFER_SRC
-                                | vk::ImageUsageFlags::TRANSFER_DST
-                                | vk::ImageUsageFlags::SAMPLED,
-                        )
-                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                        .initial_layout(vk::ImageLayout::UNDEFINED)
-                        .push_next(&mut external),
-                    None,
-                )?;
-                let requirements = raw.get_image_memory_requirements(slot.image);
-                let memory_type = (0..memory_properties.memory_type_count)
-                    .find(|i| {
-                        requirements.memory_type_bits & (1 << i) != 0
-                            && memory_properties.memory_types[*i as usize]
-                                .property_flags
-                                .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                    })
-                    .context("no device-local memory for a shared image")?;
-                let mut export = vk::ExportMemoryAllocateInfo::default().handle_types(HANDLE_TYPE);
-                let mut dedicated = vk::MemoryDedicatedAllocateInfo::default().image(slot.image);
-                slot.memory = raw.allocate_memory(
-                    &vk::MemoryAllocateInfo::default()
-                        .allocation_size(requirements.size)
-                        .memory_type_index(memory_type)
-                        .push_next(&mut export)
-                        .push_next(&mut dedicated),
-                    None,
-                )?;
-                raw.bind_image_memory(slot.image, slot.memory, 0)?;
-                let handle = win32.get_memory_win32_handle(
-                    &vk::MemoryGetWin32HandleInfoKHR::default()
-                        .memory(slot.memory)
-                        .handle_type(HANDLE_TYPE),
-                )?;
-                (requirements.size, memory_type, handle)
-            };
-            if handle == 0 {
-                bail!("the driver returned a null memory handle");
-            }
-            described.push(SlotDesc {
-                handle: handle as u64,
-                size: bytes,
-                memory_type,
-            });
-            handles.push(own(handle));
-            slots.push(slot);
-        }
-        let surface = SharedSurface::duplicate_local(&SurfaceDesc {
-            generation: 1,
-            width: size[0],
-            height: size[1],
-            format: SurfaceFormat::Rgba8Unorm,
-            device: identity,
-            process: std::process::id(),
-            slots: described,
-        })?;
-        // SAFETY: `gpu` outlives the import (`Bridge::release` drops it first), and the
-        // presenter's thread is the only user of its graphics queue.
-        let imported = unsafe { ImportedSurface::create(gpu, &surface)? };
-
-        // Slot 0 becomes a wgpu texture; wgpu drops the slot when it destroys it.
-        let first = slots.remove(0);
-        let image = first.image;
         let extent = wgpu::Extent3d {
             width: size[0],
             height: size[1],
             depth_or_array_layers: 1,
         };
-        // SAFETY: `image` is a live RGBA8 image of `extent` on this device with
-        // TRANSFER_DST usage, in UNDEFINED layout as `UNINITIALIZED` states, and its
-        // memory is released by the drop callback only.
-        let texture = unsafe {
-            let hal_texture = hal.texture_from_raw(
-                image,
-                &wgpu::hal::TextureDescriptor {
-                    label: Some("ara shared frame"),
-                    size: extent,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    usage: wgpu::TextureUses::COPY_DST,
-                    memory_flags: wgpu::hal::MemoryFlags::empty(),
-                    view_formats: Vec::new(),
-                },
-                Some(Box::new(move || drop(first))),
-                wgpu::hal::vulkan::TextureMemory::External,
-            );
-            device.create_texture_from_hal::<wgpu::hal::api::Vulkan>(
-                hal_texture,
-                &wgpu::TextureDescriptor {
-                    label: Some("ara shared frame"),
-                    size: extent,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    usage: wgpu::TextureUsages::COPY_DST,
-                    view_formats: &[],
-                },
-                wgpu::TextureUses::UNINITIALIZED,
-            )
+        let export = RingExport {
+            device,
+            raw: &raw,
+            win32: &win32,
+            memory: &memory_properties,
+            identity,
+            gpu,
+            size,
+            extent,
         };
+        let colour = export_ring(&export, &hal, "ara shared frame")?;
+        let id = export_ring(&export, &hal, "ara shared id")?;
 
         let mut handoff = Self {
             raw: raw.clone(),
@@ -287,15 +373,16 @@ impl SharedHandoff {
             acquire: vk::CommandBuffer::null(),
             release: vk::CommandBuffer::null(),
             fence: vk::Fence::null(),
-            texture,
-            image,
-            _spare: slots,
-            _handles: handles,
-            _surface: surface,
-            imported,
+            colour,
+            id,
+            id_source: None,
             extent,
             handed_over: false,
+            id_handed_over: false,
             in_flight: false,
+            frame_latched: false,
+            colour_owed: false,
+            id_owed: false,
         };
         // SAFETY: Live device; `Drop` destroys whatever was created if a later step fails.
         unsafe {
@@ -356,86 +443,209 @@ impl SharedHandoff {
         Ok(())
     }
 
+    /// The id image [`Self::publish`] copies beside the colour frame, and each
+    /// publish after until replaced. `id` is `Rgba8Unorm` (not sRGB) at this
+    /// handoff's size, with `COPY_SRC`.
+    ///
+    /// Renderlab's id texture replaces the synthetic writer by this call alone:
+    /// `handoff.set_id(id_texture)`, then the existing `publish` / `deliver` pair
+    /// plus [`Self::deliver_id`] before the next publish.
+    ///
+    /// The bridge does not call this until that texture exists. The id-slot test
+    /// does, and a `cfg(test)` caller is invisible to the library build.
+    #[allow(dead_code)]
+    pub fn set_id(&mut self, id: wgpu::Texture) {
+        self.id_source = Some(id);
+    }
+
     /// Queues the copy of the engine's output into the shared slot behind the frame
-    /// just rendered, and the slot's release to the presenter's device. Returns at
-    /// once; [`Self::deliver`] waits.
+    /// just rendered, and the slot's release to the presenter's device. When
+    /// [`Self::set_id`] was called, that texture is copied and released in the same
+    /// submissions, on the same fence. Returns at once; [`Self::deliver`] waits.
     pub fn publish(&mut self, engine: &Engine) -> Result<()> {
         let output = engine.output().context("Renderlab has no output yet")?;
-        let (src, dst) = (
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        self.copy_frame(engine.device(), engine.queue(), output)
+    }
+
+    /// [`Self::publish`] with an explicit colour texture. The id slot still comes
+    /// from [`Self::set_id`]. Tests pass a synthetic colour image; production passes
+    /// `Engine::output` through [`Self::publish`].
+    #[allow(dead_code)]
+    pub(crate) fn publish_textures(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        colour: &wgpu::Texture,
+    ) -> Result<()> {
+        self.copy_frame(device, queue, colour)
+    }
+
+    /// The copy is the whole image; a different size would read off the slot.
+    fn expect_size(&self, texture: &wgpu::Texture, what: &str) -> Result<()> {
+        let got = texture.size();
+        anyhow::ensure!(
+            got.width == self.extent.width && got.height == self.extent.height,
+            "{what} is {}x{}, the shared slot is {}x{}",
+            got.width,
+            got.height,
+            self.extent.width,
+            self.extent.height
         );
-        let write = vk::AccessFlags::TRANSFER_WRITE;
+        Ok(())
+    }
+
+    fn copy_frame(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        colour: &wgpu::Texture,
+    ) -> Result<()> {
+        if self.in_flight || self.colour_owed || self.id_owed {
+            bail!("the previous shared frame was not delivered");
+        }
+        self.expect_size(colour, "the colour image")?;
+        if let Some(id) = &self.id_source {
+            self.expect_size(id, "the id image")?;
+            anyhow::ensure!(
+                id.format() == wgpu::TextureFormat::Rgba8Unorm,
+                "the id image must be RGBA8 UNORM so the copy stays bit-exact, got {:?}",
+                id.format()
+            );
+        }
+        let id = self.id_source.clone();
+        let mut acquire = Vec::new();
         if self.handed_over {
             // Take the slot back (matching the presenter's release), then discard its
             // contents into the layout wgpu tracks it in.
+            acquire.extend(reclaim(self.colour.image, self.family));
+        }
+        if self.id_handed_over {
+            acquire.extend(reclaim(self.id.image, self.family));
+        }
+        if !acquire.is_empty() {
             // SAFETY: The previous frame's release was waited for in `deliver`, so both
             // command buffers are idle; one thread drives this queue.
-            unsafe {
-                self.submit(
-                    self.acquire,
-                    &[
-                        barrier(
-                            self.image,
-                            (src, src),
-                            (vk::QUEUE_FAMILY_EXTERNAL, self.family),
-                            (vk::AccessFlags::empty(), write),
-                        ),
-                        barrier(
-                            self.image,
-                            (vk::ImageLayout::UNDEFINED, dst),
-                            (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
-                            (write, write),
-                        ),
-                    ],
-                    vk::Fence::null(),
-                )?;
-            }
+            unsafe { self.submit(self.acquire, &acquire, vk::Fence::null())? };
             self.handed_over = false;
+            self.id_handed_over = false;
         }
-        // The output is sRGB-encoded RGBA8; the shared slot is the same bytes as UNORM.
-        let mut encoder = engine
-            .device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("ara shared frame copy"),
-            });
+        // Colour bytes are the engine's sRGB-encoded RGBA8 stored as UNORM. The id
+        // image is already UNORM bytes. Neither copy converts.
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("ara shared frame copy"),
+        });
         encoder.copy_texture_to_texture(
-            output.as_image_copy(),
-            self.texture.as_image_copy(),
+            colour.as_image_copy(),
+            self.colour.texture.as_image_copy(),
             self.extent,
         );
-        engine.queue().submit([encoder.finish()]);
-        // SAFETY: As above; the release rides behind the copy on the same queue.
+        if let Some(id) = &id {
+            encoder.copy_texture_to_texture(
+                id.as_image_copy(),
+                self.id.texture.as_image_copy(),
+                self.extent,
+            );
+        }
+        queue.submit([encoder.finish()]);
+        let mut release = vec![release_to(self.colour.image, self.family)];
+        if id.is_some() {
+            release.push(release_to(self.id.image, self.family));
+        }
+        // SAFETY: As above; the release rides behind the copies on the same queue.
         unsafe {
             self.raw.reset_fences(&[self.fence])?;
-            self.submit(
-                self.release,
-                &[barrier(
-                    self.image,
-                    (dst, src),
-                    (self.family, vk::QUEUE_FAMILY_EXTERNAL),
-                    (write, vk::AccessFlags::empty()),
-                )],
-                self.fence,
-            )?;
+            self.submit(self.release, &release, self.fence)?;
         }
         self.in_flight = true;
+        self.frame_latched = false;
+        self.colour_owed = true;
+        self.id_owed = id.is_some();
         Ok(())
+    }
+
+    /// Waits for the published frame once, so colour and id can be copied out separately.
+    fn wait_frame(&mut self) -> Result<()> {
+        if self.in_flight {
+            // SAFETY: The fence belongs to the release submitted in `publish`.
+            unsafe { self.raw.wait_for_fences(&[self.fence], true, u64::MAX)? };
+            self.in_flight = false;
+            self.frame_latched = true;
+        }
+        anyhow::ensure!(self.frame_latched, "no frame was published");
+        Ok(())
+    }
+
+    fn settle_latch(&mut self) {
+        if !self.colour_owed && !self.id_owed {
+            self.frame_latched = false;
+        }
     }
 
     /// Waits for the published frame, copies it into `destination` (an RGBA8 image
     /// of the ring's size on `gpu`, in `CopySource`) and hands the slot back.
     pub fn deliver(&mut self, gpu: &GpuDevice, destination: Image) -> Result<()> {
-        anyhow::ensure!(self.in_flight, "no frame was published");
-        // SAFETY: The fence belongs to the release submitted in `publish`.
-        unsafe { self.raw.wait_for_fences(&[self.fence], true, u64::MAX)? };
-        self.in_flight = false;
+        self.wait_frame()?;
+        anyhow::ensure!(self.colour_owed, "no frame was published");
+        self.colour_owed = false;
         self.handed_over = true;
         // SAFETY: The release completed above, the presenter's device has not
         // acquired the slot, and `destination` is idle between presents.
-        unsafe { self.imported.copy_out_image(gpu, 0, destination)? };
+        unsafe { self.colour.imported.copy_out_image(gpu, 0, destination)? };
+        self.settle_latch();
         Ok(())
     }
+
+    /// Copies the id image of the frame [`Self::deliver`] copies, into `destination`
+    /// (RGBA8 UNORM of the ring's size on `gpu`, in `CopySource`), and hands that
+    /// slot back. Call it before the next [`Self::publish`] once [`Self::set_id`]
+    /// is in use. Either copy-out may run first; both wait on the same fence.
+    #[allow(dead_code)]
+    pub fn deliver_id(&mut self, gpu: &GpuDevice, destination: Image) -> Result<()> {
+        self.wait_frame()?;
+        anyhow::ensure!(self.id_owed, "this frame published no id image");
+        self.id_owed = false;
+        self.id_handed_over = true;
+        // SAFETY: The same release as `deliver` completed, this device has not
+        // acquired the id slot, and `destination` is idle.
+        unsafe { self.id.imported.copy_out_image(gpu, 0, destination)? };
+        self.settle_latch();
+        Ok(())
+    }
+}
+
+/// Acquire a slot from the presenter and discard it into `TRANSFER_DST`, which is
+/// the layout wgpu tracks the texture in.
+fn reclaim(image: vk::Image, family: u32) -> [vk::ImageMemoryBarrier<'static>; 2] {
+    let src = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
+    let dst = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+    let write = vk::AccessFlags::TRANSFER_WRITE;
+    [
+        barrier(
+            image,
+            (src, src),
+            (vk::QUEUE_FAMILY_EXTERNAL, family),
+            (vk::AccessFlags::empty(), write),
+        ),
+        barrier(
+            image,
+            (vk::ImageLayout::UNDEFINED, dst),
+            (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
+            (write, write),
+        ),
+    ]
+}
+
+/// Release a slot to the presenter: `TRANSFER_DST` to `TRANSFER_SRC`, owned by external.
+fn release_to(image: vk::Image, family: u32) -> vk::ImageMemoryBarrier<'static> {
+    let src = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
+    let dst = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+    let write = vk::AccessFlags::TRANSFER_WRITE;
+    barrier(
+        image,
+        (dst, src),
+        (family, vk::QUEUE_FAMILY_EXTERNAL),
+        (write, vk::AccessFlags::empty()),
+    )
 }
 
 impl Drop for SharedHandoff {
