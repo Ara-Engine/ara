@@ -95,7 +95,7 @@ fn typed(
 }
 
 /// A dropdown of `options` under `key`, showing `current`; picking one runs `pick`.
-fn dropdown(
+pub(super) fn dropdown(
     s: &Studio,
     key: String,
     current: &str,
@@ -599,6 +599,54 @@ fn transition_details(
             },
         ),
     ));
+    // The blend's shape: the target's weight over the fade (straight unless shaped).
+    let shape = edit("Edit transition blend curve");
+    let straight = transition.blend.is_none();
+    let reset = edit("Straighten transition blend");
+    out.push(
+        col()
+            .pad_x(10.0)
+            .pad_y(6.0)
+            .gap(6.0)
+            .child(
+                row()
+                    .align(Align::Center)
+                    .child(
+                        text("Blend curve")
+                            .text_size(12.0)
+                            .color(c.muted_foreground.0)
+                            .grow(1.0),
+                    )
+                    .child(enabled(
+                        icon_button(l, Tone::Ghost, Size::Sm, icons::ROTATE_CCW, "Straighten")
+                            .size(22.0)
+                            .key("animation/transition/blend/reset")
+                            .on_press(move |s: &mut Studio| {
+                                reset(s, &|tr| {
+                                    tr.blend = None;
+                                    Ok(())
+                                })
+                            }),
+                        !straight,
+                    )),
+            )
+            .child(super::curve::editor(
+                s,
+                &format!("animation/{}", transition.id),
+                &transition
+                    .blend
+                    .clone()
+                    .unwrap_or_else(|| ara_curve::Preset::Linear.curve()),
+                Some((0.0, 1.0)),
+                2,
+                move |s: &mut Studio, curve| {
+                    shape(s, &|tr| {
+                        tr.blend = Some(curve.clone());
+                        Ok(())
+                    })
+                },
+            )),
+    );
     let exit = edit("Edit transition exit time");
     out.push(prop(
         s,

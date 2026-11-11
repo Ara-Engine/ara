@@ -187,14 +187,20 @@ fn title_bar(s: &Studio) -> El<Studio> {
         Some(mark) => stillkit::el::image(mark).size(20.0),
         None => el().size(20.0),
     };
-    let mut lead = vec![mark.label("Ara")];
-    lead.extend(MENUS.iter().map(|m| {
-        if m.title == "Create" {
-            create_button(s)
-        } else {
-            menu_button(s, m.title, m.items)
-        }
-    }));
+    // The menu bar is one Tab stop; Left and Right move between its menus.
+    let menus = row()
+        .gap(4.0)
+        .align(Align::Center)
+        .role(stillkit::Role::MenuBar)
+        .focus_group(stillkit::el::Orientation::Horizontal)
+        .children(MENUS.iter().map(|m| {
+            if m.title == "Create" {
+                create_button(s)
+            } else {
+                menu_button(s, m.title, m.items)
+            }
+        }));
+    let lead = vec![mark.label("Ara"), menus];
     let play = play_controls(s);
     let workspace = s.editor.host.store().workspace();
     let scene = workspace
@@ -1453,15 +1459,11 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
             .role(Role::ListBoxOption)
             .selected(on)
             .fill(if on {
-                c.selection_surface.0
+                super::style::active_fill(l)
             } else {
                 stillkit::Rgba::TRANSPARENT
             })
-            .color(if on {
-                c.selection_foreground.0
-            } else {
-                c.foreground.0
-            })
+            .color(c.foreground.0)
             .cascade_ink()
             .on_press(move |s: &mut Studio| {
                 if let Some((query, _)) = s.local.palette.clone() {
@@ -1474,11 +1476,7 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
             .child(
                 text(e.detail.clone())
                     .text_size(11.5)
-                    .color(if on {
-                        c.selection_muted_foreground.0
-                    } else {
-                        c.muted_foreground.0
-                    })
+                    .color(c.muted_foreground.0)
                     .grow(1.0),
             );
         if let Some(k) = &e.keys {

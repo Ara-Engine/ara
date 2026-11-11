@@ -95,12 +95,14 @@ fn demo_renders_moves_skins_and_relights_headless() {
             .blas,
         0
     );
-    if presenter.renderer().unwrap().gpu().info().ray_tracing {
-        assert_eq!(
-            presenter.quality(),
-            Some(ara_runtime_render::QualityPreset::High)
-        );
-    }
+    // Auto picks the device's raster tier (by device-local memory: a shared-memory
+    // integrated GPU stays at Low); ray tracing never lowers it.
+    let capabilities =
+        ara_render_fidelity::presets::Capabilities::of(presenter.renderer().unwrap().gpu());
+    assert_eq!(
+        presenter.quality(),
+        Some(ara_runtime_render::QualityPreset::detect(&capabilities))
+    );
     assert!(
         first.legend.iter().any(|m| m.name.contains("Fox")),
         "{:?}",
