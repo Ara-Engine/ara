@@ -644,7 +644,22 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
         if let Some(r) = game_rect.filter(|r| r.width() >= 64.0 && r.height() >= 64.0) {
-            let (size, scale) = ([r.width() as u32, r.height() as u32], rt.scale());
+            // A fixed resolution plays at its own size, at 1x; the view scales it to fit.
+            let fixed = rt.touch(|s| {
+                let aspect = s
+                    .editor
+                    .state
+                    .settings
+                    .get("game.aspect")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("free")
+                    .to_owned();
+                game::resolution(&aspect)
+            });
+            let (size, scale) = match fixed {
+                Some(size) => (size, 1.0),
+                None => ([r.width() as u32, r.height() as u32], rt.scale()),
+            };
             rt.touch(|s| {
                 s.editor.game_size = size;
                 s.editor.game_scale = scale;

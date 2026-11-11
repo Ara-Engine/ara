@@ -4616,6 +4616,23 @@ fn a_script_fault_shows_its_stack_with_each_frame_s_source() {
 }
 
 #[test]
+fn the_game_view_plays_at_a_fixed_resolution_scaled_to_fit() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "game.aspect.1920x1080", &crate::catalog::Target::None));
+    let aspect = rt.state().editor.state.settings["game.aspect"]
+        .as_str()
+        .map(str::to_owned);
+    assert_eq!(aspect.as_deref(), Some("1920x1080"), "kept as the setting");
+    assert_eq!(super::game::resolution("1920x1080"), Some([1920, 1080]));
+    assert_eq!(
+        super::game::resolution("16x9"),
+        None,
+        "an aspect, not a size"
+    );
+    assert_eq!(super::game::resolution("free"), None);
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
