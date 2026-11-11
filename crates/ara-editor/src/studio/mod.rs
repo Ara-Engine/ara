@@ -1312,6 +1312,13 @@ fn chrome_parts(surface: &Surface, rt: &Runtime<Studio>) {
     surface.set_chrome(&parts);
 }
 
+/// Whether the studio should close: File › Exit does as the window's close button does, and so
+/// does a human session's `daemon.shutdown` (the installed-package smoke and Hub stop the editor
+/// this way; the studio ignored it for a while, so the editor kept running).
+fn closing(studio: &Studio) -> bool {
+    studio.local.quit || studio.editor.host.stopping()
+}
+
 /// Handles window events, runs a UI frame and presents it; whether the window closed.
 /// While the game has the keyboard and mouse (`game`, once the renderer runs), its events
 /// go to the player instead: Esc, leaving the window or a click outside the Game view give
@@ -1324,8 +1331,7 @@ fn pump(
     started: Instant,
     mut game: Option<&mut game::Game>,
 ) -> anyhow::Result<bool> {
-    // File › Exit closes as the window's close button does.
-    if rt.state().local.quit {
+    if closing(rt.state()) {
         return Ok(true);
     }
     match rt.touch(|s| s.local.window.take()) {
