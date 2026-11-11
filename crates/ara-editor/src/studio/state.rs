@@ -371,6 +371,8 @@ pub struct Local {
     pub play_menu: bool,
     /// File operations still running on host jobs: each job and what it does.
     pub asset_jobs: Vec<(String, String)>,
+    /// Save As: the job copying the scene and the copy to open once it lands.
+    pub open_after: Option<(String, String)>,
     /// Entities a script being named attaches to once it compiles (New Script from the
     /// Inspector).
     pub script_attach: Vec<String>,

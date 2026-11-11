@@ -1424,6 +1424,23 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             Ok(())
         }
+        // Unity's Save Scene As: a save dialog in the content folder, then a copy opened.
+        "file.save_as" => {
+            let content = e.host.root().join(ara_doc::AUTHORING_ROOT);
+            let name = e
+                .host
+                .store()
+                .workspace()
+                .path_of(&e.state.doc)
+                .and_then(|p| p.rsplit('/').next())
+                .map_or("Untitled.scene".to_owned(), |n| {
+                    n.replace(".scene", " Copy.scene")
+                });
+            match stillkit::dialog::save_file("Save Scene As", Some(&content), &name) {
+                Some(destination) => super::asset_ops::save_as(s, &destination).map_err(Into::into),
+                None => Ok(()),
+            }
+        }
         "file.new_scene" => {
             super::asset_create::create(s, "scene");
             Ok(())
