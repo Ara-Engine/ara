@@ -371,6 +371,8 @@ pub struct Local {
     pub play_menu: bool,
     /// File operations still running on host jobs: each job and what it does.
     pub asset_jobs: Vec<(String, String)>,
+    /// Save As: the job copying the scene and the copy to open once it lands.
+    pub open_after: Option<(String, String)>,
     /// Entities a script being named attaches to once it compiles (New Script from the
     /// Inspector).
     pub script_attach: Vec<String>,
@@ -424,6 +426,9 @@ pub struct Local {
     pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
+    /// The press under way: when it went down and the farthest the pointer has travelled
+    /// from there (`studio::click` decides click against drag from it).
+    pub press: Option<(std::time::Instant, f32)>,
     /// A gizmo move waiting for the host's vertex or surface snap (`studio::snapping`).
     pub snap: Option<super::snapping::Request>,
     /// V is held: moves snap vertex to vertex, as in Unity.
@@ -471,6 +476,17 @@ pub struct Local {
     pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
     pub gizmo_hover: Option<crate::overlay::Handle>,
+    /// The selection's rendered world bounds, which the host publishes while the Rect
+    /// tool is on (`studio::rect_tool`).
+    pub rect_bounds: Option<super::rect_tool::RectBounds>,
+    /// An Inspector component header being dragged to reorder, and where it would land.
+    pub component_drag: Option<(String, Option<super::inspector::Slot>)>,
+    /// A component drag just dropped: that release's click on its header is no fold.
+    pub component_dropped: bool,
+    /// The Rect tool's drag.
+    pub rect_drag: Option<super::rect_tool::Drag>,
+    /// The Rect tool's part under the pointer.
+    pub rect_hover: Option<super::rect_tool::Grip>,
     /// A change to the OS window the host makes on its next pass.
     pub window: Option<WindowRequest>,
     /// Problems shown: errors, warnings.

@@ -11,6 +11,8 @@ workspace = true
 [features]
 hotpatch = ["dep:ara-hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
+# Counts heap allocations for the Profiler's Memory module (a counting global allocator).
+memory-profile = ["ara-profile/allocation"]
 
 [build-dependencies]
 embed-resource.workspace = true
@@ -84,6 +86,10 @@ accesskit = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 ara-ui-test = { path = "../ara-ui-test" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Wayland subsurface viewports require stillkit's GPU (Vulkan) surfaces.
+stillkit = { workspace = true, features = ["gpu"] }
 
 [target.'cfg(windows)'.dependencies]
 # Windows child HWND viewports require stillkit DirectComposition GPU surfaces.

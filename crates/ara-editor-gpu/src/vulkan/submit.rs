@@ -43,7 +43,7 @@ impl NativeUi {
     fn finish(&self) -> Result<()> {
         ara_gpu::cpu_scope!("UI.finish");
         let device = &self.memory.device;
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         let value = self
             .completion_value
             .get()
@@ -55,16 +55,16 @@ impl NativeUi {
             device.reset_fences(&[self.fence])?;
             let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(self.command)];
             let submit = vk::SubmitInfo2::default().command_buffer_infos(&commands);
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             let signals = [vk::SemaphoreSubmitInfo::default()
                 .semaphore(self.completion)
                 .value(value)
                 .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             let submit = submit.signal_semaphore_infos(&signals);
             device.queue_submit2(self.queue, &[submit], self.fence)?;
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         self.completion_value.set(value);
         self.in_flight.set(true);
         if !self.deferred {
@@ -98,7 +98,7 @@ impl NativeUi {
     /// Hand completed UI reads back to the engine's asynchronous Scene queue.
     /// A CPU fence permits retirement; this semaphore supplies the cross-queue
     /// memory dependency before the renderer rewrites a retained image.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub fn order_before_scene(&self, gpu: &UiDevice) -> Result<()> {
         ensure!(
             gpu.device.handle() == self.memory.device.handle(),

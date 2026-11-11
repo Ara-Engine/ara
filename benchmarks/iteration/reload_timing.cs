@@ -11,6 +11,10 @@
 // them (emit, analyzers, the Windows AMSI image scan, generators). Everything lands in --output (default
 // target/reload-timing/<utc stamp>): one raw JSON per run, summary.json and summary.txt.
 //
+// With --trace it also sets ARA_TRACE=1 and prints where launch time goes (the bench's and the compile server's timestamps
+// from process start to the first image, JIT and GC counters, and whether Roslyn's precompiled code is in use) and what the
+// slowest compiles of each kind were doing (GC pauses, JIT, CPU). Raw trace lines are kept as run-*.trace.txt.
+//
 // Needs the .NET 10 SDK and Rust, nothing else. A variant is the absolute path of a built `dotnet/artifacts/bin`
 // (the default, "current", is this checkout's). Run it on a quiet machine: other builds in the background move
 // every number; the summary records the CPU busy fraction the bench measured (Windows) so a noisy run shows.
@@ -49,7 +53,8 @@ for (var round = 0; round < options.Runs; round += 2)
         var file = Path.Combine(options.Output, $"run-{round:D3}-{index++}-{name}.json");
         Console.Write($"run {runs.Count + 1}/{options.Runs * variants.Count} ({name}) ... ");
         var code = Repo.Run(exe, ["--dotnet-bin", sdk, "--edits", options.Edits.ToString(CultureInfo.InvariantCulture),
-            "--lines", options.Lines.ToString(CultureInfo.InvariantCulture), "--output", file], root, check: false, quiet: true);
+            "--lines", options.Lines.ToString(CultureInfo.InvariantCulture), "--output", file], root, options.Trace ? ("ARA_TRACE", "1") : null,
+            check: false, quiet: true, stderrTo: options.Trace ? Path.ChangeExtension(file, ".trace.txt") : null);
         var result = File.Exists(file) ? JsonNode.Parse(File.ReadAllText(file)) : null;
         if (code != 0 || result is null || result["success"]?.GetValue<bool>() != true)
         {
@@ -99,6 +104,7 @@ foreach (var (name, _) in variants)
     cells[name] = entry;
 }
 summary["variants"] = cells;
+if (options.Trace) Trace.Summarize(options.Output, variants.Select(v => v.Name), text, summary);
 File.WriteAllText(Path.Combine(options.Output, "summary.json"), summary.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 File.WriteAllText(Path.Combine(options.Output, "summary.txt"), text.ToString());
 Console.WriteLine();
@@ -106,12 +112,13 @@ Console.Write(text);
 Console.WriteLine($"\nraw runs and summary: {options.Output}");
 
 /// <summary>Command line.</summary>
-sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string CargoJobs, string Output, List<(string Name, string Sdk)> Variants)
+sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string CargoJobs, string Output, List<(string Name, string Sdk)> Variants, bool Trace)
 {
     internal static Options Parse(string[] args)
     {
         int runs = 10, edits = 45, lines = 5000;
         var skip = false;
+        var trace = false;
         var jobs = "2";
         var output = "";
         var variants = new List<(string, string)>();
@@ -125,6 +132,7 @@ sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string Car
                 case "--lines": lines = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--cargo-jobs": jobs = Next(); break;
                 case "--skip-build": skip = true; break;
+                case "--trace": trace = true; break;
                 case "--output": output = Path.GetFullPath(Next()); break;
                 case "--variant":
                     var spec = Next();
@@ -137,7 +145,7 @@ sealed record Options(int Runs, int Edits, int Lines, bool SkipBuild, string Car
         }
         if (edits < 6) throw new ArgumentException("--edits must be at least 6 so every level is measured");
         output = output.Length > 0 ? output : Path.Combine(Repo.Root(), "target", "reload-timing", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        return new(Math.Max(runs, 1), edits, lines, skip, jobs, output, variants);
+        return new(Math.Max(runs, 1), edits, lines, skip, jobs, output, variants, trace);
     }
 }
 
@@ -152,14 +160,20 @@ static class Repo
     }
 
     /// <summary>Runs a program and returns its exit code; throws on failure when <paramref name="check"/>.</summary>
-    internal static int Run(string program, string[] args, string cwd, (string Key, string Value)? env = null, bool check = true, bool quiet = false)
+    internal static int Run(string program, string[] args, string cwd, (string Key, string Value)? env = null, bool check = true, bool quiet = false, string? stderrTo = null)
     {
         var psi = new ProcessStartInfo(program) { WorkingDirectory = cwd, UseShellExecute = false, RedirectStandardOutput = quiet, RedirectStandardError = quiet };
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         if (env is { } pair) psi.Environment[pair.Key] = pair.Value;
         using var process = Process.Start(psi) ?? throw new InvalidOperationException($"cannot start {program}");
-        if (quiet) { _ = process.StandardOutput.ReadToEndAsync(); _ = process.StandardError.ReadToEndAsync(); }
-        process.WaitForExit();
+        if (quiet)
+        {
+            _ = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            process.WaitForExit();
+            if (stderrTo is not null) File.WriteAllText(stderrTo, errors.GetAwaiter().GetResult());
+        }
+        else process.WaitForExit();
         if (check && process.ExitCode != 0) throw new InvalidOperationException($"{program} {string.Join(' ', args)} exited with {process.ExitCode}");
         return process.ExitCode;
     }
@@ -202,4 +216,92 @@ static class Stats
     internal static string Format(double[] values) => $"{Median(values):F1} / {Percentile(values, 0.95):F1}";
     static JsonNode? Number(double value) => double.IsNaN(value) ? null : value;
     internal static JsonObject Node(double[] values) => new() { ["median"] = Number(Median(values)), ["p95"] = Number(Percentile(values, 0.95)), ["n"] = values.Length };
+}
+
+/// <summary>Reads the <c>[ara-trace]</c> lines of every run and reports the launch timeline and what the slowest compiles did.</summary>
+static class Trace
+{
+    static readonly System.Text.RegularExpressions.Regex Line = new(@"^\[ara-trace\] (\d+) (bench|server|work) (.*)$");
+    static readonly System.Text.RegularExpressions.Regex Work = new(@"^(\w+) outcome=(\S+) ms=([\d.]+) gcDelta=(\d+)/(\d+)/(\d+) pauseDeltaMs=([-\d.]+) jitDelta=(\d+)/([-\d.]+)ms cpuDeltaMs=([-\d.]+)");
+
+    internal static void Summarize(string output, IEnumerable<string> variants, StringBuilder text, JsonObject summary)
+    {
+        foreach (var variant in variants)
+        {
+            var files = Directory.GetFiles(output, $"run-*-{variant}.trace.txt").Order().ToArray();
+            if (files.Length == 0) continue;
+            var offsets = new Dictionary<string, List<double>>();
+            var order = new List<string>();
+            var works = new List<(string Outcome, double Ms, int Gen2, double Pause, long Jit, double JitMs, double Cpu)>();
+            string[] firstDescribe = [];
+            foreach (var file in files)
+            {
+                var lines = File.ReadAllLines(file);
+                long? start = null;
+                var describe = new List<string>();
+                foreach (var raw in lines)
+                {
+                    var m = Line.Match(raw);
+                    if (!m.Success) continue;
+                    var at = long.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var kind = m.Groups[2].Value;
+                    var rest = m.Groups[3].Value;
+                    if (kind == "bench" && rest == "main") start = at;
+                    if (kind == "work")
+                    {
+                        var w = Work.Match(rest);
+                        if (w.Success)
+                            works.Add((w.Groups[2].Value, D(w, 3), int.Parse(w.Groups[6].Value, CultureInfo.InvariantCulture), D(w, 7), long.Parse(w.Groups[8].Value, CultureInfo.InvariantCulture), D(w, 9), D(w, 10)));
+                        continue;
+                    }
+                    if (start is null) continue;
+                    if (rest.StartsWith("image ", StringComparison.Ordinal) || rest.StartsWith("runtime ", StringComparison.Ordinal)) { describe.Add(rest); continue; }
+                    if (rest.StartsWith("work begin", StringComparison.Ordinal) && offsets.ContainsKey(Label(kind, rest))) continue; // the first compile only
+                    var label = Label(kind, rest);
+                    if (!offsets.TryGetValue(label, out var list)) { offsets[label] = list = []; order.Add(label); }
+                    list.Add(at - start.Value);
+                }
+                if (firstDescribe.Length == 0) firstDescribe = [.. describe];
+            }
+            text.AppendLine().AppendLine($"[{variant}] launch timeline (median ms after the bench starts; {files.Length} runs)");
+            var timeline = new JsonObject();
+            foreach (var label in order.Where(label => offsets[label].Count >= Math.Max(1, files.Length / 2)).OrderBy(label => Stats.Median(offsets[label].ToArray())))
+            {
+                var values = offsets[label].ToArray();
+                text.AppendLine($"  {Stats.Median(values),7:F0}   {label}   (max {values.Max():F0})");
+                timeline[label] = Stats.Median(values);
+            }
+            foreach (var line in firstDescribe) text.AppendLine($"  {line}");
+            summary["trace_" + variant] = new JsonObject { ["launch_timeline_ms"] = timeline, ["environment"] = new JsonArray(firstDescribe.Select(l => (JsonNode)l).ToArray()) };
+
+            text.AppendLine().AppendLine($"[{variant}] compiles (server side), by outcome: n, median / p95 ms, GC pause, JIT, CPU; and the slowest 10% against the rest");
+            var tail = new JsonObject();
+            foreach (var group in works.GroupBy(w => w.Outcome).Where(g => g.Count() >= 5).OrderBy(g => g.Key))
+            {
+                var all = group.OrderBy(w => w.Ms).ToArray();
+                var slow = all.Skip((int)(all.Length * 0.9)).ToArray();
+                var rest = all.Take((int)(all.Length * 0.9)).ToArray();
+                double Pct(Func<(string Outcome, double Ms, int Gen2, double Pause, long Jit, double JitMs, double Cpu), bool> f, (string Outcome, double Ms, int Gen2, double Pause, long Jit, double JitMs, double Cpu)[] set) =>
+                    set.Length == 0 ? 0 : 100.0 * set.Count(f) / set.Length;
+                text.AppendLine($"  {group.Key,-14} n={all.Length,4}  {Stats.Format(all.Select(w => w.Ms).ToArray()),-14} pause median {Stats.Median(all.Select(w => w.Pause).ToArray()):F1} ms  jit median {Stats.Median(all.Select(w => (double)w.Jit).ToArray()):F0} methods  cpu median {Stats.Median(all.Select(w => w.Cpu).ToArray()):F0} ms");
+                text.AppendLine($"  {"",-14} slowest 10% (n={slow.Length}): {Pct(w => w.Pause > 5, slow):F0}% had a GC pause over 5 ms, {Pct(w => w.Gen2 > 0, slow):F0}% a gen2 collection, {Pct(w => w.Jit > 100, slow):F0}% over 100 JIT'd methods"
+                    + $"   |  rest: {Pct(w => w.Pause > 5, rest):F0}% / {Pct(w => w.Gen2 > 0, rest):F0}% / {Pct(w => w.Jit > 100, rest):F0}%");
+                tail[group.Key] = new JsonObject { ["n"] = all.Length, ["median_ms"] = Stats.Median(all.Select(w => w.Ms).ToArray()), ["p95_ms"] = Stats.Percentile(all.Select(w => w.Ms).ToArray(), 0.95),
+                    ["slowest_pct_with_gc_pause_over_5ms"] = Pct(w => w.Pause > 5, slow), ["slowest_pct_with_gen2"] = Pct(w => w.Gen2 > 0, slow), ["slowest_pct_with_jit_over_100"] = Pct(w => w.Jit > 100, slow) };
+            }
+            ((JsonObject)summary["trace_" + variant]!)["compiles"] = tail;
+        }
+    }
+
+    static double D(System.Text.RegularExpressions.Match m, int group) => double.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
+
+    /// <summary>Stable label for a trace line: its text without the running totals.</summary>
+    static string Label(string kind, string rest)
+    {
+        var cut = rest.IndexOf(" jit=", StringComparison.Ordinal);
+        var label = cut >= 0 ? rest[..cut] : rest;
+        var pid = label.IndexOf(" pid=", StringComparison.Ordinal);
+        if (pid >= 0) label = label[..pid];
+        return $"{kind}: {label}";
+    }
 }

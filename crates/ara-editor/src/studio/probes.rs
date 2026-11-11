@@ -1,5 +1,7 @@
-//! Application-owner adapter for derived probe jobs. This never submits GPU work.
-use super::viewport::SceneView;
+//! Application-owner adapter for derived probe jobs (`render.probe.recapture`,
+//! `render.probe.cancel`, `render.probes.query`): the window loop polls it with the Scene
+//! view it renders. This never submits GPU work.
+use crate::app::viewport::SceneView;
 use crate::{
     Editor,
     probe_capture::{Event, Request, SceneBinding},
@@ -30,7 +32,7 @@ struct Subscription {
 
 /// Changes the application uses to schedule the next ordinary Scene/UI frame.
 #[derive(Default)]
-pub(super) struct Update {
+pub(crate) struct Update {
     pub scene_dirty: bool,
     pub changed: bool,
     pub busy: bool,
@@ -38,7 +40,7 @@ pub(super) struct Update {
 
 /// One owner for one SceneView lifetime. Retain it through normal final drain.
 #[derive(Default)]
-pub(super) struct Owner {
+pub(crate) struct Owner {
     jobs: BTreeMap<String, Subscription>,
     outgoing: VecDeque<Event>,
     cancel_sent: BTreeSet<u64>,
@@ -63,7 +65,7 @@ impl Owner {
     /// Invalidate the read model before pumping requests after a UI Scene switch.
     /// True asks the caller to tick the Host, then retry until false: an existing
     /// full event channel must drain before it can accept this invalidation.
-    pub(super) fn invalidate_scene(&mut self, editor: &mut Editor) -> bool {
+    pub(crate) fn invalidate_scene(&mut self, editor: &mut Editor) -> bool {
         self.observe_scene(&editor.state.doc);
         let delivered = self.flush(editor);
         delivered
@@ -104,7 +106,7 @@ impl Owner {
 
     /// Call every application iteration after the Scene update, including when
     /// that update was skipped. No waits, I/O, extraction, or renderer submission.
-    pub(super) fn poll(
+    pub(crate) fn poll(
         &mut self,
         editor: &mut Editor,
         scene: &mut SceneView,
@@ -318,7 +320,7 @@ impl Owner {
 
     /// Deliver cancel intent before the next Scene preparation can record work.
     /// Progress stays rate-limited; cancellation and retirement never wait for it.
-    pub(super) fn poll_cancellations(
+    pub(crate) fn poll_cancellations(
         &mut self,
         editor: &mut Editor,
         scene: &mut SceneView,
@@ -326,6 +328,13 @@ impl Owner {
     ) -> bool {
         self.cancel_eligible(editor, scene);
         self.poll_retirement(editor, scene, renderer)
+    }
+
+    /// Tells the backend about cancel intents recorded since the last poll; no retirement
+    /// check or GPU work (for passes that do not render).
+    #[cfg(any(windows, target_os = "linux"))]
+    pub(crate) fn deliver_cancellations(&mut self, editor: &mut Editor, scene: &mut SceneView) {
+        self.cancel_eligible(editor, scene);
     }
 
     fn poll_retirement(
@@ -461,7 +470,7 @@ impl Owner {
     /// True means SAFE to adopt/drop the old Scene. Call before Scene publication
     /// and keep calling poll even while false. Never destroy a retained owner to
     /// escape a missing backend status or an unacknowledged cancellation.
-    pub(super) fn prepare_scene_change(
+    pub(crate) fn prepare_scene_change(
         &mut self,
         editor: &mut Editor,
         scene: &mut SceneView,
@@ -485,7 +494,7 @@ impl Owner {
 
     /// Use before raster destruction/path replacement even when the doc is unchanged.
     /// True means SAFE. This does not permanently drain later fresh requests.
-    pub(super) fn prepare_replacement(&mut self, editor: &mut Editor) -> bool {
+    pub(crate) fn prepare_replacement(&mut self, editor: &mut Editor) -> bool {
         for job in self.jobs.keys() {
             editor.probe_captures.request_cancel(job);
         }
@@ -498,14 +507,14 @@ impl Owner {
         }
     }
 
-    pub(super) fn begin_drain(&mut self, editor: &mut Editor) {
+    pub(crate) fn begin_drain(&mut self, editor: &mut Editor) {
         self.draining = true;
         editor.probe_captures.begin_drain();
     }
-    pub(super) fn busy(&self) -> bool {
+    pub(crate) fn busy(&self) -> bool {
         !self.jobs.is_empty() || !self.outgoing.is_empty() || self.retirement_pending
     }
-    pub(super) fn resource_report(&self) -> Value {
+    pub(crate) fn resource_report(&self) -> Value {
         json!({"activeHostSubscriptions":self.jobs.len(),"queuedEvents":self.outgoing.len(),"draining":self.draining,
             "ownerGenerations":self.jobs.values().map(|sub| sub.backend.0).collect::<BTreeSet<_>>().len(),
             "terminalAwaitingDelivery":self.jobs.values().filter(|sub|sub.terminal_queued).count(),"blocker":self.blocker,"refreshRequested":self.refresh,
