@@ -119,7 +119,15 @@ internal sealed class ModuleWatcher : IDisposable
         var now = Stopwatch.GetTimestamp();
         _known[path] = stat;
         _deliveries[path] = (now, stat.Mtime, stat.Length);
+        if (_deliveries.Count > 4096) PruneDeliveries();
         _events.Add((slot, path, now));
+    }
+
+    /// <summary>Forgets deliveries older than a minute so the table does not grow with every path ever watched.</summary>
+    void PruneDeliveries()
+    {
+        foreach (var (path, delivery) in _deliveries)
+            if (Stopwatch.GetElapsedTime(delivery.At).TotalSeconds > 60) _deliveries.TryRemove(path, out _);
     }
 
     static (long Mtime, long Length)? Stat(string path)
@@ -134,18 +142,16 @@ internal sealed class ModuleWatcher : IDisposable
     }
 
     /// <summary>
-    /// Is this directory-watcher event the echo of a save the fast watch already reported? FSEvents reports one save a
-    /// few events (<c>Changed</c>, often <c>Created</c>, <c>Renamed</c> for an atomic save) ~11 ms late. It is an echo when a
-    /// fast delivery for the file is under 100 ms old and either the file's vnode watch is alive (an in-place write; a delete or
-    /// rename would have dropped it) or the file still has the stat recorded at delivery (nothing changed since). A delete never is.
+    /// Is this directory-watcher event the echo of a save the fast watch already reported? FSEvents reports one save as a few
+    /// events (<c>Changed</c>, often <c>Created</c>, <c>Renamed</c> for an atomic save) ~11 ms late. It is an echo only when a
+    /// fast delivery for the file is under 100 ms old and the file still has the modification time and length seen at that
+    /// delivery. Anything that changed since (a save that ends with a shrinking truncate, a second write) passes, so no final
+    /// state is ever dropped. A delete never is an echo.
     /// </summary>
-    bool IsFastDuplicate(string path, WatcherChangeTypes type)
-    {
-        if (_vnode is null || type == WatcherChangeTypes.Deleted || !_deliveries.TryGetValue(path, out var delivery)
-            || Stopwatch.GetElapsedTime(delivery.At).TotalMilliseconds >= DuplicateWindowMs) return false;
-        if (type is WatcherChangeTypes.Changed or WatcherChangeTypes.Created && _vnode.Watching(path)) return true;
-        return Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length;
-    }
+    bool IsFastDuplicate(string path, WatcherChangeTypes type) =>
+        _vnode is not null && type != WatcherChangeTypes.Deleted && _deliveries.TryGetValue(path, out var delivery)
+        && Stopwatch.GetElapsedTime(delivery.At).TotalMilliseconds < DuplicateWindowMs
+        && Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length;
 
     void AddVnode(uint slot, string path) => _vnode!.Add(slot, path);
 
