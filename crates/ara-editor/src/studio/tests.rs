@@ -7341,3 +7341,60 @@ fn the_frame_time_readout_is_scene_statistics_and_off_by_default() {
     settle(&mut rt);
     assert!(shows(&rt), "Scene statistics shows it");
 }
+
+// UI pass 3: the left of the window.
+
+/// How far from its panel's left edge things start, at 1000x630 (logical px). Before: a
+/// Hierarchy entity's name 50, "Project" 45 and "content" 57 in the Assets tree.
+#[test]
+fn the_left_columns_start_their_names_close_to_the_edge() {
+    let mut rt = open_sized((1000, 630));
+    scan(&mut rt);
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    settle(&mut rt);
+    let tree = rt.tree();
+    let left_of = |label: &str| {
+        tree.iter()
+            .filter(|n| n.text.as_deref() == Some(label))
+            .map(|n| n.rect.left)
+            .fold(f32::MAX, f32::min)
+    };
+    let area = |key: &str| {
+        tree.iter()
+            .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key))
+            .map(|n| n.rect)
+            .unwrap_or_else(|| panic!("{key} shows"))
+    };
+    let outline = area("area/outline");
+    let name = left_of("Box") - outline.left;
+    assert!(
+        name <= 36.0,
+        "a Hierarchy entity's name starts {name}px from its panel's edge"
+    );
+    let tree_edge = tree
+        .iter()
+        .filter(|n| {
+            n.key
+                .as_ref()
+                .is_some_and(|k| k.to_string().starts_with("assets/tree/"))
+        })
+        .map(|n| n.rect.left)
+        .fold(f32::MAX, f32::min)
+        - 3.0;
+    let project = left_of("Project") - tree_edge;
+    let content = left_of("content") - tree_edge;
+    assert!(
+        project <= 24.0,
+        "\"Project\" starts {project}px from its column's edge"
+    );
+    assert!(
+        content <= 38.0,
+        "\"content\" starts {content}px from its column's edge"
+    );
+    // The left column is narrower by default: the Hierarchy takes at most 14% of the window.
+    assert!(
+        outline.width() <= 1000.0 * 0.14,
+        "the Hierarchy is {}px wide",
+        outline.width()
+    );
+}

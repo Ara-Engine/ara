@@ -868,7 +868,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
         // wide enough for labels (about 360 px of a 1400 px window), as in Unity.
         "default" => split(
             H,
-            0.16,
+            0.135,
             area("outline", &["hierarchy"]),
             split(
                 H,

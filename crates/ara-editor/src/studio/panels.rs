@@ -91,6 +91,11 @@ impl TileSize {
     }
 }
 
+/// The folder tree beside the grid: its width, its floor, and its disclosure column.
+const TREE_WIDTH: f32 = 128.0;
+const TREE_MIN: f32 = 112.0;
+const TREE_DISCLOSURE: f32 = 10.0;
+
 /// The size tiles are drawn at: the chosen one, or the largest smaller one whose row shows
 /// whole in the `room` the body has (a tile never shows without its name; the list always
 /// fits). With no measurement yet, the chosen size.
@@ -1316,9 +1321,9 @@ fn folder_tree(s: &Studio, browser: &crate::assets::Browser, current: &str) -> E
             || current.starts_with(&format!("{d}/"))
     };
     let mut tree = col()
-        .w(176.0)
-        .min_w(160.0)
-        .pad(4.0)
+        .w(TREE_WIDTH)
+        .min_w(TREE_MIN)
+        .pad(3.0)
         .gap(0.0)
         .scroll(Axis::Vertical);
     tree = tree.children(bookmarks(s)).child(folder_row(
@@ -1387,35 +1392,42 @@ fn folder_row(
     let disclosure = match expanded {
         Some(on) => {
             let path = path.clone();
-            el().size(16.0)
-                .align(Align::Center)
-                .justify(Justify::Center)
-                .color(c.muted_foreground.0)
-                .cascade_ink()
-                .label(if on { "Collapse" } else { "Expand" })
-                .on_press(move |s: &mut Studio| {
-                    let set = &mut s.editor.state.asset_expanded_folders;
-                    if !set.remove(&path) {
-                        set.insert(path.clone());
-                    }
-                })
-                .child(
-                    icon(if on {
-                        icons::CHEVRON_DOWN
-                    } else {
-                        icons::CHEVRON_RIGHT
+            Some(
+                el().size(TREE_DISCLOSURE)
+                    .min_w(TREE_DISCLOSURE)
+                    .align(Align::Center)
+                    .justify(Justify::Center)
+                    .color(c.muted_foreground.0)
+                    .cascade_ink()
+                    .label(if on { "Collapse" } else { "Expand" })
+                    .on_press(move |s: &mut Studio| {
+                        let set = &mut s.editor.state.asset_expanded_folders;
+                        if !set.remove(&path) {
+                            set.insert(path.clone());
+                        }
                     })
-                    .size(11.0),
-                )
+                    .child(
+                        icon(if on {
+                            icons::CHEVRON_DOWN
+                        } else {
+                            icons::CHEVRON_RIGHT
+                        })
+                        .size(9.0),
+                    ),
+            )
         }
-        None => el().size(16.0),
+        // The project's root has no disclosure and no empty column before its icon (a
+        // zero-width child would still take a gap); its folders put their own chevron
+        // under it.
+        None if depth == 0 => None,
+        None => Some(el().size(TREE_DISCLOSURE).min_w(TREE_DISCLOSURE)),
     };
     let open = path.clone();
     super::style::chosen(l, row(), current)
         .key(format!("assets/tree/{path}"))
         .h(super::style::ROW)
-        .pad_x(4.0)
-        .gap(4.0)
+        .pad_x(3.0)
+        .gap(3.0)
         .align(Align::Center)
         .radius(super::style::RADIUS)
         .fill(fill)
@@ -1425,8 +1437,9 @@ fn folder_row(
         .selected(current)
         .hovered(move |e| if current { e } else { e.fill(hover) })
         .on_press(move |s: &mut Studio| open_folder(s, &open))
-        .child(el().w(depth as f32 * 12.0))
-        .child(disclosure)
+        // A folder's own chevron sits under its parent's icon, so one level is that column.
+        .children((depth >= 2).then(|| el().w((depth - 1) as f32 * 9.0)))
+        .children(disclosure)
         .child(icon(glyph).size(13.0).color(folder_ink))
         .child(text(name.to_owned()).text_size(12.0).grow(1.0))
 }
