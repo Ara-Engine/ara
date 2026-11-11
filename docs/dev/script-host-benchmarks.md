@@ -42,8 +42,8 @@ The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on mac
 ## File-watcher latency per OS
 `dotnet run benchmarks/iteration/watch_latency.cs` times how late `FileSystemWatcher` (the compile server's settings)
 reports an in-place save and an atomic save (write a temp file, rename it over the source), median / p95 / max in ms.
-Mac (FSEvents): 11.3 / 12.4 ms in place, 11.7 / 12.5 atomic. Run it on Windows and Linux to see whether their watchers
-add a fixed delay (none is expected: ReadDirectoryChangesW and inotify report at once).
+Mac (FSEvents): 11.3 / 12.4 ms in place, 11.7 / 12.5 atomic. Linux (inotify, Linux gate): 0.08 ms in place, 0.14 ms atomic,
+so Linux has no fixed delay. Run it on Windows to see whether ReadDirectoryChangesW adds one (none is expected).
 
 ## One-command timing (any OS)
 `dotnet run benchmarks/iteration/reload_timing.cs` builds `dotnet/Ara.slnx` (Release) and the `reload_bench`
