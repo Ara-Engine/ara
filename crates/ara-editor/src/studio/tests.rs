@@ -6912,3 +6912,44 @@ fn enter_takes_the_cards_button_once_it_is_offered() {
     rt.key(stillkit::el::KeyCode::ENTER.0);
     assert!(rt.state().local.import_released, "Enter opens the project");
 }
+
+/// With no one at the window the gate opens past a failed import, and the failure is still in
+/// the window afterwards: the Problems panel lists it as an error.
+#[test]
+fn a_failed_import_is_in_the_problems_panel_after_an_unattended_open() {
+    let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, true));
+    let started = std::time::Instant::now();
+    while gate.step().is_some() {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the gate never opened"
+        );
+        rt.touch(|s| s.editor.tick());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The diagnostics bus carries the failure; the studio reads it as it does each pass.
+    let started = std::time::Instant::now();
+    while !rt.state().logs.iter().any(|r| {
+        r.severity == ara_diag::Severity::Error && r.message.contains("import worker failed")
+    }) {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "no import error in the logs"
+        );
+        rt.touch(|s| s.editor.tick());
+        rt.touch(Studio::poll_logs);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "problems"})));
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.contains("import worker failed")),
+        "the Problems panel lists the failed import: {texts:?}"
+    );
+}
