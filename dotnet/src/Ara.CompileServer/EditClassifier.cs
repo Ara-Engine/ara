@@ -379,7 +379,7 @@ internal static class EditClassifier
     }
 
     /// <summary>The members of a container, in declaration order.</summary>
-    static IEnumerable<SyntaxNode> Members(SyntaxNode node) => node switch
+    internal static IEnumerable<SyntaxNode> Members(SyntaxNode node) => node switch
     {
         CompilationUnitSyntax cu => cu.Members,
         BaseNamespaceDeclarationSyntax ns => ns.Members,
@@ -388,7 +388,7 @@ internal static class EditClassifier
     };
 
     /// <summary>A container without its members: what must stay equal for its members to be diffed.</summary>
-    static SyntaxNode Header(SyntaxNode node) => node switch
+    internal static SyntaxNode Header(SyntaxNode node) => node switch
     {
         CompilationUnitSyntax cu => cu.WithMembers(default),
         BaseNamespaceDeclarationSyntax ns => ns.WithMembers(default),
@@ -397,7 +397,7 @@ internal static class EditClassifier
     };
 
     /// <summary>Members keyed by kind, name and parameter types; repeats get an occurrence suffix.</summary>
-    static List<(string Key, SyntaxNode Node)> Keyed(IEnumerable<SyntaxNode> members)
+    internal static List<(string Key, SyntaxNode Node)> Keyed(IEnumerable<SyntaxNode> members)
     {
         var seen = new Dictionary<string, int>();
         var list = new List<(string, SyntaxNode)>();
@@ -450,7 +450,7 @@ internal static class EditClassifier
         n.DescendantNodes().Any(d => d is AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax or QueryExpressionSyntax);
 
     /// <summary>The member with bodies replaced; with <paramref name="stripCtors"/>, constructor bodies and initializers too.</summary>
-    static SyntaxNode Strip(SyntaxNode node, bool stripCtors) => new BodyStripper(stripCtors).Visit(node);
+    internal static SyntaxNode Strip(SyntaxNode node, bool stripCtors) => new BodyStripper(stripCtors).Visit(node);
 
     /// <summary>Replaces bodies with a fixed placeholder; block and expression bodies normalize to the same shape.</summary>
     sealed class BodyStripper(bool stripCtors) : CSharpSyntaxRewriter
