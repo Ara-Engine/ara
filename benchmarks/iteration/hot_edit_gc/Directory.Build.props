@@ -1,0 +1,1 @@
+<Project><PropertyGroup><ArtifactsPath>$(MSBuildThisFileDirectory)../../../target/iteration-perf/hot-edit-gc</ArtifactsPath></PropertyGroup></Project>

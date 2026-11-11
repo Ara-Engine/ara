@@ -7,7 +7,7 @@
 //!   `Present::resize` (ara-platform's Metal presenter).
 //! - Windows: the layer is a child `HWND` covering the hole; a Vulkan swapchain for its
 //!   client area (`VK_KHR_win32_surface`), sized explicitly, since the child window is
-//!   not an SDL window. Not built yet: [`create`] says so.
+//!   not an SDL window. Resizes are applied at the next presentation pass.
 //!
 //! Everything above this module (what is drawn, when, at what size) is shared.
 use std::num::NonZeroIsize;
@@ -71,8 +71,11 @@ pub(super) unsafe fn create(
             present.set_wait(std::time::Duration::from_millis(1))?;
             Ok(present)
         }
-        // Windows: `NativeUi::create_hwnd_present(gpu, hwnd, extent)` (ara-editor-gpu's
-        // Vulkan backend over ara-platform's `Present::from_hwnd`) goes here.
+        #[cfg(windows)]
+        Target::Hwnd(hwnd) => {
+            // SAFETY: forwarded caller contract.
+            unsafe { ui.create_hwnd_present(ui_device(renderer.gpu()), hwnd, extent) }
+        }
         other => {
             let _ = (ui, renderer, extent);
             anyhow::bail!(
@@ -88,8 +91,11 @@ pub(super) fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> R
     {
         present.resize(extent)
     }
-    // Windows: the swapchain is recreated at `extent` (the child window has no SDL size).
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        present.request_resize(extent)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (present, extent);
         anyhow::bail!("the studio cannot resize a layer presentation on this platform yet")
