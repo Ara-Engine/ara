@@ -440,12 +440,17 @@ impl Bridge {
                         break;
                     }
                 }
+                let light = lighting::sky_light(view);
                 match self.applied.sky_map {
                     Some((_, map)) => Sky::Map {
                         map,
                         rotation_y: 0.,
-                        intensity: 1.,
-                        background: Background::Sky,
+                        intensity: light,
+                        background: if light == 1. {
+                            Background::Sky
+                        } else {
+                            Background::ScaledSky(1.)
+                        },
                     },
                     None => Sky::Uniform(environment::mean_radiance(size, &pixels)),
                 }

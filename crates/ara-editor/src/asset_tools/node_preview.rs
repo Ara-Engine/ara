@@ -80,6 +80,24 @@ pub(crate) fn derive(material: &Material, node: &str) -> Option<(Material, Shot)
         _ => return None,
     };
     preview.outputs.insert("color".into(), color);
+    // Only what the preview reads: its key then changes only when this node's inputs do,
+    // so an edit downstream leaves an upstream node's render (and its key) alone.
+    let mut reached = std::collections::BTreeSet::new();
+    let mut open: Vec<String> = preview.outputs.values().cloned().collect();
+    while let Some(id) = open.pop() {
+        if !reached.insert(id.clone()) {
+            continue;
+        }
+        if let Some(Binding {
+            expr: Expr::Call { args, .. },
+            ..
+        }) = preview.bindings.get(&id)
+        {
+            open.extend(args.iter().cloned());
+        }
+    }
+    preview.bindings.retain(|id, _| reached.contains(id));
+    preview.parameters.retain(|id, _| reached.contains(id));
     preview.normalize_order().ok()?;
     ara_material::generate(&preview, &Default::default()).ok()?;
     let shape = if world_space(material, &binding.expr) {

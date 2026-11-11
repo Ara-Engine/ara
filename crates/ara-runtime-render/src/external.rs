@@ -42,6 +42,10 @@ pub struct ExternalView<'a> {
     /// instance draws when its identity (`identity[0] | identity[1] << 32`) modulo 100 is
     /// below it, as Ara's renderer selects them.
     pub foliage_percent: u32,
+    /// Distance in metres to which terrain layers use their normal and metal/roughness
+    /// maps and project from the side on steep slopes, from the user's graphics tier as
+    /// Ara's renderer does (`Quality::terrain_detail`; 0: neither, anywhere).
+    pub terrain_detail: f32,
 }
 
 /// A completed frame from an external renderer.
@@ -130,6 +134,7 @@ impl Presenter {
                 ..Default::default()
             };
         let foliage_percent = self.user_content_budget().1;
+        let terrain_detail = self.user_terrain_detail();
         let gpu = self
             .renderer
             .as_mut()
@@ -147,6 +152,7 @@ impl Presenter {
                 terrain_materials: &self.external_terrain_materials,
                 debug_switches,
                 foliage_percent,
+                terrain_detail,
             },
         )?;
         let publication_ms =
