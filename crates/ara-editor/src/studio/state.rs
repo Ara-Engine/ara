@@ -424,6 +424,14 @@ pub struct Local {
     pub(crate) probe_status: Option<ara_runtime_render::probes::ProbeSnapshot>,
     /// A floating window being moved or resized.
     pub float_drag: Option<FloatDrag>,
+    /// A gizmo move waiting for the host's vertex or surface snap (`studio::snapping`).
+    pub snap: Option<super::snapping::Request>,
+    /// V is held: moves snap vertex to vertex, as in Unity.
+    pub vertex_key: bool,
+    /// A curve key or tangent handle being dragged (`studio::curve`).
+    pub curve_drag: Option<super::curve::CurveDrag>,
+    /// The picked key of a curve editor: its key (`curve/{field}`) and the key's index.
+    pub curve_pick: Option<(String, usize)>,
     /// A dock tab being dragged: its panel and where the pointer is (window design px).
     pub tab_drag: Option<(String, (f32, f32))>,
     /// Floating windows as native windows of their own (`studio::portals`).

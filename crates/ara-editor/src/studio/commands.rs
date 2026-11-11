@@ -426,6 +426,28 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         ),
         "game.maximize_on_play" => flip_setting(e, "game.maximizeOnPlay", false),
         "game.stats" => flip_setting(e, "game.stats", false),
+        // 2D mode: head-on and orthographic (Unity's), back to the default angle and
+        // perspective when it ends.
+        "view.mode_2d" => {
+            let on = e
+                .state
+                .settings
+                .get("viewport.mode2d")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let (yaw, pitch, projection) = match on {
+                false => (0.0, 0.0, "orthographic"),
+                true => (0.6, 0.4, "perspective"),
+            };
+            set(e, "viewport.mode2d", json!(!on)).and_then(|_| {
+                let c = e.state.camera;
+                act(
+                    e,
+                    "editor.camera",
+                    json!({"target": c.target.to_array(), "yaw": yaw, "pitch": pitch, "distance": c.distance, "projection": projection}),
+                )
+            })
+        }
         "view.camera.perspective" => act(
             e,
             "editor.camera",
@@ -878,6 +900,19 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 panel
             };
             view(e, json!({"maximized": next}))
+        }
+        // Dock: a floating panel back where the default layout keeps it.
+        "window.dock" => {
+            let panel = match target {
+                Target::Panel(panel) => panel.clone(),
+                _ => e.state.focus.clone(),
+            };
+            let slot = crate::state::home_slot(&panel);
+            act(
+                &mut s.editor,
+                "editor.layout.move",
+                json!({"panel": panel, "slot": slot}),
+            )
         }
         // Move to New Window: the panel floats over the main window, near its middle.
         "window.float" => {
@@ -2158,6 +2193,18 @@ pub(super) fn applies(s: &Studio, id: &str, target: &Target) -> bool {
                 .is_some_and(|f| f.provenance == crate::inspector::Provenance::Override),
             _ => false,
         },
+        // Docking back is for a floating panel; floating, for a docked one.
+        "window.dock" | "window.float" => {
+            let floating = match target {
+                Target::Panel(p) => e
+                    .state
+                    .floating
+                    .iter()
+                    .any(|f| super::dock::tabs_of(&f.root).contains(p)),
+                _ => false,
+            };
+            (id == "window.dock") == floating
+        }
         "edit.paste" => s.local.entity_clipboard.is_some(),
         "field.paste" => s.local.field_clipboard.is_some(),
         "component.paste" => match target {

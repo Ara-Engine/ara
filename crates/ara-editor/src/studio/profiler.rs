@@ -429,13 +429,21 @@ fn lanes(s: &Studio, profile: &Profile, frame: &Frame, width: f32) -> El<Studio>
                         ms(span.self_ns)
                     ))
                     .children((w > 48.0).then(|| {
-                        // Within its bar: a long name ends early rather than running on.
-                        text(label.clone())
-                            .text_size(10.0)
-                            .color(Rgba::new(0.0, 0.0, 0.0, 0.85))
-                            .pad_x(4.0)
+                        // Within its bar, inset from its ends: a long name ends early
+                        // rather than running on.
+                        row()
                             .w(w)
-                            .wrap(1)
+                            .h(DEPTH - 1.0)
+                            .pad_x(4.0)
+                            .align(Align::Center)
+                            .child(
+                                text(label.clone())
+                                    .text_size(10.0)
+                                    .color(ink(tint))
+                                    .w(0.0)
+                                    .grow(1.0)
+                                    .wrap(1),
+                            )
                     })),
             );
         }
@@ -875,4 +883,13 @@ fn hue(l: &ara_kit::look::Look, name: &str) -> Rgba {
 /// Nanoseconds as milliseconds.
 fn ms(ns: u64) -> String {
     format!("{:.2} ms", ns as f64 / 1e6)
+}
+
+/// Text over a bar of `tint`: dark on light tints, light on dark ones.
+fn ink(tint: Rgba) -> Rgba {
+    let luma = 0.2126 * tint.r + 0.7152 * tint.g + 0.0722 * tint.b;
+    match luma > 0.42 {
+        true => Rgba::new(0.0, 0.0, 0.0, 0.85),
+        false => Rgba::new(1.0, 1.0, 1.0, 0.92),
+    }
 }

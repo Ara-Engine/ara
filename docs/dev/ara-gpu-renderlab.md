@@ -357,3 +357,54 @@ mean5.82%, peak11.33% without a sustained breach; GPU peak0.64%. This is an isol
 CPU microbenchmark, not a frame-speed claim. Evidence:
 `target/ara-gpu/barrier-timing-review.{json,log}` and
 `target/ara-dev/gpu-load/90104-1794339026238.json`.
+
+## Cross-family image handoff (follow-up to PR #5)
+
+`distinct_families_hand_a_storage_image_between_queues_on_hardware` (library test in
+`vulkan/context/queues.rs`) runs the storage-image handoff probe on the device's real
+queue selection: compute to graphics and graphics to compute, each immediate and
+under deferred completion. The release and acquire barriers carry two different
+family indices there; the forced shared-family test omits them. A Vulkan device whose
+graphics and compute classes share one family prints `skipped:` and passes; with no
+Vulkan device it fails at device creation, as the sibling probes do. A skip looks like
+a pass in the report, so gates known to have two families (NVIDIA, RADV) set
+`ARA_REQUIRE_DISTINCT_FAMILIES=1`, which turns the skip into a failure. Run it in a
+debug build: synchronization validation is what detects a missing or mismatched
+transfer, and the byte read-back cannot, because both families share memory. It is
+ignored on macOS like the other Vulkan hardware probes, so it compiles on the Mac but
+has not run: the first native result comes from the Linux and Windows gates.
+
+## Fragment barycentrics (found by Renderlab's first Vulkan run)
+
+Renderlab's lit, receiver and glass fragment stages read per-vertex attributes, so
+their SPIR-V declares `FragmentBarycentricKHR`. The Vulkan device never enabled
+`VK_KHR_fragment_shader_barycentric`, and under validation every such module failed
+at `vkCreateShaderModule` (nine Renderlab backend tests on RADV). The device now
+enables the extension and its feature whenever the driver reports both, and
+`DeviceInfo::fragment_barycentrics` says whether it did; every Metal 4 GPU reports
+it through `supportsShaderBarycentricCoordinates`. Where the flag is false, Vulkan
+pipeline creation refuses a module that declares the capability with a contract
+error naming the stage, instead of handing it to the driver. A driver that offers
+only the older `VK_NV_fragment_shader_barycentric` reports false.
+
+Nothing in `ara-gpu`'s own cohort uses barycentrics, so the proof is Renderlab's
+backend suite under validation on a Vulkan device, which has not been rerun yet.
+Ray-query position fetch is deliberately not enabled: hit positions come from
+retained geometry (`hit_geometry`), and Renderlab's modules no longer declare the
+SPIR-V extension.
+
+## The first layer of an array as a render target (same run)
+
+`BeginRenderingSubresources` took a shortcut for mip 0, layer 0: it attached the
+image's own attachment view. On an array that view spans every layer, so rendering
+to layer 0 alone also required layer 1 to be in the attachment layout; Renderlab's
+per-caster transmission layers hit `VUID-vkCmdBeginRendering-pRenderingInfo-09592`
+with layer 1 still `UNDEFINED`. The shortcut now applies only to images with one
+layer; every other selected slice, layer 0 included, gets its own cached single-slice
+view. The existing sibling-preservation probe uploads the whole image first, which
+hid this. `regression_first_layer_of_an_array_renders_without_touching_its_siblings`
+transitions and renders one layer at a time, layer 0 first, for a colour and for a
+depth array; it passes on Metal and has not run on Vulkan, where it is expected to
+fail validation without the fix. It detects the fault through validation only,
+which debug builds enable. A resolve target at layer 0 of an array takes the same
+view path and has no test.

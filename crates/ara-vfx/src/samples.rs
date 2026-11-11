@@ -97,11 +97,7 @@ pub fn campfire() -> Effect {
         item(
             "shrink",
             Module::SizeOverLife {
-                keys: vec![
-                    Key { t: 0., value: 0.18 },
-                    Key { t: 0.4, value: 0.3 },
-                    Key { t: 1., value: 0.02 },
-                ],
+                curve: ara_curve::Curve::linear(&[(0., 0.18), (0.4, 0.3), (1., 0.02)]),
             },
         ),
     ]);
@@ -249,7 +245,7 @@ pub fn smoke() -> Effect {
         item(
             "grow",
             Module::SizeOverLife {
-                keys: vec![Key { t: 0., value: 0.3 }, Key { t: 1., value: 1.3 }],
+                curve: ara_curve::Curve::linear(&[(0., 0.3), (1., 1.3)]),
             },
         ),
         item(

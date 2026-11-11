@@ -78,14 +78,16 @@ internal sealed partial class ModuleSession
         _disk.Clear();
         foreach (var (path, text) in texts) _disk[path] = text;
         var trees = texts.ToImmutableDictionary(pair => pair.Key, pair => ModuleCompiler.Parse(pair.Key, pair.Value), ModuleState.Paths);
+        // File order, not hash order: tree order reaches the emitted metadata and must not vary by process.
+        var ordered = (currentFiles ?? [.. texts.Keys.Order(ModuleState.Paths)]).Select(path => trees[path]).ToArray();
         var (refs, surfaces) = Dependencies(ctx);
         var hot = (heat ?? (changed || published.Hot)) && ctx.Enc;
-        var user = _compiler.Create([.. trees.Values, Usings], hot, refs.Values);
+        var user = _compiler.Create([.. ordered, Usings], hot, refs.Values);
         var candidate = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty,
             trees, texts, null, hot, published.Generation, null, surfaces, refs);
         timing.Parse = timing.Mark();
         var outcome = Build(candidate.User, candidate, AbiConst.ReloadL3, escalation, timing,
-            [.. candidate.Trees.Values], null, ctx, true, ct);
+            ordered, null, ctx, true, ct);
         outcome.ValidatedInputs = intent == CompileIntent.CurrentSources || MatchesCurrentInputs(candidate, ctx);
         outcome.Intent = intent;
         return outcome;

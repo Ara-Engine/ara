@@ -133,8 +133,10 @@ impl Effect {
                                     .iter()
                                     .all(|k| k.value.iter().all(|v| *v >= 0.) && k.value[3] <= 1.)
                         }
-                        Module::SizeOverLife { keys: ks } => {
-                            keys(ks.iter().map(|k| k.t)) && ks.iter().all(|k| k.value >= 0.)
+                        Module::SizeOverLife { curve } => {
+                            curve.validate().is_ok()
+                                && keys(curve.keys.iter().map(|k| k.time))
+                                && curve.value_range(16).is_some_and(|(low, _)| low >= 0.)
                         }
                         Module::PlaneCollision {
                             normal,

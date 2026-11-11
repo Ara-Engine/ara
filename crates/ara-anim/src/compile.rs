@@ -67,6 +67,7 @@ pub(crate) struct ProgramTransition {
     pub duration: u32,
     pub exit_tick: Option<u32>,
     pub conditions: Vec<Predicate>,
+    pub blend: Option<ara_curve::Curve>,
 }
 
 /// Immutable animation program. Share this resource across all ECS actors.
@@ -268,12 +269,18 @@ impl Controller {
                     value,
                 });
             }
+            if let Some(curve) = &t.blend {
+                curve
+                    .validate()
+                    .map_err(|e| Error(format!("transition blend curve: {e}")))?;
+            }
             transitions.push(ProgramTransition {
                 from,
                 to,
                 duration: t.duration,
                 exit_tick: t.exit_tick,
                 conditions,
+                blend: t.blend.clone(),
             });
         }
         let mut properties = BTreeSet::new();
