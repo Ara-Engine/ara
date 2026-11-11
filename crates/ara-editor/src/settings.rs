@@ -344,6 +344,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(4.),
     ),
     def(
+        "assets.folderTree",
+        User,
+        "General",
+        "Assets folder tree",
+        "Show the folder tree beside the Assets grid (off: one column, as Unity's).",
+        Kind::Toggle,
+        Lit::B(true),
+    ),
+    def(
         "viewport.mode2d",
         User,
         "Viewport",
