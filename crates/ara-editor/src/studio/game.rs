@@ -474,7 +474,7 @@ impl Game {
             self.host.resolved = Arc::clone(resolved);
         }
         // A frame still on the GPU: draw nothing new this pass.
-        let ready = self.layer.ready()?;
+        let ready = self.layer.ready(renderer)?;
         let gpu = ui_device(renderer.gpu());
         self.host.live = false;
         // What to draw: each live player's frame in its tile, else the preview.
