@@ -30,7 +30,8 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ara_gpu::{
-    Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
+    Access, Buffer, Device, GpuDevice, GpuLease, Image, Pipeline, Queue, Resource, vk,
+    vulkan::PassTiming,
 };
 pub use debug::{ReferenceTrace, ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
@@ -123,10 +124,11 @@ pub struct HdrExposure {
 /// The device a renderer records on.
 ///
 /// An owned hold boxes the device so its address stays put when the renderer
-/// moves. A borrowed hold points at a device boxed by its owner; drop the
-/// renderer before that owner.
+/// moves. A leased hold shares the caller's [`GpuLease`]: the allocation does
+/// not move, and the device is destroyed only when the last lease drops.
 struct GpuHold {
     owned: Option<Box<GpuDevice>>,
+    lease: Option<GpuLease>,
     ptr: *mut GpuDevice,
 }
 
@@ -136,33 +138,38 @@ impl GpuHold {
         let ptr = owned.as_mut() as *mut GpuDevice;
         Self {
             owned: Some(owned),
+            lease: None,
             ptr,
         }
     }
 
-    /// # Safety
-    /// `ptr` is a valid device that outlives this hold and is not borrowed
-    /// through another `&mut` while this hold's device is borrowed. The
-    /// allocation must not move; a `Box<GpuDevice>` satisfies that.
-    unsafe fn borrowed(ptr: *mut GpuDevice) -> Self {
-        Self { owned: None, ptr }
+    fn leased(lease: GpuLease) -> Self {
+        let ptr = lease.as_mut_ptr();
+        Self {
+            owned: None,
+            lease: Some(lease),
+            ptr,
+        }
     }
 
     fn device(&self) -> &GpuDevice {
-        // SAFETY: `ptr` meets the `borrowed`/`owned` contract for this hold's life.
+        // SAFETY: `ptr` addresses this hold's box or its lease, for this hold's life.
         unsafe { &*self.ptr }
     }
 
     fn device_mut(&mut self) -> &mut GpuDevice {
-        // SAFETY: `ptr` meets the `borrowed`/`owned` contract for this hold's life.
+        // SAFETY: `ptr` addresses this hold's box or its lease, for this hold's life.
+        // One thread records, so this is the only live mutable use.
         unsafe { &mut *self.ptr }
     }
 }
 
 impl Drop for GpuHold {
     fn drop(&mut self) {
-        // A borrowed hold does not destroy the owner's device.
+        // The owned box is the device. A lease drops here too: the device
+        // itself is destroyed only when this was the last lease.
         drop(self.owned.take());
+        drop(self.lease.take());
     }
 }
 
@@ -179,14 +186,15 @@ impl std::ops::DerefMut for GpuHold {
     }
 }
 
-// SAFETY: the pointer addresses this hold's own box, or a boxed device the
-// caller keeps alive and sends with the renderer. `GpuDevice` itself is `Send`.
+// SAFETY: the pointer addresses this hold's own box, or the heap allocation its
+// `GpuLease` keeps alive. `GpuDevice` itself is `Send`, and a lease moves with
+// the renderer. One thread records.
 unsafe impl Send for GpuHold {}
 
 /// Vulkan renderer with persistent extracted scene resources and per-view histories.
 /// Calls are serialized for v0 diagnostics; logical queue transfers remain explicit.
 pub struct Renderer {
-    /// Device this renderer records on. Owned, or borrowed from the caller's box
+    /// Device this renderer records on. Owned, or a lease shared with the caller
     /// (`on_device`).
     gpu: GpuHold,
     /// Display size: TAA history, output and captures.
@@ -418,18 +426,13 @@ impl Renderer {
         Self::open_on(GpuHold::owned(gpu), scene, size)
     }
 
-    /// Build this renderer on a device owned by the caller.
+    /// Build this renderer on a device the caller also holds.
     ///
-    /// The renderer records through `gpu` and does not destroy it. Drop the
-    /// renderer first. Moving the owner afterwards is sound when `gpu` points
-    /// into a `Box` (the device address does not change).
-    ///
-    /// # Safety
-    /// `gpu` must stay valid and unaliased as `&mut` for every borrow this
-    /// renderer makes, and must outlive the renderer.
-    pub unsafe fn on_device(scene: Scene, size: [u32; 2], gpu: *mut GpuDevice) -> Result<Self> {
-        // SAFETY: the caller upholds `GpuHold::borrowed`.
-        Self::open_on(unsafe { GpuHold::borrowed(gpu) }, scene, size)
+    /// The renderer keeps this lease. Moving the caller's lease does not move
+    /// the device, and dropping the caller's lease does not destroy it while
+    /// this renderer still holds one. One thread records.
+    pub fn on_device(scene: Scene, size: [u32; 2], device: GpuLease) -> Result<Self> {
+        Self::open_on(GpuHold::leased(device), scene, size)
     }
 
     fn open_on(mut gpu: GpuHold, scene: Scene, size: [u32; 2]) -> Result<Self> {

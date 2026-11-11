@@ -4,7 +4,7 @@
 
 - `new_raster` omits RT features/descriptors; `new` enables optional RT.
   Windowed Vulkan devices request KHR/EXT HIGH; denial retries MEDIUM.
-- `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
+- `Device`: portable descriptors, queues, cooked pipelines, recording and retirement. `GpuLease` shares one heap-stable device; the last lease drops it.
 - `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
 - `Command::FillBuffer` repeats a u32 pattern over aligned ranges (zero clears).
   `UpdateBuffer` has no 64 KiB cap: large Vulkan writes use completion-gated
