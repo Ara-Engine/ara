@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 ara-vfx = { path = "../ara-vfx" }
 ara-gpu = { path = "../ara-gpu" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-material = { path = "../ara-material" }
 ara-json = { path = "../ara-json" }

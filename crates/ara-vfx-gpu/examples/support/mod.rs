@@ -1,10 +1,7 @@
 //! Deterministic gallery scene shared by the capture tool and golden tests.
 use anyhow::Result;
 use ara_gpu::GpuDevice;
-use ara_render::{
-    capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode},
-    scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex, sphere},
-};
+use ara_frame::{capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode}, scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex, sphere}};
 use ara_render_fidelity::{
     FidelityView, FrameInput, ImageInput, Mode, PostSettings, Settings, Tier, Upscaler,
     probes::BakedProbes,
@@ -162,7 +159,7 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
         color_lumens: [0.5, 0.65, 1., 180.],
         direction_outer: [0.; 4],
         parameters: [0., 0., 0., 1.],
-        ..ara_render::scene::Light::ZERO
+        ..ara_frame::scene::Light::ZERO
     }];
     let flicker = 0.85 + 0.1 * (tick as f32 * 0.73).sin() + 0.05 * (tick as f32 * 1.37).sin();
     for e in &effect.emitters {
@@ -195,7 +192,7 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
                     ],
                     direction_outer: [0.; 4],
                     parameters: [0., 0., 0., 1.],
-                    ..ara_render::scene::Light::ZERO
+                    ..ara_frame::scene::Light::ZERO
                 });
             }
         }

@@ -449,7 +449,7 @@ mod tests {
     fn the_compensation_curve_reads_as_aras() {
         let mut look = look();
         assert_eq!(compensation_curve(&look, 3.), 0.);
-        look.compensation_curve = ara_render::look::AutoExposure::curve(&[[4., -1.], [-2., 1.]]);
+        look.compensation_curve = ara_frame::look::AutoExposure::curve(&[[4., -1.], [-2., 1.]]);
         assert_eq!(compensation_curve(&look, -5.), 1.);
         assert!(compensation_curve(&look, 1.).abs() < 1e-6);
         assert_eq!(compensation_curve(&look, 10.), -1.);

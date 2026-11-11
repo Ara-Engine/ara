@@ -45,7 +45,7 @@ pub struct NativeConfig {
     pub upload_bytes: u64,
 }
 
-pub use ara_render::instanced::{TextureBinding as NativeBinding, TextureStats as NativeStats};
+pub use ara_frame::instanced::{TextureBinding as NativeBinding, TextureStats as NativeStats};
 
 // ABI: slot, resident first mip, original width/height, encoding, resident levels,
 // then two reserved words. Encoding 1 is BC4, 2 is BC5 XY, and 0 is BC7 colour/data.
@@ -90,7 +90,7 @@ pub struct NativeResidency {
     initial: Option<initial::Initial>,
 }
 
-impl ara_render::instanced::Textures for NativeResidency {
+impl ara_frame::instanced::Textures for NativeResidency {
     fn content_digest(&self) -> [u8; 32] {
         use sha2::{Digest, Sha256};
         let mut digest = Sha256::new();
@@ -106,18 +106,18 @@ impl ara_render::instanced::Textures for NativeResidency {
     fn preallocate(
         &mut self,
         gpu: &mut GpuDevice,
-        previous: Option<&dyn ara_render::instanced::Textures>,
+        previous: Option<&dyn ara_frame::instanced::Textures>,
     ) -> Result<bool> {
         Self::preallocate(self, gpu, previous)
     }
     fn initialize_reusing(
         &mut self,
         gpu: &mut GpuDevice,
-        previous: &dyn ara_render::instanced::Textures,
+        previous: &dyn ara_frame::instanced::Textures,
     ) -> Result<NativeStats> {
         self.prepare_reusing(gpu, previous)
     }
-    fn publish_reuse(&mut self, previous: &mut dyn ara_render::instanced::Textures) -> Result<()> {
+    fn publish_reuse(&mut self, previous: &mut dyn ara_frame::instanced::Textures) -> Result<()> {
         self.commit_reuse(previous)
     }
     fn refine(&mut self, gpu: &mut GpuDevice) -> Result<NativeStats> {

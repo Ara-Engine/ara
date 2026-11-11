@@ -4,11 +4,11 @@
 //!
 //! Hardware ray tracing is off on every preset unless the project or game opts in
 //! ([`RenderOptions::ray_tracing`]), as in Unreal: by default every preset is raster
-//! ([`RasterPlan`], `ara_render::look::Quality`) and traces no rays.
+//! ([`RasterPlan`], `ara_frame::look::Quality`) and traces no rays.
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
-use ara_render::look::{
+use ara_frame::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
     RayQueries, ReflectionCaptures, Reflections, ScreenGi, Shadows, VirtualShadows,
     VolumetricFogQuality,
@@ -419,7 +419,7 @@ impl QualityPreset {
                 lod_pixels: 6.,
                 min_pixels: 6.,
                 high_tier: false,
-                upscaler: ara_render::Upscaler::Taau,
+                upscaler: ara_frame::look::Upscaler::Taau,
                 reflection_captures: None,
                 terrain_detail: 0.,
                 local_shadows: None,
@@ -442,7 +442,7 @@ impl QualityPreset {
                 lod_pixels: 3.,
                 min_pixels: 3.,
                 high_tier: false,
-                upscaler: ara_render::Upscaler::Taau,
+                upscaler: ara_frame::look::Upscaler::Taau,
                 reflection_captures: None,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
@@ -472,7 +472,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.5,
                 high_tier: true,
-                upscaler: ara_render::Upscaler::Tsr,
+                upscaler: ara_frame::look::Upscaler::Tsr,
                 reflection_captures: reflection_captures(8),
                 terrain_detail: 150.,
                 local_shadows: Some(LocalShadows {
@@ -506,7 +506,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.,
                 high_tier: true,
-                upscaler: ara_render::Upscaler::Tsr,
+                upscaler: ara_frame::look::Upscaler::Tsr,
                 reflection_captures: reflection_captures(16),
                 terrain_detail: 300.,
                 local_shadows: Some(LocalShadows {

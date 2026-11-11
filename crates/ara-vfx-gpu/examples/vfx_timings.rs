@@ -1,7 +1,7 @@
 //! Identical 1M-sprite workloads at two world diameters, with measured coverage.
 use anyhow::{Result, ensure};
 use ara_gpu::GpuDevice;
-use ara_render::scene::CameraSpec;
+use ara_frame::scene::CameraSpec;
 use ara_vfx_gpu::{GpuSystem, View};
 use glam::Vec3;
 use serde::Serialize;

@@ -113,7 +113,7 @@ fn unchanged_secondary_prepare_keeps_generation_and_starts_no_background_jobs() 
     let plan = RasterPlan {
         render_size: [96, 64],
         display_size: [96, 64],
-        quality: ara_render::look::Quality {
+        quality: ara_frame::look::Quality {
             gi_budget: 1024,
             ..Default::default()
         },

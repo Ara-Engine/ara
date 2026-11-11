@@ -50,7 +50,7 @@ impl DepthOfField {
     /// scale in render pixels (radius = scale × (1 − focus / depth)), the largest radius
     /// and the near strength, for a camera with vertical field of view `fov` (radians)
     /// rendering `height` pixels.
-    pub(crate) fn constants(self, fov: f32, height: f32, quality: DepthOfFieldQuality) -> [f32; 4] {
+    pub fn constants(self, fov: f32, height: f32, quality: DepthOfFieldQuality) -> [f32; 4] {
         let focus = self.focus_distance.max(focal_length(fov) * 1.01);
         [
             focus,

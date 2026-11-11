@@ -84,7 +84,7 @@ pub struct FoliageGeometry {
     /// Nine meshes; the third per species is normally a baked impostor card.
     pub meshes: [FoliageMesh; 9],
     /// RGBA8 colour/alpha textures. sRGB decoding is performed exactly once.
-    pub textures: Vec<ara_render::scene::Texture>,
+    pub textures: Vec<ara_frame::scene::Texture>,
 }
 impl FoliageGeometry {
     /// Updates extracted culling bounds before upload, including vertex-wind sway.

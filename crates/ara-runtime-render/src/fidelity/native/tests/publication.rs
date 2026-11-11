@@ -2,7 +2,8 @@ use super::*;
 use ara_asset::{
     CachedImport, Cancellation, CookPreset, ImportContext, ImportInput, TargetPlatform,
 };
-use ara_render::{Renderer, capture::ViewMode, scene::CameraSpec};
+use ara_frame::{capture::ViewMode, scene::CameraSpec};
+use ara_render::{Renderer};
 use ara_render_fidelity::presets::{
     Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath,
 };
@@ -158,7 +159,7 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             raster.render(renderer, &frame, &camera, ViewMode::Lit)?;
             if stage == 1 && matches!(iteration, 0 | 5) {
                 renderer
-                    .capture_completed(&ara_render::capture::CaptureRequest {
+                    .capture_completed(&ara_frame::capture::CaptureRequest {
                         camera,
                         size: [128, 96],
                         mode: ViewMode::Lit,
@@ -224,7 +225,7 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             );
         }
         renderer
-            .capture_completed(&ara_render::capture::CaptureRequest {
+            .capture_completed(&ara_frame::capture::CaptureRequest {
                 camera,
                 size: [128, 96],
                 mode: ViewMode::Lit,
@@ -253,7 +254,7 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
                 raster.render(renderer, &failed, &camera, ViewMode::Lit)?;
             }
             renderer
-                .capture_completed(&ara_render::capture::CaptureRequest {
+                .capture_completed(&ara_frame::capture::CaptureRequest {
                     camera,
                     size: [128, 96],
                     mode: ViewMode::Lit,

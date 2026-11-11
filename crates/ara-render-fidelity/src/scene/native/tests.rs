@@ -21,7 +21,7 @@ fn native_sampling_include_tracks_the_residency_contract() {
 #[test]
 fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Result<()> {
     use crate::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
-    use ara_render::instanced::{Geometry, Instance, Lod, Material, Vertex};
+    use ara_frame::instanced::{Geometry, Instance, Lod, Material, Vertex};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = root.join("../../target/renderer-unification/native-instancing");
     let mut gpu = GpuDevice::new(&[], output.join("cache"))?;
@@ -47,7 +47,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
     let mut left = Material::default();
     left.pbr.emissive_roughness = [3.0, 0.0, 0.0, 1.0];
     left.pbr.textures[3] = 0;
-    left.pbr.flags[1] = ara_render::scene::EMISSIVE_DECODE_SRGB;
+    left.pbr.flags[1] = ara_frame::scene::EMISSIVE_DECODE_SRGB;
     left.extras.uv[3].tex_coord = 1;
     let mut right = left;
     right.pbr.emissive_roughness = [0.0, 3.0, 0.0, 1.0];
@@ -127,7 +127,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
             ..Default::default()
         },
     };
-    let camera = ara_render::scene::CameraSpec::LookAt {
+    let camera = ara_frame::scene::CameraSpec::LookAt {
         position: Vec3::new(0.0, 0.0, 3.0),
         target: Vec3::ZERO,
         vertical_fov: 60.0f32.to_radians(),

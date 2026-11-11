@@ -1,6 +1,6 @@
 //! Short material-only arrivals; no geometry replacement when the fade finishes.
 use super::*;
-use ara_render::instanced::{Changes, Scene};
+use ara_frame::instanced::{Changes, Scene};
 use std::collections::BTreeSet;
 
 const FRAMES: u8 = 12;
@@ -108,7 +108,7 @@ impl Fades {
         Ok(())
     }
 }
-fn apply(fade: &Fade, material: &mut ara_render::scene::Material, advancing: bool) {
+fn apply(fade: &Fade, material: &mut ara_frame::scene::Material, advancing: bool) {
     let remaining = if advancing {
         fade.remaining
     } else {

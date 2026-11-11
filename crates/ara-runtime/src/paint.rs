@@ -107,7 +107,7 @@ impl VertexPaint {
     }
 }
 
-/// One `u32` colour (`ara_render::instanced::Vertex::color`, red in the low byte) per
+/// One `u32` colour (`ara_frame::instanced::Vertex::color`, red in the low byte) per
 /// cooked vertex of `primitive`, from per-source-vertex `colors`; `None` when the
 /// colours were painted for a different source vertex count.
 pub fn cooked(primitive: &Primitive, colors: &[[u8; 4]]) -> Option<Arc<[u32]>> {

@@ -1,10 +1,8 @@
 use super::{contract::*, coverage, fixture, metrics, replay};
 use anyhow::{Result, ensure};
 use ara_gpu::{Device, GpuDevice};
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}};
+use ara_render::{Renderer};
 use ara_render_fidelity::{
     FidelityView, Mode, PostSettings, Settings, Tier, ToneMapper, Upscaler, presets::QualityPreset,
 };
@@ -362,7 +360,7 @@ fn reference(
 }
 
 /// Maximize the existing API's work allowances without changing allocation or quality.
-fn control_quality(mode: RunKind) -> ara_render::look::Quality {
+fn control_quality(mode: RunKind) -> ara_frame::look::Quality {
     let mut quality = QualityPreset::High.raster_quality();
     quality.ray_queries = None;
     if mode == RunKind::Uncapped {
@@ -403,7 +401,7 @@ mod tests {
 fn startup_surfaces(
     f: &fixture::Fixture,
     cache: &Path,
-) -> Result<ara_render::look::gi::ProbeSurfaces> {
+) -> Result<ara_frame::look::gi::ProbeSurfaces> {
     let mut gpu = GpuDevice::new(&[], cache)?;
     let mut view = FidelityView::new_native(
         &mut gpu,

@@ -7,27 +7,7 @@ use ara_gpu::{
 };
 use bytemuck::Zeroable;
 
-/// Display curve applied after exposure by the baseline tone map pass. The values
-/// match `ara_render_fidelity::ToneMapper` so both renderers share one look.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ToneCurve {
-    /// Narkowicz's per-channel ACES fit (the M1 curve).
-    #[default]
-    AcesFit = 0,
-    /// Khronos PBR Neutral.
-    Neutral = 1,
-    /// Hill's fitted ACES RRT+ODT, pre-scaled to keep 18% grey.
-    Filmic = 2,
-    /// AgX, Troy Sobotka's image formation as Blender 5.1 ships it (look.slangh
-    /// `agxCurve`): 16.5 stops into a log sigmoid that keeps 18% grey and bends bright,
-    /// saturated light towards white.
-    Agx = 3,
-    /// AgX with Blender's "Punchy" look: deeper shadows, more contrast.
-    AgxPunchy = 4,
-    /// AgX with Blender's "Medium High Contrast" look: contrast 1.2 about mid grey.
-    AgxMediumHighContrast = 5,
-}
+pub use ara_frame::look::ToneCurve;
 
 /// `tonemapMain`'s pass-through view ID (`Frame.temporal.z`): outside every
 /// `ViewMode` ID, so neither a debug view nor the tone curve applies (sRGB only).

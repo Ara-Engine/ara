@@ -1,7 +1,7 @@
 #[path = "../examples/common/mod.rs"]
 mod common;
 use anyhow::{Result, ensure};
-use ara_render::capture::{ViewMode, compare};
+use ara_frame::capture::{ViewMode, compare};
 use ara_render2d::Renderer2d;
 use std::path::Path;
 

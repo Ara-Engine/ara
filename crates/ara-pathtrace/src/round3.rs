@@ -23,8 +23,8 @@ pub(crate) fn case(
     many: bool,
 ) -> Result<(
     &'static str,
-    ara_render::scene::Scene,
-    ara_render::scene::CameraSpec,
+    ara_frame::scene::Scene,
+    ara_frame::scene::CameraSpec,
     f32,
 )> {
     Ok(if many {
@@ -101,7 +101,7 @@ pub fn quality(gpu: &mut GpuDevice, root: &Path, many: bool) -> Result<()> {
         hybrid.save(&golden)?;
     }
     let comparison =
-        ara_render::capture::compare(&hybrid, &image::open(golden)?.to_rgba8(), 0.005)?;
+        ara_frame::capture::compare(&hybrid, &image::open(golden)?.to_rgba8(), 0.005)?;
     anyhow::ensure!(
         comparison.passed,
         "{name}: golden error {}",

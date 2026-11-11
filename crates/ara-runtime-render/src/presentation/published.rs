@@ -17,7 +17,7 @@ impl PresentationImage {
     pub fn capture(
         &self,
         renderer: &mut Renderer,
-        capture: &mut ara_render::capture::Capture,
+        capture: &mut ara_frame::capture::Capture,
     ) -> Result<()> {
         ensure!(
             renderer.size() == self.size,

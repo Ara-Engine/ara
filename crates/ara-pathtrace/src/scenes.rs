@@ -1,5 +1,5 @@
 //! Small diagnostic scenes; geometry is shared with every rendering mode.
-use ara_render::scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex, sphere};
+use ara_frame::scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex, sphere};
 use glam::Vec3;
 /// Required fidelity verification scenarios.
 pub const NAMES: [&str; 7] = [
@@ -37,7 +37,7 @@ pub fn scene(name: &str, tick: u32) -> Scene {
             color_lumens: [1., 0.85, 0.65, 900.],
             direction_outer: [0., -1., 0., -1.],
             parameters: [0., 0., 0., 1.],
-            ..ara_render::scene::Light::ZERO
+            ..ara_frame::scene::Light::ZERO
         }],
         sun_direction: Vec3::new(-0.3, 0.8, 0.5).normalize(),
         sun_lux: Vec3::splat(3.),

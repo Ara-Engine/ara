@@ -152,7 +152,7 @@ mod tests {
             assert_eq!(material.flags[0], 1);
             assert_eq!(
                 material.flags[1],
-                ara_render::scene::BASE_COLOR_DECODE_SRGB | ara_render::scene::EMISSIVE_DECODE_SRGB
+                ara_frame::scene::BASE_COLOR_DECODE_SRGB | ara_frame::scene::EMISSIVE_DECODE_SRGB
             );
             assert_eq!(material.flags[3], 0);
             assert_eq!(material.base_color, [0.125, 0.25, 0.375, 0.4]);

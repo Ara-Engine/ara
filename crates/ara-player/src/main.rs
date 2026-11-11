@@ -1269,7 +1269,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         exposure: debug.exposure.filter(|ev| ev.is_finite()),
         view: {
             use ara_play::DebugView as D;
-            use ara_render::capture::ViewMode as V;
+            use ara_frame::capture::ViewMode as V;
             match debug.view {
                 D::Lit => V::Lit,
                 D::Albedo => V::Albedo,
@@ -1368,7 +1368,7 @@ mod cli_tests {
                     bounces: 6,
                 }),
                 exposure: Some(-2.5),
-                view: ara_render::capture::ViewMode::GiDiffuse,
+                view: ara_frame::capture::ViewMode::GiDiffuse,
             },
         ] {
             let wire: ara_play::RenderDebug =
