@@ -28,6 +28,32 @@ pub(crate) fn within(entities: &Resolved, id: &str, roots: impl Fn(&str) -> bool
 }
 
 /// The gap Drop to Surface leaves between geometry and its support.
+/// How far to move a selection whose rendered `vertices` sit around `pivot` so its lowest
+/// point along `normal` touches surface `point` at `offset` metres: a surface-snap contact.
+pub(crate) fn contact_delta(
+    vertices: &[Vec3],
+    pivot: Vec3,
+    point: Vec3,
+    normal: Vec3,
+    offset: f32,
+) -> Option<Vec3> {
+    if vertices.is_empty()
+        || !pivot.is_finite()
+        || !point.is_finite()
+        || !normal.is_finite()
+        || !offset.is_finite()
+        || normal.length_squared() < 0.5
+    {
+        return None;
+    }
+    let support = vertices
+        .iter()
+        .map(|vertex| (*vertex - pivot).dot(normal))
+        .min_by(f32::total_cmp)?;
+    let delta = point - pivot + normal * (offset - support);
+    delta.is_finite().then_some(delta)
+}
+
 pub(crate) fn offset(editor: &Editor) -> f32 {
     editor
         .state

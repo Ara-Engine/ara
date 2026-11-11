@@ -53,7 +53,7 @@ impl SceneView {
     }
 
     /// Pick through selected geometry while retaining the presented target mesh.
-    pub(in crate::app) fn surface_hit_excluding(
+    pub(crate) fn surface_hit_excluding(
         &self,
         camera: &crate::state::Camera,
         rect: Box2,

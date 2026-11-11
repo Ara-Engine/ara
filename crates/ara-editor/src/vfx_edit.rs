@@ -30,6 +30,63 @@ pub(crate) fn short(v: &Value) -> String {
     }
 }
 
+/// Adds an emitter (`add`: a copy of the samples' first, renamed), or `duplicate`s or
+/// `delete`s emitter `name` of effect `doc`, as one undo step (`vfx.text.apply` of the
+/// edited effect). The last emitter stays.
+pub(crate) fn emitter_edit(
+    editor: &mut Editor,
+    doc: &str,
+    name: &str,
+    operation: &str,
+) -> ara_ui::Result<()> {
+    let graph = ara_graph::Graph::from_document(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(doc)
+            .ok_or("effect missing")?,
+    )
+    .map_err(|d| d.to_string())?;
+    let mut effect = ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())?;
+    let revision = editor.host.store().revision();
+    let fresh = |base: &str| format!("{base}_{revision}");
+    let index = effect.emitters.iter().position(|e| e.name == name);
+    let why = match (operation, index) {
+        ("add", _) => {
+            let mut emitter = ara_vfx::samples::library()
+                .into_iter()
+                .next()
+                .and_then(|e| e.emitters.into_iter().next())
+                .ok_or("no starter emitter")?;
+            emitter.name = fresh("emitter");
+            effect.emitters.push(emitter);
+            "Add VFX emitter"
+        }
+        ("duplicate", Some(i)) => {
+            let mut copy = effect.emitters[i].clone();
+            copy.name = fresh(&copy.name);
+            effect.emitters.insert(i + 1, copy);
+            "Duplicate VFX emitter"
+        }
+        ("delete", Some(_)) if effect.emitters.len() < 2 => {
+            return Err("An effect keeps at least one emitter".into());
+        }
+        ("delete", Some(i)) => {
+            effect.emitters.remove(i);
+            "Delete VFX emitter"
+        }
+        _ => return Err("emitter missing".into()),
+    };
+    let source = effect.text().map_err(|d| d.to_string())?;
+    editor.apply_to(
+        doc,
+        vec![json!({"cmd": "vfx.text.apply", "args": {"source": source}})],
+        why,
+    )?;
+    Ok(())
+}
+
 /// Moves `up` or `down`, `duplicate`s, `toggle`s or removes the module `item`
 /// (`emitter|stage|name`) of the effect `doc` (one undo step).
 pub(crate) fn module_edit(

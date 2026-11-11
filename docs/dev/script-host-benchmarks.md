@@ -44,3 +44,13 @@ The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on mac
 reports an in-place save and an atomic save (write a temp file, rename it over the source), median / p95 / max in ms.
 Mac (FSEvents): 11.3 / 12.4 ms in place, 11.7 / 12.5 atomic. Run it on Windows and Linux to see whether their watchers
 add a fixed delay (none is expected: ReadDirectoryChangesW and inotify report at once).
+
+## One-command timing (any OS)
+`dotnet run benchmarks/iteration/reload_timing.cs` builds `dotnet/Ara.slnx` (Release) and the `reload_bench`
+example, runs the bench in fresh processes and prints median / p95 of launch to first tick and of save → visible
+for L1 (body), L2 (new member) and L3 (signature change), with the phases behind them (emit, analyzers, generators,
+the Windows AMSI image scan, register). Needs only the .NET 10 SDK and Rust. Options after `--`: `--runs 10` (fresh
+processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-build`, `--output <dir>` (default
+`target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
+each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
+mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
