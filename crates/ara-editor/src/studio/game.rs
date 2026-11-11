@@ -450,6 +450,11 @@ impl Game {
         })
     }
 
+    /// Draws the next pass even when its image is unchanged (the layer was hidden).
+    pub fn redraw(&mut self) {
+        self.shown = None;
+    }
+
     /// Whether the next pass has Game work: Play frames to collect, or a preview to render,
     /// settle or let go.
     pub fn wants_frame(
@@ -609,11 +614,12 @@ impl Game {
             glyphs: Vec::new(),
         };
         // SAFETY: forwarded caller contract.
-        unsafe {
+        let landed = unsafe {
             self.layer
                 .draw(renderer, layer, extent, scale, &list, &[])?
         };
-        self.shown = Some((image, extent));
+        // One that didn't reach the screen draws again on the next pass.
+        self.shown = landed.then_some((image, extent));
         if self.host.live {
             let (since, count, _) = &mut self.presents;
             *count += 1;

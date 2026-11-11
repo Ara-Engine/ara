@@ -477,7 +477,8 @@ fn toolchain() -> String {
     )
 }
 
-/// Draws the canvas into the page's layer. `extent` is in physical pixels.
+/// Draws the canvas into the page's layer (`extent` in physical pixels); whether it
+/// reached the screen.
 /// # Safety
 /// `layer` is the graph page's live native layer (`present::Target`).
 pub(super) unsafe fn draw(
@@ -487,7 +488,7 @@ pub(super) unsafe fn draw(
     layer: super::present::Target,
     extent: [u32; 2],
     scale: f32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let rect = Box2 {
         x: 0.0,
         y: 0.0,
@@ -497,7 +498,7 @@ pub(super) unsafe fn draw(
     let theme = theme(&s.look);
     let page = &mut s.graph;
     let (Some(shown), Some(text)) = (page.shown.as_mut(), page.text.as_ref()) else {
-        return Ok(());
+        return Ok(true);
     };
     if std::mem::take(&mut shown.fresh) {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
@@ -508,9 +509,10 @@ pub(super) unsafe fn draw(
     let mut list = DisplayList::default();
     shown.canvas.paint(&mut list, rect, theme);
     // SAFETY: forwarded caller contract.
-    unsafe { target.draw(renderer, layer, extent, scale, &list, &text.assets)? };
-    page.dirty = false;
-    Ok(())
+    let landed = unsafe { target.draw(renderer, layer, extent, scale, &list, &text.assets)? };
+    // One that didn't reach the screen draws again on the next pass.
+    page.dirty = !landed;
+    Ok(landed)
 }
 
 /// The canvas colours from the studio's tokens.
