@@ -10,7 +10,7 @@ use ara_runtime::{
 use ara_runtime_render::{ExternalView, fidelity::EnvironmentMap};
 use renderlab::engine::{
     Camera, DepthOfField, Exposure, Light, PostSettings, ReflectionSettings, Settings, Sun,
-    Tonemapper, Vec3,
+    Tonemapper, Vec3, ViewLook,
 };
 use std::{borrow::Cow, f32::consts::PI};
 
@@ -345,7 +345,7 @@ pub(crate) fn settings(
     stops: f32,
     max_reflection_roughness: Option<f32>,
     gaps: &mut Gaps,
-) -> Settings {
+) -> (Settings, ViewLook) {
     let (frame, look) = (view.frame, view.look);
     let fog = frame
         .look
@@ -379,18 +379,22 @@ pub(crate) fn settings(
             }
         });
     let defaults = Settings::default();
-    Settings {
-        exposure: Exposure::Manual { stops },
+    let engine = Settings {
         // Only the atmosphere reads it; a map's strength rides on `Sky::Map` (`bridge`).
         sky_light: sky_light(view),
         aerial_perspective: frame.look.sky.is_some(),
         height_fog: fog.map(|(height, _)| height),
         volumetric_fog: fog.and_then(|(_, volumetric)| volumetric),
+        ..defaults
+    };
+    let view_defaults = ViewLook::default();
+    let view_look = ViewLook {
+        exposure: Exposure::Manual { stops },
         reflections: ReflectionSettings {
             max_roughness: max_reflection_roughness
-                .unwrap_or(defaults.reflections.max_roughness)
+                .unwrap_or(view_defaults.reflections.max_roughness)
                 .clamp(0., 1.),
-            ..defaults.reflections
+            ..view_defaults.reflections
         },
         post: PostSettings {
             bloom: look.bloom.clamp(0., 1.),
@@ -409,10 +413,13 @@ pub(crate) fn settings(
                 let v = look.grading.vignette.clamp(0., 1.);
                 1. - 1. / ((1. + 2.6 * v) * (1. + 2.6 * v))
             },
-            ..defaults.post
+            ..view_defaults.post
         },
-        ..defaults
-    }
+        // The bridge keeps the baked table across frames and sets it when the grade changes.
+        colour_lut: None,
+        ..view_defaults
+    };
+    (engine, view_look)
 }
 
 #[cfg(test)]

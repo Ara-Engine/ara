@@ -19,9 +19,12 @@ use ara_gpu::{
     Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
 };
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
-use renderlab::engine::{
-    Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery, Light,
-    Limits, RenderPath, Sky, Sun, headless_adapter,
+use renderlab::{
+    ViewId,
+    engine::{
+        Background, Capabilities, Engine, EngineDescriptor, EnvironmentId, ExperimentalRayQuery,
+        Light, Limits, RenderPath, Sky, Sun, ViewDesc, ViewLook, headless_adapter,
+    },
 };
 use std::time::{Duration, Instant};
 
@@ -65,6 +68,12 @@ pub(crate) struct Bridge {
     gaps: Gaps,
     applied: Applied,
     metering: Metering,
+    /// The one view the bridge renders (the presenter's, view 0), created on the first frame.
+    view: Option<ViewId>,
+    /// What the view is set to: its size and look (its colour table is baked, `Applied::grade`).
+    desc: ViewDesc,
+    /// The look last applied to the view without its table, so unchanged frames set nothing.
+    last_look: Option<ViewLook>,
     /// The GPU histogram passes in flight for the meter.
     readbacks: Readbacks,
     max_reflection_roughness: Option<f32>,
@@ -161,6 +170,9 @@ impl Bridge {
             gaps: Gaps::default(),
             applied: Applied::default(),
             metering: Metering::new(),
+            view: None,
+            desc: ViewDesc::new(1, 1),
+            last_look: None,
             readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
             constant_sky: options.constant_sky,
@@ -202,7 +214,6 @@ impl Bridge {
             }
         }
         self.report_unsupported(view);
-        self.engine.resize(view.size[0], view.size[1])?;
         // Terrain tiles take at most half the mesh-material groups; entity draws and
         // foliage share the rest. On the non-RT path foliage is capped by the largest
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
@@ -234,19 +245,35 @@ impl Bridge {
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
-        self.engine.set_settings(lighting::settings(
-            view,
-            stops,
-            self.max_reflection_roughness,
-            &mut self.gaps,
-        ))?;
+        let (settings, look) =
+            lighting::settings(view, stops, self.max_reflection_roughness, &mut self.gaps);
+        self.engine.set_settings(settings)?;
         let authored = crate::grade::authored(view);
         let grade = crate::grade::key(view.look, authored);
-        if self.applied.grade != Some(grade) {
-            self.engine
-                .set_colour_lut(crate::grade::lut(view.look, authored))?;
+        let regrade = self.applied.grade != Some(grade);
+        if regrade {
+            self.desc.look.colour_lut = crate::grade::lut(view.look, authored);
             self.applied.grade = Some(grade);
         }
+        // The view: created on the first frame; a new size or look sets it (a size restarts its
+        // histories, as a resize did before views).
+        if self.view.is_none()
+            || regrade
+            || self.last_look.as_ref() != Some(&look)
+            || (self.desc.width, self.desc.height) != (view.size[0], view.size[1])
+        {
+            self.desc.look = ViewLook {
+                colour_lut: self.desc.look.colour_lut.take(),
+                ..look.clone()
+            };
+            (self.desc.width, self.desc.height) = (view.size[0], view.size[1]);
+            match self.view {
+                Some(id) => self.engine.set_view(id, &self.desc)?,
+                None => self.view = Some(self.engine.create_view(&self.desc)?),
+            }
+            self.last_look = Some(look);
+        }
+        let view_id = self.view.context("the view was created above")?;
         self.apply_sky(view)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
@@ -270,18 +297,21 @@ impl Bridge {
             self.last_view = Some(view);
         }
         if std::mem::take(&mut self.cut) {
-            self.engine.cut();
+            self.engine.cut_view(view_id);
             // As Ara resets its exposure history: the meter snaps to its target.
             self.metering.snap();
             // Readings in flight describe the old view.
             self.readbacks.discard();
         }
         self.ensure_target(gpu, view.size)?;
-        let rendered = self.engine.render(&lighting::camera(frame)?)?.frame;
+        let rendered = self
+            .engine
+            .render_view(view_id, &lighting::camera(frame)?)?
+            .frame;
         let target = self.target.as_mut().context("target ensured above")?;
         // Shared: the copy into the shared slot queues behind the frame right away.
         if let Some(shared) = &mut target.shared {
-            shared.publish(&self.engine)?;
+            shared.publish(&self.engine, view_id)?;
         }
 
         // The meter: queue this frame's histogram pass when the meter asks (every frame while
@@ -290,7 +320,7 @@ impl Bridge {
         if let Some(meter) = metered
             && self.metering.due()
         {
-            let queued = self.engine.output().is_some_and(|output| {
+            let queued = self.engine.view_output(view_id).is_some_and(|output| {
                 self.readbacks.submit(
                     self.engine.device(),
                     self.engine.queue(),
@@ -340,7 +370,7 @@ impl Bridge {
             shared.deliver(gpu, target.image)?;
             target.image
         } else {
-            let read = self.engine.capture()?;
+            let read = self.engine.capture_view(view_id)?;
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;

@@ -22,7 +22,7 @@ use ara_gpu::{
     vulkan::external::ImportedSurface,
 };
 use ash038::{self as ash, vk};
-use renderlab::engine::Engine;
+use renderlab::{ViewId, engine::Engine};
 
 const HANDLE_TYPE: vk::ExternalMemoryHandleTypeFlags =
     vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32;
@@ -359,8 +359,10 @@ impl SharedHandoff {
     /// Queues the copy of the engine's output into the shared slot behind the frame
     /// just rendered, and the slot's release to the presenter's device. Returns at
     /// once; [`Self::deliver`] waits.
-    pub fn publish(&mut self, engine: &Engine) -> Result<()> {
-        let output = engine.output().context("Renderlab has no output yet")?;
+    pub fn publish(&mut self, engine: &Engine, view: ViewId) -> Result<()> {
+        let output = engine
+            .view_output(view)
+            .context("Renderlab has no output yet")?;
         let (src, dst) = (
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,

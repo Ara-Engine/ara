@@ -114,7 +114,9 @@ impl Effects {
             .tick
             .map_or(0, |last| frame.tick.saturating_sub(last).min(MAX_CATCH_UP));
         self.tick = Some(frame.tick);
-        engine.set_particle_step(elapsed as f32 / EFFECT_HZ)?;
+        // One engine tick per frame: the particle step and the shared per-frame work (skinning)
+        // that every view rendered after it reuses.
+        engine.tick(elapsed as f32 / EFFECT_HZ)?;
         let prewarm = WARM_SECONDS;
 
         let mut seen = HashSet::new();
