@@ -6,7 +6,6 @@ mod actions;
 pub mod activity;
 pub(crate) mod agent_setup;
 pub(crate) mod animation_edit;
-pub(crate) mod app;
 pub(crate) mod asset_import;
 pub(crate) mod asset_links;
 pub(crate) mod asset_plan;
@@ -36,9 +35,9 @@ pub use ara_editor_gpu as gpu;
 pub mod inspector;
 pub(crate) mod keys;
 pub(crate) mod lighting;
-mod loading;
 pub(crate) mod names;
 mod native;
+mod open_project;
 pub mod overlay;
 pub mod paint;
 pub(crate) mod painter;
@@ -50,7 +49,6 @@ pub mod prefab;
 mod probe_capture;
 mod script_assets;
 pub mod settings;
-pub mod shell;
 pub mod state;
 pub mod studio;
 pub(crate) mod surface_drop;
@@ -64,7 +62,10 @@ pub(crate) mod vfx_edit;
 mod view_camera;
 pub mod world;
 
-pub use app::{LAUNCHED, Options, Settle, before_open_project, run};
+pub use open_project::before_open_project;
+pub use studio::Options;
+/// When the process started: `main` sets it first.
+pub static LAUNCHED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 pub use editor::{Editor, EditorError};
 #[cfg(test)]
 pub(crate) fn test_target() -> std::path::PathBuf {

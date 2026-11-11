@@ -1266,7 +1266,7 @@ pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_render::RenderDebug)
 /// effect switches.
 fn draw_mode_button(s: &Studio, vertical: bool) -> El<Studio> {
     let l = &s.look;
-    let current = crate::app::viewport::VIEW_MODES
+    let current = crate::studio::viewport::VIEW_MODES
         .iter()
         .find(|(name, ..)| *name == s.editor.state.view_mode)
         .map_or("Lit", |(_, title, ..)| *title);
@@ -1318,7 +1318,7 @@ fn draw_mode_items(s: &Studio) -> Vec<El<Studio>> {
         let mut out = col().w(190.0).gap(1.0);
         for group in groups {
             out = out.child(menu_heading(l, group));
-            for (name, title, _, _) in crate::app::viewport::VIEW_MODES
+            for (name, title, _, _) in crate::studio::viewport::VIEW_MODES
                 .iter()
                 .filter(|(.., heading, _)| heading == group)
             {

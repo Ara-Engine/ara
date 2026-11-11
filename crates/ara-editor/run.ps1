@@ -1,7 +1,6 @@
 param(
-    [ValidateSet('Check','Verify','Window')][string]$Mode='Check',
-    [string]$Project,
-    [int]$Frames=5300
+    [ValidateSet('Check','Window')][string]$Mode='Check',
+    [string]$Project
 )
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -20,20 +19,12 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'check failed' }
         cargo test -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host
         if ($LASTEXITCODE -ne 0) { throw 'tests failed' }
-        cargo test -p ara-editor --test editor hierarchy_100k -- --ignored --nocapture
-        if ($LASTEXITCODE -ne 0) { throw 'hierarchy scale gate failed' }
-        cargo test -p ara-editor --test native -- --ignored --nocapture
-        if ($LASTEXITCODE -ne 0) { throw 'native golden gate failed' }
         cargo clippy -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host --all-targets -- -D warnings
         if ($LASTEXITCODE -ne 0) { throw 'clippy failed' }
         cargo fmt -p ara-editor -p ara-editor-gpu -p ara-render -p ara-ui -p ara-ui-document -p ara-host -- --check
     } else {
         if (-not $Project) { throw '-Project must name an initialized project' }
-        if ($Mode -eq 'Verify') {
-            cargo run --release -p ara-editor -- $Project --sample --verify --frames $Frames --output "$PSScriptRoot/evidence/final"
-        } else {
-            cargo run -p ara-editor -- $Project --sample
-        }
+        cargo run -p ara-editor -- $Project --sample
     }
     if ($LASTEXITCODE -ne 0) { throw 'editor command failed' }
 } finally {

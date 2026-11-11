@@ -105,9 +105,7 @@ impl Pen {
         if color[3] <= 0.004 {
             return;
         }
-        let Some([from, to]) =
-            super::super::diagnostics::clip(self.matrix * a.extend(1.), self.matrix * b.extend(1.))
-        else {
+        let Some([from, to]) = clip(self.matrix * a.extend(1.), self.matrix * b.extend(1.)) else {
             return;
         };
         let (Some(from), Some(to)) = (self.screen(from), self.screen(to)) else {
@@ -351,4 +349,35 @@ impl Pen {
             line(overlays, &s, s.width, s.color);
         }
     }
+}
+
+/// Clip a homogeneous segment to the view frustum .
+fn clip(from: Vec4, to: Vec4) -> Option<[Vec4; 2]> {
+    if !from.is_finite() || !to.is_finite() {
+        return None;
+    }
+    let distances = |p: Vec4| [p.w + p.x, p.w - p.x, p.w + p.y, p.w - p.y, p.z, p.w - p.z];
+    let (a, b) = (distances(from), distances(to));
+    let (mut first, mut last) = (0_f32, 1_f32);
+    for (a, b) in a.into_iter().zip(b) {
+        if a < 0. && b < 0. {
+            return None;
+        }
+        if (a < 0.) != (b < 0.) {
+            let at = a / (a - b);
+            if a < 0. {
+                first = first.max(at)
+            } else {
+                last = last.min(at)
+            }
+        }
+    }
+    if first > last {
+        return None;
+    }
+    let clipped = [from.lerp(to, first), from.lerp(to, last)];
+    clipped
+        .iter()
+        .all(|point| point.is_finite() && point.w > 1e-6)
+        .then_some(clipped)
 }

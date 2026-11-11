@@ -17,7 +17,7 @@ pub(crate) struct CaptureParams {
         reason = "Host validates the session before service dispatch"
     )]
     pub session: String,
-    /// `viewport`, `editor`, or `layout`.
+    /// `viewport`, `editor`, `layout`, or `window` (the editor window with its Scene in it).
     pub target: Option<String>,
     /// Relative output PNG path under the project (default `.ara/captures/<job>.png`).
     pub path: Option<String>,
@@ -46,16 +46,16 @@ impl Service for CaptureService {
         "capture"
     }
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
-        vec![Method::new::<CaptureParams>(db,"capture","Capture the viewport with entity marks, editor UI or layout report; returns a job.").tool("ara_capture").read_only()]
+        vec![Method::new::<CaptureParams>(db,"capture","Capture the viewport with entity marks, the editor UI, its layout report, or the whole window with the Scene in it (target window); returns a job.").tool("ara_capture").read_only()]
     }
     fn call(&mut self, cx: &mut Cx<'_>, _: &str, params: Value) -> Result<Value, Vec<Diagnostic>> {
         let params: CaptureParams = ara_host::parse(params)?;
         if !matches!(
             params.target.as_deref().unwrap_or("viewport"),
-            "viewport" | "editor" | "layout"
+            "viewport" | "editor" | "layout" | "window"
         ) {
             return Err(vec![crate::invalid(
-                "capture target must be viewport, editor or layout",
+                "capture target must be viewport, editor, layout or window",
             )]);
         }
         let job = cx.start_job("capture");
@@ -86,6 +86,8 @@ pub(crate) enum Work {
     Editor(Vec<u8>, std::path::PathBuf, Value),
     /// Only the layout report.
     Layout(std::path::PathBuf, Value),
+    /// The editor window with its Scene composited in, and its layout report.
+    Window(image::RgbaImage, std::path::PathBuf, Value),
 }
 impl Work {
     /// Writes the files and gives the job's result.
@@ -109,6 +111,12 @@ impl Work {
             Self::Layout(path, report) => {
                 std::fs::write(&path, ara_json::to_canonical_string(&report))?;
                 Ok(json!({"path":path,"target":"layout"}))
+            }
+            Self::Window(image, path, report) => {
+                image.save(&path)?;
+                let layout = path.with_extension("layout.json");
+                std::fs::write(&layout, ara_json::to_canonical_string(&report))?;
+                Ok(json!({"path":path,"layout":layout,"target":"window"}))
             }
         }
     }

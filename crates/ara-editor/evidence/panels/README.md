@@ -1,5 +1,7 @@
 # Editor panels v1 verification
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 Source: `9d8e20ea50c30ebf752ef99ed25cfacb4ca0fb2c`, Windows 11,
 RTX 4070 SUPER, release profile, `CARGO_BUILD_JOBS=2`, Vulkan validation enabled.
 Main was merged through `2d20bd8` before the final source gates. No importer

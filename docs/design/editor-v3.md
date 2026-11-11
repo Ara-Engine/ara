@@ -61,5 +61,5 @@ Generic pieces went to stillkit, not Ara: native layers (#7), virtual lists (#8)
 ## Still to come
 
 - **Windows Scene layer:** a Vulkan swapchain on the native HWND. Until then the studio is the default only on macOS.
-- **Game view:** embedded players (D19). Until it lands, the studio's Play opens the player in its own window, and the "Play in the Game view" preference has no effect there. It needs shared-surface import, input capture and per-client stats, which today live in the legacy shell.
+- **Game view:** embedded players (D19). Until it lands, the studio's Play opens the player in its own window, and the "Play in the Game view" preference has no effect there. It needs shared-surface import, input capture and per-client stats.
 - **Pages:** the tool pages (material, VFX, animation, profiler, lighting, import), floating windows and drag-to-dock.

@@ -275,7 +275,8 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
                     run(
                         env.command(env.installed.join("ara-editor.exe"))
                             .arg(&copy)
-                            .args(["--frames", "20"]),
+                            .args(["--frames", "20", "--output"])
+                            .arg(env.directory.join("templates-out").join(name.as_ref())),
                         &env.directory.join(format!("template-{name}.log")),
                     )
                 }),

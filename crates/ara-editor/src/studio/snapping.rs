@@ -10,7 +10,7 @@ use ara_ui::paint::Box2;
 use glam::{Mat4, Vec3};
 
 use crate::Editor;
-use crate::app::viewport::SceneView;
+use crate::studio::viewport::SceneView;
 use crate::surface_drop::{contact_delta, offset, within};
 use crate::world::EditWorldView as _;
 

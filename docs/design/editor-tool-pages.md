@@ -238,4 +238,4 @@ ui.build                            1  0.94 ms  0.61 ms  ██░░░░░  
 
 ## Verification
 
-Every page is captured offscreen (`--verify-panels`, a fresh profile) at 1440×900 (1×) and 2560×1440 (2×) in Ara Dark and Ara Light, before and after, and each capture is inspected for clutter, alignment, contrast and purpose-fit.
+Every page was captured offscreen (`--verify-panels`, a fresh profile; the previous editor shell's route, removed with it in #53; the studio's pages are checked by its own tests and `ara_capture`) at 1440×900 (1×) and 2560×1440 (2×) in Ara Dark and Ara Light, before and after, and each capture is inspected for clutter, alignment, contrast and purpose-fit.

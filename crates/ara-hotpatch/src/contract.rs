@@ -204,11 +204,7 @@ impl Bodies<'_> {
             || (sig.ident == "record_post_process"
                 && self
                     .source
-                    .ends_with("crates/ara-render-fidelity/src/features.rs"))
-            || (sig.ident == "draw_panel"
-                && self
-                    .source
-                    .ends_with("crates/ara-editor/src/shell/panels.rs"));
+                    .ends_with("crates/ara-render-fidelity/src/features.rs"));
         let mut retained = Retained(false, scoped);
         retained.visit_block(body);
         retained.visit_return_type(&sig.output);

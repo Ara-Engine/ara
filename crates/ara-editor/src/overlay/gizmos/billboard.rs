@@ -10,57 +10,7 @@ use super::*;
 
 /// Disc radius at 100 % icon size, in logical pixels.
 const RADIUS: f32 = 11.;
-/// Glyphs the icons use; each rasterizes as `gizmo-<name>`.
-const GLYPHS: &[&str] = &[
-    "lightbulb",
-    "flashlight",
-    "sun",
-    "square",
-    "circle",
-    "video",
-    "volume-2",
-    "audio-lines",
-    "ear",
-    "circle-dot",
-    "layers",
-    "cloud-fog",
-    "sun-dim",
-    "globe",
-    "sparkles",
-];
 
-/// Rasterize the gizmo glyphs (white, bolder strokes) for `dpi`, sized for the
-/// largest default icon so they never magnify.
-pub(crate) fn install(renderer: &mut ara_ui_render::gpu::Renderer, dpi: f32) -> ara_ui::Result<()> {
-    let size = (36. * dpi.max(1.)).ceil() as u32;
-    for name in GLYPHS {
-        let svg = crate::shell::icons::svg(name)
-            .ok_or_else(|| format!("gizmo glyph {name} is not bundled"))?
-            .replace("currentColor", "#ffffff")
-            .replace("stroke-width=\"2\"", "stroke-width=\"2.4\"");
-        let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default())?;
-        let mut pixels = resvg::tiny_skia::Pixmap::new(size, size).ok_or("gizmo glyph extent")?;
-        resvg::render(
-            &tree,
-            resvg::tiny_skia::Transform::from_scale(size as f32 / 24., size as f32 / 24.),
-            &mut pixels.as_mut(),
-        );
-        // Straight alpha: every glyph is white, so colour channels are simply 255.
-        let mut rgba = pixels.take();
-        for pixel in rgba.as_chunks_mut::<4>().0 {
-            pixel[..3].fill(255);
-        }
-        renderer.image(
-            glyph(name),
-            ara_ui_render::gpu::Image {
-                width: size,
-                height: size,
-                rgba,
-            },
-        )?;
-    }
-    Ok(())
-}
 /// Resource handle of a gizmo glyph image.
 fn glyph(name: &str) -> u32 {
     ara_ui::source::stable_id(&format!("gizmo-{name}")) as u32 & 0x7fff_ffff

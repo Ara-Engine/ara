@@ -1,7 +1,6 @@
 //! The other panels: Assets (the project's files as a grid, folders first, breadcrumb and
 //! search), Console (the diagnostics bus, newest last, severity toggles with counts) and
-//! Problems (errors and warnings now, grouped by file). Panels not yet on stillkit say so
-//! and name the legacy window that still has them.
+//! Problems (errors and warnings now, grouped by file). An unknown panel says so.
 use ara_kit::icons;
 use ara_kit::ui::*;
 use serde_json::{Value, json};
@@ -54,8 +53,8 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
             empty(
                 &s.look,
                 glyph,
-                &format!("{title} is coming to the new editor"),
-                "This panel still lives in the legacy window: run `ara editor --legacy-ui` to use it today.",
+                &format!("{title} isn't in this editor"),
+                "Its layout names a panel this version doesn't have; close the tab.",
                 None,
             )
         }

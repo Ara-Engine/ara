@@ -37,8 +37,8 @@ pub(crate) enum Done {
     /// The source's import has not published: show its pending state; it is asked
     /// again by [`Thumbnails::retry_pending`].
     Pending(String),
-    /// It cannot render: key, project path and a project-relative error.
-    Failed(String, String, String),
+    /// It cannot render: key and a project-relative error.
+    Failed(String, String),
 }
 struct Request {
     path: String,
@@ -47,13 +47,10 @@ struct Request {
     shot: Shot,
     pixels: u32,
 }
-/// What a request renders: the project file, unsaved bytes of it, a derived material,
-/// or a prefab's extracted scene with its content digest.
+/// What a request renders: the project file, or a derived material.
 enum Source {
     File,
-    Bytes(Vec<u8>),
     Material(Box<ara_material::Material>),
-    Scene(Box<ara_render::scene::Scene>, String),
 }
 pub(crate) struct Thumbnails {
     send: Option<SyncSender<Request>>,
@@ -111,41 +108,6 @@ impl Thumbnails {
         }
         self.enqueue(path, path.into(), Source::File, Shot::surface(false), TILE);
     }
-    /// A larger view of a project asset (import preview), `pixels` square; returns
-    /// its image key. Like live previews it survives browser refreshes as last good.
-    pub fn request_sized(&mut self, path: &str, pixels: u32) -> String {
-        let key = format!("live:{pixels}:{path}");
-        if is_prefab(path) {
-            self.want_prefab(path, key.clone(), pixels);
-            return key;
-        }
-        self.enqueue(
-            path,
-            key.clone(),
-            Source::File,
-            Shot::surface(false),
-            pixels,
-        );
-        key
-    }
-    /// A preview of unsaved source (the material editor's live render); returns its key.
-    pub fn request_live(
-        &mut self,
-        path: &str,
-        source: Vec<u8>,
-        plane: bool,
-        pixels: u32,
-    ) -> String {
-        let key = format!("live:{}:{plane}:{pixels}", ara_asset::Digest::of(&source));
-        self.enqueue(
-            path,
-            key.clone(),
-            Source::Bytes(source),
-            Shot::surface(plane),
-            pixels,
-        );
-        key
-    }
     /// The key of a derived material's preview (a graph node's value); identical
     /// previews share it.
     pub fn material_key(material: &ara_material::Material, shot: Shot, pixels: u32) -> String {
@@ -182,40 +144,6 @@ impl Thumbnails {
             self.prefabs.push((path.into(), key, pixels));
         }
     }
-    /// Prefab requests to extract now: (path, key, pixels).
-    pub fn take_prefabs(&mut self) -> Vec<(String, String, u32)> {
-        std::mem::take(&mut self.prefabs)
-    }
-    /// Render an extracted prefab `scene` under `key`; `digest` names its content for
-    /// the disk cache. A full queue forgets the request so the tile asks again.
-    pub fn request_scene(
-        &mut self,
-        path: &str,
-        key: String,
-        scene: ara_render::scene::Scene,
-        digest: String,
-        pixels: u32,
-    ) {
-        let request = Request {
-            path: path.into(),
-            key: key.clone(),
-            source: Source::Scene(Box::new(scene), digest),
-            shot: Shot::surface(false),
-            pixels: pixels.clamp(16, MASTER),
-        };
-        if !self
-            .send
-            .as_ref()
-            .is_some_and(|queue| queue.try_send(request).is_ok())
-        {
-            self.requested.remove(&key);
-        }
-    }
-    /// Forget a prefab request without rendering (nothing to draw yet): asked again
-    /// after the next invalidation.
-    pub fn skip_prefab(&mut self, key: &str) {
-        self.prefab_digests.remove(key);
-    }
     fn enqueue(&mut self, path: &str, key: String, source: Source, shot: Shot, pixels: u32) {
         if self.requested.contains(&key) {
             return;
@@ -227,7 +155,7 @@ impl Thumbnails {
             shot,
             pixels: pixels.clamp(16, MASTER),
         };
-        let queue = if matches!(request.source, Source::Material(_) | Source::Bytes(_)) {
+        let queue = if matches!(request.source, Source::Material(_)) {
             self.previews.as_ref()
         } else {
             self.send.as_ref()
@@ -364,18 +292,7 @@ fn cook_all(root: &Path, requests: &[Request]) {
 /// Renders one request into its result.
 fn finish(root: &Path, mut request: Request, renderer: &mut Option<Renderer>) -> Done {
     let image = match &mut request.source {
-        Source::Scene(scene, digest) => {
-            let scene = std::mem::replace(scene, Box::new(empty_scene()));
-            prefab(root, *scene, digest, renderer).map(Some)
-        }
         Source::Material(material) => derived(root, material, request.shot).map(Some),
-        Source::Bytes(bytes) => master(
-            root,
-            &request.path,
-            Some(bytes.as_slice()),
-            request.shot,
-            renderer,
-        ),
         Source::File => master(root, &request.path, None, request.shot, renderer),
     };
     match image {
@@ -384,11 +301,7 @@ fn finish(root: &Path, mut request: Request, renderer: &mut Option<Renderer>) ->
             image: present(&image, request.pixels),
         }),
         Ok(None) => Done::Pending(request.key.clone()),
-        Err(error) => Done::Failed(
-            request.key.clone(),
-            request.path.clone(),
-            relative(&error.to_string(), root),
-        ),
+        Err(error) => Done::Failed(request.key.clone(), relative(&error.to_string(), root)),
     }
 }
 
@@ -456,7 +369,7 @@ fn master(
     }
     let extension = source.extension().and_then(|s| s.to_str()).unwrap_or("");
     let image = match extension {
-        ext if crate::shell::is_texture(ext) && ext != "ktx2" => {
+        ext if crate::names::is_texture(ext) && ext != "ktx2" => {
             texture(&image::open(&source)?.to_rgba8())
         }
         "fbx" => studio::shoot(
@@ -633,16 +546,6 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
     }
 }
 
-/// Whether the thumbnailer can draw `path`: source images (not cooked KTX2), models,
-/// materials, graphs and prefabs.
-pub(crate) fn has_thumbnail(path: &str) -> bool {
-    let extension = path.rsplit('.').next().unwrap_or_default();
-    (crate::shell::is_texture(extension) && extension != "ktx2")
-        || matches!(
-            extension,
-            "glb" | "gltf" | "fbx" | "material" | "graph" | "prefab"
-        )
-}
 /// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
 pub(crate) fn image_name(slot: usize) -> String {
     format!("asset-thumbnail-{slot}")
@@ -652,57 +555,12 @@ pub(crate) fn image_name(slot: usize) -> String {
 fn is_prefab(path: &str) -> bool {
     path.rsplit('.').next() == Some("prefab")
 }
-/// A prefab's studio shot, cached by its content digest like file masters.
-fn prefab(
-    root: &Path,
-    scene: ara_render::scene::Scene,
-    digest: &str,
-    renderer: &mut Option<Renderer>,
-) -> anyhow::Result<RgbaImage> {
-    let cache = root.join(".ara/cache/thumbnails");
-    std::fs::create_dir_all(&cache)?;
-    let key = ara_asset::Digest::of(format!("ara-prefab-v1-{MASTER}-{digest}").as_bytes());
-    let target = cache.join(format!("{key}.png"));
-    if target.exists() {
-        return Ok(image::open(target)?.to_rgba8());
-    }
-    anyhow::ensure!(!scene.meshes.is_empty(), "the prefab has no meshes to show");
-    let image = studio::shoot(
-        studio::Subject::scene(scene),
-        renderer,
-        &root.join(".ara/cache/thumbnail-gpu"),
-    )?;
-    image.save(&target)?;
-    Ok(image)
-}
-/// A placeholder left behind once a request's scene moves into its shot.
-fn empty_scene() -> ara_render::scene::Scene {
-    ara_render::scene::Scene {
-        meshes: Vec::new(),
-        materials: Vec::new(),
-        textures: Vec::new(),
-        lights: Vec::new(),
-        sun_direction: glam::Vec3::Y,
-        sun_lux: glam::Vec3::ZERO,
-        environment: Vec::new(),
-        environment_size: [0, 0],
-    }
-}
 
 /// The UI image handle of a slot (what `<image src>` resolves `image_name` to).
 pub(crate) fn image_id(slot: usize) -> u32 {
     ara_ui::source::stable_id(&image_name(slot)) as u32 & 0x7fff_ffff
 }
 
-/// A prefab's studio shot on a fresh renderer (GPU tests).
-#[cfg(test)]
-pub(super) fn prefab_shot(
-    root: &Path,
-    scene: ara_render::scene::Scene,
-    digest: &str,
-) -> anyhow::Result<RgbaImage> {
-    prefab(root, scene, digest, &mut None)
-}
 #[cfg(test)]
 #[path = "thumbnails/shutdown_tests.rs"]
 mod shutdown_tests;

@@ -45,7 +45,6 @@ impl App {
                 "crates/ara-ui/src/select/select.css",
             ],
             Self::Editor => &[
-                "crates/ara-editor/src/shell",
                 "crates/ara-ui/src/dialogs/dialogs.css",
                 "crates/ara-ui/src/select/select.css",
             ],
@@ -360,18 +359,14 @@ mod tests {
         assert!(rebuilds(App::Hub, "crates/ara-hub/src/view/mod.rs"));
         assert!(rebuilds(App::Hub, "Cargo.lock"));
         assert!(!rebuilds(App::Hub, "crates/ara-hub/src/view/hub.css"));
-        assert!(rebuilds(App::Hub, "crates/ara-editor/src/shell/editor.css"));
-        assert!(!rebuilds(
-            App::Editor,
-            "crates/ara-editor/src/shell/lighting/lighting.css"
-        ));
+        assert!(rebuilds(App::Hub, "crates/ara-editor/src/studio/mod.rs"));
         assert!(!rebuilds(
             App::Editor,
             "crates/ara-ui/src/dialogs/dialogs.css"
         ));
         assert!(rebuilds(
             App::Editor,
-            "crates/ara-editor/src/loading/loading.css"
+            "crates/ara-editor/src/open_project/open_project.css"
         ));
         assert!(!rebuilds(App::Editor, "crates/ara-editor/AGENTS.md"));
         assert!(!super::rebuilds(

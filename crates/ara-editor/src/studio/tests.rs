@@ -166,7 +166,7 @@ fn a_move_with_surface_or_vertex_snapping_asks_the_host_instead_of_stepping() {
     rt.frame(FRAME);
     assert!(rt.state().local.snap.is_some_and(|r| r.vertex));
     // Until the Scene presents this scene, the host has no geometry to snap to.
-    let scene = crate::app::viewport::SceneView::default();
+    let scene = crate::studio::viewport::SceneView::default();
     let view = rt.state().editor.view().unwrap();
     let capture =
         super::snapping::Snap::capture(&rt.state().editor, &view, &scene, &|_| None, &request);
@@ -889,7 +889,7 @@ fn drop_to_surface_asks_the_host_and_waits_for_presented_geometry() {
         "the host drops it next pass"
     );
     // Before the Scene has presented this scene, the planner refuses rather than guess.
-    let scene = crate::app::viewport::SceneView::default();
+    let scene = crate::studio::viewport::SceneView::default();
     let planned = crate::surface_drop::plan(&rt.state().editor, &scene, |_| None);
     assert!(planned.is_err_and(|e| e.to_string().contains("waiting")));
 }
@@ -5116,7 +5116,7 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
         )
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
-    let renderer = crate::app::viewport::prepare_renderer(
+    let renderer = crate::studio::viewport::prepare_renderer(
         scene,
         [64, 64],
         super::present_extensions(),
@@ -5694,7 +5694,7 @@ fn the_editor_capture_says_the_scene_is_not_in_it() {
 fn hidden_pass(
     rt: &mut Runtime<Studio>,
     owner: &mut super::probes::Owner,
-    scene_view: &mut crate::app::viewport::SceneView,
+    scene_view: &mut crate::studio::viewport::SceneView,
     renderer: &mut ara_render::Renderer,
     view: &crate::world::DocumentView,
     render: bool,
@@ -5721,7 +5721,7 @@ struct HiddenScene {
     rt: Runtime<Studio>,
     renderer: ara_render::Renderer,
     view: crate::world::DocumentView,
-    scene_view: crate::app::viewport::SceneView,
+    scene_view: crate::studio::viewport::SceneView,
     owner: super::probes::Owner,
 }
 impl HiddenScene {
@@ -5755,7 +5755,7 @@ impl HiddenScene {
                 )
                 .unwrap()
         });
-        let mut renderer = crate::app::viewport::prepare_renderer(
+        let mut renderer = crate::studio::viewport::prepare_renderer(
             scene,
             [320, 240],
             super::present_extensions(),
@@ -5767,7 +5767,7 @@ impl HiddenScene {
         .unwrap()
         .expect("the renderer starts on this GPU");
         let view = rt.touch(|s| s.editor.view()).unwrap();
-        let mut scene_view = crate::app::viewport::SceneView::default();
+        let mut scene_view = crate::studio::viewport::SceneView::default();
         let mut owner = super::probes::Owner::default();
         // Render until the Scene's content is published and the host has the probe report
         // (the Lighting page reads it as the loop does, once a second).
@@ -5950,7 +5950,7 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
         )
         .unwrap()
     });
-    let mut renderer = crate::app::viewport::prepare_renderer(
+    let mut renderer = crate::studio::viewport::prepare_renderer(
         scene,
         [320, 240],
         super::present_extensions(),
@@ -5961,7 +5961,7 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     )
     .unwrap()
     .expect("the renderer starts on this GPU");
-    let view = crate::app::viewport::SceneView::default();
+    let view = crate::studio::viewport::SceneView::default();
     let job = rt.touch(|s| {
         s.editor
             .action(
@@ -5989,6 +5989,91 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
     assert_eq!(status["status"], "done", "{status}");
     assert!(root.join(".ara/captures/scene.png").is_file());
     assert!(root.join(".ara/captures/scene.entities.json").is_file());
+    view.destroy(&mut renderer).unwrap();
+}
+
+/// The `window` target is the editor window with the Scene in it: the picture is the size of
+/// the window's own snapshot, the Scene view's middle is the render (not the window's hole),
+/// and the chrome over it is the UI's.
+#[test]
+fn agents_capture_the_window_with_the_scene_in_it_on_this_gpu() {
+    use crate::world::EditWorldView as _;
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    let scene = rt.touch(|s| {
+        s.editor
+            .view()
+            .unwrap()
+            .scene(
+                s.editor.host.root(),
+                &s.editor.state,
+                None,
+                &mut s.editor.models,
+            )
+            .unwrap()
+    });
+    let mut renderer = crate::studio::viewport::prepare_renderer(
+        scene,
+        [320, 240],
+        super::present_extensions(),
+        root.join(".ara/gpu"),
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .unwrap()
+    .expect("the renderer starts on this GPU");
+    let view = crate::studio::viewport::SceneView::default();
+    let job = rt.touch(|s| {
+        s.editor
+            .action(
+                "capture",
+                json!({"target": "window", "path": ".ara/captures/window.png"}),
+            )
+            .unwrap()["job"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    });
+    super::capture::serve(&mut rt, Some((&mut renderer, &view)));
+    let started = std::time::Instant::now();
+    let status = loop {
+        let status = rt.touch(|s| {
+            s.editor.tick();
+            s.editor.action("jobs.status", json!({"job": job})).unwrap()
+        });
+        if status["status"] != "running" {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "{status}");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(status["status"], "done", "{status}");
+    let picture = image::open(root.join(".ara/captures/window.png"))
+        .unwrap()
+        .to_rgba8();
+    let ui = rt.snap().unwrap();
+    assert_eq!(
+        picture.dimensions(),
+        (ui.width, ui.height),
+        "the window's size"
+    );
+    let rect = rt.find("scene/view").unwrap();
+    let scale = rt.scale();
+    let (x, y) = (
+        ((rect.left + rect.width() / 2.0) * scale) as u32,
+        ((rect.top + rect.height() / 2.0) * scale) as u32,
+    );
+    let [r, g, b, a] = picture.get_pixel(x, y).0;
+    // Opaque (blending a faint UI pixel over the Scene may round down by one).
+    assert!(a >= 250, "alpha {a}");
+    assert!(
+        u32::from(r) + u32::from(g) + u32::from(b) > 30,
+        "the Scene's render is there, not the hole: {r} {g} {b}"
+    );
+    // The chrome is the UI's: the title bar is not the Scene's sky.
+    assert_ne!(picture.get_pixel(x, 4).0, picture.get_pixel(x, y).0);
     view.destroy(&mut renderer).unwrap();
 }
 
@@ -6826,4 +6911,45 @@ fn enter_takes_the_cards_button_once_it_is_offered() {
     settle(&mut rt);
     rt.key(stillkit::el::KeyCode::ENTER.0);
     assert!(rt.state().local.import_released, "Enter opens the project");
+}
+
+/// With no one at the window the gate opens past a failed import, and the failure is still in
+/// the window afterwards: the Problems panel lists it as an error.
+#[test]
+fn a_failed_import_is_in_the_problems_panel_after_an_unattended_open() {
+    let mut rt = open_with_imports(&[("crate.gltf", "ara.gltf", b"{}")]);
+    let mut gate = rt.touch(|s| super::loading::Gate::new(&s.editor, true));
+    let started = std::time::Instant::now();
+    while gate.step().is_some() {
+        assert!(
+            started.elapsed() < Duration::from_secs(60),
+            "the gate never opened"
+        );
+        rt.touch(|s| s.editor.tick());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The diagnostics bus carries the failure; the studio reads it as it does each pass.
+    let started = std::time::Instant::now();
+    while !rt.state().logs.iter().any(|r| {
+        r.severity == ara_diag::Severity::Error && r.message.contains("import worker failed")
+    }) {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "no import error in the logs"
+        );
+        rt.touch(|s| s.editor.tick());
+        rt.touch(Studio::poll_logs);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "problems"})));
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    assert!(
+        texts.iter().any(|t| t.contains("import worker failed")),
+        "the Problems panel lists the failed import: {texts:?}"
+    );
 }

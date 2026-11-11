@@ -7,7 +7,7 @@ use stillkit::el::Runtime;
 use super::{Studio, capture, gizmo_state, probes};
 #[cfg(any(windows, target_os = "linux"))]
 use crate::Editor;
-use crate::app::viewport::SceneView;
+use crate::studio::viewport::SceneView;
 use crate::world::DocumentView;
 
 /// Whether the loop must render the Scene with nothing presented: a probe bake or its

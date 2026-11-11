@@ -20,7 +20,7 @@ pins them, `fetch` restores them.
 | `kits <project>` | write only the generated, git-ignored `content/kit/` files (glTF + bin, suit palette); no document is authored. Release packaging runs it on the staged template copy (`--samples <stage>/templates`) |
 | `capture <project> <look> [--quick] [--quality low\|medium\|high\|epic] [--reference spp]` | captures, per-pass timings and optional path-tracer errors → `target/ara-samples/captures/<project>/<look>/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
-| `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `target/ara-samples/evidence/<project>/<name>-editor.png` |
+| `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --frames N --screenshot` (the studio's window with its Scene, taken through the capture service's `window` target), framed over the Engine Protocol → `target/ara-samples/evidence/<project>/<name>-editor.png` |
 
 `build`, `capture`, `play` and `editor` need release builds of `ara`,
 `ara-import-worker`, `ara-player` and `ara-editor` (found next to this binary, in `target/release`, or via `ARA_BIN`,

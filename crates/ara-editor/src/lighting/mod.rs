@@ -3,7 +3,6 @@
 //! (`model`), the volumes, fog and probes Add creates and the look presets (`authoring`),
 //! and local volumes' cages as the renderer bounds them (`bounds`).
 pub(crate) mod authoring;
-pub(crate) mod bounds;
 pub(crate) mod model;
 
 use crate::Editor;

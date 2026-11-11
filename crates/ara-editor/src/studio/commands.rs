@@ -2217,7 +2217,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
         // Window › a panel (last, so the window.* commands above take theirs first).
         id if id.starts_with("window.") => {
             let panel = id.trim_start_matches("window.");
-            // Tool pages open floating by default (the legacy window's habit); here a page
+            // Tool pages open floating by default (`state::float_size`); here a page
             // that was not open docks beside the Scene. One already floating stays so.
             let open = crate::state::panel_visible(&e.state, panel);
             act(e, "editor.layout.show", json!({"panel": panel}))
