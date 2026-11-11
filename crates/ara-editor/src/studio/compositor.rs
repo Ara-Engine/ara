@@ -23,6 +23,9 @@ pub(super) struct Compositor {
     outlines: Outlines,
     /// How the overlays read object ids (`ARA_SCENE_IDS`).
     ids: overlay::IdMode,
+    /// Debug (`ARA_SCENE_DUMP=<file.png>`): each composed Scene frame, with its overlays,
+    /// is read back and written there. The window captures never include the overlays.
+    dump: Option<std::path::PathBuf>,
     sheet: ara_ui::style::Sheet,
     light: bool,
     present: Option<(ara_platform::Present, [u32; 2])>,
@@ -78,6 +81,7 @@ impl Compositor {
             paint,
             outlines: Outlines::default(),
             ids: overlay::IdMode::from_env(),
+            dump: std::env::var_os("ARA_SCENE_DUMP").map(Into::into),
             sheet: sheet(light)?,
             light,
             present: None,
@@ -242,6 +246,12 @@ impl Compositor {
                 .render(&mut self.ui, &list, &[], size, TextMode::Raster)
         })
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+        if let Some(path) = &self.dump {
+            self.ui
+                .pixels()?
+                .save(path)
+                .map_err(|e| anyhow::anyhow!("ARA_SCENE_DUMP: {e}"))?;
+        }
         let present = match self.present.take() {
             Some((mut present, was)) => {
                 if was != extent {

@@ -63,7 +63,9 @@ overlays draw with the shown frame's camera and drag pose (`SceneView::shown_fra
 The overlays read ids through `gpu::IdSource` (`overlay::IdMode`, debug switch
 `ARA_SCENE_IDS`: unset = today; `direct` = ara-render ids with shader outlines, the control;
 `repacked` = the same ids repacked to Renderlab's packed RGBA8 form, Metal only): the two
-modes' Scene captures must match pixel for pixel.
+modes' Scene frames must match pixel for pixel. `ARA_SCENE_DUMP=<file.png>` writes each composed
+Scene frame (image + overlays, the compositor's target) to a PNG: window captures and `--headless`
+never include the overlays, so use it to see them.
 
 Panel authoring: asset_tools owns isolated import jobs, cached off-thread thumbnails
 (models, material spheres, VFX) and material node previews (`node_preview.rs`). authoring
