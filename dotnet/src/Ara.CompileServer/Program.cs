@@ -84,6 +84,11 @@ if (args.Contains("--fix", StringComparer.Ordinal))
     }
     catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
 }
+// The host needs ~100 ms to send the first module; use it to warm Roslyn on another core.
+if (ModuleCompiler.ShouldWarmUp(System.Environment.ProcessorCount))
+    _ = ModuleCompiler.WarmUpAsync().ContinueWith(
+    warm => { if (warm.Result is { } failure) Console.Error.WriteLine($"[ara] compile warm-up failed (the first compile will be slower): {failure}"); },
+    TaskContinuationOptions.OnlyOnRanToCompletion);
 var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
 var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 

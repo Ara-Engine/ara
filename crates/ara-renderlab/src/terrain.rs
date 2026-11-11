@@ -79,8 +79,12 @@ pub(crate) struct Terrain {
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
     foliage_key: u64,
-    /// The layer atlas and parameters, and the layers' key they were built for.
-    splat: Option<(u64, crate::splat::Splat)>,
+    /// The layer atlas and parameters, and the layers' key they were built for; `None`
+    /// inside when the build failed (the tiles then show the layers' factors, and the
+    /// build is not retried until the key changes).
+    splat: Option<(u64, Option<crate::splat::Splat>)>,
+    /// Decoded layer maps kept across rebuilds of the atlases.
+    quadrants: crate::splat::Quadrants,
     /// The splat program once tried: `Some(None)` when Renderlab rejected it.
     splat_program: Option<Option<ProgramId>>,
 }
@@ -121,16 +125,33 @@ impl Terrain {
         let old_textures: Vec<TextureId> = if stale {
             self.splat
                 .take()
-                .map(|(_, s)| s.textures().collect())
+                .and_then(|(_, s)| s)
+                .map(|s| s.textures().collect())
                 .unwrap_or_default()
         } else {
             Vec::new()
         };
-        if program.is_some() && self.splat.is_none() && !layers.maps.is_empty() {
-            let splat = crate::splat::build(engine, &layers.maps, view.terrain_detail, gaps)?;
-            self.splat = Some((layers.key, splat));
+        if program.is_some() && self.splat.is_none() && layers.maps.iter().any(Option::is_some) {
+            let built = crate::splat::build(
+                engine,
+                &layers.maps,
+                view.terrain_detail,
+                &mut self.quadrants,
+                gaps,
+            );
+            // A build that fails (the device refused an atlas) costs the layers' maps,
+            // not the frame.
+            let built = built
+                .map_err(|error| {
+                    gaps.unsupported(
+                        "terrain layer maps",
+                        &format!("each layer shows its base colour factor ({error:#})"),
+                    );
+                })
+                .ok();
+            self.splat = Some((layers.key, built));
         }
-        let splat = program.zip(self.splat.as_ref().map(|(_, s)| s));
+        let splat = program.zip(self.splat.as_ref().and_then(|(_, s)| s.as_ref()));
         let wanted: Vec<_> = coords
             .iter()
             .filter_map(|coord| {
@@ -323,8 +344,10 @@ impl Terrain {
 struct Layers<'a> {
     /// Linear base colour factor per splat channel; `None` without layer materials.
     colours: Option<[[f32; 3]; 4]>,
-    /// Each resolved layer's material and cooked maps, for the splat atlases.
-    maps: Vec<crate::splat::LayerMaps<'a>>,
+    /// Each layer's material and cooked maps, for the splat atlases, one entry per layer
+    /// in the splat's channel order; `None` for a layer whose material is not resolved
+    /// (still streaming, or deleted), so the layers after it keep their channels.
+    maps: Vec<Option<crate::splat::LayerMaps<'a>>>,
     roughness: f32,
     /// Changes when the colours do, so tiles are placed again.
     key: u64,
@@ -356,28 +379,35 @@ impl<'a> Layers<'a> {
         let mut colours = [[1.; 3]; 4];
         let (mut roughness, mut key) = (0., FNV);
         for (colour, reference) in colours.iter_mut().zip(references) {
-            let material = view
-                .terrain_materials
-                .get(&reference.0)
-                .map(|m| &m.material);
-            if let Some(asset) = view.terrain_materials.get(&reference.0) {
+            let asset = view.terrain_materials.get(&reference.0);
+            roughness +=
+                asset.map_or(0.5, |a| a.material.roughness) / references.len().min(4) as f32;
+            // One entry per layer, resolved or not, so splat channels keep their layers.
+            maps.push(asset.map(|asset| {
                 let material = &asset.material;
                 colour.copy_from_slice(&material.base_color[..3]);
+                key = fnv(key, &asset.digest.0);
+                // A map's cache key: the material asset's digest and the texture slot.
                 let map = |slot: Option<usize>| {
-                    slot.and_then(|i| asset.textures.get(i))
-                        .map(|t| &t.ktx2[..])
+                    let i = slot?;
+                    let texture = asset.textures.get(i)?;
+                    Some((
+                        fnv(fnv(FNV, &asset.digest.0), &i.to_le_bytes()),
+                        &texture.ktx2[..],
+                    ))
                 };
-                maps.push(crate::splat::LayerMaps {
+                crate::splat::LayerMaps {
                     material,
                     color: map(material.base_color_texture),
                     normal: map(material.normal_texture),
                     metal_roughness: map(material.metallic_roughness_texture),
                     unsampled: material.occlusion_texture.is_some()
                         || material.emissive_texture.is_some(),
-                });
-                key = fnv(key, &asset.digest.0);
+                }
+            }));
+            if asset.is_none() {
+                key = fnv(key, b"unresolved");
             }
-            roughness += material.map_or(0.5, |m| m.roughness) / references.len().min(4) as f32;
             for channel in colour {
                 key = fnv(key, &channel.to_bits().to_le_bytes());
             }

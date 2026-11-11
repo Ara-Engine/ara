@@ -22,6 +22,10 @@ use renderlab::{
     asset::TextureRole,
     engine::{Engine, ProgramId, TextureId, Value},
 };
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Side of one layer's quadrant in an atlas, texels.
 const LAYER_SIZE: u32 = 512;
@@ -165,12 +169,15 @@ pub(crate) fn source() -> Option<String> {
     })
 }
 
+/// A layer's cooked map and its cache key (the material asset's digest and the slot).
+pub(crate) type Map<'a> = (u64, &'a [u8]);
+
 /// One terrain layer's material and its cooked maps.
 pub(crate) struct LayerMaps<'a> {
     pub material: &'a ModelMaterial,
-    pub color: Option<&'a [u8]>,
-    pub normal: Option<&'a [u8]>,
-    pub metal_roughness: Option<&'a [u8]>,
+    pub color: Option<Map<'a>>,
+    pub normal: Option<Map<'a>>,
+    pub metal_roughness: Option<Map<'a>>,
     /// Occlusion or emission maps, which Ara's terrain samples and this does not.
     pub unsampled: bool,
 }
@@ -196,6 +203,35 @@ fn quadrant(ktx2: &[u8]) -> Result<Vec<u8>> {
     let mut out = vec![0u8; (LAYER_SIZE * LAYER_SIZE * 4) as usize];
     resample_into(&decoded.rgba, decoded.size, &mut out, LAYER_SIZE, [0, 0]);
     Ok(out)
+}
+
+/// Layer maps already decoded and resampled to quadrants, by `Map` key. Decoding a map
+/// holds its full-size pixels (134 MB for a 4096² map) and stalls the frame, so a
+/// rebuild of the atlases for a changed tier or factor reuses the quadrants of every
+/// map that is still in use (`build` drops the rest).
+#[derive(Default)]
+pub(crate) struct Quadrants {
+    entries: HashMap<u64, Arc<[u8]>>,
+    used: HashSet<u64>,
+}
+
+impl Quadrants {
+    /// The quadrant for `map`, decoded on first use.
+    fn load(&mut self, (key, ktx2): Map<'_>) -> Result<Arc<[u8]>> {
+        self.used.insert(key);
+        if let Some(quadrant) = self.entries.get(&key) {
+            return Ok(Arc::clone(quadrant));
+        }
+        let quadrant: Arc<[u8]> = quadrant(ktx2)?.into();
+        self.entries.insert(key, Arc::clone(&quadrant));
+        Ok(quadrant)
+    }
+
+    /// Forgets every quadrant no `load` asked for since the last call.
+    fn retain_used(&mut self) {
+        let used = std::mem::take(&mut self.used);
+        self.entries.retain(|key, _| used.contains(key));
+    }
 }
 
 /// Mean of linear channel `c` of an RGBA8 quadrant, 0 to 1.
@@ -231,29 +267,58 @@ fn place(atlas: &mut [u8], i: usize, quadrant: &[u8], alpha: Option<usize>) {
     }
 }
 
-/// Builds the atlases of up to four layers and the parameters that place, tint, roughen
-/// and light them, for a detail distance of `detail` metres.
-pub(crate) fn build(
-    engine: &mut Engine,
-    layers: &[LayerMaps<'_>],
-    detail: f32,
+/// The atlases' pixels and the program's parameters for up to four layers, one splat
+/// channel per entry of `layers` (`None`: a layer whose material is not resolved stays on
+/// the defaults, so the layers after it keep their channels).
+struct Channels {
+    atlas: Vec<u8>,
+    normals: Vec<u8>,
+    any_normal: bool,
+    uv: Vec<Value>,
+    tint: Vec<Value>,
+    packed: [[f32; 4]; 4],
+}
+
+/// Fills `Channels` from `layers`. A map that cannot be decoded is reported and left
+/// out: its layer keeps the material's factors for it.
+fn channels(
+    layers: &[Option<LayerMaps<'_>>],
+    quadrants: &mut Quadrants,
     gaps: &mut Gaps,
-) -> Result<Splat> {
+) -> Channels {
     let side = 2 * LAYER_SIZE;
-    let mut atlas = vec![255u8; (side * side * 4) as usize];
-    let mut normals = [128u8, 128, 255, 255].repeat((side * side) as usize);
-    let mut any_normal = false;
-    let vec4 = |v: [f32; 4]| Value::Vec4(v);
-    let mut uv = vec![vec4([1., 1., 0., 0.]); 4];
-    let mut tint = vec![vec4([1., 1., 1., 0.5]); 4];
-    // Per layer: metal, colour mean luminance, roughness mean, normal scale.
-    let mut packed = [[0f32, 0., 1., 0.]; 4];
+    let mut out = Channels {
+        atlas: vec![255u8; (side * side * 4) as usize],
+        normals: [128u8, 128, 255, 255].repeat((side * side) as usize),
+        any_normal: false,
+        uv: vec![Value::Vec4([1., 1., 0., 0.]); 4],
+        tint: vec![Value::Vec4([1., 1., 1., 0.5]); 4],
+        // Per layer: metal, colour mean luminance, roughness mean, normal scale.
+        packed: [[0f32, 0., 1., 0.]; 4],
+    };
+    let mut load = |map: Map<'_>, gaps: &mut Gaps| match quadrants.load(map) {
+        Ok(q) => Some(q),
+        Err(error) => {
+            gaps.unsupported(
+                "terrain layer maps that cannot be decoded",
+                &format!("the layer keeps its material's factors for that map ({error:#})"),
+            );
+            None
+        }
+    };
     for (i, layer) in layers.iter().take(4).enumerate() {
+        let Some(layer) = layer else { continue };
         let m = layer.material;
         if m.base_color_uv.rotation != 0. || m.normal_uv.rotation != 0. {
             gaps.unsupported(
                 "rotated terrain layer maps",
                 "the layer's maps repeat unrotated",
+            );
+        }
+        if m.base_color_uv.scale.iter().any(|s| *s < 0.) {
+            gaps.unsupported(
+                "terrain layer maps with a negative scale",
+                "the normal map's relief follows the terrain's fixed frame, not the mirrored map",
             );
         }
         if layer.unsampled {
@@ -263,28 +328,26 @@ pub(crate) fn build(
             );
         }
         let t = &m.base_color_uv;
-        uv[i] = vec4([t.scale[0], t.scale[1], t.offset[0], t.offset[1]]);
+        out.uv[i] = Value::Vec4([t.scale[0], t.scale[1], t.offset[0], t.offset[1]]);
         let [r, g, b, _] = m.base_color;
-        tint[i] = vec4([r, g, b, m.roughness.clamp(0.045, 1.)]);
-        let [metal, flat, rough, normal] = &mut packed[i];
+        out.tint[i] = Value::Vec4([r, g, b, m.roughness.clamp(0.045, 1.)]);
+        let [metal, flat, rough, normal] = &mut out.packed[i];
         *metal = m.metallic.clamp(0., 1.);
-        if let Some(ktx2) = layer.color {
-            let q = quadrant(ktx2)?;
+        if let Some(q) = layer.color.and_then(|map| load(map, gaps)) {
             let [r, g, b] = texture::mean_linear(&q);
             *flat = (0.2126 * r + 0.7152 * g + 0.0722 * b).max(1e-4);
-            place(&mut atlas, i, &q, None);
+            place(&mut out.atlas, i, &q, None);
         }
-        if let Some(ktx2) = layer.metal_roughness {
-            let q = quadrant(ktx2)?;
+        if let Some(q) = layer.metal_roughness.and_then(|map| load(map, gaps)) {
             *rough = mean(&q, 1);
             *metal *= mean(&q, 2);
             // The colour atlas's alpha carries the roughness map where it tiles as the
             // colour map does; otherwise it holds the map's mean, which the layer keeps.
             if m.metallic_roughness_uv == m.base_color_uv {
-                place(&mut atlas, i, &q, Some(1));
+                place(&mut out.atlas, i, &q, Some(1));
             } else {
                 let fill = [0, (*rough * 255.).round() as u8, 0, 0].repeat(q.len() / 4);
-                place(&mut atlas, i, &fill, Some(1));
+                place(&mut out.atlas, i, &fill, Some(1));
                 gaps.unsupported(
                     "terrain layer roughness maps tiled unlike their colour maps",
                     "the layer keeps its roughness map's mean",
@@ -299,42 +362,66 @@ pub(crate) fn build(
         }
         // A zero normal scale is a flat layer, as no map. The normal map shares the
         // layer's coordinates (Renderlab's 256 parameter bytes hold one set per layer).
-        if let Some(ktx2) = layer.normal.filter(|_| m.normal_scale != 0.) {
-            if m.normal_uv == m.base_color_uv {
-                place(&mut normals, i, &quadrant(ktx2)?, None);
-                *normal = m.normal_scale;
-                any_normal = true;
-            } else {
+        if let Some(map) = layer.normal.filter(|_| m.normal_scale != 0.) {
+            if m.normal_uv != m.base_color_uv {
                 gaps.unsupported(
                     "terrain layer normal maps tiled unlike their colour maps",
                     "the layer is flat",
                 );
+            } else if let Some(q) = load(map, gaps) {
+                place(&mut out.normals, i, &q, None);
+                *normal = m.normal_scale;
+                out.any_normal = true;
             }
         }
     }
+    quadrants.retain_used();
+    out
+}
+
+/// Builds the atlases of up to four layers and the parameters that place, tint, roughen
+/// and light them, for a detail distance of `detail` metres. A failed upload leaves no
+/// texture behind.
+pub(crate) fn build(
+    engine: &mut Engine,
+    layers: &[Option<LayerMaps<'_>>],
+    detail: f32,
+    quadrants: &mut Quadrants,
+    gaps: &mut Gaps,
+) -> Result<Splat> {
+    let side = 2 * LAYER_SIZE;
+    let c = channels(layers, quadrants, gaps);
     let atlas = engine.create_texture(texture::chain(
         [side, side],
-        atlas,
+        c.atlas,
         TextureRole::BaseColorSrgb,
     ))?;
-    let normals = any_normal
+    let normals = c
+        .any_normal
         .then(|| {
             engine.create_texture(texture::chain(
                 [side, side],
-                normals,
+                c.normals,
                 TextureRole::NormalLinear,
             ))
         })
-        .transpose()?;
+        .transpose();
+    let normals = match normals {
+        Ok(normals) => normals,
+        Err(error) => {
+            engine.remove_texture(atlas)?;
+            return Err(error.into());
+        }
+    };
     let detail = detail.max(0.);
     Ok(Splat {
         atlas,
         normals,
         parameters: vec![
-            ("uv", Value::Array(uv)),
-            ("tint", Value::Array(tint)),
-            ("layer", Value::Array(packed.map(vec4).to_vec())),
-            ("detail", vec4([detail, 0., 0., 0.])),
+            ("uv", Value::Array(c.uv)),
+            ("tint", Value::Array(c.tint)),
+            ("layer", Value::Array(c.packed.map(Value::Vec4).to_vec())),
+            ("detail", Value::Vec4([detail, 0., 0., 0.])),
         ],
     })
 }
@@ -397,6 +484,79 @@ mod tests {
         let source = source().expect("the standard program ends as expected");
         assert_eq!(source.matches("fn surface(").count(), 1);
         assert!(source.contains("fn ara_atlas(") && source.contains("fn shade("));
+    }
+
+    fn material(colour: [f32; 3], roughness: f32) -> ModelMaterial {
+        ModelMaterial {
+            base_color: [colour[0], colour[1], colour[2], 1.],
+            roughness,
+            ..Default::default()
+        }
+    }
+
+    fn layer(material: &ModelMaterial) -> LayerMaps<'_> {
+        LayerMaps {
+            material,
+            color: None,
+            normal: None,
+            metal_roughness: None,
+            unsampled: false,
+        }
+    }
+
+    /// A layer whose material is not resolved stays on the defaults and the layers after
+    /// it keep their own channels.
+    #[test]
+    fn an_unresolved_layer_does_not_shift_the_next_ones() {
+        let (b, c) = (
+            material([0.2, 0.4, 0.6], 0.3),
+            material([0.7, 0.1, 0.1], 0.8),
+        );
+        let layers = [None, Some(layer(&b)), Some(layer(&c))];
+        let out = channels(&layers, &mut Quadrants::default(), &mut Gaps::default());
+        assert_eq!(out.tint[0], Value::Vec4([1., 1., 1., 0.5]));
+        assert_eq!(out.tint[1], Value::Vec4([0.2, 0.4, 0.6, 0.3]));
+        assert_eq!(out.tint[2], Value::Vec4([0.7, 0.1, 0.1, 0.8]));
+    }
+
+    /// A map that cannot be decoded is reported and the layer keeps its factors; the
+    /// rest of the terrain still builds.
+    #[test]
+    fn an_undecodable_map_costs_that_map_only() {
+        let (a, b) = (
+            material([0.5, 0.5, 0.5], 0.4),
+            material([0.1, 0.2, 0.3], 0.6),
+        );
+        let mut broken = layer(&a);
+        broken.color = Some((7, b"not a ktx2 file"));
+        let mut gaps = Gaps::default();
+        let out = channels(
+            &[Some(broken), Some(layer(&b))],
+            &mut Quadrants::default(),
+            &mut gaps,
+        );
+        assert!(gaps.reported("terrain layer maps that cannot be decoded"));
+        assert_eq!(out.tint[0], Value::Vec4([0.5, 0.5, 0.5, 0.4]));
+        assert_eq!(out.tint[1], Value::Vec4([0.1, 0.2, 0.3, 0.6]));
+    }
+
+    /// A rebuild takes a map's quadrant from the cache instead of decoding it again (the
+    /// bytes below would not decode), and forgets quadrants no layer uses any more.
+    #[test]
+    fn rebuilding_reuses_decoded_quadrants_and_drops_unused_ones() {
+        let a = material([1.; 3], 0.5);
+        let mut quadrants = Quadrants::default();
+        let pixel = [10u8, 20, 30, 255];
+        let solid: Arc<[u8]> = pixel.repeat((LAYER_SIZE * LAYER_SIZE) as usize).into();
+        quadrants.entries.insert(1, Arc::clone(&solid));
+        quadrants.entries.insert(2, solid);
+        let mut cached = layer(&a);
+        cached.color = Some((1, b"never decoded"));
+        let mut gaps = Gaps::default();
+        let out = channels(&[Some(cached)], &mut quadrants, &mut gaps);
+        assert!(!gaps.reported("terrain layer maps that cannot be decoded"));
+        assert_eq!(&out.atlas[..4], &pixel);
+        assert!(quadrants.entries.contains_key(&1) && !quadrants.entries.contains_key(&2));
     }
 
     #[test]
