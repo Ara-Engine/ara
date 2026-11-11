@@ -18,7 +18,7 @@ pub(in crate::vulkan) struct Worker {
 impl Worker {
     pub fn new(
         device: ash::Device,
-        mesh: bool,
+        mesh: pipeline::ShaderFeatures,
         layout: vk::PipelineLayout,
         path: PathBuf,
         info: &DeviceInfo,

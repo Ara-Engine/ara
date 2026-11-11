@@ -1,6 +1,7 @@
 //! Floating windows as native windows. The studio keeps one runtime: each floating window
 //! lays out in a region beyond the main window (`dock::region`), and its own OS window shows
-//! just that region (`Runtime::present_region`) and sends its input at the region's offset.
+//! just that region (`Runtime::present_region_at`, at that window's own backing scale, so a
+//! monitor of another scale draws it sharp) and sends its input at the region's offset.
 //! So a panel torn out of the dock is a real window: it moves to another monitor, and its
 //! tabs drag back into the main window's dock (pointer events are mapped by the desktop
 //! point while a tab is dragged).
@@ -36,6 +37,8 @@ struct Portal {
     rect: [i32; 4],
     /// A frame the system gave it that the layout doesn't have yet, and since when.
     moved: Option<([i32; 4], Instant)>,
+    /// Its window's backing scale (device px per design px): its monitor's.
+    scale: f32,
 }
 
 /// A window's client area on the screen (device px) and where its region starts in the
@@ -46,6 +49,8 @@ pub(super) struct Placement {
     pub client: [f32; 4],
     /// The runtime point (device px) at the client's top-left.
     pub origin: (f32, f32),
+    /// Runtime device px per window device px (the runtime's scale over the window's).
+    pub k: f32,
 }
 
 /// The runtime point (device px) for screen point `screen`, in the first window of
@@ -54,7 +59,8 @@ pub(super) fn locate(windows: &[Placement], screen: (f32, f32)) -> Option<(f32, 
     windows.iter().find_map(|w| {
         let [x, y, cw, ch] = w.client;
         let (dx, dy) = (screen.0 - x, screen.1 - y);
-        (dx >= 0.0 && dy >= 0.0 && dx < cw && dy < ch).then_some((w.origin.0 + dx, w.origin.1 + dy))
+        (dx >= 0.0 && dy >= 0.0 && dx < cw && dy < ch)
+            .then_some((w.origin.0 + dx * w.k, w.origin.1 + dy * w.k))
     })
 }
 
@@ -150,9 +156,10 @@ impl Portals {
                     } else {
                         surface.show_active(false);
                     }
+                    let own = surface.scale();
                     let (cw, ch) = surface.client_size();
-                    let size = (cw as f32 / scale, ch as f32 / scale);
-                    let inset = surface.system_controls().map_or(0.0, |r| r.right / scale);
+                    let size = (cw as f32 / own, ch as f32 / own);
+                    let inset = surface.system_controls().map_or(0.0, |r| r.right / own);
                     let (id2, origin) = (id.clone(), main_origin(main, scale));
                     rt.touch(|s| {
                         s.local.desktop.sizes.insert(id2, size);
@@ -166,6 +173,7 @@ impl Portals {
                             region: *region,
                             rect: *rect,
                             moved: None,
+                            scale: own,
                         },
                     );
                     changed = true;
@@ -197,9 +205,11 @@ impl Portals {
         self.pointer_in = Some(id);
         let scale = rt.scale();
         if let Some(portal) = self.windows.values().find(|w| w.surface.id() == id) {
+            // Its own device px, rescaled to the runtime's, at the region's offset.
+            let k = scale / portal.scale;
             p.at = Point::new(
-                p.at.x + portal.region.left * scale,
-                p.at.y + portal.region.top * scale,
+                p.at.x * k + portal.region.left * scale,
+                p.at.y * k + portal.region.top * scale,
             );
         }
         let s = rt.state();
@@ -214,12 +224,14 @@ impl Portals {
                 Some(Placement {
                     client: client(&w.surface)?,
                     origin: (w.region.left * scale, w.region.top * scale),
+                    k: scale / w.scale,
                 })
             })
             .collect();
         windows.extend(client(main).map(|client| Placement {
             client,
             origin: (0.0, 0.0),
+            k: 1.0,
         }));
         if let Some((x, y)) = locate(&windows, screen) {
             p.at = Point::new(x, y);
@@ -235,7 +247,8 @@ impl Portals {
         id: SurfaceId,
         event: &Event,
     ) -> bool {
-        let Some((float, portal)) = self.windows.iter().find(|(_, w)| w.surface.id() == id) else {
+        let Some((float, portal)) = self.windows.iter_mut().find(|(_, w)| w.surface.id() == id)
+        else {
             return false;
         };
         match event {
@@ -254,8 +267,18 @@ impl Portals {
                 });
             }
             Event::Resized(w, h) => {
-                let scale = rt.scale();
-                let size = (*w as f32 / scale, *h as f32 / scale);
+                let size = (*w as f32 / portal.scale, *h as f32 / portal.scale);
+                let float = float.clone();
+                rt.update(|s| {
+                    s.local.desktop.sizes.insert(float, size);
+                });
+            }
+            // Moved to a monitor of another scale: draw and read input at its scale, and
+            // keep its design size.
+            Event::DpiChanged(dpi) => {
+                portal.scale = *dpi as f32 / 96.0;
+                let (cw, ch) = portal.surface.client_size();
+                let size = (cw as f32 / portal.scale, ch as f32 / portal.scale);
                 let float = float.clone();
                 rt.update(|s| {
                     s.local.desktop.sizes.insert(float, size);
@@ -266,11 +289,7 @@ impl Portals {
                     rt.accessibility_action(*hit, &action);
                 }
             }
-            Event::Activated
-            | Event::Deactivated
-            | Event::DpiChanged(_)
-            | Event::Leave
-            | Event::CaptureLost => {}
+            Event::Activated | Event::Deactivated | Event::Leave | Event::CaptureLost => {}
             #[cfg(any(windows, target_os = "macos"))]
             Event::VisibilityChanged => {}
             _ => return false,
@@ -288,9 +307,18 @@ impl Portals {
             .map(|id| (format!("float/{id}/bar"), format!("float/{id}/close")))
             .collect();
         for (portal, (bar, close)) in self.windows.values_mut().zip(keys) {
-            rt.present_region(&mut portal.surface, (0, 0), portal.region)?;
+            rt.present_region_at(&mut portal.surface, (0, 0), portal.region, portal.scale)?;
             let (ox, oy) = (portal.region.left * scale, portal.region.top * scale);
-            let local = |r: Rect| Rect::new(r.left - ox, r.top - oy, r.width(), r.height());
+            // Runtime device px to the window's own.
+            let k = portal.scale / scale;
+            let local = |r: Rect| {
+                Rect::new(
+                    (r.left - ox) * k,
+                    (r.top - oy) * k,
+                    r.width() * k,
+                    r.height() * k,
+                )
+            };
             let mut parts = Vec::new();
             if let Some(r) = rt.find(&bar) {
                 parts.push((local(r), Chrome::Caption));
