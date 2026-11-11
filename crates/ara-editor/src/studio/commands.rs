@@ -682,7 +682,11 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 "gi_debug" => "gi_diffuse".to_owned(),
                 snake => camel(snake),
             };
-            view(e, json!({"viewMode": mode}))
+            if super::unavailable::view_mode_available(&mode) {
+                view(e, json!({"viewMode": mode}))
+            } else {
+                Err(format!("{mode}: {}", super::unavailable::SOON).into())
+            }
         }
         id if id.starts_with("view.debug.") => {
             type Flip = fn(&mut ara_render::RenderDebug);
@@ -717,6 +721,9 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 _ => None,
             };
             match flip {
+                Some(_) if !super::unavailable::effect_available(id) => {
+                    Err(format!("{id}: {}", super::unavailable::SOON).into())
+                }
                 Some(flip) => {
                     super::scene_overlays::flip_effect(s, flip);
                     Ok(())

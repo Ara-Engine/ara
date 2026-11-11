@@ -4,6 +4,9 @@
 //! is not there yet.
 //!
 //! - A panel, page or preview area that has nothing to draw: [`tile`].
+//! - What the Scene view's renderer offers is decided in one place, the predicates below: the
+//!   draw-mode menu and the `view.mode.*` / `view.debug.*` commands both ask them, so turning a
+//!   view mode or an effect back on is one line.
 //! - A menu entry or button with nothing behind it: keep the entry, `enabled(item, false)`, and
 //!   give it the tooltip [`SOON`], so the menu keeps its shape.
 use ara_kit::icons;
@@ -34,4 +37,16 @@ pub(super) fn tile(l: &Look, key: &str, line: &str) -> El<Studio> {
                 .child(icon(icons::SQUARE_DASHED).size(22.0))
                 .child(text(line.to_owned()).text_size(12.0).wrap(3)),
         )
+}
+
+/// Whether the Scene view's renderer offers the view mode `name` (a `VIEW_MODES` name, such as
+/// `"lit"` or `"wireframe"`). Turn a mode back on by adding it here when Renderlab gains it.
+pub(super) fn view_mode_available(name: &str) -> bool {
+    matches!(name, "" | "lit")
+}
+
+/// Whether the Scene view's renderer offers the render debug switch `title` (an `EFFECTS` title,
+/// such as "Shadows"). Turn one back on by adding it here when Renderlab gains it.
+pub(super) fn effect_available(_title: &str) -> bool {
+    false
 }

@@ -621,22 +621,31 @@ fn a_saved_layout_brings_its_scene_overlays_back() {
 }
 
 #[test]
-fn the_draw_mode_menu_switches_view_modes_and_effects() {
+fn the_draw_mode_menu_keeps_every_entry_and_offers_what_the_renderer_has() {
+    use super::unavailable::{effect_available, view_mode_available};
     let mut rt = open();
     settle(&mut rt);
     press(&mut rt, "scene/draw-mode");
     assert!(
-        rt.find("scene/draw-mode/overdraw").is_some(),
-        "every mode is offered"
+        rt.find("scene/draw-mode/overdraw").is_some() && rt.find("scene/effect/Shadows").is_some(),
+        "every mode and effect keeps its entry"
     );
+    // An entry the renderer does not offer is disabled: pressing it changes nothing.
+    assert!(!view_mode_available("wireframe") && !effect_available("Shadows"));
     press(&mut rt, "scene/draw-mode/wireframe");
-    assert_eq!(rt.state().editor.state.view_mode, "wireframe");
-    press(&mut rt, "scene/draw-mode");
+    assert_ne!(rt.state().editor.state.view_mode, "wireframe");
     press(&mut rt, "scene/effect/Shadows");
     assert!(
-        !rt.state().editor.state.render_debug.shadows,
-        "Shadows turned off"
+        rt.state().editor.state.render_debug.shadows,
+        "Shadows stay on"
     );
+    // An offered one works.
+    assert!(view_mode_available("lit"));
+    press(&mut rt, "scene/draw-mode/lit");
+    assert!(matches!(
+        rt.state().editor.state.view_mode.as_str(),
+        "" | "lit"
+    ));
 }
 
 #[test]
@@ -1793,12 +1802,12 @@ fn view_selection_and_transform_commands_run_in_the_studio() {
         rt.update(|s| super::commands::run(s, id, &crate::catalog::Target::None));
         settle(rt);
     };
+    // The renderer's view modes and effects refuse until it offers them (`unavailable`).
     run(&mut rt, "view.mode.lit_wireframe");
-    assert_eq!(rt.state().editor.state.view_mode, "litWireframe");
+    assert_ne!(rt.state().editor.state.view_mode, "litWireframe");
     run(&mut rt, "view.debug.shadows");
-    assert!(!rt.state().editor.state.render_debug.shadows);
-    run(&mut rt, "view.debug.reset");
     assert!(rt.state().editor.state.render_debug.shadows);
+    run(&mut rt, "view.mode.lit");
     run(&mut rt, "view.show.grid");
     assert_eq!(
         rt.state().editor.state.settings["viewport.grid"],
@@ -7663,4 +7672,38 @@ fn the_unavailable_tile_says_what_is_missing() {
         ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
     )
     .unwrap();
+}
+
+/// The narrow default times the small-window zoom must not cut a child's name: at 900x560 (a
+/// 818 px wide layout) the Hierarchy still fits about 14 characters of an indented name.
+#[test]
+fn the_hierarchy_keeps_room_for_an_indented_name_in_a_small_window() {
+    let mut rt = open_sized((818, 509));
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![
+                    json!({"cmd":"entity.create","args":{"id":"e_ter","name":"Terrain","components":{"Transform":{}}}}),
+                    json!({"cmd":"entity.create","args":{"id":"e_chunk","name":"Terrain chunk","parent":"e_ter","components":{"Transform":{}}}}),
+                ],
+                "Create",
+                None,
+            )
+            .unwrap()
+    });
+    rt.update(|s| s.resolve());
+    settle(&mut rt);
+    let outline = rt.find("area/outline").expect("the Hierarchy area");
+    assert!(outline.width() >= 136.0, "{}px wide", outline.width());
+    let name = rt
+        .tree()
+        .into_iter()
+        .find(|n| n.text.as_deref() == Some("Terrain chunk"))
+        .expect("the child's name shows");
+    assert!(
+        name.rect.right <= outline.right && name.rect.width() >= 13.0 * 5.5,
+        "the name is {}px wide inside a {}px panel",
+        name.rect.width(),
+        outline.width()
+    );
 }
