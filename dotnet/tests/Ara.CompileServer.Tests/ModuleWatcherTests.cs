@@ -75,6 +75,71 @@ public sealed class ModuleWatcherTests : IDisposable
         Assert.True(latencies[latencies.Count / 2] < 8, $"median {latencies[latencies.Count / 2]:F1} ms");
     }
 
+    void AtomicSave(string path, string text)
+    {
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, text);
+        File.Move(temp, path, overwrite: true);
+    }
+
+    [Fact]
+    public void One_atomic_save_is_delivered_once_on_macOS()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var start = Stopwatch.GetTimestamp();
+        AtomicSave(Path.Combine(_directory, "A.cs"), "class A { int atomic; }");
+        Assert.NotNull(Next("A.cs"));
+        // FSEvents reports the rename ~11 ms later; the file is unchanged since the fast delivery, so it is dropped.
+        Thread.Sleep(400);
+        var extras = new List<string>();
+        while (_sets.TryTake(out var extra)) extras.Add(string.Join(",", extra.Paths.Select(Path.GetFileName)) + "@" + Stopwatch.GetElapsedTime(start, extra.At).TotalMilliseconds.ToString("F1"));
+        Assert.True(extras.Count == 0, "extra sets: " + string.Join(" | ", extras));
+    }
+
+    [Fact]
+    public void Atomic_saves_arrive_faster_than_the_directory_watcher_on_macOS()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var latencies = new List<double>();
+        for (var i = 0; i < 20; i++)
+        {
+            Drain();
+            var start = Stopwatch.GetTimestamp();
+            AtomicSave(Path.Combine(_directory, "A.cs"), $"class A {{ int a{i}; }}");
+            var set = Next("A.cs") ?? throw new Xunit.Sdk.XunitException("save not delivered");
+            latencies.Add(Stopwatch.GetElapsedTime(start, set.At).TotalMilliseconds);
+        }
+        latencies.Sort();
+        Assert.True(latencies[latencies.Count / 2] < 8, $"median {latencies[latencies.Count / 2]:F1} ms");
+    }
+
+    [Fact]
+    public void A_new_file_is_delivered_once_on_macOS()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        File.WriteAllText(Path.Combine(_directory, "New.cs"), "class New { }");
+        Assert.NotNull(Next("New.cs"));
+        Thread.Sleep(400);
+        Assert.False(_sets.TryTake(out var extra) && extra.Paths.Any(path => Path.GetFileName(path) == "New.cs"));
+    }
+
+    [Fact]
+    public void A_save_in_a_new_subfolder_is_delivered_fast_on_macOS()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var folder = Path.Combine(_directory, "Sub");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "S.cs");
+        File.WriteAllText(path, "class S { }");
+        Assert.NotNull(Next("S.cs"));
+        Thread.Sleep(300); // the folder's own watch starts from its Created event
+        Drain();
+        var start = Stopwatch.GetTimestamp();
+        AtomicSave(path, "class S { int v; }");
+        var set = Next("S.cs") ?? throw new Xunit.Sdk.XunitException("save not delivered");
+        Assert.True(Stopwatch.GetElapsedTime(start, set.At).TotalMilliseconds < 9, "a save in a folder created after Watch took the slow path");
+    }
+
     [Fact]
     public void An_atomic_save_is_delivered_and_the_replacement_is_watched_afterwards()
     {

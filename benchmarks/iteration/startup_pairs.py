@@ -22,8 +22,8 @@ def pct(values, p):
     return values[round((len(values) - 1) * p)] if values else float("nan")
 
 
-def run(exe, sdk, edits, lines, out, env):
-    cmd = [exe, "--dotnet-bin", sdk, "--edits", str(edits), "--lines", str(lines), "--output", str(out)]
+def run(exe, sdk, edits, lines, out, env, extra):
+    cmd = [exe, "--dotnet-bin", sdk, "--edits", str(edits), "--lines", str(lines), "--output", str(out), *extra]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600, env={**os.environ, **env})
     return json.loads(Path(out).read_text())
 
@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--exe", required=True)
     ap.add_argument("--variant", action="append", required=True, help="name=/absolute/projects-bin")
     ap.add_argument("--env", action="append", default=[], help="variant:KEY=VALUE, set only for that variant")
+    ap.add_argument("--bench-arg", action="append", default=[], help="extra argument for reload_bench, e.g. --atomic-save")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--edits", type=int, default=30)
     ap.add_argument("--lines", type=int, default=5000)
@@ -51,7 +52,7 @@ def main():
     runs = []
     for r in range(a.rounds):
         for i, name in enumerate(order):
-            d = run(a.exe, sdk[name], a.edits, a.lines, scratch / f"{r}-{i}-{name}.json", env[name])
+            d = run(a.exe, sdk[name], a.edits, a.lines, scratch / f"{r}-{i}-{name}.json", env[name], a.bench_arg)
             if not d.get("success"):
                 print("FAILED", name, d.get("failures"), file=sys.stderr)
             edits = [e for e in d["edits"] if not e["warmup"] and e["save_to_visible_ms"] is not None]
