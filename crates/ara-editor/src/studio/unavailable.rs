@@ -63,3 +63,15 @@ pub(super) fn view_mode_available(name: &str) -> bool {
 pub(super) fn effect_available(_title: &str) -> bool {
     false
 }
+
+/// Whether the Scene's renderer can capture reflection probes (the Lighting page's Recapture and
+/// the `render.probe.recapture` job). Existing captures keep loading; only new ones need it.
+pub(super) fn probe_capture_available() -> bool {
+    false
+}
+
+/// Whether the Game view can show the scene through its gameplay camera outside Play (a second
+/// camera on the Scene's renderer). Play itself runs in the player process and is unaffected.
+pub(super) fn game_preview_available() -> bool {
+    false
+}
