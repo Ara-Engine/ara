@@ -385,7 +385,10 @@ fn marquee_hits(s: &Studio, a: [f32; 2], b: [f32; 2], size: (f32, f32)) -> Vec<S
 /// The Orientation overlay: the axis gizmo, and the frame rate under it while frames run.
 pub(super) fn orientation_widget(s: &Studio) -> El<Studio> {
     let mut corner = col().gap(6.0).align(Align::End).child(axes(s));
-    if let Some((fps, ms)) = s.local.scene.fps.filter(|_| s.local.scene.ready) {
+    // Frame time is Scene statistics: View › Scene statistics (off by default) shows it. A
+    // screenshot or a first run never carries a "2 fps 631 ms" from its first frames.
+    let stats = super::scene_overlays::flag(s, "viewport.stats", false);
+    if let Some((fps, ms)) = s.local.scene.fps.filter(|_| s.local.scene.ready && stats) {
         corner = corner.child(
             row().h(18.0).pad_x(6.0).child(
                 text(format!("{fps:.0} fps  {ms:.1} ms"))
