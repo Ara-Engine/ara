@@ -838,7 +838,7 @@ impl World {
                 // (the settle frames snap the meter, so captures stay deterministic)
                 // instead of the legacy daylight exposure; `--ev100` still locks over it.
                 frame.look.meter_without_volumes();
-                let request = ara_render::capture::CaptureRequest {
+                let request = ara_frame::capture::CaptureRequest {
                     camera: ara_runtime_render::camera(frame)?,
                     size,
                     // `ara capture --view` (renderDebug.view); Lit by default.

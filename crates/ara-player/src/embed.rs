@@ -394,10 +394,10 @@ impl Embedded {
 
 /// Saves the presentation just published as `play-entry-<pid>.png` in `dir`.
 fn save_first_frame(presenter: &mut Presenter, frame: &RenderFrame, dir: &Path) -> Result<()> {
-    let request = ara_render::capture::CaptureRequest {
+    let request = ara_frame::capture::CaptureRequest {
         camera: ara_runtime_render::camera(frame)?,
         size: presenter.output_size(),
-        mode: ara_render::capture::ViewMode::Lit,
+        mode: ara_frame::capture::ViewMode::Lit,
         deterministic: false,
         exposure: frame.environment.exposure,
         settle_frames: 1,

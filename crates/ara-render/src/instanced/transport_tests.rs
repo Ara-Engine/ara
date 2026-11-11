@@ -1,5 +1,8 @@
-use super::*;
-use crate::instanced::{Geometry, Instance, Lod, Material, Vertex};
+use crate::instanced::transport::{flags, BodyClass, NativeChangeFeed};
+use crate::instanced::{
+    Changes, Geometry, Instance, Lod, Material, Scene, Vertex,
+};
+use anyhow::Result;
 use glam::{Mat4, Vec3};
 
 fn scene() -> Scene {

@@ -6,7 +6,7 @@ use ara_gpu::{
     vk,
     vulkan::Command,
 };
-use ara_render::scene::{Material, Scene};
+use ara_frame::scene::{Material, Scene};
 use glam::Vec3;
 use sha2::{Digest, Sha256};
 

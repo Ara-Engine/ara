@@ -1,7 +1,7 @@
 //! Vertex colours and per-instance paint reach the native scene: geometry colours,
 //! instance paint streams, the glTF tint flag and vertex-paint layer materials.
 use super::*;
-use ara_render::scene::{VERTEX_COLOR_TINT, VERTEX_PAINT_LAYERS};
+use ara_frame::scene::{VERTEX_COLOR_TINT, VERTEX_PAINT_LAYERS};
 use ara_runtime::{
     material::PaintLayer,
     model::{Model, ModelVertex, Primitive},

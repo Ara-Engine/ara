@@ -57,6 +57,7 @@ ara-physics = { path = "../ara-physics" }
 ara-platform = { path = "../ara-platform" }
 ara-play-host = { path = "../ara-play-host" }
 ara-proto = { path = "../ara-proto" }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-rpc = { path = "../ara-rpc" }

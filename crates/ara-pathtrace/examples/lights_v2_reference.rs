@@ -13,7 +13,7 @@
 //! `cargo run -p ara-pathtrace --example lights_v2_reference -- <case dir> <samples>`
 use anyhow::{Context, Result, ensure};
 use ara_gpu::GpuDevice;
-use ara_render::scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{CameraSpec, Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_render_fidelity::PostSettings;
 use glam::{Mat4, Vec3};
 use serde::Deserialize;

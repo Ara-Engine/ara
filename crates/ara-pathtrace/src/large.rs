@@ -5,7 +5,7 @@ use ara_pathtrace::metrics;
 
 const SIZE: [u32; 2] = [640, 360];
 
-fn scene(root: &Path) -> Result<ara_render::scene::Scene> {
+fn scene(root: &Path) -> Result<ara_frame::scene::Scene> {
     content::load(&root.join(".sn/assets/sponza"))
 }
 /// Fixed photographic display shared by hybrid/reference comparisons.
@@ -145,7 +145,7 @@ pub fn quality(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
         hybrid.save(&golden)?;
     }
     let comparison =
-        ara_render::capture::compare(&hybrid, &image::open(golden)?.to_rgba8(), 0.005)?;
+        ara_frame::capture::compare(&hybrid, &image::open(golden)?.to_rgba8(), 0.005)?;
     anyhow::ensure!(
         comparison.passed,
         "Sponza display golden changed: {}",
@@ -171,7 +171,7 @@ pub fn quality(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
     // Exercise real content with camera reprojection and four-phase repair.
     let mut sequence = image::RgbaImage::new(SIZE[0] * 4, SIZE[1] * 3);
     for tick in 0..48 {
-        let pan = ara_render::scene::CameraSpec::LookAt {
+        let pan = ara_frame::scene::CameraSpec::LookAt {
             position: glam::Vec3::new(-11. + tick as f32 * 0.01, 1.7, tick as f32 * 0.003),
             target: glam::Vec3::new(5., 3., 0.),
             vertical_fov: 1.05,

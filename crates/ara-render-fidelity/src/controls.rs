@@ -19,7 +19,7 @@ impl FidelityView {
         }
         Ok(())
     }
-    /// Replace the light tables `ara_render::scene::Light::tables` offsets address
+    /// Replace the light tables `ara_frame::scene::Light::tables` offsets address
     /// (photometric profiles; word 0 reserved), as the raster renderer's
     /// `set_light_tables`. The buffer grows only when a larger table arrives.
     pub fn set_light_tables(&mut self, gpu: &mut GpuDevice, words: &[u32]) -> Result<()> {

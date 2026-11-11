@@ -1,6 +1,6 @@
 //! Cooked model access; the viewport never discovers or imports source glTF files.
 use anyhow::Context;
-use ara_render::scene::{Mesh, Vertex};
+use ara_frame::scene::{Mesh, Vertex};
 use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::collections::BTreeMap;

@@ -1,7 +1,7 @@
 use super::*;
 use ara_gpu::cooked::write_json;
 use ara_pathtrace::metrics;
-use ara_render::capture::compare;
+use ara_frame::capture::compare;
 use serde::Serialize;
 use std::collections::BTreeMap;
 

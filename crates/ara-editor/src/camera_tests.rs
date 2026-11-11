@@ -29,7 +29,7 @@ fn orthographic_rays_are_parallel_and_preserve_near_plane_origins_at_depth() {
             assert!(
                 (centre
                     - camera.position()
-                    - forward * ara_render::scene::CameraSpec::ORTHOGRAPHIC_NEAR)
+                    - forward * ara_frame::scene::CameraSpec::ORTHOGRAPHIC_NEAR)
                     .length()
                     < 1e-5
             );

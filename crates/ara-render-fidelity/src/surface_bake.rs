@@ -1,12 +1,12 @@
 //! One-time probe surface acquisition for the raster renderer's GI
-//! (`ara_render::look::gi`): ray queries run here only, never per frame.
+//! (`ara_frame::look::gi`): ray queries run here only, never per frame.
 use crate::{FidelityView, Tier};
 use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Barrier, Device, GpuDevice, Queue, Resource, RootConstants, vk, vulkan::Command,
 };
 use ara_render::graph::State;
-use ara_render::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
+use ara_frame::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
 
 /// Probes per submission, bounding each dispatch well under driver timeouts.
 const BATCH: usize = 2048;
@@ -89,7 +89,7 @@ impl FidelityView {
                 .collect()
         };
         let surfaces = ProbeSurfaces {
-            layout: ara_render::look::gi::ProbeLayout::single(ara_render::look::gi::ProbeLattice {
+            layout: ara_frame::look::gi::ProbeLayout::single(ara_frame::look::gi::ProbeLattice {
                 origin: self.volume.origin.to_array(),
                 spacing: self.volume.spacing.to_array(),
                 counts: self.volume.counts,

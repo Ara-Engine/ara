@@ -9,12 +9,8 @@ use ara_gpu::{
     vk,
     vulkan::{Attachment, Command, PassTiming},
 };
-use ara_render::{
-    capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode},
-    graph::{Graph, State},
-    renderer::post::ToneMap,
-    scene::CameraSpec,
-};
+use ara_frame::{capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode}, scene::CameraSpec};
+use ara_render::{graph::{Graph, State}, renderer::post::ToneMap};
 use std::{collections::BTreeMap, path::PathBuf};
 
 mod passes;

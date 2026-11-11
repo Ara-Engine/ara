@@ -11,7 +11,7 @@ use crate::state::EditorState;
 use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
 use ara_ops::Store;
-use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
+use ara_frame::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
 use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 pub use gltf::ModelCache;
@@ -412,7 +412,7 @@ impl DocumentView {
                         color_lumens: color.extend(intensity).into(),
                         direction_outer: direction.extend(0.8).into(),
                         parameters: [if kind == "spot" { 1. } else { 0. }, 0.94, 0., 1.],
-                        ..ara_render::scene::Light::ZERO
+                        ..ara_frame::scene::Light::ZERO
                     });
                 }
             }

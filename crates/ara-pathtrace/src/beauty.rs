@@ -1,7 +1,7 @@
 //! Pinned CC0 furniture arranged as a photographic interior; fetched assets stay local.
 use crate::scenes::{mat, quad};
 use anyhow::Result;
-use ara_render::scene::{CameraSpec, Scene};
+use ara_frame::scene::{CameraSpec, Scene};
 use glam::{Mat4, Vec3};
 use std::path::Path;
 
@@ -74,7 +74,7 @@ pub fn scene(path: &Path) -> Result<Scene> {
     ] {
         let image = image::open(path.join("wood_floor").join(name))?.to_rgba8();
         let index = scene.textures.len() as u32;
-        scene.textures.push(ara_render::scene::Texture {
+        scene.textures.push(ara_frame::scene::Texture {
             size: [image.width(), image.height()],
             rgba: image.into_raw(),
             srgb,

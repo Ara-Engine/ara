@@ -2,10 +2,8 @@
 #[cfg(test)]
 use crate::world::EditWorldView;
 use crate::{Editor, gpu::NativeUi, overlay};
-use ara_render::{
-    Renderer,
-    capture::{CaptureRequest, ViewMode},
-};
+use ara_frame::{capture::{CaptureRequest, ViewMode}};
+use ara_render::{Renderer};
 use glam::Vec3;
 #[cfg(test)]
 use serde_json::json;
@@ -1197,7 +1195,7 @@ impl SceneView {
         &self,
         renderer: &mut Renderer,
         request: &CaptureRequest,
-    ) -> anyhow::Result<ara_render::capture::Capture> {
+    ) -> anyhow::Result<ara_frame::capture::Capture> {
         renderer.wait_scene_frame()?;
         let mut capture = if renderer.is_native() {
             renderer.capture_completed(request)?

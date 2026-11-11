@@ -35,6 +35,7 @@ ara-play-host = { path = "../ara-play-host" }
 ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-json.workspace = true
 ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
+ara-frame = { path = "../ara-frame" }
 ara-render = { path = "../ara-render" }
 ara-renderlab = { path = "../ara-renderlab" }
 ara-render-fidelity = { path = "../ara-render-fidelity", optional = true }
