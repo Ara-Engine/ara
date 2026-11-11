@@ -37,7 +37,8 @@ pub(super) fn view(s: &super::Studio) -> stillkit::el::El<super::Studio> {
         "21x9" => Some(21.0 / 9.0),
         "4x3" => Some(4.0 / 3.0),
         "9x16" => Some(9.0 / 16.0),
-        _ => None,
+        // A fixed resolution letterboxes to its own aspect (Play renders at its size).
+        _ => resolution(aspect).map(|[w, h]| w as f32 / h as f32),
     };
     // A fixed aspect letterboxes the player inside the area (Unity's Game view).
     let fitted = ratio.and_then(|ratio| {
@@ -242,19 +243,31 @@ fn setting_bool(s: &super::Studio, key: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// The fixed resolution an aspect setting names (`1920x1080`), when it names one: Play
+/// renders at exactly that size and the Game view scales it to fit, as Unity's does.
+pub(super) fn resolution(aspect: &str) -> Option<[u32; 2]> {
+    let (w, h) = aspect.split_once('x')?;
+    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+    (w >= 320 && h >= 320).then_some([w, h])
+}
+
 /// The Game view's toolbar (Unity's): aspect, Maximize on Play, statistics.
 fn toolbar(s: &super::Studio, aspect: &str) -> stillkit::el::El<super::Studio> {
     use ara_kit::{icons, ui::*};
     use stillkit::el::{Align, row};
     let l = &s.look;
     const KEY: &str = "game/aspect";
-    const ASPECTS: [(&str, &str); 6] = [
+    const ASPECTS: [(&str, &str); 10] = [
         ("free", "Free aspect"),
         ("16x9", "16:9"),
         ("16x10", "16:10"),
         ("21x9", "21:9"),
         ("4x3", "4:3"),
         ("9x16", "9:16 portrait"),
+        ("1920x1080", "1920 × 1080"),
+        ("2560x1440", "2560 × 1440"),
+        ("1280x720", "1280 × 720"),
+        ("1080x1920", "1080 × 1920"),
     ];
     let title = ASPECTS
         .iter()
@@ -474,7 +487,7 @@ impl Game {
             self.host.resolved = Arc::clone(resolved);
         }
         // A frame still on the GPU: draw nothing new this pass.
-        let ready = self.layer.ready()?;
+        let ready = self.layer.ready(renderer)?;
         let gpu = ui_device(renderer.gpu());
         self.host.live = false;
         // What to draw: each live player's frame in its tile, else the preview.

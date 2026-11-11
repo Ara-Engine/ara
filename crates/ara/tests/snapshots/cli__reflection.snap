@@ -1,6 +1,5 @@
 ---
 source: crates/ara/tests/cli.rs
-assertion_line: 121
 expression: out
 ---
 {
@@ -660,6 +659,11 @@ expression: out
           "type": "list<AnimCondition>",
           "doc": "Typed AND predicates; empty means unconditional.",
           "default": []
+        },
+        "blend": {
+          "type": "option<ValueCurve>",
+          "doc": "How the cross-fade's weight rises: the target's weight (0 to 1) over the fade's progress (0 to 1). None is a straight line.",
+          "default": null
         }
       }
     },
@@ -2537,6 +2541,101 @@ expression: out
             "linear",
             "step"
           ]
+        }
+      }
+    },
+    "CurveExtrapolation": {
+      "kind": "enum",
+      "doc": "What a curve does before its first key or after its last.",
+      "variants": {
+        "clamp": {
+          "doc": "Holds the end key's value."
+        },
+        "loop": {
+          "doc": "Repeats the keyed span."
+        },
+        "pingPong": {
+          "doc": "Repeats the keyed span, mirrored every other time."
+        }
+      }
+    },
+    "CurveInterpolation": {
+      "kind": "enum",
+      "doc": "How the segment from a key to the next one moves.",
+      "variants": {
+        "cubic": {
+          "doc": "A cubic shaped by both keys' slopes."
+        },
+        "linear": {
+          "doc": "A straight line to the next key."
+        },
+        "constant": {
+          "doc": "This key's value until the next key."
+        }
+      }
+    },
+    "CurveKey": {
+      "kind": "struct",
+      "doc": "One key of a curve.",
+      "fields": {
+        "time": {
+          "type": "f32",
+          "doc": "Where the key sits on the curve's time axis.",
+          "default": 0
+        },
+        "value": {
+          "type": "f32",
+          "doc": "The curve's value at the key.",
+          "default": 0
+        },
+        "inSlope": {
+          "type": "f32",
+          "doc": "The slope arriving at the key (value per unit time), used when `tangent` is Broken.",
+          "default": 0
+        },
+        "outSlope": {
+          "type": "f32",
+          "doc": "The slope leaving the key (value per unit time), used when `tangent` is Free or Broken.",
+          "default": 0
+        },
+        "tangent": {
+          "type": "CurveTangent",
+          "doc": "How the key's slopes are chosen.",
+          "default": "auto",
+          "options": [
+            "auto",
+            "flat",
+            "free",
+            "broken"
+          ]
+        },
+        "interpolation": {
+          "type": "CurveInterpolation",
+          "doc": "How the segment from this key to the next moves.",
+          "default": "cubic",
+          "options": [
+            "cubic",
+            "linear",
+            "constant"
+          ]
+        }
+      }
+    },
+    "CurveTangent": {
+      "kind": "enum",
+      "doc": "How a key's slopes are chosen.",
+      "variants": {
+        "auto": {
+          "doc": "Smooth through the neighbours without overshooting them; flat at the ends and at peaks and dips."
+        },
+        "flat": {
+          "doc": "Level on both sides."
+        },
+        "free": {
+          "doc": "One slope set by hand on both sides (`out_slope`)."
+        },
+        "broken": {
+          "doc": "Separate slopes set by hand on each side."
         }
       }
     },
@@ -9170,6 +9269,37 @@ expression: out
           "type": "string",
           "doc": "Complete native UI XML. Existing identity metadata may be retained or omitted.",
           "required": true
+        }
+      }
+    },
+    "ValueCurve": {
+      "kind": "struct",
+      "doc": "Values over time: keys in time order, joined by cubic, linear or constant segments.",
+      "fields": {
+        "keys": {
+          "type": "list<CurveKey>",
+          "doc": "The keys, in strictly increasing time order.",
+          "default": []
+        },
+        "before": {
+          "type": "CurveExtrapolation",
+          "doc": "What the curve does before its first key.",
+          "default": "clamp",
+          "options": [
+            "clamp",
+            "loop",
+            "pingPong"
+          ]
+        },
+        "after": {
+          "type": "CurveExtrapolation",
+          "doc": "What the curve does after its last key.",
+          "default": "clamp",
+          "options": [
+            "clamp",
+            "loop",
+            "pingPong"
+          ]
         }
       }
     },
