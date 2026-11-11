@@ -5155,7 +5155,7 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
         )
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
-    let renderer = crate::studio::viewport::prepare_renderer(
+    let (_device, renderer) = crate::studio::viewport::prepare_renderer(
         scene,
         [64, 64],
         super::present_extensions(),
@@ -5794,7 +5794,7 @@ impl HiddenScene {
                 )
                 .unwrap()
         });
-        let mut renderer = crate::studio::viewport::prepare_renderer(
+        let (_device, mut renderer) = crate::studio::viewport::prepare_renderer(
             scene,
             [320, 240],
             super::present_extensions(),
@@ -5989,7 +5989,7 @@ fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
         )
         .unwrap()
     });
-    let mut renderer = crate::studio::viewport::prepare_renderer(
+    let (_device, mut renderer) = crate::studio::viewport::prepare_renderer(
         scene,
         [320, 240],
         super::present_extensions(),
@@ -6052,7 +6052,7 @@ fn agents_capture_the_window_with_the_scene_in_it_on_this_gpu() {
             )
             .unwrap()
     });
-    let mut renderer = crate::studio::viewport::prepare_renderer(
+    let (_device, mut renderer) = crate::studio::viewport::prepare_renderer(
         scene,
         [320, 240],
         super::present_extensions(),

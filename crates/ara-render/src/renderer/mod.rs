@@ -120,11 +120,75 @@ pub struct HdrExposure {
     pub fallback: f32,
 }
 
+/// The device a renderer records on.
+///
+/// An owned hold boxes the device so its address stays put when the renderer
+/// moves. A borrowed hold points at a device boxed by its owner; drop the
+/// renderer before that owner.
+struct GpuHold {
+    owned: Option<Box<GpuDevice>>,
+    ptr: *mut GpuDevice,
+}
+
+impl GpuHold {
+    fn owned(gpu: GpuDevice) -> Self {
+        let mut owned = Box::new(gpu);
+        let ptr = owned.as_mut() as *mut GpuDevice;
+        Self {
+            owned: Some(owned),
+            ptr,
+        }
+    }
+
+    /// # Safety
+    /// `ptr` is a valid device that outlives this hold and is not borrowed
+    /// through another `&mut` while this hold's device is borrowed. The
+    /// allocation must not move; a `Box<GpuDevice>` satisfies that.
+    unsafe fn borrowed(ptr: *mut GpuDevice) -> Self {
+        Self { owned: None, ptr }
+    }
+
+    fn device(&self) -> &GpuDevice {
+        // SAFETY: `ptr` meets the `borrowed`/`owned` contract for this hold's life.
+        unsafe { &*self.ptr }
+    }
+
+    fn device_mut(&mut self) -> &mut GpuDevice {
+        // SAFETY: `ptr` meets the `borrowed`/`owned` contract for this hold's life.
+        unsafe { &mut *self.ptr }
+    }
+}
+
+impl Drop for GpuHold {
+    fn drop(&mut self) {
+        // A borrowed hold does not destroy the owner's device.
+        drop(self.owned.take());
+    }
+}
+
+impl std::ops::Deref for GpuHold {
+    type Target = GpuDevice;
+    fn deref(&self) -> &GpuDevice {
+        self.device()
+    }
+}
+
+impl std::ops::DerefMut for GpuHold {
+    fn deref_mut(&mut self) -> &mut GpuDevice {
+        self.device_mut()
+    }
+}
+
+// SAFETY: the pointer addresses this hold's own box, or a boxed device the
+// caller keeps alive and sends with the renderer. `GpuDevice` itself is `Send`.
+unsafe impl Send for GpuHold {}
+
 /// Vulkan renderer with persistent extracted scene resources and per-view histories.
 /// Calls are serialized for v0 diagnostics; logical queue transfers remain explicit.
 pub struct Renderer {
-    /// GPU ownership and native window integration surface.
-    gpu: GpuDevice,
+    /// Device this renderer records on. Owned, or borrowed from the caller's box
+    /// (`on_device`).
+    gpu: GpuHold,
     /// Display size: TAA history, output and captures.
     size: [u32; 2],
     /// Render size of the scene passes (G-buffer, depth, HDR, IDs, motion); smaller
@@ -350,7 +414,25 @@ impl Renderer {
     }
     /// Prepare targets and pipelines on an existing exclusive GPU owner. Native
     /// window integrations can retain their swapchain while this runs on a worker.
-    pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: GpuDevice) -> Result<Self> {
+    pub fn with_device(scene: Scene, size: [u32; 2], gpu: GpuDevice) -> Result<Self> {
+        Self::open_on(GpuHold::owned(gpu), scene, size)
+    }
+
+    /// Build this renderer on a device owned by the caller.
+    ///
+    /// The renderer records through `gpu` and does not destroy it. Drop the
+    /// renderer first. Moving the owner afterwards is sound when `gpu` points
+    /// into a `Box` (the device address does not change).
+    ///
+    /// # Safety
+    /// `gpu` must stay valid and unaliased as `&mut` for every borrow this
+    /// renderer makes, and must outlive the renderer.
+    pub unsafe fn on_device(scene: Scene, size: [u32; 2], gpu: *mut GpuDevice) -> Result<Self> {
+        // SAFETY: the caller upholds `GpuHold::borrowed`.
+        Self::open_on(unsafe { GpuHold::borrowed(gpu) }, scene, size)
+    }
+
+    fn open_on(mut gpu: GpuHold, scene: Scene, size: [u32; 2]) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
         #[cfg(feature = "fidelity-lab")]
         crate::lab::declare(gpu.lab_params_mut())?;
@@ -365,30 +447,33 @@ impl Renderer {
             compiler: metadata.compiler,
             binding_layout_hash: metadata.binding_layout_hash,
         };
-        let mut load = |name: &str| -> Result<_> {
-            let cooked: ara_gpu::cooked::CookedPipeline =
-                serde_json::from_slice(&std::fs::read(artifacts.join(format!("{name}.json")))?)?;
-            ensure!(
-                cooked.key == shader_metadata.content_key,
-                "Baseline cook is incomplete; recook the pipeline manifest"
-            );
-            Ok(gpu.create_pipeline(&cooked, &artifacts)?)
-        };
-        let pipelines = Pipelines {
-            shadow: load("shadow")?,
-            gbuffer: load("gbuffer")?,
-            tile: load("tile")?,
-            lighting: load("lighting")?,
-            lighting_high: load("lighting_high")?,
-            lighting_gi: load("lighting_gi")?,
-            lighting_high_gi: load("lighting_high_gi")?,
-            lighting_refl: load("lighting_refl")?,
-            lighting_high_refl: load("lighting_high_refl")?,
-            forward: load("forward")?,
-            taa: load("taa")?,
-            tonemap: load("tonemap")?,
-            wire_composite: load("wire_composite")?,
-            outline_composite: load("outline_composite")?,
+        let pipelines = {
+            let mut load = |name: &str| -> Result<_> {
+                let cooked: ara_gpu::cooked::CookedPipeline = serde_json::from_slice(
+                    &std::fs::read(artifacts.join(format!("{name}.json")))?,
+                )?;
+                ensure!(
+                    cooked.key == shader_metadata.content_key,
+                    "Baseline cook is incomplete; recook the pipeline manifest"
+                );
+                Ok(gpu.create_pipeline(&cooked, &artifacts)?)
+            };
+            Pipelines {
+                shadow: load("shadow")?,
+                gbuffer: load("gbuffer")?,
+                tile: load("tile")?,
+                lighting: load("lighting")?,
+                lighting_high: load("lighting_high")?,
+                lighting_gi: load("lighting_gi")?,
+                lighting_high_gi: load("lighting_high_gi")?,
+                lighting_refl: load("lighting_refl")?,
+                lighting_high_refl: load("lighting_high_refl")?,
+                forward: load("forward")?,
+                taa: load("taa")?,
+                tonemap: load("tonemap")?,
+                wire_composite: load("wire_composite")?,
+                outline_composite: load("outline_composite")?,
+            }
         };
         let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(

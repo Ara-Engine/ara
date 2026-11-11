@@ -14,16 +14,17 @@ impl PresentationImage {
 
     /// Reads completed color into a capture while preserving its entity IDs,
     /// metadata and numbered overlays. Used only at an explicit capture boundary.
+    /// `gpu` is the device that published this image.
     pub fn capture(
         &self,
-        renderer: &mut Renderer,
+        gpu: &mut GpuDevice,
         capture: &mut ara_frame::capture::Capture,
     ) -> Result<()> {
         ensure!(
-            renderer.size() == self.size,
+            capture.image.width() == self.size[0] && capture.image.height() == self.size[1],
             "completed capture size differs from working view"
         );
-        crate::readback::replace(renderer, self.image, capture)
+        crate::readback::replace(gpu, self.image, self.size, capture)
     }
 
     /// Publishes a completed CopySource image. A failed replacement keeps `slot`
