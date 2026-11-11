@@ -99,6 +99,9 @@ impl PresentationImage {
             .iter()
             .map(|pass| pass.milliseconds)
             .sum();
+        // Scene frames submit this copy on `scene_graphics`. The editor UI samples
+        // the image on the other queue and requires TRANSFER_SRC.
+        gpu.publish_submission_to_ui(point)?;
         gpu.assert_clean()?;
         Ok(elapsed)
     }

@@ -1,7 +1,7 @@
 //! A deliberately blocked Scene must not block the native UI queue or the CPU.
 use ara_gpu::{
     Access, Barrier, Device, Queue, Resource, vk,
-    vulkan::{Command, QueueGate, VulkanDevice},
+    vulkan::{Command, QueueGate, VulkanDevice, image_barrier},
 };
 
 #[test]
@@ -191,5 +191,77 @@ fn deferred_frame_polls_without_waiting_and_orders_constant_writes() -> anyhow::
         [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1]
     );
     gpu.assert_clean()?;
+    Ok(())
+}
+
+/// Scene-queue `CopySource` stays `UNDEFINED` on the UI queue until
+/// `publish_submission_to_ui`. The barrier below is the editor's external-image
+/// transition; synchronization validation rejects it when that call is removed.
+/// Adapters with one graphics queue skip: both queues are the same submission.
+#[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
+fn scene_queue_copy_source_reaches_the_ui_queue() -> anyhow::Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-gpu/scene-ui-publish")
+        .join(std::process::id().to_string());
+    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    if gpu.context().scene_graphics == gpu.context().graphics {
+        return Ok(());
+    }
+    let image = gpu.create_image(
+        4,
+        4,
+        vk::Format::R8G8B8A8_UNORM,
+        vk::ImageUsageFlags::TRANSFER_SRC
+            | vk::ImageUsageFlags::TRANSFER_DST
+            | vk::ImageUsageFlags::SAMPLED,
+    )?;
+    gpu.begin_deferred_completion()?;
+    let mut commands = gpu.begin(Queue::Graphics);
+    commands.push(Command::BeginPass("SceneUi.Publish".into()));
+    commands.barriers([Barrier {
+        resource: Resource::Image(image),
+        before: Access::Undefined,
+        after: Access::CopySource,
+        handoff: None,
+    }]);
+    commands.push(Command::EndPass);
+    let point = gpu.submit(commands.finish(), &[])?;
+    let mut completion = gpu.end_deferred_completion()?;
+    // Host-wait only. `wait_completion` would publish the whole frame and hide a
+    // missing `publish_submission_to_ui`.
+    gpu.wait(point)?;
+    gpu.publish_submission_to_ui(point)?;
+    let native = gpu.native_image(image)?;
+    let barrier = image_barrier(
+        native,
+        vk::ImageAspectFlags::COLOR,
+        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        (
+            vk::PipelineStageFlags2::ALL_TRANSFER,
+            vk::AccessFlags2::TRANSFER_READ,
+        ),
+        (
+            vk::PipelineStageFlags2::FRAGMENT_SHADER,
+            vk::AccessFlags2::SHADER_SAMPLED_READ,
+        ),
+    );
+    let context = gpu.context();
+    context.immediate(|command| {
+        // SAFETY: `command` is a fresh recording buffer on this device. `native`
+        // stays alive through this submit, and the barrier is the editor UI's.
+        unsafe {
+            context.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().image_memory_barriers(&[barrier]),
+            );
+        }
+    })?;
+    gpu.assert_clean()?;
+    gpu.wait_completion(&mut completion)?;
     Ok(())
 }
