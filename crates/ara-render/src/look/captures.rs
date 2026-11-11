@@ -16,7 +16,7 @@ use super::frame::LookFrame;
 use crate::graph::{Graph, ResourceId, State};
 use anyhow::Result;
 use ara_gpu::{Access, Buffer, Device, GpuDevice, Image, Queue, Resource, vk};
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Vec3};
 
 /// Prefiltered roughness levels per capture: 0, .25, .5, .75 and 1.
 pub(crate) const LEVELS: u32 = 5;
@@ -751,6 +751,7 @@ impl Captures {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::Quat;
 
     fn slab(lo: [f32; 3], hi: [f32; 3], smooth: bool) -> ([Vec3; 2], bool) {
         ([Vec3::from_array(lo), Vec3::from_array(hi)], smooth)

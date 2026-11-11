@@ -6,7 +6,6 @@
 //! surfaces and its own previous irradiance (multiple bounces), and shades the
 //! G-buffer from the resulting irradiance volume. Lighting is deterministic: fixed
 //! directions, no per-pixel or per-frame random sampling.
-use anyhow::Result;
 use ara_gpu::{Access, Buffer, Image};
 pub use ara_frame::look::gi::{
     log_distance, moment_limit, pack_moments, ProbeLayout, ProbeLattice, ProbeSurfaces,
@@ -337,6 +336,7 @@ impl GiGpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
 
     #[test]
     fn moments_pack_to_unorm16_over_the_limit_and_upload_bit_for_bit() -> Result<()> {
