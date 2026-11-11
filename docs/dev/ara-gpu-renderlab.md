@@ -408,3 +408,41 @@ depth array; it passes on Metal and has not run on Vulkan, where it is expected 
 fail validation without the fix. It detects the fault through validation only,
 which debug builds enable. A resolve target at layer 0 of an array takes the same
 view path and has no test.
+
+## Cube-array views (found by merging Renderlab main)
+
+Renderlab's P-SKY change samples its three environment maps as
+`texture_cube_array<f32>` with a filtering sampler, in the prelude every lit program
+includes. `ViewDimension` had 2D, 2D-array and volume views only, so those inputs
+could not be published on either backend.
+
+`ViewDimension::CubeArray` publishes whole cubes over six consecutive layers each
+(+X, -X, +Y, -Y, +Z, -Z) of a square two-dimensional image, sampled only. The faces
+are still written through `D2` or `D2Array` storage views of the same image. A
+storage cube view, a non-square image and a layer count that is not whole cubes are
+contract errors on both backends.
+
+- **Vulkan:** square layered single-sample images are created `CUBE_COMPATIBLE`; the
+  device enables `imageCubeArray` whenever the driver reports it and
+  `DeviceInfo::cube_arrays` says whether it did. Without it, a cube-array view and a
+  shader module with an arrayed cube image type are both refused with a contract
+  error. The module check reads the image types, not `OpCapability SampledCubeArray`:
+  Slang emits the type without declaring the capability, and `spirv-val` accepts
+  that.
+- **Metal:** a `MTLTextureTypeCubeArray` texture view of the 2D-array texture;
+  `cube_arrays` is always true.
+
+Tests, one per backend, both named
+`cube_array_views_sample_faces_by_direction_and_cubes_by_index`: twelve layers hold
+their own index, each face of both cubes is sampled by direction, and all twelve
+come back in order; a storage cube view, a non-square image and a partial cube are
+refused. The Metal one (`metal/texture_tests.rs`) compiles MSL at run time. The
+Vulkan one (`tests/cube_arrays.rs`) runs a cooked Slang stage that stores the twelve
+samples through a 2D-array storage view, and on a device without `imageCubeArray`
+checks instead that the view and the pipeline are refused, prints `SKIPPED` and
+stops. Its shader is its own cohort (`tests/cube_shaders`, `tests/cube_cooked`),
+cooked on the Mac with every target rebuilt (SPIR-V, DXIL, metallib) under the Mac
+key, so no Windows-keyed cook was touched. On the Mac the Vulkan test passes on the
+Vulkan SDK's KosmicKrisp driver with the Khronos validation layer (`DYLD_LIBRARY_PATH`,
+`VK_LAYER_PATH` and `VK_DRIVER_FILES` pointed into the SDK); it has not run on RADV
+or NVIDIA from here.
