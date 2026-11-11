@@ -15,6 +15,7 @@ mod asset_create;
 mod asset_inspector;
 mod asset_ops;
 mod build_page;
+mod capture;
 mod chrome;
 mod commands;
 mod components;
@@ -39,6 +40,7 @@ mod panels;
 mod portals;
 mod preferences;
 mod present;
+pub(crate) mod probes;
 mod profiler;
 mod references;
 mod running;
@@ -219,6 +221,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     // The Scene's size while a resize is under way, and when it last changed.
     let mut sizing: Option<([u32; 2], Instant)> = None;
     let mut overlay_key = 0_u64;
+    // Derived probe jobs (`render.probe.*`): served against the Scene view rendered here.
+    let mut probe_owner = probes::Owner::default();
     // Native layers placed on the last pass: one shown again presents at once (on Wayland
     // a hidden layer loses its picture).
     let mut placed: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
@@ -295,8 +299,18 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         pass.phase("studio.authority");
         // The authority: protocol requests, imports, agent work.
         let (changed, sync_changed) = rt.touch(|s| {
+            // A Scene switch reaches the probe jobs before requests about the new one.
+            for _ in 0..2 {
+                if !probe_owner.invalidate_scene(&mut s.editor) {
+                    break;
+                }
+                s.editor.tick();
+            }
             server.pump(&mut s.editor);
             s.editor.tick();
+            // Cancellation reaches a running bake before the next Scene GPU work.
+            scene_dirty |=
+                probe_owner.poll_cancellations(&mut s.editor, &mut scene_view, &mut renderer);
             (
                 s.editor.host.store().revision() != revision,
                 s.editor.sync(),
@@ -440,7 +454,22 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 renderer
                     .resize(extent)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
-                if let Err(error) = rt.touch(|s| {
+                if let Err(error) = rt.touch(|s| -> ara_ui::Result<()> {
+                    // A probe bake reading this Scene holds it until its work retires.
+                    let mut safe = probe_owner.prepare_scene_change(
+                        &mut s.editor,
+                        &mut scene_view,
+                        &mut renderer,
+                    )?;
+                    if safe
+                        && probe_owner.busy()
+                        && scene_view.probe_replacement_required(&renderer, &s.editor)?
+                    {
+                        safe = probe_owner.prepare_replacement(&mut s.editor);
+                    }
+                    if !safe {
+                        return Ok(());
+                    }
                     // Frames carry the drag pose they show (`SceneView::shown_frame`).
                     scene_view.gizmo_offset = gizmo_state(s).offset;
                     scene_view.render(&mut renderer, &s.editor, &view, 1)
@@ -522,6 +551,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             if render {
                 scene_dirty = false;
             }
+            // Probe jobs advance; agents' captures read the Scene just rendered.
+            match rt.touch(|s| probe_owner.poll(&mut s.editor, &mut scene_view, &mut renderer)) {
+                Ok(probe) => {
+                    scene_dirty |= probe.scene_dirty;
+                    if probe.changed {
+                        rt.update(|_| {});
+                    }
+                }
+                Err(error) => rt.touch(|s| s.editor.report_failure(&*error)),
+            }
+            capture::serve(&mut rt, Some((&mut renderer, &scene_view)));
             // A click in the view: the entity under it through the channel map.
             pass.mark("composite");
             pass.phase("studio.game");
@@ -881,6 +921,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
             || composite
+            || probe_owner.busy()
             || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
@@ -896,6 +937,35 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         wake_at(next);
         // Sleep until an event, that wake, or an animation frame: never spin.
         wait();
+    }
+    // Probe work retires with the Scene view it read, before the renderer goes.
+    rt.touch(|s| probe_owner.begin_drain(&mut s.editor));
+    let draining = Instant::now();
+    loop {
+        let done = rt.touch(|s| -> ara_ui::Result<bool> {
+            server.pump(&mut s.editor);
+            s.editor.tick();
+            probe_owner.poll(&mut s.editor, &mut scene_view, &mut renderer)?;
+            s.editor.tick();
+            Ok(!probe_owner.busy() && !s.editor.probe_captures.busy())
+        });
+        match done {
+            Ok(true) => break,
+            Ok(false) if draining.elapsed() < Duration::from_secs(90) => {
+                std::thread::sleep(Duration::from_millis(8))
+            }
+            Ok(false) => {
+                eprintln!(
+                    "ara-editor: probe work did not retire: {}",
+                    ara_json::to_canonical_string(&probe_owner.resource_report())
+                );
+                break;
+            }
+            Err(error) => {
+                eprintln!("ara-editor: probe work failed while closing: {error}");
+                break;
+            }
+        }
     }
     renderer.wait_scene_frame().ok();
     rt.touch(|s| game.retire(&mut s.editor, &mut renderer));

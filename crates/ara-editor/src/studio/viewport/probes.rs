@@ -90,11 +90,7 @@ impl SceneView {
     }
 
     /// Cheap provenance check used only while captures are active or a read is due.
-    pub(crate) fn probe_source_matches(
-        &self,
-        editor: &Editor,
-        binding: &SceneBinding,
-    ) -> bool {
+    pub(crate) fn probe_source_matches(&self, editor: &Editor, binding: &SceneBinding) -> bool {
         self.validate_probe_frame(editor, &binding.doc, binding.source_revision)
             .is_ok()
             && self.raster.as_ref().is_some_and(|raster| {

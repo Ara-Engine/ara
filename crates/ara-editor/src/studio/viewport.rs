@@ -1090,7 +1090,7 @@ impl SceneView {
     }
     /// Captures the same completed color the Scene viewport displays; the raster
     /// capture supplies picking/mark metadata only. Render this view first.
-    pub(super) fn capture(
+    pub(crate) fn capture(
         &self,
         renderer: &mut Renderer,
         request: &CaptureRequest,
