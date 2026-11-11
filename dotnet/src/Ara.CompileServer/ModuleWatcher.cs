@@ -32,6 +32,8 @@ internal sealed class ModuleWatcher : IDisposable
     /// <summary>Folders whose entries changed and have not been rescanned yet (folder, slot); the scan thread debounces them.</summary>
     readonly ConcurrentDictionary<string, uint> _dirty = new(StringComparer.Ordinal);
     readonly AutoResetEvent _scanWake = new(false);
+    /// <summary>New files the folder scan has seen and is settling: the directory watcher's early event for one is covered by the delivery to come.</summary>
+    readonly ConcurrentDictionary<string, byte> _settling = new(StringComparer.Ordinal);
     readonly Thread? _scan;
     int _scans;
 
@@ -77,6 +79,15 @@ internal sealed class ModuleWatcher : IDisposable
             if (!Relevant(e.FullPath)) return;
             // Arm first, then maybe drop the echo: an echo must never be the reason a replaced file or a new folder stays unwatched.
             if (_vnode is not null) ArmFromEvent(slot, e.FullPath, e.ChangeType);
+            // A source file nobody has seen yet is reported through the folder scan, which waits for it to hold still: these
+            // events (FSEvents raises Created and Changed for a new file) can arrive within ~2 ms of its creation, between a
+            // writer's chunks.
+            if (_vnode is not null && e.ChangeType is WatcherChangeTypes.Created or WatcherChangeTypes.Changed && IsSourceInput(e.FullPath) && !_known.ContainsKey(e.FullPath)
+                && Path.GetDirectoryName(e.FullPath) is { } parent)
+            {
+                MarkDirty(slot, parent);
+                return;
+            }
             if (IsFastDuplicate(e.FullPath, e.ChangeType)) return;
             if (_vnode is not null && IsSourceInput(e.FullPath)) RememberOrForget(e.FullPath, e.ChangeType);
             _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp()));
@@ -100,8 +111,13 @@ internal sealed class ModuleWatcher : IDisposable
                 _events.Add((slot, e.FullPath, t));
             }
         };
-        w.EnableRaisingEvents = true;
-        if (_vnode is not null) ArmFolder(slot, dir);
+        // A failed start leaves nothing behind, so the caller can retry without watching the folder twice.
+        try
+        {
+            w.EnableRaisingEvents = true;
+            if (_vnode is not null) ArmFolder(slot, dir);
+        }
+        catch { w.Dispose(); throw; }
         lock (_watchers) _watchers.Add(w);
     }
 
@@ -196,6 +212,7 @@ internal sealed class ModuleWatcher : IDisposable
     void ScanFolder(uint slot, string folder)
     {
         Interlocked.Increment(ref _scans);
+        var fresh = new List<(string Path, (long Mtime, long Length) Stat)>();
         try
         {
             foreach (var info in new DirectoryInfo(folder).EnumerateFiles())
@@ -210,29 +227,44 @@ internal sealed class ModuleWatcher : IDisposable
                     if (known == stat) continue;
                     _vnode!.Replace(slot, path); // a replacement is a new inode: watch it, whatever the old watch is doing
                     Deliver(slot, path, stat);
-                    continue;
                 }
-                if (!SettleNewFile(path, ref stat)) continue;
-                _known[path] = stat;
-                _vnode!.Replace(slot, path);
-                if (stat.Length > 0) Deliver(slot, path, stat);
+                else fresh.Add((path, stat));
             }
+            // New files settle together, once: a checkout adding hundreds of files costs one wait, not one per file.
+            foreach (var (path, _) in fresh) _settling[path] = 0;
+            try
+            {
+                foreach (var (path, stat) in SettleNewFiles(fresh))
+                {
+                    _known[path] = stat;
+                    _vnode!.Replace(slot, path);
+                    if (stat.Length > 0) Deliver(slot, path, stat);
+                }
+            }
+            finally { foreach (var (path, _) in fresh) _settling.TryRemove(path, out _); }
         }
         catch (IOException) { /* the folder went away; the directory watcher reports it */ }
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>Waits (up to ~12 ms) until a new file's stat holds still for ~3 ms; false when it disappeared.</summary>
-    static bool SettleNewFile(string path, ref (long Mtime, long Length) stat)
+    /// <summary>
+    /// Waits (up to ~12 ms in total, however many files) until every new file's stat has held still for ~3 ms; returns the ones
+    /// that still exist, with their latest stat.
+    /// </summary>
+    static List<(string Path, (long Mtime, long Length) Stat)> SettleNewFiles(List<(string Path, (long Mtime, long Length) Stat)> files)
     {
-        for (var i = 0; i < 4; i++)
+        for (var round = 0; round < 4 && files.Count > 0; round++)
         {
             Spin(3);
-            if (Stat(path) is not { } now) return false;
-            if (now == stat) return true;
-            stat = now;
+            var stable = true;
+            for (var i = files.Count - 1; i >= 0; i--)
+            {
+                if (Stat(files[i].Path) is not { } now) { files.RemoveAt(i); continue; }
+                if (now != files[i].Stat) { files[i] = (files[i].Path, now); stable = false; }
+            }
+            if (stable) break;
         }
-        return true;
+        return files;
     }
 
     void Deliver(uint slot, string path, (long Mtime, long Length) stat)
@@ -270,9 +302,9 @@ internal sealed class ModuleWatcher : IDisposable
     /// state is ever dropped. A delete never is an echo.
     /// </summary>
     bool IsFastDuplicate(string path, WatcherChangeTypes type) =>
-        _vnode is not null && type != WatcherChangeTypes.Deleted && _deliveries.TryGetValue(path, out var delivery)
+        _vnode is not null && type != WatcherChangeTypes.Deleted && (_settling.ContainsKey(path) || _deliveries.TryGetValue(path, out var delivery)
         && Stopwatch.GetElapsedTime(delivery.At).TotalMilliseconds < DuplicateWindowMs
-        && Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length;
+        && Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length);
 
     void AddVnode(uint slot, string path) => _vnode!.Add(slot, path);
 
@@ -334,6 +366,9 @@ internal sealed class ModuleWatcher : IDisposable
         }
         catch (OperationCanceledException) { }
     }
+
+    /// <summary>Folder watchers started so far.</summary>
+    internal int Count { get { lock (_watchers) return _watchers.Count; } }
 
     /// <summary>Stops every watcher and the pump.</summary>
     public void Dispose()

@@ -23,13 +23,14 @@ internal sealed class VnodeEvents : IDisposable
     readonly Action<uint, string> _changed;
     readonly Action<uint, string>? _directoryChanged;
     readonly int _queue;
-    readonly ConcurrentDictionary<int, (uint Slot, string Path, bool Directory)> _byDescriptor = new();
+    readonly ConcurrentDictionary<int, (uint Slot, string Path, bool Directory, long Token)> _byDescriptor = new();
     readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
     readonly Thread _thread;
     readonly int _maxFiles;
     /// <summary>Slots only directories may take: one directory watch covers every atomic save in its folder, a file watch one file's in-place saves.</summary>
     readonly int _directoryReserve;
     int _held;
+    long _tokens;
     volatile bool _stopped;
 
     /// <summary>
@@ -78,9 +79,12 @@ internal sealed class VnodeEvents : IDisposable
         }
         // Both maps are complete before the kernel can deliver the first event for this descriptor, so a delete or
         // rename that lands right after registration finds (and removes) both entries.
-        _byDescriptor[fd] = (slot, path, directory);
+        // The kevent carries this registration's token back with every event: a descriptor number is reused as soon as it is
+        // closed, and an event still queued for the previous owner of the number must not act on its successor.
+        var token = Interlocked.Increment(ref _tokens);
+        _byDescriptor[fd] = (slot, path, directory, token);
         var flags = directory ? NoteWrite | NoteDelete | NoteRename | NoteRevoke : NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke;
-        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = flags };
+        var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = flags, UserData = (nint)token };
         if (_stopped || Register(_queue, ref change, 1, IntPtr.Zero, 0, IntPtr.Zero) < 0) Remove(fd);
     }
 
@@ -131,7 +135,7 @@ internal sealed class VnodeEvents : IDisposable
             for (var i = 0; i < count; i++)
             {
                 var fd = (int)events[i].Ident;
-                if (!_byDescriptor.TryGetValue(fd, out var entry)) continue;
+                if (!_byDescriptor.TryGetValue(fd, out var entry) || entry.Token != events[i].UserData) continue;
                 if ((events[i].FFlags & (NoteDelete | NoteRename | NoteRevoke)) != 0)
                 {
                     if (entry.Directory) RemoveUnder(entry.Path);
