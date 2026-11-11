@@ -92,6 +92,10 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 gizmo::end(s, true);
                 return Handled::Yes;
             }
+            if key == stillkit::el::KeyCode::ESCAPE && s.local.rect_drag.is_some() {
+                super::rect_tool::end(s, true);
+                return Handled::Yes;
+            }
             // Esc puts a piloted Camera's move under way back.
             if key == stillkit::el::KeyCode::ESCAPE && s.local.pilot.active() {
                 match s.local.pilot.cancel(&mut s.editor) {
@@ -111,6 +115,8 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 None => Handled::No,
             }
         })
+        // The Rect tool's rect, under the overlays.
+        .children(super::rect_tool::layer(s))
         .children(super::scene_overlays::layer(s))
         .children(s.local.marquee.map(|(a, b, _)| {
             let c = &l.c;
@@ -240,7 +246,25 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
                 size: e.size,
                 window: (e.at.x, e.at.y),
             });
-            return gizmo::hover(s, at, e.size);
+            // Both: the rect and the axis gizmo never show together.
+            return gizmo::hover(s, at, e.size) | super::rect_tool::hover(s, at, e.size);
+        }
+        (PointerPhase::Down, Button::Left)
+            if !e.mods.alt && super::rect_tool::begin(s, at, e.size) =>
+        {
+            return true;
+        }
+        (PointerPhase::Move, Button::Left) if s.local.rect_drag.is_some() => {
+            super::rect_tool::drive(s, at, e.mods.alt, e.mods.shift);
+            return true;
+        }
+        (PointerPhase::Up, Button::Left) if s.local.rect_drag.is_some() => {
+            super::rect_tool::end(s, false);
+            return true;
+        }
+        (PointerPhase::Cancel, _) if s.local.rect_drag.is_some() => {
+            super::rect_tool::end(s, true);
+            return true;
         }
         (PointerPhase::Down, Button::Left) if !e.mods.alt && gizmo::begin(s, at, e.size) => {
             return true;

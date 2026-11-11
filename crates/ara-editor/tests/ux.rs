@@ -738,7 +738,7 @@ fn viewport_toolbar_overlays_the_image_and_first_click_selects_each_tool() {
         ("tool-Translate", "W", Tool::Translate),
         ("tool-Rotate", "E", Tool::Rotate),
         ("tool-Scale", "R", Tool::Scale),
-        ("tool-Universal", "T", Tool::Universal),
+        ("tool-Universal", "Y", Tool::Universal),
     ] {
         let i = shell.ui.find(id).unwrap();
         let node = &shell.ui.nodes[i];

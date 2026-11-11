@@ -3104,6 +3104,24 @@ fn captures() {
         )
         .unwrap();
         rt.update(super::scene_overlays::reset);
+        // The Rect tool round the box (bounds as the host publishes them), its right edge lit.
+        rt.update(|s| {
+            super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None);
+            s.local.rect_bounds = Some([glam::Vec3::splat(-0.5), glam::Vec3::splat(0.5)]);
+            s.local.rect_hover = Some(super::rect_tool::Grip { u: 1, v: 0 });
+        });
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-rect.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| {
+            super::commands::run(s, "view.tool.move", &crate::catalog::Target::None);
+            s.local.rect_hover = None;
+        });
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
@@ -5046,4 +5064,62 @@ fn click_cost() {
             break;
         }
     }
+}
+
+#[test]
+fn the_rect_tool_resizes_from_an_edge_keeping_the_opposite_one_in_one_undo_step() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None));
+    assert_eq!(rt.state().editor.state.tool, crate::state::Tool::Rect);
+    // The host publishes the presented bounds; here, the unit box's.
+    rt.update(|s| s.local.rect_bounds = Some([glam::Vec3::splat(-0.5), glam::Vec3::splat(0.5)]));
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let size = (view.width(), view.height());
+    let c = super::rect_tool::corners(rt.state(), size).expect("the rect shows");
+    // The edge from corner 1 to 2 is the high side of the first axis; drag it outward.
+    let mid = (c[1] + c[2]) * 0.5;
+    let out = (mid - (c[0] + c[2]) * 0.5).normalize();
+    let at = |d: f32| (view.left + mid.x + out.x * d, view.top + mid.y + out.y * d);
+    let before = rt.state().editor.host.store().revision();
+    rt.pointer_move(at(0.0).0, at(0.0).1);
+    rt.frame(FRAME);
+    assert!(rt.state().local.rect_hover.is_some(), "the edge lights");
+    rt.pointer_down(at(0.0).0, at(0.0).1);
+    for step in 1..=6 {
+        rt.pointer_move(at(step as f32 * 10.0).0, at(step as f32 * 10.0).1);
+        rt.frame(FRAME);
+    }
+    assert!(
+        rt.state().local.rect_drag.is_some(),
+        "the drag holds the edge"
+    );
+    rt.pointer_up(at(60.0).0, at(60.0).1);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().editor.host.store().revision(),
+        before + 1,
+        "one transaction"
+    );
+    let record = &rt.state().resolved["e_box"].record["Transform"];
+    let scale: Vec<f64> = (0..3)
+        .map(|i| record["scale"][i].as_f64().unwrap())
+        .collect();
+    let position: Vec<f64> = (0..3)
+        .map(|i| record["position"][i].as_f64().unwrap())
+        .collect();
+    let axis = (0..3)
+        .find(|&i| (scale[i] - 1.0).abs() > 0.05)
+        .expect("one axis grew");
+    assert!(scale[axis] > 1.0, "{scale:?}");
+    assert_eq!(
+        (0..3).filter(|&i| (scale[i] - 1.0).abs() > 1e-4).count(),
+        1,
+        "{scale:?}"
+    );
+    // The opposite edge stays: the centre moves by half the growth, toward the dragged side.
+    assert!(
+        (position[axis].abs() - (scale[axis] - 1.0) * 0.5).abs() < 1e-3,
+        "{position:?} {scale:?}"
+    );
 }

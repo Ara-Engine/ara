@@ -1105,7 +1105,11 @@ fn build() -> Vec<Spec> {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "scale"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Scale)),
-        cmd("view.tool.universal", "Universal Tool", "transform", "T", "Move, rotate or scale using the combined handles.", |_, e, _| {
+        cmd("view.tool.rect", "Rect Tool", "scan", "T", "Resize and move by a rectangle round the selection, in the plane facing the view.", |_, e, _| {
+            view(e, json!({"gizmos": true}))?;
+            act(e, "editor.tool", json!({"tool": "rect"}))
+        }).when(|_| Avail::Blocked("The Rect tool is in the new editor; open it without --legacy-ui.".into())),
+        cmd("view.tool.universal", "Universal Tool", "transform", "Y", "Move, rotate or scale using the combined handles.", |_, e, _| {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "universal"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Universal)),
