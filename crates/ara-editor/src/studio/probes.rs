@@ -332,7 +332,7 @@ impl Owner {
 
     /// Tells the backend about cancel intents recorded since the last poll; no retirement
     /// check or GPU work (for passes that do not render).
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) fn deliver_cancellations(&mut self, editor: &mut Editor, scene: &mut SceneView) {
         self.cancel_eligible(editor, scene);
     }
