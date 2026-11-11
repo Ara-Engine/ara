@@ -206,8 +206,11 @@ impl Gesture {
         }
         true
     }
-    /// Applies the world-space map `map` to every root's pose at pointer-down (the Rect
-    /// tool's resize and move). A non-finite map leaves the preview as it was.
+    /// Applies the world-space map `map` (the Rect tool's resize and move) to every root's
+    /// pose at pointer-down as a pose it can keep: the root's position goes through the
+    /// map and each of its own axes scales by how far the map stretches that axis, its
+    /// rotation untouched. A rotated root therefore never shears, and the preview is the
+    /// exact TRS the commit writes. A non-finite map leaves the preview as it was.
     pub fn map_world(&mut self, map: Mat4) -> bool {
         if !map.is_finite() {
             return false;
@@ -217,7 +220,21 @@ impl Gesture {
             else {
                 continue;
             };
-            let next = parent.inverse() * map * *parent * *start;
+            let (scale, rotation, position) = (*parent * *start).to_scale_rotation_translation();
+            let stretch = Vec3::new(
+                map.transform_vector3(rotation * Vec3::X).length(),
+                map.transform_vector3(rotation * Vec3::Y).length(),
+                map.transform_vector3(rotation * Vec3::Z).length(),
+            );
+            let world = Mat4::from_scale_rotation_translation(
+                scale * stretch,
+                rotation,
+                map.transform_point3(position),
+            );
+            // Kept as the TRS `commands` will write, so what shows is what commits.
+            let (scale, rotation, position) =
+                (parent.inverse() * world).to_scale_rotation_translation();
+            let next = Mat4::from_scale_rotation_translation(scale, rotation, position);
             if next.is_finite() {
                 *current = next;
             }

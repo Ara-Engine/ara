@@ -902,10 +902,26 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 )),
                 eye,
             );
-            let commands = target
-                .entities(&e.state)
+            let selected = target.entities(&e.state);
+            // A selected entity under another selected one follows it, as in Unity.
+            let ancestor_selected = |id: &str| {
+                let mut at = s.resolved.get(id).and_then(|entity| entity.parent.clone());
+                while let Some(parent) = at {
+                    if selected.contains(&parent) {
+                        return true;
+                    }
+                    at = s
+                        .resolved
+                        .get(&parent)
+                        .and_then(|entity| entity.parent.clone());
+                }
+                false
+            };
+            let mut skipped = 0;
+            let commands: Vec<Value> = selected
                 .iter()
-                .map(|id| {
+                .filter(|id| !ancestor_selected(id))
+                .filter_map(|id| {
                     let parent = s
                         .resolved
                         .get(id)
@@ -915,13 +931,25 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                     let (_, rotation, position) =
                         (parent.inverse() * view).to_scale_rotation_translation();
                     let (x, y, z) = rotation.to_euler(glam::EulerRot::XYZ);
-                    json!({"cmd": "transform.set", "args": {
+                    // A parent scaled to nothing has no inverse: nothing to place under it.
+                    if !(position.is_finite() && x.is_finite() && y.is_finite() && z.is_finite()) {
+                        skipped += 1;
+                        return None;
+                    }
+                    Some(json!({"cmd": "transform.set", "args": {
                         "entities": [id],
                         "position": position.to_array(),
                         "rotation": [x.to_degrees(), y.to_degrees(), z.to_degrees()],
-                    }})
+                    }}))
                 })
                 .collect();
+            if skipped > 0 {
+                super::note(
+                    s,
+                    format!("Align with View skipped {skipped} under a parent scaled to zero"),
+                );
+            }
+            let e = &mut s.editor;
             apply(e, commands, "Align with view")
         }
         "transform.move_to_view" => {

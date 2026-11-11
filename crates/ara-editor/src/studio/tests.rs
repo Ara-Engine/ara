@@ -5476,3 +5476,99 @@ fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
         before = now;
     }
 }
+
+#[test]
+fn a_rect_drag_on_a_rotated_object_commits_the_pose_it_previewed() {
+    let mut rt = open();
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_turned","name":"Turned","components":{"Transform":{"position":[0,0,0],"rotation":[0,45,0]},"MeshRenderer":{"shape":"box"}}}})],
+                "Create",
+                None,
+            )
+            .unwrap();
+    });
+    rt.update(|s| {
+        s.select(vec!["e_turned".into()], false);
+        super::commands::run(s, "view.tool.rect", &crate::catalog::Target::None);
+        // The box turned 45° about Y spans ±0.71 in X and Z (world handles).
+        let half = glam::Vec3::new(0.7072, 0.5, 0.7072);
+        s.local.rect_bounds = Some([-half, half]);
+    });
+    settle(&mut rt);
+    let view = rt.find("scene/view").unwrap();
+    let c = super::rect_tool::corners(rt.state(), (view.width(), view.height()))
+        .expect("the rect shows");
+    let mid = (c[1] + c[2]) * 0.5;
+    let out = (mid - (c[0] + c[2]) * 0.5).normalize();
+    let at = |d: f32| (view.left + mid.x + out.x * d, view.top + mid.y + out.y * d);
+    rt.pointer_move(at(0.0).0, at(0.0).1);
+    rt.frame(FRAME);
+    rt.pointer_down(at(0.0).0, at(0.0).1);
+    for step in 1..=6 {
+        rt.pointer_move(at(step as f32 * 10.0).0, at(step as f32 * 10.0).1);
+        rt.frame(FRAME);
+    }
+    // The pose the Scene shows at the end of the drag (no parent: local is world).
+    let previewed = rt
+        .state()
+        .editor
+        .gesture
+        .as_ref()
+        .and_then(|g| g.current.get("e_turned").copied())
+        .expect("the drag previews");
+    rt.pointer_up(at(60.0).0, at(60.0).1);
+    rt.frame(FRAME);
+    let committed = crate::world::world_transform(&rt.state().resolved, "e_turned").unwrap();
+    let (scale, rotation, _) = committed.to_scale_rotation_translation();
+    assert!(
+        committed.abs_diff_eq(previewed, 1e-3),
+        "committed {committed:?} != previewed {previewed:?}"
+    );
+    let turned = glam::Quat::from_rotation_y(45f32.to_radians());
+    assert!(
+        rotation.dot(turned).abs() > 0.9999,
+        "the rotation stays 45° about Y: {rotation:?}"
+    );
+    assert!(
+        (scale - glam::Vec3::ONE).abs().max_element() > 0.05,
+        "it resized: {scale}"
+    );
+}
+
+#[test]
+fn align_with_view_moves_a_selected_parent_and_its_selected_child_follows() {
+    let mut rt = open();
+    rt.touch(|s| {
+        s.editor
+            .apply(
+                vec![json!({"cmd":"entity.create","args":{"id":"e_bulb","name":"Bulb","parent":"e_lamp","components":{"Transform":{"position":[0,1,0]}}}})],
+                "Create",
+                None,
+            )
+            .unwrap();
+    });
+    rt.update(|s| s.resolve());
+    assert_eq!(
+        rt.state().resolved["e_bulb"].parent.as_deref(),
+        Some("e_lamp")
+    );
+    rt.update(|s| s.select(vec!["e_lamp".into(), "e_bulb".into()], false));
+    rt.update(|s| super::commands::run(s, "transform.align_view", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let camera = rt.state().editor.state.camera;
+    let lamp = crate::world::world_transform(&rt.state().resolved, "e_lamp").unwrap();
+    assert!(
+        lamp.w_axis.truncate().abs_diff_eq(camera.position(), 1e-3),
+        "the parent is at the camera"
+    );
+    let bulb: Vec<f64> = (0..3)
+        .map(|i| {
+            rt.state().resolved["e_bulb"].record["Transform"]["position"][i]
+                .as_f64()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(bulb, [0.0, 1.0, 0.0], "the child keeps its place under it");
+}
