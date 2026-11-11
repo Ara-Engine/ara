@@ -5123,3 +5123,31 @@ fn the_rect_tool_resizes_from_an_edge_keeping_the_opposite_one_in_one_undo_step(
         "{position:?} {scale:?}"
     );
 }
+
+#[test]
+fn the_game_scale_slider_zooms_live_and_keeps_the_scale_on_release() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "window.game", &crate::catalog::Target::None));
+    settle(&mut rt);
+    assert_eq!(super::game::zoom(rt.state()), 1.0);
+    let track = rt.find("game/scale").expect("the Scale slider shows");
+    let (y, from) = (track.center().y, track.left + 1.0);
+    rt.pointer_move(from, y);
+    rt.frame(FRAME);
+    rt.pointer_down(from, y);
+    let to = track.left + track.width() * 0.75;
+    rt.pointer_move(to, y);
+    rt.frame(FRAME);
+    let live = super::game::zoom(rt.state());
+    assert!((live - 4.0).abs() < 0.15, "live while dragging: {live}");
+    assert_eq!(
+        rt.state().editor.state.settings["game.scale"].as_f64(),
+        Some(1.0),
+        "written only on the release"
+    );
+    rt.pointer_up(to, y);
+    settle(&mut rt);
+    let kept = rt.state().editor.state.settings["game.scale"].as_f64();
+    assert!(kept.is_some_and(|v| (v - 4.0).abs() < 0.15), "{kept:?}");
+    assert_eq!(super::game::zoom(rt.state()), kept.unwrap() as f32);
+}

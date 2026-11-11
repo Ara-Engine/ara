@@ -423,6 +423,20 @@ pub const DEFS: &[Def] = &[
         Lit::S("free"),
     ),
     def(
+        "game.scale",
+        User,
+        "Game",
+        "Scale",
+        "Zoom into the Game view's picture about its centre, to inspect it pixel by pixel.",
+        Kind::Number {
+            min: 1.,
+            max: 5.,
+            step: 0.1,
+            unit: "x",
+        },
+        Lit::N(1.),
+    ),
+    def(
         "game.maximizeOnPlay",
         User,
         "Game",
