@@ -629,7 +629,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     ((pick.u * size[0] as f32) as u32).min(size[0].saturating_sub(1)),
                     ((pick.v * size[1] as f32) as u32).min(size[1].saturating_sub(1)),
                 ];
-                let entity = match compositor.pick(&mut renderer, &view, revision, at) {
+                let entity = match compositor.pick(&mut renderer, None, &view, revision, at) {
                     Ok(entity) => entity,
                     Err(error) => {
                         rt.touch(|s| s.editor.report_failure(&*error));

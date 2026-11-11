@@ -6,7 +6,9 @@
 //! the repack is not wired on Vulkan. Captures go under
 //! `target/tmp/ara-editor-gpu-packed-ids-scene`.
 #![cfg(target_os = "macos")]
-use ara_editor_gpu::{IdSource, NativeUi, Overlay, UiDevice, open_presentation};
+use ara_editor_gpu::{
+    IdHit, IdPick, IdSource, NativeUi, Overlay, PackedPick, UiDevice, open_presentation,
+};
 use ara_render::{
     Renderer,
     capture::ViewMode,
@@ -338,5 +340,25 @@ fn the_packed_path_composes_the_direct_frame_pixel_for_pixel() -> ara_ui::Result
         index: 1,
         color: ORANGE,
     })?;
+
+    // The click reads the same packed ids: through the one-texel readback it names the
+    // channel ara-render's own pick reports, on an object, the ground and the sky.
+    let _ = rig.frame("click", IdSource::Repacked(ENTITY), true, Vec::new())?;
+    let mut pick = PackedPick(|at| rig.ui.repacked_texel(at));
+    for (at, entity) in [
+        (hovered, Some(HOVERED)),
+        (selected, Some(SELECTED)),
+        (pixel_of(Vec3::new(0., -0.05, 1.2)), Some(GROUND)),
+        ([2, 2], None),
+    ] {
+        let from_render = rig.renderer.entity_at(at)?;
+        assert_eq!(from_render, entity, "the scene at {at:?}");
+        let hit = pick.id_at(at)?;
+        let channel = hit
+            .id()
+            .map(|id| rig.renderer.entities()[id as usize - 1].0);
+        assert_eq!(channel, entity, "the packed click at {at:?} ({hit:?})");
+        assert!(entity.is_some() || hit == IdHit::Nothing);
+    }
     Ok(())
 }

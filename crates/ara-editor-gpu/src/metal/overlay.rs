@@ -25,7 +25,9 @@ impl NativeUi {
                         size[0],
                         size[1],
                         vk::Format::R8G8B8A8_UNORM,
-                        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+                        vk::ImageUsageFlags::COLOR_ATTACHMENT
+                            | vk::ImageUsageFlags::SAMPLED
+                            | vk::ImageUsageFlags::TRANSFER_SRC,
                     )?;
                     let slot = self.device.sampled_image(image, false)?;
                     if let Some(old) = self.packed.replace(Target { image, size, slot }) {

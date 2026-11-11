@@ -10,7 +10,7 @@ mod metal;
 #[cfg(not(target_os = "macos"))]
 mod vulkan;
 
-pub use ids::{IdHit, IdSource, NO_ID_HIT};
+pub use ids::{IdHit, IdPick, IdSource, NO_ID_HIT, PackedPick};
 #[cfg(target_os = "macos")]
 pub use metal::{NativeUi, PlaySurface, UiDevice, open_presentation, ui_device};
 #[cfg(not(target_os = "macos"))]

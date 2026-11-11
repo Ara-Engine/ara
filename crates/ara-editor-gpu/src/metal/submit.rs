@@ -304,4 +304,36 @@ impl NativeUi {
         }
         image::RgbaImage::from_raw(size[0], size[1], out).context("UI screenshot dimensions")
     }
+
+    /// The texel at `at` of the repacked id image (`IdSource::Repacked`), bytes as stored,
+    /// after the last frame: the debug source's click (wrap it in `PackedPick`). Reads the
+    /// whole image back.
+    pub fn repacked_texel(&mut self, at: [u32; 2]) -> Result<[u8; 4]> {
+        self.wait_previous()?;
+        let packed = self
+            .packed
+            .as_ref()
+            .context("no repacked id image: render a frame with IdSource::Repacked first")?;
+        let (image, size) = (packed.image, packed.size);
+        anyhow::ensure!(
+            at[0] < size[0] && at[1] < size[1],
+            "ID pick outside the image"
+        );
+        let readback = self
+            .device
+            .create_readback_buffer(u64::from(size[0]) * u64::from(size[1]) * 4)?;
+        let mut rec = self.device.begin(Queue::Graphics);
+        rec.push(transition(image, Access::ShaderRead, Access::CopySource));
+        rec.push(Command::ReadImage {
+            source: image,
+            destination: readback,
+        });
+        // The next frame rewrites it from Undefined, as the repack always does.
+        let point = self.device.submit(rec.finish(), &[])?;
+        self.device.resolve(point)?;
+        let pixels = self.device.read(readback);
+        Device::retire(&mut self.device, Resource::Buffer(readback))?;
+        let at = (at[1] as usize * size[0] as usize + at[0] as usize) * 4;
+        Ok(pixels?[at..at + 4].try_into()?)
+    }
 }

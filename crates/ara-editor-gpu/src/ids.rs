@@ -54,6 +54,25 @@ impl IdHit {
     }
 }
 
+/// Asks an id source what is under a Scene pixel: the click. Hover and the click read
+/// the same ids. A host whose ids live elsewhere (Renderlab's one-pixel request)
+/// implements it and hands it to the editor's `Compositor::pick`; nothing in this crate
+/// changes.
+pub trait IdPick {
+    /// The hit under `pixel`, in display pixels of the Scene view's output.
+    fn id_at(&mut self, pixel: [u32; 2]) -> anyhow::Result<IdHit>;
+}
+
+/// An [`IdPick`] over a packed image's one-texel readback: `read` returns the RGBA8 texel
+/// at a pixel, bytes as stored.
+pub struct PackedPick<F>(pub F);
+
+impl<F: FnMut([u32; 2]) -> anyhow::Result<[u8; 4]>> IdPick for PackedPick<F> {
+    fn id_at(&mut self, pixel: [u32; 2]) -> anyhow::Result<IdHit> {
+        Ok(IdHit::from_packed((self.0)(pixel)?))
+    }
+}
+
 /// Where the Scene overlays read object ids. Each handle names an external image
 /// attached with `NativeUi::external_image`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
