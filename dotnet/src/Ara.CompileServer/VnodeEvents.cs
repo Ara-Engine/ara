@@ -13,7 +13,8 @@ namespace Ara.CompileServer;
 internal sealed class VnodeEvents : IDisposable
 {
     /// <summary>One descriptor per watched file; beyond this the directory watcher alone covers the rest.</summary>
-    const int MaxFiles = 1024;
+    const int DefaultMaxFiles = 1024;
+    const int RlimitNofile = 8;
     const short EvfiltVnode = -4;
     const ushort EvAdd = 0x1, EvClear = 0x20;
     const uint NoteDelete = 0x1, NoteWrite = 0x2, NoteExtend = 0x4, NoteRename = 0x20, NoteRevoke = 0x40;
@@ -24,12 +25,16 @@ internal sealed class VnodeEvents : IDisposable
     readonly ConcurrentDictionary<int, (uint Slot, string Path)> _byDescriptor = new();
     readonly ConcurrentDictionary<string, int> _byPath = new(StringComparer.Ordinal);
     readonly Thread _thread;
+    readonly int _maxFiles;
     volatile bool _stopped;
 
     /// <summary><paramref name="changed"/> receives (slot, path) on the watcher thread for each in-place write.</summary>
-    internal VnodeEvents(Action<uint, string> changed)
+    internal VnodeEvents(Action<uint, string> changed, int maxFiles = DefaultMaxFiles)
     {
         _changed = changed;
+        // Never take more than a quarter of the process's descriptor limit: the server also needs descriptors
+        // for source reads, memory-mapped references, pipes and the other watchers.
+        _maxFiles = Math.Min(maxFiles, (int)Math.Min(DescriptorLimit() / 4, int.MaxValue));
         _queue = kqueue();
         if (_queue < 0) throw new InvalidOperationException("kqueue is unavailable");
         _thread = new Thread(Pump) { Name = "ara-vnode", IsBackground = true };
@@ -42,7 +47,7 @@ internal sealed class VnodeEvents : IDisposable
     /// <summary>Starts watching a file. Failures (a missing file, no descriptors left) leave it to the directory watcher.</summary>
     internal void Add(uint slot, string path)
     {
-        if (_stopped || _byPath.ContainsKey(path) || _byPath.Count >= MaxFiles) return;
+        if (_stopped || _byPath.ContainsKey(path) || _byPath.Count >= _maxFiles) return;
         var fd = open(path, OEvtOnly | OCloexec);
         if (fd < 0) return;
         var change = new KEvent { Ident = (nuint)fd, Filter = EvfiltVnode, Flags = (ushort)(EvAdd | EvClear), FFlags = NoteWrite | NoteExtend | NoteDelete | NoteRename | NoteRevoke };
@@ -74,7 +79,12 @@ internal sealed class VnodeEvents : IDisposable
                 var fd = (int)events[i].Ident;
                 if (!_byDescriptor.TryGetValue(fd, out var entry)) continue;
                 if ((events[i].FFlags & (NoteDelete | NoteRename | NoteRevoke)) != 0) Remove(fd);
-                else _changed(entry.Slot, entry.Path);
+                else
+                {
+                    // A failing callback must not end the watcher thread (and with it every later fast save).
+                    try { _changed(entry.Slot, entry.Path); }
+                    catch (Exception) { /* the directory watcher still reports the save */ }
+                }
             }
         }
     }
@@ -85,6 +95,26 @@ internal sealed class VnodeEvents : IDisposable
         _thread.Join(1000);
         foreach (var fd in _byDescriptor.Keys.ToArray()) Remove(fd);
         _ = close(_queue);
+    }
+
+    /// <summary>The soft limit on open descriptors; a conservative 256 when it cannot be read.</summary>
+    static ulong DescriptorLimit()
+    {
+        var limit = new RLimit();
+        return getrlimit(RlimitNofile, ref limit) == 0 && limit.Current > 0 ? limit.Current : 256;
+    }
+
+    /// <summary>How many files are watched right now (open descriptors held by this class).</summary>
+    internal int WatchedCount => _byPath.Count;
+
+    /// <summary>Descriptors this instance still owns; equals <see cref="WatchedCount"/> unless one leaked.</summary>
+    internal int DescriptorCount => _byDescriptor.Count;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RLimit
+    {
+        public ulong Current;
+        public ulong Maximum;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -110,4 +140,5 @@ internal sealed class VnodeEvents : IDisposable
     [DllImport("libc", EntryPoint = "kevent")] static extern int Wait(int queue, IntPtr changes, int changeCount, [Out] KEvent[] events, int eventCount, ref TimeSpec timeout);
     [DllImport("libc", SetLastError = true)] static extern int open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
     [DllImport("libc")] static extern int close(int descriptor);
+    [DllImport("libc")] static extern int getrlimit(int resource, ref RLimit limit);
 }
