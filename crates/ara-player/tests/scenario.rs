@@ -369,7 +369,6 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
         serde_json::to_string_pretty(&summary).unwrap()
     );
     drop(agent);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The same demo in an SDL3 window, driven over MCP: a warm windowed player from the
@@ -440,5 +439,4 @@ fn agent_plays_the_demo_in_a_window() {
         .unwrap()
     );
     drop(agent);
-    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -1,6 +1,7 @@
 //! Diagnostics for what the Renderlab path does not render: nothing is dropped
 //! silently. Each feature reports once per renderer (`ARA_RENDERLAB_UNSUPPORTED`), each exceeded limit
-//! once (`ARA_RENDERLAB_LIMIT`).
+//! once (`ARA_RENDERLAB_LIMIT`), each run-time failure the path works around once
+//! (`ARA_RENDERLAB_FAULT`).
 use std::collections::BTreeSet;
 
 /// Features and limits already reported.
@@ -24,6 +25,14 @@ impl Gaps {
     pub fn limit(&mut self, limit: &'static str, effect: &str) {
         if self.reported.insert(limit) {
             eprintln!("ARA_RENDERLAB_LIMIT: the scene exceeds Renderlab's {limit}: {effect}");
+        }
+    }
+
+    /// Something the path relies on failed at run time and it carries on without (a GPU
+    /// readback that never completes, a device error); `detail` says what and what follows.
+    pub fn fault(&mut self, what: &'static str, detail: &str) {
+        if self.reported.insert(what) {
+            eprintln!("ARA_RENDERLAB_FAULT: {what}: {detail}");
         }
     }
 

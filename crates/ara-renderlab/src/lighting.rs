@@ -172,19 +172,20 @@ pub(crate) fn lights<'a>(
 /// A display-referred meter for frames Ara would meter automatically: Renderlab has
 /// manual exposure only, so the bridge steers its stops until the image's log-mean
 /// luminance sits at middle grey. Each rendered frame adapts toward the target the
-/// last frame read back measured (`next`); frames are read back every frame while the
-/// meter snaps and every `READBACK_EVERY`th otherwise (`due`, `observe`).
+/// last reading measured (`next`). The GPU meters a frame every frame while the meter
+/// snaps and every `READBACK_EVERY`th otherwise (`due`), and its histogram arrives a few
+/// frames later without any frame waiting for it (`meter::Readbacks`, `observe`).
 pub(crate) struct Metering {
     /// The meter: exposure stops before the compensation and its curve.
     stops: Option<f32>,
-    /// Where the meter adapts to: the last frame read back's meter plus its error,
-    /// within the EV100 limits (the meter itself inside the dead band).
+    /// Where the meter adapts to: the last reading's meter plus its error, within the
+    /// EV100 limits (that meter itself inside the dead band).
     target: Option<f32>,
     /// Snap to the meter's target instead of adapting, until the image settles or the
     /// meter is pinned at an EV100 limit: the first frame and every cut, as Ara resets
     /// its exposure history.
     snapping: bool,
-    /// Frames until the meter next wants a frame read back.
+    /// Frames until the meter next wants a frame metered.
     wait: u32,
 }
 
@@ -193,8 +194,8 @@ pub(crate) struct Metering {
 /// a paused game or a redrawn tick still adapts.
 const FRAME_SECONDS: f32 = 1. / 60.;
 
-/// Frames per readback once the meter adapts or rests; between readbacks it adapts
-/// toward the last target, so a two-stop change costs a handful of readbacks.
+/// Frames per metered frame once the meter adapts or rests; between them it adapts
+/// toward the last target.
 const READBACK_EVERY: u32 = 16;
 
 /// Ara's compensation curve at scene EV100 `ev` (`exposureCurve`, shaders/look.slangh):
@@ -262,46 +263,38 @@ impl Metering {
         (meter, meter + look.compensation + curve)
     }
 
-    /// Whether the frame just rendered should be read back for `observe`: every frame
-    /// while the meter snaps, then every `READBACK_EVERY`th. Call once per frame.
+    /// Whether the frame just rendered should be metered (a GPU histogram pass whose
+    /// reading `observe` takes): every frame while the meter snaps, then every
+    /// `READBACK_EVERY`th. Call once per frame.
     pub fn due(&mut self) -> bool {
-        let due = self.wait == 0;
-        self.wait = self.wait.saturating_sub(1);
-        due
+        if self.wait == 0 {
+            self.wait = if self.snapping { 0 } else { READBACK_EVERY - 1 };
+            true
+        } else {
+            self.wait -= 1;
+            false
+        }
     }
 
-    /// Feeds back the frame rendered with `stops` from `meter` (display-encoded RGBA8),
-    /// metering as Ara's automatic exposure does: the log mean of the luminance between
-    /// the look's low and high percentiles, steered to middle grey before the
-    /// compensation and its curve, within its EV100 limits. Sets the target `next` adapts
-    /// toward, or snaps to it after a cut.
-    pub fn observe(&mut self, look: &FrameEnvironment, meter: f32, stops: f32, rgba8: &[u8]) {
-        // Every 37th pixel: a few thousand samples of a 1080p frame.
-        let mut samples: Vec<f32> = rgba8
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .step_by(37)
-            .map(|pixel| {
-                let linear = |v: u8| (f32::from(v) / 255.).powf(2.2);
-                (0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2]))
-                    .max(1e-4)
-                    .ln()
-            })
-            .collect();
-        if samples.is_empty() {
-            return;
-        }
-        samples.sort_by(f32::total_cmp);
+    /// The pass `due` asked for was not queued: ask again next frame, not 16 frames on.
+    pub fn retry(&mut self) {
+        self.wait = 0;
+    }
+
+    /// Feeds back the frame rendered with `stops` from `meter`, seen as the log-luminance
+    /// `histogram` of the GPU's meter pass (`meter::Readbacks`), a few frames late: metering
+    /// as Ara's automatic exposure does, the log mean of the luminance between the look's low
+    /// and high percentiles, steered to middle grey before the compensation and its curve,
+    /// within its EV100 limits. Sets the absolute target `next` adapts toward (so a late
+    /// reading does not set the running meter back), or snaps to it after a cut.
+    pub fn observe(&mut self, look: &FrameEnvironment, meter: f32, stops: f32, histogram: &[u32]) {
         let limits = &look.auto_exposure;
-        let at =
-            |p: f32| ((samples.len() as f32 * p.clamp(0., 1.)) as usize).min(samples.len() - 1);
-        let (low, high) = (
-            at(limits.low_percentile),
-            at(limits.high_percentile).max(at(limits.low_percentile) + 1),
-        );
-        let trimmed = &samples[low..high.min(samples.len())];
-        let mean = (trimmed.iter().sum::<f32>() / trimmed.len().max(1) as f32).exp();
+        let Some(log_mean) =
+            crate::meter::log_mean(histogram, limits.low_percentile, limits.high_percentile)
+        else {
+            return;
+        };
+        let mean = log_mean.exp();
         // The meter's error, without the compensation and curve the frame was rendered with.
         let error = (0.18 / (mean / (stops - meter).exp2())).log2();
         let stops_at = |ev: f32| ara_render_fidelity::settings::exposure_from_ev100(ev, 0.).log2();
@@ -312,7 +305,7 @@ impl Metering {
         // How far the limits let the meter go: a meter pinned at a limit has settled as
         // far as it can, so a snap ends there too.
         let reach = (meter + error).clamp(darkest.min(brightest), brightest.max(darkest)) - meter;
-        self.stops = Some(meter);
+        self.stops.get_or_insert(meter);
         if reach.abs() < 0.15 {
             // A dead band keeps a settled image (and its temporal history) still.
             self.target = Some(meter);
@@ -325,7 +318,6 @@ impl Metering {
         } else {
             self.target = Some(meter + reach);
         }
-        self.wait = if self.snapping { 0 } else { READBACK_EVERY - 1 };
     }
 }
 
@@ -431,10 +423,22 @@ mod tests {
         FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.)
     }
 
-    /// A flat grey frame whose display luminance is `grey` (display-encoded RGBA8).
-    fn frame(grey: f32) -> Vec<u8> {
-        let v = (grey.powf(1. / 2.2) * 255.).round() as u8;
-        [v, v, v, 255].repeat(64 * 64)
+    /// What the GPU's meter pass reports for a flat grey frame whose display luminance is
+    /// `grey`.
+    fn frame(grey: f32) -> Vec<u32> {
+        // Display-encoded as the output is (sRGB), which the meter's histogram decodes.
+        let encoded = if grey <= 0.003_130_8 {
+            12.92 * grey
+        } else {
+            1.055 * grey.powf(1. / 2.4) - 0.055
+        };
+        let v = (encoded * 255.).round() as u8;
+        crate::meter::histogram_of_rgba8(&[v, v, v, 255].repeat(64 * 64), 64)
+    }
+
+    /// The same for 64 pixels of one display value (a single row).
+    fn row(value: u8) -> Vec<u32> {
+        crate::meter::histogram_of_rgba8(&[value; 4 * 64], 64)
     }
 
     /// As Ara's `exposureCurve`: held past both ends, linear between keys, none when
@@ -554,6 +558,82 @@ mod tests {
         );
     }
 
+    /// The GPU's readings arrive a few frames after the frame they describe. Three frames late,
+    /// the meter still snaps to middle grey after a cut without overshooting, and follows a
+    /// two-stop change at Ara's rate without oscillating: every reading sets an absolute
+    /// target, so a late one does not set the running meter back.
+    #[test]
+    fn late_readings_still_converge_without_overshoot() {
+        const LATE: usize = 3;
+        let look = look();
+        let mut meter = Metering::new();
+        let mut late: std::collections::VecDeque<(usize, f32, f32, Vec<u32>)> =
+            std::collections::VecDeque::new();
+        // The scene's display luminance is the exposure itself (`brightness` stops over).
+        let mut brightness = 0.;
+        let target = |brightness: f32| 0.18f32.log2() - brightness;
+        let (mut worst_over, mut first_close) = (0f32, None);
+        for f in 0..260usize {
+            if f == 120 {
+                // The scene brightens by two stops: the right meter is two stops lower.
+                brightness = 2.;
+            }
+            let (m, stops) = meter.next(-6., &look);
+            while late.front().is_some_and(|(at, ..)| f >= at + LATE) {
+                let Some((_, m, stops, histogram)) = late.pop_front() else {
+                    break;
+                };
+                meter.observe(&look, m, stops, &histogram);
+            }
+            if meter.due() {
+                let seen = frame((stops + brightness).exp2().min(1.));
+                late.push_back((f, m, stops, seen));
+            }
+            let wanted = target(brightness);
+            if f < 120 {
+                // The meter starts below the target: it must not pass it by more than the dead
+                // band, snapping included.
+                worst_over = worst_over.max(stops - wanted);
+                if (stops - wanted).abs() < 0.3 && first_close.is_none() {
+                    first_close = Some(f);
+                }
+            }
+            if f == 119 {
+                assert!(
+                    (stops - wanted).abs() < 0.3,
+                    "settled before the change: {stops}"
+                );
+            }
+            if f == 259 {
+                assert!(
+                    (stops - wanted).abs() < 0.3,
+                    "followed the change: {stops} vs {wanted}"
+                );
+            }
+        }
+        assert!(
+            // The first frame is a cut: its reading is applied LATE frames on, so the meter
+            // has snapped for the frame after that.
+            first_close.is_some_and(|f| f <= LATE + 1),
+            "the snap took {first_close:?} frames, more than LATE + 1"
+        );
+        assert!(worst_over < 0.35, "overshoot {worst_over}");
+    }
+
+    /// A pass the bridge could not queue is asked for again next frame, not 16 on.
+    #[test]
+    fn a_refused_pass_is_asked_for_again_next_frame() {
+        let mut meter = Metering::new();
+        meter.snapping = false;
+        meter.wait = 0;
+        assert!(meter.due());
+        assert!(!meter.due(), "queued: the next ask is 16 frames away");
+        meter.wait = 0;
+        assert!(meter.due());
+        meter.retry();
+        assert!(meter.due(), "refused: asked for again at once");
+    }
+
     #[test]
     fn sun_points_away_from_ara_direction_and_dark_suns_are_none() {
         let mut frame = RenderFrame::default();
@@ -601,21 +681,21 @@ mod tests {
         let mut look = FrameEnvironment::resolve(&Default::default(), glam30::Vec3::ZERO, 1.);
         let mut metering = Metering::new();
         assert_eq!(metering.next(-3., &look), (-3., -3.));
-        metering.observe(&look, -3., -3., &[255; 4 * 64]);
+        metering.observe(&look, -3., -3., &row(255));
         assert!(metering.next(0., &look).1 < -3., "a white frame stops down");
         // sRGB 118 is about 18% linear: no change.
         metering.stops = Some(-5.);
-        metering.observe(&look, -5., -5., &[118; 4 * 64]);
+        metering.observe(&look, -5., -5., &row(118));
         assert_eq!(metering.next(0., &look).1, -5.);
         // Compensation renders brighter, and the meter does not fight it.
         look.compensation = 1.;
         assert_eq!(metering.next(0., &look), (-5., -4.));
-        metering.observe(&look, -5., -4., &[160; 4 * 64]);
+        metering.observe(&look, -5., -4., &row(160));
         assert_eq!(metering.next(0., &look), (-5., -4.));
         // The EV100 limits bound the meter: EV100 5 is about -5.3 stops.
         look.auto_exposure.maximum_ev100 = 5.;
         metering.snap();
-        metering.observe(&look, -5., -4., &[255; 4 * 64]);
+        metering.observe(&look, -5., -4., &row(255));
         assert!(metering.next(0., &look).0 >= -5.27 - 1e-3);
     }
 }
