@@ -1,14 +1,15 @@
-//! Terrain and foliage on the Renderlab path, first pass: ordinary meshes.
+//! Terrain and foliage on the Renderlab path: ordinary meshes.
 //!
 //! Each resident terrain tile is the world-space mesh Ara's presenter already builds
-//! (`ara_runtime_render::terrain_mesh`), at full resolution. Its colour is the base
-//! colour factor of each of the terrain's splat-layer materials, blended by the tile's
-//! splat weights into one texture; a terrain without layer materials has Ara's default
-//! white surface. Each foliage instance of
-//! a resident tile draws the parts of its rule's model. What that leaves out against
-//! `ara-landscape`: distance levels of detail, the layered terrain materials and their
-//! virtual texture, and wind. Tiles and foliage follow tile residency, so streaming
-//! still decides what exists.
+//! (`ara_runtime_render::terrain_mesh`), at full resolution. Its surface is the splat
+//! program (`splat`): the terrain's layer materials' colour, roughness and normal maps
+//! blended by the tile's splat weights as Ara's renderer shades them, with side
+//! projections and detail maps to the user's detail distance. Without the program each
+//! layer's base colour factor is blended into one texture; a terrain without layer
+//! materials has Ara's default white surface. Each foliage instance of a resident tile
+//! draws the parts of its rule's model. What that leaves out against `ara-landscape`:
+//! distance levels of detail, the virtual texture, and wind. Tiles and foliage follow
+//! tile residency, so streaming still decides what exists.
 use crate::{gaps::Gaps, scene, texture};
 use anyhow::Result;
 use ara_runtime::extract::Draw;
@@ -19,10 +20,10 @@ use ara_runtime_render::{
 use glam34::{Mat4 as AraMat4, Quat, Vec3 as AraVec3};
 use renderlab::engine::ProgramId;
 use renderlab::{
-    asset::{TextureRole, Wrap},
+    asset::{TangentBasis, TextureRole, Wrap},
     engine::{
-        Engine, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Sampler, TextureId,
-        TextureRef, Vertex,
+        Engine, Mat4, MaterialDesc, MaterialId, MeshData, MeshId, ObjectId, Sampler, TangentStream,
+        TextureId, TextureRef, Vertex,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -78,8 +79,12 @@ pub(crate) struct Terrain {
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
     foliage_key: u64,
-    /// The layer atlas and parameters, and the layers' key they were built for.
-    splat: Option<(u64, crate::splat::Splat)>,
+    /// The layer atlas and parameters, and the layers' key they were built for; `None`
+    /// inside when the build failed (the tiles then show the layers' factors, and the
+    /// build is not retried until the key changes).
+    splat: Option<(u64, Option<crate::splat::Splat>)>,
+    /// Decoded layer maps kept across rebuilds of the atlases.
+    quadrants: crate::splat::Quadrants,
     /// The splat program once tried: `Some(None)` when Renderlab rejected it.
     splat_program: Option<Option<ProgramId>>,
 }
@@ -117,15 +122,36 @@ impl Terrain {
             .splat
             .as_ref()
             .is_some_and(|(key, _)| *key != layers.key);
-        let old_atlas = if stale {
-            self.splat.take().map(|(_, s)| s.atlas)
+        let old_textures: Vec<TextureId> = if stale {
+            self.splat
+                .take()
+                .and_then(|(_, s)| s)
+                .map(|s| s.textures().collect())
+                .unwrap_or_default()
         } else {
-            None
+            Vec::new()
         };
-        if program.is_some() && self.splat.is_none() && !layers.maps.is_empty() {
-            self.splat = Some((layers.key, crate::splat::build(engine, &layers.maps, gaps)?));
+        if program.is_some() && self.splat.is_none() && layers.maps.iter().any(Option::is_some) {
+            let built = crate::splat::build(
+                engine,
+                &layers.maps,
+                view.terrain_detail,
+                &mut self.quadrants,
+                gaps,
+            );
+            // A build that fails (the device refused an atlas) costs the layers' maps,
+            // not the frame.
+            let built = built
+                .map_err(|error| {
+                    gaps.unsupported(
+                        "terrain layer maps",
+                        &format!("each layer shows its base colour factor ({error:#})"),
+                    );
+                })
+                .ok();
+            self.splat = Some((layers.key, built));
         }
-        let splat = program.zip(self.splat.as_ref().map(|(_, s)| s));
+        let splat = program.zip(self.splat.as_ref().and_then(|(_, s)| s.as_ref()));
         let wanted: Vec<_> = coords
             .iter()
             .filter_map(|coord| {
@@ -160,8 +186,8 @@ impl Terrain {
                 slot.insert(place(engine, mesh, &tile.weights, &layers, splat)?);
             }
         }
-        if let Some(atlas) = old_atlas {
-            engine.remove_texture(atlas)?;
+        for texture in old_textures {
+            engine.remove_texture(texture)?;
         }
 
         // Foliage: rebuilt when the terrain generation, the resident tiles or the
@@ -318,8 +344,10 @@ impl Terrain {
 struct Layers<'a> {
     /// Linear base colour factor per splat channel; `None` without layer materials.
     colours: Option<[[f32; 3]; 4]>,
-    /// Each resolved layer's material and cooked base-colour map, for the splat atlas.
-    maps: Vec<(&'a ara_runtime::model::ModelMaterial, Option<&'a [u8]>)>,
+    /// Each layer's material and cooked maps, for the splat atlases, one entry per layer
+    /// in the splat's channel order; `None` for a layer whose material is not resolved
+    /// (still streaming, or deleted), so the layers after it keep their channels.
+    maps: Vec<Option<crate::splat::LayerMaps<'a>>>,
     roughness: f32,
     /// Changes when the colours do, so tiles are placed again.
     key: u64,
@@ -351,31 +379,70 @@ impl<'a> Layers<'a> {
         let mut colours = [[1.; 3]; 4];
         let (mut roughness, mut key) = (0., FNV);
         for (colour, reference) in colours.iter_mut().zip(references) {
-            let material = view
-                .terrain_materials
-                .get(&reference.0)
-                .map(|m| &m.material);
-            if let Some(asset) = view.terrain_materials.get(&reference.0) {
+            let asset = view.terrain_materials.get(&reference.0);
+            roughness +=
+                asset.map_or(0.5, |a| a.material.roughness) / references.len().min(4) as f32;
+            // One entry per layer, resolved or not, so splat channels keep their layers.
+            maps.push(asset.map(|asset| {
                 let material = &asset.material;
                 colour.copy_from_slice(&material.base_color[..3]);
-                let map = material
-                    .base_color_texture
-                    .and_then(|i| asset.textures.get(i))
-                    .map(|t| &t.ktx2[..]);
-                maps.push((material, map));
                 key = fnv(key, &asset.digest.0);
+                // A map's cache key: the material asset's digest and the texture slot.
+                let map = |slot: Option<usize>| {
+                    let i = slot?;
+                    let texture = asset.textures.get(i)?;
+                    Some((
+                        fnv(fnv(FNV, &asset.digest.0), &i.to_le_bytes()),
+                        &texture.ktx2[..],
+                    ))
+                };
+                crate::splat::LayerMaps {
+                    material,
+                    color: map(material.base_color_texture),
+                    normal: map(material.normal_texture),
+                    metal_roughness: map(material.metallic_roughness_texture),
+                    unsampled: material.occlusion_texture.is_some()
+                        || material.emissive_texture.is_some(),
+                }
+            }));
+            if asset.is_none() {
+                key = fnv(key, b"unresolved");
             }
-            roughness += material.map_or(0.5, |m| m.roughness) / references.len().min(4) as f32;
             for channel in colour {
                 key = fnv(key, &channel.to_bits().to_le_bytes());
             }
         }
+        // The detail distance shapes the splat's parameters: a new tier re-places tiles.
+        key = fnv(key, &view.terrain_detail.to_bits().to_le_bytes());
         Self {
             colours: Some(colours),
             maps,
             roughness: roughness.clamp(0.045, 1.),
             key,
         }
+    }
+}
+
+/// Tile tangents for the splat's frame: world +X projected onto each vertex normal,
+/// with the handedness that puts the bitangent toward +Z on upward-facing ground.
+fn splat_tangents(vertices: &[Vertex]) -> TangentStream {
+    let values = vertices
+        .iter()
+        .map(|v| {
+            let n = AraVec3::from_array(v.normal).normalize_or(AraVec3::Y);
+            let x = AraVec3::X - n * n.x;
+            let t = if x.length_squared() > 1e-8 {
+                x.normalize()
+            } else {
+                (AraVec3::Z - n * n.z).normalize_or(AraVec3::Z)
+            };
+            let handedness = if n.cross(t).z < 0. { -1. } else { 1. };
+            [t.x, t.y, t.z, handedness]
+        })
+        .collect();
+    TangentStream {
+        basis: TangentBasis::Authored,
+        values,
     }
 }
 
@@ -388,11 +455,18 @@ fn place(
     splat: Option<(ProgramId, &crate::splat::Splat)>,
 ) -> Result<Tile> {
     let vertices: Vec<Vertex> = tile.source.vertices.iter().map(scene::vertex).collect();
-    let mesh = engine.create_mesh(&MeshData {
+    let data = MeshData {
         vertices: &vertices,
         indices: &tile.source.indices,
-    })?;
+    };
     let fits = weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1];
+    // Layer normal maps need a tangent frame: the splat's (+X along the ground, the
+    // bitangent toward +Z, as the layers' world X/Z coordinates run).
+    let normals = splat.filter(|_| fits).and_then(|(_, s)| s.normals);
+    let mesh = match normals {
+        Some(_) => engine.create_mesh_with_tangents(&data, &splat_tangents(&vertices))?,
+        None => engine.create_mesh(&data)?,
+    };
     let clamp = Sampler {
         wrap_u: Wrap::Clamp,
         wrap_v: Wrap::Clamp,
@@ -417,6 +491,13 @@ fn place(
                 texture: weights,
                 sampler: clamp,
             }),
+            // The program decodes and scales the layers' normals itself; a zero scale
+            // keeps Renderlab's own normal-variance estimate off the atlas.
+            normal_texture: normals.map(|texture| TextureRef {
+                texture,
+                sampler: clamp,
+            }),
+            normal_scale: 0.,
             program: Some(program),
             parameters: &splat.parameters,
             ..Default::default()

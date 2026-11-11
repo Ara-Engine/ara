@@ -15,7 +15,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 /// Ticks an effect runs before its first composite (fires reach steady state well
 /// before); later composites advance by the elapsed ticks they are given, so a run of
 /// composited frames is a coherent animation the temporal antialiasing converges on.
-const WARM_TICKS: u32 = 150;
+/// External renderers warm a new effect by the same amount, whatever the scene tick.
+pub const WARM_TICKS: u32 = 150;
 
 fn cooked_root() -> PathBuf {
     ara_gpu::cooked::resource_dir(

@@ -12,6 +12,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   `Editor::tick`, keeps the renderer in sync (`SceneSync`), renders and composites the
   Scene when it is dirty, resolves picks, polls Assets and the diagnostics bus, applies
   `Local::focus` requests, and sleeps until the next timer (idle costs nothing).
+- `agent_work.rs`: what runs every pass whether or not the Scene is on screen: the probe
+  owner's poll (`probes.rs`) and queued captures (`capture.rs`), plus the unpresented Scene
+  render a probe bake needs (a bake advances only through Scene renders). A `viewport`
+  capture without a presented Scene fails saying so; `editor` and `layout` never need it.
 - `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
 - `game.rs`: the Game view's own layer (`GAME_LAYER`): the gameplay camera's preview outside
   Play (`app::game_preview` through its `GameHost` seam), the embedded player's frames during

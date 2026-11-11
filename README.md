@@ -1,10 +1,6 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/ara-wordmark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/brand/ara-wordmark-light.svg">
-    <img alt="Ara" src="assets/brand/ara-wordmark-light.svg" width="300">
-  </picture>
-</p>
+<p align="center"><img alt="Ara" src="assets/brand/icons/engine/ara-engine.svg" width="128"></p>
+
+<h1 align="center">Ara</h1>
 
 <p align="center"><b>An AI-native game engine in Rust.</b><br>AI agents build it. Agents and humans make games with it.</p>
 
@@ -226,4 +222,4 @@ Ara is dual-licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-
 
 Unless you state otherwise, any contribution you submit for inclusion in Ara is dual-licensed as above, without any additional terms or conditions.
 
-<p align="center"><img src="assets/brand/ara-icon.svg" width="40" alt=""></p>
+<p align="center"><img src="assets/brand/icons/engine/ara-engine-small.svg" width="40" alt=""></p>
