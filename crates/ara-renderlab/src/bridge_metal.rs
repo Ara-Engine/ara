@@ -19,8 +19,9 @@ use anyhow::{Context, Result, anyhow};
 use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command};
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::{
+    ViewId,
     backend_ara::cache::ShaderCache,
-    engine::{Light, Settings, Sun},
+    engine::{Light, Settings, Sun, ViewDesc, ViewLook},
 };
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -43,6 +44,14 @@ pub(crate) struct Bridge {
     skies: Skies,
     metering: Metering,
     max_reflection_roughness: Option<f32>,
+    /// The one view the bridge renders (the presenter's), created on the first frame.
+    view: Option<ViewId>,
+    /// What the view is set to: its size and look (its colour table is baked,
+    /// `Applied::grade`).
+    desc: ViewDesc,
+    /// The look last applied to the view without its table, so unchanged frames set
+    /// nothing.
+    last_look: Option<ViewLook>,
     cut: bool,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
@@ -83,6 +92,9 @@ impl Bridge {
             skies: Skies::new(options.constant_sky),
             metering: Metering::new(),
             max_reflection_roughness: options.max_reflection_roughness,
+            view: None,
+            desc: ViewDesc::new(1, 1),
+            last_look: None,
             cut: true,
             last_view: None,
         })
@@ -103,7 +115,6 @@ impl Bridge {
     ) -> Result<ExternalFrame> {
         let frame = view.frame;
         self.report_unsupported(view);
-        self.engine.resize(view.size[0], view.size[1])?;
         // Terrain tiles take at most half the mesh-material groups; entity draws and
         // foliage share the rest.
         let (tiles, _) =
@@ -122,19 +133,35 @@ impl Bridge {
         self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
-        self.engine.set_settings(lighting::settings(
-            view,
-            stops,
-            self.max_reflection_roughness,
-            &mut self.gaps,
-        ))?;
+        let (settings, look) =
+            lighting::settings(view, stops, self.max_reflection_roughness, &mut self.gaps);
+        self.engine.set_settings(settings)?;
         let authored = crate::grade::authored(view);
         let grade = crate::grade::key(view.look, authored);
-        if self.applied.grade != Some(grade) {
-            self.engine
-                .set_colour_lut(crate::grade::lut(view.look, authored))?;
+        let regrade = self.applied.grade != Some(grade);
+        if regrade {
+            self.desc.look.colour_lut = crate::grade::lut(view.look, authored);
             self.applied.grade = Some(grade);
         }
+        // The view: created on the first frame; a new size or look sets it (a size
+        // restarts its frame sequence, as a resize did before views).
+        if self.view.is_none()
+            || regrade
+            || self.last_look.as_ref() != Some(&look)
+            || (self.desc.width, self.desc.height) != (view.size[0], view.size[1])
+        {
+            self.desc.look = ViewLook {
+                colour_lut: self.desc.look.colour_lut.take(),
+                ..look.clone()
+            };
+            (self.desc.width, self.desc.height) = (view.size[0], view.size[1]);
+            match self.view {
+                Some(id) => self.engine.set_view(id, &self.desc)?,
+                None => self.view = Some(self.engine.create_view(&self.desc)?),
+            }
+            self.last_look = Some(look);
+        }
+        let view_id = self.view.context("the view was created above")?;
         self.skies
             .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
         let sun = lighting::sun(frame);
@@ -159,10 +186,11 @@ impl Bridge {
             self.last_view = Some(view);
         }
         if std::mem::take(&mut self.cut) {
-            self.engine.cut();
+            self.engine.cut_view(view_id);
             self.metering.snap();
         }
-        self.engine.render(gpu, &lighting::camera(frame)?)?;
+        self.engine
+            .render_view(gpu, view_id, &lighting::camera(frame)?)?;
         for refusal in self.engine.refusals() {
             self.gaps.unsupported(
                 refusal.what,
@@ -171,7 +199,7 @@ impl Bridge {
         }
         let image = self
             .engine
-            .output()
+            .view_output(view_id)
             .context("Renderlab's Metal backend produced no displayed image")?
             .image;
         // The meter: on the frames it asks for (every frame while it snaps, then every
@@ -186,7 +214,7 @@ impl Bridge {
         }
         let (gpu_ms, passes) = self
             .engine
-            .images()
+            .images(view_id)
             .map(|images| {
                 (
                     Some(images.times.gpu.as_secs_f64() * 1000.),
