@@ -12,7 +12,7 @@ namespace Ara.CompileServer;
 /// <summary>
 /// Runs the Ara analyzers (ARA0001-ARA0506) over eligible methods from a proven clean
 /// baseline, full touched trees (plus the files that spell a new member's name, see
-/// <see cref="AdditiveAnalysisScope"/>) otherwise, or the full module for declaration/reference
+/// <see cref="AnalysisScope"/>) otherwise, or the full module for declaration/reference
 /// changes. Analyzer errors retain the last good code.
 /// The module's profile (<c>gameplay</c> or <c>editor</c>) selects the API allowlist.
 /// </summary>
