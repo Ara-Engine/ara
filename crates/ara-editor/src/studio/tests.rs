@@ -4974,7 +4974,7 @@ fn a_wayland_layer_presents_and_resizes() -> anyhow::Result<()> {
         cache,
         false,
         Default::default(),
-        |_| Ok(false),
+        |_| Ok(true),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?
     .context("the renderer started")?;
