@@ -1,7 +1,7 @@
 //! The Scene view's GPU compositor: the renderer's image with the editor's scene overlays
 //! (grid, selection and agent outlines by entity, the transform gizmo) drawn over it on the
 //! GPU UI adapter, then presented into the studio's native layer. The overlays are the same
-//! `crate::overlay` geometry and shaders the legacy window used; only the host changed.
+//! `crate::overlay` geometry and shaders.
 
 use anyhow::Result;
 use ara_ui::paint::{Box2, DisplayList, Draw};
@@ -64,7 +64,7 @@ impl Compositor {
         // SAFETY: forwarded caller contract.
         let mut ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
         // Submissions return at once; the next frame checks the last one finished (the
-        // UI thread never waits on the GPU, as the legacy window does).
+        // UI thread never waits on the GPU).
         ui.set_deferred_completion(true)?;
         let mut paint = UiRenderer::default();
         paint
@@ -130,7 +130,7 @@ impl Compositor {
     pub unsafe fn frame(
         &mut self,
         renderer: &mut ara_render::Renderer,
-        scene: &mut crate::app::viewport::SceneView,
+        scene: &mut crate::studio::viewport::SceneView,
         view: &DocumentView,
         state: &EditorState,
         changed: &std::collections::BTreeMap<u64, &str>,
@@ -151,7 +151,7 @@ impl Compositor {
             self.light = state.light;
         }
         // The image on screen: the last completed frame of an asynchronous Scene, or the
-        // published presentation of a synchronous one (as the legacy window attaches it).
+        // published presentation of a synchronous one.
         scene
             .attach(&mut self.ui, renderer, state.quality)
             .map_err(|e| anyhow::anyhow!("{e}"))?;

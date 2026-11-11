@@ -118,7 +118,6 @@ fn every_component_type_classifies_with_schema_defaults() {
             "{components} draws a {kind} shape"
         );
         assert_eq!(icon.is_some(), iconed, "{components} icon");
-        assert!(TYPES.iter().any(|t| t.key == kind), "{kind} is a menu type");
     }
     // Icon-only types and the first-iconed-wins rule.
     let (_, icon) = parts::classify(&record(json!({"HeightFog":{},"VisualEffect":{}})));

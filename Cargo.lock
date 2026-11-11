@@ -909,8 +909,6 @@ dependencies = [
 name = "ara-editor"
 version = "0.0.1-alpha"
 dependencies = [
- "accesskit 0.25.2",
- "accesskit_windows 0.35.2",
  "anyhow",
  "ara-agents",
  "ara-ai",
@@ -953,13 +951,11 @@ dependencies = [
  "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
- "ara-ui-test",
  "ara-ui-text",
  "ara-update",
  "ara-vfx",
  "ara-vfx-gpu",
  "ara-world",
- "bevy_ecs",
  "blake3",
  "bytemuck",
  "dunce",
@@ -970,7 +966,6 @@ dependencies = [
  "image",
  "notify",
  "parley 0.12.0",
- "resvg",
  "sdl3-sys",
  "serde",
  "serde_json",
@@ -1005,8 +1000,10 @@ dependencies = [
  "ara-crash",
  "ara-editor",
  "ara-gpu",
+ "ara-host",
  "ara-hotpatch",
  "ara-importers",
+ "ara-profile",
  "ara-texture-gpu",
  "ara-ui",
 ]

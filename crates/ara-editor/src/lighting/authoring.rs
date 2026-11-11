@@ -1,8 +1,52 @@
 //! Presets lower to existing typed entity/nested commands, never document writes.
 use super::*;
-use crate::commands::nested::Operation;
-use crate::shell::collection_adapter;
+use crate::commands::nested::{self, Operation};
 use std::collections::BTreeMap;
+
+/// Typed nested-edit commands for a collection field on every selected entity; later calls
+/// in one batch observe earlier ones' ops (`editor.property.nested.edit`).
+#[allow(clippy::too_many_arguments)]
+fn collection_commands(
+    editor: &Editor,
+    selection: &[String],
+    field: &crate::inspector::Field,
+    reference: &serde_json::Value,
+    pointer: &str,
+    operation: Operation,
+    value: serde_json::Value,
+    index: Option<u32>,
+) -> ara_ui::Result<Vec<serde_json::Value>> {
+    let db = editor.host.store().schema();
+    let path = field.path.parse::<ara_schema::FieldPath>()?;
+    let path = db
+        .resolve_path(db.get("Entity").ok_or("Entity schema missing")?, &path)
+        .map_err(|error| error.to_string())?;
+    let fallback;
+    let reference = if reference.is_null() && field.mixed {
+        let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
+            .map_err(|errors| format!("{errors:?}"))?;
+        let primary = selection
+            .first()
+            .and_then(|entity| resolved.get(entity))
+            .ok_or("The selected object no longer exists")?;
+        fallback = ara_schema::path::get_effective(&primary.record, &path.steps)
+            .unwrap_or(serde_json::Value::Null);
+        &fallback
+    } else {
+        reference
+    };
+    let hints =
+        nested::hints(db, &path.ty, reference, pointer).map_err(|error| error.to_string())?;
+    Ok(selection
+        .iter()
+        .map(|entity| {
+            serde_json::json!({"cmd": "editor.property.nested.edit", "args": {
+                "entity": entity, "path": field.path, "pointer": pointer, "hints": hints,
+                "operation": operation, "value": value, "index": index,
+            }})
+        })
+        .collect())
+}
 
 /// Actual reflected component to create at the Scene camera's authoring pivot.
 #[derive(Clone, Copy, Debug)]
@@ -104,7 +148,7 @@ pub(crate) fn preset_commands(
         .find(|field| field.path == "PostProcessVolume.overrides")
         .ok_or("Post-process override schema is unavailable")?;
         for group in &groups {
-            calls.extend(collection_adapter::commands(
+            calls.extend(collection_commands(
                 editor,
                 &selection,
                 &field,

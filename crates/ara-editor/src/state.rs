@@ -366,7 +366,7 @@ pub struct EditorState {
     /// Collapsed hierarchy addresses.
     pub collapsed: BTreeSet<String>,
     /// Large hierarchy groups the user expanded: groups of
-    /// [`LARGE_GROUP`](crate::shell::LARGE_GROUP) or more children start collapsed.
+    /// 32 or more children start collapsed.
     pub expanded: BTreeSet<String>,
     /// Entities hidden in the scene viewport only.
     pub hidden: BTreeSet<String>,

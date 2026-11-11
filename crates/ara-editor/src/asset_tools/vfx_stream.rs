@@ -34,8 +34,6 @@ pub(crate) struct Frame {
     pub tick: u32,
     /// Live particles, all emitters.
     pub alive: u32,
-    /// Live particles per emitter, by name.
-    pub emitters: Vec<(String, u32)>,
 }
 
 pub(crate) struct VfxStream {
@@ -156,25 +154,12 @@ impl VfxStream {
                             image::RgbaImage::from_raw(768, 768, system.read_output(device)?)
                                 .ok_or_else(|| anyhow::anyhow!("invalid preview pixels"))?;
                         // Counters exist once the first tick has run.
-                        let (tick, alive, emitters) = match system.stats(device) {
-                            Ok(stats) => (
-                                stats.tick,
-                                stats.particles_alive,
-                                stats
-                                    .emitters
-                                    .into_iter()
-                                    .map(|e| (e.name, e.alive))
-                                    .collect(),
-                            ),
-                            Err(_) => (0, 0, Vec::new()),
+                        let (tick, alive) = match system.stats(device) {
+                            Ok(stats) => (stats.tick, stats.particles_alive),
+                            Err(_) => (0, 0),
                         };
                         device.assert_clean()?;
-                        Ok(Frame {
-                            image,
-                            tick,
-                            alive,
-                            emitters,
-                        })
+                        Ok(Frame { image, tick, alive })
                     })()
                     .map_err(|e| e.to_string());
                     let _ = frames.try_send(rendered);

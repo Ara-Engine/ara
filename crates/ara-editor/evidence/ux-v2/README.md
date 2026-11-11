@@ -1,5 +1,7 @@
 # Editor UX v2, phase 1: evidence
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 Produced by `./crates/ara-editor/verify-ux.ps1 -Release` (`--verify-ux`) on the
 RTX 4070 SUPER at exact physical 1440×900 and 2560×1369 (1x). Each step is
 captured in both themes as `<step>-{dark,light}.png`. Floating windows are also

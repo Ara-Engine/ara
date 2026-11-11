@@ -2,7 +2,7 @@
 use ara_doc::prefab::Resolved;
 use glam::{EulerRot, Mat4};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Selected top-level roots in tree display order; descendants travel with their root.
 pub(crate) fn selection_roots<'a>(
@@ -155,36 +155,4 @@ pub(crate) fn group_commands(
         }
     }
     Ok(calls)
-}
-
-/// Full, deduplicated target set. Presentation flags also support inner prefab entities.
-pub(crate) fn view_targets(
-    resolved: &Resolved,
-    selected: &[String],
-    descendants: bool,
-) -> Result<Vec<String>, String> {
-    if selected.is_empty() {
-        return Err("Select an entity".into());
-    }
-    for id in selected {
-        ancestors(resolved, id)?;
-    }
-    let mut found: BTreeSet<&str> = selected.iter().map(String::as_str).collect();
-    if descendants {
-        let mut children: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for (id, entity) in resolved {
-            if let Some(parent) = entity.parent.as_deref() {
-                children.entry(parent).or_default().push(id);
-            }
-        }
-        let mut pending: Vec<_> = found.iter().copied().collect();
-        while let Some(id) = pending.pop() {
-            for child in children.get(id).into_iter().flatten() {
-                if found.insert(child) {
-                    pending.push(child);
-                }
-            }
-        }
-    }
-    Ok(found.into_iter().map(str::to_owned).collect())
 }

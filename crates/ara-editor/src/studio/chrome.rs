@@ -473,19 +473,6 @@ fn dynamic(s: &Studio, kind: crate::catalog::menus::Dynamic, target: &Target) ->
                 })
                 .collect()
         }
-        Dynamic::GizmoTypes => {
-            let settings = crate::overlay::gizmos::Settings::read(&e.state);
-            crate::overlay::gizmos::TYPES
-                .iter()
-                .map(|g| {
-                    entry(
-                        g.label.to_owned(),
-                        Target::Component(g.key.to_owned()),
-                        Some(settings.shows(g.key)),
-                    )
-                })
-                .collect()
-        }
         // Floating windows, by the panels they hold; the front one is checked.
         Dynamic::Windows => {
             let front = e.state.floating.last().map(|f| f.id.clone());

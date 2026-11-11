@@ -1,5 +1,7 @@
 # Loading window
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 Design: [`docs/design/editor-opening-and-assets.md`](../../../../docs/design/editor-opening-and-assets.md), section 1.
 Open `gallery.html` to step through the states at 1× and 2×, Ara Dark beside Ara Light.
 

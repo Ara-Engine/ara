@@ -1,5 +1,7 @@
 # Terrain selection outline
 
+> **Historical evidence.** Captured from the previous editor shell, which was removed in #53: the `ara-editor --verify…` routes and `cargo test --test native` commands named here no longer exist. Kept as the visual record.
+
 Owner report (preview 14): a thin white polyline on Outpost's left summit, the outline
 of one terrain chunk (its ridge plus a vertical chunk border).
 

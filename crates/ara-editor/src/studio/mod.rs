@@ -26,8 +26,10 @@ mod create;
 mod curve;
 mod dock;
 mod game;
+mod game_preview;
 mod gizmo;
 mod graph;
+pub mod headless;
 mod hierarchy;
 mod inspector;
 mod layer;
@@ -36,6 +38,7 @@ mod loading;
 mod material_stats;
 mod mesh_paint;
 mod panels;
+mod player;
 mod portals;
 mod preferences;
 mod present;
@@ -46,7 +49,9 @@ mod references;
 mod running;
 mod scene;
 mod scene_overlays;
+pub(crate) mod scene_sync;
 mod scripts;
+pub(crate) mod setup;
 mod shortcuts;
 mod snapping;
 pub mod state;
@@ -55,6 +60,7 @@ mod style;
 mod tests;
 mod trace;
 mod vfx;
+pub(crate) mod viewport;
 
 use std::time::{Duration, Instant};
 
@@ -62,11 +68,13 @@ use stillkit::el::{Runtime, SystemClipboard};
 use stillkit::platform::current::host::{modifiers, reduced_motion, wait, wake_at};
 use stillkit::{Caption, Chrome, Event, Kind, Role, Surface, next_event};
 
-use crate::app::{Options, scene_sync::SceneSync, viewport::SceneView};
 use crate::transport::Server;
 use crate::world::EditWorldView as _;
 use crate::{Editor, settings};
+use scene_sync::SceneSync;
+pub use setup::Options;
 pub use state::Studio;
+use viewport::SceneView;
 
 /// V, held during a move to snap vertex to vertex (a virtual-key code).
 const VERTEX_KEY: u16 = 0x56;
@@ -87,7 +95,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         Some(user_settings),
         ara_host::HostConfig::default(),
     )?;
-    crate::app::setup::prepare(&mut editor, &options).map_err(|e| anyhow::anyhow!("{e}"))?;
+    setup::prepare(&mut editor, &options).map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
         "Ara editor authority listening on 127.0.0.1:{}",
@@ -114,8 +122,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     surface.set_caption(Caption::Compact);
     let scale = surface.scale();
     let (sw, sh) = stillkit::platform::current::host::screen_size();
-    let w = ((1600.0 * scale) as i32).min(sw - 40);
-    let h = ((1000.0 * scale) as i32).min(sh - 80);
+    // A bounded run opens at the requested size in device pixels (`--size`); otherwise the
+    // studio's own.
+    let (want_w, want_h) = if options.bounded() {
+        (options.size[0] as f32, options.size[1] as f32)
+    } else {
+        (1600.0 * scale, 1000.0 * scale)
+    };
+    let w = (want_w as i32).min(sw - 40);
+    let h = (want_h as i32).min(sh - 80);
     surface.place(((sw - w) / 2, (sh - h) / 2, w, h));
     let size = surface.client_size();
     let mut studio = Studio::new(editor, (size.0 as f32 / scale, size.1 as f32 / scale));
@@ -136,7 +151,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut portals = portals::Portals::default();
     // In the background (automated captures, tests beside a person's work) the window
     // shows without activating or taking focus; otherwise it comes forward, active.
-    if options.background {
+    if options.hidden() {
+        // `--frames N`: never shown. The loop and the protocol server run as usual.
+        rt.touch(|s| s.local.background = true);
+    } else if options.background || options.screenshot {
         rt.touch(|s| s.local.background = true);
         surface.show();
     } else {
@@ -166,7 +184,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     })?;
     let cache = rt.state().editor.host.root().join(".ara/gpu");
     let mut quit = false;
-    let renderer = crate::app::viewport::prepare_renderer(
+    let renderer = viewport::prepare_renderer(
         scene,
         extent,
         present_extensions(),
@@ -233,6 +251,10 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut scene_dirty = true;
     // The import gate: held until the project's imports settle (see `loading`).
     let mut gate = Some(rt.touch(|s| loading::Gate::new(&s.editor, options.unattended())));
+    // A bounded run counts frames and ends itself: `--frames N`, or `--screenshot` (60 unless
+    // given). Presented Scene frames count when the window shows; hidden, the loop's own.
+    let frame_limit = options.bounded().then(|| options.frames.unwrap_or(60));
+    let mut frames = 0_u64;
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
@@ -989,6 +1011,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.profiling = recording);
         }
         was_recording = recording;
+        if let Some(limit) = frame_limit {
+            if options.hidden() || presented {
+                frames += 1;
+            }
+            if frames >= limit {
+                if options.screenshot {
+                    capture::screenshot(
+                        &mut rt,
+                        Some((&mut renderer, &scene_view)),
+                        &options.output,
+                    )?;
+                }
+                break;
+            }
+        }
         let busy = flying
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
@@ -1001,6 +1038,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let next = [
             rt.wake_at().map(|at| started + at),
             busy.then(|| Instant::now() + Duration::from_millis(8)),
+            // A bounded run counts frames: it never idles for its half second.
+            frame_limit.map(|_| Instant::now() + Duration::from_millis(16)),
             // The card's clock and the import feed are read on this wake while it holds.
             gated.then(|| Instant::now() + Duration::from_millis(100)),
             sizing.map(|(_, at)| at + Duration::from_millis(125)),

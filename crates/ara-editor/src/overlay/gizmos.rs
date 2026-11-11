@@ -15,42 +15,8 @@ mod tests;
 mod wire;
 
 use super::*;
-pub(crate) use billboard::install;
 use glam::Mat4;
 use parts::{Icon, Part};
-
-/// One row of the Gizmos menu: a component family with its own visibility switch.
-pub(crate) struct GizmoType {
-    /// Key stored in `viewport.gizmoTypes` (the main component's name).
-    pub key: &'static str,
-    /// Menu label.
-    pub label: &'static str,
-}
-const fn kind(key: &'static str, label: &'static str) -> GizmoType {
-    GizmoType { key, label }
-}
-/// Every gizmo type, in Gizmos menu order.
-pub(crate) const TYPES: &[GizmoType] = &[
-    kind("Light", "Light"),
-    kind("Camera", "Camera"),
-    kind("AudioSource", "Audio Source"),
-    kind("AudioListener", "Audio Listener"),
-    kind("ReverbZone", "Reverb Zone"),
-    kind("AcousticPortal", "Acoustic Portal"),
-    kind("ReflectionProbe", "Reflection Probe"),
-    kind("PostProcessVolume", "Post-process Volume"),
-    kind("HeightFog", "Fog, Sky & Environment"),
-    kind("LocalFogVolume", "Local Fog Volume"),
-    kind("VisualEffect", "Visual Effect"),
-    kind("Collider", "Collider"),
-    kind("CharacterController", "Character Controller"),
-    kind("Joint", "Joint"),
-    kind("NavAgent", "Nav Agent"),
-    kind("NavObstacle", "Nav Obstacle"),
-    kind("NavLink", "Nav Link"),
-    kind("NavMeshSurface", "Nav Mesh Surface"),
-    kind("Perceiver", "Perceiver"),
-];
 
 /// The Gizmos menu's choices, read from editor settings.
 #[derive(Clone, Debug, PartialEq)]

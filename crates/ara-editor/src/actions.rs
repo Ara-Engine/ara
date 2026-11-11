@@ -256,7 +256,7 @@ impl Service for EditorService {
             Method::new::<EditorImports>(
                 db,
                 "editor.imports",
-                "Where the project's imports stand (stage, counts, every failed import with its error) and whether the studio's import gate still holds its views; `release: true` opens it without a person, for a studio an agent started.",
+                "Where the project's imports stand (stage, counts, every failed import with its error) and whether the studio's import gate still holds its views; `release: true` opens it without a person, for a studio an agent started; the window acts on its next pass, so the reply can still say `holding`: poll until the gate is `open` before capturing.",
             ),
             Method::new::<EditorWindow>(
                 db,
@@ -712,7 +712,7 @@ impl EditorService {
             "editor.view" => {
                 let p: EditorView = parse(params)?;
                 if let Some(mode) = p.view_mode {
-                    if !crate::app::viewport::VIEW_MODES
+                    if !crate::studio::viewport::VIEW_MODES
                         .iter()
                         .any(|(name, ..)| *name == mode)
                     {

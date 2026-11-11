@@ -5,8 +5,8 @@
 //! - `perf` builds and runs the player on frozen exported packs (Outpost, Hangar,
 //!   Showcase) per preset at 2560×1440, validation off, hidden window;
 //! - `ara-samples capture --reference` (the visual sweep) supplies ꟻLIP and RMSE;
-//! - the editor's `--verify-responsiveness` probe supplies editor startup, Scene CPU,
-//!   Play and input latency, on a cold project copy and then warm.
+//! - the editor's responsiveness rows (startup, Scene CPU, Play, input latency) read
+//!   "not measured": that probe went with the legacy editor window.
 //!
 //! Every GPU step runs under the `ara-dev gpu` lock. A row with no measurement reads
 //! "not measured", never "pass". Readiness timeouts explicitly fail GPU rows;

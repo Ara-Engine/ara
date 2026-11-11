@@ -4,47 +4,14 @@
 //! import gate must never wait for a person who is not there.
 use ara_proto::Endpoint;
 use ara_rpc::Client;
-use serde_json::{Value, json};
-use std::path::PathBuf;
+use serde_json::json;
+mod common;
 use std::time::{Duration, Instant};
-
-/// A project whose scene uses `models/crate.gltf`; the glTF is `{}`, which fails to import.
-fn project() -> PathBuf {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ara-editor/background-capture")
-        .join(std::process::id().to_string());
-    let _ = std::fs::remove_dir_all(&root);
-    let content = root.join(ara_doc::AUTHORING_ROOT);
-    std::fs::create_dir_all(content.join("levels")).unwrap();
-    std::fs::create_dir_all(content.join("models")).unwrap();
-    std::fs::create_dir_all(root.join("settings")).unwrap();
-    let write = |path: PathBuf, value: Value| {
-        std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap()
-    };
-    write(
-        root.join("ara.project.json"),
-        json!({"name": "Background capture", "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION, "main": "levels/main.scene"}),
-    );
-    write(
-        content.join("levels/main.scene"),
-        json!({"$schema":"ara://schema/scene/1","id":"sc_back0001","records":{
-            "e_box00001":{"name":"Box","Transform":{},"MeshRenderer":{"shape":"box"}},
-            "e_crate001":{"name":"Crate","Transform":{"position":[2,0,0]},
-                "MeshRenderer":{"model":"@models/crate.gltf#as_crate0001"}}}}),
-    );
-    std::fs::write(content.join("models/crate.gltf"), "{}").unwrap();
-    write(
-        content.join("models/crate.gltf.import.json"),
-        json!({"$schema":"ara://schema/import/1","id":"as_crate0001","records":{
-            "i_settings":{"importer":"ara.gltf","version":"1","settings":{}}}}),
-    );
-    root
-}
 
 #[test]
 #[ignore = "opens an unfocused window and needs a GPU: cargo test -p ara-editor --test background_capture -- --ignored"]
 fn a_background_studio_on_a_failed_import_serves_a_viewport_capture() {
-    let root = project();
+    let root = common::project("background-capture");
     let log = root.join("editor.err.log");
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_ara-editor"))
         .arg(&root)

@@ -842,7 +842,7 @@ feature resolution, freezes Outpost, Hangar and Showcase packs once per sample t
   readiness, content/GI arrival and warmup frames in both launches;
 - `ara-samples capture <project> <look> --quality all --reference 256` per scene (ꟻLIP/RMSE),
   or `--flip-from <capture-dir>` to reuse a sweep;
-- the editor's `--verify-responsiveness` on a fresh `samples/outpost` copy with
+- the previous editor shell's `--verify-responsiveness` (removed in #53; the studio has no responsiveness probe yet) on a fresh `samples/outpost` copy with
   `--settle-imports after` (interactions during imports), then again on that copy with
   `--settle-imports before` (warm startup, Scene orbit, Play, interactions after imports).
 
@@ -950,9 +950,9 @@ Debug Hub and editor builds watch their CSS and the two theme files
 (`assets/themes/ara-{dark,light}.json`) in the checkout they were built from. A save
 is validated off the UI thread, then restyles the running window within about
 250 ms; an invalid save keeps the last good styles and prints why. The editor watches
-every `.css` under `crates/ara-editor/src/shell` (file names must stay unique) plus
-ara-ui's dialog and Select CSS. The Hub watches `hub.css` and the Select CSS. The
-editor's open-project and loading screens, and inline CSS constants, are not live.
+ara-ui's dialog and Select CSS (its studio window has no CSS). The Hub watches `hub.css`
+and the Select CSS. The editor's open-project screen and inline CSS constants are not
+live.
 
 `live` covers everything else. It rebuilds after Rust, manifest or embedded-resource
 saves (not the app's live CSS). When the executables changed, it stages a copy under

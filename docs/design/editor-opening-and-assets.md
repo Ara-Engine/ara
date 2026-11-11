@@ -11,6 +11,8 @@ UE's startup splash (an asset import progress window before the editor appears).
 
 ## 1. The loading window
 
+> **Status.** The separate window described here was removed with the previous editor shell (#53). The loading step is now a card over the studio's own window (`crates/ara-editor/src/studio/loading.rs`, #59): the same stages (preparing, importing, review), the failed imports with their errors, "Open now" after a few seconds, and imports that settle at once show nothing. While it holds, the Scene, Game and graph views are not presented; a studio nobody is at (`--background`, `--frames`, `--screenshot`) opens it once the imports settle, and `editor.imports` lets an agent read the failures and open it. The Behaviour and Verification notes below describe the old window.
+
 **Benchmarks.** Unity shows a small window while a project imports ("Importing
 (iteration 2)", the current asset, a bar) and opens the editor when it is done. UE
 shows its splash with the stage and percentage. Neither lets you work early; neither
@@ -20,7 +22,7 @@ shows failures until the editor is up.
 offers "Open now" after a few seconds for people who want to work while importing, and
 is skipped entirely when the imports are already done.
 
-**Behaviour** (`crates/ara-editor/src/loading/`):
+**Behaviour** (the old window; `crates/ara-editor/src/loading/`, now deleted):
 - The editor process opens the project and starts its authority and EP server, then,
   before creating the main window, shows a 520 px wide undecorated window, centred on
   the pointer's display, rounded on Windows 11 with the theme's hairline border, and
@@ -84,12 +86,12 @@ extension lives in the tooltip and the Inspector:
 
 ## Verification
 
-- `ara-editor <project> --verify-loading --dpi 1|2` runs the loading window offscreen
+- `ara-editor <project> --verify-loading --dpi 1|2` (the old window's route, removed in #53; the studio's gate is covered by `studio::tests` and `tests/background_capture.rs`) ran the loading window offscreen
   on a cold, Hub-created Outpost: its real milestones (preparing, importing, half way,
   review or opening) and every state from fixed statuses (preparing, importing, open
   now with failures, review, review with more than four failures, opening), in both
   themes.
-- `--verify-panels` captures Assets (models, samples, a textures folder with long
+- `--verify-panels` (also removed in #53) captured Assets (models, samples, a textures folder with long
   real-world names, and the same folder as a list) and the Hierarchy at 1440 × 900 and
   2560 × 1440, in both themes.
 - Tests: `names` (stems, two-line fitting, separators, ellipsis), `loading::view`

@@ -2,8 +2,8 @@
 //! editor's and Hub's offscreen verification routes and tests.
 use stillkit::Image;
 
-/// Encodes a premultiplied BGRA snapshot as a straight-alpha RGBA PNG.
-pub fn png(image: &Image) -> anyhow::Result<Vec<u8>> {
+/// A premultiplied BGRA snapshot as straight-alpha RGBA bytes.
+pub fn rgba(image: &Image) -> Vec<u8> {
     let mut rgba = Vec::with_capacity(image.pixels.len());
     for &[b, g, r, a] in image.pixels.as_chunks::<4>().0 {
         let un = |c: u8| {
@@ -15,6 +15,12 @@ pub fn png(image: &Image) -> anyhow::Result<Vec<u8>> {
         };
         rgba.extend_from_slice(&[un(r), un(g), un(b), a]);
     }
+    rgba
+}
+
+/// Encodes a premultiplied BGRA snapshot as a straight-alpha RGBA PNG.
+pub fn png(image: &Image) -> anyhow::Result<Vec<u8>> {
+    let rgba = rgba(image);
     let mut out = Vec::new();
     image::codecs::png::PngEncoder::new(&mut out).write_image(
         &rgba,

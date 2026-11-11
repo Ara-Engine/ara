@@ -9,7 +9,7 @@ use glam::{Mat4, Vec3};
 use serde_json::{Value, json};
 
 use crate::Editor;
-use crate::app::viewport::SceneView;
+use crate::studio::viewport::SceneView;
 use crate::world::EditWorldView;
 
 /// Whether `id` is `roots`-accepted or sits below one that is.

@@ -225,7 +225,7 @@ fn theme_switch_is_one_restyle_without_layout_or_shaping() -> Result<()> {
     assert_eq!(work.layout_passes, 0, "colors never relayout");
     assert!(work.paint_nodes > 0);
     // Generous for the unoptimized test profile on a loaded machine; the release
-    // editor measures a theme switch in `--verify-responsiveness`.
+    // editor shell measured a theme switch in its `--verify-responsiveness` probe (removed).
     assert!(
         elapsed < std::time::Duration::from_millis(250),
         "{elapsed:?} for {nodes} nodes"

@@ -37,81 +37,17 @@ fn main() -> ara_ui::Result<()> {
         background: std::env::var_os("ARA_EDITOR_BACKGROUND").is_some_and(|v| v == "1"),
         ..Default::default()
     };
-    // The studio (D31) is the interactive editor everywhere; the legacy window keeps only
-    // the verify routes and headless captures until it is removed.
-    let mut legacy = false;
+    let mut output_given = false;
     let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--legacy-ui" => legacy = true,
             "--headless" => options.headless = true,
             "--background" => options.background = true,
             "--version" | "-V" => {
                 println!("ara-editor {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
-            "--verify" => options.verify = true,
-            "--verify-panels" => options.verify_panels = true,
-            "--verify-ux" => options.verify_ux = true,
-            "--verify-docking" => options.verify_docking = true,
-            "--verify-behaviours" => {
-                options.verify_behaviours = true;
-                options.behaviour_asset_ops = true;
-            }
-            "--verify-behaviours-core" => {
-                options.verify_behaviours = true;
-                options.behaviour_asset_ops = false;
-            }
-            "--verify-profiler" => options.verify_profiler = true,
-            "--verify-assets" => options.verify_assets = true,
-            "--verify-journey" => options.verify_journey = true,
-            "--verify-monkey" => options.verify_monkey = true,
-            "--monkey-replay" => {
-                options.monkey_replay = Some(PathBuf::from(
-                    args.next().ok_or("--monkey-replay needs a journal path")?,
-                ));
-                options.verify_monkey = true;
-            }
-            "--monkey-seed" => {
-                options.monkey_seed = args
-                    .next()
-                    .ok_or("--monkey-seed needs an integer")?
-                    .parse()?;
-            }
-            "--monkey-seconds" => {
-                options.monkey_seconds = args
-                    .next()
-                    .ok_or("--monkey-seconds needs a number")?
-                    .parse()?;
-                if options.monkey_seconds == 0 {
-                    return Err("--monkey-seconds must be positive".into());
-                }
-            }
-            "--monkey-steps" => {
-                let steps = args
-                    .next()
-                    .ok_or("--monkey-steps needs a number")?
-                    .parse()?;
-                if steps == 0 {
-                    return Err("--monkey-steps must be positive".into());
-                }
-                options.monkey_steps = Some(steps);
-            }
-            "--verify-first-hour" => options.verify_first_hour = true,
-            "--verify-scene-quality" => options.verify_scene_quality = true,
-            "--verify-game-view" => options.verify_game_view = true,
-            "--verify-loading" => options.verify_loading = true,
-            "--verify-responsiveness" => options.verify_responsiveness = true,
-            "--verify-unpresentable" => options.verify_unpresentable = true,
-            "--settle-imports" => {
-                options.settle = Some(match args.next().as_deref() {
-                    Some("before") => ara_editor::Settle::Before,
-                    Some("after") => ara_editor::Settle::After,
-                    _ => return Err("--settle-imports needs before or after".into()),
-                })
-            }
             "--sample" => options.sample = true,
-            "--screenshot" => options.screenshot = true,
             "--panel" => options.panel = Some(args.next().ok_or("--panel needs a panel name")?),
             "--play" => options.play = true,
             "--scene" => options.scene = Some(args.next().ok_or("--scene needs a scene path")?),
@@ -123,35 +59,21 @@ fn main() -> ara_ui::Result<()> {
                 let (w, h) = size.split_once('x').ok_or("--size needs WxH")?;
                 options.size = [w.parse()?, h.parse()?];
                 if options.size.iter().any(|v| *v < 320 || *v > 8192) {
-                    return Err("invalid window size".into());
+                    return Err("invalid capture size".into());
                 }
             }
-            "--dpi" => {
-                let dpi: f32 = args.next().ok_or("--dpi needs a scale")?.parse()?;
-                if !dpi.is_finite() || !(0.5..=4.).contains(&dpi) {
-                    return Err("invalid DPI".into());
-                }
-                options.dpi = Some(dpi);
-            }
-
             "--frames" => {
-                options.frames = Some(args.next().ok_or("--frames needs a number")?.parse()?)
+                let frames = args.next().ok_or("--frames needs a count")?;
+                options.frames = Some(frames.parse().map_err(|_| "--frames needs a count")?);
             }
+            "--screenshot" => options.screenshot = true,
             "--output" => {
-                options.output = PathBuf::from(args.next().ok_or("--output needs a directory")?)
+                options.output = PathBuf::from(args.next().ok_or("--output needs a directory")?);
+                output_given = true;
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--scene levels/x.scene] [--sample] [--headless] [--frames N] [--legacy-ui] [--background] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative editor + project Engine Protocol authority.\n--legacy-ui opens the previous editor window instead of the studio.\n--background opens the window behind others without taking focus (also ARA_EDITOR_BACKGROUND=1), for automated captures.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings.
---verify-first-hour replays a new user's first hour on a fresh project (imports, Assets, Inspector, the tool pages, Play, Build), capturing each step.
---verify-assets proves right-click Create, C# inline rename, real compilation and entity attachment, with offscreen captures.
---verify-loading runs the loading window offscreen on the project and captures its milestones and every state.
---verify-docking runs native tab insertion, reorder, split, detach, reattach and Escape routes at UI scales 1 and 1.25, capturing every gesture.
---verify-behaviours drives content drag/drop, references, component ordering and OS import through the offscreen native loop, capturing before/preview/after states and writing behaviours.json.
---verify-behaviours-core runs the independent editor UI, selection, hierarchy, camera, prefab and Play stories; it records that extended import/asset lifecycle acceptance is excluded. The full --verify-behaviours route still requires those checks.
---verify-monkey runs deterministic randomized editor input and command edge cases offscreen; --monkey-seed N selects a replay, --monkey-seconds N sets the soak budget (default 1800), --monkey-steps N limits actions. Writes monkey.json and a durable action journal.
---verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions.
---verify-unpresentable holds the window unable to show (minimized or occluded) and checks the loop presents nothing, stays responsive and resumes presenting."
+                    "ara-editor <project> [--scene levels/x.scene] [--select a,b] [--play] [--panel NAME] [--sample] [--background] [--frames N] [--screenshot] [--size WxH] [--output DIR] [--headless]\n\nNative editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--select a,b selects those entities once the scene is open.\n--play starts Play in the Game view once the window is up.\n--panel NAME opens that panel; with --sample, its starter asset when there is none.\n--sample creates an undoable sample scene if the scene is empty.\n--background opens the window behind others without taking focus (also ARA_EDITOR_BACKGROUND=1), for automated captures.\n--frames N ends the editor after N frames with its window hidden (the protocol server stays up until then: --frames 1000000 is a server for an export step).\n--screenshot opens the window in the background at --size, then after the frames (default 60) saves it with its Scene as editor.png in --output and exits; the same picture agents get from the capture target `window`.\n--headless captures editor-scene.png (at --size, into --output) without creating a window, then exits."
                 );
                 return Ok(());
             }
@@ -159,37 +81,43 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
+    // Without `--output`, captures, a bounded run's profile and its evidence go under the
+    // project's own `.ara/captures`, never into whatever directory the editor was started in
+    // (a checkout).
+    if !output_given {
+        options.output = options.project.join(".ara/captures");
+    }
+    // The editor's views are native layers (Wayland subsurfaces on Linux): where this
+    // session can't host them (X11, no or a dead compositor, no wl_subcompositor), it says
+    // what it needs instead of opening the project.
+    if !options.headless
+        && let Err(why) = ara_editor::studio::can_host()
+    {
+        return Err(format!(
+            "ara-editor can't show its views here: {why:#}. On Linux it needs a Wayland \
+             session whose compositor offers subsurfaces (GNOME and KDE do); --headless \
+             captures the scene without a window"
+        )
+        .into());
+    }
     if !ara_editor::before_open_project(&options)? {
         return Ok(());
     }
-    if options.offscreen() {
-        // SAFETY: a bounded pre-open check starts no workers/windows; startup is still single-threaded.
-        unsafe { options.isolate_profile() };
-    }
+    // SAFETY: a headless pre-open check starts no workers or windows; startup is still
+    // single-threaded.
+    unsafe { options.isolate_profile() };
     #[cfg(feature = "tracy")]
     let _tracy = ara_gpu::__tracy::Client::start();
-    // Bounded runs never offer the crash folder or consume its "seen" marker.
-    let _capture = match ara_crash::desktop::start("ara-editor", !options.offscreen()) {
+    // Headless runs never offer the crash folder or consume its "seen" marker.
+    let _capture = match ara_crash::desktop::start("ara-editor", !options.headless) {
         Ok(capture) => Some(capture),
         Err(error) => {
             eprintln!("ARA-EXP-CRASH-004: {error:#}");
             None
         }
     };
-    // The studio's views are native layers (Wayland subsurfaces on Linux): where this
-    // session can't host them (X11, no or a dead compositor, no wl_subcompositor), the
-    // previous window, which runs on X11, opens instead, saying why.
-    if !legacy
-        && !options.offscreen()
-        && let Err(why) = ara_editor::studio::can_host()
-    {
-        eprintln!(
-            "ara-editor: the new editor can't show its views here ({why:#}), so the previous editor window opens"
-        );
-        legacy = true;
-    }
-    if legacy || options.offscreen() || options.frames.is_some() {
-        return ara_editor::run(options);
+    if options.headless {
+        return ara_editor::studio::headless::run(options);
     }
     ara_editor::studio::run(options).map_err(|e| format!("{e:#}").into())
 }

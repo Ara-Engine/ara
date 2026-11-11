@@ -417,7 +417,7 @@ hold the evidence and causes.
   frames never drawn small or stretched (cover the panel until the new size arrives), whole
   physical pixels at fractional DPI, native-resolution embedded Game view (+~1 ms GPU),
   exposure finishes adapting before a still Scene stops (120-frame cap), single resize per
-  change, HUD at the exact scene size; `ara-editor --verify-game-view` route. Open:
+  change, HUD at the exact scene size; `ara-editor --verify-game-view` route (the previous editor shell's; removed with it, #53). Open:
   (1) automatic reflection captures finish baking ~1 s after Play entry (brightness 49 to 45
   over 15 frames); waiting for them or baking all at once both failed; try a bounded number
   of bake steps per frame during entry, without the lighting-change re-bake. (2) After a

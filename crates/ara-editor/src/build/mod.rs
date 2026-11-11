@@ -210,11 +210,6 @@ fn launch(game: &Path) -> anyhow::Result<Launch> {
     })
 }
 
-/// Locate the shipping C# manifest through the same platform-aware resolver as Run Build.
-pub(crate) fn scripts_manifest(game: &Path) -> anyhow::Result<PathBuf> {
-    Ok(launch(game)?.data.join("game/scripts.json"))
-}
-
 /// Log a build message (ARA4505 unless it carries an export code) on the bus, so
 /// Console and Problems show it.
 fn log(editor: &mut Editor, diagnostic: ara_diag::Diagnostic) {
@@ -943,11 +938,6 @@ impl Builder {
         changed
     }
 
-    /// Read-only artifact proof for the last successfully completed build/package.
-    pub(crate) fn package_result(&self) -> Value {
-        json!({"game":self.last_build,"packages":self.last_packages})
-    }
-
     /// Reveal only a path present in the last actual package receipt.
     pub(crate) fn reveal_package(
         &mut self,
@@ -1009,17 +999,6 @@ mod tests {
         }
     }
 
-    fn manifest(output: &Path, entry: &str, platform: &str) -> anyhow::Result<()> {
-        ara_export::tools::write_json(
-            &output.join("distribution.json"),
-            &json!({
-                "format":"ara.distribution/1", "buildId":"fixture", "platform":platform,
-                "entryPoint":entry, "files":{entry:{"hash":"fixture","bytes":0,"executable":true}},
-                "packages":{}, "symbols":"symbols/fixture.zip", "signing":"unsigned"
-            }),
-        )
-    }
-
     #[test]
     fn settings_profiles_take_precedence_and_legacy_profiles_still_work() -> anyhow::Result<()> {
         let scratch = Scratch::new()?;
@@ -1065,157 +1044,6 @@ mod tests {
         assert!(
             !chosen.exists(),
             "reading the chosen root never creates or migrates it"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn run_build_resolves_a_relocated_named_application_and_external_reports() -> anyhow::Result<()>
-    {
-        let scratch = Scratch::new()?;
-        let output = scratch.0.join("first");
-        let game = output.join("build");
-        std::fs::create_dir_all(game.join("data"))?;
-        std::fs::write(game.join("Outpost.exe"), b"player fixture")?;
-        ara_export::tools::write_json(
-            &game.join("data/ara-launch.json"),
-            &json!({"contract":"ara.player.runtime/1","pack":"game.arapack"}),
-        )?;
-        std::fs::create_dir_all(game.join("data/game"))?;
-        std::fs::write(game.join("data/game/scripts.json"), b"{}")?;
-        manifest(&output, "Outpost.exe", "windows")?;
-        let moved = scratch.0.join("relocated");
-        std::fs::rename(&output, &moved)?;
-        let launch = launch(&moved.join("build"))?;
-        assert_eq!(
-            launch.executable,
-            dunce::canonicalize(moved.join("build/Outpost.exe"))?
-        );
-        assert_eq!(launch.data, dunce::canonicalize(moved.join("build/data"))?);
-        assert_eq!(launch.report, dunce::canonicalize(moved.join("report"))?);
-        let scripts = scripts_manifest(&moved.join("build"))?;
-        assert!(scripts.is_file());
-        assert_eq!(scripts, launch.data.join("game/scripts.json"));
-        assert!(!moved.join("build/game/scripts.json").exists());
-        assert!(
-            !launch
-                .report
-                .starts_with(dunce::canonicalize(moved.join("build"))?)
-        );
-        assert!(!moved.join("build/run.png").exists());
-        for entry in ["../outside.exe", "C:/outside.exe", "data/../../outside.exe"] {
-            manifest(&moved, entry, "windows")?;
-            assert!(super::launch(&moved.join("build")).is_err(), "{entry}");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn macos_manifest_locates_bundle_resources_without_assuming_the_players_name()
-    -> anyhow::Result<()> {
-        let scratch = Scratch::new()?;
-        let game = scratch.0.join("build");
-        std::fs::create_dir_all(game.join("Salvage.app/Contents/MacOS"))?;
-        std::fs::create_dir_all(game.join("Salvage.app/Contents/Resources"))?;
-        std::fs::write(
-            game.join("Salvage.app/Contents/MacOS/Salvage"),
-            b"player fixture",
-        )?;
-        std::fs::write(
-            game.join("Salvage.app/Contents/Resources/ara-launch.json"),
-            b"{}",
-        )?;
-        std::fs::create_dir_all(game.join("Salvage.app/Contents/Resources/game"))?;
-        std::fs::write(
-            game.join("Salvage.app/Contents/Resources/game/scripts.json"),
-            b"{}",
-        )?;
-        manifest(&scratch.0, "Salvage.app/Contents/MacOS/Salvage", "macos")?;
-        let launch = launch(&game)?;
-        assert_eq!(
-            launch.data,
-            dunce::canonicalize(game.join("Salvage.app/Contents/Resources"))?
-        );
-        assert!(launch.executable.ends_with("MacOS/Salvage"));
-        let scripts = scripts_manifest(&game)?;
-        assert!(scripts.is_file());
-        assert_eq!(scripts, launch.data.join("game/scripts.json"));
-        assert!(!game.join("game/scripts.json").exists());
-        Ok(())
-    }
-
-    #[test]
-    fn completed_package_receipt_reaches_the_retained_shell_without_authoring_changes()
-    -> anyhow::Result<()> {
-        let scratch = Scratch::new()?;
-        std::fs::create_dir_all(scratch.0.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
-        std::fs::write(
-            scratch.0.join("ara.project.json"),
-            ara_json::to_canonical_string(&json!({
-                "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Package receipt","main":"levels/main.scene"
-            })),
-        )?;
-        std::fs::write(
-            scratch
-                .0
-                .join(ara_doc::AUTHORING_ROOT)
-                .join("levels/main.scene"),
-            ara_json::to_canonical_string(&json!({
-                "$schema":"ara://schema/scene/1","id":"sc_packagereceipt","records":{}
-            })),
-        )?;
-        let mut editor =
-            Editor::open_with(&scratch.0, Some(scratch.0.join(".ara/test-settings.json")))
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let mut shell = Builder::default();
-        let revision = editor.host.store().revision();
-        let package = PackageArtifact {
-            path: scratch.0.join("Custom result.zip"),
-            hash: "b".repeat(64),
-            bytes: 47,
-            executable: false,
-        };
-        let (send, events) = channel();
-        shell.job = Some(BuildJob {
-            events,
-            profile_creation: None,
-            saving: None,
-            preset: "windows".into(),
-            stage: "packaging".into(),
-            cooking: None,
-        });
-        send.send(BuildEvent::Finished(Ok(Built {
-            game: scratch.0.join("build"),
-            seconds: 2.,
-            executed: false,
-            packages: vec![package.clone()],
-        })))?;
-        assert!(shell.poll_build(&mut editor));
-        assert!(shell.job.is_none());
-        assert_eq!(shell.package_result()["packages"], json!([package]));
-        assert_eq!(editor.host.store().revision(), revision);
-        assert!(
-            shell
-                .note
-                .as_deref()
-                .is_some_and(|note| note.contains("Custom result.zip"))
-        );
-        shell
-            .reveal_package(
-                &crate::catalog::Target::Text(
-                    package
-                        .path
-                        .to_str()
-                        .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
-                        .into(),
-                ),
-                true,
-            )
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-        assert!(
-            shell
-                .reveal_package(&crate::catalog::Target::Text("unrelated.zip".into()), true)
-                .is_err()
         );
         Ok(())
     }

@@ -64,7 +64,6 @@ ara-runtime = { path = "../ara-runtime" }
 ara-runtime-render = { path = "../ara-runtime-render" }
 ara-schema = { path = "../ara-schema" }
 ara-script = { path = "../ara-script" }
-bevy_ecs.workspace = true
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
@@ -77,15 +76,11 @@ glam = { workspace = true, features = ["serde", "bytemuck"] }
 glam34 = { workspace = true }
 gltf = { workspace = true, default-features = true }
 parley = { workspace = true, features = ["std", "complex-scripts"] }
-resvg.workspace = true
 image = { workspace = true, features = ["png", "jpeg", "hdr", "exr", "tga", "tiff", "webp", "bmp", "dds"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 sdl3-sys.workspace = true
-accesskit = { workspace = true, features = ["serde"] }
 
-[dev-dependencies]
-ara-ui-test = { path = "../ara-ui-test" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Wayland subsurface viewports require stillkit's GPU (Vulkan) surfaces.
@@ -94,5 +89,4 @@ stillkit = { workspace = true, features = ["gpu"] }
 [target.'cfg(windows)'.dependencies]
 # Windows child HWND viewports require stillkit DirectComposition GPU surfaces.
 stillkit = { workspace = true, features = ["gpu"] }
-accesskit_windows = "0.35"
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }

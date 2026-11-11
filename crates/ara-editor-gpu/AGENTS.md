@@ -36,12 +36,13 @@ viewport is its clip) include it. Metal needs the latter cooked on the canonical
 with Metal Shader Converter installed. Keep `ui.slang`'s SPIR-V byte-identical when
 refactoring the body (compile both entries before and after with the same slangc).
 Do not enable runtime descriptor arrays: ara-gpu's device uses a fixed-size heap.
-`ara-editor --verify` compares actual GPU output against CpuGpu for raster/MSDF,
-nested clips, alpha, and complete editor screenshots with both semantic themes.
+The pixel contract is `tests/ui_pixels.rs`: actual GPU output against CpuGpu for
+raster/MSDF, nested clips and alpha, windowless on either backend (local SSIM loss <= 0.01).
+The old editor shell's `--verify` route also ran it over complete editor screenshots in both
+semantic themes; that route went with the shell (#53).
 
-Set CARGO_BUILD_JOBS=2. Run cargo check/clippy/test -p ara-editor-gpu plus the
-editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
-`tests/ui_pixels.rs` runs the same GPU/CPU comparison windowless on either backend.
+Set CARGO_BUILD_JOBS=2. Run cargo check/clippy/test -p ara-editor-gpu, with process-local
+empty VK_IMPLICIT_LAYER_PATH.
 
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.

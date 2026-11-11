@@ -1,7 +1,7 @@
 //! Application-owner adapter for derived probe jobs (`render.probe.recapture`,
 //! `render.probe.cancel`, `render.probes.query`): the window loop polls it with the Scene
 //! view it renders. This never submits GPU work.
-use crate::app::viewport::SceneView;
+use crate::studio::viewport::SceneView;
 use crate::{
     Editor,
     probe_capture::{Event, Request, SceneBinding},

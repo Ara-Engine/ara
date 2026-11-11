@@ -1,5 +1,11 @@
 # Colour picker: design
 
+> **Describes removed code.** The picker below belonged to the previous editor shell
+> (`shell/color/`, `app/eyedropper.rs`), removed in #53; it was last in the tree at main
+> commit `bcbb2e993`. The studio's colour fields use `stillkit_kit::ColorPicker`, which has no
+> eyedropper yet (a follow-up). Read this for the design and the Windows screen-sampling
+> approach, not as a map of the code.
+
 Code: `crates/ara-editor/src/shell/color/` (`mod.rs` state and gestures, `markup.rs`,
 `paint.rs`, `eyedropper.rs`, `math.rs`), `crates/ara-editor/src/app/eyedropper.rs`
 (frame readback and Windows screen sampling), `Draw::Fill` in `ara-ui`.

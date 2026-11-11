@@ -7,16 +7,6 @@ pub(crate) fn existing_storage<'a>(files: &'a [AuthoredFile], logical: &str) -> 
         .find(|file| matches!(&file.scope, AuthoredScope::Authored) && file.path == logical)
         .map(|file| file.storage_path.as_str())
 }
-/// Stable IDs repair stale reference paths before consulting the browser cache.
-pub(crate) fn reference_storage<'a>(
-    files: &'a [AuthoredFile],
-    index: &ara_doc::AssetIndex,
-    reference: &str,
-) -> Option<&'a str> {
-    let parts = ara_schema::grammar::parse_ref(reference).ok()?;
-    let logical = parts.id.and_then(|id| index.path_of(id)).or(parts.path)?;
-    existing_storage(files, logical)
-}
 /// New source files use the indexed parent; an empty browser folder denotes the
 /// workspace's authored root, never project-level settings or generated outputs.
 pub(crate) fn storage(
@@ -129,32 +119,5 @@ mod tests {
             AuthoredScope::Authored,
         ));
         assert!(!available(&files, &workspace, "settings/builds"));
-    }
-    #[test]
-    fn references_reveal_current_storage_by_id_instead_of_a_stale_logical_path() {
-        let files = vec![AuthoredFile {
-            path: "Materials/Renamed.graph".into(),
-            storage_path: "game/Materials/Renamed.graph".into(),
-            scope: AuthoredScope::Authored,
-            role: AuthoredRole::Document {
-                name: "graph".into(),
-            },
-        }];
-        let mut index = ara_doc::AssetIndex::new();
-        index.insert("gr_stable", "Materials/Renamed.graph", Some("graph".into()));
-        assert_eq!(
-            reference_storage(&files, &index, "@Materials/Old.graph#gr_stable"),
-            Some("game/Materials/Renamed.graph")
-        );
-        assert_eq!(
-            reference_storage(&files, &index, "@#gr_stable"),
-            Some("game/Materials/Renamed.graph")
-        );
-        assert_eq!(
-            reference_storage(&files, &index, "@Materials/Renamed.graph"),
-            Some("game/Materials/Renamed.graph")
-        );
-        assert!(reference_storage(&files, &index, "Materials/Renamed.graph").is_none());
-        assert!(reference_storage(&files, &index, "@../Escaped.graph#gr_stable").is_none());
     }
 }

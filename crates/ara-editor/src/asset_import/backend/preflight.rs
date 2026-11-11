@@ -70,6 +70,8 @@ impl Plan {
     pub fn labels(&self) -> Vec<String> {
         self.conflicts.iter().map(Conflict::label).collect()
     }
+    /// The plan as the host's JSON (tests).
+    #[cfg(test)]
     pub fn value(&self) -> ara_ui::Result<Value> {
         Ok(serde_json::to_value(self)?)
     }

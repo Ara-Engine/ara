@@ -25,8 +25,6 @@ pub(crate) enum Dynamic {
     PrefabSources,
     /// Cached canonical and legacy build profiles, selected through typed preferences.
     BuildProfiles,
-    /// Scene gizmo types (`overlay::gizmos::TYPES`), toggled with `view.gizmos.type`.
-    GizmoTypes,
     /// Panels to open as a tab beside the clicked one, run with `window.add_tab`.
     AddTab,
 }
@@ -39,15 +37,13 @@ impl Dynamic {
             Self::SavedLayouts => "layout.load",
             Self::PrefabSources => "prefab.apply_to",
             Self::BuildProfiles => "build.profile.select",
-            Self::GizmoTypes => "view.gizmos.type",
             Self::AddTab => "window.add_tab",
         }
     }
 }
-/// A top-level menu with its Alt mnemonic.
+/// A top-level menu.
 pub(crate) struct Menu {
     pub title: &'static str,
-    pub mnemonic: char,
     pub items: &'static [Item],
 }
 use Item::{Command as C, Separator as S, Sub};
@@ -161,7 +157,6 @@ const TOOLS: &[Item] = &[
 pub(crate) const MENUS: &[Menu] = &[
     Menu {
         title: "File",
-        mnemonic: 'F',
         items: &[
             C("file.new_scene"),
             C("file.new_project"),
@@ -200,7 +195,6 @@ pub(crate) const MENUS: &[Menu] = &[
     },
     Menu {
         title: "Edit",
-        mnemonic: 'E',
         items: &[
             C("edit.undo"),
             C("edit.redo"),
@@ -286,7 +280,6 @@ pub(crate) const MENUS: &[Menu] = &[
     },
     Menu {
         title: "View",
-        mnemonic: 'V',
         items: &[
             Sub(
                 "Hierarchy",
@@ -406,7 +399,6 @@ pub(crate) const MENUS: &[Menu] = &[
     },
     Menu {
         title: "Create",
-        mnemonic: 'C',
         items: &[
             C("create.empty"),
             C("create.empty_child"),
@@ -491,7 +483,6 @@ pub(crate) const MENUS: &[Menu] = &[
     },
     Menu {
         title: "Window",
-        mnemonic: 'W',
         items: &[
             Sub(
                 "Layouts",
@@ -548,7 +539,6 @@ pub(crate) const MENUS: &[Menu] = &[
     },
     Menu {
         title: "Help",
-        mnemonic: 'H',
         items: &[
             C("help.search"),
             S,
@@ -581,16 +571,8 @@ pub(crate) enum Context {
     Folder,
     /// Empty asset browser space.
     Assets,
-    /// An inspector field.
-    Field,
-    /// An inspector component header.
-    Component,
     /// A dock tab or panel header.
     Tab,
-    /// A graph node.
-    Node,
-    /// Empty graph canvas.
-    Canvas,
     /// A console row.
     Console,
     /// A real immutable transaction in History.
@@ -601,26 +583,6 @@ pub(crate) enum Context {
     Status,
     /// The Hierarchy's scene header row (the scene asset as its target).
     Scene,
-    /// The Play cluster's mode button.
-    Play,
-    /// A VFX module row.
-    Module,
-    /// Viewport toolbar: camera views.
-    Camera,
-    /// Viewport camera fly speed presets.
-    CameraSpeed,
-    /// Snap increments when the viewport is too narrow for three value buttons.
-    Snapping,
-    /// Viewport toolbar: view modes.
-    ViewModes,
-    /// Viewport toolbar: show flags.
-    Show,
-    /// Viewport toolbar: component gizmos, icons and gizmo types.
-    Gizmos,
-    /// Game view toolbar: aspect presets.
-    GameAspect,
-    /// Hierarchy toolbar: type filters.
-    HierarchyFilter,
 }
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
@@ -782,29 +744,6 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("assets.show_all"),
         ],
-        Context::Field => &[
-            C("field.copy"),
-            C("field.paste"),
-            C("field.reset"),
-            C("field.copy_path"),
-            S,
-            C("prefab.apply_override"),
-            Sub("Apply To", &[Item::Dynamic(Dynamic::PrefabSources)]),
-            C("prefab.revert_override"),
-            S,
-            C("field.why"),
-        ],
-        Context::Component => &[
-            C("component.reset"),
-            C("component.remove"),
-            C("component.copy"),
-            C("component.paste"),
-            S,
-            C("component.move_up"),
-            C("component.move_down"),
-            S,
-            C("component.add"),
-        ],
         Context::Tab => &[
             Sub("Add Tab", &[Item::Dynamic(Dynamic::AddTab)]),
             S,
@@ -823,21 +762,6 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("window.close_panel"),
             S,
             C("layout.reset"),
-        ],
-        Context::Node => &[
-            C("graph.delete"),
-            C("graph.group"),
-            C("graph.frame"),
-            S,
-            C("graph.add"),
-        ],
-        Context::Canvas => &[
-            C("graph.add"),
-            C("graph.comment"),
-            C("graph.reroute"),
-            S,
-            C("graph.frame"),
-            C("graph.select_all"),
         ],
         Context::Console => &[
             C("console.copy"),
@@ -867,165 +791,6 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.copy_reference"),
             S,
             C("create.empty"),
-        ],
-        Context::Module => &[
-            C("vfx.module.up"),
-            C("vfx.module.down"),
-            C("vfx.module.duplicate"),
-            C("vfx.module.toggle"),
-            S,
-            C("vfx.module.delete"),
-        ],
-        Context::CameraSpeed => &[
-            C("view.camera.speed.slow"),
-            C("view.camera.speed.normal"),
-            C("view.camera.speed.fast"),
-            S,
-            C("view.camera.speed_down"),
-            C("view.camera.speed_up"),
-        ],
-        Context::Snapping => &[
-            C("snap.grid"),
-            C("snap.rotation"),
-            C("snap.scale"),
-            S,
-            C("snap.settings"),
-        ],
-        Context::Camera => &[
-            C("view.camera.perspective"),
-            C("view.camera.fov"),
-            C("view.camera.default"),
-            C("view.camera.align"),
-            S,
-            C("view.camera.top"),
-            C("view.camera.bottom"),
-            C("view.camera.front"),
-            C("view.camera.back"),
-            C("view.camera.left"),
-            C("view.camera.right"),
-            S,
-            C("view.frame"),
-            C("view.frame_all"),
-            S,
-            C("view.camera.speed_up"),
-            C("view.camera.speed_down"),
-        ],
-        Context::ViewModes => &[
-            C("view.mode.lit"),
-            C("view.mode.unlit"),
-            C("view.mode.wireframe"),
-            C("view.mode.lit_wireframe"),
-            S,
-            C("view.mode.normals"),
-            C("view.mode.depth"),
-            C("view.mode.roughness_metal"),
-            C("view.mode.entity_ids"),
-            C("view.mode.shadow_cascades"),
-            S,
-            C("view.mode.overdraw"),
-            C("view.mode.light_complexity"),
-            C("view.mode.shadow_penumbra"),
-            C("view.mode.gi_debug"),
-            C("view.mode.decal_coverage"),
-            C("view.mode.vertex_color"),
-            S,
-            C("view.quality.project"),
-            C("view.quality.auto"),
-            S,
-            C("view.quality.low"),
-            C("view.quality.medium"),
-            C("view.quality.high"),
-            C("view.quality.epic"),
-            S,
-            C("view.debug.ambient_occlusion"),
-            C("view.debug.shadows"),
-            C("view.debug.soft_shadows"),
-            C("view.debug.screen_reflections"),
-            C("view.debug.reflection_captures"),
-            C("view.debug.global_illumination"),
-            C("view.debug.screen_gi"),
-            C("view.debug.volumetric_fog"),
-            C("view.debug.temporal_jitter"),
-            C("view.debug.reflections"),
-            C("view.debug.reflection_sources"),
-            C("view.debug.full_resolution"),
-        ],
-        Context::HierarchyFilter => &[
-            C("hierarchy.filter.save"),
-            C("hierarchy.filter.apply"),
-            C("hierarchy.filter.remove"),
-            S,
-            C("hierarchy.filter.all"),
-            S,
-            C("hierarchy.filter.lights"),
-            C("hierarchy.filter.cameras"),
-            C("hierarchy.filter.meshes"),
-            C("hierarchy.filter.prefabs"),
-            C("hierarchy.filter.audio"),
-            C("hierarchy.filter.effects"),
-        ],
-        Context::GameAspect => &[
-            C("game.aspect.free"),
-            S,
-            C("game.aspect.16x9"),
-            C("game.aspect.16x10"),
-            C("game.aspect.4x3"),
-            C("game.aspect.21x9"),
-            C("game.aspect.9x16"),
-        ],
-        Context::Show => &[
-            C("view.show.grid"),
-            C("view.show.outline"),
-            C("view.show.gizmos"),
-            C("view.show.orientation"),
-            S,
-            C("view.show.bounds"),
-            C("view.show.colliders"),
-            C("view.show.stats"),
-            S,
-            C("view.game"),
-            C("view.hide_overlays"),
-            C("view.overlays.reset"),
-        ],
-        Context::Gizmos => &[
-            C("view.gizmos.toggle"),
-            S,
-            C("view.gizmos.icons"),
-            C("view.gizmos.icons3d"),
-            Sub(
-                "Icon Size",
-                &[
-                    C("view.gizmos.icon_size.small"),
-                    C("view.gizmos.icon_size.medium"),
-                    C("view.gizmos.icon_size.large"),
-                    C("view.gizmos.icon_size.huge"),
-                ],
-            ),
-            S,
-            C("view.gizmos.all_types"),
-            Item::Dynamic(Dynamic::GizmoTypes),
-        ],
-        Context::Play => &[
-            C("play.options"),
-            C("play.simulate"),
-            C("play.eject"),
-            C("play.possess"),
-            C("play.mode.local"),
-            C("play.mode.host"),
-            C("play.mode.dedicated"),
-            S,
-            C("play.clients.more"),
-            C("play.clients.fewer"),
-            C("play.start_paused"),
-            S,
-            C("play.settings"),
-            C("play.network_profile"),
-            S,
-            C("play.inspect"),
-            C("play.runtime.patch"),
-            C("play.runtime.discard"),
-            C("play.keep"),
-            C("play.keep_driven"),
         ],
     }
 }

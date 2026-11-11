@@ -310,32 +310,14 @@ impl Context<'_> {
         }
     }
 
-    fn probe(&self, project: &Path, settle: &str) -> Result<Output> {
+    /// The editor's responsiveness probe (`--verify-responsiveness`) went with the legacy
+    /// window; until the studio has one, its rows read "not measured" with this reason.
+    fn probe(&self, _project: &Path, settle: &str) -> Result<Output> {
         let label = if settle == "after" { "cold" } else { "warm" };
-        let output = self.output.join("editor").join(label);
-        let layers = output.join("empty-vulkan-layers");
-        fs::create_dir_all(&layers)?;
-        let log = output.join("editor.log");
-        let mut command = Command::new(self.binary("ara-editor")?);
-        command
-            .current_dir(self.root)
-            .arg(project)
-            .args(["--verify-responsiveness", "--settle-imports", settle])
-            .args(["--size", "2560x1440", "--output"])
-            .arg(&output)
-            .env("ARA_PLAYER", self.binary("ara-player")?)
-            .env("ARA_SHADER_DIR", self.root)
-            .env("VK_INSTANCE_LAYERS", "")
-            .env("VK_IMPLICIT_LAYER_PATH", &layers)
-            .stdout(File::create(&log)?)
-            .stderr(File::create(log.with_extension("stderr.log"))?);
-        eprintln!("D26: editor probe, {label}");
-        run(&mut command, Duration::from_secs(45 * 60), &log)?;
-        let path = output.join("responsiveness.json");
-        Ok(Output {
-            value: serde_json::from_slice(&fs::read(&path)?)?,
-            path,
-        })
+        anyhow::bail!(
+            "editor {label} responsiveness: the probe was part of the legacy editor window, \
+             removed; the studio has no responsiveness probe yet"
+        )
     }
 }
 
