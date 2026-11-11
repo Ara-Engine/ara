@@ -15,10 +15,11 @@ use std::time::{Duration, Instant};
 use ara_kit::icons;
 use ara_kit::ui::*;
 use ara_play_host::{ImportProgress, PublishedAssets};
-use stillkit::el::{Align, Overlay, col, el, row, text};
+use stillkit::el::{Align, Handled, KeyCode, Overlay, col, el, row, text};
 
 use super::Studio;
 use crate::Editor;
+use crate::import_gate::{Imports, imports as imports_of, source_paths};
 
 /// Imports that settle sooner never show the card.
 const SHOW_AFTER: Duration = Duration::from_millis(400);
@@ -28,19 +29,6 @@ const SKIP_AFTER: Duration = Duration::from_secs(3);
 const GIVE_UP: Duration = Duration::from_secs(12);
 /// Failed imports listed by name; more are counted.
 const MAX_FAILURES: usize = 4;
-
-/// Where a project's imports stand, by project path ([`ImportProgress`] by asset id).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Imports {
-    /// Sources with a current import.
-    pub done: usize,
-    /// Registered sources.
-    pub total: usize,
-    /// Sources still importing.
-    pub pending: usize,
-    /// Failed sources: project path and the import's error, sorted by path.
-    pub failed: Vec<(String, String)>,
-}
 
 /// What the card shows for one pass of the gate.
 #[derive(Clone, Debug, PartialEq)]
@@ -97,17 +85,7 @@ struct Tracker {
 
 impl Tracker {
     fn new(editor: &Editor) -> Self {
-        let paths = editor
-            .host
-            .store()
-            .workspace()
-            .docs()
-            .filter(|(_, d)| d.kind == "import")
-            .map(|(path, d)| {
-                let source = path.strip_suffix(".import.json").unwrap_or(path);
-                (d.id.to_string(), source.to_owned())
-            })
-            .collect();
+        let paths = source_paths(editor.host.store().workspace());
         Self {
             reader: PublishedAssets::for_project(editor.host.root()).ok(),
             revision: 0,
@@ -160,19 +138,7 @@ impl Tracker {
     }
 
     fn imports(&self) -> Option<Imports> {
-        let p = self.progress.as_ref()?;
-        let mut failed: Vec<(String, String)> = p
-            .failed
-            .iter()
-            .map(|(id, error)| (self.path(id), error.clone()))
-            .collect();
-        failed.sort();
-        Some(Imports {
-            done: p.done,
-            total: p.total,
-            pending: p.pending.len(),
-            failed,
-        })
+        Some(imports_of(self.progress.as_ref()?, &self.paths))
     }
 }
 
@@ -182,32 +148,121 @@ pub(super) struct Gate {
     started: Instant,
     project: String,
     folder: String,
+    /// Nobody is at the window (a background or capture start): the gate opens once the
+    /// imports settle, failures or not, so an agent's captures are never held for a person.
+    unattended: bool,
+    /// Who let themselves in before the imports settled.
+    released: Option<&'static str>,
+    /// The furthest stage logged, so each is said once.
+    logged: Logged,
+    /// Log lines not yet taken ([`Gate::take_log`]).
+    lines: Vec<String>,
+}
+
+/// The stages the gate logs, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Logged {
+    Nothing,
+    Importing,
+    Review,
+    Opened,
 }
 
 impl Gate {
-    /// A gate for the project `editor` has open, started now.
-    pub(super) fn new(editor: &Editor) -> Self {
+    /// A gate for the project `editor` has open, started now. `unattended` opens it by
+    /// itself once the imports settle, whatever they came to.
+    pub(super) fn new(editor: &Editor, unattended: bool) -> Self {
         Self {
             tracker: Tracker::new(editor),
             started: Instant::now(),
             project: project_name(editor),
             folder: dunce::simplified(editor.host.root()).display().to_string(),
+            unattended,
+            released: None,
+            logged: Logged::Nothing,
+            lines: Vec::new(),
         }
+    }
+
+    /// Opens the gate now (`by` says who: a person at the card, an agent over the protocol).
+    pub(super) fn release(&mut self, by: &'static str) {
+        self.released.get_or_insert(by);
+    }
+
+    /// The log lines since the last call: one per stage change (importing, review, opened),
+    /// for the console, so a real import can be checked without a screenshot.
+    pub(super) fn take_log(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.lines)
     }
 
     /// Reads the feed. `Some` is what the card shows and the gate holds; `None` means open:
-    /// every import settled clean, or the pipeline never reported (no import worker).
+    /// every import settled clean, a person or an agent let themselves in, the gate is
+    /// unattended and the imports settled, or the pipeline never reported (no import worker).
     pub(super) fn step(&mut self) -> Option<Standing> {
         self.tracker.poll();
-        self.standing()
+        let standing = self.standing();
+        self.log(standing.as_ref());
+        standing
+    }
+
+    /// Why the gate is open, if it is.
+    fn opened(&self) -> Option<&'static str> {
+        let imports = self.tracker.imports();
+        if let Some(by) = self.released {
+            Some(by)
+        } else if self.tracker.settled_clean() {
+            Some("all imported")
+        } else if self.unattended && imports.as_ref().is_some_and(Imports::settled) {
+            Some("no one at the window")
+        } else if imports.is_none() && self.started.elapsed() >= GIVE_UP {
+            Some("no report from the import pipeline")
+        } else {
+            None
+        }
+    }
+
+    /// Says each stage once: importing, review (with the failures and their errors), opened.
+    fn log(&mut self, standing: Option<&Standing>) {
+        match (standing, self.opened()) {
+            (Some(standing), _) => match standing.stage() {
+                Stage::Importing if self.logged < Logged::Importing => {
+                    let i = standing.imports.as_ref().map(|i| (i.done, i.total));
+                    let (done, total) = i.unwrap_or_default();
+                    self.lines
+                        .push(format!("imports: importing {done} of {total}"));
+                    self.logged = Logged::Importing;
+                }
+                Stage::Review if self.logged < Logged::Review => {
+                    let failed = standing.imports.as_ref().map_or(&[][..], |i| &i.failed);
+                    self.lines.push(review_line(failed));
+                    self.logged = Logged::Review;
+                }
+                _ => {}
+            },
+            (None, why) if self.logged < Logged::Opened => {
+                let failed = self.tracker.imports().map(|i| i.failed).unwrap_or_default();
+                // A gate that opens past its review (unattended, or released at once) still
+                // says what failed.
+                if !failed.is_empty() && self.logged < Logged::Review {
+                    self.lines.push(review_line(&failed));
+                }
+                self.lines.push(format!(
+                    "imports: opened ({}), {} failed",
+                    why.unwrap_or("open"),
+                    failed.len()
+                ));
+                self.logged = Logged::Opened;
+            }
+            _ => {}
+        }
     }
 
     fn standing(&self) -> Option<Standing> {
-        let elapsed = self.started.elapsed();
-        let imports = self.tracker.imports();
-        if self.tracker.settled_clean() || (imports.is_none() && elapsed >= GIVE_UP) {
+        if self.opened().is_some() {
             return None;
         }
+        let elapsed = self.started.elapsed();
+        let imports = self.tracker.imports();
         Some(Standing {
             project: self.project.clone(),
             folder: self.folder.clone(),
@@ -238,6 +293,20 @@ impl Gate {
         self.tracker.reader = None;
         self
     }
+}
+
+/// The log line for a review: each failed source with the first line of its error.
+fn review_line(failed: &[(String, String)]) -> String {
+    let list: Vec<String> = failed
+        .iter()
+        .map(|(path, error)| format!("{path}: {}", error.lines().next().unwrap_or_default()))
+        .collect();
+    format!(
+        "imports: review with {} failure{}: {}",
+        failed.len(),
+        if failed.len() == 1 { "" } else { "s" },
+        list.join("; ")
+    )
 }
 
 /// The project's name as people read it: `name` in `ara.project.json`, else its folder's.
@@ -399,7 +468,19 @@ pub(super) fn overlay(s: &Studio) -> Option<Overlay<Studio>> {
         _ => {}
     }
     let status = (stage == Stage::Review).then_some((Status::Warning, icons::CIRCLE_ALERT));
-    let panel = dialog_panel(l, status, &title, body, buttons, open).w(480.0);
+    // Enter takes the card's button, as the old loading window's did: Open project on a
+    // review, Open now once it is offered.
+    let enter = stage == Stage::Review || standing.skip;
+    let panel = dialog_panel(l, status, &title, body, buttons, open)
+        .w(480.0)
+        .on_key(move |s: &mut Studio, key, _| {
+            if enter && key.0 == KeyCode::ENTER.0 {
+                s.local.import_released = true;
+                Handled::Yes
+            } else {
+                Handled::No
+            }
+        });
     // No dismiss on a press outside or Esc: only the card's own buttons let a person in.
     Some(stillkit::el::dialog(panel))
 }

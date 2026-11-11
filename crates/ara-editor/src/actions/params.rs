@@ -548,3 +548,16 @@ pub(super) struct EditorWindow {
     /// Desktop rectangle: x, y, width, height.
     pub rect: [f32; 4],
 }
+
+/// `editor.imports`: the project's import report, optionally opening the studio's gate.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorImports {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Open the studio's import gate if it holds (a studio an agent started has no person
+    /// to press Open now); the report lists the failed imports it skipped.
+    pub release: Option<bool>,
+}
