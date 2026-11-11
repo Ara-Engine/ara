@@ -2,7 +2,8 @@
 //! press on one starts an editor gesture (`begin_gesture_tool`), moves drive it, release
 //! commits it as one undo step and Escape or a lost capture cancels. Geometry and hit tests
 //! are `crate::overlay`'s, the same the compositor draws; this file only maps pointer
-//! movement to the gesture's delta (along an axis, across a plane, around a ring).
+//! movement to the gesture's delta (along an axis, across a plane, around a ring). A move
+//! with vertex or surface snapping on asks the host instead (`studio::snapping`).
 use glam::{Vec2, Vec3};
 
 use super::Studio;
@@ -109,11 +110,38 @@ pub(super) fn begin(s: &mut Studio, at: [f32; 2], size: (f32, f32)) -> bool {
     true
 }
 
-/// Moves the gesture to the pointer at `at`.
+/// Whether setting `key` is on.
+fn on(s: &Studio, key: &str) -> bool {
+    s.editor
+        .state
+        .settings
+        .get(key)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Moves the gesture to the pointer at `at`: by the handle's geometry, or, moving with
+/// vertex snapping (the overlay's, or V held) or surface snapping on, by the host's snap.
 pub(super) fn drive(s: &mut Studio, at: [f32; 2]) {
     let Some(drag) = s.local.gizmo.clone() else {
         return;
     };
+    let moving = s
+        .editor
+        .gesture
+        .as_ref()
+        .is_some_and(|g| matches!(g.tool, Tool::Translate | Tool::Universal));
+    let vertex = s.local.vertex_key || on(s, "viewport.vertexSnap");
+    if moving && (vertex || on(s, "viewport.surfaceSnap")) {
+        s.local.snap = Some(super::snapping::Request {
+            at,
+            start: drag.start,
+            rect: drag.rect,
+            pivot: drag.pivot,
+            vertex,
+        });
+        return;
+    }
     let camera = s.editor.state.camera;
     let Some(gesture) = s.editor.gesture.as_mut() else {
         return;
