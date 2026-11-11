@@ -28,7 +28,7 @@ ara-vfx = { path = "../ara-vfx" }
 # names opt-in #12, the adapter's TLAS limit #13 and P-PIPE) with two open PRs on top:
 # P-SKY's filtered sky lookups (Ara-Engine/renderlab#16), `Background::ScaledSky` for the
 # sky-light strength (#17, stacked on #16) and the emitter curl's origin and birth-time
-# phase with a stepped prewarm (#22), merged on `t3/ara-pin-curl`. Repin to main when
+# phase with a stepped prewarm (#25), merged on `t3/ara-pin-curl`. Repin to main when
 # they merge.
 renderlab = { git = "https://github.com/Ara-Engine/renderlab", rev = "d484b23b7a1a8a01c794e09c82c9e38ba425adbc" }
 # The shared-image handoff reaches Renderlab's raw Vulkan device through wgpu-hal, with
