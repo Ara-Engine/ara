@@ -5109,3 +5109,109 @@ fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
         before = now;
     }
 }
+
+#[test]
+fn agents_capture_the_studio_window_and_its_layout() {
+    let mut rt = open();
+    settle(&mut rt);
+    let root = rt.state().editor.host.root().to_owned();
+    for (target, file) in [("editor", "studio.png"), ("layout", "layout.json")] {
+        let job = rt.touch(|s| {
+            s.editor
+                .action(
+                    "capture",
+                    json!({"target": target, "path": format!(".ara/captures/{file}")}),
+                )
+                .unwrap()["job"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        });
+        super::capture::serve(&mut rt, None);
+        let started = std::time::Instant::now();
+        let status = loop {
+            let status = rt.touch(|s| {
+                s.editor.tick();
+                s.editor.action("jobs.status", json!({"job": job})).unwrap()
+            });
+            if status["status"] != "running" {
+                break status;
+            }
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "{target}: {status}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(status["status"], "done", "{target}: {status}");
+        let report = match target {
+            "editor" => {
+                let png = std::fs::read(root.join(".ara/captures/studio.png")).unwrap();
+                assert!(png.starts_with(b"\x89PNG"), "a PNG");
+                std::fs::read_to_string(root.join(".ara/captures/studio.layout.json")).unwrap()
+            }
+            _ => std::fs::read_to_string(root.join(".ara/captures/layout.json")).unwrap(),
+        };
+        assert!(
+            report.contains("scene/view"),
+            "{target}: the layout names the Scene view"
+        );
+    }
+}
+
+#[test]
+fn agents_capture_the_scene_with_entity_marks_on_this_gpu() {
+    use crate::world::EditWorldView as _;
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    let scene = rt.touch(|s| {
+        let view = s.editor.view().unwrap();
+        view.scene(
+            s.editor.host.root(),
+            &s.editor.state,
+            None,
+            &mut s.editor.models,
+        )
+        .unwrap()
+    });
+    let mut renderer = crate::app::viewport::prepare_renderer(
+        scene,
+        [320, 240],
+        super::present_extensions(),
+        root.join(".ara/gpu"),
+        false,
+        Default::default(),
+        |_| Ok(true),
+    )
+    .unwrap()
+    .expect("the renderer starts on this GPU");
+    let view = crate::app::viewport::SceneView::default();
+    let job = rt.touch(|s| {
+        s.editor
+            .action(
+                "capture",
+                json!({"target": "viewport", "path": ".ara/captures/scene.png", "marks": 8}),
+            )
+            .unwrap()["job"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    });
+    super::capture::serve(&mut rt, Some((&mut renderer, &view)));
+    let started = std::time::Instant::now();
+    let status = loop {
+        let status = rt.touch(|s| {
+            s.editor.tick();
+            s.editor.action("jobs.status", json!({"job": job})).unwrap()
+        });
+        if status["status"] != "running" {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "{status}");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(status["status"], "done", "{status}");
+    assert!(root.join(".ara/captures/scene.png").is_file());
+    assert!(root.join(".ara/captures/scene.entities.json").is_file());
+    view.destroy(&mut renderer).unwrap();
+}
