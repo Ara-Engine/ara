@@ -195,7 +195,15 @@ impl Owner {
                 source_revision,
                 why,
             } => {
-                let rejected = if self.draining || editor.probe_captures.cancel_requested(&job) {
+                let rejected = if !super::unavailable::probe_capture_available() {
+                    Some(vec![
+                        Diagnostic::error(
+                            crate::codes::RENDER,
+                            "Reflection probe capture is not available yet: the Scene's renderer cannot capture probes",
+                        )
+                        .doc(&doc),
+                    ])
+                } else if self.draining || editor.probe_captures.cancel_requested(&job) {
                     Some(vec![
                         Diagnostic::error(
                             codes::PROBE_STALE,

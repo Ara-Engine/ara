@@ -1,57 +1,31 @@
-//! The VFX tool, laid out as Niagara's: the live GPU preview with its timeline (restart,
-//! play/pause, step, rate), time and particle count on the left; the System Overview in the
+//! The VFX tool, laid out as Niagara's: the preview with its timeline (restart,
+//! play/pause, step, rate) on the left, a placeholder with disabled controls until the renderer
+//! can draw effects; the System Overview in the
 //! middle, one card per emitter with its stages (spawn, initialize, update, render) in their
 //! colours; the picked module's Selection on the right, where its values are typed and its
 //! tools move, duplicate or remove it. A module's checkbox keeps it but skips it. Hide and
-//! Isolate change only the preview. The preview runs on its own worker
-//! (`asset_tools::vfx_stream`); every edit is one undo step of the document's commands.
+//! Isolate change only the preview (and are kept for when it returns). Every edit is one undo
+//! step of the document's commands.
 use std::collections::BTreeSet;
-use std::sync::Arc;
 
 use ara_kit::icons;
 use ara_kit::ui::*;
 use serde_json::{Value, json};
-use stillkit::el::{Align, Axis, El, Justify, col, el, icon, image, menu, row, text};
+use stillkit::el::{Align, Axis, El, Justify, col, el, icon, menu, row, text};
 
 use super::Studio;
-use crate::asset_tools::vfx_stream::VfxStream;
 
 /// An emitter card's width in the System Overview.
 const CARD: f32 = 300.0;
 /// Preview rates, in percent of real time.
 const RATES: [u32; 4] = [25, 50, 100, 200];
 
-/// The VFX page's preview and view state (what to show, never the effect itself).
+/// The VFX page's view state (what to show, never the effect itself).
+#[derive(Default)]
 pub struct Page {
-    stream: Option<VfxStream>,
-    /// The newest preview frame, ready to draw.
-    pub frame: Option<Arc<stillkit::Image>>,
-    tick: u32,
-    alive: u32,
-    rate: u32,
-    hz: u32,
     hidden: BTreeSet<String>,
     isolated: Option<String>,
     collapsed: BTreeSet<String>,
-    /// What the preview runs (document and revision, playing, rate, hidden, isolated).
-    shown: Option<(String, u64, bool, u32, usize, Option<String>)>,
-}
-
-impl Default for Page {
-    fn default() -> Self {
-        Self {
-            stream: None,
-            frame: None,
-            tick: 0,
-            alive: 0,
-            rate: 100,
-            hz: 60,
-            hidden: BTreeSet::new(),
-            isolated: None,
-            collapsed: BTreeSet::new(),
-            shown: None,
-        }
-    }
 }
 
 /// What a preview toggle does to one emitter (the effect itself is unchanged).
@@ -66,25 +40,6 @@ pub(super) enum Emitter {
 }
 
 impl Page {
-    /// Runs the preview again from tick 0.
-    pub(super) fn restart(&mut self) {
-        if let Some(stream) = self.stream.as_mut() {
-            stream.restart();
-        }
-    }
-
-    /// Advances the paused preview one tick.
-    pub(super) fn step(&mut self) {
-        if let Some(stream) = self.stream.as_mut() {
-            stream.step();
-        }
-    }
-
-    /// Runs the preview at `rate` percent (its fixed tick is unchanged).
-    pub(super) fn set_rate(&mut self, rate: u32) {
-        self.rate = rate.clamp(1, 1000);
-    }
-
     /// Flips one of emitter `name`'s preview toggles.
     pub(super) fn emitter(&mut self, name: &str, toggle: Emitter) {
         let flip = |set: &mut BTreeSet<String>| {
@@ -139,82 +94,6 @@ fn effect(s: &Studio, doc: &str) -> Result<ara_vfx::Effect, String> {
     ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())
 }
 
-/// The host's pass: keep the preview running what the page shows (paused while the page is
-/// not `visible`) and take its newest frame. Whether a new frame arrived.
-pub(super) fn update(s: &mut Studio, visible: bool) -> bool {
-    let Some(doc) = document(s).filter(|_| visible) else {
-        if let Some(stream) = s.vfx.stream.as_mut() {
-            stream.pause();
-        }
-        s.vfx.shown = None;
-        return false;
-    };
-    let revision = s.editor.host.store().revision();
-    let playing = s.editor.state.preview_playing;
-    let page = &s.vfx;
-    let key = (
-        doc.clone(),
-        revision,
-        playing,
-        page.rate,
-        page.hidden.len(),
-        page.isolated.clone(),
-    );
-    if page.shown.as_ref() != Some(&key)
-        && let Ok(mut effect) = effect(s, &doc)
-    {
-        let page = &mut s.vfx;
-        page.hz = effect.hz;
-        effect.emitters.retain(|e| match &page.isolated {
-            Some(only) => &e.name == only,
-            None => !page.hidden.contains(&e.name),
-        });
-        let root = s.editor.host.root().to_owned();
-        page.stream
-            .get_or_insert_with(|| VfxStream::new(&root))
-            .show(effect, playing, page.rate);
-        page.shown = Some(key);
-    }
-    let page = &mut s.vfx;
-    let Some(stream) = page.stream.as_mut() else {
-        return false;
-    };
-    let mut landed = None;
-    for frame in stream.poll() {
-        match frame {
-            Ok(frame) => landed = Some(frame),
-            Err(error) => s.editor.report_failure(&*anyhow::anyhow!("{error}")),
-        }
-    }
-    let Some(frame) = landed else {
-        return false;
-    };
-    page.tick = frame.tick;
-    page.alive = frame.alive;
-    // The worker's RGBA as premultiplied BGRA, as stillkit draws images.
-    let (width, height) = frame.image.dimensions();
-    let mut pixels = frame.image.into_raw();
-    for px in pixels.as_chunks_mut::<4>().0 {
-        let a = u16::from(px[3]);
-        let mul = |c: u8| ((u16::from(c) * a + 127) / 255) as u8;
-        let (r, g, b) = (mul(px[0]), mul(px[1]), mul(px[2]));
-        px[0] = b;
-        px[1] = g;
-        px[2] = r;
-    }
-    page.frame = Some(Arc::new(stillkit::Image {
-        width,
-        height,
-        pixels,
-    }));
-    true
-}
-
-/// Whether the preview is running (the host wakes for its frames).
-pub(super) fn running(s: &Studio) -> bool {
-    s.vfx.shown.is_some() && s.editor.state.preview_playing
-}
-
 /// The page, laid out as Niagara's: the preview and its timeline on the left, the System
 /// Overview (one card per emitter, its stages in their colours) in the middle, and the picked
 /// module's Selection on the right.
@@ -242,44 +121,23 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .rects
         .get("vfx/preview")
         .map_or(360.0, |r| (r.width() - 20.0).clamp(160.0, 720.0));
-    // Before its first frame: the worker is starting, or the effect has to compile first.
-    let waiting = match &fx {
-        Ok(_) => "Starting the preview…",
-        Err(_) => "The preview starts once the effect compiles.",
-    };
-    let preview = match &s.vfx.frame {
-        Some(frame) => image(frame.clone()).size(size),
-        None => el()
-            .size(size)
-            .align(Align::Center)
-            .justify(Justify::Center)
-            .child(text(waiting).text_size(12.0).color(c.muted_foreground.0)),
-    };
-    let seconds = s.vfx.tick as f32 / s.vfx.hz.max(1) as f32;
+    let preview = col().size(size).child(super::unavailable::tile(
+        l,
+        "vfx/preview-unavailable",
+        "Effect preview is not available yet.",
+    ));
     let status = match &fx {
         Ok(_) => row()
             .gap(6.0)
             .align(Align::Center)
             .child(el().size(7.0).radius(3.5).fill(c.success_foreground.0))
-            .child(text("Compiled").text_size(11.5).color(c.muted_foreground.0))
-            .child(el().grow(1.0))
-            .child(
-                text(format!(
-                    "{seconds:.2} s · tick {} · {} particles",
-                    s.vfx.tick, s.vfx.alive
-                ))
-                .text_size(11.5)
-                .family(mono())
-                .color(c.muted_foreground.0),
-            ),
+            .child(text("Compiled").text_size(11.5).color(c.muted_foreground.0)),
         Err(error) => row().child(
-            text(format!(
-                "Compile failed · {error} · the last good preview keeps running"
-            ))
-            .text_size(11.5)
-            .color(c.destructive_foreground.0)
-            .wrap(3)
-            .grow(1.0),
+            text(format!("Compile failed · {error}"))
+                .text_size(11.5)
+                .color(c.destructive_foreground.0)
+                .wrap(3)
+                .grow(1.0),
         ),
     };
     let left = col()
@@ -909,65 +767,44 @@ pub(super) fn edit(s: &mut Studio, doc: &str, item: &str, op: &str) {
 fn timeline(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
-    let playing = s.editor.state.preview_playing;
+    let soon = super::unavailable::SOON;
     let mut rates = row().gap(1.0);
     for rate in RATES {
-        let on = s.vfx.rate == rate;
         rates = rates.child(
-            super::style::chosen(l, row(), on)
-                .key(format!("vfx/rate/{rate}"))
-                .h(22.0)
-                .pad_x(7.0)
-                .align(Align::Center)
-                .radius(super::style::RADIUS)
-                .label(format!("Run at {rate}%"))
-                .selected(on)
-                .on_press(move |s: &mut Studio| s.vfx.rate = rate)
-                .child(
-                    text(format!("{rate}%"))
-                        .text_size(11.0)
-                        .family(mono())
-                        .color(if on {
-                            c.foreground.0
-                        } else {
-                            c.muted_foreground.0
-                        }),
-                ),
+            enabled(
+                row()
+                    .key(format!("vfx/rate/{rate}"))
+                    .h(22.0)
+                    .pad_x(7.0)
+                    .align(Align::Center)
+                    .radius(super::style::RADIUS)
+                    .label(format!("Run at {rate}%"))
+                    .child(
+                        text(format!("{rate}%"))
+                            .text_size(11.0)
+                            .family(mono())
+                            .color(c.muted_foreground.0),
+                    ),
+                false,
+            )
+            .tooltip(soon),
         );
     }
+    let control = |glyph, label: &str, key: &str| {
+        enabled(
+            icon_button(l, Tone::Ghost, Size::Sm, glyph, label).key(key.to_owned()),
+            false,
+        )
+        .tooltip(soon)
+    };
     row()
         .h(34.0)
         .pad_x(8.0)
         .gap(6.0)
         .align(Align::Center)
         .fill(super::style::tones(l).strip)
-        .child(
-            icon_button(l, Tone::Ghost, Size::Sm, icons::REFRESH_CCW, "Restart")
-                .key("vfx/restart")
-                .on_press(|s: &mut Studio| s.vfx.restart()),
-        )
-        .child(
-            icon_button(
-                l,
-                Tone::Ghost,
-                Size::Sm,
-                if playing { icons::PAUSE } else { icons::PLAY },
-                if playing { "Pause" } else { "Play" },
-            )
-            .key("vfx/play")
-            .on_press(move |s: &mut Studio| s.editor.state.preview_playing = !playing),
-        )
-        .child(enabled(
-            icon_button(
-                l,
-                Tone::Ghost,
-                Size::Sm,
-                icons::STEP_FORWARD,
-                "Step one frame",
-            )
-            .key("vfx/step")
-            .on_press(|s: &mut Studio| s.vfx.step()),
-            !playing,
-        ))
+        .child(control(icons::REFRESH_CCW, "Restart", "vfx/restart"))
+        .child(control(icons::PLAY, "Play", "vfx/play"))
+        .child(control(icons::STEP_FORWARD, "Step one frame", "vfx/step"))
         .child(rates)
 }
