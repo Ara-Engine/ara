@@ -7062,7 +7062,7 @@ fn the_title_bar_has_no_theme_button_and_no_rule_under_it() {
 fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
     let mut rt = open();
     settle(&mut rt);
-    for panel in ["hierarchy", "inspector", "scene", "game"] {
+    for panel in ["hierarchy", "inspector", "scene", "game", "assets"] {
         rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
         settle(&mut rt);
         assert!(
@@ -7077,17 +7077,20 @@ fn core_panels_have_no_tab_close_and_the_window_menu_hides_and_shows_them() {
         "other panels keep their ×"
     );
     // Window › Hierarchy is checked while shown; pressing it hides the panel, and again shows it.
-    for (shown_after, key) in [
-        (false, "cmd/window.close_panel/Hierarchy"),
-        (true, "cmd/window.hierarchy/Hierarchy"),
-    ] {
-        press(&mut rt, "menu/Window");
-        press(&mut rt, key);
-        assert_eq!(
-            crate::state::panel_visible(&rt.state().editor.state, "hierarchy"),
-            shown_after
-        );
-        settle(&mut rt);
+    for (panel, label) in [("hierarchy", "Hierarchy"), ("assets", "Assets")] {
+        for (shown_after, key) in [
+            (false, format!("cmd/window.close_panel/{label}")),
+            (true, format!("cmd/window.{panel}/{label}")),
+        ] {
+            press(&mut rt, "menu/Window");
+            press(&mut rt, &key);
+            assert_eq!(
+                crate::state::panel_visible(&rt.state().editor.state, panel),
+                shown_after,
+                "{label} after pressing {key}"
+            );
+            settle(&mut rt);
+        }
     }
 }
 
@@ -7397,4 +7400,137 @@ fn the_left_columns_start_their_names_close_to_the_edge() {
         "the Hierarchy is {}px wide",
         outline.width()
     );
+}
+
+/// The UI pass 3 review shots at three window sizes (device px; the zoom applies as in the
+/// window): a three-level Hierarchy nest, the Assets tree two folders deep with the path bar and a
+/// hovered filter's tooltip, and Settings' theme control. Written to
+/// `target/studio-captures/pass3/<ARA_CAP_TAG, default "after">/`.
+#[test]
+#[ignore = "writes review captures under target/"]
+fn pass_three_captures() {
+    let tag = std::env::var("ARA_CAP_TAG").unwrap_or_else(|_| "after".into());
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/studio-captures/pass3")
+        .join(tag);
+    std::fs::create_dir_all(&out).unwrap();
+    let shot = |rt: &mut Runtime<Studio>, name: &str| {
+        std::fs::write(
+            out.join(format!("{name}.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+    };
+    for (w, h) in [(1280u32, 720u32), (1000, 630), (900, 560)] {
+        let zoom = super::zoom::for_width(w as f32);
+        let mut rt = open_sized(((w as f32 / zoom) as u32, (h as f32 / zoom) as u32));
+        rt.set_scale(zoom);
+        rt.resize((w, h));
+        let size = format!("{w}x{h}");
+        let root = rt.state().editor.host.root().to_owned();
+        std::fs::create_dir_all(root.join("content/models/props")).unwrap();
+        std::fs::create_dir_all(root.join("content/textures")).unwrap();
+        std::fs::write(root.join("content/models/props/notes.md"), "# Props").unwrap();
+        rt.touch(|s| {
+            s.editor
+                .apply(
+                    vec![
+                        json!({"cmd":"entity.create","args":{"id":"e_arm","name":"Arm","parent":"e_lamp","components":{"Transform":{}}}}),
+                        json!({"cmd":"entity.create","args":{"id":"e_hand","name":"Hand","parent":"e_arm","components":{"Transform":{}}}}),
+                    ],
+                    "Create",
+                    None,
+                )
+                .unwrap()
+        });
+        rt.update(|s| s.resolve());
+        scan(&mut rt);
+        rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+        settle(&mut rt);
+        for _ in 0..20 {
+            rt.frame(FRAME);
+        }
+        // The host feeds back the Assets body and path bar rects; do the same here.
+        let measure = |rt: &mut Runtime<Studio>| {
+            let scale = rt.scale();
+            let rects: Vec<_> = ["assets/body", "assets/crumbs", "assets/search"]
+                .into_iter()
+                .filter_map(|k| rt.find(k).map(|r| (k.to_owned(), r)))
+                .map(|(k, r)| {
+                    let r = stillkit::Rect::new(
+                        r.left / scale,
+                        r.top / scale,
+                        r.width() / scale,
+                        r.height() / scale,
+                    );
+                    (k, r)
+                })
+                .collect();
+            rt.update(|s| s.local.rects.extend(rects));
+            settle(rt);
+        };
+        measure(&mut rt);
+        shot(&mut rt, &format!("{size}-hierarchy-nest"));
+        // Two folders deep: the path bar reads project › content › models › props.
+        rt.update(|s| {
+            s.act(
+                "editor.workspace",
+                json!({"folder": "content/models/props", "asset": ""}),
+            )
+        });
+        settle(&mut rt);
+        measure(&mut rt);
+        shot(&mut rt, &format!("{size}-assets-two-deep"));
+        // A hovered filter shows its name in a tooltip once the pointer has rested.
+        let chip = rt
+            .find("assets/filter/texture")
+            .expect("the Textures filter");
+        rt.pointer_move(chip.center().x, chip.center().y);
+        for _ in 0..80 {
+            rt.frame(FRAME);
+        }
+        assert!(
+            rt.tree()
+                .iter()
+                .any(|n| n.text.as_deref() == Some("Textures")),
+            "the hovered filter's tooltip shows"
+        );
+        shot(&mut rt, &format!("{size}-assets-filter-tooltip"));
+        rt.pointer_move(0.0, 0.0);
+        // Settings, filtered to the theme control.
+        rt.update(|s| super::commands::run(s, "edit.preferences", &crate::catalog::Target::None));
+        settle(&mut rt);
+        rt.update(|s| s.local.settings.as_mut().unwrap().query = "Theme".into());
+        settle(&mut rt);
+        shot(&mut rt, &format!("{size}-settings-theme"));
+    }
+}
+
+/// The path bar names as many trailing folders as fit and folds the rest into one "…" step
+/// that opens the nearest hidden folder; it never overprints.
+#[test]
+fn a_deep_path_folds_its_leading_folders_into_one_step() {
+    use super::panels::crumbs_fit;
+    let parts = ["models", "props", "crates", "small"];
+    let fit = |parts: &[&str], room| {
+        let c = crumbs_fit("Studio", parts, room);
+        (c.shown, c.root_named)
+    };
+    assert_eq!(fit(&parts, None), (4, true), "unmeasured shows all");
+    assert_eq!(fit(&parts, Some(900.0)), (4, true), "room for all");
+    let (some, named) = fit(&parts, Some(260.0));
+    assert!(
+        (1..4).contains(&some) && named,
+        "{some} of 4 in a narrow bar"
+    );
+    assert_eq!(
+        fit(&parts, Some(10.0)),
+        (1, false),
+        "the current one stays, the root is its icon"
+    );
+    assert_eq!(fit(&[], Some(60.0)), (0, false), "no room for the name");
+    assert_eq!(fit(&[], Some(200.0)), (0, true), "the root alone");
+    // What it reserves is what it shows.
+    let c = crumbs_fit("Studio", &parts, Some(260.0));
+    assert!(c.width <= 260.0, "{} fits 260", c.width);
 }

@@ -231,13 +231,7 @@ fn title_bar(s: &Studio) -> El<Studio> {
         .unwrap_or("Scene")
         .trim_end_matches(".scene")
         .to_owned();
-    let project = s
-        .editor
-        .host
-        .root()
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let project = super::loading::project_name(&s.editor);
     let hover = super::style::tones(l).hover;
     let launcher = row()
         .key("launcher")
@@ -259,8 +253,10 @@ fn title_bar(s: &Studio) -> El<Studio> {
         .child(icon(icons::SEARCH).size(13.0))
         .child(text("Search or run…").text_size(12.0).grow(1.0))
         .child(kbd(l, launcher_chord()));
+    // Always a little air from the run controls, however narrow the window.
     let crumb = row()
         .gap(6.0)
+        .pad_x(8.0)
         .align(Align::Center)
         .child(
             text(project)
@@ -356,9 +352,9 @@ fn lines(s: &Studio, items: &'static [Item], depth: usize, target: &Target, out:
             // clicked (the menu bar keeps every entry).
             // Window › a core panel: checked while shown, and a press hides or shows it (its
             // tab has no ×).
-            Item::Command(id @ ("window.hierarchy" | "window.inspector" | "window.game"))
-                if *target == Target::None =>
-            {
+            Item::Command(
+                id @ ("window.hierarchy" | "window.inspector" | "window.game" | "window.assets"),
+            ) if *target == Target::None => {
                 let panel = id.trim_start_matches("window.");
                 let shown = crate::state::panel_visible(&s.editor.state, panel);
                 let title = super::dock::panel_title(panel).0.to_owned();

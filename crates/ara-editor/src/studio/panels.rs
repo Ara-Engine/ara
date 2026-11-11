@@ -240,40 +240,48 @@ fn assets(s: &Studio) -> El<Studio> {
         .unwrap_or_default();
     // The path starts at the project's root: its icon and the project's own name (the tree
     // beside it says "Project", the path bar need not), then each folder below it.
-    let project = s
-        .editor
-        .state
-        .settings
-        .get("project.name")
-        .and_then(Value::as_str)
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
-        .or_else(|| {
-            s.editor
-                .host
-                .root()
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-        })
-        .unwrap_or_else(|| "Project".into());
+    let project = super::loading::project_name(&s.editor);
+    let parts: Vec<&str> = folder.split('/').filter(|p| !p.is_empty()).collect();
+    // The room is what the path bar and the search box share beyond the search's minimum, so
+    // it does not depend on how they split it now.
+    let room = s
+        .local
+        .rects
+        .get("assets/crumbs")
+        .zip(s.local.rects.get("assets/search"))
+        .map(|(crumbs, search)| crumbs.width() + (search.width() - SEARCH_MIN).max(0.0));
+    let Crumbs {
+        shown,
+        root_named,
+        width,
+    } = crumbs_fit(&project, &parts, room);
+    let hidden = parts.len() - shown;
     let mut crumbs = row()
+        .key("assets/crumbs")
         .gap(2.0)
         .align(Align::Center)
-        .min_w(44.0)
-        .child(root_crumb(l, &project, folder.is_empty()));
-    let mut at = String::new();
-    for part in folder.split('/').filter(|p| !p.is_empty()) {
-        if !at.is_empty() {
-            at.push('/');
-        }
-        at.push_str(part);
+        // What it shows is not squeezed: the search box gives way instead.
+        .min_w(width + 8.0)
+        .child(root_crumb(l, &project, root_named, folder.is_empty()));
+    let chevron = || {
+        icon(icons::CHEVRON_RIGHT)
+            .size(12.0)
+            .min_w(12.0)
+            .color(c.muted_foreground.0)
+    };
+    // Folders that do not fit fold into one "…" step that opens the nearest hidden one.
+    if hidden > 0 {
+        let above = parts[..hidden].join("/");
         crumbs = crumbs
-            .child(
-                icon(icons::CHEVRON_RIGHT)
-                    .size(12.0)
-                    .color(c.muted_foreground.0),
-            )
-            .child(crumb(l, part, at.clone(), at == folder));
+            .child(chevron())
+            .child(crumb(l, "…", above.clone(), false).tooltip(above));
+    }
+    for i in hidden..parts.len() {
+        let at = parts[..=i].join("/");
+        let current = i + 1 == parts.len();
+        crumbs = crumbs
+            .child(chevron())
+            .child(crumb(l, parts[i], at, current));
     }
     let search = search(
         l,
@@ -299,8 +307,8 @@ fn assets(s: &Studio) -> El<Studio> {
     )
     .h(22.0)
     .w(200.0)
-    // The breadcrumb gives way first: the search box keeps a usable width.
-    .min_w(96.0);
+    // The search box gives way to the path bar down to this.
+    .min_w(SEARCH_MIN);
     let view = &s.local.assets_view;
     let nav = |glyph, label: &str, key: &str, on: bool, ahead: bool| {
         enabled(
@@ -1444,8 +1452,63 @@ fn folder_row(
         .child(text(name.to_owned()).text_size(12.0).grow(1.0))
 }
 
-/// The path bar's first step: the project root, its icon and the project's name.
-fn root_crumb(l: &ara_kit::look::Look, project: &str, current: bool) -> El<Studio> {
+/// What the path bar shows: see [`crumbs_fit`].
+pub(super) struct Crumbs {
+    /// How many of the path's trailing folders show; the rest fold into a "…" step.
+    pub shown: usize,
+    /// Whether the root step keeps the project's name or is its icon alone.
+    pub root_named: bool,
+    /// The estimated width of the steps, design px.
+    pub width: f32,
+}
+
+/// The narrowest the Assets search box gets.
+const SEARCH_MIN: f32 = 96.0;
+
+/// What the path bar shows in `room` design px (everything when it has not been measured yet):
+/// at least the current folder, with the root named when the current folder fits beside its
+/// name. Text widths are an estimate, a little on the generous side.
+pub(super) fn crumbs_fit(project: &str, parts: &[&str], room: Option<f32>) -> Crumbs {
+    const CHAR: f32 = 6.6;
+    const ROOT_ICON: f32 = 12.0 + 14.0;
+    const STEP: f32 = 12.0 + 2.0 + 12.0 + 2.0;
+    const FOLDED: f32 = STEP + 8.0;
+    let step = |part: &str| STEP + part.chars().count() as f32 * CHAR;
+    let named = ROOT_ICON + 5.0 + project.chars().count() as f32 * CHAR;
+    let all = named + parts.iter().map(|p| step(p)).sum::<f32>();
+    let Some(room) = room.map(|r| r - 8.0) else {
+        return Crumbs {
+            shown: parts.len(),
+            root_named: true,
+            width: all,
+        };
+    };
+    let last = parts.last().map_or(0.0, |p| step(p));
+    let root_named = named + last <= room;
+    let mut width = if root_named { named } else { ROOT_ICON };
+    let mut shown = 0;
+    for (i, part) in parts.iter().enumerate().rev() {
+        let step = step(part);
+        // Whatever stays hidden costs one "…" step.
+        let folded = if i > 0 { FOLDED } else { 0.0 };
+        if shown > 0 && width + step + folded > room {
+            break;
+        }
+        width += step;
+        shown += 1;
+    }
+    if shown < parts.len() {
+        width += FOLDED;
+    }
+    Crumbs {
+        shown,
+        root_named,
+        width,
+    }
+}
+
+/// The path bar's first step: the project root, its icon and (`named`) the project's name.
+fn root_crumb(l: &ara_kit::look::Look, project: &str, named: bool, current: bool) -> El<Studio> {
     let c = &l.c;
     let hover = c.foreground.0;
     row()
@@ -1467,13 +1530,13 @@ fn root_crumb(l: &ara_kit::look::Look, project: &str, current: bool) -> El<Studi
         .hovered(move |e| e.color(hover))
         .on_press(|s: &mut Studio| open_folder(s, ""))
         .child(icon(icons::BOX).size(14.0).min_w(14.0))
-        .child(
+        .children(named.then(|| {
             text(project.to_owned())
                 .text_size(12.0)
                 .weight(if current { 600 } else { 500 })
                 .wrap(1)
-                .min_w(0.0),
-        )
+                .min_w(0.0)
+        }))
 }
 
 fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> El<Studio> {

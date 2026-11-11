@@ -872,7 +872,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
             area("outline", &["hierarchy"]),
             split(
                 H,
-                0.69,
+                0.66,
                 split(
                     V,
                     0.72,
