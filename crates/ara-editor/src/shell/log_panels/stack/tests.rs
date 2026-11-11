@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)] // Isolated fixtures and retained interaction assertions.
 use super::*;
+use crate::exception_stack::{MAX_DEPTH, MAX_FRAMES, MAX_NODES, MAX_STRING};
 use ara_ui::{input::InputEvent, source::stable_id};
 #[path = "tests/fixture.rs"]
 mod fixture;
