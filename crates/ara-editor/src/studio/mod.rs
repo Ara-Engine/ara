@@ -430,9 +430,14 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             Some(selection) if scene_dirty || rect_for.as_ref() != Some(&selection) => {
                 let channels = compositor.channels(&renderer, &view, revision);
                 let entities = view.entities();
-                let bounds = scene_view.bounds_where(channels, |address| {
-                    crate::world::bounds::selected(entities, address, &selection)
-                });
+                let rotation = rect_tool::frame_rotation(entities, &selection);
+                let bounds = scene_view
+                    .bounds_in(
+                        channels,
+                        |address| crate::world::bounds::selected(entities, address, &selection),
+                        rotation,
+                    )
+                    .map(|[min, max]| rect_tool::RectBounds { rotation, min, max });
                 rect_for = Some(selection);
                 if rt.state().local.rect_bounds != bounds {
                     rt.update(|s| s.local.rect_bounds = bounds);

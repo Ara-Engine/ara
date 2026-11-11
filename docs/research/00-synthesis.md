@@ -23,7 +23,7 @@
 | D11 | **C# is the one scripting language** (§4.7). It stays unless the S2 or S7 gates fail. |
 | D12 | **Own native GPU backends from the start** (Vulkan 1.3 + Metal 4). No wgpu. |
 | D13 | **Team:** Islam plus agents. |
-| D14 | **License not decided**; the repo stays private. |
+| D14 | **License: MIT OR Apache-2.0** (D38, 2026-11-11; was "not decided"). |
 | D15 | **Apple silicon only** (Intel Macs dropped for now). A MacBook Pro M5 is the Metal and Mac/iOS build machine. |
 | D16 | **Dogfood game: Outpost** (§8). |
 
@@ -433,7 +433,7 @@ arabench, generated docs and the local gates run continuously from phase 1.
 | Scripting language | **C# confirmed** (D11), with R10's reversal conditions checked at S2 and S7 |
 | First dogfood game | **Outpost** (D16), chosen for the owner: co-op third-person salvage that exercises every pillar |
 | Team | **Islam + agents** (D13) |
-| Engine license | **Not decided**; private repo (D14) |
+| Engine license | **MIT OR Apache-2.0** (D38) |
 | Hardware floors | **Intel Macs dropped for now** (D15); the other floors in §4.11 stand until revisited |
 | Mac hardware | **MacBook Pro M5** (Apple10: hardware RT + mesh shading) is the Metal and Mac/iOS machine |
 
