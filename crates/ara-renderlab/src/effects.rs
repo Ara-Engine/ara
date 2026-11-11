@@ -365,6 +365,9 @@ fn map(emitter: &Emitter, seed: u32, view: &EffectView, gaps: &mut Gaps) -> Opti
                 curls += 1;
                 // A field over the effect's scaled space: wavelengths and pull scale with it.
                 desc.forces.curl = [frequency.max(0.) / scale.max(1e-6), strength * scale];
+                // As Ara's: sampled in the effect's space, phased 0.013 rad per birth tick.
+                desc.forces.curl_origin = origin;
+                desc.forces.curl_phase_rate = 0.013 * EFFECT_HZ;
             }
             Module::Vortex {
                 center,
