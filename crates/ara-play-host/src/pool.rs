@@ -409,8 +409,8 @@ pub struct PoolConfig {
     pub windowed: usize,
     /// Window size for windowed players.
     pub size: [u32; 2],
-    /// The player's `--renderer` (`renderlab`, `ara`, `renderlab-rt`, `renderlab-nonrt`); `None`
-    /// leaves the player's own default (Renderlab). Tests of the frozen `ara-render` name it.
+    /// The player's `--renderer` (`renderlab`, `renderlab-rt`, `renderlab-nonrt`); `None`
+    /// leaves the player's own default (Renderlab).
     pub renderer: Option<String>,
 }
 

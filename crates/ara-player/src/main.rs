@@ -70,9 +70,9 @@ struct Args {
     /// Hardware ray tracing opt-in; omit to use saved user/project preferences.
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     ray_tracing: Option<bool>,
-    /// Renderer for the 3D scene: renderlab (default: hardware ray tracing where the GPU has it,
-    /// else its non-RT path; Ara's renderer where Renderlab cannot run), ara (the frozen
-    /// ara-render), renderlab-rt or renderlab-nonrt.
+    /// Renderlab path for the 3D scene: renderlab (default: hardware ray tracing where the
+    /// GPU has it, else its non-RT path; on Apple, the Metal device), renderlab-rt or
+    /// renderlab-nonrt. A path that cannot start is an error.
     #[arg(long, env = "ARA_RENDERER", value_enum, default_value_t)]
     renderer: renderer::RendererChoice,
     /// Internal warm-up policy, distinct from a user's persistent graphics preference.
@@ -1064,7 +1064,7 @@ impl Player {
                 if params.path.is_some() && self.presenter.is_none() {
                     // Headless players create a GPU device on their first image.
                     let mut presenter = Presenter::new(self.size, Vec::new(), &self.args.gpu_cache);
-                    renderer::install(&mut presenter, &self.args.gpu_cache);
+                    renderer::install(&mut presenter, &self.args.gpu_cache)?;
                     presenter.set_quality(self.quality);
                     presenter.set_render_options(self.render_options);
                     self.presenter = Some(presenter);
@@ -1268,8 +1268,8 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         }),
         exposure: debug.exposure.filter(|ev| ev.is_finite()),
         view: {
-            use ara_play::DebugView as D;
             use ara_frame::capture::ViewMode as V;
+            use ara_play::DebugView as D;
             match debug.view {
                 D::Lit => V::Lit,
                 D::Albedo => V::Albedo,

@@ -158,7 +158,7 @@ impl Embedded {
             }
             None => Presenter::new(size, Vec::new(), cache),
         };
-        crate::renderer::install(&mut presenter, cache);
+        crate::renderer::install(&mut presenter, cache)?;
         presenter.set_quality(quality);
         presenter.set_render_options(options);
         // An editor Game view: sharp at the panel's size within a 1440p frame's cost.
@@ -551,10 +551,8 @@ mod tests {
 
     #[test]
     fn embedded_gpu_defaults_to_raster_and_honours_the_rt_opt_in() -> Result<()> {
-        // This asserts on ara-render's presenter (native raster geometry, its quality preset),
-        // so it names that renderer; the player's own default is Renderlab.
-        crate::renderer::configure(crate::renderer::RendererChoice::Ara);
-        // Field order also protects assertion/error unwinding: the ring borrows
+        // The bootstrap renderer still records native raster beside Renderlab. Field
+        // order also protects assertion/error unwinding: the ring borrows
         // native device objects and must be dropped before the owning presenter.
         struct Session {
             _ring: Embedded,
