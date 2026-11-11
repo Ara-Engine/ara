@@ -12,6 +12,7 @@
 //! 60 Hz effect clock), so it is deterministic in what it spawns but not particle for
 //! particle Ara's. A new effect starts warmed by 2.5 seconds, as Ara's composite warms
 //! every effect before its first frame (`fidelity::vfx::WARM_TICKS`).
+use crate::rl::Engine;
 use crate::{gaps::Gaps, texture};
 use anyhow::Result;
 use ara_material::Domain;
@@ -23,7 +24,7 @@ use ara_vfx::{Blend, ColorKey, Effect, Emitter, Key, Module, SpriteTexture};
 use renderlab::{
     asset::TextureRole,
     engine::{
-        ColorKey as RlColorKey, EmitterDescriptor, EmitterId, Engine, Flipbook, MAX_CURVE_KEYS,
+        ColorKey as RlColorKey, EmitterDescriptor, EmitterId, Flipbook, MAX_CURVE_KEYS,
         MAX_PARTICLES, PlaneCollision, SizeKey, SpawnShape, SpriteAlignment, TextureId, Vec3,
     },
 };
@@ -394,8 +395,15 @@ fn map(emitter: &Emitter, seed: u32, view: &EffectView, gaps: &mut Gaps) -> Opti
                 // A field over the effect's scaled space: wavelengths and pull scale with it.
                 desc.forces.curl = [frequency.max(0.) / scale.max(1e-6), strength * scale];
                 // As Ara's: sampled in the effect's space, phased 0.013 rad per birth tick.
-                desc.forces.curl_origin = origin;
-                desc.forces.curl_phase_rate = 0.013 * EFFECT_HZ;
+                // Renderlab's revision on Apple predates the curl's origin and phase
+                // (Renderlab #25); emitters are refused there anyway.
+                #[cfg(not(target_vendor = "apple"))]
+                {
+                    desc.forces.curl_origin = origin;
+                    desc.forces.curl_phase_rate = 0.013 * EFFECT_HZ;
+                }
+                #[cfg(target_vendor = "apple")]
+                let _ = origin;
             }
             Module::Vortex {
                 center,

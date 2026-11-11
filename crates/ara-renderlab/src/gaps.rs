@@ -30,6 +30,8 @@ impl Gaps {
 
     /// Something the path relies on failed at run time and it carries on without (a GPU
     /// readback that never completes, a device error); `detail` says what and what follows.
+    // On Apple, the Metal arm reports no run-time fault yet.
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     pub fn fault(&mut self, what: &'static str, detail: &str) {
         if self.reported.insert(what) {
             eprintln!("ARA_RENDERLAB_FAULT: {what}: {detail}");

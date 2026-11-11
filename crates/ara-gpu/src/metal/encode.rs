@@ -118,9 +118,12 @@ struct Recording<'a> {
     aliases: Vec<(usize, usize)>,
     /// Attachment operations of the list's remaining rendering scopes, in order.
     scopes: std::vec::IntoIter<Vec<Ops>>,
-    /// Passes begun so far, and the indices of passes still open.
+    /// Passes begun so far, and the indices and labels of passes still open. The
+    /// innermost label names each encoder opened inside the pass, so Instruments'
+    /// Metal System Trace and Xcode's GPU capture attribute GPU time by pass (a
+    /// command buffer's debug groups do not reach Metal System Trace).
     passes: usize,
-    open: Vec<usize>,
+    open: Vec<(usize, String)>,
     /// Extent of the open rendering scope and its current viewport and scissor.
     scope: [u32; 2],
     view: (MTLViewport, MTLScissorRect),
@@ -188,7 +191,7 @@ impl MetalDevice {
         let result = crate::vulkan::timestamps::commands(&list.commands)
             .try_for_each(|command| self.encode_one(&mut rec, list.queue, command));
         // Unclosed passes end with the list, so every slot is written.
-        while let Some(pass) = rec.open.pop() {
+        while let Some((pass, _)) = rec.open.pop() {
             rec.timestamp(2 + 2 * pass);
         }
         rec.end();
@@ -703,12 +706,12 @@ impl MetalDevice {
             Command::BeginPass(label) => {
                 let pass = rec.passes;
                 rec.passes += 1;
-                rec.open.push(pass);
+                rec.open.push((pass, label.clone()));
                 rec.timestamp(1 + 2 * pass);
                 rec.cmd.pushDebugGroup(&NSString::from_str(label));
             }
             Command::EndPass => {
-                let pass = rec
+                let (pass, _) = rec
                     .open
                     .pop()
                     .ok_or_else(|| GpuError::Contract("EndPass without BeginPass".into()))?;
@@ -856,6 +859,9 @@ impl MetalDevice {
             .cmd
             .renderCommandEncoderWithDescriptor(&pass)
             .ok_or_else(|| nil("render encoder"))?;
+        if let Some((_, label)) = rec.open.last() {
+            encoder.setLabel(Some(&NSString::from_str(label)));
+        }
         let pixel = |a: crate::rendering::RenderAttachment| {
             self.images.get(a.target.image).map(|i| i.raw.info.pixel)
         };
@@ -1106,6 +1112,9 @@ impl Recording<'_> {
                 );
             }
             encoder.setArgumentTable(Some(&device.table));
+            if let Some((_, label)) = self.open.last() {
+                encoder.setLabel(Some(&NSString::from_str(label)));
+            }
             self.active = Active::Compute(encoder);
             self.bound = None;
             self.stamp = None;
