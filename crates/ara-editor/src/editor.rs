@@ -603,7 +603,12 @@ impl Editor {
             }
             crate::state::Tool::Rotate => &["Transform.rotation"],
             crate::state::Tool::Scale => &["Transform.scale"],
-            crate::state::Tool::Rect => &["Transform.position", "Transform.scale"],
+            // Its commit writes the whole pose (`Gesture::commands`).
+            crate::state::Tool::Rect => &[
+                "Transform.position",
+                "Transform.rotation",
+                "Transform.scale",
+            ],
         };
         let entities: Vec<_> = self
             .gesture

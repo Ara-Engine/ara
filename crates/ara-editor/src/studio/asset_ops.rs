@@ -245,6 +245,10 @@ pub(super) fn save_as(s: &mut Studio, destination: &std::path::Path) -> anyhow::
         s.editor.host.flush();
         return Ok(());
     }
+    // Save As makes a new scene; it never replaces one (the dialog may have offered to).
+    if content.join(&scene).exists() {
+        anyhow::bail!("Save As: {scene} already exists; choose a new name");
+    }
     let jobs = s.local.asset_jobs.len();
     transact(
         s,

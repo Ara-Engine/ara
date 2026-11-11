@@ -655,7 +655,18 @@ fn row_el(
                             as usize;
                         let within = (e.local.y - k * ROW) / ROW;
                         use ara_ui::drag_drop::Placement;
-                        let place = if within < 0.25 {
+                        // Sorted by name, the rows show no authored order to place
+                        // between: a drop only reparents.
+                        let sorted = s
+                            .editor
+                            .state
+                            .settings
+                            .get("hierarchy.alphabetical")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false);
+                        let place = if sorted {
+                            Placement::Inside
+                        } else if within < 0.25 {
                             Placement::Before
                         } else if within > 0.75 {
                             Placement::After
