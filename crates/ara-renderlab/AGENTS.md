@@ -80,6 +80,19 @@ once (`ARA_RENDERLAB_LIMIT` for the limit) when a frame uses it.
 | Skinning with more than four influences | The four strongest, renormalized | Eight-influence skinning in Renderlab | No | Renderlab build thread |
 | 2D | Unchanged: `Presenter2d` keeps Ara's 2D renderer | Nothing for 3D work | No | None needed |
 
+**Showcase frame cost by Renderlab branch** (Radeon 760M only; `ara capture --preset epic
+--stability 30`, 1920x1080, the bridge's `External.Frame.Gpu` and `External.Pass.Shading`,
+fastest of four runs on a shared machine, spread up to 10%; Ara's renderer: 58.2 ms):
+
+| Renderlab | RT GPU / shading, ms | non-RT GPU / shading, ms | Sky map's shading premium, RT / non-RT |
+|---|---|---|---|
+| main pin `901c1d2` | 159.3 / 105.9 (66%) | 291.6 / 194.7 (67%) | 20.7 / 22.6 |
+| P-SKY `48f86f1` (Renderlab#16) | 149.9 / 96.6 (64%) | 282.6 / 185.1 (65%) | 11.1 / 12.8 |
+| P-SKY2 `d7e2096` (#19) | 150.3 / 96.1 (64%) | 281.4 / 184.0 (65%) | 7.4 / 11.0 |
+
+The premium is map against `ARA_RENDERLAB_SKY=constant` in the same round. The RTX 4070 SUPER
+before P-SKY: non-RT 40.5 ms GPU, shading 33.4 (82%), against 3.0 ms on Ara's renderer.
+
 Not a Renderlab gap either: Outpost's ground at dusk. Ara's renderer lights the compound
 with direct sun, but the sun stands 4 degrees up behind a 67 m dune 184 m away (20 degrees
 up from the compound), so Renderlab's shadow there is physically right and Ara's
