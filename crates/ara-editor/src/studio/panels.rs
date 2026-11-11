@@ -295,7 +295,10 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     }
     // List, then three tile sizes (Unity's slider, as steps).
-    let mut sizes = row().gap(1.0);
+    // One Tab stop for the view sizes (on the current one), arrows between them.
+    let mut sizes = row()
+        .gap(1.0)
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (size, glyph, label) in [
         (TileSize::List, icons::LIST, "List"),
         (TileSize::Small, icons::GRID_3X3, "Small tiles"),
@@ -347,14 +350,16 @@ fn assets(s: &Studio) -> El<Studio> {
         }))
         .child(sizes)
         .child(view_menu(s));
-    // Type filters (Unreal's filter bar): one type across the whole project.
+    // Type filters (Unreal's filter bar): one type across the whole project. A narrow
+    // panel wraps them onto another line rather than hiding the last ones past its edge.
     let mut chips = row()
-        .h(24.0)
         .min_w(0.0)
         .pad_x(6.0)
+        .pad_y(2.0)
         .gap(3.0)
         .align(Align::Center)
-        .scroll(Axis::Horizontal);
+        .flow_wrap()
+        .focus_group(stillkit::el::Orientation::Horizontal);
     for (id, label, glyph) in FILTERS {
         let on = view.filter == Some(id);
         let tint = category_tint(l, id);
@@ -1808,14 +1813,14 @@ fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
     }
     if let Some(doc) = doc {
         out = out.child(
-            text(doc.summary())
+            super::style::prose(doc.summary())
                 .text_size(11.5)
                 .wrap(3)
                 .color(c.muted_foreground.0),
         );
         if let Some(cause) = doc.causes.first() {
             out = out.child(
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(2)
                     .color(c.muted_foreground.0),
@@ -2120,13 +2125,13 @@ fn problem(s: &Studio, r: &LogRow) -> El<Studio> {
     if open && let Some(doc) = doc {
         message = message
             .child(
-                text(format!("{}: {}", doc.title, doc.summary()))
+                super::style::prose(&format!("{}: {}", doc.title, doc.summary()))
                     .text_size(11.5)
                     .wrap(4)
                     .color(c.muted_foreground.0),
             )
             .children(doc.causes.first().map(|cause| {
-                text(format!("Usually: {cause}"))
+                super::style::prose(&format!("Usually: {cause}"))
                     .text_size(11.5)
                     .wrap(3)
                     .color(c.muted_foreground.0)

@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/Snowy7/stillkit?rev=52e36f9f2d1997668b03f4a558f32534671f87ef#52e36f9f2d1997668b03f4a558f32534671f87ef"
+source = "git+https://github.com/Snowy7/stillkit?rev=cceec79f97702c056145091f5783cb00ed3f5fe1#cceec79f97702c056145091f5783cb00ed3f5fe1"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_consumer 0.39.2",
@@ -539,6 +539,7 @@ name = "ara-anim"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-cmd",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-json",
@@ -845,6 +846,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-curve"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
@@ -912,6 +922,7 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-crash",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-editor-gpu",
@@ -2455,6 +2466,7 @@ name = "ara-vfx"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-cmd",
+ "ara-curve",
  "ara-diag",
  "ara-doc",
  "ara-graph",
@@ -12300,7 +12312,7 @@ checksum = "ae139f051204a4af015d4f0ed3a1f7a51020d03a44c7cf249168c543d88131e9"
 [[package]]
 name = "stillkit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=52e36f9f2d1997668b03f4a558f32534671f87ef#52e36f9f2d1997668b03f4a558f32534671f87ef"
+source = "git+https://github.com/Snowy7/stillkit?rev=cceec79f97702c056145091f5783cb00ed3f5fe1#cceec79f97702c056145091f5783cb00ed3f5fe1"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_macos 0.27.2",
@@ -12336,7 +12348,7 @@ dependencies = [
 [[package]]
 name = "stillkit-kit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=52e36f9f2d1997668b03f4a558f32534671f87ef#52e36f9f2d1997668b03f4a558f32534671f87ef"
+source = "git+https://github.com/Snowy7/stillkit?rev=cceec79f97702c056145091f5783cb00ed3f5fe1#cceec79f97702c056145091f5783cb00ed3f5fe1"
 dependencies = [
  "stillkit",
 ]
