@@ -43,7 +43,6 @@ fn first_pins_are_persisted_final_generations() {
         Some(pinned.as_str()),
         "a later pass replaced the generation Play pinned"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
