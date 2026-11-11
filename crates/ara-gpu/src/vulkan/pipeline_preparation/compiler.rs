@@ -24,7 +24,7 @@ impl Drop for Batch {
 /// The cache is confined to the compiler thread, including persistence and Drop.
 pub(super) struct Compiler {
     device: ash::Device,
-    mesh: bool,
+    mesh: pipeline::ShaderFeatures,
     layout: vk::PipelineLayout,
     cache: vk::PipelineCache,
     path: PathBuf,
@@ -32,7 +32,7 @@ pub(super) struct Compiler {
 impl Compiler {
     pub fn new(
         device: ash::Device,
-        mesh: bool,
+        mesh: pipeline::ShaderFeatures,
         layout: vk::PipelineLayout,
         path: PathBuf,
         seed: Vec<u8>,

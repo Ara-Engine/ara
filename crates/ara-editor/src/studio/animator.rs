@@ -12,6 +12,45 @@ use stillkit::el::{Align, Axis, El, col, menu, row, text};
 use super::Studio;
 use crate::authoring::animation::{seconds_value, ticks, transition_edge};
 
+/// Deletes what is picked on the Animation canvas (Delete): its transitions, and its states
+/// with every transition reaching them (one undo step). The entry state stays: another has
+/// to become the default first.
+pub(super) fn delete_selection(s: &mut Studio) {
+    let (Some(doc), Some(graph)) = (s.graph.shown_doc(), s.graph.shown_graph()) else {
+        return;
+    };
+    let doc = doc.to_owned();
+    let picked = s.graph.selection();
+    let states: Vec<String> = picked
+        .iter()
+        .filter_map(|id| {
+            graph.nodes.get(id)?.payload["state"]
+                .as_str()
+                .map(str::to_owned)
+        })
+        .collect();
+    if picked.is_empty() {
+        return;
+    }
+    save(s, &doc, "Delete states and transitions", |controller| {
+        if states.contains(&controller.initial) {
+            return Err(format!(
+                "{} is the entry state: make another the default first",
+                controller.initial
+            ));
+        }
+        controller.transitions.retain(|t| {
+            !picked.contains(&transition_edge(&t.id))
+                && !states.contains(&t.from)
+                && !states.contains(&t.to)
+        });
+        for state in &states {
+            controller.states.remove(state);
+        }
+        Ok(())
+    });
+}
+
 /// Changes the controller in `doc` and saves it as one undo step; a failed change reports
 /// and saves nothing.
 fn save(

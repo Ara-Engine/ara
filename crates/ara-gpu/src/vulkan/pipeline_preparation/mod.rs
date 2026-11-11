@@ -30,7 +30,7 @@ impl VulkanDevice {
         if self.pipeline_preparation.is_none() {
             self.pipeline_preparation = Some(Worker::new(
                 self.context.device.clone(),
-                self.context.info.mesh_shading,
+                pipeline::ShaderFeatures::of(&self.context.info),
                 self.heap.layout,
                 self.cache_path.with_extension("async.bin"),
                 &self.context.info,
