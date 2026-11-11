@@ -1736,6 +1736,32 @@ fn file_play_and_assets_commands_run_in_the_studio() {
     assert!(rt.state().local.quit);
 }
 
+/// A human session's `daemon.shutdown` closes the studio like File › Exit, so tools that stop the
+/// editor through the protocol (the installed-package smoke, Hub) are not left waiting for it.
+#[test]
+fn a_human_sessions_daemon_shutdown_closes_the_studio() {
+    let mut rt = open();
+    assert!(!super::closing(rt.state()));
+    rt.update(|s| {
+        let begun = s
+            .editor
+            .call_for(
+                ara_proto::ConnId::LOCAL,
+                "session.begin",
+                json!({"client": "test", "author": "human", "label": "stop"}),
+            )
+            .expect("a human session");
+        s.editor
+            .call_for(
+                ara_proto::ConnId::LOCAL,
+                "daemon.shutdown",
+                json!({"session": begun["session"]}),
+            )
+            .expect("a human session may stop the daemon");
+    });
+    assert!(super::closing(rt.state()));
+}
+
 #[test]
 fn the_build_window_offers_a_profile_and_starts_creating_one() {
     let mut rt = open();
