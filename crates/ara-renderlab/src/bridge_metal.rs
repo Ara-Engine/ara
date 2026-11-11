@@ -8,11 +8,11 @@ use crate::{
     ActivePath, Options,
     decals::Decals,
     effects::Effects,
-    environment,
     gaps::Gaps,
-    lighting::{self, Metering, SkySource},
+    lighting::{self, Metering},
     rl::Engine,
     scene::{MAX_GROUPS, Scene},
+    sky::Skies,
     terrain::Terrain,
 };
 use anyhow::{Context, Result, anyhow};
@@ -20,7 +20,7 @@ use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, comman
 use ara_runtime_render::{EXTERNAL_PASSES, ExternalFrame, ExternalView};
 use renderlab::{
     backend_ara::cache::ShaderCache,
-    engine::{Light, Settings, Sky, Sun},
+    engine::{Light, Settings, Sun},
 };
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -28,7 +28,6 @@ use renderlab::{
 struct Applied {
     sun: Option<Sun>,
     lights: Vec<Light>,
-    sky: Option<Sky>,
     /// The colour grade last asked for (`grade::key`).
     grade: Option<u64>,
 }
@@ -41,6 +40,7 @@ pub(crate) struct Bridge {
     effects: Effects,
     gaps: Gaps,
     applied: Applied,
+    skies: Skies,
     metering: Metering,
     max_reflection_roughness: Option<f32>,
     cut: bool,
@@ -80,6 +80,7 @@ impl Bridge {
             effects: Effects::default(),
             gaps: Gaps::default(),
             applied: Applied::default(),
+            skies: Skies::new(options.constant_sky),
             metering: Metering::new(),
             max_reflection_roughness: options.max_reflection_roughness,
             cut: true,
@@ -134,18 +135,8 @@ impl Bridge {
                 .set_colour_lut(crate::grade::lut(view.look, authored))?;
             self.applied.grade = Some(grade);
         }
-        // The backend has no environment maps yet: an authored sky image lights the
-        // scene as a constant of its mean radiance (reported once by the backend).
-        let sky = match lighting::sky(view, &mut self.gaps) {
-            SkySource::Atmosphere(medium) => Sky::Atmosphere(medium),
-            SkySource::Map { size, pixels } => {
-                Sky::Uniform(environment::mean_radiance(size, &pixels))
-            }
-        };
-        if self.applied.sky != Some(sky) {
-            self.engine.set_sky(sky)?;
-            self.applied.sky = Some(sky);
-        }
+        self.skies
+            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;

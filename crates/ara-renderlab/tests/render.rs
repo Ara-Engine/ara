@@ -250,10 +250,6 @@ fn studio_sky() -> ara_runtime_render::fidelity::EnvironmentMap {
 
 /// A content-supplied HDR sky is drawn behind the scene and lights it.
 #[test]
-#[cfg_attr(
-    target_vendor = "apple",
-    ignore = "Renderlab's Metal backend has no environment maps yet: the sky lights as its mean radiance"
-)]
 fn an_hdr_environment_map_backs_and_lights_the_frame() {
     let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("renderlab");
     std::fs::create_dir_all(&out).unwrap();

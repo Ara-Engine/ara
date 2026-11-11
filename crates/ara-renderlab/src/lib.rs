@@ -26,7 +26,6 @@ mod cutout;
 mod decals;
 mod effects;
 // On Apple the backend has no environment maps yet: only `mean_radiance` is used there.
-#[cfg_attr(target_vendor = "apple", allow(dead_code))]
 mod environment;
 mod gaps;
 mod rl;
@@ -41,6 +40,7 @@ mod meter;
 mod scene;
 #[cfg(not(target_vendor = "apple"))]
 mod shared;
+mod sky;
 mod splat;
 mod terrain;
 mod texture;
