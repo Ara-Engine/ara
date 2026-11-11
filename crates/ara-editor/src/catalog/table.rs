@@ -1087,6 +1087,13 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Choose the Scene view's vertical field of view.",
     },
     Command {
+        id: "view.mode_2d",
+        title: "2D Mode",
+        icon: "square",
+        keys: "",
+        summary: "Look at the scene head-on and flat; right and Alt drags pan instead of turning.",
+    },
+    Command {
         id: "view.camera.front",
         title: "Front",
         icon: "camera",
@@ -2011,6 +2018,34 @@ pub(crate) const COMMANDS: &[Command] = &[
         summary: "Letterbox the Game view to portrait 9:16.",
     },
     Command {
+        id: "game.aspect.1920x1080",
+        title: "1920 × 1080",
+        icon: "monitor",
+        keys: "",
+        summary: "Play at 1920 × 1080 (Full HD), scaled to fit the Game view.",
+    },
+    Command {
+        id: "game.aspect.2560x1440",
+        title: "2560 × 1440",
+        icon: "monitor",
+        keys: "",
+        summary: "Play at 2560 × 1440 (QHD), scaled to fit the Game view.",
+    },
+    Command {
+        id: "game.aspect.1280x720",
+        title: "1280 × 720",
+        icon: "monitor",
+        keys: "",
+        summary: "Play at 1280 × 720 (HD), scaled to fit the Game view.",
+    },
+    Command {
+        id: "game.aspect.1080x1920",
+        title: "1080 × 1920",
+        icon: "monitor",
+        keys: "",
+        summary: "Play at 1080 × 1920 (portrait phone), scaled to fit the Game view.",
+    },
+    Command {
         id: "prefab.apply_all",
         title: "Apply All Overrides",
         icon: "save",
@@ -2863,6 +2898,13 @@ pub(crate) const COMMANDS: &[Command] = &[
         icon: "external-link",
         keys: "",
         summary: "Tear the panel off into its own OS window.",
+    },
+    Command {
+        id: "window.dock",
+        title: "Dock Panel in Main Window",
+        icon: "panel-bottom",
+        keys: "",
+        summary: "Put a floating panel back where the default layout keeps it.",
     },
     Command {
         id: "window.gather",

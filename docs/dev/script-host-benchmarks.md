@@ -15,3 +15,36 @@ interleaved rounds; system CPU busy during each run in brackets. p50 / p95, ms:
 | L3 rest: detect, parse, transfer, pre-JIT, register, boundary, first tick (p50 sum) | 33, 25 | 20, 24 |
 The L3 floor here is emit (~100 ms) plus the AMSI scan (~140 ms). Earlier v1 runs at 61–71%
 CPU measured L3 427 / 614. Tick p99 2.5 ms during reloads; no leaked generations.
+
+## Compile server ReadyToRun (Mac, 2026-11-11)
+Save → visible on the Mac, 5.2k-line module (88 files), 20k entities, 60 Hz, `reload_bench`, other agents'
+builds running (load 4-7). Roslyn ships IL only, so the old no-tiering server JIT-optimized every Roslyn method
+on first use: start + initial compile spent 861 ms in the generator and 606 ms in emit, against ~6 ms and
+~200 ms once warm. `dotnet build` of `Ara.CompileServer` now publishes with ReadyToRun into `obj/` and copies the
+precompiled assemblies over the output (`-p:AraReadyToRun=false` restores the old build and no-tiering config).
+The server tiers normally with PGO off and `CallCountingDelayMs=0`.
+
+20 fresh processes per variant in mirrored order, 15 edits per level per process. Median / p95, ms:
+| | IL, no tiering | ReadyToRun + tiering | + `CallCountingDelayMs=0` (shipped) |
+|---|---|---|---|
+| start + initial compile | 2262 / 2425 | 1009 / 1187 | 1068 / 1210 |
+| first L1 edit after start | 149 / 170 | 73 / 86 | 66 / 73 |
+| L1 save→visible | 38 / 139 | 40 / 68 | 37 / 63 |
+| L2 save→visible | 139 / 166 | 148 / 189 | 138 / 161 |
+| L3 save→visible | 234 / 261 | 250 / 300 | 233 / 261 |
+A 90-edit run (first versus last 30 edits per level) shows the delay knob matters only early: late L3 is
+236 ms against 238 ms for the old server. Raw rows: `benchmarks/iteration/compile_server_r2r_mac_2026-11-11.json`
+(`startup_pairs.py` runs it). Edit phases at steady state, L1: ~12 ms in the server and ~8 ms waiting for the tick
+boundary; L2: 90–120 ms of 145 is the full-module analyzer run (emit is 3 ms); L3: 150–290 ms is the full emit.
+The package grows ~32 MB (R2R images are ~3x the IL). `FileSystemWatcher` on macOS delivers events 11 ms
+(median) after the write, a third of an L1 save→visible.
+
+## One-command timing (any OS)
+`dotnet run benchmarks/iteration/reload_timing.cs` builds `dotnet/Ara.slnx` (Release) and the `reload_bench`
+example, runs the bench in fresh processes and prints median / p95 of launch to first tick and of save → visible
+for L1 (body), L2 (new member) and L3 (signature change), with the phases behind them (emit, analyzers, generators,
+the Windows AMSI image scan, register). Needs only the .NET 10 SDK and Rust. Options after `--`: `--runs 10` (fresh
+processes per variant), `--edits 45`, `--lines 5000` (module size), `--skip-build`, `--output <dir>` (default
+`target/reload-timing/<utc stamp>`: one raw JSON per run, `summary.json`, `summary.txt`). To compare two builds, copy
+each `dotnet/artifacts/bin` aside and pass `--variant before=<abs path> --variant after=<abs path>`; variants run in
+mirrored order. Run on a quiet machine: the summary records the system CPU busy fraction (Windows) so a noisy run shows.
