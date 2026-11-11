@@ -27,6 +27,10 @@ use std::time::{Duration, Instant};
 
 /// Longest a present waits for its frame before reading it back regardless.
 const FRAME_WAIT: Duration = Duration::from_secs(5);
+/// Mesh-material groups terrain tiles may take; each resident tile is its own group (its own
+/// weights texture, so tiles never merge by material). Outpost's 144 tiles need 144; entity
+/// draws and foliage get `MAX_GROUPS - TERRAIN_GROUPS`, merged by material when they exceed it.
+const TERRAIN_GROUPS: usize = MAX_GROUPS * 3 / 4;
 
 /// The presenter-device image each frame lands in, and how it gets there.
 struct Target {
@@ -203,8 +207,8 @@ impl Bridge {
         }
         self.report_unsupported(view);
         self.engine.resize(view.size[0], view.size[1])?;
-        // Terrain tiles take at most half the mesh-material groups; entity draws and
-        // foliage share the rest. On the non-RT path foliage is capped by the largest
+        // Terrain tiles take at most three quarters of the mesh-material groups
+        // (`TERRAIN_GROUPS`); entity draws and foliage share the rest. On the non-RT path foliage is capped by the largest
         // mesh uploaded: when this frame uploads a larger one (a new cut or batch), the
         // foliage is rebuilt for it before the frame renders.
         let nonrt = self.path == ActivePath::NonRt;
@@ -213,7 +217,7 @@ impl Bridge {
             let (tiles, assumed) = self.terrain.sync(
                 &mut self.engine,
                 view,
-                MAX_GROUPS / 2,
+                TERRAIN_GROUPS,
                 nonrt.then_some(known),
                 &mut self.gaps,
             )?;
