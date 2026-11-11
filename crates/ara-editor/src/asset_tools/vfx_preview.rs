@@ -1,7 +1,10 @@
 //! Offline preview cook/capture worker. Last-good UI images stay live while it runs.
 use super::studio::MASTER;
+use ara_frame::{
+    capture::{CaptureRequest, ViewMode},
+    scene::CameraSpec,
+};
 use ara_gpu::cooked::{RenderState, Stage};
-use ara_frame::{capture::{CaptureRequest, ViewMode}, scene::CameraSpec};
 use glam::Vec3;
 use std::{
     collections::BTreeMap,

@@ -2,12 +2,12 @@
 //! A [`Shot`] picks the geometry and whether values show lit and tone mapped (thumbnails)
 //! or raw (in-node previews of intermediate values).
 use super::studio::MASTER;
+use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use ara_gpu::{
     Access, Barrier, GpuDevice, Queue, Resource, RootConstants,
     commands::{Attachment, Command},
     vk,
 };
-use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
 use std::{collections::BTreeMap, path::Path};
 /// How a material is photographed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

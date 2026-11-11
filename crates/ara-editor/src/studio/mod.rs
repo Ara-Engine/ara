@@ -1011,6 +1011,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             rt.update(|s| s.local.profiling = recording);
         }
         was_recording = recording;
+        if frame_limit.is_some()
+            && let Some(error) = scene_view.stalled(Duration::from_secs(10))
+        {
+            anyhow::bail!(
+                "the Scene view stopped drawing and a bounded run cannot finish: {error}"
+            );
+        }
+        if presented {
+            scene_view.presented();
+        }
         if let Some(limit) = frame_limit {
             if options.hidden() || presented {
                 frames += 1;

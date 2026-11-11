@@ -74,6 +74,9 @@ pub struct Outlines {
     upload: Option<ara_ui_render::gpu::Image>,
     /// Scene gizmos (icons and component shapes); clicks on icons select.
     pub icons: gizmos::Gizmos,
+    /// Where the pointer rests over the Scene, normalised: the hovered object outlines.
+    /// Only the capture switch `ARA_SCENE_HOVER=u,v` sets it today.
+    pub hover: Option<[f32; 2]>,
     /// Each outlined channel (index + 1) and its colour group, for the renderer.
     channel_groups: Vec<(u32, u8)>,
     /// Whether the Scene frame draws the outlines itself (a raster Scene: whole
@@ -680,6 +683,12 @@ pub fn build(
         }
     } else {
         outlines.sent = None;
+        if let Some(uv) = outlines.hover {
+            overlays.push(Overlay::Hover {
+                uv,
+                color: color("accent", 0.35)?,
+            });
+        }
         for (n, (token, used)) in outlines.groups.iter().enumerate() {
             if *used {
                 overlays.push(Overlay::Outline {

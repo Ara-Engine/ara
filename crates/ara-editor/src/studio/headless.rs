@@ -1,7 +1,7 @@
 //! `--headless`: render the project's scene offscreen and write `editor-scene.png` to the
 //! output folder, with no window (release smoke tests, `ara hub open --headless`).
-use ara_render::Renderer;
 use ara_frame::capture::{CaptureRequest, ViewMode};
+use ara_render::Renderer;
 
 use super::setup::{self, Options};
 use super::viewport::SceneView;

@@ -72,6 +72,13 @@ impl Compositor {
         // Submissions return at once; the next frame checks the last one finished (the
         // UI thread never waits on the GPU).
         ui.set_deferred_completion(true)?;
+        // Debug: `ARA_SCENE_HOVER=u,v` rests the pointer there, for captures of the hover.
+        let hover = std::env::var("ARA_SCENE_HOVER").ok().and_then(|v| {
+            let (u, v) = v.split_once(',')?;
+            Some([u.trim().parse().ok()?, v.trim().parse().ok()?])
+        });
+        let mut outlines = Outlines::default();
+        outlines.hover = hover;
         let mut paint = UiRenderer::default();
         paint
             .external_image(overlay::viewport_image())
@@ -79,7 +86,7 @@ impl Compositor {
         Ok(Self {
             ui,
             paint,
-            outlines: Outlines::default(),
+            outlines,
             ids: overlay::IdMode::from_env(),
             dump: std::env::var_os("ARA_SCENE_DUMP").map(Into::into),
             sheet: sheet(light)?,
@@ -306,8 +313,8 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
-    use ara_gpu::vulkan::QueueGate;
     use ara_frame::scene::{CameraSpec, Material, Scene, Texture};
+    use ara_gpu::vulkan::QueueGate;
     use glam::Vec3;
 
     #[test]
