@@ -60,6 +60,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly SourceClaims _claims = new();
     readonly Dictionary<string, Guid> _references = new(ModuleState.Paths);
     readonly List<FileSystemWatcher> _referenceWatchers = [];
+    readonly List<Task> _watchStarts = [];
     readonly AutoResetEvent _wake = new(false);
     readonly CancellationTokenSource _stop = new();
     readonly Thread _worker;
@@ -106,6 +107,8 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0,
         PublishedSnapshot? published = null)
     {
+        var requested = DateTime.UtcNow;
+        ModuleSession m;
         lock (_lock)
         {
             var missing = references.Where(r => !_byName.ContainsKey(r)).ToList();
@@ -116,13 +119,11 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                     $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, validated: false, supplied: attempt);
                 return;
             }
-            var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
+            m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
             if (published is not null && !m.ImportPublished(published, this)) initial = true;
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
-            if (watch && !m.ReadOnlyPublished) _watcher.Watch(slot, m.WatchDirectory);
-            foreach (var a in assemblies) WatchReference(a);
             if (initial) Enqueue(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
             else if (m.PublishedReferencesDrift(this))
                 Enqueue(new Work(WorkKind.PublishedRebind, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
@@ -130,6 +131,35 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 Enqueue(new Work(WorkKind.Change, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
         }
         _wake.Set();
+        // Watchers start after the first compile is queued and off this thread: a FileSystemWatcher takes
+        // ~200 ms to start on macOS, which used to delay the first compile and the next Watch message.
+        lock (_watchStarts) _watchStarts.Add(Task.Run(() => StartWatching(slot, assemblies, watch, requested)));
+    }
+
+    /// <summary>
+    /// Watches the module folder and its reference assemblies. A save between the request and the watcher going live
+    /// would be missed by both the first compile (which may already have read the file) and the watcher, so
+    /// files modified since the request are compiled as a change once the watcher is live.
+    /// </summary>
+    internal void StartWatching(uint slot, IReadOnlyList<string> assemblies, bool watch, DateTime requested)
+    {
+        ModuleSession m;
+        lock (_lock) m = _bySlot[slot];
+        try
+        {
+            if (_stop.IsCancellationRequested) return;
+            if (watch && !m.ReadOnlyPublished)
+            {
+                _watcher.Watch(slot, m.WatchDirectory);
+                var late = m.SourceFiles().Where(path => File.GetLastWriteTimeUtc(path) >= requested).ToArray();
+                if (late.Length > 0) OnWatcher(slot, late, Stopwatch.GetTimestamp());
+            }
+            foreach (var a in assemblies) WatchReference(a);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            Log(1, $"module `{m.Name}`: file watching did not start: {error.Message}");
+        }
     }
 
     /// <summary>Explicit recovery always validates current inputs and emits one atomic fresh-image swap.</summary>
@@ -769,8 +799,11 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     void WatchReference(string path)
     {
         path = Path.GetFullPath(path);
-        if (_references.ContainsKey(path) || !File.Exists(path)) return;
-        _references[path] = Mvid(path) ?? Guid.Empty;
+        lock (_lock)
+        {
+            if (_references.ContainsKey(path) || !File.Exists(path)) return;
+            _references[path] = Mvid(path) ?? Guid.Empty;
+        }
         var w = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path))
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
@@ -779,7 +812,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         w.Changed += on;
         w.Created += on;
         w.EnableRaisingEvents = true;
-        _referenceWatchers.Add(w);
+        lock (_referenceWatchers) _referenceWatchers.Add(w);
     }
 
     void CheckReference(string path)
@@ -819,7 +852,10 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     {
         _stop.Cancel();
         _wake.Set();
+        Task[] starts;
+        lock (_watchStarts) starts = [.. _watchStarts];
+        try { Task.WaitAll(starts, TimeSpan.FromSeconds(5)); } catch (AggregateException) { /* each start logs its own failure */ }
         _watcher.Dispose();
-        foreach (var w in _referenceWatchers) w.Dispose();
+        lock (_referenceWatchers) foreach (var w in _referenceWatchers) w.Dispose();
     }
 }
