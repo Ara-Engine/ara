@@ -196,6 +196,20 @@ pub struct DeviceInfo {
     /// shaders may sample cube arrays: Vulkan's `imageCubeArray`, enabled whenever the
     /// device reports it, and every Metal 4 GPU.
     pub cube_arrays: bool,
+    /// Image loads, fetches and atomics are bounds-checked against the view's extent
+    /// without a test in the shader: outside it they return zero in every component
+    /// the format has, a missing G or B as 0 and a missing A as 1, and writes outside
+    /// it change nothing (Vulkan specification, Shaders, "Shader Out-of-Bounds Memory
+    /// Access", Robust Image Access 2). `robustImageAccess2` (`VK_KHR_robustness2` or
+    /// `VK_EXT_robustness2`) with Vulkan 1.3's `robustImageAccess`, enabled whenever the
+    /// device reports both. A value an invocation stored outside an image may be read
+    /// back by that invocation unless the access is volatile. False on Metal, where an
+    /// access outside an image is undefined.
+    pub robust_image_access: bool,
+    /// The driver zeroes workgroup variables declared with a null initializer
+    /// (`shaderZeroInitializeWorkgroupMemory`, Vulkan 1.3), enabled whenever the
+    /// device reports it. False on Metal: shaders zero threadgroup memory themselves.
+    pub zero_initialize_workgroup_memory: bool,
     /// Largest storage-buffer binding range in bytes.
     pub max_storage_buffer_range: u32,
     /// Compute and fragment shaders support subgroup (wave) basic, vote, ballot and
@@ -471,6 +485,8 @@ pub(crate) fn test_info() -> DeviceInfo {
         buffer_int64_atomics: false,
         fragment_barycentrics: false,
         cube_arrays: false,
+        robust_image_access: false,
+        zero_initialize_workgroup_memory: false,
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
         name: String::new(),
