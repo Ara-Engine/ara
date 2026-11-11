@@ -127,6 +127,24 @@ impl Presenter {
         }
     }
 
+    /// Distance in metres to which terrain layers use their normal and metal/roughness
+    /// maps (`Quality::terrain_detail`): the user's view-distance tier, or the
+    /// presenter's own quality without settings.
+    pub(crate) fn user_terrain_detail(&self) -> f32 {
+        let tier = self.graphics.as_ref().map(|settings| {
+            let caps = self.graphics_capabilities();
+            settings
+                .groups
+                .view_distance
+                .unwrap_or(settings.tier(&caps))
+        });
+        tier.map(preset)
+            .or(self.quality())
+            .unwrap_or(QualityPreset::High)
+            .raster_quality()
+            .terrain_detail
+    }
+
     pub(crate) fn user_content_budget(&self) -> (u64, u32) {
         self.graphics
             .as_ref()
