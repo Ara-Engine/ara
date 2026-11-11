@@ -46,7 +46,8 @@
        (docs/dev/script-host-benchmarks.md). The inner publish sets AraInnerPublish to stop recursion. -->
   <Target Name="AraReadyToRun" AfterTargets="Build" Condition="'$(AraReadyToRun)' != 'false' and '$(AraInnerPublish)' != 'true'">
     <PropertyGroup>
-      <_AraR2RDir>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)r2r/</_AraR2RDir>
+      <!-- IntermediateOutputPath is already absolute under ArtifactsPath; NormalizeDirectory resolves either form. -->
+      <_AraR2RDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'r2r'))</_AraR2RDir>
     </PropertyGroup>
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish" Properties="NoBuild=true;AraInnerPublish=true;PublishDir=$(_AraR2RDir)" />
     <ItemGroup>
