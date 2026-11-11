@@ -291,12 +291,14 @@ fn main() {
     config.compile_server = Some(compile_server);
     let t0 = Instant::now();
     let mut host = ScriptHost::start(config, db, &engine, &mut world).expect("host");
+    let host_start_ms = t0.elapsed().as_secs_f64() * 1e3;
     host.load_modules(&mut world, &[ModuleSpec::from_dir(&dir).expect("module")])
         .expect("initial compile");
     let startup_ms = t0.elapsed().as_secs_f64() * 1e3;
-    println!("start + initial compile: {startup_ms:.0} ms");
+    println!("start + initial compile: {startup_ms:.0} ms (host start {host_start_ms:.0} ms)");
     if let Some(output) = output.as_mut() {
         output.data["startup_ms"] = json!(startup_ms);
+        output.data["host_start_ms"] = json!(host_start_ms);
     }
 
     for n in 0..20_000 {

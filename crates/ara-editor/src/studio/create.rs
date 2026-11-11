@@ -687,7 +687,7 @@ fn panel(s: &Studio, b: &Browser) -> El<Studio> {
                    pick: Option<Option<Category>>| {
         let hover = c.hover_surface.0;
         cats = std::mem::replace(&mut cats, col()).child(
-            super::style::chosen(l, row(), on)
+            super::style::active(l, row(), on)
                 .key(key)
                 .h(24.0)
                 .pad_x(8.0)
@@ -847,7 +847,7 @@ fn item_row(
     let c = &l.c;
     let tint = category_tint(l, item.category);
     let hover = c.hover_surface.0;
-    super::style::chosen(l, row(), active)
+    super::style::active(l, row(), active)
         .key(format!("create/item/{}", item.id))
         .h(26.0)
         .pad_x(8.0)

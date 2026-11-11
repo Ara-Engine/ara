@@ -139,6 +139,175 @@ fn dragging_the_x_arrow_moves_along_x_in_one_undo_step() {
 }
 
 #[test]
+fn a_move_with_surface_or_vertex_snapping_asks_the_host_instead_of_stepping() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.act(
+            "editor.settings.set",
+            json!({"key": "viewport.surfaceSnap", "value": true}),
+        )
+    });
+    settle(&mut rt);
+    let (tip, dir) = x_arrow(&rt);
+    rt.pointer_move(tip[0], tip[1]);
+    rt.frame(FRAME);
+    rt.pointer_down(tip[0], tip[1]);
+    rt.pointer_move(tip[0] + dir[0] * 40.0, tip[1] + dir[1] * 40.0);
+    rt.frame(FRAME);
+    let request = rt
+        .state()
+        .local
+        .snap
+        .expect("the host is asked to snap the move");
+    assert!(!request.vertex, "onto a surface");
+    // Held V makes it vertex to vertex.
+    rt.touch(|s| s.local.vertex_key = true);
+    rt.pointer_move(tip[0] + dir[0] * 50.0, tip[1] + dir[1] * 50.0);
+    rt.frame(FRAME);
+    assert!(rt.state().local.snap.is_some_and(|r| r.vertex));
+    // Until the Scene presents this scene, the host has no geometry to snap to.
+    let scene = crate::app::viewport::SceneView::default();
+    let view = rt.state().editor.view().unwrap();
+    let capture =
+        super::snapping::Snap::capture(&rt.state().editor, &view, &scene, &|_| None, &request);
+    assert!(capture.is_none(), "it waits for presented geometry");
+    rt.pointer_up(tip[0] + dir[0] * 50.0, tip[1] + dir[1] * 50.0);
+    rt.frame(FRAME);
+    assert_eq!(
+        position(&rt, "e_box")[0].as_f64().unwrap(),
+        0.0,
+        "no grid move meanwhile"
+    );
+}
+
+#[test]
+fn a_value_that_differs_across_the_selection_shows_a_dash_and_takes_one_for_all() {
+    let mut rt = open();
+    // A second box, rougher than the first.
+    rt.update(|s| {
+        s.apply(
+            vec![json!({"cmd": "entity.create", "args": {"id": "e_crate", "name": "Crate", "components": {"Transform": {"position": [2, 0, 0]}, "MeshRenderer": {"shape": "box", "roughness": 0.9}}}})],
+            "Add a crate",
+        );
+        s.select(vec!["e_box".into(), "e_crate".into()], false);
+    });
+    settle(&mut rt);
+    let key = "field/MeshRenderer.roughness";
+    let shown = rt
+        .tree()
+        .into_iter()
+        .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key));
+    let shown = shown.expect("the field shows");
+    assert_eq!(
+        shown.value.or(shown.text).as_deref(),
+        Some("—"),
+        "shows a dash"
+    );
+    let r = rt.find(key).expect("the field");
+    rt.pointer_move(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.center().x, r.center().y);
+    rt.pointer_up(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.type_text("0.25");
+    rt.key(0x0D);
+    settle(&mut rt);
+    for id in ["e_box", "e_crate"] {
+        let v = &rt.state().resolved[id].record["MeshRenderer"]["roughness"];
+        assert_eq!(v.as_f64(), Some(0.25), "{id} takes it: {v}");
+    }
+}
+
+#[test]
+fn the_tools_overlay_selects_without_a_gizmo_and_moves_with_one() {
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/view.tool.select");
+    assert!(rt.state().editor.state.hide_gizmos, "Select shows no gizmo");
+    press(&mut rt, "scene/view.tool.move");
+    assert!(!rt.state().editor.state.hide_gizmos, "Move brings it back");
+}
+
+#[test]
+fn two_d_mode_looks_head_on_and_flat_and_right_drags_pan() {
+    use crate::state::CameraProjection;
+    let mut rt = open();
+    settle(&mut rt);
+    press(&mut rt, "scene/2d");
+    let camera = rt.state().editor.state.camera;
+    assert_eq!(camera.projection, CameraProjection::Orthographic);
+    assert_eq!((camera.yaw, camera.pitch), (0.0, 0.0), "head-on");
+    // A right drag pans; the view doesn't turn.
+    let view = rt.find("scene/view").unwrap();
+    let (x, y) = (view.center().x, view.center().y);
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Press(
+        stillkit::Pointer {
+            at: stillkit::Point::new(x, y),
+            screen: (0, 0),
+        },
+        stillkit::Button::Right,
+    ));
+    rt.handle(&stillkit::Event::Move(stillkit::Pointer {
+        at: stillkit::Point::new(x + 60.0, y),
+        screen: (0, 0),
+    }));
+    rt.frame(FRAME);
+    rt.handle(&stillkit::Event::Release(
+        stillkit::Pointer {
+            at: stillkit::Point::new(x + 60.0, y),
+            screen: (0, 0),
+        },
+        stillkit::Button::Right,
+    ));
+    settle(&mut rt);
+    let panned = rt.state().editor.state.camera;
+    assert_eq!((panned.yaw, panned.pitch), (0.0, 0.0), "still head-on");
+    assert_ne!(panned.target, camera.target, "panned");
+    // Off again: perspective, at an angle.
+    press(&mut rt, "scene/2d");
+    assert_eq!(
+        rt.state().editor.state.camera.projection,
+        CameraProjection::Perspective
+    );
+}
+
+#[test]
+fn a_vector_that_differs_shows_a_dash_per_axis_and_each_keeps_its_others() {
+    let mut rt = open();
+    rt.update(|s| s.select(vec!["e_box".into(), "e_lamp".into()], false));
+    settle(&mut rt);
+    let shown = |rt: &Runtime<Studio>, axis: usize| {
+        let key = format!("field/Transform.position/{axis}");
+        rt.tree()
+            .into_iter()
+            .find(|n| n.key.as_ref().is_some_and(|k| k.to_string() == key))
+            .and_then(|n| n.value.or(n.text))
+            .map(|t| t.to_string())
+    };
+    assert_eq!(shown(&rt, 0).as_deref(), Some("—"), "X differs (0, 3)");
+    assert_eq!(shown(&rt, 1).as_deref(), Some("—"), "Y differs (0, 2)");
+    assert_eq!(shown(&rt, 2).as_deref(), Some("0"), "Z is shared");
+    let r = rt.find("field/Transform.position/0").expect("X");
+    rt.pointer_move(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(r.center().x, r.center().y);
+    rt.pointer_up(r.center().x, r.center().y);
+    rt.frame(FRAME);
+    rt.type_text("5");
+    rt.key(0x0D);
+    settle(&mut rt);
+    let position = |id: &str| rt.state().resolved[id].record["Transform"]["position"].clone();
+    assert_eq!(position("e_box"), json!([5.0, 0, 0]));
+    assert_eq!(
+        position("e_lamp"),
+        json!([5.0, 2, 0]),
+        "the Lamp keeps its Y"
+    );
+}
+
+#[test]
 fn escape_cancels_a_gizmo_drag() {
     let mut rt = open();
     let (tip, dir) = x_arrow(&rt);
@@ -281,6 +450,88 @@ fn scene_overlays_move_to_another_edge_collapse_and_hide() {
     settle(&mut rt);
     let d = dock(&rt, "tools");
     assert!(!d.hidden && !d.collapsed && d.edge == super::scene_overlays::Edge::Top);
+}
+
+#[test]
+fn a_scene_overlay_floats_as_a_panel_switches_layout_and_docks_back() {
+    use super::scene_overlays::{Edge, Layout};
+    let mut rt = open();
+    settle(&mut rt);
+    let dock = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    let drag_grip = |rt: &mut Runtime<Studio>, to: (f32, f32)| {
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        let grip = rt.find("scene/overlay/tools/grip").expect("its grip");
+        rt.pointer_move(grip.center().x, grip.center().y);
+        rt.frame(FRAME);
+        rt.pointer_down(grip.center().x, grip.center().y);
+        for step in 1..=8 {
+            let t = step as f32 / 8.0;
+            rt.pointer_move(
+                grip.center().x + (to.0 - grip.center().x) * t,
+                grip.center().y + (to.1 - grip.center().y) * t,
+            );
+            rt.frame(FRAME);
+        }
+        rt.pointer_up(to.0, to.1);
+        settle(rt);
+        track(rt, &["scene/view", "scene/overlay/tools"]);
+        settle(rt);
+    };
+    let view = rt.find("scene/view").expect("the Scene view");
+    // Let go in the middle of the view: it floats there, as a titled panel.
+    drag_grip(&mut rt, (view.center().x, view.center().y));
+    let f = dock(&rt).float.expect("floating");
+    assert_eq!(f.layout, Layout::Panel);
+    let shown = rt.find("scene/overlay/tools").expect("shown");
+    assert!(
+        shown.left > view.left + 40.0 && shown.top > view.top + 40.0,
+        "where it was let go: {shown:?} in {view:?}"
+    );
+    // Its menu lays it out vertically, in place.
+    rt.update(|s| s.local.overlay_menu = Some(("tools", (shown.left + 4.0, shown.top + 4.0))));
+    settle(&mut rt);
+    press(&mut rt, "scene/overlay/tools/vertical");
+    let g = dock(&rt).float.expect("still floating");
+    assert_eq!((g.layout, g.at), (Layout::Vertical, f.at));
+    let tall = rt.find("scene/overlay/tools").expect("shown");
+    assert!(tall.height() > tall.width(), "a column: {tall:?}");
+    // The saved form reads back the same.
+    let text = dock(&rt).text();
+    assert_eq!(
+        super::scene_overlays::Dock::parse(&text),
+        Some(dock(&rt)),
+        "{text}"
+    );
+    // Dragged to the right edge, it docks there again.
+    drag_grip(&mut rt, (view.right - 14.0, view.center().y));
+    let d = dock(&rt);
+    assert_eq!((d.float, d.edge), (None, Edge::Right), "{d:?}");
+}
+
+#[test]
+fn a_saved_layout_brings_its_scene_overlays_back() {
+    let mut rt = open();
+    settle(&mut rt);
+    let tools = |rt: &Runtime<Studio>| super::scene_overlays::dock(rt.state(), "tools");
+    rt.update(|s| {
+        super::scene_overlays::update(s, "tools", |d| {
+            d.float = Some(super::scene_overlays::Float {
+                at: (160.0, 120.0),
+                layout: super::scene_overlays::Layout::Panel,
+            })
+        });
+        s.act("editor.layout.save", json!({"name": "Overlays"}));
+        super::scene_overlays::reset(s);
+    });
+    settle(&mut rt);
+    assert!(tools(&rt).float.is_none(), "reset docks it");
+    rt.update(|s| s.act("editor.layout.apply", json!({"name": "Overlays"})));
+    settle(&mut rt);
+    assert_eq!(
+        tools(&rt).float.map(|f| f.at),
+        Some((160.0, 120.0)),
+        "as saved with the layout"
+    );
 }
 
 #[test]
@@ -1949,17 +2200,7 @@ fn assets_save_searches_hide_support_files_and_move_and_import() {
     });
     settle(&mut rt);
     press(&mut rt, &format!("assets/move/{art}"));
-    for _ in 0..3000 {
-        if rt.touch(|s| {
-            s.editor.tick();
-            super::asset_ops::poll_jobs(s);
-            s.local.asset_jobs.is_empty()
-        }) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    assert!(content.join("art/notes.md").is_file(), "moved on disk");
+    finish_file_jobs(&mut rt, &content.join("art/notes.md"));
     assert!(!content.join("levels/notes.md").exists());
     // Import a file from outside, then again: the second asks before overwriting.
     let outside = root.join("outside");
@@ -2389,6 +2630,19 @@ fn a_native_floating_window_shows_its_region_and_its_tab_docks_back_or_tears_out
         super::dock::area_holding(rt.state(), "console"),
         Some(scene.clone())
     );
+    // Its title bar's Dock button puts it back where the default layout keeps it.
+    rt.update(|s| super::commands::run(s, "window.float", &Target::Panel("console".into())));
+    settle(&mut rt);
+    let id = floating(&rt)[0].id.clone();
+    let region = super::dock::region(rt.state(), 0, &id, floating(&rt)[0].rect);
+    rt.set_portals(&[region]);
+    settle(&mut rt);
+    press(&mut rt, &format!("float/{id}/dock"));
+    assert!(floating(&rt).is_empty(), "docked back");
+    assert_eq!(
+        super::dock::area_holding(rt.state(), "console").as_deref(),
+        Some("bottom")
+    );
     // Dragged out past the main window's edge, the tab tears out where the pointer is on
     // the desktop (a second monitor's, say).
     rt.update(|s| s.act("editor.layout.show", json!({"panel": "console"})));
@@ -2421,13 +2675,16 @@ fn a_desktop_point_maps_into_the_topmost_window_under_it() {
     let main = Placement {
         client: [0.0, 0.0, 1000.0, 800.0],
         origin: (0.0, 0.0),
+        k: 1.0,
     };
+    // A floating window on a 1x monitor beside a 2x runtime: its pixels count double.
     let float = Placement {
         client: [900.0, 100.0, 400.0, 300.0],
         origin: (100_000.0, 0.0),
+        k: 2.0,
     };
     let windows = [float, main];
-    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_050.0, 50.0)));
+    assert_eq!(locate(&windows, (950.0, 150.0)), Some((100_100.0, 100.0)));
     assert_eq!(locate(&windows, (500.0, 500.0)), Some((500.0, 500.0)));
     assert_eq!(locate(&windows, (2000.0, 500.0)), None);
 }
@@ -2611,16 +2868,7 @@ fn new_script_is_named_in_place_then_compiles_and_attaches() {
     rt.update(|s| super::asset_ops::rename(s, &path, "Mover"));
     let root = rt.state().editor.host.root().to_owned();
     let moved = path.replace("NewBehaviour", "Mover");
-    for _ in 0..3000 {
-        if rt.touch(|s| {
-            s.editor.tick();
-            super::asset_ops::poll_jobs(s);
-            s.local.asset_jobs.is_empty()
-        }) {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    finish_file_jobs(&mut rt, &root.join(&moved));
     let source = std::fs::read_to_string(root.join(&moved)).expect("renamed on disk");
     assert!(source.contains("class Mover"), "the class follows the file");
     // Where the engine's C# tools are built it compiles and attaches; elsewhere the
@@ -2659,7 +2907,16 @@ fn captures() {
     });
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
-    for light in [false, true] {
+    // Every shot in both themes, at 1x and at 2x (`@2x` in the name).
+    let design = rt.state().size;
+    for (light, scale) in [(false, 1.0), (true, 1.0), (false, 2.0), (true, 2.0)] {
+        rt.set_scale(scale);
+        rt.resize(((design.0 * scale) as u32, (design.1 * scale) as u32));
+        let theme = format!(
+            "{}{}",
+            if light { "light" } else { "dark" },
+            if scale > 1.0 { "@2x" } else { "" }
+        );
         rt.update(|s| s.editor.state.light = light);
         if rt.touch(Studio::sync_look) {
             let theme = rt.state().look.theme.clone();
@@ -2693,23 +2950,91 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-{panel}.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-{panel}.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
             )
             .unwrap();
         }
+        // The Size over Life curve in the VFX Selection, a key picked (its handles shown).
+        if !light && scale == 1.0 {
+            rt.touch(|s| {
+                let doc = s
+                    .editor
+                    .action(
+                        "editor.resource.create",
+                        json!({"path": "samples/capture.graph", "domain": "vfx"}),
+                    )
+                    .unwrap()["doc"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                s.act("editor.workspace", json!({"resource": doc}));
+            });
+        }
+        rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+        let effect = effect_at(&rt, "samples/capture.graph");
+        if let Some((emitter, module, curve)) = effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        }) {
+            let mut shaped = curve;
+            shaped.keys[0].interpolation = ara_curve::Interpolation::Cubic;
+            rt.update(|s| {
+                s.editor.state.resource_item = Some(format!("{emitter}|update|{module}"));
+                s.local.curve_pick = Some((format!("curve/vfx/{emitter}/update/{module}"), 1));
+                s.local.curve_drag = Some(super::curve::CurveDrag {
+                    field: format!("curve/vfx/{emitter}/update/{module}"),
+                    frame: super::curve::Frame::of(&shaped, Some((0.0, 1.0))),
+                    curve: shaped,
+                    grab: super::curve::Grab::Key(1),
+                });
+            });
+            host_feedback(&mut rt);
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{theme}-vfx-curve.png");
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+            rt.update(|s| s.local.curve_drag = None);
+        }
+        // Scene overlays floating: Tools as a titled panel, Snapping as a column.
+        rt.update(|s| {
+            s.act("editor.layout.show", json!({"panel": "scene"}));
+            s.act(
+                "editor.settings.set",
+                json!({"key": "viewport.overlays", "value": {
+                    "tools": "float:120:140:panel",
+                    "snapping": "float:420:120:vertical",
+                }}),
+            );
+        });
+        host_feedback(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        std::fs::write(
+            out.join(format!("{theme}-scene-overlays-float.png")),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(super::scene_overlays::reset);
         // A hovered Hierarchy row, its eye and lock offered.
         let lamp = rt.find("row/e_lamp").unwrap();
         rt.pointer_move(lamp.center().x + 40.0, lamp.center().y);
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-hover.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-hover.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2721,11 +3046,7 @@ fn captures() {
             for _ in 0..30 {
                 rt.frame(FRAME);
             }
-            let name = format!(
-                "{}-menu-{}.png",
-                if light { "light" } else { "dark" },
-                menu.to_lowercase()
-            );
+            let name = format!("{theme}-menu-{}.png", menu.to_lowercase());
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2740,7 +3061,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-menu-cascade.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-menu-cascade.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2755,10 +3076,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-hierarchy-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-hierarchy-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2774,7 +3092,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-profiler-tree.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-profiler-tree.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2789,10 +3107,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-inspector-debug.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-inspector-debug.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2805,7 +3120,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-scene-menu.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-scene-menu.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2818,7 +3133,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-context.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-context.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2835,7 +3150,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-play.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-play.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2854,7 +3169,7 @@ fn captures() {
             for _ in 0..10 {
                 rt.frame(FRAME);
             }
-            let name = format!("{}-tabdrag.png", if light { "light" } else { "dark" });
+            let name = format!("{theme}-tabdrag.png");
             std::fs::write(
                 out.join(name),
                 ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2881,10 +3196,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-profiler-compare.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-profiler-compare.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2906,7 +3218,7 @@ fn captures() {
         for _ in 0..10 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-floating.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-floating.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2927,7 +3239,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-create.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-create.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2939,7 +3251,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-settings.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-settings.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2951,7 +3263,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-palette.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2962,10 +3274,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-palette-search.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-palette-search.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -2979,7 +3288,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!("{}-add-component.png", if light { "light" } else { "dark" });
+        let name = format!("{theme}-add-component.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3002,10 +3311,7 @@ fn captures() {
         for _ in 0..30 {
             rt.frame(FRAME);
         }
-        let name = format!(
-            "{}-asset-inspector.png",
-            if light { "light" } else { "dark" }
-        );
+        let name = format!("{theme}-asset-inspector.png");
         std::fs::write(
             out.join(name),
             ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
@@ -3377,6 +3683,47 @@ fn track(rt: &mut Runtime<Studio>, keys: &[&str]) {
     rt.touch(|s| s.local.rects.extend(rects));
 }
 
+/// Waits for the file jobs an operation just queued to end and for `file` to exist: their
+/// own completion, never an empty job list (which an operation that queued nothing also
+/// shows). Fails at once when nothing was queued, and after a minute otherwise.
+fn finish_file_jobs(rt: &mut Runtime<Studio>, file: &std::path::Path) {
+    let jobs: Vec<String> = rt
+        .state()
+        .local
+        .asset_jobs
+        .iter()
+        .map(|(job, _)| job.clone())
+        .collect();
+    assert!(
+        !jobs.is_empty(),
+        "the operation queued no file job for {}",
+        file.display()
+    );
+    let started = std::time::Instant::now();
+    while started.elapsed() < Duration::from_secs(60) {
+        rt.touch(|s| {
+            s.editor.tick();
+            super::asset_ops::poll_jobs(s);
+        });
+        let running = |rt: &Runtime<Studio>| {
+            rt.state()
+                .local
+                .asset_jobs
+                .iter()
+                .any(|(job, _)| jobs.contains(job))
+        };
+        if !running(rt) && file.is_file() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!(
+        "{} after a minute; jobs {jobs:?} running: {:?}",
+        file.display(),
+        rt.state().local.asset_jobs
+    );
+}
+
 /// Presses the element keyed `key` (hovered first, as a pointer would).
 fn press(rt: &mut Runtime<Studio>, key: &str) {
     let r = rt.find(key).unwrap_or_else(|| panic!("{key} shows"));
@@ -3438,6 +3785,78 @@ fn the_animator_adds_parameters_and_conditions_to_a_picked_transition() {
     assert!(
         rt.find("animation/condition/0/value").is_some(),
         "its threshold is typed in place"
+    );
+}
+
+#[test]
+fn delete_removes_picked_states_and_transitions_but_keeps_the_entry() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/walk.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let controller = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+    };
+    let before = controller(&rt);
+    let transition = before.transitions[0].clone();
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition.id));
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(
+        controller(&rt).transitions.is_empty(),
+        "the transition went"
+    );
+    // A state other than the entry goes; the entry is refused.
+    let node = |rt: &Runtime<Studio>, state: &str| {
+        let graph = rt.state().graph.shown_graph().unwrap();
+        graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.payload["state"] == state)
+            .map(|(id, _)| id.clone())
+            .unwrap()
+    };
+    let entry = before.initial.clone();
+    let other = before.states.keys().find(|k| **k != entry).unwrap().clone();
+    let id = node(&rt, &other);
+    rt.update(|s| {
+        s.graph.pick(id);
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(!controller(&rt).states.contains_key(&other), "{other} went");
+    let id = node(&rt, &entry);
+    rt.update(|s| {
+        s.graph.pick(id);
+        super::animator::delete_selection(s);
+        super::graph::sync(s, "animation");
+    });
+    assert!(
+        controller(&rt).states.contains_key(&entry),
+        "the entry stays"
     );
 }
 
@@ -3925,6 +4344,502 @@ fn a_picked_vfx_module_is_edited_in_the_selection_panel() {
 }
 
 #[test]
+fn the_size_over_life_curve_takes_a_key_and_a_dragged_one_in_one_step() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/fire.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let size_curve = |rt: &Runtime<Studio>| {
+        let effect = effect_at(rt, "samples/fire.graph");
+        effect.emitters.iter().find_map(|e| {
+            e.stacks.update.iter().find_map(|m| match &m.module {
+                ara_vfx::Module::SizeOverLife { curve } => {
+                    Some((e.name.clone(), m.name.clone(), curve.clone()))
+                }
+                _ => None,
+            })
+        })
+    };
+    let (emitter, module, curve) = size_curve(&rt).expect("a Size over Life module");
+    press(&mut rt, &format!("vfx/module/{emitter}|update|{module}"));
+    let plot = rt
+        .find(&format!("curve/vfx/{emitter}/update/{module}"))
+        .expect("the curve shows in the Selection");
+    let (w, h) = (plot.width(), plot.height());
+    let frame = super::curve::Frame::of(&curve, Some((0.0, 1.0)));
+    let at = |(x, y): (f32, f32)| (plot.left + x, plot.top + y);
+    // A double-click on the plot adds a key there.
+    let (x, y) = at(frame.place((0.5, curve.evaluate(0.5) * 0.5), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    let pointer = stillkit::Pointer {
+        at: stillkit::Point::new(x, y),
+        screen: (0, 0),
+    };
+    rt.handle(&stillkit::Event::DoubleClick(
+        pointer,
+        stillkit::Button::Left,
+    ));
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    let (_, _, added) = size_curve(&rt).expect("still there");
+    assert_eq!(added.keys.len(), curve.keys.len() + 1, "a key added");
+    let undo_depth = rt.state().editor.host.store().history().len();
+    // The first key dragged up: higher, saved once on release.
+    let first = added.keys[0];
+    let frame = super::curve::Frame::of(&added, Some((0.0, 1.0)));
+    let (x, y) = at(frame.place((first.time, first.value), (w, h)));
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    for step in 1..=4 {
+        rt.pointer_move(x, y - 6.0 * step as f32);
+        rt.frame(FRAME);
+    }
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth,
+        "nothing saved mid-drag"
+    );
+    rt.pointer_up(x, y - 24.0);
+    settle(&mut rt);
+    let (_, _, dragged) = size_curve(&rt).expect("still there");
+    assert!(
+        dragged.keys[0].value > first.value,
+        "{} > {}",
+        dragged.keys[0].value,
+        first.value
+    );
+    assert_eq!(dragged.keys[0].time, 0.0, "kept at the start of life");
+    assert_eq!(
+        rt.state().editor.host.store().history().len(),
+        undo_depth + 1,
+        "one undo step"
+    );
+}
+
+#[test]
+fn a_transition_s_blend_curve_shapes_it_and_straightens_back() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/run.animation", "domain": "animation"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        for kind in ["state", "state", "transition"] {
+            crate::animation_edit::edit(&mut s.editor, &doc, kind).unwrap();
+        }
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.animation", &crate::catalog::Target::None));
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let blend = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .blend
+            .clone()
+    };
+    let transition = {
+        let workspace = rt.state().editor.host.store().workspace();
+        crate::authoring::animation::controller(workspace.doc(&doc).expect("doc"))
+            .expect("controller")
+            .1
+            .transitions[0]
+            .id
+            .clone()
+    };
+    rt.update(|s| {
+        s.graph
+            .pick(crate::authoring::animation::transition_edge(&transition))
+    });
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "straight to start");
+    let plot = rt
+        .find(&format!("curve/animation/{transition}"))
+        .expect("the blend curve shows with the transition");
+    let (w, h) = (plot.width(), plot.height());
+    let straight = ara_curve::Preset::Linear.curve();
+    let frame = super::curve::Frame::of(&straight, Some((0.0, 1.0)));
+    let (kx, ky) = frame.place((0.0, 0.0), (w, h));
+    let (x, y) = (plot.left + kx, plot.top + ky);
+    // Pick the first key, then pull its leaving handle flat: the fade eases in.
+    rt.pointer_move(x, y);
+    rt.frame(FRAME);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    settle(&mut rt);
+    assert_eq!(blend(&rt), None, "picking a key changes nothing");
+    // The handle lies along the straight line, 36 px out.
+    let (ex, ey) = frame.place((1.0, 1.0), (w, h));
+    let len = ((ex - kx).powi(2) + (ey - ky).powi(2)).sqrt();
+    let handle = (x + (ex - kx) / len * 36.0, y + (ey - ky) / len * 36.0);
+    rt.pointer_move(handle.0, handle.1);
+    rt.frame(FRAME);
+    rt.pointer_down(handle.0, handle.1);
+    rt.pointer_move(handle.0 + 10.0, y);
+    rt.frame(FRAME);
+    rt.pointer_up(handle.0 + 10.0, y);
+    rt.update(|s| super::graph::sync(s, "animation"));
+    settle(&mut rt);
+    let shaped = blend(&rt).expect("shaped");
+    assert!(
+        shaped.evaluate(0.25) < 0.2,
+        "eases in: {}",
+        shaped.evaluate(0.25)
+    );
+    press(&mut rt, "animation/transition/blend/reset");
+    rt.update(|s| super::graph::sync(s, "animation"));
+    assert_eq!(blend(&rt), None, "straight again");
+}
+
+#[test]
+fn tab_stops_once_per_menu_bar_tree_and_toolbar_and_field_to_field_in_the_inspector() {
+    let mut rt = open();
+    settle(&mut rt);
+    let mut stops: Vec<(String, String)> = Vec::new();
+    for _ in 0..60 {
+        rt.key(0x09);
+        rt.frame(FRAME);
+        if let Some(n) = rt.tree().into_iter().find(|n| n.focused) {
+            let key = n.key.map(|k| k.to_string()).unwrap_or_default();
+            stops.push((key, n.label.map(|l| l.to_string()).unwrap_or_default()));
+        }
+    }
+    // Within one pass round the window (60 Tabs cover more than one here).
+    let pass = stops
+        .iter()
+        .skip(1)
+        .position(|s| *s == stops[0])
+        .map_or(stops.len(), |at| at + 1);
+    let stops = &stops[..pass];
+    let count = |prefix: &str| stops.iter().filter(|(k, _)| k.starts_with(prefix)).count();
+    assert_eq!(count("menu/"), 1, "the menu bar is one stop: {stops:?}");
+    assert_eq!(
+        count("row/"),
+        1,
+        "the Hierarchy is one stop, on its selected row"
+    );
+    assert_eq!(
+        count("scene/view.tool."),
+        1,
+        "the Tools overlay is one stop"
+    );
+    assert!(
+        !stops.iter().any(|(k, _)| k.ends_with("/scrub")),
+        "scrub labels are drag handles, not stops"
+    );
+    let position: Vec<&str> = stops
+        .iter()
+        .filter(|(k, _)| k.starts_with("field/Transform.position/"))
+        .map(|(_, l)| l.as_str())
+        .collect();
+    assert_eq!(
+        position,
+        ["Position X", "Position Y", "Position Z"],
+        "field to field, named"
+    );
+}
+
+#[test]
+fn the_material_page_shows_each_operation_s_value_in_its_node() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/paint.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                "Showcase",
+            )
+            .unwrap();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    settle(&mut rt);
+    // The previews render on their own worker on this GPU: wait for them to land.
+    let started = std::time::Instant::now();
+    while rt.state().graph.previewed() < 3
+        && started.elapsed() < std::time::Duration::from_secs(120)
+    {
+        rt.touch(|s| super::graph::sync(s, "material"));
+        rt.touch(super::graph::previews);
+        if let Some(error) = rt.state().graph.preview_error() {
+            panic!("the previews can't render here: {error}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(
+        rt.state().graph.previewed() >= 3,
+        "operation nodes show their values ({} rendered)",
+        rt.state().graph.previewed()
+    );
+}
+
+#[test]
+fn a_prefab_dragged_onto_a_hierarchy_row_lands_under_that_entity() {
+    let mut rt = open();
+    rt.update(|s| s.act("editor.layout.show", json!({"panel": "assets"})));
+    scan(&mut rt);
+    rt.update(|s| {
+        s.select(vec!["e_box".into()], false);
+        super::commands::run(
+            s,
+            "create.prefab",
+            &crate::catalog::Target::Entity("e_box".into()),
+        );
+    });
+    // The new prefab shows in Assets once the browser rescans.
+    let mut prefab = None;
+    for _ in 0..400 {
+        rt.touch(|s| {
+            s.editor.tick();
+            if let Some(b) = s.assets.as_mut() {
+                b.refresh();
+                b.poll();
+            }
+        });
+        prefab = rt.touch(|s| {
+            s.assets.as_ref().and_then(|b| {
+                b.items
+                    .iter()
+                    .find(|a| a.kind == "prefab")
+                    .map(|a| a.path.clone())
+            })
+        });
+        if prefab.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let prefab = prefab.expect("the prefab shows in Assets");
+    let folder = prefab.rsplit_once('/').map_or("", |(d, _)| d).to_owned();
+    rt.update(|s| s.act("editor.workspace", json!({"folder": folder})));
+    settle(&mut rt);
+    let tile = rt.find(&format!("asset/{prefab}")).expect("its tile");
+    let row = rt.find("row/e_lamp").expect("the Lamp's row");
+    rt.pointer_move(tile.center().x, tile.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tile.center().x, tile.center().y);
+    rt.pointer_move(tile.center().x + 20.0, tile.center().y - 20.0);
+    rt.frame(FRAME);
+    assert!(rt.state().local.asset_drag.is_some(), "dragging the prefab");
+    // The host reports where things can drop while an asset is dragged.
+    let keys = super::panels::drop_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    rt.pointer_move(row.center().x, row.center().y);
+    rt.frame(FRAME);
+    rt.pointer_up(row.center().x, row.center().y);
+    settle(&mut rt);
+    let placed = rt
+        .state()
+        .resolved
+        .iter()
+        .filter(|(id, _)| !["e_box", "e_lamp", "e_sun", "e_post"].contains(&id.as_str()))
+        .find(|(_, e)| e.parent.as_deref() == Some("e_lamp"));
+    assert!(placed.is_some(), "an instance under the Lamp");
+    // Onto an Inspector field that doesn't take a prefab (the Box's Model): it says so and
+    // changes nothing.
+    rt.update(|s| s.select(vec!["e_box".into()], false));
+    settle(&mut rt);
+    let field = rt
+        .find("field/MeshRenderer.model")
+        .expect("the Model field");
+    let before = rt.state().resolved["e_box"].record.clone();
+    rt.pointer_move(tile.center().x, tile.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(tile.center().x, tile.center().y);
+    rt.pointer_move(tile.center().x + 20.0, tile.center().y - 20.0);
+    rt.frame(FRAME);
+    let keys = super::panels::drop_keys(rt.state());
+    track(
+        &mut rt,
+        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    rt.pointer_move(field.center().x, field.center().y);
+    rt.frame(FRAME);
+    rt.pointer_up(field.center().x, field.center().y);
+    settle(&mut rt);
+    assert_eq!(
+        rt.state().resolved["e_box"].record,
+        before,
+        "nothing assigned"
+    );
+    let said = rt
+        .state()
+        .local
+        .note
+        .as_ref()
+        .map(|(n, _)| n.clone())
+        .unwrap_or_default();
+    assert!(said.contains("doesn't take"), "it says why: {said}");
+}
+
+#[test]
+fn a_script_fault_shows_its_stack_with_each_frame_s_source() {
+    let mut rt = open();
+    // Frames link only to files that exist in the project.
+    let scripts = rt.state().editor.host.root().join("content/scripts");
+    std::fs::create_dir_all(&scripts).unwrap();
+    for name in ["PlayerControl.cs", "Targeting.cs"] {
+        std::fs::write(scripts.join(name), "class C {}").unwrap();
+    }
+    let frame = |method: &str, file: Option<&str>, line: Option<u32>| json!({"method": method, "file": file, "line": line, "column": line.map(|_| 9)});
+    let exception = json!({
+        "schema": 1, "type": "System.InvalidOperationException", "message": "No target",
+        "frames": [
+            frame("PlayerControl.Update()", Some("content/scripts/PlayerControl.cs"), Some(42)),
+            frame("Ara.Runtime.Tick()", None, None),
+        ],
+        "inners": [{
+            "schema": 1, "type": "System.NullReferenceException", "message": "target was null",
+            "frames": [frame("Targeting.Find()", Some("content/scripts/Targeting.cs"), Some(7))],
+            "inners": [], "truncated": false
+        }],
+        "truncated": false
+    });
+    let diagnostic = ara_diag::Diagnostic::error(
+        ara_diag::codes::UNRESOLVED_REF,
+        "PlayerControl.Update threw",
+    )
+    .data(json!({"exception": exception}));
+    let entry = json!({"seq": 9, "at": 0, "origin": "script", "diagnostic": serde_json::to_value(&diagnostic).unwrap()});
+    let row = super::state::LogRow::from_entry(&entry).expect("a bus record reads");
+    rt.update(|s| {
+        s.logs = vec![row];
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.local.console_open = Some(9);
+    });
+    settle(&mut rt);
+    let texts: Vec<String> = rt
+        .tree()
+        .into_iter()
+        .filter_map(|n| n.text.map(|t| t.to_string()))
+        .collect();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("InvalidOperationException: No target")),
+        "the fault"
+    );
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("Caused by System.NullReferenceException")),
+        "its cause"
+    );
+    assert!(
+        texts.iter().any(|t| t == "at Ara.Runtime.Tick()"),
+        "a frame without a source"
+    );
+    assert!(
+        rt.find("console/detail/frame/0").is_some(),
+        "PlayerControl.cs:42 opens"
+    );
+    assert!(
+        rt.find("console/detail/frame/1").is_none(),
+        "no link without a file"
+    );
+    assert!(
+        rt.find("console/detail/frame/2").is_some(),
+        "the cause's frame opens too"
+    );
+}
+
+#[test]
+fn the_game_view_plays_at_a_fixed_resolution_scaled_to_fit() {
+    let mut rt = open();
+    rt.update(|s| super::commands::run(s, "game.aspect.1920x1080", &crate::catalog::Target::None));
+    let aspect = rt.state().editor.state.settings["game.aspect"]
+        .as_str()
+        .map(str::to_owned);
+    assert_eq!(aspect.as_deref(), Some("1920x1080"), "kept as the setting");
+    assert_eq!(super::game::resolution("1920x1080"), Some([1920, 1080]));
+    assert_eq!(
+        super::game::resolution("16x9"),
+        None,
+        "an aspect, not a size"
+    );
+    assert_eq!(super::game::resolution("free"), None);
+}
+
+#[test]
+fn emitters_add_duplicate_and_delete_but_one_stays() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/sparks.graph", "domain": "vfx"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.vfx", &crate::catalog::Target::None));
+    settle(&mut rt);
+    let names = |rt: &Runtime<Studio>| -> Vec<String> {
+        effect_at(rt, "samples/sparks.graph")
+            .emitters
+            .into_iter()
+            .map(|e| e.name)
+            .collect()
+    };
+    let start = names(&rt).len();
+    press(&mut rt, "vfx/emitter/add");
+    assert_eq!(names(&rt).len(), start + 1, "added");
+    let first = names(&rt)[0].clone();
+    rt.update(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &first, "duplicate").unwrap());
+    assert_eq!(names(&rt).len(), start + 2, "duplicated");
+    for name in names(&rt).into_iter().skip(1) {
+        rt.update(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &name, "delete").unwrap());
+    }
+    assert_eq!(names(&rt), std::slice::from_ref(&first), "down to one");
+    let last = rt.touch(|s| crate::vfx_edit::emitter_edit(&mut s.editor, &doc, &first, "delete"));
+    assert!(last.is_err(), "the last one stays");
+}
+
+#[test]
 fn a_console_row_opens_its_details() {
     let mut rt = open();
     let diagnostic = ara_diag::Diagnostic::error(
@@ -4019,5 +4934,178 @@ fn click_cost() {
         if !more && !rt.animating() {
             break;
         }
+    }
+}
+
+#[test]
+fn stack_frames_outside_the_project_never_open() {
+    let mut rt = open();
+    let root = rt.state().editor.host.root().to_owned();
+    std::fs::create_dir_all(root.join("content/scripts")).unwrap();
+    std::fs::write(root.join("content/scripts/Mover.cs"), "class Mover {}").unwrap();
+    // Outside the project, beside it: reachable only through `..`.
+    std::fs::write(root.with_extension("bat"), "echo").unwrap();
+    let outside = format!(
+        "../{}",
+        root.with_extension("bat")
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+    );
+    let absolute = root
+        .join("content/scripts/Mover.cs")
+        .to_string_lossy()
+        .into_owned();
+    for file in [
+        absolute.as_str(),
+        "/etc/passwd",
+        "C:\\Windows\\x.bat",
+        "\\\\host\\share\\x.exe",
+        outside.as_str(),
+        "content/scripts/../../../x.bat",
+        "content\\scripts\\..\\..\\x.bat",
+        "content/scripts/Missing.cs",
+    ] {
+        assert_eq!(
+            super::panels::frame_target(&root, file),
+            None,
+            "{file} is refused"
+        );
+    }
+    assert!(
+        super::panels::frame_target(&root, "content/scripts/Mover.cs").is_some(),
+        "a project file opens"
+    );
+    // In the Console: the refused frames read as text, the project file is a link.
+    let frame = |i: u32, file: &str| json!({"method": format!("M{i}()"), "file": file, "line": 3, "column": 1});
+    let exception = json!({"schema": 1, "type": "System.Exception", "message": "boom", "frames": [
+        frame(0, "C:\\Windows\\x.bat"),
+        frame(1, "\\\\host\\share\\x.exe"),
+        frame(2, &outside),
+        frame(3, "content/scripts/Mover.cs"),
+    ], "inners": [], "truncated": false});
+    let diagnostic = ara_diag::Diagnostic::error(ara_diag::codes::UNRESOLVED_REF, "Mover threw")
+        .data(json!({"exception": exception}));
+    let entry = json!({"seq": 4, "at": 0, "origin": "script", "diagnostic": serde_json::to_value(&diagnostic).unwrap()});
+    let row = super::state::LogRow::from_entry(&entry).expect("a bus record reads");
+    rt.update(|s| {
+        s.logs = vec![row];
+        s.act("editor.layout.show", json!({"panel": "console"}));
+        s.local.console_open = Some(4);
+    });
+    settle(&mut rt);
+    for i in 0..3 {
+        assert!(
+            rt.find(&format!("console/detail/frame/{i}")).is_none(),
+            "frame {i} is no link"
+        );
+        assert!(
+            rt.find(&format!("console/detail/source/{i}")).is_some(),
+            "frame {i} reads as text"
+        );
+    }
+    assert!(
+        rt.find("console/detail/frame/3").is_some(),
+        "the project file links"
+    );
+    let _ = std::fs::remove_file(root.with_extension("bat"));
+}
+
+#[test]
+fn in_node_previews_keep_their_own_picture_while_a_downstream_value_changes() {
+    let mut rt = open();
+    let doc = rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/cycle.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.editor
+            .apply_to(
+                &doc,
+                vec![json!({"cmd": "material.text.apply", "args": {"text": crate::asset_tools::node_preview::SHOWCASE}})],
+                "Showcase",
+            )
+            .unwrap();
+        s.act("editor.workspace", json!({"resource": doc.clone()}));
+        doc
+    });
+    rt.update(|s| super::commands::run(s, "window.material", &crate::catalog::Target::None));
+    // Every previewed node shows the picture of its own current key, once renders land.
+    let settle_previews = |rt: &mut Runtime<Studio>| {
+        let started = std::time::Instant::now();
+        loop {
+            rt.touch(|s| super::graph::sync(s, "material"));
+            rt.touch(super::graph::previews);
+            if let Some(error) = rt.state().graph.preview_error() {
+                panic!("the previews can't render here: {error}");
+            }
+            let slots = rt.state().graph.preview_slots();
+            if !slots.is_empty()
+                && slots
+                    .iter()
+                    .all(|(_, _, shown, own)| own.is_some() && shown == own)
+            {
+                return slots;
+            }
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(120),
+                "previews never settled: {slots:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    // By key: a text edit gives the nodes new ids, but an unchanged node keeps its key.
+    let by_key = |slots: Vec<(String, String, Option<u32>, Option<u32>)>| {
+        slots
+            .into_iter()
+            .map(|(_, key, shown, _)| (key, shown))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let mut before = by_key(settle_previews(&mut rt));
+    // The `scale` constant (6) feeds three previewed nodes; the four others (uv, normal,
+    // view, rim) never change. Its value is edited in place, as the canvas does, so node
+    // ids stay; enough edits to go round every slot several times.
+    let scale_node = {
+        let graph = rt.state().graph.shown_graph().expect("the material shows");
+        graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.payload["name"] == "scale")
+            .map(|(id, _)| id.clone())
+            .unwrap_or_else(|| panic!("the scale constant: {:?}", graph.nodes))
+    };
+    for scale in 7..19 {
+        rt.touch(|s| {
+            s.editor
+                .apply_to(
+                    &doc,
+                    vec![json!({"cmd": "editor.material.value.set", "args": {"node": scale_node, "value": [scale as f64]}})],
+                    "Scale",
+                )
+                .unwrap();
+        });
+        let now = by_key(settle_previews(&mut rt));
+        let unchanged: Vec<_> = now
+            .iter()
+            .filter(|(key, _)| before.contains_key(*key))
+            .collect();
+        assert_eq!(
+            unchanged.len(),
+            4,
+            "scale {scale}: {now:?} before {before:?}"
+        );
+        for (key, shown) in unchanged {
+            assert_eq!(
+                before[key], *shown,
+                "scale {scale}: {key} keeps its own picture"
+            );
+        }
+        before = now;
     }
 }

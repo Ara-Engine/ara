@@ -416,3 +416,35 @@ fn ordered_numeric_boolean_conditions_and_exit_time_do_not_lose_triggers() {
     );
     assert_eq!(snapshot_json(&a)["lane"]["state"], 1);
 }
+
+#[test]
+fn a_transition_blend_curve_shapes_the_cross_fade_and_a_bad_one_does_not_compile() {
+    let s = common::skeleton(2);
+    // From a pose at 0 to one at 10: the pose shows the fade's weight.
+    let weight_after_one_tick = |blend: Option<ara_curve::Curve>| {
+        let mut data = common::controller_data();
+        data.states.get_mut("move").unwrap().node = "run".into();
+        data.transitions[0].blend = blend;
+        let c = constant_program(data, &s, &[0.0, 10.0]);
+        let mut a = Animator::new(&c, &s).unwrap();
+        a.set(c.parameter("go").unwrap(), ParameterValue::Trigger(true))
+            .unwrap();
+        a.tick(&c, &s, |_| {}).unwrap();
+        a.pose().translations()[0].x / 10.0
+    };
+    let progress = 800.0 / 4800.0;
+    common::near(weight_after_one_tick(None), progress, 1e-5);
+    let eased = Some(ara_curve::Preset::EaseIn.curve());
+    common::near(weight_after_one_tick(eased), progress * progress, 1e-5);
+    let mut data = common::controller_data();
+    data.transitions[0].blend = Some(ara_curve::Curve::empty());
+    let bindings = (0..2)
+        .map(|i| {
+            let clip = common::clip(&s, 1.0);
+            let cooked = CookedClip::cook(&clip, &s, CompressionSettings::default());
+            (common::reference(i), cooked.unwrap().0)
+        })
+        .collect();
+    let error = Controller::compile(&data, &s, bindings).err().unwrap();
+    assert!(error.0.contains("blend curve"), "{}", error.0);
+}

@@ -120,7 +120,7 @@ fn destroy(device: &ash::Device, values: Vec<Replacement>) {
 
 fn compile(
     device: &ash::Device,
-    mesh: bool,
+    mesh: pipeline::ShaderFeatures,
     layout: vk::PipelineLayout,
     directory: &Path,
     entries: &[&Entry],
@@ -186,7 +186,11 @@ fn compile(
 }
 
 impl Worker {
-    pub fn new(device: ash::Device, mesh: bool, layout: vk::PipelineLayout) -> Result<Self> {
+    pub fn new(
+        device: ash::Device,
+        mesh: pipeline::ShaderFeatures,
+        layout: vk::PipelineLayout,
+    ) -> Result<Self> {
         let (sender, requests) = mpsc::channel();
         let (replies, receiver) = mpsc::channel();
         let compiler_device = device.clone();
