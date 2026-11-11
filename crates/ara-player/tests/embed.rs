@@ -322,5 +322,4 @@ fn embedded_play_shares_frames_with_the_owner_device() {
             log.path().display()
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

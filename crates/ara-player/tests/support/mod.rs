@@ -6,6 +6,7 @@ use ara_mcp::Adapter;
 use ara_play_host::{PlayConfig, PlayService};
 use serde_json::{Value, json};
 use std::{
+    ops::Deref,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -223,10 +224,44 @@ impl Agent {
     }
 }
 
-/// A fresh temporary copy of the demo project.
-pub fn demo_copy(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ara-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+/// A scratch directory under the system temp dir that is deleted when it goes out of
+/// scope, so a test that fails (or just ends) leaves nothing in `/tmp`. Declare it
+/// before anything that runs processes in it: locals drop in reverse order, so the
+/// players are gone by the time it is removed.
+pub struct Scratch(PathBuf);
+
+impl Scratch {
+    /// A fresh, not yet created directory `ara-<tag>-<pid>`; a stale one from a crashed run
+    /// with the same pid is removed first.
+    pub fn new(tag: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("ara-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        Self(dir)
+    }
+}
+
+impl Deref for Scratch {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for Scratch {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A fresh temporary copy of the demo project, removed when the guard drops.
+pub fn demo_copy(tag: &str) -> Scratch {
+    let dir = Scratch::new(tag);
     copy(
         Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")),
         &dir,
