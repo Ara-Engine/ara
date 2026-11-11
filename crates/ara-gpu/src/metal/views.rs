@@ -25,7 +25,7 @@ impl MetalDevice {
     ) -> Result<HeapIndex> {
         native::pool(|| {
             let raw = &self.images.get(image)?.raw;
-            desc.validate(raw.shape, storage)?;
+            desc.validate(raw.shape, raw.size, storage)?;
             if !raw.usage.contains(if storage {
                 vk::ImageUsageFlags::STORAGE
             } else {
@@ -47,6 +47,7 @@ impl MetalDevice {
                 ViewDimension::D2 => MTLTextureType::Type2D,
                 ViewDimension::D2Array => MTLTextureType::Type2DArray,
                 ViewDimension::D3 => MTLTextureType::Type3D,
+                ViewDimension::CubeArray => MTLTextureType::TypeCubeArray,
             };
             // SAFETY: dimension and mip/layer ranges were checked against the parent allocation.
             let texture = unsafe {

@@ -14,17 +14,22 @@ pub(super) struct ShaderFeatures {
     pub mesh_shading: bool,
     /// `FragmentBarycentricKHR` in a fragment stage.
     pub fragment_barycentrics: bool,
+    /// `SampledCubeArray` in any stage.
+    pub cube_arrays: bool,
 }
 impl ShaderFeatures {
     pub(super) fn of(info: &super::DeviceInfo) -> Self {
         Self {
             mesh_shading: info.mesh_shading,
             fragment_barycentrics: info.fragment_barycentrics,
+            cube_arrays: info.cube_arrays,
         }
     }
 }
 /// `OpCapability FragmentBarycentricKHR`.
 const FRAGMENT_BARYCENTRIC: u32 = 5284;
+/// `OpCapability SampledCubeArray`.
+const SAMPLED_CUBE_ARRAY: u32 = 45;
 /// Whether a SPIR-V module declares `capability`. Capabilities lead the module, right
 /// after its five-word header, so the scan stops at the first other instruction.
 fn declares_capability(words: &[u32], capability: u32) -> bool {
@@ -156,6 +161,12 @@ pub(super) fn create_inner(
             {
                 return Err(GpuError::Contract(format!(
                     "{} reads fragment barycentrics, which this device does not support",
+                    stage.spirv
+                )));
+            }
+            if !features.cube_arrays && declares_capability(&words, SAMPLED_CUBE_ARRAY) {
+                return Err(GpuError::Contract(format!(
+                    "{} samples cube arrays, which this device does not support",
                     stage.spirv
                 )));
             }
