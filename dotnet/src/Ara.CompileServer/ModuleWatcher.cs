@@ -25,7 +25,8 @@ internal sealed class ModuleWatcher : IDisposable
     readonly CancellationTokenSource _stop = new();
     readonly Thread _pump;
     readonly VnodeEvents? _vnode;
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _vnodeWrites = new(StringComparer.Ordinal);
+    /// <summary>The last fast delivery per file: when, and the file's modification time and length then.</summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long At, long Mtime, long Length)> _vnodeWrites = new(StringComparer.Ordinal);
 
     /// <summary><paramref name="changed"/> receives (slot, paths, first event timestamp) on the pump thread.</summary>
     internal ModuleWatcher(Action<uint, IReadOnlyCollection<string>, long> changed)
@@ -69,25 +70,57 @@ internal sealed class ModuleWatcher : IDisposable
         };
         w.EnableRaisingEvents = true;
         if (_vnode is not null)
-            foreach (var file in SourceFiles(dir)) AddVnode(slot, file);
+            foreach (var file in SourceFiles(dir))
+            {
+                AddVnode(slot, file);
+            }
         lock (_watchers) _watchers.Add(w);
     }
 
-    /// <summary>The file watch of an in-place write: queued at once, and remembered to drop the directory watcher's echo.</summary>
+    /// <summary>
+    /// The file watch of an in-place write: queued at once, and remembered with the file's stat to drop the directory
+    /// watcher's echo. Truncation alone raises no event here (<c>NOTE_ATTRIB</c> is not subscribed), so the first event is a
+    /// write; a save written in chunks raises one event per write and each is reported, so the final state always arrives (the
+    /// pump's 1 ms settle merges steady writes; a writer that pauses longer gets a compile of the partial file first, as it
+    /// did through FSEvents past its 11 ms). A wait here would only add latency, and under load it was measured to erase the gain.
+    /// </summary>
     void OnVnode(uint slot, string path)
     {
+        var stat = Stat(path) ?? default;
         var now = Stopwatch.GetTimestamp();
-        _vnodeWrites[path] = now;
+        _vnodeWrites[path] = (now, stat.Mtime, stat.Length);
+        if (_vnodeWrites.Count > 4096) PruneVnodeWrites();
         _events.Add((slot, path, now));
     }
 
+    /// <summary>Forgets deliveries older than a minute so the table does not grow with every path ever watched.</summary>
+    void PruneVnodeWrites()
+    {
+        foreach (var (path, delivery) in _vnodeWrites)
+            if (Stopwatch.GetElapsedTime(delivery.At).TotalSeconds > 60) _vnodeWrites.TryRemove(path, out _);
+    }
+
+    static (long Mtime, long Length)? Stat(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? (file.LastWriteTimeUtc.Ticks, file.Length) : null;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
     /// <summary>
-    /// FSEvents reports one in-place write as <c>Changed</c> and often <c>Created</c> too. While the file's vnode watch is
-    /// alive it was not replaced (a delete or rename drops the watch), so such an event right after a vnode write is that write.
+    /// FSEvents reports one in-place write as <c>Changed</c> and often <c>Created</c> too, ~11 ms late. It is that write's
+    /// echo when a vnode delivery for the file is under 100 ms old, its vnode watch is alive (a delete or rename drops it), and
+    /// the file still has the modification time and length seen at the delivery. Anything that changed since (a save that ends
+    /// with a shrinking truncate, a second write) passes, so no final state is ever dropped.
     /// </summary>
     bool IsVnodeDuplicate(string path) =>
-        _vnode is not null && _vnode.Watching(path) && _vnodeWrites.TryGetValue(path, out var at)
-        && Stopwatch.GetElapsedTime(at).TotalMilliseconds < DuplicateWindowMs;
+        _vnode is not null && _vnode.Watching(path) && _vnodeWrites.TryGetValue(path, out var delivery)
+        && Stopwatch.GetElapsedTime(delivery.At).TotalMilliseconds < DuplicateWindowMs
+        && Stat(path) is { } now && now.Mtime == delivery.Mtime && now.Length == delivery.Length;
 
     void AddVnode(uint slot, string path) => _vnode!.Add(slot, path);
 
