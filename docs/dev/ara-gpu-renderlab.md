@@ -382,8 +382,10 @@ their SPIR-V declares `FragmentBarycentricKHR`. The Vulkan device never enabled
 at `vkCreateShaderModule` (nine Renderlab backend tests on RADV). The device now
 enables the extension and its feature whenever the driver reports both, and
 `DeviceInfo::fragment_barycentrics` says whether it did; every Metal 4 GPU reports
-it through `supportsShaderBarycentricCoordinates`. A caller must not create a
-pipeline whose fragment stage declares barycentrics where the flag is false.
+it through `supportsShaderBarycentricCoordinates`. Where the flag is false, Vulkan
+pipeline creation refuses a module that declares the capability with a contract
+error naming the stage, instead of handing it to the driver. A driver that offers
+only the older `VK_NV_fragment_shader_barycentric` reports false.
 
 Nothing in `ara-gpu`'s own cohort uses barycentrics, so the proof is Renderlab's
 backend suite under validation on a Vulkan device, which has not been rerun yet.
@@ -401,5 +403,8 @@ with layer 1 still `UNDEFINED`. The shortcut now applies only to images with one
 layer; every other selected slice, layer 0 included, gets its own cached single-slice
 view. The existing sibling-preservation probe uploads the whole image first, which
 hid this. `regression_first_layer_of_an_array_renders_without_touching_its_siblings`
-transitions and renders one layer at a time, layer 0 first; it passes on Metal and
-has not run on Vulkan, where it is expected to fail validation without the fix.
+transitions and renders one layer at a time, layer 0 first, for a colour and for a
+depth array; it passes on Metal and has not run on Vulkan, where it is expected to
+fail validation without the fix. It detects the fault through validation only,
+which debug builds enable. A resolve target at layer 0 of an array takes the same
+view path and has no test.
