@@ -6,7 +6,9 @@ namespace Ara.CompileServer;
 /// <summary>
 /// Watches module folders for <c>*.cs</c> changes and reports one change set per module per
 /// save: events are coalesced over a 1 ms settle (a truncate+write pair reads once). One pump
-/// thread serves every module.
+/// thread serves every module. On macOS, <c>FileSystemWatcher</c> (FSEvents) reports an in-place save
+/// ~11 ms late, so source files also carry a kqueue watch (<see cref="VnodeEvents"/>) that reports the
+/// write at once; the late directory event for the same write is dropped as a duplicate.
 /// </summary>
 internal sealed class ModuleWatcher : IDisposable
 {
@@ -14,17 +16,26 @@ internal sealed class ModuleWatcher : IDisposable
     internal static bool IsSourceInput(string path) => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(ProjectInventory.ManifestSuffix, StringComparison.OrdinalIgnoreCase);
     const double SettleMs = 1.0;
+    /// <summary>A late directory <c>Changed</c> or <c>Created</c> event this soon after a vnode event is the same write.</summary>
+    const double DuplicateWindowMs = 100.0;
 
     readonly Action<uint, IReadOnlyCollection<string>, long> _changed;
     readonly BlockingCollection<(uint Slot, string Path, long Ticks)> _events = [];
     readonly List<FileSystemWatcher> _watchers = [];
     readonly CancellationTokenSource _stop = new();
     readonly Thread _pump;
+    readonly VnodeEvents? _vnode;
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _vnodeWrites = new(StringComparer.Ordinal);
 
     /// <summary><paramref name="changed"/> receives (slot, paths, first event timestamp) on the pump thread.</summary>
     internal ModuleWatcher(Action<uint, IReadOnlyCollection<string>, long> changed)
     {
         _changed = changed;
+        if (OperatingSystem.IsMacOS())
+        {
+            try { _vnode = new VnodeEvents(OnVnode); }
+            catch (Exception) { /* no kqueue: the directory watcher alone, as on every other platform */ }
+        }
         _pump = new Thread(Pump) { Name = "ara-watch", IsBackground = true };
         _pump.Start();
     }
@@ -39,7 +50,13 @@ internal sealed class ModuleWatcher : IDisposable
             InternalBufferSize = 64 * 1024,
         };
         static bool Relevant(string path) => IsSourceInput(path) || !Path.HasExtension(path);
-        FileSystemEventHandler on = (_, e) => { if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp())); };
+        FileSystemEventHandler on = (_, e) =>
+        {
+            if (!Relevant(e.FullPath) || (e.ChangeType is WatcherChangeTypes.Changed or WatcherChangeTypes.Created && IsVnodeDuplicate(e.FullPath))) return;
+            _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp()));
+            // A new or replaced source file needs a fresh vnode watch.
+            if (_vnode is not null && IsSourceInput(e.FullPath) && e.ChangeType != WatcherChangeTypes.Deleted) AddVnode(slot, e.FullPath);
+        };
         w.Changed += on;
         w.Created += on;
         w.Deleted += on;
@@ -48,9 +65,43 @@ internal sealed class ModuleWatcher : IDisposable
             var t = Stopwatch.GetTimestamp();
             if (Relevant(e.OldFullPath)) _events.Add((slot, e.OldFullPath, t));
             if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, t));
+            if (_vnode is not null && IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
         };
         w.EnableRaisingEvents = true;
+        if (_vnode is not null)
+            foreach (var file in SourceFiles(dir)) AddVnode(slot, file);
         lock (_watchers) _watchers.Add(w);
+    }
+
+    /// <summary>The file watch of an in-place write: queued at once, and remembered to drop the directory watcher's echo.</summary>
+    void OnVnode(uint slot, string path)
+    {
+        var now = Stopwatch.GetTimestamp();
+        _vnodeWrites[path] = now;
+        _events.Add((slot, path, now));
+    }
+
+    /// <summary>
+    /// FSEvents reports one in-place write as <c>Changed</c> and often <c>Created</c> too. While the file's vnode watch is
+    /// alive it was not replaced (a delete or rename drops the watch), so such an event right after a vnode write is that write.
+    /// </summary>
+    bool IsVnodeDuplicate(string path) =>
+        _vnode is not null && _vnode.Watching(path) && _vnodeWrites.TryGetValue(path, out var at)
+        && Stopwatch.GetElapsedTime(at).TotalMilliseconds < DuplicateWindowMs;
+
+    void AddVnode(uint slot, string path) => _vnode!.Add(slot, path);
+
+    /// <summary>Source inputs under a module folder, skipping build output and hidden folders.</summary>
+    static IEnumerable<string> SourceFiles(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden })
+                .Where(path => IsSourceInput(path) && !Path.GetRelativePath(dir, path).Split(Path.DirectorySeparatorChar)
+                    .Any(part => part is "bin" or "obj" || part.StartsWith('.')))
+                .ToArray();
+        }
+        catch (IOException) { return []; }
     }
 
     void Pump()
@@ -87,6 +138,7 @@ internal sealed class ModuleWatcher : IDisposable
     public void Dispose()
     {
         _stop.Cancel();
+        _vnode?.Dispose();
         lock (_watchers)
         {
             foreach (var w in _watchers) w.Dispose();
