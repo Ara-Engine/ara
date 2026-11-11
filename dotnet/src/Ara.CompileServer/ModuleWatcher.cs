@@ -68,12 +68,14 @@ internal sealed class ModuleWatcher : IDisposable
             if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, t));
             if (_vnode is not null && IsSourceInput(e.FullPath)) AddVnode(slot, e.FullPath);
         };
-        w.EnableRaisingEvents = true;
-        if (_vnode is not null)
-            foreach (var file in SourceFiles(dir))
-            {
-                AddVnode(slot, file);
-            }
+        // A failed start leaves nothing behind, so the caller can retry without watching the folder twice.
+        try
+        {
+            w.EnableRaisingEvents = true;
+            if (_vnode is not null)
+                foreach (var file in SourceFiles(dir)) AddVnode(slot, file);
+        }
+        catch { w.Dispose(); throw; }
         lock (_watchers) _watchers.Add(w);
     }
 
@@ -166,6 +168,9 @@ internal sealed class ModuleWatcher : IDisposable
         }
         catch (OperationCanceledException) { }
     }
+
+    /// <summary>Folder watchers started so far.</summary>
+    internal int Count { get { lock (_watchers) return _watchers.Count; } }
 
     /// <summary>Stops every watcher and the pump.</summary>
     public void Dispose()

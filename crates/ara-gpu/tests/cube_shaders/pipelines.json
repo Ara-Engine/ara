@@ -1,0 +1,26 @@
+{
+  "cubes": {
+    "entries": {
+      "cubesMain": "compute"
+    },
+    "source": "cubes.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "raster": {
+        "blends": [],
+        "cull": "none",
+        "depth_bias": 0.0,
+        "depth_bias_slope": 0.0,
+        "depth_compare": "greaterEqual",
+        "front_face": "counterClockwise",
+        "samples": "One",
+        "vertex_layouts": []
+      },
+      "vertex_stride": 0
+    }
+  }
+}

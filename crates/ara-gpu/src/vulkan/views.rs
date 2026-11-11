@@ -24,7 +24,12 @@ impl VulkanDevice {
         storage: bool,
     ) -> Result<HeapIndex> {
         let raw = self.images.get(image)?.raw;
-        desc.validate(raw.shape, storage)?;
+        desc.validate(raw.shape, [raw.width, raw.height], storage)?;
+        if desc.dimension == ViewDimension::CubeArray && !self.context.info.cube_arrays {
+            return Err(GpuError::Contract(
+                "This device does not support cube-array views".into(),
+            ));
+        }
         if !raw.usage.contains(if storage {
             vk::ImageUsageFlags::STORAGE
         } else {
@@ -48,6 +53,7 @@ impl VulkanDevice {
             ViewDimension::D2 => vk::ImageViewType::TYPE_2D,
             ViewDimension::D2Array => vk::ImageViewType::TYPE_2D_ARRAY,
             ViewDimension::D3 => vk::ImageViewType::TYPE_3D,
+            ViewDimension::CubeArray => vk::ImageViewType::CUBE_ARRAY,
         };
         let format = if storage {
             context::allocation::storage_alias(raw.format).unwrap_or(raw.format)
