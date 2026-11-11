@@ -518,6 +518,52 @@ impl SceneView {
         }
         Ok(())
     }
+    /// Draws the Scene's frame with the editor-hosted Renderlab engine when
+    /// `ARA_SCENE_RENDERER=renderlab`, from the editor's camera; its image is what the
+    /// compositor shows. A failure is reported once and `ara-render` keeps showing the Scene.
+    fn draw_renderlab(&mut self, renderer: &mut Renderer, editor: &Editor) {
+        if !renderlab::requested() || self.renderlab_failed {
+            return;
+        }
+        let Some(content) = self.content.as_mut() else {
+            return;
+        };
+        let store = editor.host.store();
+        let camera = renderlab::camera_view(&editor.state.camera.spec());
+        if let (Some(frame), Some(camera)) = (self.raster_frame.as_mut(), camera) {
+            frame.camera = Some(camera);
+        }
+        let drawn = (|| -> anyhow::Result<()> {
+            if self.renderlab.is_none() {
+                self.renderlab = Some(renderlab::RenderlabScene::new(
+                    &editor.host.root().join(".ara/gpu"),
+                )?);
+            }
+            let frame = self
+                .raster_frame
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no Scene frame"))?;
+            let look = ara_runtime_render::environment_at(frame, editor.state.camera.position());
+            let size = renderer.size();
+            self.renderlab
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("no Renderlab engine"))?
+                .render(
+                    renderer.gpu_mut(),
+                    frame,
+                    &look,
+                    size,
+                    self.revision,
+                    || content.content(frame, store.workspace(), store.schema()),
+                )
+        })();
+        if let Err(error) = drawn {
+            eprintln!(
+                "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
+            );
+            self.renderlab_failed = true;
+        }
+    }
     fn render_raster_attempt(
         &mut self,
         renderer: &mut Renderer,
@@ -673,6 +719,9 @@ impl SceneView {
             });
             self.frame_pending = renderer.scene_frame_pending();
             self.active = renderer.presentation_ready();
+            // Outside the deferred completion scope: Renderlab's CPU-copy handoff waits for
+            // its own submission, which a deferred scope would leave in flight.
+            self.draw_renderlab(renderer, editor);
             return result.map(|_| ()).map_err(Into::into);
         }
         if self
@@ -836,44 +885,8 @@ impl SceneView {
                 self.convergence.completed();
             }
         }
-        if renderlab::requested() && !self.renderlab_failed {
-            // Renderlab draws the same frame from the same camera; its image is what the
-            // compositor shows, ara-render's feeds the ids and the tags.
-            let camera = renderlab::camera_view(&editor.state.camera.spec());
-            if let (Some(frame), Some(camera)) = (self.raster_frame.as_mut(), camera) {
-                frame.camera = Some(camera);
-            }
-            let drawn = (|| -> anyhow::Result<()> {
-                if self.renderlab.is_none() {
-                    self.renderlab = Some(renderlab::RenderlabScene::new(
-                        &editor.host.root().join(".ara/gpu"),
-                    )?);
-                }
-                let frame = self
-                    .raster_frame
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("no Scene frame"))?;
-                let look =
-                    ara_runtime_render::environment_at(frame, editor.state.camera.position());
-                let size = renderer.size();
-                self.renderlab
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("no Renderlab engine"))?
-                    .render(
-                        renderer.gpu_mut(),
-                        frame,
-                        &look,
-                        size,
-                        self.revision,
-                        || content.content(frame, store.workspace(), store.schema()),
-                    )
-            })();
-            if let Err(error) = drawn {
-                eprintln!(
-                    "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
-                );
-                self.renderlab_failed = true;
-            }
+        if !matches!(work, RasterWork::Submitted(_)) {
+            self.draw_renderlab(renderer, editor);
         }
         if matches!(work, RasterWork::Submitted(_)) {
             self.convergence.submitted(settle.max(1));
