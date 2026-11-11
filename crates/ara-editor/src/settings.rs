@@ -344,6 +344,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(4.),
     ),
     def(
+        "hierarchy.alphabetical",
+        User,
+        "General",
+        "Sort the Hierarchy by name",
+        "List siblings alphabetically instead of in their authored order (Unity's alphanumeric sorting).",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
         "assets.folderTree",
         User,
         "General",

@@ -86,8 +86,23 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
             id,
         ));
     }
+    // Authored order, or by name (Unity's alphanumeric sorting).
+    let alphabetical = s
+        .editor
+        .state
+        .settings
+        .get("hierarchy.alphabetical")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     for list in children.values_mut() {
-        list.sort();
+        match alphabetical {
+            true => list.sort_by(|a, b| {
+                a.1.to_lowercase()
+                    .cmp(&b.1.to_lowercase())
+                    .then(a.2.cmp(b.2))
+            }),
+            false => list.sort(),
+        }
     }
     let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let keep: Option<BTreeSet<&str>> = (!terms.is_empty()).then(|| {
@@ -342,6 +357,26 @@ fn filter_menu(s: &Studio) -> El<Studio> {
                 .on_press(run(id, Target::None)),
         );
     }
+    let alphabetical = s
+        .editor
+        .state
+        .settings
+        .get("hierarchy.alphabetical")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    items.push(menu_separator(l));
+    items.push(menu_heading(l, "Sort"));
+    items.push(
+        menu_check(l, &format!("{KEY}/alphabetical"), "By name", alphabetical).on_press(
+            move |s: &mut Studio| {
+                s.local.select = None;
+                s.act(
+                    "editor.settings.set",
+                    json!({"key": "hierarchy.alphabetical", "value": !alphabetical}),
+                );
+            },
+        ),
+    );
     let saved = saved_filters(s);
     if !saved.is_empty() {
         items.push(menu_separator(l));
