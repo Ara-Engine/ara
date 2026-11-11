@@ -1,7 +1,7 @@
 //! One presentation path for windows, embedded surfaces and explicit readbacks.
 use super::*;
-use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk};
 use ara_frame::capture::{FeatureCapture, ShaderMetadata};
+use ara_gpu::{Access, Barrier, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk};
 use ara_render_fidelity::presets::{Capabilities, FidelityPlan, Plan, RenderPath};
 pub use ara_render_fidelity::presets::{QualityChoice, QualityPreset, RenderOptions};
 use ara_render_fidelity::{FidelityView, FrameInput, PostSettings, environment::FrameEnvironment};

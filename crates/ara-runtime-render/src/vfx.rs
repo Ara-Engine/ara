@@ -4,8 +4,11 @@
 //! with the camera shifted into the effect's local space so depth stays consistent.
 //! Presentation only: gameplay never reads GPU particles.
 use anyhow::{Context, Result};
-use ara_frame::{capture::{Capture, CaptureRequest}, scene::CameraSpec};
-use ara_render::{Renderer};
+use ara_frame::{
+    capture::{Capture, CaptureRequest},
+    scene::CameraSpec,
+};
+use ara_render::Renderer;
 use ara_runtime::extract::RenderFrame;
 use ara_vfx::Effect;
 use ara_vfx_gpu::{GpuSystem, Lighting, Placement, SceneColor, SceneDepth, View};

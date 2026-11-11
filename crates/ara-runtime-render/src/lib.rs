@@ -39,8 +39,11 @@ pub mod two_d;
 pub mod vfx;
 
 use anyhow::{Context, Result, ensure};
-use ara_frame::{capture::{Capture, CaptureRequest, ViewMode}, scene::{self, CameraSpec, Scene, Vertex}};
-use ara_render::{Renderer};
+use ara_frame::{
+    capture::{Capture, CaptureRequest, ViewMode},
+    scene::{self, CameraSpec, Scene, Vertex},
+};
+use ara_render::Renderer;
 use ara_runtime::{
     components::Environment,
     extract::{Draw, Geometry, RenderFrame},

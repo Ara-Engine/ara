@@ -47,6 +47,8 @@ struct Target {
     shared: Option<SharedHandoff>,
     /// Packed ids retained on the presenter, beside `image`.
     id: Option<crate::shared::PresentedId>,
+    /// The texture Renderlab writes the view's ids into (`Options::scene_ids`).
+    ids: Option<crate::id_target::IdTarget>,
 }
 
 /// Lighting last applied to the engine, so unchanged frames set nothing.
@@ -83,6 +85,8 @@ pub(crate) struct Bridge {
     skies: Skies,
     /// The frames cross by CPU copy: asked for, or the shared route is unavailable.
     cpu_copy: bool,
+    /// Ids are written beside every frame (`Options::scene_ids`).
+    scene_ids: bool,
     gpu_ms: Option<f64>,
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
@@ -162,12 +166,17 @@ impl Bridge {
             applied: Applied::default(),
             metering: Metering::new(),
             view: None,
-            desc: ViewDesc::new(1, 1),
+            desc: {
+                let mut desc = ViewDesc::new(1, 1);
+                desc.outputs.ids = options.scene_ids;
+                desc
+            },
             last_look: None,
             readbacks,
             max_reflection_roughness: options.max_reflection_roughness,
             skies: Skies::new(options.constant_sky),
             cpu_copy: options.cpu_copy_handoff,
+            scene_ids: options.scene_ids,
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
@@ -300,12 +309,25 @@ impl Bridge {
             .frame;
         let target = self.target.as_mut().context("target ensured above")?;
         // Shared: the copy into the shared slot queues behind the frame right away.
-        if let Some(shared) = &mut target.shared {
-            if crate::shared::scene_ids_pattern() {
-                shared.stage_pattern(&self.engine)?;
+        if self.scene_ids {
+            if target.ids.as_ref().is_none_or(|t| t.size() != view.size) {
+                target.ids = Some(crate::id_target::IdTarget::new(
+                    self.engine.device(),
+                    view.size,
+                ));
             }
-            // When Renderlab's id texture exists, this is the replacement:
-            // shared.set_id(id_texture);
+            if let Some(ids) = &target.ids {
+                ids.write(&mut self.engine, view_id)?;
+            }
+        }
+        if let Some(shared) = &mut target.shared {
+            match &target.ids {
+                Some(ids) => shared.set_id(ids.texture().clone()),
+                None if crate::shared::scene_ids_pattern() => {
+                    shared.stage_pattern(&self.engine)?;
+                }
+                None => {}
+            }
             shared.publish(&self.engine, view_id)?;
         }
 
@@ -360,6 +382,7 @@ impl Bridge {
         // The handoff onto the presenter's device, timed: the shared ring's delivery,
         // or the CPU copy's readback and upload.
         let started = Instant::now();
+        let mut id_texels = None;
         let image = if let Some(shared) = &mut target.shared {
             settle(gpu, target.image, &mut target.fresh)?;
             shared.deliver(gpu, target.image)?;
@@ -369,6 +392,11 @@ impl Bridge {
             target.image
         } else {
             let read = self.engine.capture_view(view_id)?;
+            id_texels = target
+                .ids
+                .as_ref()
+                .map(|ids| ids.read(&self.engine))
+                .transpose()?;
             upload(gpu, target, &read.rgba8)?
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
@@ -376,6 +404,7 @@ impl Bridge {
         Ok(ExternalFrame {
             image,
             id: target.id.as_ref().map(crate::shared::PresentedId::output),
+            id_texels,
             gpu_ms: self.gpu_ms,
             passes: self.passes,
             handoff_ms,
@@ -421,6 +450,7 @@ impl Bridge {
             fresh: true,
             shared,
             id: None,
+            ids: None,
         });
         Ok(())
     }

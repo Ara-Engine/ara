@@ -57,22 +57,77 @@ struct Target {
 }
 
 impl Ids {
-    /// Brings the ids up to `frame` seen at `size`. Uploads outside any deferred
-    /// completion scope: it waits for the copy.
+    /// Brings the ids up to `frame` seen at `size`: the engine's own texels when it
+    /// delivered them (`ExternalFrame::id_texels`), else rasterised from the draws, only
+    /// when they or the camera changed. Uploads outside any deferred completion scope: it
+    /// waits for the copy.
     pub(super) fn update(
         &mut self,
         gpu: &mut GpuDevice,
         frame: &RenderFrame,
         size: [u32; 2],
+        delivered: Option<Vec<u8>>,
     ) -> Result<()> {
         let key = change_key(frame, size);
-        if self.key == Some(key) && self.target.as_ref().is_some_and(|t| t.size == size) {
+        let delivered = delivered.filter(|t| t.len() == size[0] as usize * size[1] as usize * 4);
+        // A converged still frame delivers the same ids again: nothing to upload.
+        if self.size == size
+            && self.target.is_some()
+            && delivered.as_deref() == Some(self.texels.as_slice())
+        {
+            self.key = Some(key);
             return Ok(());
         }
-        self.entities = entities(frame);
-        self.texels = crate::studio::trace::time("scene ids rasterise", Duration::ZERO, || {
-            self.rasteriser.ids(frame, size)
+        if delivered.is_none()
+            && self.key == Some(key)
+            && self.target.as_ref().is_some_and(|t| t.size == size)
+        {
+            return Ok(());
+        }
+        crate::studio::trace::log(|| {
+            format!(
+                "scene ids {size:?} from {} (target {:?})",
+                if delivered.is_some() {
+                    "the engine"
+                } else {
+                    "the draws"
+                },
+                self.target.as_ref().map(|t| t.size)
+            )
         });
+        // Debug (`ARA_SCENE_IDS_COMPARE=1`): how the engine's ids agree with the rasterised.
+        if let (Some(engine), true) = (
+            &delivered,
+            std::env::var_os("ARA_SCENE_IDS_COMPARE").is_some(),
+        ) {
+            let drawn = self.rasteriser.ids(frame, size);
+            let id = |t: &[u8], n: usize| {
+                u32::from_le_bytes([t[n * 4], t[n * 4 + 1], t[n * 4 + 2], t[n * 4 + 3]])
+            };
+            let mut counts = [0usize; 4];
+            for n in 0..engine.len() / 4 {
+                let (a, b) = (id(engine, n), id(&drawn, n));
+                let k = match (a, b) {
+                    (0, 0) => continue,
+                    (a, b) if a == b => 0,
+                    (0, _) => 1,
+                    (_, 0) => 2,
+                    _ => 3,
+                };
+                counts[k] += 1;
+            }
+            eprintln!(
+                "ARA_SCENE_IDS_COMPARE: {} agree, {} drawn only, {} engine only, {} differ",
+                counts[0], counts[1], counts[2], counts[3]
+            );
+        }
+        self.entities = entities(frame);
+        self.texels = match delivered {
+            Some(texels) => texels,
+            None => crate::studio::trace::time("scene ids rasterise", Duration::ZERO, || {
+                self.rasteriser.ids(frame, size)
+            }),
+        };
         self.size = size;
         if self.target.as_ref().is_some_and(|t| t.size != size) {
             self.release(gpu)?;

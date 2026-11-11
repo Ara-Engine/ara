@@ -33,6 +33,8 @@ mod grade;
 #[cfg(all(test, not(target_vendor = "apple")))]
 mod id_slot;
 #[cfg(not(target_vendor = "apple"))]
+mod id_target;
+#[cfg(not(target_vendor = "apple"))]
 mod lighting;
 mod meter;
 mod scene;
@@ -86,6 +88,10 @@ pub struct Options {
     /// Light the scene with a constant sky of the sky image's mean radiance instead of
     /// the image itself. For A/B measurement of what a sky map costs in Renderlab.
     pub constant_sky: bool,
+    /// Write the view's object ids beside each frame (`ExternalFrame::id`, `id_texels`):
+    /// the Scene host's outlines, hover and clicks. Draws carry their index in the frame's
+    /// `draws` plus one. Off: no id pass runs.
+    pub scene_ids: bool,
 }
 
 /// Renderlab behind Ara's presenter.

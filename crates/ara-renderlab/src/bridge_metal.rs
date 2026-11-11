@@ -225,6 +225,7 @@ impl Bridge {
         Ok(ExternalFrame {
             image,
             id: None,
+            id_texels: None,
             gpu_ms,
             passes,
             // The frame was drawn on the presenter's device: nothing crossed.

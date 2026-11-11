@@ -48,6 +48,8 @@ impl RenderlabScene {
         let renderlab = Renderlab::new(&Options {
             path: PathChoice::Auto,
             pipeline_cache: Some(cache.join("renderlab")),
+            // `ARA_SCENE_IDS_SYNTHETIC=1` keeps the host's own rasterised ids (the A/B switch).
+            scene_ids: std::env::var_os("ARA_SCENE_IDS_SYNTHETIC").is_none(),
             ..Default::default()
         })?;
         Ok(Self {
@@ -97,7 +99,7 @@ impl RenderlabScene {
         if let Some(id) = rendered.id {
             PresentationImage::publish(&mut self.published_ids, gpu, id, size)?;
         }
-        self.ids.update(gpu, frame, size)?;
+        self.ids.update(gpu, frame, size, rendered.id_texels)?;
         Ok(())
     }
 

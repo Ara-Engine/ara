@@ -11,8 +11,8 @@ use crate::{
     fidelity::{EnvironmentMap, native::Content},
 };
 use anyhow::{Context, Result};
-use ara_gpu::{GpuDevice, Image, commands::PassTiming};
 use ara_frame::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
+use ara_gpu::{GpuDevice, Image, commands::PassTiming};
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_runtime::{extract::Draw, material::MaterialAsset};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
@@ -59,6 +59,10 @@ pub struct ExternalFrame {
     /// 0xFFFF_FFFF a hit without an id). `None` when the renderer has no id image:
     /// the host rasterises its own.
     pub id: Option<Image>,
+    /// The same packed ids as RGBA8 texels, rows top first with no padding, when the renderer
+    /// delivered them by CPU copy (what a click reads, bit for bit). `None` on the shared
+    /// handoff, where `id` is the only copy.
+    pub id_texels: Option<Vec<u8>>,
     /// GPU milliseconds the external renderer measured for a recent frame, when it
     /// has timestamps (it may lag the presented frame).
     pub gpu_ms: Option<f64>,
