@@ -49,7 +49,9 @@ internal sealed class ModuleWatcher : IDisposable
             if (Relevant(e.OldFullPath)) _events.Add((slot, e.OldFullPath, t));
             if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, t));
         };
-        w.EnableRaisingEvents = true;
+        // A failed start leaves nothing behind, so the caller can retry without watching the folder twice.
+        try { w.EnableRaisingEvents = true; }
+        catch { w.Dispose(); throw; }
         lock (_watchers) _watchers.Add(w);
     }
 
@@ -82,6 +84,9 @@ internal sealed class ModuleWatcher : IDisposable
         }
         catch (OperationCanceledException) { }
     }
+
+    /// <summary>Folder watchers started so far.</summary>
+    internal int Count { get { lock (_watchers) return _watchers.Count; } }
 
     /// <summary>Stops every watcher and the pump.</summary>
     public void Dispose()
