@@ -18,7 +18,7 @@ impl NativeUi {
                     .command_buffer_count(1),
             )?[0];
             self.fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             {
                 let mut timeline = vk::SemaphoreTypeCreateInfo::default()
                     .semaphore_type(vk::SemaphoreType::TIMELINE);
