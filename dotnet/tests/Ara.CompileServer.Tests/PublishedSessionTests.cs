@@ -175,4 +175,43 @@ public sealed class PublishedSessionTests
         Assert.Equal(source, server.CommittedTexts("Game")![path]);
         Assert.True(sink.Empty);
     }
+
+    /// <summary>
+    /// A published module rebuilt from its committed text, or from the files on disk, hands Roslyn the trees in
+    /// path order: hash-map order changes per process and tree order reaches the emitted metadata.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_published_rebuild_compiles_user_trees_in_path_order(bool fromDisk)
+    {
+        var directory = InstalledTools.Scratch("published-order");
+        try
+        {
+            // 48 files: hash-map order matches path order with probability 1/48!.
+            var names = Enumerable.Range(0, 48).Select(i => $"F{(i * 17) % 48:D2}").ToArray();
+            var sources = names.Select(name => (Path: System.IO.Path.Combine(directory, name + ".cs"),
+                Text: $"namespace Order; public static class {name} {{ public static int V => 1; }}")).ToArray();
+            foreach (var (path, text) in sources) File.WriteAllText(path, text);
+            var compiler = new ModuleCompiler("Core", [typeof(Behaviour).Assembly.Location]);
+            var user = compiler.Create(sources.Select(source => ModuleCompiler.Parse(source.Path, source.Text)), false, []);
+            var (image, errors) = ModuleCompiler.Emit(user);
+            Assert.Empty(errors);
+            Assert.NotNull(image);
+            var snapshot = new PublishedSnapshot("Core", false, 0, "published-core", PublishedSnapshot.Hash(image.Pe),
+                PublishedSnapshot.Hash(image.Pdb), image.Pe, image.Pdb,
+                [.. sources.Select(source => new PublishedSource(source.Path, source.Text, PublishedSnapshot.TextHash(source.Text)))]);
+            var module = new ModuleSession(0, "Core", directory, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", new AnalyzerSet());
+            Assert.True(module.ImportPublished(snapshot));
+            var context = new Context(module);
+            // Compile reads the folder (a saved edit makes the first rebuild); Full rebuilds the committed text.
+            if (fromDisk) File.WriteAllText(sources[0].Path, sources[0].Text.Replace("=> 1;", "=> 2;", StringComparison.Ordinal));
+            var outcome = fromDisk ? module.Compile(sources.Select(source => source.Path), 0, context) : module.Full(Escalation.Requested, null, context);
+            Assert.Equal(OutcomeKind.Image, outcome.Kind);
+            var order = outcome.Next!.Final.SyntaxTrees.Select(tree => System.IO.Path.GetFileNameWithoutExtension(tree.FilePath))
+                .Where(name => name.Length == 3 && name[0] == 'F' && char.IsAsciiDigit(name[1])).ToArray();
+            Assert.Equal(names.Order(StringComparer.Ordinal), order);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
 }

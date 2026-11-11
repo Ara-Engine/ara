@@ -34,7 +34,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal TimeSpan AgentQuiet = TimeSpan.FromMilliseconds(150);
     readonly Func<long> _clock;
 
-    enum WorkKind { Initial, Change, Heat, Rebuild, Recover, PublishedRebind }
+    enum WorkKind { Initial, Change, Heat, Rebuild, Recover, PublishedRebind, Verify }
 
     sealed class Work(WorkKind kind, uint slot, uint origin, long tEvent)
     {
@@ -61,6 +61,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly Dictionary<string, Guid> _references = new(ModuleState.Paths);
     readonly List<FileSystemWatcher> _referenceWatchers = [];
     readonly List<Task> _watchStarts = [];
+    readonly HashSet<string> _referenceWatched = new(ModuleState.Paths);
     readonly AutoResetEvent _wake = new(false);
     readonly CancellationTokenSource _stop = new();
     readonly Thread _worker;
@@ -107,7 +108,6 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0,
         PublishedSnapshot? published = null)
     {
-        var requested = DateTime.UtcNow;
         ModuleSession m;
         lock (_lock)
         {
@@ -124,6 +124,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
+            // The MVID baselines are taken now, before the first compile reads the references, so a rebuild of a
+            // referenced assembly after this point shows as drift (only the watchers start later).
+            foreach (var a in assemblies) RecordReference(a);
             if (initial) Enqueue(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
             else if (m.PublishedReferencesDrift(this))
                 Enqueue(new Work(WorkKind.PublishedRebind, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
@@ -133,32 +136,37 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         _wake.Set();
         // Watchers start after the first compile is queued and off this thread: a FileSystemWatcher takes
         // ~200 ms to start on macOS, which used to delay the first compile and the next Watch message.
-        lock (_watchStarts) _watchStarts.Add(Task.Run(() => StartWatching(slot, assemblies, watch, requested)));
+        lock (_watchStarts) _watchStarts.Add(Task.Run(() => StartWatching(slot, assemblies, watch)));
     }
 
     /// <summary>
-    /// Watches the module folder and its reference assemblies. A save between the request and the watcher going live
-    /// would be missed by both the first compile (which may already have read the file) and the watcher, so
-    /// files modified since the request are compiled as a change once the watcher is live.
+    /// Watches the module folder and its reference assemblies, then queues a verification behind the first compile.
+    /// Whatever happened to the sources between the request and the watcher going live (a save, a delete, a file
+    /// moved in) is in neither the watcher's events nor, necessarily, the first compile's reads, so the verification
+    /// compares the sources' actual bytes with what the module compiled and compiles any difference as a change.
+    /// It does not trust modification times, which are coarse on some file systems and unchanged by a rename.
+    /// A failure to start is logged and retried once; the module is never silently left unwatched.
     /// </summary>
-    internal void StartWatching(uint slot, IReadOnlyList<string> assemblies, bool watch, DateTime requested)
+    internal void StartWatching(uint slot, IReadOnlyList<string> assemblies, bool watch)
     {
-        ModuleSession m;
-        lock (_lock) m = _bySlot[slot];
-        try
+        string? name = null;
+        for (var attempt = 1; attempt <= 2 && !_stop.IsCancellationRequested; attempt++)
         {
-            if (_stop.IsCancellationRequested) return;
-            if (watch && !m.ReadOnlyPublished)
+            try
             {
-                _watcher.Watch(slot, m.WatchDirectory);
-                var late = m.SourceFiles().Where(path => File.GetLastWriteTimeUtc(path) >= requested).ToArray();
-                if (late.Length > 0) OnWatcher(slot, late, Stopwatch.GetTimestamp());
+                ModuleSession m;
+                lock (_lock) m = _bySlot[slot];
+                name = m.Name;
+                if (watch && !m.ReadOnlyPublished) _watcher.Watch(slot, m.WatchDirectory);
+                foreach (var a in assemblies) WatchReference(a);
+                if (watch && !m.ReadOnlyPublished) Enqueue(new Work(WorkKind.Verify, slot, AbiConst.OriginHuman, Stopwatch.GetTimestamp()));
+                return;
             }
-            foreach (var a in assemblies) WatchReference(a);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ObjectDisposedException)
-        {
-            Log(1, $"module `{m.Name}`: file watching did not start: {error.Message}");
+            catch (Exception error) when (!_stop.IsCancellationRequested)
+            {
+                Log(attempt == 1 ? 0u : 1u, $"module `{name ?? slot.ToString()}`: file watching did not start{(attempt == 1 ? ", retrying" : "; edits to it will not reload until the project reopens")}: {error.Message}");
+                if (attempt == 1) Thread.Sleep(200);
+            }
         }
     }
 
@@ -394,6 +402,14 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             return;
         }
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
+        if (w.Kind == WorkKind.Verify)
+        {
+            // Nothing to do (and nothing reported) unless the sources differ from what the module compiled.
+            var drift = m.DriftedSources();
+            if (drift.Length == 0) return;
+            w = new Work(WorkKind.Change, w.Slot, w.Origin, w.TEvent);
+            w.Paths.UnionWith(drift);
+        }
         if (w.Kind == WorkKind.Heat && m.LoadedHot == (w.Hot && Enc)) return;
         Begin(m.Slot, m.Name, m.Profile);
         CompileState(true);
@@ -796,13 +812,19 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// host's default context, which cannot unload: when it changes, nothing can reload in this
     /// process (L4) until the play process restarts.
     /// </summary>
+    void RecordReference(string path)
+    {
+        path = Path.GetFullPath(path);
+        if (_references.ContainsKey(path) || !File.Exists(path)) return;
+        _references[path] = Mvid(path) ?? Guid.Empty;
+    }
+
     void WatchReference(string path)
     {
         path = Path.GetFullPath(path);
         lock (_lock)
         {
-            if (_references.ContainsKey(path) || !File.Exists(path)) return;
-            _references[path] = Mvid(path) ?? Guid.Empty;
+            if (!_references.ContainsKey(path) || !_referenceWatched.Add(path)) return;
         }
         var w = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path))
         {
@@ -813,6 +835,8 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         w.Created += on;
         w.EnableRaisingEvents = true;
         lock (_referenceWatchers) _referenceWatchers.Add(w);
+        // A rebuild between the baseline and the watcher going live raised no event.
+        ThreadPool.QueueUserWorkItem(_ => CheckReference(path));
     }
 
     void CheckReference(string path)

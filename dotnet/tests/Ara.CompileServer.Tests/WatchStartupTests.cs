@@ -3,8 +3,8 @@ using Ara.Hosting;
 
 namespace Ara.CompileServer.Tests;
 
-/// <summary>The first compile no longer waits for the file watchers; a save made meanwhile must still be compiled.</summary>
-public sealed class WatchStartupTests
+/// <summary>The first compile no longer waits for the file watchers; whatever happens to the sources meanwhile must still be compiled.</summary>
+public sealed class WatchStartupTests : IDisposable
 {
     const string Game = """
         namespace Game;
@@ -23,28 +23,90 @@ public sealed class WatchStartupTests
         }
         """;
 
+    const string Extra = "namespace Game; public static class Extra { public static int Two() => 2; }";
+
+    readonly Modules _modules = new();
+    readonly string _dir;
+    readonly string _path;
+    readonly string[] _assemblies = [typeof(Behaviour).Assembly.Location];
+
+    /// <summary>A hot module of two files, compiled once with no watcher (the state before the watchers start).</summary>
+    public WatchStartupTests()
+    {
+        _dir = Path.Combine(_modules.Root, "Game");
+        Directory.CreateDirectory(_dir);
+        _path = Path.Combine(_dir, "Code.cs");
+        File.WriteAllText(_path, Game);
+        File.WriteAllText(Path.Combine(_dir, "Extra.cs"), Extra);
+        _modules.Server.Watch(0, "Game", _dir, true, _assemblies, [], "gameplay", watch: false);
+        _modules.Idle();
+        Assert.Equal(MessageKind.Reload, _modules.Sink.Next().Kind);
+    }
+
+    bool Compiled(Func<IEnumerable<string>, bool> condition)
+    {
+        var deadline = Stopwatch.GetTimestamp() + 30 * Stopwatch.Frequency;
+        while (Stopwatch.GetTimestamp() < deadline)
+        {
+            if (_modules.Server.Dependency("Game") is { } state && condition(state.Texts.Values)) return true;
+            Thread.Sleep(50);
+        }
+        return false;
+    }
+
     [Fact]
     public void A_save_made_before_the_watcher_goes_live_is_compiled_once_it_does()
     {
-        using var modules = new Modules();
-        var dir = Path.Combine(modules.Root, "Game");
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, "Code.cs");
-        File.WriteAllText(path, Game);
-        var assemblies = new[] { typeof(Behaviour).Assembly.Location };
-        // No watcher yet, and the first compile has read the original text.
-        var requested = DateTime.UtcNow.AddSeconds(-1);
-        modules.Server.Watch(0, "Game", dir, true, assemblies, [], "gameplay", watch: false);
-        modules.Idle();
-        File.WriteAllText(path, Game.Replace("c.Value += 1;", "c.Value += 7;", StringComparison.Ordinal));
-        // The watcher starts: the save predates it, so it must be compiled as a change.
-        modules.Server.StartWatching(0, assemblies, watch: true, requested);
-        var deadline = Stopwatch.GetTimestamp() + 30 * Stopwatch.Frequency;
-        while (!(modules.Server.Dependency("Game") is { } state && state.Texts.Values.Any(text => text.Contains("c.Value += 7;", StringComparison.Ordinal))))
-        {
-            Assert.True(Stopwatch.GetTimestamp() < deadline, "the save was never compiled");
-            Thread.Sleep(50);
-        }
+        File.WriteAllText(_path, Game.Replace("c.Value += 1;", "c.Value += 7;", StringComparison.Ordinal));
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.True(Compiled(texts => texts.Any(text => text.Contains("c.Value += 7;", StringComparison.Ordinal))), "the save was never compiled");
+    }
+
+    /// <summary>NTFS and some Linux file systems stamp writes from a coarse clock, so a save can carry a time before the request.</summary>
+    [Fact]
+    public void A_save_whose_file_time_predates_the_request_is_still_found()
+    {
+        File.WriteAllText(_path, Game.Replace("c.Value += 1;", "c.Value += 8;", StringComparison.Ordinal));
+        File.SetLastWriteTimeUtc(_path, DateTime.UtcNow.AddHours(-1));
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.True(Compiled(texts => texts.Any(text => text.Contains("c.Value += 8;", StringComparison.Ordinal))), "the save was never compiled");
+    }
+
+    [Fact]
+    public void A_file_deleted_before_the_watcher_goes_live_is_found()
+    {
+        File.Delete(Path.Combine(_dir, "Extra.cs"));
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.True(Compiled(texts => !texts.Any(text => text.Contains("class Extra", StringComparison.Ordinal))), "the deleted file stayed compiled");
+    }
+
+    /// <summary>A rename or a copy that keeps the time (mv, git mv, cp -p) leaves a file with an old modification time.</summary>
+    [Fact]
+    public void A_file_moved_in_with_an_old_time_is_found()
+    {
+        var outside = Path.Combine(_modules.Root, "Moved.cs");
+        File.WriteAllText(outside, "namespace Game; public static class Moved { public static int Three() => 3; }");
+        File.SetLastWriteTimeUtc(outside, DateTime.UtcNow.AddDays(-3));
+        File.Move(outside, Path.Combine(_dir, "Moved.cs"));
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
+        Assert.True(Compiled(texts => texts.Any(text => text.Contains("class Moved", StringComparison.Ordinal))), "the moved-in file was never compiled");
+    }
+
+    [Fact]
+    public void When_nothing_changed_the_verification_compiles_and_reports_nothing()
+    {
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
+        _modules.Idle();
+        Thread.Sleep(300); // the start runs on its own thread; its verification is queued once the watcher is live
+        _modules.Idle();
+        Assert.True(_modules.Sink.Empty, "an unchanged module sent messages");
+    }
+
+    [Fact]
+    public void A_start_that_fails_is_contained_not_thrown()
+    {
+        Directory.Delete(_dir, recursive: true); // the module folder vanished between the request and the start
+        _modules.Server.StartWatching(0, _assemblies, watch: true);
     }
 
     [Fact]
@@ -54,7 +116,9 @@ public sealed class WatchStartupTests
         var dir = Path.Combine(modules.Root, "Game");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "Code.cs"), Game);
-        modules.Server.Watch(0, "Game", dir, true, [typeof(Behaviour).Assembly.Location], [], "gameplay", watch: true);
+        modules.Server.Watch(0, "Game", dir, true, _assemblies, [], "gameplay", watch: true);
         modules.Dispose();
     }
+
+    public void Dispose() => _modules.Dispose();
 }
