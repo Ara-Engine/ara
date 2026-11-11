@@ -100,6 +100,8 @@ equivalent.
   `state::Previews`, models/prefabs drag into the Scene), Console, Problems (one-click
   typed fixes via `fixes::apply_fix`); other panels say they are coming.
 - `preferences.rs`: Preferences / Project Settings generated from `crate::settings::DEFS`.
+- `quit.rs`: File › Exit and the window's close ask first when work could be lost; `daemon.shutdown` closes without asking (`closing` in `mod.rs`).
+- `zoom.rs`: the zoom step for small windows (one table; `ARA_UI_ZOOM` forces one).
 - `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
 - `commands.rs`: which registry commands the studio runs, `run`, `applies` (context
   menus), the keymap in force (`Bindings`, from `catalog::keymap`), macOS glyphs.

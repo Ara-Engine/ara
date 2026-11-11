@@ -44,6 +44,7 @@ mod preferences;
 mod present;
 pub(crate) mod probes;
 mod profiler;
+mod quit;
 mod rect_tool;
 mod references;
 mod running;
@@ -1381,7 +1382,7 @@ fn pump(
             trace::log(|| format!("event {event:?}"));
         }
         match event {
-            Event::Close => return Ok(true),
+            Event::Close => rt.update(quit::request),
             Event::Resized(w, h) => {
                 // The zoom follows the window's width (`zoom`).
                 let platform = surface.scale();

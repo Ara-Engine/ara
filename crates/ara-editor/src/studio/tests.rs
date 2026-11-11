@@ -1731,7 +1731,8 @@ fn file_play_and_assets_commands_run_in_the_studio() {
     assert!(!rt.state().editor.state.asset_favourites.is_empty());
     run(&mut rt, "assets.search.scope");
     assert!(rt.state().editor.state.asset_search_folder_only);
-    // Exit asks the host to close.
+    // Exit asks the host to close (with the documents written, nothing is left to ask about).
+    rt.update(|s| s.editor.host.flush());
     run(&mut rt, "file.exit");
     assert!(rt.state().local.quit);
 }
@@ -7523,6 +7524,17 @@ fn pass_three_captures() {
         );
         shot(&mut rt, &format!("{size}-assets-filter-tooltip"));
         rt.pointer_move(0.0, 0.0);
+        // Exit with a number mid-drag asks first.
+        rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+        rt.update(|s| super::commands::run(s, "file.exit", &crate::catalog::Target::None));
+        settle(&mut rt);
+        assert!(rt.find("quit/save").is_some(), "the question shows");
+        for _ in 0..40 {
+            rt.frame(FRAME);
+        }
+        shot(&mut rt, &format!("{size}-quit-dialog"));
+        press(&mut rt, "quit/cancel");
+        rt.update(|s| s.local.scrub = None);
         // Settings, filtered to the theme control.
         rt.update(|s| super::commands::run(s, "edit.preferences", &crate::catalog::Target::None));
         settle(&mut rt);
@@ -7559,4 +7571,47 @@ fn a_deep_path_folds_its_leading_folders_into_one_step() {
     // What it reserves is what it shows.
     let c = crumbs_fit("Studio", &parts, Some(260.0));
     assert!(c.width <= 260.0, "{} fits 260", c.width);
+}
+
+#[test]
+fn exit_asks_only_when_work_could_be_lost_and_a_tool_shutdown_never_asks() {
+    use crate::catalog::Target;
+    let exit = |rt: &mut Runtime<Studio>| {
+        rt.update(|s| super::commands::run(s, "file.exit", &Target::None));
+        settle(rt);
+    };
+    // Nothing at risk: it closes at once.
+    let mut rt = open();
+    rt.update(|s| s.editor.host.flush());
+    exit(&mut rt);
+    assert!(rt.state().local.quit, "closes without asking");
+    assert!(rt.state().local.quit_ask.is_none());
+
+    // A number being dragged: it asks first, and Cancel keeps the editor open.
+    let mut rt = open();
+    rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+    exit(&mut rt);
+    assert!(!rt.state().local.quit, "asks first");
+    assert!(rt.state().local.quit_ask.is_some());
+    assert!(rt.find("quit/save").is_some() && rt.find("quit/discard").is_some());
+    press(&mut rt, "quit/cancel");
+    assert!(rt.state().local.quit_ask.is_none() && !rt.state().local.quit);
+
+    // Save and close commits the drag, then closes.
+    exit(&mut rt);
+    press(&mut rt, "quit/save");
+    assert!(rt.state().local.quit);
+    assert_eq!(
+        position(&rt, "e_box")[0].as_f64(),
+        Some(2.0),
+        "the drag's value was committed"
+    );
+
+    // Discard and close drops the drag.
+    let mut rt = open();
+    rt.update(|s| s.local.scrub = Some(("Transform.position".into(), Some(0), 0.0, 2.0)));
+    exit(&mut rt);
+    press(&mut rt, "quit/discard");
+    assert!(rt.state().local.quit && rt.state().local.scrub.is_none());
+    assert_eq!(position(&rt, "e_box")[0].as_f64(), Some(0.0));
 }
