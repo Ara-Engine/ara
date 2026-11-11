@@ -1958,7 +1958,7 @@ dependencies = [
  "glam 0.30.10",
  "glam 0.34.1",
  "image",
- "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=89cd84a1b81f955884fa8a2415660cd43b33fd67)",
+ "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132)",
  "renderlab 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=a0094f6a6e423cd8fb12aa133dcb0def94f2dd81)",
  "wgpu",
 ]
@@ -11432,7 +11432,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "renderlab"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=89cd84a1b81f955884fa8a2415660cd43b33fd67#89cd84a1b81f955884fa8a2415660cd43b33fd67"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132#2395c6bcdbacae93f61f40c0f62f373b007d0132"
 dependencies = [
  "anyhow",
  "ara-gpu",
@@ -11443,7 +11443,7 @@ dependencies = [
  "naga",
  "pollster",
  "rayon",
- "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=89cd84a1b81f955884fa8a2415660cd43b33fd67)",
+ "renderlab-asset 0.1.3 (git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132)",
  "serde_json",
  "sha2 0.10.9",
  "wgpu",
@@ -11467,7 +11467,7 @@ dependencies = [
 [[package]]
 name = "renderlab-asset"
 version = "0.1.3"
-source = "git+https://github.com/Ara-Engine/renderlab?rev=89cd84a1b81f955884fa8a2415660cd43b33fd67#89cd84a1b81f955884fa8a2415660cd43b33fd67"
+source = "git+https://github.com/Ara-Engine/renderlab?rev=2395c6bcdbacae93f61f40c0f62f373b007d0132#2395c6bcdbacae93f61f40c0f62f373b007d0132"
 
 [[package]]
 name = "renderlab-asset"
