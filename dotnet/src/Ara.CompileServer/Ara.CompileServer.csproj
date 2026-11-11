@@ -10,11 +10,18 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Workstation concurrent GC keeps the footprint small next to the editor. -->
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
-    <!-- No tiering: every Roslyn method is JIT-optimized on first use (the initial build and the
-         prewarm pay for it). With tiering, emit paths that run once per edit sit at tier 0 or in
-         PGO instrumentation for many edits: a 5.2k-line L3 emit took p50 167-207 / p95 226-314 ms
-         with tiering and 86-100 / 107-137 ms without (interleaved runs, 14-81% background CPU). -->
-    <TieredCompilation>false</TieredCompilation>
+    <!-- ReadyToRun (below) makes Roslyn start without JIT, so the server tiers normally. Without it
+         (-p:AraReadyToRun=false) every Roslyn method would run at tier 0 for many edits, so keep
+         the older no-tiering setting: every method is JIT-optimized on first use. -->
+    <TieredCompilation Condition="'$(AraReadyToRun)' == 'false'">false</TieredCompilation>
+    <TieredPGO Condition="'$(AraReadyToRun)' != 'false'">false</TieredPGO>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(AraReadyToRun)' != 'false'">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Keep outputs at artifacts/bin/<Project>/release; the host looks there. -->
+    <ArtifactsPivots>$(Configuration.ToLowerInvariant())</ArtifactsPivots>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" />
@@ -26,7 +33,26 @@
     <ProjectReference Include="../Ara.Analyzers/Ara.Analyzers.csproj" />
     <ProjectReference Include="../Ara.Analyzers.CodeFixes/Ara.Analyzers.CodeFixes.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(AraReadyToRun)' != 'false'">
+    <!-- Start promoting hot Roslyn methods to tier 1 at once instead of after a 100 ms quiet period:
+         without it the first ~30 edits ran 5-10% slower than the old no-tiering server. -->
+    <RuntimeHostConfigurationOption Include="System.Runtime.TieredCompilation.CallCountingDelayMs" Value="0" />
+  </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Ara.CompileServer.Tests" />
   </ItemGroup>
+  <!-- After every build, publish-with-ReadyToRun into obj/ and copy the precompiled assemblies over the
+       build output. Roslyn ships IL only, so a cold server spent ~1.2 s of a 2.4 s start JIT-compiling it
+       (docs/dev/script-host-benchmarks.md). The inner publish sets AraInnerPublish to stop recursion. -->
+  <Target Name="AraReadyToRun" AfterTargets="Build" Condition="'$(AraReadyToRun)' != 'false' and '$(AraInnerPublish)' != 'true'">
+    <PropertyGroup>
+      <!-- IntermediateOutputPath is already absolute under ArtifactsPath; NormalizeDirectory resolves either form. -->
+      <_AraR2RDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'r2r'))</_AraR2RDir>
+    </PropertyGroup>
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish" Properties="NoBuild=true;AraInnerPublish=true;PublishDir=$(_AraR2RDir)" />
+    <ItemGroup>
+      <_AraR2RFile Include="$(_AraR2RDir)*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_AraR2RFile)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
