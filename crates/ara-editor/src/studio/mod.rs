@@ -43,6 +43,7 @@ mod scene;
 mod scene_overlays;
 mod scripts;
 mod shortcuts;
+mod snapping;
 pub mod state;
 mod style;
 #[cfg(test)]
@@ -61,6 +62,9 @@ use crate::transport::Server;
 use crate::world::EditWorldView as _;
 use crate::{Editor, settings};
 pub use state::Studio;
+
+/// V, held during a move to snap vertex to vertex (a virtual-key code).
+const VERTEX_KEY: u16 = 0x56;
 
 /// The Scene view's native layer.
 pub(crate) const SCENE_LAYER: &str = "scene";
@@ -197,6 +201,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut shown_extent = [0, 0];
     // The tag of the Scene frame last composited (`Renderer::shown_frame_tag`).
     let mut shown_tag = u64::MAX;
+    // The running drag's snap source, captured at its first snapped move.
+    let mut snap: Option<snapping::Snap> = None;
     // The graph canvas's size when last drawn.
     let mut graph_extent = ("", [0, 0]);
     // A composite is owed (something changed) but has not presented yet.
@@ -522,6 +528,38 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
+        // A move with vertex or surface snapping: the presented geometry answers it.
+        if let Some(request) = rt.touch(|s| s.local.snap.take()) {
+            let channels = compositor.channels(&renderer, &view, revision);
+            let target_of = |id: u64| channels.target_of(id).map(str::to_owned);
+            rt.update(|s| {
+                if snap.as_ref().is_none_or(|c| !c.live(&s.editor, &view)) {
+                    snap = snapping::Snap::capture(
+                        &s.editor,
+                        &view,
+                        &scene_view,
+                        &target_of,
+                        &request,
+                    );
+                }
+                let Some(capture) = snap.as_ref() else {
+                    return;
+                };
+                match capture.delta(&s.editor, &scene_view, &request) {
+                    Ok((delta, said)) => {
+                        if let Some(gesture) = s.editor.gesture.as_mut() {
+                            gesture.translate_world(delta);
+                        }
+                        note(s, said);
+                    }
+                    Err(why) => note(s, why),
+                }
+            });
+            scene_dirty = true;
+        }
+        if rt.state().local.gizmo.is_none() {
+            snap = None;
+        }
         // Drop to Surface (End): the presented geometry answers its rays.
         if rt.touch(|s| std::mem::take(&mut s.local.drop_to_surface)) {
             let channels = compositor.channels(&renderer, &view, revision);
@@ -624,7 +662,22 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         let visible = true;
         // Play embeds its player at the Game view's size (`Editor::embed_play`).
         if let Some(r) = game_rect.filter(|r| r.width() >= 64.0 && r.height() >= 64.0) {
-            let (size, scale) = ([r.width() as u32, r.height() as u32], rt.scale());
+            // A fixed resolution plays at its own size, at 1x; the view scales it to fit.
+            let fixed = rt.touch(|s| {
+                let aspect = s
+                    .editor
+                    .state
+                    .settings
+                    .get("game.aspect")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("free")
+                    .to_owned();
+                game::resolution(&aspect)
+            });
+            let (size, scale) = match fixed {
+                Some(size) => (size, 1.0),
+                None => ([r.width() as u32, r.height() as u32], rt.scale()),
+            };
             rt.touch(|s| {
                 s.editor.game_size = size;
                 s.editor.game_scale = scale;
@@ -684,6 +737,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             };
             let extent = [r.width() as u32, r.height() as u32];
             rt.touch(|s| graph::sync(s, domain));
+            rt.touch(graph::previews);
             if (rt.state().graph.dirty || graph_extent != (name, extent))
                 && graph_layer.ready(&renderer)?
             {
@@ -1025,10 +1079,20 @@ fn pump(
                 if FLY_KEYS.contains(&vk) && rt.state().local.flying {
                     rt.touch(|s| s.local.held.insert(vk));
                 }
+                // V held during a move snaps vertex to vertex.
+                if vk == VERTEX_KEY && rt.state().local.gizmo.is_some() {
+                    rt.touch(|s| s.local.vertex_key = true);
+                    continue;
+                }
                 rt.key_with(vk, modifiers());
             }
             Event::KeyUp(vk) => {
-                rt.touch(|s| s.local.held.remove(&vk));
+                rt.touch(|s| {
+                    s.local.held.remove(&vk);
+                    if vk == VERTEX_KEY {
+                        s.local.vertex_key = false;
+                    }
+                });
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Event::Char(c) => rt.type_text(c.encode_utf8(&mut [0; 4])),
