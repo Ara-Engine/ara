@@ -182,12 +182,15 @@ impl Gpu {
                 vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
             let mut ray = vk::PhysicalDeviceRayQueryFeaturesKHR::default();
             let mut mesh_features = vk::PhysicalDeviceMeshShaderFeaturesEXT::default();
+            let mut barycentric_features =
+                vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default();
             let mut supported = vk::PhysicalDeviceFeatures2::default()
                 .push(&mut v11)
                 .push(&mut v12)
                 .push(&mut v13)
                 .push(&mut acceleration_features)
                 .push(&mut mesh_features)
+                .push(&mut barycentric_features)
                 .push(&mut ray);
             instance.get_physical_device_features2(physical, &mut supported);
             let core_supported = supported.features;
@@ -199,6 +202,13 @@ impl Gpu {
             let shader_integer_dot_product = v13.shader_integer_dot_product != 0;
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
+            }
+            // Optional: fragment stages that declare FragmentBarycentricKHR (per-vertex
+            // attributes, barycentric coordinates) are legal only with this enabled.
+            let fragment_barycentrics = has_extension(ash::khr::fragment_shader_barycentric::NAME)
+                && barycentric_features.fragment_shader_barycentric != 0;
+            if fragment_barycentrics {
+                device_extensions.push(ash::khr::fragment_shader_barycentric::NAME.as_ptr());
             }
             let ray_tracing_supported = rt_extensions
                 && acceleration_features.acceleration_structure != 0
@@ -299,6 +309,12 @@ impl Gpu {
                 .task_shader(mesh_shading);
             if mesh_shading {
                 device_info = device_info.push(&mut mesh_features);
+            }
+            let mut barycentric_features =
+                vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default()
+                    .fragment_shader_barycentric(true);
+            if fragment_barycentrics {
+                device_info = device_info.push(&mut barycentric_features);
             }
             let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
@@ -415,6 +431,7 @@ impl Gpu {
                 hdr_metadata,
                 present_scaling,
                 buffer_int64_atomics,
+                fragment_barycentrics,
                 shader_integer_dot_product,
                 packed_integer_dot_accelerated: shader_integer_dot_product
                     && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,
