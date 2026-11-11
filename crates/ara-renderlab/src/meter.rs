@@ -454,9 +454,42 @@ mod tests {
         assert_eq!(log_mean(&vec![0; BINS], 0., 1.), None);
     }
 
+    /// Whether `gpu` is `twin` with each sample allowed to sit one bin off: the running count
+    /// of `gpu` up to every bin stays between the twin's counts up to the bins either side.
+    /// A device's hardware sRGB decode of a dark grey can differ from the CPU formula by a
+    /// fraction of a bin (the RTX 4070 SUPER puts grey 4, a quarter bin from an edge, one bin up).
+    fn within_one_bin(gpu: &[u32], twin: &[u32]) -> bool {
+        let running = |bins: &[u32]| -> Vec<u32> {
+            bins.iter()
+                .scan(0, |sum, count| {
+                    *sum += count;
+                    Some(*sum)
+                })
+                .collect()
+        };
+        let (gpu, twin) = (running(gpu), running(twin));
+        gpu.last() == twin.last()
+            && (0..twin.len()).all(|bin| {
+                let before = bin.checked_sub(1).map_or(0, |b| twin[b]);
+                let after = twin.get(bin + 1).unwrap_or(&twin[bin]);
+                (before..=*after).contains(&gpu[bin])
+            })
+    }
+
+    /// A sample one bin off passes, two bins off or a lost sample does not.
+    #[test]
+    fn within_one_bin_allows_exactly_one_bin_of_slack() {
+        let twin = [0, 4, 0, 0, 2];
+        assert!(within_one_bin(&twin, &twin));
+        assert!(within_one_bin(&[0, 0, 4, 0, 2], &twin)); // the four, one bin up
+        assert!(within_one_bin(&[1, 3, 0, 0, 2], &twin)); // one of them, one bin down
+        assert!(!within_one_bin(&[0, 0, 0, 4, 2], &twin)); // two bins up
+        assert!(!within_one_bin(&[0, 4, 0, 0, 1], &twin)); // a sample lost
+    }
+
     /// The shader and its CPU twin bin the same frame the same way: a frame of flat blocks of
-    /// known greys (each far from a bin edge) through a real device lands in the same bins,
-    /// arrives without waiting, and a discard drops it.
+    /// known greys through a real device lands in the same bins (give or take one, see
+    /// `within_one_bin`), arrives without waiting, and a discard drops it.
     #[test]
     fn the_gpu_histogram_matches_its_cpu_twin_and_arrives_without_a_wait() {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -518,7 +551,11 @@ mod tests {
         assert_eq!((reading.meter, reading.stops), (-2.5, -1.5));
         let twin = histogram_of_rgba8(&rgba8, w as usize);
         assert_eq!(reading.histogram.iter().sum::<u32>(), 50 * 40);
-        assert_eq!(reading.histogram, twin);
+        assert!(
+            within_one_bin(&reading.histogram, &twin),
+            "the GPU histogram is more than a bin from its CPU twin: {:?} against {twin:?}",
+            reading.histogram
+        );
         // A reading of a frame submitted before a cut is dropped on arrival.
         assert!(readbacks.submit(&device, &queue, &texture, 0., 0., &mut gaps));
         readbacks.discard();
