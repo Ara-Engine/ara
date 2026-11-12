@@ -24,6 +24,7 @@ impl SceneView {
         view: &crate::world::DocumentView,
     ) -> ara_ui::Result<()> {
         ara_gpu::cpu_scope!("SceneView.render_scene_frame");
+        self.live_size = device.size();
         if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
             // Drafts belong to the outgoing scene.
             self.set_preview_view(&editor.state.doc, None);
@@ -203,7 +204,8 @@ impl SceneView {
         let Some(scene) = self.renderlab.as_mut() else {
             return;
         };
-        match scene.poll(device.gpu_mut()) {
+        let size = device.size();
+        match scene.poll(device.gpu_mut(), size) {
             Ok(true) => {
                 super::super::trace::log(|| "scene frame taken".into());
                 if let Err(error) = self.publish_still(device) {

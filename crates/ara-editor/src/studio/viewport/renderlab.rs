@@ -28,9 +28,17 @@ struct Flight {
     entities: Vec<(u64, String)>,
 }
 
+impl Flight {
+    /// Whether the frame still fits the Scene view: drawn at the size it has now.
+    fn is_current(&self, size: [u32; 2]) -> bool {
+        self.size == size
+    }
+}
+
 /// The frame on screen.
 struct Shown {
     camera: crate::state::Camera,
+    size: [u32; 2],
 }
 
 /// The editor-hosted Renderlab engine and the last image it drew.
@@ -125,7 +133,7 @@ impl RenderlabScene {
 
     /// Takes the frame [`Self::start`] submitted once the GPU has finished it, and publishes its
     /// image and ids; whether one arrived. Never waits for the GPU.
-    pub(super) fn poll(&mut self, gpu: &mut GpuDevice) -> Result<bool> {
+    pub(super) fn poll(&mut self, gpu: &mut GpuDevice, size: [u32; 2]) -> Result<bool> {
         if self.flight.is_none() {
             return Ok(false);
         }
@@ -133,8 +141,18 @@ impl RenderlabScene {
             return Ok(false);
         };
         let flight = self.flight.take().context("a flight was checked above")?;
+        // A frame of the old size (the view was resized while it drew) is never shown: its image
+        // and ids belong to the old rectangle. The next frame carries the new size.
+        if !flight.is_current(size) {
+            return Ok(false);
+        }
         self.adopt(gpu, rendered, flight)?;
         Ok(true)
+    }
+
+    /// The size of the frame on screen.
+    pub(super) fn shown_size(&self) -> Option<[u32; 2]> {
+        self.shown.as_ref().map(|shown| shown.size)
     }
 
     /// Whether a frame was submitted and not yet taken.
@@ -159,6 +177,7 @@ impl RenderlabScene {
             .update(gpu, flight.entities, flight.size, rendered.id_texels)?;
         self.shown = Some(Shown {
             camera: flight.camera,
+            size: flight.size,
         });
         Ok(())
     }
@@ -202,5 +221,24 @@ impl RenderlabScene {
         }
         self.ids.release(gpu)?;
         self.engine.release(gpu)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A frame that was in flight when the view resized is not current: it is dropped, never
+    /// presented into the new rectangle with the old ids.
+    #[test]
+    fn a_frame_drawn_at_the_old_size_is_not_current() {
+        let flight = Flight {
+            camera: crate::state::Camera::default(),
+            size: [906, 574],
+            entities: Vec::new(),
+        };
+        assert!(flight.is_current([906, 574]));
+        assert!(!flight.is_current([1200, 574]));
+        assert!(!flight.is_current([906, 700]));
     }
 }

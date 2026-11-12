@@ -64,6 +64,8 @@ pub(crate) struct SceneView {
     scene_drawn: Option<scene_frame::Drawn>,
     /// Passes Renderlab still draws after the last change (`scene_frame`).
     scene_settle: u32,
+    /// The Scene view's size as of the last pass: a click is in this size, the ids may not be.
+    live_size: [u32; 2],
     /// The Renderlab image `published` was last copied from.
     published_from: Option<ara_gpu::Image>,
     /// The Scene has drawn a frame the compositor can show.
@@ -166,9 +168,12 @@ impl SceneView {
     }
     /// The engine's own id under `pixel` for a click, when Renderlab shows the Scene.
     pub(super) fn pick_front(&mut self, pixel: [u32; 2]) -> Option<u32> {
+        let live = self.live_size;
         self.renderlab
             .as_mut()
-            .filter(|r| r.image().is_some())
+            // The engine answers for the size it last drew: after a resize the frame on screen is
+            // the old one, and the texels (scaled) answer instead.
+            .filter(|r| r.image().is_some() && r.shown_size() == Some(live))
             .and_then(|r| r.pick_id(pixel))
     }
     pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
@@ -176,6 +181,7 @@ impl SceneView {
             .as_ref()
             .filter(|r| r.image().is_some())
             .and_then(renderlab::RenderlabScene::id_host)
+            .map(|host| host.in_view(self.live_size))
     }
     /// The channels (draw `n` is `n + 1`) the Scene's ids name.
     pub(super) fn entities(&self) -> &[(u64, String)] {
