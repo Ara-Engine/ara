@@ -136,6 +136,7 @@ pub(crate) fn lights<'a>(
             inner,
             outer,
             source_radius,
+            cast_shadows: None,
         };
         out.push(match light.kind {
             LightKind::Spot => {
@@ -163,6 +164,7 @@ pub(crate) fn lights<'a>(
                 candela,
                 range,
                 source_radius,
+                cast_shadows: None,
             },
         });
     }
