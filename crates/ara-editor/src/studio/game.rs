@@ -653,10 +653,7 @@ impl Game {
             glyphs: Vec::new(),
         };
         // SAFETY: forwarded caller contract.
-        let landed = unsafe {
-            self.layer
-                .draw(device, layer, extent, scale, &list, &[])?
-        };
+        let landed = unsafe { self.layer.draw(device, layer, extent, scale, &list, &[])? };
         // One that didn't reach the screen draws again on the next pass.
         self.shown = landed.then_some(shown);
         if self.host.live {
