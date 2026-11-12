@@ -743,7 +743,7 @@ impl State {
         let mut events = Vec::new();
         let lost = self.bus.drain(&mut events);
         // `ASSET_IMPORTED` is a signal, not a record: it retires the asset's earlier
-        // import failures (persisted ones included).
+        // import failures (persisted ones included) and placeholder warnings.
         let (imported, events): (Vec<_>, Vec<_>) = events
             .into_iter()
             .partition(|e| e.diagnostic.code == codes::ASSET_IMPORTED);
@@ -752,13 +752,17 @@ impl State {
             .flat_map(|e| e.diagnostic.subjects)
             .map(|s| s.value)
             .collect();
-        if !imported.is_empty()
-            && self
+        if !imported.is_empty() {
+            let failures = self
                 .diag
-                .clear_import_failures(|asset| imported.iter().any(|a| a == asset))
-                > 0
-        {
-            self.diag_file.removed();
+                .clear_import_failures(|asset| imported.iter().any(|a| a == asset));
+            // A world that started before the asset published warned that it drew a
+            // placeholder; the import has since finished, so that warning is stale.
+            let ids: Vec<&str> = imported.iter().map(|a| a.trim_start_matches('@')).collect();
+            let placeholders = self.diag.clear_asset_placeholders(&ids);
+            if failures + placeholders > 0 {
+                self.diag_file.removed();
+            }
         }
         let mut touched = self.diag.ingest(events);
         touched.extend(self.diag.absorb(&lost));
