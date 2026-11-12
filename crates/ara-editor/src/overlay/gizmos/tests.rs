@@ -182,6 +182,39 @@ fn selection_draws_full_detail_and_unselected_entities_a_hint() {
     assert_eq!(lines(&draw(&mut gizmos, &scene, &state(&[]))), 0);
     // Twelve box edges, each with its halo.
     assert_eq!(lines(&draw(&mut gizmos, &scene, &state(&["e_box1"]))), 24);
+    // The Collider shapes overlay draws them on every entity.
+    let mut shown = state(&[]);
+    shown
+        .settings
+        .insert("viewport.colliders".into(), json!(true));
+    assert_eq!(lines(&draw(&mut gizmos, &scene, &shown)), 24);
+}
+
+#[test]
+fn mesh_bounds_draw_a_box_for_the_selected_mesh_only() {
+    let boxes = [(
+        Mat4::from_translation(Vec3::new(1., 0., 0.)),
+        [Vec3::splat(-1.), Vec3::splat(1.)],
+    )];
+    let mut overlays = Vec::new();
+    draw_boxes(
+        &mut overlays,
+        &state(&[]).camera,
+        RECT,
+        boxes.into_iter(),
+        [1.; 4],
+    );
+    // Twelve edges, each with its halo.
+    assert_eq!(lines(&overlays), 24);
+    let mut none = Vec::new();
+    draw_boxes(
+        &mut none,
+        &state(&[]).camera,
+        RECT,
+        std::iter::empty(),
+        [1.; 4],
+    );
+    assert!(none.is_empty());
 }
 
 #[test]
