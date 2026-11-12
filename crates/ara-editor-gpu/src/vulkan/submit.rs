@@ -607,6 +607,9 @@ impl NativeUi {
             );
         }
         self.finish()?;
+        // A deferred submission returns at once: the copy must land before the buffer is read
+        // and dropped (destroying a buffer a pending command refers to is a validation error).
+        self.wait_previous()?;
         image::RgbaImage::from_raw(size[0], size[1], buffer.read(bytes as usize)?)
             .ok_or_else(|| anyhow::anyhow!("UI screenshot dimensions"))
     }
