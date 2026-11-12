@@ -131,7 +131,6 @@ mod tests {
             "ara-runtime-render",
             "ara-render2d",
             "ara-landscape",
-            "ara-vfx-gpu",
         ] {
             let cooked = root.path().join("resources").join(package);
             std::fs::create_dir_all(cooked.join(&key))?;

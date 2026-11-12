@@ -92,9 +92,6 @@ pub(crate) struct Effects {
     tick: Option<u64>,
     /// Sprite sheets uploaded, by atlas family.
     sheets: HashMap<u32, TextureId>,
-    /// The cooked atlas, read once (`None` inside: it could not be read, so sheets are
-    /// cooked instead).
-    atlas: Option<Option<Vec<u8>>>,
 }
 
 impl Effects {
@@ -152,7 +149,7 @@ impl Effects {
                 let Some(mapped) = mapped else { continue };
                 seen.insert(slot);
                 let sprite = match mapped.sheet {
-                    Some(family) => Some(sheet(&mut self.sheets, &mut self.atlas, engine, family)?),
+                    Some(family) => Some(sheet(&mut self.sheets, engine, family)?),
                     None => None,
                 };
                 match self.live.get_mut(&slot) {
@@ -184,38 +181,18 @@ impl Effects {
 }
 
 /// The Renderlab texture of one procedural sprite sheet, uploaded on first use into
-/// `sheets`: from the cooked atlas Ara's exports ship (read once into `atlas`), or cooked
-/// here when it cannot be read.
+/// `sheets`, cooked from `ara_vfx::atlas` on that first use.
 fn sheet(
     sheets: &mut HashMap<u32, TextureId>,
-    atlas: &mut Option<Option<Vec<u8>>>,
     engine: &mut Engine,
     family: u32,
 ) -> Result<TextureId> {
     if let Some(id) = sheets.get(&family) {
         return Ok(*id);
     }
-    let atlas = atlas.get_or_insert_with(|| {
-        let dir = ara_gpu::cooked::resource_dir(
-            "ara-vfx-gpu",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-vfx-gpu/cooked"),
-        );
-        std::fs::read(dir.join("atlas.rgba")).ok().filter(|bytes| {
-            let [w, h] = ara_vfx::atlas::ATLAS_SIZE;
-            bytes.len() == (w * h * 4) as usize
-        })
-    });
     let side = ara_vfx::atlas::SHEET_SIZE;
     let bytes = (side * side * 4) as usize;
-    let at = family as usize * bytes;
-    let cooked;
-    let sheet = match atlas {
-        Some(atlas) => &atlas[at..at + bytes],
-        None => {
-            cooked = ara_vfx::atlas::cook_sheet(family);
-            &cooked[..]
-        }
-    };
+    let sheet = ara_vfx::atlas::cook_sheet(family);
     // Density is the opacity; the colour comes from the emitter, times fire's heat ramp
     // (the G/B lighting gradients are left out: lit sprites shade flat). Ara reads each
     // 128-pixel frame with v up the image, Renderlab with v down it: frames flip in place.

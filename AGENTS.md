@@ -30,7 +30,7 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - localization and saves (`ara-l10n`, `ara-save`);
 - the editor (`ara-editor`, `ara-editor-gpu`) and the play process (`ara-runtime*`, `ara-play*`, `ara-player`);
 - multiplayer (`ara-net`), world streaming (`ara-world`), terrain (`ara-terrain`, `ara-landscape`, `ara-foliage`), 2D (`ara-2d`, `ara-render2d`, `ara-physics2d`, `ara-import2d`);
-- VFX (`ara-vfx`, `ara-vfx-gpu`), animation v2 (`ara-anim-physics`), profiling (`ara-profile`, `ara-bench`), vendored SDL3 (`ara-sdl3-src`).
+- VFX (`ara-vfx`), animation v2 (`ara-anim-physics`), profiling (`ara-profile`, `ara-bench`), vendored SDL3 (`ara-sdl3-src`).
 
 **In progress:**
 - integration v2: C# in the runtime, one shared schema DB, subsystem hooks, replicated Play;

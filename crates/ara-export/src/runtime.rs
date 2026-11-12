@@ -125,7 +125,6 @@ pub(crate) fn unpack_template(
         "ara-runtime-render",
         "ara-render2d",
         "ara-landscape",
-        "ara-vfx-gpu",
     ] {
         ensure!(
             destination.join("resources").join(package).is_dir(),

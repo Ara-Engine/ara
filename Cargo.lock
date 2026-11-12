@@ -2420,27 +2420,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-vfx-gpu"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-json",
- "ara-material",
- "ara-render",
- "ara-render-fidelity",
- "ara-shader-cook",
- "ara-vfx",
- "blake3",
- "bytemuck",
- "glam 0.30.10",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-vsm"
 version = "0.0.1-alpha"
 dependencies = [
