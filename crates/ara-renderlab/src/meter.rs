@@ -58,16 +58,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
 }
 
 /// The bin of luminance `l` (0 to 1), as the shader bins it.
-#[cfg(any(test, target_vendor = "apple"))]
+#[cfg(test)]
 pub(crate) fn bin_of(l: f32) -> usize {
     let x = (l.max(1e-4).ln() - LOG_DARKEST) / -LOG_DARKEST;
     ((x * BINS as f32).floor().clamp(0., BINS as f32 - 1.)) as usize
 }
 
 /// The histogram the shader would build for `rgba8` (display-encoded, `width` pixels wide):
-/// the same sampled pixels and bins, on the CPU. The tests' reference, and on Apple the
-/// meter itself (`bridge_metal`), which reads the displayed image back on metered frames.
-#[cfg(any(test, target_vendor = "apple"))]
+/// the same sampled pixels and bins, on the CPU: the tests' reference. (On Apple the
+/// Renderlab backend bins on the GPU, `Engine::view_histogram`, with the same definition.)
+#[cfg(test)]
 pub(crate) fn histogram_of_rgba8(rgba8: &[u8], width: usize) -> Vec<u32> {
     let decode = |v: u8| {
         let s = f32::from(v) / 255.;
