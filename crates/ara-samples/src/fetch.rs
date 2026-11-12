@@ -156,31 +156,48 @@ pub fn hash_file(path: &Path) -> Result<String> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+/// The assets to fetch with the projects each goes into (every project when `projects` is
+/// empty). An asset several projects use is ONE item: two workers must never download the
+/// same file at once (they would share one `.part` file and corrupt each other's transfer).
+fn work<'a>(lock: &'a Lock, projects: &[String]) -> Vec<(&'a Asset, Vec<&'a str>)> {
+    lock.assets
+        .iter()
+        .filter_map(|asset| {
+            let wanted: Vec<&str> = asset
+                .projects
+                .iter()
+                .map(String::as_str)
+                .filter(|p| projects.is_empty() || projects.iter().any(|w| w == p))
+                .collect();
+            (!wanted.is_empty()).then_some((asset, wanted))
+        })
+        .collect()
+}
+
 /// Fetches every asset of `projects` (all when empty) and materializes it into each
 /// project that uses it. Already-present files are re-hashed, never re-downloaded.
 pub fn fetch(samples: &Path, lock: &Lock, projects: &[String], jobs: usize) -> Result<()> {
     let cache = Cache::new(samples);
-    let wanted: Vec<(&Asset, &str)> = lock
-        .assets
-        .iter()
-        .flat_map(|a| a.projects.iter().map(move |p| (a, p.as_str())))
-        .filter(|(_, p)| projects.is_empty() || projects.iter().any(|w| w == p))
-        .collect();
+    let wanted = work(lock, projects);
+    let total: usize = wanted.iter().map(|(_, projects)| projects.len()).sum();
     let queue = Mutex::new(wanted.iter());
     let errors = Mutex::new(Vec::new());
     let done = Mutex::new(0usize);
     std::thread::scope(|scope| {
         for _ in 0..jobs.max(1) {
             scope.spawn(|| {
-                while let Some(&(asset, project)) = queue.lock().ok().and_then(|mut q| q.next()) {
-                    if let Err(e) = materialize(&cache, &samples.join(project), asset)
-                        && let Ok(mut errors) = errors.lock()
-                    {
-                        errors.push(format!("{project}/{}: {e:#}", asset.id));
-                    }
-                    if let Ok(mut done) = done.lock() {
-                        *done += 1;
-                        eprintln!("[{}/{}] {project}: {}", *done, wanted.len(), asset.id);
+                while let Some((asset, projects)) = queue.lock().ok().and_then(|mut q| q.next()) {
+                    // The first project downloads the blobs; the others link the cached ones.
+                    for project in projects {
+                        if let Err(e) = materialize(&cache, &samples.join(project), asset)
+                            && let Ok(mut errors) = errors.lock()
+                        {
+                            errors.push(format!("{project}/{}: {e:#}", asset.id));
+                        }
+                        if let Ok(mut done) = done.lock() {
+                            *done += 1;
+                            eprintln!("[{}/{total}] {project}: {}", *done, asset.id);
+                        }
                     }
                 }
             });

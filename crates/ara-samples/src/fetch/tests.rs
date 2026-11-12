@@ -164,3 +164,74 @@ fn invalid_mirror_is_skipped_and_size_is_checked_before_caching() {
         0
     );
 }
+
+#[test]
+fn an_asset_shared_by_two_projects_is_one_work_item() {
+    let fixture = Fixture::new();
+    let mut shared = fixture.asset("a.wav", &[], b"shared bytes");
+    shared.id = "shared".into();
+    shared.projects = vec!["showcase".into(), "outpost".into()];
+    let mut only = fixture.asset("b.wav", &[], b"only bytes");
+    only.id = "only".into();
+    only.projects = vec!["outpost".into()];
+    let lock = Lock {
+        version: 1,
+        assets: vec![shared, only],
+    };
+    // Every project: the shared asset is listed once, with both projects.
+    let all = work(&lock, &[]);
+    let listed: Vec<(&str, Vec<&str>)> = all
+        .iter()
+        .map(|(asset, projects)| (asset.id.as_str(), projects.clone()))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            ("shared", vec!["showcase", "outpost"]),
+            ("only", vec!["outpost"])
+        ]
+    );
+    // One project: only its assets, and only that project's name.
+    let showcase = work(&lock, &["showcase".to_owned()]);
+    assert_eq!(showcase.len(), 1);
+    assert_eq!(showcase[0].0.id, "shared");
+    assert_eq!(showcase[0].1, vec!["showcase"]);
+    assert!(work(&lock, &["missing".to_owned()]).is_empty());
+}
+
+/// Three projects share one large asset; with several workers on an empty cache every project
+/// must end with the pinned bytes. Before assets were one work item, the workers downloaded the
+/// same URL into the same `.part` file at once and some of them failed or saw truncated bytes.
+#[test]
+fn projects_sharing_an_asset_all_get_the_pinned_bytes_with_several_workers() {
+    let fixture = Fixture::new();
+    let bytes: Vec<u8> = (0..24u32 * 1024 * 1024)
+        .map(|i| (i.wrapping_mul(2_654_435_761) >> 24) as u8)
+        .collect();
+    std::fs::write(fixture.0.join("big.wav"), &bytes).unwrap();
+    let mut asset = fixture.asset("big.wav", &[], &bytes);
+    let names = ["project", "project2", "project3"];
+    for name in &names[1..] {
+        std::fs::create_dir_all(fixture.0.join(name)).unwrap();
+        std::fs::write(
+            fixture.0.join(name).join("ara.project.json"),
+            r#"{"layoutVersion":4}"#,
+        )
+        .unwrap();
+    }
+    asset.projects = names.iter().map(|n| (*n).to_owned()).collect();
+    let lock = Lock {
+        version: 1,
+        assets: vec![asset.clone()],
+    };
+    fetch(&fixture.0, &lock, &[], 4).unwrap();
+    for name in names {
+        let target = asset.dir(&fixture.0.join(name)).join("clip.wav");
+        assert_eq!(
+            blake3::hash(&std::fs::read(&target).unwrap()),
+            blake3::hash(&bytes),
+            "{name}"
+        );
+    }
+    assert!(verify(&fixture.0, &lock, &[]).unwrap().is_empty());
+}
