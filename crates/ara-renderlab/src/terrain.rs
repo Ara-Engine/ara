@@ -77,6 +77,9 @@ struct Member<'a> {
     index: u32,
 }
 
+/// An object and the id ranges (first triangle, triangles, id) set on it.
+type Tagged = (ObjectId, Vec<(u32, u32, u32)>);
+
 /// The triangles of a chunk's mesh that one tile owns, and the tile's index.
 struct TagRange {
     first_triangle: u32,
@@ -167,7 +170,7 @@ pub(crate) struct Terrain {
     /// The placed tiles' objects with their index among the frame's sorted resident tile
     /// coordinates, and the ids last set from them (`Terrain::tag`).
     tagged: Vec<(ObjectId, Vec<TagRange>)>,
-    applied: Vec<(ObjectId, Vec<(u32, u32, u32)>)>,
+    applied: Vec<Tagged>,
     /// Foliage part draws of the resident tiles, for `Scene::sync`.
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
@@ -376,7 +379,7 @@ impl Terrain {
     /// coordinates is `first + n` (the editor lists them after the frame's draws), one range of
     /// a chunk's triangles per member tile. Sets only what changed.
     pub fn tag(&mut self, engine: &mut Engine, first: u32) -> Result<()> {
-        let wanted: Vec<(ObjectId, Vec<(u32, u32, u32)>)> = self
+        let wanted: Vec<Tagged> = self
             .tagged
             .iter()
             .map(|(object, members)| {
