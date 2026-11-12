@@ -81,14 +81,13 @@ pub(crate) struct Foliage<'a> {
     pub key: u64,
 }
 
-/// Frames between two bursts of foliage level changes.
+/// Every respawned foliage draw changes the scene Renderlab lights (its GI cache relights on any
+/// change), so a steady trickle of level swaps, which a moving camera produces every frame, costs
+/// far more than the same swaps in one burst now and then (measured: 96 draws a frame took the
+/// Outpost orbit from 10 to 1.7 frames a second). Frames between two bursts:
 const LOD_BURST_FRAMES: u32 = 16;
 /// Foliage draws that may change level (or appear or vanish) in one burst, nearest first.
 const LOD_SWAPS_PER_BURST: usize = 768;
-/// Frames between bursts: every respawned draw changes the scene Renderlab lights (its GI cache
-/// relights on any change), so a steady trickle of swaps, which a moving camera produces every
-/// frame, costs far more than the same swaps in one burst now and then (measured: 96 draws a
-/// frame took the Outpost orbit from 10 to 1.7 frames a second).
 
 /// What a foliage draw needs to pick its level of detail: where it is and how big it is.
 struct Instance {
