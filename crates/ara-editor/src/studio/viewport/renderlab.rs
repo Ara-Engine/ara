@@ -26,8 +26,8 @@ pub(super) struct RenderlabScene {
     content: Option<(Revision, Content)>,
     /// The completed image, a copy the compositor can sample while the next frame renders.
     published: Option<PresentationImage>,
-    /// The Scene's object ids, rasterised from the frame beside the image: what clicks
-    /// read, and what the overlays sample while the engine delivers none.
+    /// The Scene's channels and, when the engine hands its ids across as CPU texels, those
+    /// texels (what a click falls back to and a capture reads) and their GPU copy for the overlays.
     ids: Ids,
     /// The engine's own packed ids (`ExternalFrame::id`), when it delivers them: a copy the
     /// compositor can sample while the next frame renders.
@@ -41,8 +41,7 @@ impl RenderlabScene {
         let renderlab = Renderlab::new(&Options {
             path: PathChoice::Auto,
             pipeline_cache: Some(cache.join("renderlab")),
-            // `ARA_SCENE_IDS_SYNTHETIC=1` keeps the host's own rasterised ids (the A/B switch).
-            scene_ids: std::env::var_os("ARA_SCENE_IDS_SYNTHETIC").is_none(),
+            scene_ids: true,
             ..Default::default()
         })?;
         Ok(Self {

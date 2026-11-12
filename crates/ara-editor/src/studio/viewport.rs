@@ -17,7 +17,7 @@ mod scene_frame;
 pub(super) use ids::IdHost;
 
 /// Binds the Scene view's picture and its pick buffer as the UI adapter's external images:
-/// Renderlab's image and the packed ids rasterised beside it.
+/// Renderlab's image and the packed ids it wrote beside it.
 fn attach(
     gpu: &mut NativeUi,
     device: &SceneDevice,
