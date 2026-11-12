@@ -249,8 +249,20 @@ pub fn goal(root: &Path, lock: &Lock) -> Result<String> {
         Material::glass("goal glass", [0.7, 0.95, 1.0], 0.25),
     ]);
     let v = Vec3::new;
-    slab_box(&mut k, 0, v(-3.0, 0.0, -3.0), v(3.0, 0.06, 3.0), Vec2::ONE);
-    slab_box(&mut k, 1, v(-2.6, 0.06, -2.6), v(2.6, 0.08, 2.6), Vec2::ONE);
+    slab_box(&mut k, 0, v(-3.0, 0.0, -3.0), v(3.0, 0.1, 3.0), Vec2::ONE);
+    // A clear emissive ring on the dark plate.
+    let segments = 32;
+    for i in 0..segments {
+        let a = i as f32 / segments as f32 * std::f32::consts::TAU;
+        let at = v(a.cos() * 2.6, 0.1, a.sin() * 2.6);
+        k.cuboid(
+            1,
+            v(0.6, 0.04, 0.26),
+            Mat4::from_translation(at + v(0.0, 0.02, 0.0)) * Mat4::from_rotation_y(-a - FRAC_PI_2),
+            Vec2::ONE,
+        );
+    }
+    k.cylinder(1, 0.45, 0.03, 24, Mat4::from_translation(v(0.0, 0.1, 0.0)), Vec2::ONE);
     for i in 0..6 {
         let a = i as f32 / 6.0 * std::f32::consts::TAU;
         let p = v(a.cos() * 2.7, 0.0, a.sin() * 2.7);
@@ -290,6 +302,7 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
     const MARK: usize = 9;
     const STEEL: usize = 10;
     const PLATES: usize = 11;
+    const DARKWIN: usize = 12;
     let mut k = Kit::new(vec![
         Material::textured("yard concrete", "concrete_floor_02").tinted([0.075, 0.08, 0.095]),
         Material::flat("sooty brick", [0.1, 0.09, 0.09], 0.92, 0.0),
@@ -303,6 +316,7 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
         Material::flat("road marking", [0.7, 0.66, 0.55], 0.85, 0.0),
         Material::flat("black girder steel", [0.06, 0.065, 0.07], 0.55, 1.0),
         Material::textured("stacked plate", "metal_plate").tinted([0.2, 0.22, 0.26]),
+        Material::flat("dark window", [0.015, 0.025, 0.045], 0.12, 0.2),
     ]);
     let v = Vec3::new;
     let floor = YARD_FLOOR;
@@ -423,6 +437,20 @@ pub fn yard(root: &Path, lock: &Lock) -> Result<String> {
             rx += 3.0;
         }
         slab_box(&mut k, STEEL, v(x - sx * 0.5 - 0.3, floor + h, z - sz * 0.5 - 0.3), v(x + sx * 0.5 + 0.3, floor + h + 0.5, z + sz * 0.5 + 0.3), Vec2::ONE);
+        // A grid of windows on the long building behind the goal: about one in four lit.
+        if sx > 50.0 {
+            let mut n = 0u32;
+            for row in 0..3 {
+                let wy = floor + 3.6 + row as f32 * 3.8;
+                let mut wx = x - sx * 0.5 + 3.0;
+                while wx < x + sx * 0.5 - 3.0 {
+                    n += 1;
+                    let lit = (n.wrapping_mul(2_654_435_761) >> 13) % 4 == 0;
+                    slab_box(&mut k, if lit { WINDOW } else { DARKWIN }, v(wx, wy, z - sz * 0.5 - 0.3), v(wx + 2.2, wy + 1.6, z - sz * 0.5 - 0.05), Vec2::ONE);
+                    wx += 4.2;
+                }
+            }
+        }
     }
     let (tx, tz) = (-48.0, 2.0);
     slab_box(&mut k, SHED, v(tx - 1.0, floor, tz - 1.0), v(tx + 1.0, floor + 14.0, tz + 1.0), plate_m);

@@ -237,9 +237,9 @@ fn game(ctx: &Ctx) -> Result<()> {
     s.entity(
         "e_camwide",
         "Establishing camera",
-        json!({"Transform": {"position": [-26.0, 12.0, -24.0]}, "Camera": {"fov": 52, "priority": 10}}),
+        json!({"Transform": {"position": [0.0, 3.4, -4.3]}, "Camera": {"fov": 66, "priority": 10}}),
     );
-    s.commands.push(("transform.lookAt", json!({"entity": "e_camwide", "point": [2.0, -7.0, 52.0]})));
+    s.commands.push(("transform.lookAt", json!({"entity": "e_camwide", "point": [0.0, -4.0, 80.0]})));
     s.entity("e_run", "Run", json!({"GlintRun": {"checkpointCount": 2, "start": START.to_array()}}));
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(SCENE.0, "Glint: Foundry Steps, ball, course and run director", calls)?;

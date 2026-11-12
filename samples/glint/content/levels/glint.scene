@@ -137,12 +137,12 @@
       "name": "Establishing camera",
       "order": "af",
       "Camera": {
-        "fov": 52,
+        "fov": 66,
         "priority": 10
       },
       "Transform": {
-        "position": [-26, 12, -24],
-        "rotation": [-165.96376, -19.667955, -175.19034]
+        "position": [0, 3.4, -4.3],
+        "rotation": [-174.98334, 0, -180]
       }
     },
     "e_course": {
