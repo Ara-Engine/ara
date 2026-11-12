@@ -176,7 +176,7 @@ struct Player {
     quality: QualityChoice,
     render_options: RenderOptions,
     /// Effects the Play start turned off for diagnosis (`PlayScene::render_debug`).
-    render_debug: ara_render::RenderDebug,
+    render_debug: ara_runtime_render::RenderDebug,
     link: Link,
     args: Args,
     size: [u32; 2],
@@ -292,7 +292,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         render_options: RenderOptions {
             ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing),
         },
-        render_debug: ara_render::RenderDebug::default(),
+        render_debug: ara_runtime_render::RenderDebug::default(),
         link,
         args,
         size,
@@ -524,11 +524,6 @@ impl Player {
             }
             // Acoustics and voice updates read the simulation only (physics is not
             // stepping between ticks): a worker runs them while the GPU frame presents.
-            if let (Some(presenter), Some((doc, cache))) =
-                (&mut self.presenter, world.probe_scene())
-            {
-                presenter.set_probe_scene(doc, cache);
-            }
             if let Some(presenter) = &mut self.presenter {
                 presenter.set_debug(self.render_debug);
             }
@@ -860,9 +855,6 @@ impl Player {
             let state: ara_play::ImportState = serde_json::from_value(params)?;
             if let Some(world) = &mut self.world {
                 world.imports(state);
-                if let Some(presenter) = &mut self.presenter {
-                    presenter.update_model_placeholders(|asset| world.pending_model(asset))?;
-                }
             } else {
                 self.pending_imports = Some(state);
             }
@@ -1245,8 +1237,8 @@ impl Player {
 }
 
 /// The renderer's switches for a Play start's `renderDebug` (one field each).
-fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
-    ara_render::RenderDebug {
+fn render_debug(debug: ara_play::RenderDebug) -> ara_runtime_render::RenderDebug {
+    ara_runtime_render::RenderDebug {
         ambient_occlusion: debug.ambient_occlusion,
         shadows: debug.shadows,
         soft_shadows: debug.soft_shadows,
@@ -1254,15 +1246,15 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         temporal_jitter: debug.temporal_jitter,
         full_resolution: debug.full_resolution,
         reflections: match debug.reflections {
-            ara_play::ReflectionView::Lit => ara_render::ReflectionView::Lit,
-            ara_play::ReflectionView::Reflections => ara_render::ReflectionView::Reflections,
-            ara_play::ReflectionView::Sources => ara_render::ReflectionView::Sources,
+            ara_play::ReflectionView::Lit => ara_runtime_render::ReflectionView::Lit,
+            ara_play::ReflectionView::Reflections => ara_runtime_render::ReflectionView::Reflections,
+            ara_play::ReflectionView::Sources => ara_runtime_render::ReflectionView::Sources,
         },
         screen_reflections: debug.screen_reflections,
         reflection_captures: debug.reflection_captures,
         global_illumination: debug.global_illumination,
         screen_gi: debug.screen_gi,
-        reference: debug.reference.map(|r| ara_render::ReferenceTrace {
+        reference: debug.reference.map(|r| ara_runtime_render::ReferenceTrace {
             samples: r.samples.clamp(8, 65536),
             bounces: r.bounces.clamp(1, 16),
         }),
@@ -1344,26 +1336,26 @@ mod cli_tests {
         super::Args::command().debug_assert();
     }
 
-    /// The editor sends `ara_render::RenderDebug` as `play.start` `renderDebug`;
+    /// The editor sends `ara_runtime_render::RenderDebug` as `play.start` `renderDebug`;
     /// the protocol's copy must read every switch back unchanged.
     #[test]
     #[allow(clippy::unwrap_used)]
     fn render_debug_survives_the_play_start_wire() {
         for debug in [
-            ara_render::RenderDebug::default(),
-            ara_render::RenderDebug {
+            ara_runtime_render::RenderDebug::default(),
+            ara_runtime_render::RenderDebug {
                 ambient_occlusion: false,
                 shadows: false,
                 soft_shadows: false,
                 volumetric_fog: false,
                 temporal_jitter: false,
                 full_resolution: true,
-                reflections: ara_render::ReflectionView::Sources,
+                reflections: ara_runtime_render::ReflectionView::Sources,
                 screen_reflections: false,
                 reflection_captures: false,
                 global_illumination: false,
                 screen_gi: false,
-                reference: Some(ara_render::ReferenceTrace {
+                reference: Some(ara_runtime_render::ReferenceTrace {
                     samples: 2048,
                     bounces: 6,
                 }),

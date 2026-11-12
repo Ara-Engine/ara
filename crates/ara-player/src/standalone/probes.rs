@@ -84,10 +84,9 @@ fn frames_in_flight_with_game_ui_and_swapchain_stay_validation_clean() -> Result
         owner.presenter.stats().gpu.is_some(),
         "the previous frame reported"
     );
-    owner.presenter.set_frames_in_flight(false)?;
-    let renderer = owner.presenter.renderer().context("renderer")?;
-    renderer.gpu().wait_idle()?;
-    renderer.gpu().assert_clean()?;
+    let gpu = owner.presenter.gpu().context("renderer")?;
+    gpu.wait_idle()?;
+    gpu.assert_clean()?;
     Ok(())
 }
 
@@ -135,10 +134,9 @@ fn an_unpresentable_window_never_blocks_the_event_pump() -> Result<()> {
         window.present(&mut owner.presenter, &crate::device::warm_frame(), content)?;
     }
     ensure!(owner.presenter.stats().gpu.is_some(), "presenting resumed");
-    owner.presenter.set_frames_in_flight(false)?;
-    let renderer = owner.presenter.renderer().context("renderer")?;
-    renderer.gpu().wait_idle()?;
-    renderer.gpu().assert_clean()?;
+    let gpu = owner.presenter.gpu().context("renderer")?;
+    gpu.wait_idle()?;
+    gpu.assert_clean()?;
     Ok(())
 }
 

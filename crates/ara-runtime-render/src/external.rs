@@ -1,13 +1,12 @@
-//! A renderer outside `ara-render` behind the presenter. A host installs one with
-//! [`Presenter::set_external_renderer`]; from then on every present and capture
-//! draws the extracted frame with it and publishes its image through the
-//! presenter's ordinary output, so the game UI, overlays and the window copy work
-//! unchanged. Ara's own renderer keeps only its bootstrap scene meanwhile.
+//! The renderer behind the presenter (in practice Renderlab). A host installs one with
+//! [`Presenter::set_external_renderer`]; every present and capture draws the extracted
+//! frame with it and publishes its image through the presenter's output, so the game UI,
+//! overlays and the window copy work unchanged.
 //!
-//! The presenter owns the device the image must arrive on; the external renderer
-//! owns everything else (its own device, scene and history).
+//! The presenter owns the device the image must arrive on; the renderer owns everything
+//! else (its own device, scene and history).
 use crate::{
-    GpuFrameCosts, PresentStats, PresentationImage, Presenter, RenderFrame,
+    GpuFrameCosts, PresentStats, PresentationImage, Presenter, RenderDebug, RenderFrame,
     fidelity::{EnvironmentMap, native::Content},
 };
 use anyhow::{Context, Result};
@@ -74,7 +73,7 @@ pub struct ExternalFrame {
 /// Named passes an external renderer can report per frame (`ExternalFrame::passes`).
 pub const EXTERNAL_PASSES: usize = 6;
 
-/// A renderer that draws extracted frames in place of `ara-render`.
+/// A renderer that draws extracted frames.
 pub trait ExternalRenderer: Send {
     /// Name for logs and capture provenance.
     fn name(&self) -> &str;
@@ -91,13 +90,11 @@ pub trait ExternalRenderer: Send {
 
 impl Presenter {
     /// Draws every following present and capture with `external` (see the module
-    /// docs), or returns to Ara's renderer with `None`. Call before the first
-    /// present where possible: content Ara's renderer already prepared stays loaded.
+    /// docs); `None` removes the renderer, and presents fail until another is installed.
     pub fn set_external_renderer(
         &mut self,
         external: Option<Box<dyn ExternalRenderer>>,
     ) -> Result<()> {
-        self.drain()?;
         if let Some(mut old) = self.external.take()
             && let Some(device) = self.device.as_mut()
         {
@@ -123,10 +120,15 @@ impl Presenter {
         self.stats = PresentStats::default();
         let started = Instant::now();
         self.ensure_device()?;
+        anyhow::ensure!(
+            self.external.is_some(),
+            "no renderer is installed on this presenter"
+        );
         // The draw count stands in for a structural change: ordinary motion never
         // resolves content.
         if self.external_draws != Some(frame.draws.len()) {
             let content = resolve()?;
+            self.stats.prepare = started.elapsed();
             self.environment = content.environment;
             self.external_foliage = content.foliage_parts;
             self.external_terrain_materials = content.terrain_materials;
@@ -136,7 +138,7 @@ impl Presenter {
         let size = self.size;
         // The exposure lock reaches the external renderer through the look.
         let debug_switches = self.debug
-            != ara_render::RenderDebug {
+            != RenderDebug {
                 exposure: self.debug.exposure,
                 ..Default::default()
             };
@@ -147,6 +149,7 @@ impl Presenter {
             .as_mut()
             .context("presentation device")?
             .gpu_mut();
+        let render_started = Instant::now();
         let external = self.external.as_mut().context("external renderer")?;
         let rendered = external.render(
             gpu,
@@ -173,8 +176,15 @@ impl Presenter {
         self.stats.gpu = Some(costs);
         self.stats.external_handoff_ms = Some(rendered.handoff_ms);
         self.external_passes = rendered.passes;
-        self.stats.render = started.elapsed();
-        self.published_quality = None;
+        self.timings = timings(costs.raster_ms, &rendered.passes);
+        if let Some(frame) = self.profile_next.take() {
+            if self.profile_completed.len() == 8 {
+                self.profile_completed.pop_front();
+            }
+            self.profile_completed
+                .push_back((frame, self.timings.clone()));
+        }
+        self.stats.render = render_started.elapsed();
         Ok(())
     }
 
@@ -286,13 +296,8 @@ impl Presenter {
 
 impl Presenter {
     /// The frame the last `present` displayed, read back for live measurements
-    /// (stability, video). Ara's renderer reads its completed view through
-    /// `request`; an external renderer's published image is read as it is.
-    pub fn live_image(&mut self, request: &CaptureRequest) -> Result<image::RgbaImage> {
-        if self.external.is_none() {
-            let renderer = self.renderer.as_mut().context("presentation device")?;
-            return Ok(renderer.capture_completed(request)?.image);
-        }
+    /// (stability, video): the published image, as it is.
+    pub fn live_image(&mut self) -> Result<image::RgbaImage> {
         let published = self.published.as_ref().context("no presented frame")?;
         let size = published.size();
         let output = published.output();
@@ -306,4 +311,24 @@ impl Presenter {
         )?;
         image::RgbaImage::from_raw(size[0], size[1], rgba).context("presented image dimensions")
     }
+}
+
+/// The frame's GPU timings as pass records: the renderer's whole frame, then its named
+/// passes (entries with an empty name are unused).
+fn timings(frame_ms: f64, passes: &[(&'static str, f64); EXTERNAL_PASSES]) -> Vec<PassTiming> {
+    let timing = |pass: &str, milliseconds: f64| PassTiming {
+        pass: pass.into(),
+        queue: ara_gpu::Queue::Graphics,
+        milliseconds,
+        start_ms: 0.,
+        end_ms: milliseconds,
+    };
+    std::iter::once(timing("External.Frame", frame_ms))
+        .chain(
+            passes
+                .iter()
+                .filter(|(name, _)| !name.is_empty())
+                .map(|(name, ms)| timing(&format!("External.Pass.{name}"), *ms)),
+        )
+        .collect()
 }

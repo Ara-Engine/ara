@@ -102,25 +102,9 @@ public static partial class ShadowMenu {
     );
     let state = agent.play("graphics", json!({"world":world}));
     assert_eq!(state["state"]["applied"]["groups"]["shadows"], "epic");
-    assert_eq!(state["rendererQuality"]["shadowCascades"], 4);
-    assert_eq!(state["rendererQuality"]["shadowResolution"], 2048);
-    assert_eq!(state["rendererQuality"]["shadowDistance"], 250.0);
-    assert_eq!(
-        state["rendererQuality"]["bloom"], false,
-        "the other groups remain Low"
-    );
     assert_eq!(state["state"]["capabilities"]["deviceKnown"], true);
     agent.play("capture", json!({"world":world,"path":root.join("medium-capture.png"),"width":320,"height":180,"marks":0,"preset":"medium"}));
-    assert_eq!(
-        agent.play("graphics", json!({"world":world}))["rendererQuality"]["bloom"],
-        true,
-        "per-capture preset overrides the view without overwriting user preferences"
-    );
     agent.play("capture", json!({"world":world,"path":root.join("restored-low.png"),"width":320,"height":180,"marks":0}));
-    assert_eq!(
-        agent.play("graphics", json!({"world":world}))["rendererQuality"]["bloom"],
-        false
-    );
     let ray_supported = state["state"]["capabilities"]["rayTracingSupported"]
         .as_bool()
         .unwrap();

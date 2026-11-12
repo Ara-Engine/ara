@@ -11,7 +11,7 @@
 //! The simulation is Renderlab's. It steps by the frame's elapsed simulation ticks (Ara's
 //! 60 Hz effect clock), so it is deterministic in what it spawns but not particle for
 //! particle Ara's. A new effect starts warmed by 2.5 seconds, as Ara's composite warms
-//! every effect before its first frame (`fidelity::vfx::WARM_TICKS`).
+//! every effect before its first frame (`WARM_TICKS`).
 use crate::rl::Engine;
 use crate::{gaps::Gaps, texture};
 use anyhow::Result;
@@ -34,10 +34,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 const EFFECT_HZ: f32 = 60.;
 /// Ticks stepped at most per frame.
 const MAX_CATCH_UP: u64 = 8;
-/// Seconds a new effect is warmed before it is first drawn: Ara's composite runs every
-/// effect `WARM_TICKS` before its first frame, whatever the scene tick, so smoke and
-/// fire appear in their steady state.
-const WARM_SECONDS: f32 = ara_runtime_render::fidelity::vfx::WARM_TICKS as f32 / EFFECT_HZ;
+/// Ticks every new effect runs before its first frame, whatever the scene tick, so
+/// smoke and fire appear in their steady state.
+const WARM_TICKS: u32 = 150;
+/// Seconds a new effect is warmed before it is first drawn (`WARM_TICKS`).
+const WARM_SECONDS: f32 = WARM_TICKS as f32 / EFFECT_HZ;
 const FNV: u64 = 0xcbf2_9ce4_8422_2325;
 /// Ara colours fire by a heat ramp of its sheet's density, from dark red to a hot white
 /// (`render.slang`). The ramp's brightest channel is 1.6: the sheet stores it over 1.6

@@ -213,7 +213,7 @@ impl Surface {
         self.resize(presenter.size(), self.scale)?;
         self.ui.frame(&mut self.text).map_err(ui_error)?;
         decoration::apply(&mut self.ui, self.screen);
-        let renderer = presenter.renderer().context("game UI needs a renderer")?;
+        let scene_gpu = presenter.gpu().context("game UI needs a renderer")?;
         let image = presenter
             .output()
             .context("game UI needs a completed scene")?;
@@ -222,7 +222,7 @@ impl Surface {
             // SAFETY: the window drops this surface before its presenter's device;
             // all UI and scene submissions occur sequentially on this thread.
             let mut gpu = unsafe {
-                ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(renderer.gpu()))?
+                ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(scene_gpu))?
             };
             gpu.set_deferred_completion(self.frames_in_flight)?;
             self.gpu = Some(gpu);
@@ -238,7 +238,7 @@ impl Surface {
             .set_raster_scale(self.scale)
             .map_err(ui_error)?;
         // The scene of a frame in flight may still be rendering into this image.
-        gpu.order_after(renderer.gpu());
+        gpu.order_after(scene_gpu);
         let id = stable_id("game-scene") as u32 & 0x7fff_ffff;
         // SAFETY: scene image/view and NativeUi share this presenter's live device.
         // The presenter replaces this image only after an idle wait (resize); its
@@ -246,8 +246,8 @@ impl Surface {
         unsafe {
             gpu.external_image(
                 id,
-                renderer.gpu().native_image(image)?,
-                renderer.gpu().image_view(image)?,
+                scene_gpu.native_image(image)?,
+                scene_gpu.image_view(image)?,
             )?;
         }
         self.renderer.external_image(id).map_err(ui_error)?;

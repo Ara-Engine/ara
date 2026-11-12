@@ -1,52 +1,9 @@
-//! Explicit readbacks of the selected live presentation.
+//! Explicit readbacks of the installed renderer's presentation.
 use super::*;
 
 impl Presenter {
-    /// Wait for the current frame and read its display, preserving temporal history.
-    #[cfg(feature = "fidelity-lab")]
-    pub fn lab_display(&mut self, frame: &RenderFrame) -> Result<image::RgbaImage> {
-        self.drain()?;
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("warm renderer is not ready")?;
-        if let Some(live) = &mut self.live {
-            live.view.capture(renderer.gpu_mut())
-        } else {
-            Ok(renderer
-                .capture_completed(&CaptureRequest {
-                    camera: camera(frame)?,
-                    size: self.size,
-                    mode: ViewMode::Lit,
-                    deterministic: false,
-                    exposure: frame.environment.exposure,
-                    settle_frames: 0,
-                    tick: frame.tick,
-                    seed: 0,
-                    marks: None,
-                })?
-                .image)
-        }
-    }
-    /// Wait for the current frame and read scene-linear radiance, preserving accumulation.
-    #[cfg(feature = "fidelity-lab")]
-    pub fn lab_radiance(&mut self) -> Result<([u32; 2], Vec<[f32; 4]>)> {
-        self.drain()?;
-        let renderer = self
-            .renderer
-            .as_mut()
-            .context("warm renderer is not ready")?;
-        if let Some(live) = &mut self.live {
-            Ok((
-                live.plan.render_size,
-                live.view.capture_radiance(renderer.gpu_mut())?,
-            ))
-        } else {
-            renderer.lab_radiance()
-        }
-    }
-    /// Captures the selected native presentation used by windows and embedded Game.
-    /// Resolves content only when required, with stable GPU-derived entity marks.
+    /// Captures `frame` with the installed renderer (history cut, settled, read back).
+    /// Resolves content only when required.
     pub fn capture_with(
         &mut self,
         frame: &RenderFrame,
@@ -77,122 +34,10 @@ impl Presenter {
             request
         };
         self.resize(request.size)?;
-        if self.external.is_some() {
-            self.drain()?;
-            return self.capture_external(frame, request, resolve);
-        }
-        self.prepare_with(frame, resolve)?;
-        let prepared_stats = self.stats;
-        if let Some(raster) = &mut self.raster
-            && self.live.is_none()
-        {
-            return raster.capture(
-                self.renderer.as_mut().context("raster capture device")?,
-                frame,
-                request,
-            );
-        }
-        if self.live.is_none() || !matches!(request.mode, ViewMode::Lit) {
-            anyhow::bail!(
-                "the old baseline capture is gone; capture through Renderlab or a raster view"
-            );
-        }
-        if request.deterministic {
-            let live = self.live.as_mut().context("native capture view")?;
-            let gpu = self
-                .renderer
-                .as_mut()
-                .context("presentation device")?
-                .gpu_mut();
-            // Captures settle residency before accumulating AA; progressive live
-            // refinement must not change the material midway through a readback.
-            let mut settled = false;
-            for _ in 0..256 {
-                let stats = live.view.refine_native_textures(gpu)?;
-                if stats.pending_textures == 0 {
-                    settled = true;
-                    break;
-                }
-                ensure!(
-                    stats.uploaded_bytes > 0,
-                    "capture texture residency made no progress"
-                );
-            }
-            ensure!(settled, "capture texture residency did not settle");
-            live.effects.reset(gpu)?;
-            live.view.reset_accumulation(gpu)?;
-            live.tick = None;
-            live.temporal = request.seed as u32;
-            live.lighting_changed = false;
-        }
-        // The path-traced reference accumulates 8 samples a frame (ara-render-fidelity
-        // render.rs): present until its budget is reached.
-        let frames = match self.debug.reference {
-            Some(trace) => request.settle_frames.max(trace.samples.div_ceil(8) + 1),
-            None => request.settle_frames,
-        };
-        for _ in 0..frames.max(1) {
-            self.present(frame)?;
-        }
-        self.stats.rebuilt |= prepared_stats.rebuilt;
-        self.stats.updated = self.stats.updated.max(prepared_stats.updated);
-        ensure!(
-            self.failure.is_none(),
-            "fidelity capture failed: {:?}",
-            self.failure
-        );
-        let live = self.live.as_mut().context("native capture view")?;
-        let gpu = self
-            .renderer
-            .as_mut()
-            .context("presentation device")?
-            .gpu_mut();
-        let image = live.view.capture(gpu)?;
-        let low = live.view.capture_entity_ids(gpu)?;
-        let size = live.plan.render_size;
-        let mut ids = Vec::with_capacity(image.width() as usize * image.height() as usize);
-        for y in 0..image.height() {
-            for x in 0..image.width() {
-                ids.push(
-                    low[(u64::from(y) * u64::from(size[1]) / u64::from(image.height())) as usize
-                        * size[0] as usize
-                        + (u64::from(x) * u64::from(size[0]) / u64::from(image.width())) as usize],
-                );
-            }
-        }
-        let names: Vec<_> = live
-            .prepared
-            .scene
-            .instances
-            .iter()
-            .map(|i| (i.entity, i.name.to_owned()))
-            .collect();
-        let root = ara_gpu::cooked::resource_dir(
-            "ara-render-fidelity",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-render-fidelity/cooked"),
-        );
-        let manifest: ara_gpu::cooked::CookedPipeline =
-            serde_json::from_slice(&std::fs::read(root.join("reference.json"))?)?;
-        let shaders = ShaderMetadata {
-            content_key: manifest.key,
-            compiler: manifest.compiler,
-            binding_layout_hash: manifest.binding_layout_hash,
-        };
-        Capture::from_feature(
-            FeatureCapture {
-                rgba: image.into_raw(),
-                ids,
-                names: &names,
-                hash: live.view.scene_hash(),
-                device: gpu.info(),
-                timings: live.view.timings(),
-                shaders: &shaders,
-            },
-            request,
-        )
+        self.capture_external(frame, request, resolve)
     }
 
-    /// Captures use raster by default; explicit RenderOptions can select fidelity.
+    /// A deterministic capture of `frame` in `mode`, settled for 16 frames.
     pub fn capture(
         &mut self,
         frame: &RenderFrame,
@@ -216,22 +61,5 @@ impl Presenter {
             },
             || Ok(Content::default()),
         )
-    }
-
-    /// Captures the selected window/Game presentation, including fidelity terrain and VFX.
-    pub fn capture_presented(
-        &mut self,
-        frame: &RenderFrame,
-        size: [u32; 2],
-        marks: Option<usize>,
-        seed: u64,
-    ) -> Result<Capture> {
-        self.prepare(frame)?;
-        if self.live.is_none() && self.raster.is_none() {
-            anyhow::bail!(
-                "the old baseline capture is gone; capture through Renderlab or a raster view"
-            );
-        }
-        self.capture(frame, size, ViewMode::Lit, marks, seed)
     }
 }

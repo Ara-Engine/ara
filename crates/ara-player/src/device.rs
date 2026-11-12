@@ -281,35 +281,26 @@ impl Windowed {
             self.recreate(presenter)?;
             presenter.resize(size)?;
         }
-        // Frames in flight: the scene, its UI composite and the window blit return
-        // once submitted; each waits its previous frame at the start of the next, so
-        // simulation and extraction overlap the GPU. Everything after the scene here
-        // is GPU work on the same queue.
-        presenter.set_frames_in_flight(true)?;
         // The UI composite and the window copy of the frame in flight may still read
         // the image this frame's scene rewrites; on Metal they run on queues of their
         // own, so the scene waits for them on the GPU.
-        if let Some(renderer) = presenter.renderer_mut() {
+        if let Some(gpu) = presenter.gpu_mut() {
             if let Some(surface) = &self.game_ui {
-                surface.order_before(renderer.gpu_mut());
+                surface.order_before(gpu);
             }
             if let Some(present) = &self.present {
-                present.order_before(renderer.gpu_mut());
+                present.order_before(gpu);
             }
         }
         presenter.present_with(frame, resolve)?;
-        // The frame in flight is stalled (Presenter::STALL_WAIT): nothing new to show.
-        if presenter.stats().skipped {
-            return Ok(());
-        }
         let cpu = started.elapsed() - presenter.stats().render;
-        let renderer = presenter
-            .renderer()
+        let gpu = presenter
+            .gpu()
             .ok_or_else(|| anyhow::anyhow!("renderer missing"))?;
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
+            self.present = Some(unsafe { Present::create(gpu, &self.window)? });
         }
         // The window copy returns once submitted, like the scene and its UI composite.
         // Set every frame: a presentation adopted from the loading view
@@ -317,12 +308,12 @@ impl Windowed {
         // frame's GPU work before the next frame could record.
         if let Some(present) = &mut self.present {
             // SAFETY: the presentation and window retain this same device.
-            if !unsafe { present.set_vsync_device(renderer.gpu(), &self.window, self.vsync)? } {
+            if !unsafe { present.set_vsync_device(gpu, &self.window, self.vsync)? } {
                 return Ok(());
             }
-            // SAFETY: created on this renderer's device, or on the loading device that
+            // SAFETY: created on this device, or on the loading device that
             // shares its native device; both are live.
-            unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
+            unsafe { present.set_frames_in_flight(gpu, true)? };
         }
         // The game UI (if any) composites the scene into its own target and presents it.
         if let Some(surface) = &mut self.game_ui {
@@ -336,9 +327,9 @@ impl Windowed {
             // ahead of the blit on this queue; both owners are live.
             Some(present) => unsafe {
                 match &self.game_ui {
-                    Some(surface) => surface.present(renderer.gpu(), present),
+                    Some(surface) => surface.present(gpu, present),
                     None => present.present_image(
-                        renderer.gpu(),
+                        gpu,
                         presenter.output().context("presented image missing")?,
                         presenter.output_size(),
                     ),
@@ -478,11 +469,11 @@ impl Windowed {
     }
 
     fn recreate(&mut self, presenter: &Presenter) -> Result<()> {
-        if let (Some(mut present), Some(renderer)) = (self.present.take(), presenter.renderer()) {
+        if let (Some(mut present), Some(gpu)) = (self.present.take(), presenter.gpu()) {
             // SAFETY: waiting for device idle before destroying presentation objects.
             unsafe {
-                renderer.gpu().wait_idle()?;
-                present.retire(renderer.gpu());
+                gpu.wait_idle()?;
+                present.retire(gpu);
             }
         }
         Ok(())

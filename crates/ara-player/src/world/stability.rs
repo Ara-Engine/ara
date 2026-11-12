@@ -45,7 +45,7 @@ pub(super) fn measure(
                     .map(|t| t.milliseconds)
                     .sum::<f64>()
             });
-            let image = presenter.live_image(request).context("live frame")?;
+            let image = presenter.live_image().context("live frame")?;
             let luma: Vec<f32> = image
                 .pixels()
                 .map(|p| {

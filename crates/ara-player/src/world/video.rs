@@ -47,7 +47,7 @@ pub(super) fn record(
             presenter.present_with(frame, || content(frame))?;
             if i >= WARMUP {
                 presenter
-                    .live_image(request)
+                    .live_image()
                     .context("live frame")?
                     .save(dir.join(format!("{:05}.png", i - WARMUP)))?;
             }

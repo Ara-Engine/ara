@@ -101,10 +101,7 @@ impl Prepared {
     pub fn model_source(&self, instance: usize) -> Option<&str> {
         self.model_sources.get(&instance).map(AsRef::as_ref)
     }
-    pub(crate) fn root_instances(&self) -> usize {
-        self.bindings.links.len()
-    }
-    /// Publication-local rows changed by the last `update_frame`. Raster consumes
+    /// Publication-local rows changed by the last `update_frame`. The renderer consumes
     /// these without rescanning static foliage, geometry or material blocks.
     pub fn changes(&self) -> &render::Changes {
         &self.changes

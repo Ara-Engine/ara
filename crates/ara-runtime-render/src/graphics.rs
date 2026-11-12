@@ -107,7 +107,7 @@ impl Presenter {
     /// replace residency/foliage on the next frame, retaining completed last-good output.
     pub fn set_graphics_settings(&mut self, settings: &Settings) {
         if self.graphics.as_ref() != Some(settings) {
-            self.graphics_plan_key = None;
+            self.preset = None;
             self.choice = choice(settings.preset);
             self.graphics = Some(settings.clone());
         }
@@ -115,10 +115,10 @@ impl Presenter {
 
     /// Query physical GPU support without creating a device or enabling ray tracing.
     pub fn graphics_capabilities(&self) -> UserCapabilities {
-        let Some(renderer) = &self.renderer else {
+        let Some(gpu) = self.gpu() else {
             return UserCapabilities::default();
         };
-        let info = renderer.gpu().info();
+        let info = gpu.info();
         UserCapabilities {
             device_known: true,
             ray_tracing_supported: info.ray_tracing_supported,

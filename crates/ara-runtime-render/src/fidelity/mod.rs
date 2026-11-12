@@ -19,8 +19,6 @@ mod packing;
 mod terrain;
 #[cfg(test)]
 mod tests;
-/// Particle composition over fidelity HDR radiance and depth.
-pub mod vfx;
 pub use content::{Content, EnvironmentMap, Foliage, TerrainLayer};
 
 /// Scene textures the fidelity view accepts.

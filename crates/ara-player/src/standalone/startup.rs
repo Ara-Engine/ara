@@ -176,7 +176,6 @@ pub(super) fn load(
             let (prepared, build_ms) = prepared_world.take().context("prepared runtime")?;
             let world = prepared.map_runtime(|runtime| Ok(crate::net::Play::Local(runtime)))?;
             let mut presenter = scene_presenter.take().context("warmed scene presenter")?;
-            presenter.set_probe_gi(true);
             presenter.set_quality(settings.quality);
             window.finish_loading(loading);
             window.title(settings.name)?;

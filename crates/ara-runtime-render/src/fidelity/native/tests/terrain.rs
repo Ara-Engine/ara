@@ -118,12 +118,6 @@ fn signed_terrain_splats_and_rule_prefab_parts_use_runtime_placements_once() {
         );
         let mut prepared = prepare(&frame, pending, config()).unwrap();
         prepared.enable_motion();
-        let slots = &prepared.unpublished_materials["as_missing"];
-        assert_eq!(slots.len(), 1);
-        assert_eq!(
-            prepared.scene.materials[slots[0]].pbr.base_color,
-            crate::PENDING_MODEL_COLOR
-        );
         let failed = Content::resolve_available_with_pending(
             &frame,
             &workspace,
