@@ -9,7 +9,8 @@ Bounded and unattended starts (`studio/setup.rs`, `Options`): `--frames N` ends 
 frames with the window never shown, so `--frames 1000000` is a protocol server for an export
 step; `--screenshot` shows the window in the background, then after the frames saves it with
 its Scene as `editor.png` in `--output` (the capture service's `window` target, one
-implementation); `--background` shows it unfocused. All three are unattended: the studio's
+implementation) plus `editor-scene-overlays.png`, the compositor's composed Scene frame with the
+grid, outlines, gizmos and icons (the window picture never has them); `--background` shows it unfocused. All three are unattended: the studio's
 import gate opens by itself once imports settle (`Options::unattended`). Tests that open a
 window are `#[ignore]`: `cargo test -p ara-editor --test bounded_runs --test
 background_capture -- --ignored`.
