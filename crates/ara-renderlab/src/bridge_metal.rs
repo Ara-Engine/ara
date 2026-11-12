@@ -146,9 +146,10 @@ impl Bridge {
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
-        let posed = self.scene.take_palettes_changed();
+        // Ticks every frame, as before the bridge learned to skip ticks (Apple's loop is not
+        // measured for it).
         self.effects
-            .sync(&mut self.engine, frame, posed, &mut self.gaps)?;
+            .sync(&mut self.engine, frame, true, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =

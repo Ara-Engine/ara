@@ -108,12 +108,12 @@ impl Effects {
     /// `posed` says a skinned object's pose changed: a tick that steps nothing still
     /// restarts the engine's per-tick work (the atmosphere's environment is placed again,
     /// which relights the GI cache), so redrawing the same tick from a moving camera must
-    /// not tick.
+    /// not tick, except while the lighting settles or a pose changed (`tick_anyway`).
     pub fn sync(
         &mut self,
         engine: &mut Engine,
         frame: &RenderFrame,
-        posed: bool,
+        tick_anyway: bool,
         gaps: &mut Gaps,
     ) -> Result<()> {
         let first = self.tick.is_none();
@@ -123,7 +123,7 @@ impl Effects {
         self.tick = Some(frame.tick);
         // The particle step and the shared per-tick work (skinning) that every view rendered
         // after it reuses.
-        if first || elapsed > 0 || posed {
+        if first || elapsed > 0 || tick_anyway {
             engine.tick(elapsed as f32 / EFFECT_HZ)?;
         }
         let prewarm = WARM_SECONDS;

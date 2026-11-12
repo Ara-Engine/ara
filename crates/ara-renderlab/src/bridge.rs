@@ -32,6 +32,11 @@ use std::time::{Duration, Instant};
 const FRAME_WAIT: Duration = Duration::from_secs(5);
 /// How long a click waits for the engine's id readback.
 const PICK_WAIT: Duration = Duration::from_millis(250);
+/// Frames the engine ticks after the scene or the view changed (a cut, new objects, a new sun or
+/// lights), whether or not a simulation tick elapsed: Renderlab's lighting settles over about
+/// this many ticks (measured: the first 30 reproduce an always-ticking frame to 71 dB).
+const SETTLE_TICKS: u32 = 32;
+
 /// Mesh-material groups terrain tiles may take; each resident tile is its own group (its own
 /// weights texture, so tiles never merge by material). Outpost's 144 tiles need 144; entity
 /// draws and foliage get `MAX_GROUPS - TERRAIN_GROUPS`, merged by material when they exceed it.
@@ -102,6 +107,8 @@ pub(crate) struct Bridge {
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
+    /// Frames left in which the engine ticks whether or not a simulation tick elapsed.
+    settle_ticks: u32,
     /// The frame begun and not yet taken (`Bridge::begin`, `Bridge::finish`).
     pending: Option<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
@@ -232,6 +239,7 @@ impl Bridge {
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
+            settle_ticks: SETTLE_TICKS,
             pending: None,
             last_view: None,
         })
@@ -346,9 +354,25 @@ impl Bridge {
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
+        // A view that jumps (a camera cut, a teleport) shares nothing with the history
+        // Renderlab accumulated: it starts over, as before a capture.
+        if let Some(camera) = frame.camera {
+            let view = (camera.position, camera.forward);
+            self.cut |= self.last_view.is_some_and(|last| jumped(last, view));
+            self.last_view = Some(view);
+        }
+        // Ticking also drives Renderlab's lighting convergence: its GI cache and atmosphere
+        // environment keep settling over the first ticks after anything about the scene or the
+        // view changed (a cut, new objects, a pose). Tick through `SETTLE_TICKS` frames then,
+        // and only when a simulation tick elapsed afterwards.
         let posed = self.scene.take_palettes_changed();
+        if self.scene.take_changed() || self.cut || self.view.is_none() {
+            self.settle_ticks = SETTLE_TICKS;
+        }
+        let settling = self.settle_ticks > 0;
+        self.settle_ticks = self.settle_ticks.saturating_sub(1);
         self.effects
-            .sync(&mut self.engine, frame, posed, &mut self.gaps)?;
+            .sync(&mut self.engine, frame, posed || settling, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =
@@ -363,11 +387,13 @@ impl Bridge {
         }
         // The view: created on the first frame; a new size or look sets it (a size restarts its
         // histories, as a resize did before views).
-        if self.view.is_none()
-            || regrade
-            || self.last_look.as_ref() != Some(&look)
-            || (self.desc.width, self.desc.height) != (view.size[0], view.size[1])
-        {
+        // A new size or grade restarts the lighting's settling; the exposure drifting every frame
+        // (it is part of the look) does not.
+        let resized = (self.desc.width, self.desc.height) != (view.size[0], view.size[1]);
+        if resized || regrade {
+            self.settle_ticks = SETTLE_TICKS;
+        }
+        if self.view.is_none() || regrade || self.last_look.as_ref() != Some(&look) || resized {
             self.desc.look = ViewLook {
                 colour_lut: self.desc.look.colour_lut.take(),
                 ..look.clone()
@@ -380,12 +406,17 @@ impl Bridge {
             self.last_look = Some(look);
         }
         let view_id = self.view.context("the view was created above")?;
-        self.skies
-            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?;
+        if self
+            .skies
+            .apply(&mut self.engine, view, &mut self.gaps, self.cut)?
+        {
+            self.settle_ticks = SETTLE_TICKS;
+        }
         let sun = lighting::sun(frame);
         if self.applied.sun != sun {
             self.engine.set_sun(sun)?;
             self.applied.sun = sun;
+            self.settle_ticks = SETTLE_TICKS;
         }
         let lights = lighting::lights(
             frame.lights.iter().chain(self.effects.lights()),
@@ -394,15 +425,9 @@ impl Bridge {
         if self.applied.lights != lights {
             self.engine.set_lights(&lights)?;
             self.applied.lights = lights;
+            self.settle_ticks = SETTLE_TICKS;
         }
 
-        // A view that jumps (a camera cut, a teleport) shares nothing with the history
-        // Renderlab accumulated: it starts over, as before a capture.
-        if let Some(camera) = frame.camera {
-            let view = (camera.position, camera.forward);
-            self.cut |= self.last_view.is_some_and(|last| jumped(last, view));
-            self.last_view = Some(view);
-        }
         if std::mem::take(&mut self.cut) {
             self.engine.cut_view(view_id);
             // As Ara resets its exposure history: the meter snaps to its target.

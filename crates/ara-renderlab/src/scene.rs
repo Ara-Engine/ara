@@ -145,6 +145,8 @@ pub(crate) struct Scene {
     palette: Vec<Mat4>,
     /// A skinned object's joint palette changed since `take_palettes_changed` last asked.
     palettes_changed: bool,
+    /// An object was spawned, moved, replaced or removed since `take_changed` last asked.
+    changed: bool,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
     /// Mean linear colour of each emissive map packed so far, by its content key.
@@ -564,8 +566,17 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 }
 
 impl Scene {
+    /// Whether the scene's objects changed since this was last asked: a spawn, move,
+    /// replacement or removal (`Bridge::begin` lets the lighting settle after one).
+    // On Apple the bridge ticks every frame and asks neither.
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
+    pub fn take_changed(&mut self) -> bool {
+        std::mem::take(&mut self.changed)
+    }
+
     /// Whether a skinned object's pose changed since this was last asked: the engine must
     /// tick to skin it (`Effects::sync`).
+    #[cfg_attr(target_vendor = "apple", allow(dead_code))]
     pub fn take_palettes_changed(&mut self) -> bool {
         std::mem::take(&mut self.palettes_changed)
     }
@@ -828,6 +839,7 @@ impl Scene {
         let Some(batch) = self.batches.remove(&material) else {
             return Ok(());
         };
+        self.changed = true;
         engine.despawn(batch.id)?;
         engine.remove_mesh(batch.mesh)?;
         self.release_material(engine, batch.material_slot)
@@ -849,6 +861,7 @@ impl Scene {
             o.mesh == mesh && o.material == material && o.skin.map(|s| s.1) == joints
         });
         if !reusable {
+            self.changed = true;
             self.remove(engine, draw.entity)?;
 
             let (mesh_id, skin, tangents) = match (mesh, joints) {
@@ -885,6 +898,7 @@ impl Scene {
             .get_mut(&draw.entity)
             .context("object placed above")?;
         if object.world != world {
+            self.changed = true;
             engine.set_transform(object.id, Mat4::from_cols_array(&world))?;
             object.world = world;
         }
@@ -919,6 +933,7 @@ impl Scene {
         let Some(object) = self.objects.remove(&entity) else {
             return Ok(());
         };
+        self.changed = true;
         engine.despawn(object.id)?;
         match (object.mesh, object.skin) {
             (_, Some((posed, _))) => engine.remove_mesh(posed)?,
