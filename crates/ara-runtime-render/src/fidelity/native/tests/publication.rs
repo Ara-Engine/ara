@@ -3,7 +3,7 @@ use ara_asset::{
     CachedImport, Cancellation, CookPreset, ImportContext, ImportInput, TargetPlatform,
 };
 use ara_frame::{capture::ViewMode, scene::CameraSpec};
-use ara_render::{Renderer};
+use ara_render::Renderer;
 use ara_render_fidelity::presets::{
     Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath,
 };
