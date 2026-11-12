@@ -261,7 +261,6 @@ impl Terrain {
     /// Gives the placed tiles the editor's ids: tile `n` of the frame's sorted resident
     /// coordinates is `first + n` (the editor lists them after the frame's draws). Sets only
     /// what changed.
-    #[cfg(not(target_vendor = "apple"))]
     pub fn tag(&mut self, engine: &mut Engine, first: u32) -> Result<()> {
         let wanted: Vec<(ObjectId, u32)> = self
             .tagged
@@ -274,12 +273,6 @@ impl Terrain {
             }
             self.applied = wanted;
         }
-        Ok(())
-    }
-
-    /// Apple's backend has no object ids yet.
-    #[cfg(target_vendor = "apple")]
-    pub fn tag(&mut self, _: &mut Engine, _: u32) -> Result<()> {
         Ok(())
     }
 
