@@ -181,8 +181,8 @@
       },
       "Mover": {
         "origin": [0, 0.30000001192092896, 32.5],
-        "travel": [4, 0, 0],
-        "periodTicks": 300
+        "travel": [3, 0, 0],
+        "periodTicks": 360
       },
       "RigidBody": {
         "motion": "kinematic"

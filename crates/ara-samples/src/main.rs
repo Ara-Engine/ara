@@ -16,6 +16,7 @@ mod credits;
 mod editor;
 mod fetch;
 mod game;
+mod glint_replay;
 mod kit;
 mod lock;
 mod play;
@@ -140,6 +141,17 @@ enum Command {
         /// A headless player instead of a window.
         #[arg(long)]
         headless: bool,
+    },
+    /// Replay Glint's recorded inputs frame-exactly and check the finish time and state hash.
+    GlintReplay {
+        /// The replay file (default: `samples/glint/replay/foundry.json`).
+        file: Option<PathBuf>,
+        /// Rewrite the file's expected result from this run instead of checking it.
+        #[arg(long)]
+        record: bool,
+        /// Write the file's stills (start, mid-course, goal) into this directory.
+        #[arg(long)]
+        captures: Option<PathBuf>,
     },
     /// Open a scene in `ara-editor`, frame it over the Engine Protocol and capture.
     Editor {
@@ -305,6 +317,20 @@ fn main() -> Result<()> {
                 look: &look,
             },
         )?,
+        Command::GlintReplay {
+            file,
+            record,
+            captures,
+        } => {
+            let root = samples.join("glint");
+            let file = file.unwrap_or_else(|| root.join("replay/foundry.json"));
+            glint_replay::run(&glint_replay::Request {
+                root: &root,
+                file: &file,
+                record,
+                captures,
+            })?;
+        }
         Command::Play {
             project,
             scene,

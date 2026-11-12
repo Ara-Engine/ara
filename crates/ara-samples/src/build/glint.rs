@@ -6,7 +6,7 @@
 //! `Surface` component with the same half extents as their collider, because scripts have
 //! no contact events or ray casts to ask the physics engine.
 use super::{
-    Ctx,
+    Ctx, clean,
     outpost::light,
     place::{Models, Scene},
 };
@@ -90,9 +90,9 @@ const SLIDER: Slider = Slider {
     id: "e_m1",
     name: "Moving platform",
     origin: Vec3::new(0.0, 0.8 - SLAB * 0.5, 32.5),
-    travel: Vec3::new(4.0, 0.0, 0.0),
+    travel: Vec3::new(3.0, 0.0, 0.0),
     size: (3.2, 3.2),
-    period: 300,
+    period: 360,
 };
 
 /// Spinner bars over the beam: Z of the pivot, start yaw, degrees a second.
@@ -115,6 +115,7 @@ fn surface_components(slab: &Slab) -> Value {
 
 /// Builds the Glint project: one scene, authored through typed commands.
 pub fn build(ctx: &Ctx) -> Result<()> {
+    clean(ctx, &["levels"])?;
     ctx.new_document(SCENE.0, "scene", SCENE.1)?;
     let models = Models::default();
     let mut s = Scene::new(&models);

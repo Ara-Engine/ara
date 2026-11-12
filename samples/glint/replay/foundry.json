@@ -1,0 +1,2926 @@
+{
+  "format": "glint-replay/1",
+  "scene": "levels/glint.scene",
+  "seed": 7,
+  "chunk": 4,
+  "endTick": 2072,
+  "events": [
+    {
+      "tick": 4,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 8,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 12,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 16,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 20,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 24,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 28,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 32,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 36,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 40,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 44,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 48,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 52,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 56,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 60,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 64,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 68,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 72,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 76,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 80,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 84,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 88,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 92,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 96,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 100,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 104,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 108,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 112,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 116,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 120,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 124,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 128,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 132,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 136,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 140,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 144,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 148,
+      "action": "Move",
+      "value": [0, 1],
+      "hold": 4
+    },
+    {
+      "tick": 152,
+      "action": "Move",
+      "value": [0, 0.651],
+      "hold": 4
+    },
+    {
+      "tick": 156,
+      "action": "Move",
+      "value": [0, 0.359],
+      "hold": 4
+    },
+    {
+      "tick": 164,
+      "action": "Move",
+      "value": [0, 0.329],
+      "hold": 4
+    },
+    {
+      "tick": 168,
+      "action": "Move",
+      "value": [0, 0.261],
+      "hold": 4
+    },
+    {
+      "tick": 172,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 176,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 176,
+      "action": "Move",
+      "value": [0, 0.6],
+      "hold": 4
+    },
+    {
+      "tick": 180,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 184,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 188,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 192,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 196,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 200,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 204,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 208,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 212,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 216,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 220,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 224,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 228,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 232,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 236,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 240,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 244,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 248,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 252,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 256,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 260,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 264,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 268,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 272,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 276,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 280,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 284,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 288,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 292,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 296,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 300,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 304,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 308,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 312,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 316,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 320,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 324,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 328,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 332,
+      "action": "Move",
+      "value": [0, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 336,
+      "action": "Move",
+      "value": [0, 0.448],
+      "hold": 4
+    },
+    {
+      "tick": 340,
+      "action": "Move",
+      "value": [0, 0.379],
+      "hold": 4
+    },
+    {
+      "tick": 344,
+      "action": "Move",
+      "value": [0, 0.321],
+      "hold": 4
+    },
+    {
+      "tick": 348,
+      "action": "Move",
+      "value": [0, 0.272],
+      "hold": 4
+    },
+    {
+      "tick": 352,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 356,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 360,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 368,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 372,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 376,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 380,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 384,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 388,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 392,
+      "action": "Move",
+      "value": [0, 0.3],
+      "hold": 4
+    },
+    {
+      "tick": 396,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 400,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 404,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 408,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 412,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 416,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 420,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 424,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 428,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 432,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 436,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 440,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 444,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 448,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 452,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 456,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 460,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 464,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 468,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 472,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 476,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 480,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 484,
+      "action": "Move",
+      "value": [0, 0.4],
+      "hold": 4
+    },
+    {
+      "tick": 484,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 488,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 492,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 496,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 500,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 504,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 508,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 512,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 516,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 520,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 524,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 528,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 532,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 536,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 540,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 544,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 548,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 552,
+      "action": "Move",
+      "value": [0, 0.453],
+      "hold": 4
+    },
+    {
+      "tick": 556,
+      "action": "Move",
+      "value": [0, 0.37],
+      "hold": 4
+    },
+    {
+      "tick": 560,
+      "action": "Move",
+      "value": [0, 0.297],
+      "hold": 4
+    },
+    {
+      "tick": 564,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 568,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 576,
+      "action": "Move",
+      "value": [0.259, 0.151],
+      "hold": 4
+    },
+    {
+      "tick": 580,
+      "action": "Move",
+      "value": [0.264, 0.142],
+      "hold": 4
+    },
+    {
+      "tick": 584,
+      "action": "Move",
+      "value": [0.265, 0.14],
+      "hold": 4
+    },
+    {
+      "tick": 588,
+      "action": "Move",
+      "value": [0.266, 0.139],
+      "hold": 4
+    },
+    {
+      "tick": 592,
+      "action": "Move",
+      "value": [0.267, 0.138],
+      "hold": 4
+    },
+    {
+      "tick": 596,
+      "action": "Move",
+      "value": [0.267, 0.137],
+      "hold": 4
+    },
+    {
+      "tick": 600,
+      "action": "Move",
+      "value": [0.267, 0.137],
+      "hold": 4
+    },
+    {
+      "tick": 604,
+      "action": "Move",
+      "value": [0.267, 0.137],
+      "hold": 4
+    },
+    {
+      "tick": 608,
+      "action": "Move",
+      "value": [0.267, 0.137],
+      "hold": 4
+    },
+    {
+      "tick": 612,
+      "action": "Move",
+      "value": [0.267, 0.136],
+      "hold": 4
+    },
+    {
+      "tick": 616,
+      "action": "Move",
+      "value": [0.267, 0.136],
+      "hold": 4
+    },
+    {
+      "tick": 620,
+      "action": "Move",
+      "value": [0.267, 0.136],
+      "hold": 4
+    },
+    {
+      "tick": 624,
+      "action": "Move",
+      "value": [0.268, 0.136],
+      "hold": 4
+    },
+    {
+      "tick": 628,
+      "action": "Move",
+      "value": [0.268, 0.135],
+      "hold": 4
+    },
+    {
+      "tick": 632,
+      "action": "Move",
+      "value": [-0.467, 0.179],
+      "hold": 4
+    },
+    {
+      "tick": 632,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 636,
+      "action": "Move",
+      "value": [-0.18, 0.466],
+      "hold": 4
+    },
+    {
+      "tick": 640,
+      "action": "Move",
+      "value": [-0.185, 0.464],
+      "hold": 4
+    },
+    {
+      "tick": 644,
+      "action": "Move",
+      "value": [-0.189, 0.463],
+      "hold": 4
+    },
+    {
+      "tick": 648,
+      "action": "Move",
+      "value": [-0.193, 0.461],
+      "hold": 4
+    },
+    {
+      "tick": 652,
+      "action": "Move",
+      "value": [-0.196, 0.46],
+      "hold": 4
+    },
+    {
+      "tick": 656,
+      "action": "Move",
+      "value": [-0.198, 0.459],
+      "hold": 4
+    },
+    {
+      "tick": 660,
+      "action": "Move",
+      "value": [-0.2, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 664,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 668,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 672,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 676,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 680,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 684,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 688,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 692,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 696,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 700,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 704,
+      "action": "Move",
+      "value": [-0.201, 0.458],
+      "hold": 4
+    },
+    {
+      "tick": 708,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 712,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 716,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 720,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 724,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 728,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 732,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 736,
+      "action": "Move",
+      "value": [-0.241, 0.55],
+      "hold": 4
+    },
+    {
+      "tick": 740,
+      "action": "Move",
+      "value": [-0.196, 0.448],
+      "hold": 4
+    },
+    {
+      "tick": 744,
+      "action": "Move",
+      "value": [-0.155, 0.353],
+      "hold": 4
+    },
+    {
+      "tick": 748,
+      "action": "Move",
+      "value": [-0.122, 0.279],
+      "hold": 4
+    },
+    {
+      "tick": 752,
+      "action": "Move",
+      "value": [-0.1, 0.229],
+      "hold": 4
+    },
+    {
+      "tick": 760,
+      "action": "Move",
+      "value": [-0.021, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 764,
+      "action": "Move",
+      "value": [-0.019, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 768,
+      "action": "Move",
+      "value": [-0.017, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 772,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 776,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 780,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 784,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 788,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 792,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 796,
+      "action": "Move",
+      "value": [-0.016, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 800,
+      "action": "Move",
+      "value": [-0.015, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 804,
+      "action": "Move",
+      "value": [-0.015, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 808,
+      "action": "Move",
+      "value": [-0.015, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 812,
+      "action": "Move",
+      "value": [-0.013, 0.655],
+      "hold": 4
+    },
+    {
+      "tick": 816,
+      "action": "Move",
+      "value": [-0.009, 0.467],
+      "hold": 4
+    },
+    {
+      "tick": 820,
+      "action": "Move",
+      "value": [-0.006, 0.325],
+      "hold": 4
+    },
+    {
+      "tick": 828,
+      "action": "Move",
+      "value": [-0.002, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 832,
+      "action": "Move",
+      "value": [-0.002, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 836,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 836,
+      "action": "Move",
+      "value": [-0.001, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 840,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 844,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 848,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 852,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 856,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 860,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 864,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 868,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 872,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 876,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 880,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 884,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 888,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 892,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 896,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 900,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 904,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 908,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 912,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 916,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 920,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 924,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 928,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 932,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 936,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 940,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 944,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 948,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 952,
+      "action": "Move",
+      "value": [-1, 0],
+      "hold": 4
+    },
+    {
+      "tick": 956,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 960,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 964,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 968,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 972,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 976,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 980,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 984,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 988,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 992,
+      "action": "Move",
+      "value": [0, 0],
+      "hold": 4
+    },
+    {
+      "tick": 996,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1000,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1004,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1008,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1012,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1016,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1020,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1024,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1028,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1032,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1036,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1040,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1044,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1048,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1052,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1056,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1060,
+      "action": "Move",
+      "value": [0, 0.606],
+      "hold": 4
+    },
+    {
+      "tick": 1064,
+      "action": "Move",
+      "value": [0, 0.424],
+      "hold": 4
+    },
+    {
+      "tick": 1068,
+      "action": "Move",
+      "value": [0, 0.295],
+      "hold": 4
+    },
+    {
+      "tick": 1076,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1080,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1084,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1084,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1088,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1092,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1096,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1100,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1104,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1108,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1112,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1116,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1120,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1124,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1128,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1132,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1136,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1140,
+      "action": "Move",
+      "value": [0, 0.8],
+      "hold": 4
+    },
+    {
+      "tick": 1144,
+      "action": "Move",
+      "value": [0, 0.666],
+      "hold": 4
+    },
+    {
+      "tick": 1148,
+      "action": "Move",
+      "value": [0, 0.449],
+      "hold": 4
+    },
+    {
+      "tick": 1156,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1160,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1164,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1168,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1172,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1176,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1180,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1184,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1188,
+      "action": "Move",
+      "value": [0, 0.482],
+      "hold": 4
+    },
+    {
+      "tick": 1192,
+      "action": "Move",
+      "value": [0, 0.399],
+      "hold": 4
+    },
+    {
+      "tick": 1196,
+      "action": "Move",
+      "value": [0, 0.33],
+      "hold": 4
+    },
+    {
+      "tick": 1200,
+      "action": "Move",
+      "value": [0, 0.274],
+      "hold": 4
+    },
+    {
+      "tick": 1204,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1208,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1212,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1212,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1216,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1220,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1224,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1228,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1232,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1236,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1240,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1244,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1248,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1252,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1256,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1260,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1264,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1268,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1272,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1276,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1280,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1284,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1288,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1292,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1296,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1300,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1304,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1308,
+      "action": "Move",
+      "value": [0, 0.9],
+      "hold": 4
+    },
+    {
+      "tick": 1312,
+      "action": "Move",
+      "value": [0, 0.707],
+      "hold": 4
+    },
+    {
+      "tick": 1316,
+      "action": "Move",
+      "value": [0, 0.485],
+      "hold": 4
+    },
+    {
+      "tick": 1320,
+      "action": "Move",
+      "value": [0, 0.312],
+      "hold": 4
+    },
+    {
+      "tick": 1328,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1332,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1336,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1340,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1344,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1348,
+      "action": "Move",
+      "value": [0, 0.486],
+      "hold": 4
+    },
+    {
+      "tick": 1352,
+      "action": "Move",
+      "value": [0, 0.402],
+      "hold": 4
+    },
+    {
+      "tick": 1356,
+      "action": "Move",
+      "value": [0, 0.332],
+      "hold": 4
+    },
+    {
+      "tick": 1360,
+      "action": "Move",
+      "value": [0, 0.275],
+      "hold": 4
+    },
+    {
+      "tick": 1364,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1368,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1372,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1372,
+      "action": "Move",
+      "value": [0, 0.5],
+      "hold": 4
+    },
+    {
+      "tick": 1376,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1380,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1384,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1388,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1392,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1396,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1400,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1404,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1408,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1412,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1416,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1420,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1424,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1428,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1432,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1436,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1440,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1444,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1448,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1452,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1456,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1460,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1464,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1468,
+      "action": "Move",
+      "value": [0, 0.35],
+      "hold": 4
+    },
+    {
+      "tick": 1472,
+      "action": "Move",
+      "value": [0, 0.346],
+      "hold": 4
+    },
+    {
+      "tick": 1476,
+      "action": "Move",
+      "value": [0, 0.305],
+      "hold": 4
+    },
+    {
+      "tick": 1480,
+      "action": "Move",
+      "value": [0, 0.269],
+      "hold": 4
+    },
+    {
+      "tick": 1484,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1488,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1492,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1496,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1500,
+      "action": "Move",
+      "value": [0, 0.25],
+      "hold": 4
+    },
+    {
+      "tick": 1508,
+      "action": "Move",
+      "value": [-0.189, 0.353],
+      "hold": 4
+    },
+    {
+      "tick": 1512,
+      "action": "Move",
+      "value": [-0.192, 0.351],
+      "hold": 4
+    },
+    {
+      "tick": 1516,
+      "action": "Move",
+      "value": [-0.181, 0.327],
+      "hold": 4
+    },
+    {
+      "tick": 1520,
+      "action": "Move",
+      "value": [-0.156, 0.282],
+      "hold": 4
+    },
+    {
+      "tick": 1524,
+      "action": "Move",
+      "value": [-0.135, 0.244],
+      "hold": 4
+    },
+    {
+      "tick": 1528,
+      "action": "Move",
+      "value": [-0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1532,
+      "action": "Move",
+      "value": [-0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1536,
+      "action": "Move",
+      "value": [-0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1540,
+      "action": "Move",
+      "value": [-0.12, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1544,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1544,
+      "action": "Move",
+      "value": [-0.023, 0.399],
+      "hold": 4
+    },
+    {
+      "tick": 1548,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1552,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1556,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1560,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1564,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1568,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1572,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1576,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1580,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1584,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1588,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1592,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1596,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1600,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1604,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1608,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1612,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1616,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1620,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1624,
+      "action": "Move",
+      "value": [-0.092, 0.338],
+      "hold": 4
+    },
+    {
+      "tick": 1628,
+      "action": "Move",
+      "value": [-0.088, 0.325],
+      "hold": 4
+    },
+    {
+      "tick": 1632,
+      "action": "Move",
+      "value": [-0.077, 0.285],
+      "hold": 4
+    },
+    {
+      "tick": 1636,
+      "action": "Move",
+      "value": [-0.068, 0.248],
+      "hold": 4
+    },
+    {
+      "tick": 1640,
+      "action": "Move",
+      "value": [-0.066, 0.241],
+      "hold": 4
+    },
+    {
+      "tick": 1644,
+      "action": "Move",
+      "value": [-0.066, 0.241],
+      "hold": 4
+    },
+    {
+      "tick": 1648,
+      "action": "Move",
+      "value": [-0.065, 0.241],
+      "hold": 4
+    },
+    {
+      "tick": 1652,
+      "action": "Move",
+      "value": [-0.066, 0.241],
+      "hold": 4
+    },
+    {
+      "tick": 1656,
+      "action": "Move",
+      "value": [-0.065, 0.241],
+      "hold": 4
+    },
+    {
+      "tick": 1664,
+      "action": "Move",
+      "value": [0.091, 0.41],
+      "hold": 4
+    },
+    {
+      "tick": 1668,
+      "action": "Move",
+      "value": [0.089, 0.381],
+      "hold": 4
+    },
+    {
+      "tick": 1672,
+      "action": "Move",
+      "value": [0.078, 0.331],
+      "hold": 4
+    },
+    {
+      "tick": 1676,
+      "action": "Move",
+      "value": [0.067, 0.284],
+      "hold": 4
+    },
+    {
+      "tick": 1680,
+      "action": "Move",
+      "value": [0.058, 0.243],
+      "hold": 4
+    },
+    {
+      "tick": 1684,
+      "action": "Move",
+      "value": [0.058, 0.243],
+      "hold": 4
+    },
+    {
+      "tick": 1688,
+      "action": "Move",
+      "value": [0.058, 0.243],
+      "hold": 4
+    },
+    {
+      "tick": 1692,
+      "action": "Move",
+      "value": [0.057, 0.243],
+      "hold": 4
+    },
+    {
+      "tick": 1696,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1696,
+      "action": "Move",
+      "value": [0.011, 0.42],
+      "hold": 4
+    },
+    {
+      "tick": 1700,
+      "action": "Move",
+      "value": [0.165, 0.309],
+      "hold": 4
+    },
+    {
+      "tick": 1704,
+      "action": "Move",
+      "value": [0.168, 0.307],
+      "hold": 4
+    },
+    {
+      "tick": 1708,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1712,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1716,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1720,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1724,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1728,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1732,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1736,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1740,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1744,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1748,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1752,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1756,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1760,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1764,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1768,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1772,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1776,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1780,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1784,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1788,
+      "action": "Move",
+      "value": [0.17, 0.306],
+      "hold": 4
+    },
+    {
+      "tick": 1792,
+      "action": "Move",
+      "value": [0.162, 0.292],
+      "hold": 4
+    },
+    {
+      "tick": 1796,
+      "action": "Move",
+      "value": [0.15, 0.27],
+      "hold": 4
+    },
+    {
+      "tick": 1800,
+      "action": "Move",
+      "value": [0.132, 0.239],
+      "hold": 4
+    },
+    {
+      "tick": 1804,
+      "action": "Move",
+      "value": [0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1808,
+      "action": "Move",
+      "value": [0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1812,
+      "action": "Move",
+      "value": [0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1816,
+      "action": "Move",
+      "value": [0.121, 0.219],
+      "hold": 4
+    },
+    {
+      "tick": 1820,
+      "action": "Move",
+      "value": [0.122, 0.218],
+      "hold": 4
+    },
+    {
+      "tick": 1828,
+      "action": "Move",
+      "value": [-0.075, 0.411],
+      "hold": 4
+    },
+    {
+      "tick": 1832,
+      "action": "Move",
+      "value": [-0.077, 0.38],
+      "hold": 4
+    },
+    {
+      "tick": 1836,
+      "action": "Move",
+      "value": [-0.068, 0.328],
+      "hold": 4
+    },
+    {
+      "tick": 1840,
+      "action": "Move",
+      "value": [-0.057, 0.278],
+      "hold": 4
+    },
+    {
+      "tick": 1844,
+      "action": "Move",
+      "value": [-0.051, 0.245],
+      "hold": 4
+    },
+    {
+      "tick": 1848,
+      "action": "Move",
+      "value": [-0.05, 0.245],
+      "hold": 4
+    },
+    {
+      "tick": 1852,
+      "action": "Move",
+      "value": [-0.051, 0.245],
+      "hold": 4
+    },
+    {
+      "tick": 1856,
+      "action": "Jump",
+      "value": true,
+      "hold": 1
+    },
+    {
+      "tick": 1856,
+      "action": "Move",
+      "value": [-0.011, 0.45],
+      "hold": 4
+    },
+    {
+      "tick": 1860,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1864,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1868,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1872,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1876,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1880,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1884,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1888,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1892,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1896,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1900,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1904,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1908,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1912,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1916,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1920,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1924,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1928,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 1932,
+      "action": "Move",
+      "value": [-0.047, 0.498],
+      "hold": 4
+    },
+    {
+      "tick": 2056,
+      "action": "Interact",
+      "value": true,
+      "hold": 2
+    }
+  ],
+  "captures": [
+    {
+      "tick": 20,
+      "name": "start"
+    },
+    {
+      "tick": 900,
+      "name": "midcourse"
+    },
+    {
+      "tick": 1940,
+      "name": "goal"
+    }
+  ],
+  "expect": {
+    "finishTicks": 1929,
+    "falls": 1,
+    "hash": "1f44ee0f2090673ff2b643399764859c83232b5bd3d2cca5b345b6a5d201e821"
+  }
+}

@@ -37,7 +37,9 @@ public sealed partial class BallController : Behaviour
             return;
         }
         ref var body = ref World.Get<Velocity>(Entity);
-        var grounded = Course.Resting(position, Radius, out _);
+        var grounded = Course.Resting(position, Radius, out _, out var under);
+        // A ball resting on a sliding platform moves with it: steer relative to the platform.
+        var carry = grounded && World.Has<Mover>(under) ? Course.MoverVelocity(under, in tick) : Vector3.Zero;
         ball.Grounded = grounded;
         ball.CoyoteTicks = grounded ? 6 : Math.Max(0, ball.CoyoteTicks - 1);
 
@@ -51,7 +53,7 @@ public sealed partial class BallController : Behaviour
         if (wish.LengthSquared() > 1f) wish = Vector3.Normalize(wish);
 
         var velocity = body.Linear;
-        var planar = new Vector3(velocity.X, 0, velocity.Z);
+        var planar = new Vector3(velocity.X - carry.X, 0, velocity.Z - carry.Z);
         var step = tick.Dt;
         if (wish != Vector3.Zero)
         {
@@ -64,8 +66,8 @@ public sealed partial class BallController : Behaviour
             var slow = Resistance * step;
             planar = planar.Length() > slow ? planar - Vector3.Normalize(planar) * slow : Vector3.Zero;
         }
-        velocity.X = planar.X;
-        velocity.Z = planar.Z;
+        velocity.X = planar.X + carry.X;
+        velocity.Z = planar.Z + carry.Z;
 
         var jump = Input.Button(ball.Player, "Jump");
         if (jump && !ball.JumpHeld && ball.CoyoteTicks > 0)
