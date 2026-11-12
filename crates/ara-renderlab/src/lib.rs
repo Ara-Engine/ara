@@ -78,8 +78,9 @@ pub struct Options {
     pub path: PathChoice,
     /// Directory for Renderlab's persistent pipeline cache (kept apart from Ara's).
     pub pipeline_cache: Option<PathBuf>,
-    /// Roughness at which Renderlab stops tracing reflections; `None` keeps its own
-    /// default (0.5); 0.05 traces mirrors only (an A/B switch for the glossy band's cost).
+    /// Roughness at which Renderlab stops tracing reflections; `None` is the bridge's
+    /// default (`lighting::REFLECTION_ROUGHNESS`, 0.35: Renderlab's own is 0.5); 0.05 traces
+    /// mirrors only (an A/B switch for the glossy band's cost).
     pub max_reflection_roughness: Option<f32>,
     /// Hand frames to the presenter by CPU copy even where the two devices could
     /// share images (A/B measurements; the automatic fallback needs no flag).

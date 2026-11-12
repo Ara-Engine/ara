@@ -14,6 +14,12 @@ use renderlab::engine::{
 };
 use std::{borrow::Cow, f32::consts::PI};
 
+/// Perceptual roughness at which traced reflections end, unless the host asks otherwise: traced
+/// fully to 0.7 times this and faded into the untraced estimate by it. Renderlab's own is 0.5;
+/// at 0.35 Showcase's frame is a third cheaper on the Radeon 760M (45 to 30 ms) and the
+/// difference in the picture is under 47 dB PSNR (mirrors and polished metal still trace).
+pub(crate) const REFLECTION_ROUGHNESS: f32 = 0.35;
+
 /// Where the camera looks from when the world has none (as `ara-runtime-render`).
 const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
 /// Clip planes in metres: Ara's extraction carries none.
@@ -394,7 +400,7 @@ pub(crate) fn settings(
         exposure: Exposure::Manual { stops },
         reflections: ReflectionSettings {
             max_roughness: max_reflection_roughness
-                .unwrap_or(view_defaults.reflections.max_roughness)
+                .unwrap_or(REFLECTION_ROUGHNESS)
                 .clamp(0., 1.),
             ..view_defaults.reflections
         },
