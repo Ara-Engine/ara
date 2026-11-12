@@ -146,7 +146,9 @@ impl Bridge {
         self.terrain
             .tag(&mut self.engine, frame.draws.len() as u32 + 1)?;
         self.decals.sync(&mut self.engine, frame, &mut self.gaps)?;
-        self.effects.sync(&mut self.engine, frame, &mut self.gaps)?;
+        let posed = self.scene.take_palettes_changed();
+        self.effects
+            .sync(&mut self.engine, frame, posed, &mut self.gaps)?;
 
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);
         let (settings, look) =

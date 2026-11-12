@@ -61,6 +61,8 @@ struct Object {
     world: [f32; 16],
     /// The posed mesh and joint count of a skinned object.
     skin: Option<(MeshId, usize)>,
+    /// Hash of the joint palette last given to a skinned object (0: none yet).
+    pose: u64,
 }
 
 /// A draw's transform with its last row made exactly (0, 0, 0, 1) when it is within 1e-3 of it:
@@ -141,6 +143,8 @@ pub(crate) struct Scene {
     /// objects by entity (`false`), batches by material key (`true`).
     tags: Tags,
     palette: Vec<Mat4>,
+    /// A skinned object's joint palette changed since `take_palettes_changed` last asked.
+    palettes_changed: bool,
     /// The emissive program once tried: `Some(None)` when Renderlab rejected it.
     emissive: Option<Option<ProgramId>>,
     /// Mean linear colour of each emissive map packed so far, by its content key.
@@ -560,6 +564,12 @@ fn triangles(draw: &Draw) -> Result<Triangles<'_>> {
 }
 
 impl Scene {
+    /// Whether a skinned object's pose changed since this was last asked: the engine must
+    /// tick to skin it (`Effects::sync`).
+    pub fn take_palettes_changed(&mut self) -> bool {
+        std::mem::take(&mut self.palettes_changed)
+    }
+
     /// Triangles of the largest mesh this scene has uploaded (cut meshes and static
     /// batches included). Renderlab's non-RT shadows size their ids by it.
     // On Apple, only the non-RT path caps foliage by it.
@@ -866,6 +876,7 @@ impl Scene {
                     material_slot,
                     world,
                     skin,
+                    pose: 0,
                 },
             );
         }
@@ -887,8 +898,18 @@ impl Scene {
             debug_assert_eq!(self.palette.len(), joints);
             // The identity joint rigid vertices bind to (`influence`).
             self.palette.push(Mat4::IDENTITY);
-            // Sent every frame: Renderlab itself ignores an unchanged palette.
-            engine.set_joint_palette(posed, &self.palette)?;
+            let pose = self.palette.iter().fold(FNV, |h, joint| {
+                joint
+                    .to_cols_array()
+                    .iter()
+                    .fold(h, |h, v| fnv(h, &v.to_bits().to_le_bytes()))
+            });
+            // Only a changed pose is sent, and it is what makes the engine tick again.
+            if object.pose != pose {
+                engine.set_joint_palette(posed, &self.palette)?;
+                object.pose = pose;
+                self.palettes_changed = true;
+            }
         }
         Ok(())
     }
