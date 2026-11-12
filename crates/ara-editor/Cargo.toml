@@ -60,6 +60,7 @@ ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-rpc = { path = "../ara-rpc" }
 ara-runtime = { path = "../ara-runtime" }
+ara-renderlab = { path = "../ara-renderlab" }
 ara-runtime-render = { path = "../ara-runtime-render" }
 ara-schema = { path = "../ara-schema" }
 ara-script = { path = "../ara-script" }
