@@ -406,6 +406,50 @@ fn engine_diagnostics_survive_a_restart_with_their_causes() {
 }
 
 #[test]
+fn a_placeholder_warning_ends_when_the_asset_imports() {
+    let _g = serial();
+    let mut h = open("placeholder-stale");
+    std::thread::spawn(|| {
+        for asset in ["as_boombox", "as_lantern"] {
+            Diagnostic::warning(
+                Code(7310),
+                format!(
+                    "ARA7310: asset {asset} has no published generation; showing placeholder geometry; re-import the asset"
+                ),
+            )
+            .emit();
+        }
+    })
+    .join()
+    .expect("worker");
+    h.tick();
+    let count = |h: &mut Host| {
+        let s = begin(h, "human");
+        call(
+            h,
+            ConnId::LOCAL,
+            "logs",
+            json!({ "session": s, "codes": ["ARA7310"], "group": false }),
+        )["total"]
+            .clone()
+    };
+    assert_eq!(count(&mut h), 2);
+    std::thread::spawn(|| {
+        Diagnostic::info(codes::ASSET_IMPORTED, "`as_boombox` imported")
+            .subject(Subject::asset("@as_boombox"))
+            .emit();
+    })
+    .join()
+    .expect("worker");
+    h.tick();
+    assert_eq!(
+        count(&mut h),
+        1,
+        "the imported asset's warning goes; the other stays"
+    );
+}
+
+#[test]
 fn stale_import_failures_and_editor_failures_do_not_outlive_their_cause() {
     let _g = serial();
     let mut h = open("import-stale");

@@ -611,6 +611,20 @@ impl Store {
         })
     }
 
+    /// Removes placeholder warnings (ARA7310, a model Play drew as a placeholder) that name
+    /// one of `assets` (ids without the `@`): they were raised before the asset published,
+    /// and its import has since finished.
+    pub fn clear_asset_placeholders(&mut self, assets: &[&str]) -> usize {
+        const ASSET_PLACEHOLDER: crate::Code = crate::Code(7310);
+        self.remove_where(|_, r| {
+            r.diagnostic.code == ASSET_PLACEHOLDER
+                && assets.iter().any(|a| {
+                    let message = &r.diagnostic.message;
+                    message.contains(&format!("asset {a} ")) || message.contains(&format!(" {a}: "))
+                })
+        })
+    }
+
     fn remove_where(&mut self, mut doomed: impl FnMut(u64, &Record) -> bool) -> usize {
         let doomed: Vec<u64> = self
             .records
