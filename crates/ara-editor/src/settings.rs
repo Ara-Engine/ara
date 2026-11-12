@@ -119,15 +119,6 @@ const fn def(
     }
 }
 use Scope::{Project, User};
-/// `viewport.quality` choices: the project's default, Auto, or a preset.
-pub const QUALITY_OVERRIDES: &[(&str, &str)] = &[
-    ("project", "Project default"),
-    ("auto", "Auto"),
-    ("low", "Low"),
-    ("medium", "Medium"),
-    ("high", "High"),
-    ("epic", "Epic"),
-];
 /// The most project colour swatches `color.swatches` keeps.
 pub const COLOR_SWATCHES: usize = 48;
 /// The most recent colours `color.recent` keeps.
@@ -192,15 +183,6 @@ pub const DEFS: &[Def] = &[
         "Turns off decorative transitions; all interaction feedback stays.",
         Kind::Toggle,
         Lit::B(false),
-    ),
-    def(
-        "viewport.quality",
-        User,
-        "Viewport",
-        "Scene quality",
-        "Lit quality of your Scene view: the project's default, detected from the GPU, or a preset. Low is the raster preview; never saved in the project.",
-        Kind::Choice(QUALITY_OVERRIDES),
-        Lit::S("project"),
     ),
     def(
         "viewport.grid",
@@ -757,16 +739,6 @@ impl Settings {
             if let Some(quality) = rendering.get("quality").and_then(Value::as_str) {
                 project.insert("rendering.quality".into(), quality.into());
             }
-        }
-        // Before presets: Fidelity meant the project's default, Raster meant Low.
-        match user.get("viewport.quality").and_then(Value::as_str) {
-            Some("fidelity") => {
-                user.remove("viewport.quality");
-            }
-            Some("raster") => {
-                user.insert("viewport.quality".into(), "low".into());
-            }
-            _ => {}
         }
         // Unknown or invalid stored values fall back to their defaults.
         user.retain(|k, v| def_of(k).is_some_and(|d| d.scope == User && valid(d, v).is_ok()));

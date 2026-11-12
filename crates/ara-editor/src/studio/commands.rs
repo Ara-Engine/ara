@@ -37,7 +37,7 @@ fn set(e: &mut Editor, key: &str, value: Value) -> R {
     )
 }
 
-/// Changes the view state (`editor.view`: view mode, gizmos, Play's state).
+/// Changes the view state (`editor.view`: game view, overlays, gizmos, Play's state).
 fn view(e: &mut Editor, params: Value) -> R {
     act(e, "editor.view", params)
 }
@@ -88,23 +88,6 @@ fn flip_setting(e: &mut Editor, key: &str, default: bool) -> R {
         .and_then(Value::as_bool)
         .unwrap_or(default);
     set(e, key, json!(!on))
-}
-
-/// `snake_case` as `camelCase` (the `editor.view` mode names).
-fn camel(snake: &str) -> String {
-    let mut out = String::with_capacity(snake.len());
-    let mut upper = false;
-    for c in snake.chars() {
-        if c == '_' {
-            upper = true;
-        } else if upper {
-            out.extend(c.to_uppercase());
-            upper = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// `roots` and everything under them, roots first.
@@ -675,79 +658,7 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             }
             None => Err("Select an entity to make a prefab of".into()),
         },
-        // View: modes, effects, quality, what draws, gizmos, the camera, the UI.
-        id if id.starts_with("view.mode.") => {
-            let mode = match id.trim_start_matches("view.mode.") {
-                "unlit" | "base_color" => "baseColor".to_owned(),
-                "gi_debug" => "gi_diffuse".to_owned(),
-                snake => camel(snake),
-            };
-            if super::unavailable::view_mode_available(&mode) {
-                view(e, json!({"viewMode": mode}))
-            } else {
-                Err(format!("{mode}: {}", super::unavailable::SOON).into())
-            }
-        }
-        id if id.starts_with("view.debug.") => {
-            type Flip = fn(&mut ara_play::RenderDebug);
-            let flip: Option<Flip> = match id.trim_start_matches("view.debug.") {
-                "ambient_occlusion" => Some(|d| d.ambient_occlusion = !d.ambient_occlusion),
-                "shadows" => Some(|d| d.shadows = !d.shadows),
-                "soft_shadows" => Some(|d| d.soft_shadows = !d.soft_shadows),
-                "screen_reflections" => Some(|d| d.screen_reflections = !d.screen_reflections),
-                "reflection_captures" => Some(|d| d.reflection_captures = !d.reflection_captures),
-                "global_illumination" => Some(|d| d.global_illumination = !d.global_illumination),
-                "screen_gi" => Some(|d| d.screen_gi = !d.screen_gi),
-                "volumetric_fog" => Some(|d| d.volumetric_fog = !d.volumetric_fog),
-                "temporal_jitter" => Some(|d| d.temporal_jitter = !d.temporal_jitter),
-                "full_resolution" => Some(|d| d.full_resolution = !d.full_resolution),
-                "reflections" => Some(|d| {
-                    use ara_play::ReflectionView as R;
-                    d.reflections = if d.reflections == R::Reflections {
-                        R::Lit
-                    } else {
-                        R::Reflections
-                    }
-                }),
-                "reflection_sources" => Some(|d| {
-                    use ara_play::ReflectionView as R;
-                    d.reflections = if d.reflections == R::Sources {
-                        R::Lit
-                    } else {
-                        R::Sources
-                    }
-                }),
-                "reset" => Some(|d| *d = ara_play::RenderDebug::default()),
-                _ => None,
-            };
-            match flip {
-                Some(_) if !super::unavailable::effect_available(id) => {
-                    Err(format!("{id}: {}", super::unavailable::SOON).into())
-                }
-                Some(flip) => {
-                    super::scene_overlays::flip_effect(s, flip);
-                    Ok(())
-                }
-                None => Err(format!("{id}: unknown effect").into()),
-            }
-        }
-        id if id.starts_with("view.quality.") => set(
-            e,
-            "viewport.quality",
-            json!(id.trim_start_matches("view.quality.")),
-        ),
-        "view.fidelity" => {
-            use ara_render_fidelity::presets::QualityPreset;
-            let low = |c| e.state.resolve_quality(c) == Some(QualityPreset::Low);
-            let next = if e.state.quality {
-                "low"
-            } else if low(e.state.project_quality()) {
-                "auto"
-            } else {
-                "project"
-            };
-            set(e, "viewport.quality", json!(next))
-        }
+        // View: what draws, gizmos, the camera, the UI.
         "view.show.grid" | "view.show.outline" => {
             flip_setting(e, &format!("viewport.{}", &id[10..]), true)
         }
@@ -1814,15 +1725,6 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             ),
             None => Err("No Assets search was cleared this session".into()),
         },
-        // Rendering Debug: the Scene's draw-mode menu, whose switches turn effects off.
-        "window.render_debug" => {
-            s.local.overlay_settings = Some("draw");
-            act(
-                &mut s.editor,
-                "editor.layout.show",
-                json!({"panel": "scene"}),
-            )
-        }
         "lighting.preset.manual" | "lighting.preset.interior" => {
             use crate::lighting::authoring::Preset;
             let preset = match id {

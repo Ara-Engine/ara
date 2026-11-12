@@ -1140,7 +1140,6 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
                 "Orthographic"
             };
             line()
-                .child(draw_mode_button(s, vertical))
                 .child(
                     toggle(
                         l,
@@ -1200,155 +1199,6 @@ fn content(s: &Studio, id: &str, vertical: bool) -> El<Studio> {
             .child(settings_button(s, "camera", camera_panel)),
         _ => el(),
     }
-}
-
-/// The render debug switches the draw-mode menu offers: title, and how to read and
-/// flip it.
-type Switch = (
-    &'static str,
-    fn(&ara_play::RenderDebug) -> bool,
-    fn(&mut ara_play::RenderDebug),
-);
-const EFFECTS: [Switch; 9] = [
-    (
-        "Ambient occlusion",
-        |d| d.ambient_occlusion,
-        |d| d.ambient_occlusion = !d.ambient_occlusion,
-    ),
-    ("Shadows", |d| d.shadows, |d| d.shadows = !d.shadows),
-    (
-        "Soft shadows",
-        |d| d.soft_shadows,
-        |d| d.soft_shadows = !d.soft_shadows,
-    ),
-    (
-        "Screen reflections",
-        |d| d.screen_reflections,
-        |d| d.screen_reflections = !d.screen_reflections,
-    ),
-    (
-        "Reflection captures",
-        |d| d.reflection_captures,
-        |d| d.reflection_captures = !d.reflection_captures,
-    ),
-    (
-        "Global illumination",
-        |d| d.global_illumination,
-        |d| d.global_illumination = !d.global_illumination,
-    ),
-    ("Screen GI", |d| d.screen_gi, |d| d.screen_gi = !d.screen_gi),
-    (
-        "Volumetric fog",
-        |d| d.volumetric_fog,
-        |d| d.volumetric_fog = !d.volumetric_fog,
-    ),
-    (
-        "Temporal jitter",
-        |d| d.temporal_jitter,
-        |d| d.temporal_jitter = !d.temporal_jitter,
-    ),
-];
-
-/// Flips one render debug switch: the Scene view reads it each frame, a running Play
-/// gets it at once, and each Play start carries it.
-pub(super) fn flip_effect(s: &mut Studio, flip: fn(&mut ara_play::RenderDebug)) {
-    flip(&mut s.editor.state.render_debug);
-    if let Some(world) = s.editor.play_world.clone() {
-        let debug = s.editor.state.render_debug;
-        s.act(
-            "play.renderDebug",
-            json!({"world": world, "renderDebug": debug}),
-        );
-    }
-}
-
-/// Unity's draw mode menu: the current view mode, opening every mode by group and the
-/// effect switches.
-fn draw_mode_button(s: &Studio, vertical: bool) -> El<Studio> {
-    let l = &s.look;
-    let current = crate::studio::viewport::VIEW_MODES
-        .iter()
-        .find(|(name, ..)| *name == s.editor.state.view_mode)
-        .map_or("Lit", |(_, title, ..)| *title);
-    let effects_off = EFFECTS
-        .iter()
-        .filter(|(_, on, _)| !on(&s.editor.state.render_debug))
-        .count();
-    let label = if effects_off > 0 {
-        format!("{current} · {effects_off} off")
-    } else {
-        current.to_owned()
-    };
-    let open = s.local.overlay_settings == Some("draw");
-    let mut button = labelled(l, icons::SUN, &label, vertical)
-        .key("scene/draw-mode")
-        .tooltip("Draw mode and effects")
-        .expanded(open)
-        .on_press(|s: &mut Studio| {
-            s.local.overlay_settings = if s.local.overlay_settings == Some("draw") {
-                None
-            } else {
-                Some("draw")
-            }
-        });
-    if open {
-        button = button.overlay(
-            popover(
-                super::style::float(l, row())
-                    .key("scene/draw-mode/panel")
-                    .pad(8.0)
-                    .gap(12.0)
-                    .align(Align::Start)
-                    .children(draw_mode_items(s)),
-            )
-            .side(stillkit::el::Side::Bottom)
-            .align(Align::Start)
-            .offset(6.0)
-            .on_dismiss(|s: &mut Studio| s.local.overlay_settings = None),
-        );
-    }
-    button
-}
-
-/// The draw mode menu's two columns: Shading and Material modes; Lighting and
-/// Performance modes, then the effect switches.
-fn draw_mode_items(s: &Studio) -> Vec<El<Studio>> {
-    let l = &s.look;
-    let column = |groups: &[&str]| {
-        let mut out = col().w(190.0).gap(1.0);
-        for group in groups {
-            out = out.child(menu_heading(l, group));
-            for (name, title, _, _) in crate::studio::viewport::VIEW_MODES
-                .iter()
-                .filter(|(.., heading, _)| heading == group)
-            {
-                let on = s.editor.state.view_mode == *name
-                    || (s.editor.state.view_mode.is_empty() && *name == "lit");
-                let name = *name;
-                let item = menu_check(l, &format!("scene/draw-mode/{name}"), title, on);
-                out = out.child(if super::unavailable::view_mode_available(name) {
-                    item.on_press(move |s: &mut Studio| {
-                        s.local.overlay_settings = None;
-                        s.act("editor.view", json!({"viewMode": name}));
-                    })
-                } else {
-                    enabled(item, false).tooltip(super::unavailable::SOON)
-                });
-            }
-        }
-        out
-    };
-    let mut second = column(&["Lighting", "Performance"]).child(menu_heading(l, "Effects"));
-    for (title, on, flip) in EFFECTS {
-        let checked = on(&s.editor.state.render_debug);
-        let item = menu_check(l, &format!("scene/effect/{title}"), title, checked);
-        second = second.child(if super::unavailable::effect_available(title) {
-            item.on_press(move |s: &mut Studio| flip_effect(s, flip))
-        } else {
-            enabled(item, false).tooltip(super::unavailable::SOON)
-        });
-    }
-    vec![column(&["Shading", "Material"]), second]
 }
 
 /// A chevron that opens overlay `id`'s settings panel.
@@ -1547,37 +1397,9 @@ fn visibility_panel(s: &Studio) -> El<Studio> {
         ))
 }
 
-/// Camera: fly speed, field of view, and the Scene's render quality.
+/// Camera: fly speed and field of view, then the saved views.
 fn camera_panel(s: &Studio) -> El<Studio> {
     let l = &s.look;
-    let quality = s
-        .editor
-        .state
-        .settings
-        .get("viewport.quality")
-        .and_then(Value::as_str)
-        .unwrap_or("project")
-        .to_owned();
-    let qualities = crate::settings::QUALITY_OVERRIDES
-        .iter()
-        .map(|(value, title)| {
-            let on = *value == quality;
-            let value = *value;
-            super::style::chosen(l, row(), on)
-                .key(format!("scene/quality/{value}"))
-                .h(24.0)
-                .pad_x(8.0)
-                .align(Align::Center)
-                .radius(super::style::RADIUS)
-                .label(*title)
-                .selected(on)
-                .on_press(move |s: &mut Studio| set(s, "viewport.quality", json!(value)))
-                .child(text(*title).text_size(11.5).color(if on {
-                    l.c.foreground.0
-                } else {
-                    l.c.muted_foreground.0
-                }))
-        });
     col()
         .gap(2.0)
         .child(
@@ -1607,13 +1429,6 @@ fn camera_panel(s: &Studio) -> El<Studio> {
                 )
             },
         ))
-        .child(
-            text("Scene quality")
-                .text_size(12.0)
-                .color(l.c.muted_foreground.0)
-                .pad_y(4.0),
-        )
-        .child(stillkit::el::grid(3).gap(2.0).children(qualities))
         .children(bookmarks(s))
 }
 

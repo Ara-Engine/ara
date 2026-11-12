@@ -1,12 +1,9 @@
-//! The quiet stand-in for what the renderer does not provide yet (view modes, rendering debug
-//! switches, asset previews, the Scene view itself): a muted tile with an icon and one line, in
-//! the space the thing would fill. Never a blank and never a red error: nothing is broken, it
+//! The quiet stand-in for what the renderer does not provide yet (asset previews, the Game
+//! view outside Play): a muted tile with an icon and one line, in the space the thing would
+//! fill. Never a blank and never a red error: nothing is broken, it
 //! is not there yet.
 //!
 //! - A panel, page or preview area that has nothing to draw: [`tile`].
-//! - What the Scene view's renderer offers is decided in one place, the predicates below: the
-//!   draw-mode menu and the `view.mode.*` / `view.debug.*` commands both ask them, so turning a
-//!   view mode or an effect back on is one line.
 //! - A menu entry or button with nothing behind it: keep the entry, `enabled(item, false)`, and
 //!   give it the tooltip [`SOON`], so the menu keeps its shape.
 use ara_kit::icons;
@@ -50,18 +47,6 @@ pub(super) fn note(l: &Look, line: &str) -> El<Studio> {
         .cascade_ink()
         .child(icon(icons::SQUARE_DASHED).size(14.0))
         .child(text(line.to_owned()).text_size(11.5).wrap(3).grow(1.0))
-}
-
-/// Whether the Scene view's renderer offers the view mode `name` (a `VIEW_MODES` name, such as
-/// `"lit"` or `"wireframe"`). Turn a mode back on by adding it here when Renderlab gains it.
-pub(super) fn view_mode_available(name: &str) -> bool {
-    matches!(name, "" | "lit")
-}
-
-/// Whether the Scene view's renderer offers the render debug switch `title` (an `EFFECTS` title,
-/// such as "Shadows"). Turn one back on by adding it here when Renderlab gains it.
-pub(super) fn effect_available(_title: &str) -> bool {
-    false
 }
 
 /// Whether the Scene's renderer can capture reflection probes (the Lighting page's Recapture and
