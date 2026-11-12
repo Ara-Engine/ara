@@ -29,6 +29,8 @@ pub(crate) struct Settings {
     pub icons_3d: bool,
     /// Icon size factor (`viewport.iconSize` percent / 100).
     pub icon_scale: f32,
+    /// Collider shapes draw on every entity, not only the selected (`viewport.colliders`).
+    pub colliders: bool,
     /// Hidden types (`viewport.gizmoTypes` keys set to `"off"`).
     hidden: Vec<String>,
 }
@@ -58,6 +60,11 @@ impl Settings {
             icons: flag("viewport.icons"),
             icons_3d: flag("viewport.icons3d"),
             icon_scale: (state.number("viewport.iconSize", 100.) as f32 / 100.).clamp(0.25, 3.),
+            colliders: state
+                .settings
+                .get("viewport.colliders")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
             hidden,
         }
     }
@@ -192,7 +199,13 @@ impl Gizmos {
         for (detail, n, world) in &order {
             for part in &self.sources[*n].parts {
                 if settings.shows(part.kind) {
-                    shapes::draw(&mut pen, part, *world, *detail, &palette);
+                    // Collider shapes show on every entity when the overlay is on.
+                    let detail = if settings.colliders && part.kind == "Collider" {
+                        Detail::Full
+                    } else {
+                        *detail
+                    };
+                    shapes::draw(&mut pen, part, *world, detail, &palette);
                 }
             }
             pen.flush(overlays);
@@ -221,4 +234,22 @@ impl Gizmos {
         }
         Ok(())
     }
+}
+
+/// The selected meshes' boxes (`viewport.bounds`): each primitive's own geometry box through
+/// its world pose, `offset` being the drag preview applied to the selection.
+pub(super) fn draw_boxes(
+    overlays: &mut Vec<Overlay>,
+    camera: &Camera,
+    rect: Box2,
+    boxes: impl Iterator<Item = (Mat4, [Vec3; 2])>,
+    color: [f32; 4],
+) {
+    let Some(mut pen) = wire::Pen::new(camera, rect) else {
+        return;
+    };
+    for (world, [lo, hi]) in boxes {
+        pen.cuboid(world, (lo + hi) * 0.5, (hi - lo) * 0.5, 1.0, color);
+    }
+    pen.flush(overlays);
 }

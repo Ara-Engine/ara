@@ -554,6 +554,7 @@ pub fn build(
     state: &EditorState,
     rect: Box2,
     entities: &[(u64, String)],
+    mesh_boxes: &[(u64, glam::Mat4, [glam::Vec3; 2])],
     changed: &std::collections::BTreeMap<u64, &str>,
     gizmo: GizmoState,
     outlines: &mut Outlines,
@@ -628,6 +629,30 @@ pub fn build(
     outlines
         .icons
         .draw(&mut overlays, view, state, rect, revision, gizmo, &color)?;
+    // Mesh bounds: the selected meshes' boxes (`viewport.bounds`, off by default).
+    if !state.game_view
+        && state
+            .settings
+            .get("viewport.bounds")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    {
+        let selected = mesh_boxes.iter().filter_map(|(id, world, bounds)| {
+            let entity = outlines.channels.target_of(*id)?;
+            state
+                .selection
+                .iter()
+                .any(|s| s == entity)
+                .then_some((gizmo.offset * *world, *bounds))
+        });
+        gizmos::draw_boxes(
+            &mut overlays,
+            &state.camera,
+            rect,
+            selected,
+            color("muted-foreground", 0.9)?,
+        );
+    }
     let Some(handles) = moved_handles(view, state, rect, gizmo.offset) else {
         return Ok(overlays);
     };

@@ -175,11 +175,22 @@ impl Compositor {
             w: logical[0],
             h: logical[1],
         };
+        let mesh_boxes = if state
+            .settings
+            .get("viewport.bounds")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            scene.instance_boxes()
+        } else {
+            Vec::new()
+        };
         let overlays = overlay::build(
             view,
             state,
             rect,
             scene.entities(),
+            &mesh_boxes,
             changed,
             gizmo,
             &mut self.outlines,

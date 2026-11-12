@@ -39,4 +39,25 @@ impl SceneView {
             })
             .reduce(|a, b| [a[0].min(b[0]), a[1].max(b[1])])
     }
+
+    /// Every presented primitive's own geometry box with its entity's render id and world
+    /// pose, for the Mesh bounds overlay (`viewport.bounds`).
+    pub(crate) fn instance_boxes(&self) -> Vec<(u64, Mat4, [Vec3; 2])> {
+        let Some(prepared) = self.prepared.as_ref() else {
+            return Vec::new();
+        };
+        let scene = &prepared.scene;
+        scene
+            .instances
+            .iter()
+            .filter_map(|instance| {
+                let local = scene.geometry.get(instance.geometry)?.bounds;
+                (local.iter().all(|p| p.is_finite()) && local[0].cmple(local[1]).all()).then_some((
+                    instance.entity,
+                    instance.world,
+                    local,
+                ))
+            })
+            .collect()
+    }
 }
