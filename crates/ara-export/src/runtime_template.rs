@@ -74,7 +74,6 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
             "ara-texture-gpu",
             "ara-gpu",
             "ara-editor-gpu",
@@ -85,7 +84,6 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
         ]
     };
     for package in packages {
@@ -311,7 +309,6 @@ mod tests {
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
         ] {
             let root = scratch.path().join("crates").join(package).join("cooked");
             for cohort in [&key, &stale] {
@@ -391,7 +388,6 @@ mod tests {
             "ara-render-fidelity",
             "ara-runtime-render",
             "ara-render2d",
-            "ara-landscape",
             "ara-texture-gpu",
             "ara-gpu",
             "ara-editor-gpu",

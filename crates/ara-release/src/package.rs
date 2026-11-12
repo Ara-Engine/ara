@@ -27,7 +27,6 @@ const RESOURCES: &[&str] = &[
     "ara-render-fidelity",
     "ara-runtime-render",
     "ara-render2d",
-    "ara-landscape",
 ];
 
 pub fn package(root: &Path, version: &str) -> Result<()> {

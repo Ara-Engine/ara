@@ -124,7 +124,6 @@ pub(crate) fn unpack_template(
         "ara-render-fidelity",
         "ara-runtime-render",
         "ara-render2d",
-        "ara-landscape",
     ] {
         ensure!(
             destination.join("resources").join(package).is_dir(),
