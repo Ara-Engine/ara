@@ -217,9 +217,13 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
-        // Metal orders the UI frame after Renderlab's last submission on the adapter's queue.
+        // Metal orders the UI frame after the copies that published the Scene's image and ids,
+        // not after everything Renderlab committed since: its next frame keeps drawing while
+        // the UI composes this one.
         #[cfg(target_os = "macos")]
-        self.ui.order_after(renderer.gpu());
+        if let Some(point) = scene.published_point() {
+            self.ui.order_after_point(renderer.gpu(), point);
+        }
         let size = [
             logical[0].round().max(1.0) as u32,
             logical[1].round().max(1.0) as u32,
@@ -229,6 +233,10 @@ impl Compositor {
                 .render(&mut self.ui, &list, &[], size, TextMode::Raster)
         })
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+        // The Scene's next publish copy rewrites the image this UI frame samples: Metal orders
+        // Renderlab's next submission after it (Vulkan's `scene_ready` does this on its queue).
+        #[cfg(target_os = "macos")]
+        self.ui.order_before(renderer.gpu_mut());
         if let Some(path) = &self.dump {
             self.ui
                 .pixels()?

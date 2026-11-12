@@ -4,7 +4,7 @@
 //! and outlines come from the frame's own CPU ids (`ids`) until Renderlab delivers its own.
 use super::ids::{IdHost, Ids};
 use anyhow::{Context, Result};
-use ara_gpu::{GpuDevice, Image};
+use ara_gpu::{GpuDevice, Image, TimelinePoint};
 use ara_render_fidelity::environment::FrameEnvironment;
 use ara_renderlab::{Options, PathChoice, Renderlab};
 use ara_runtime::extract::RenderFrame;
@@ -214,6 +214,22 @@ impl RenderlabScene {
     /// The last completed image, for the compositor.
     pub(super) fn image(&self) -> Option<Image> {
         self.published.as_ref().map(PresentationImage::output)
+    }
+
+    /// The latest submission that wrote what the compositor samples (the image and the ids
+    /// copies, all on the graphics queue): the UI orders after this point alone, so Renderlab's
+    /// next frame can draw while the UI composes this one.
+    pub(super) fn published_point(&self) -> Option<TimelinePoint> {
+        [
+            self.published.as_ref().and_then(PresentationImage::point),
+            self.published_ids
+                .as_ref()
+                .and_then(PresentationImage::point),
+            self.ids.point(),
+        ]
+        .into_iter()
+        .flatten()
+        .max_by_key(|point| point.value)
     }
 
     /// Releases what the engine and the published image hold on `gpu`.

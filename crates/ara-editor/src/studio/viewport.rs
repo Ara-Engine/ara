@@ -166,6 +166,13 @@ impl SceneView {
             .as_ref()
             .is_some_and(|scene| scene.image().is_some())
     }
+    /// The submission the compositor's UI frame must follow: the copies that published the
+    /// Scene's image and ids (`RenderlabScene::published_point`).
+    pub(super) fn published_point(&self) -> Option<ara_gpu::TimelinePoint> {
+        self.renderlab
+            .as_ref()
+            .and_then(renderlab::RenderlabScene::published_point)
+    }
     /// The engine's own id under `pixel` for a click, when Renderlab shows the Scene.
     pub(super) fn pick_front(&mut self, pixel: [u32; 2]) -> Option<u32> {
         let live = self.live_size;

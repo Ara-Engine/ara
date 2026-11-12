@@ -183,7 +183,8 @@ impl Bridge {
             if let Some((_, meter, stops)) = at.map(|at| self.metered.remove(at))
                 && automatic
             {
-                self.metering.observe(view.look, meter, stops, &reading.bins);
+                self.metering
+                    .observe(view.look, meter, stops, &reading.bins);
             }
         }
         let (stops, metered) = lighting::exposure_stops(view, &mut self.metering);

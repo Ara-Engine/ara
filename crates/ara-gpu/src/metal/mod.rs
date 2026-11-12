@@ -814,6 +814,15 @@ impl MetalDevice {
             self.wait_event(event, value);
         }
     }
+    /// Order this device's next commit after `point` of `other`: a queue-level wait on
+    /// that one submission, not on everything `other` has committed. For a UI adapter that
+    /// composites an image `other` published at `point` while `other`'s later frames are
+    /// still drawing.
+    pub fn wait_for_point(&mut self, other: &MetalDevice, point: TimelinePoint) {
+        if let Some(event) = other.events.get(point.queue.index()) {
+            self.wait_event(event, point.value);
+        }
+    }
     /// Order both queues' next commits after `event` reaches `value`.
     pub(super) fn wait_event(
         &mut self,

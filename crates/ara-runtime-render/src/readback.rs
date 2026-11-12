@@ -22,6 +22,9 @@ pub fn read_rgba8(gpu: &mut ara_gpu::GpuDevice, image: Image, size: [u32; 2]) ->
         handoff: None,
     }]);
     let point = gpu.submit(r.finish(), &[])?;
+    // Waits for this copy itself: `resolve` returns at once inside a deferred completion
+    // scope, and the image's own copy may not have been waited for (`PresentationImage`).
+    Device::wait(gpu, point)?;
     gpu.resolve(point)?;
     let result = gpu.read(read);
     gpu.retire(Resource::Buffer(read))?;

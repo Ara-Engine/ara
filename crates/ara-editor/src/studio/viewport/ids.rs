@@ -12,7 +12,8 @@
 use crate::gpu::{IdHit, IdPick};
 use anyhow::{Context, Result};
 use ara_gpu::{
-    Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, commands::Command, vk,
+    Access, Barrier, Buffer, Device, GpuDevice, Image, Queue, Resource, TimelinePoint,
+    commands::Command, vk,
 };
 use ara_runtime::extract::RenderFrame;
 use std::time::Duration;
@@ -61,6 +62,8 @@ struct Target {
     size: [u32; 2],
     /// Never written: the first upload starts from an undefined layout.
     fresh: bool,
+    /// The last upload's submission, which the UI orders its sampling after.
+    point: Option<TimelinePoint>,
 }
 
 impl Ids {
@@ -108,6 +111,11 @@ impl Ids {
         self.target.as_ref().map(|t| t.image)
     }
 
+    /// The submission that wrote [`Self::image`], when one did.
+    pub(super) fn point(&self) -> Option<TimelinePoint> {
+        self.target.as_ref().and_then(|t| t.point)
+    }
+
     /// The ids as the click and the channel map read them, once a frame has been seen.
     pub(super) fn host(&self) -> Option<IdHost<'_>> {
         self.ready.then_some(IdHost {
@@ -150,6 +158,7 @@ impl Target {
             staging,
             size,
             fresh: true,
+            point: None,
         })
     }
 
@@ -187,6 +196,7 @@ impl Target {
         // (`PresentationImage::copy`).
         gpu.publish_submission_to_ui(point)?;
         self.fresh = false;
+        self.point = Some(point);
         Ok(())
     }
 }
