@@ -126,11 +126,11 @@ impl SceneView {
                 && self
                     .renderlab
                     .as_ref()
-                    .is_some_and(|scene| scene.image().is_some());
+                    .is_some_and(|scene| scene.image().is_some() && !scene.in_flight());
             if drawn {
                 return Ok(());
             }
-            if self.content_job.is_some() {
+            if self.content_job.is_some() || self.needs_frame() {
                 // The worker is extracting: wait for it rather than spin.
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }

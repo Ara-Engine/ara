@@ -53,6 +53,15 @@ struct Target {
     ids: Option<crate::id_target::IdTarget>,
 }
 
+/// A frame begun and not yet taken.
+struct Pending {
+    frame: renderlab::engine::FrameId,
+    view: ViewId,
+    since: Instant,
+    /// The engine reported it complete.
+    done: bool,
+}
+
 /// Lighting last applied to the engine, so unchanged frames set nothing.
 #[derive(Default)]
 struct Applied {
@@ -93,6 +102,8 @@ pub(crate) struct Bridge {
     /// Renderlab's own passes for the frame `gpu_ms` measured (`ExternalFrame::passes`).
     passes: [(&'static str, f64); EXTERNAL_PASSES],
     cut: bool,
+    /// The frame begun and not yet taken (`Bridge::begin`, `Bridge::finish`).
+    pending: Option<Pending>,
     /// The last frame's eye and view direction, to notice a view that jumps.
     last_view: Option<([f32; 3], [f32; 3])>,
 }
@@ -221,6 +232,7 @@ impl Bridge {
             gpu_ms: None,
             passes: [("", 0.); EXTERNAL_PASSES],
             cut: true,
+            pending: None,
             last_view: None,
         })
     }
@@ -248,7 +260,7 @@ impl Bridge {
         };
         let started = Instant::now();
         while started.elapsed() < PICK_WAIT {
-            let events = self.engine.poll()?;
+            let events = self.pump()?;
             if let Some(read) = events.ids.iter().find(|read| read.request == request) {
                 return Ok(Some(read.at(0, 0).front));
             }
@@ -260,11 +272,34 @@ impl Bridge {
         Ok(None)
     }
 
+    /// Draws `view` and waits for it: [`Self::begin`], then [`Self::finish`] until it is done.
     pub fn render(
         &mut self,
         gpu: &mut GpuDevice,
         view: &ExternalView<'_>,
     ) -> Result<ExternalFrame> {
+        self.begin(gpu, view)?;
+        loop {
+            if let Some(frame) = self.finish(gpu)? {
+                return Ok(frame);
+            }
+            std::thread::yield_now();
+        }
+    }
+
+    /// Whether a frame was begun and not yet taken by [`Self::finish`].
+    pub fn in_flight(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// Starts drawing `view` and returns without waiting for the GPU: the scene is synced and the
+    /// frame, its ids and the meter's pass are submitted. [`Self::finish`] takes the result. Only
+    /// one frame is in flight at a time: it is an error to begin another before it is taken.
+    pub fn begin(&mut self, gpu: &mut GpuDevice, view: &ExternalView<'_>) -> Result<()> {
+        anyhow::ensure!(
+            self.pending.is_none(),
+            "a frame is in flight: finish it before beginning another"
+        );
         let frame = view.frame;
         // The meter's readings of earlier frames, the previous one's included: the bridge
         // waited for that frame and its histogram pass is queued right behind it, so the
@@ -423,32 +458,64 @@ impl Bridge {
             }
         }
 
-        // Wait for the frame on Renderlab's device first, so the handoff below times
-        // the crossing alone. Bounded: a completion the engine dropped only costs
-        // the split (the handoff waits for the frame itself).
-        let waited = Instant::now();
-        loop {
-            let events = self.engine.poll()?;
-            if let Some(sample) = events.gpu.last() {
-                let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
-                self.gpu_ms = ms(Some(sample.render_span));
-                // Renderlab's own split of that span; what is left over is its GI cache.
-                self.passes = [
-                    ("Shading", Some(sample.mesh_pass)),
-                    ("Receivers", sample.receiver_pass),
-                    ("Visibility", sample.visibility_compute),
-                    ("Shadows", sample.shadow_generation),
-                    ("Reconstruction", sample.reconstruction_pass),
-                    ("Present", sample.present_pass),
-                ]
-                .map(|(name, pass)| ms(pass).map_or(("", 0.), |ms| (name, ms)));
-            }
-            let done = events.completed.iter().any(|c| c.frame == Some(rendered));
-            if done || waited.elapsed() > FRAME_WAIT {
-                break;
-            }
-            std::thread::yield_now();
+        self.pending = Some(Pending {
+            frame: rendered,
+            view: view_id,
+            since: Instant::now(),
+            done: false,
+        });
+        Ok(())
+    }
+
+    /// Reads the engine's events: the GPU's pass timings, and whether the frame in flight has
+    /// completed (any caller's poll may be the one that sees it).
+    fn pump(&mut self) -> Result<renderlab::engine::Events> {
+        let events = self.engine.poll()?;
+        if let Some(sample) = events.gpu.last() {
+            let ms = |pass: Option<std::time::Duration>| pass.map(|d| d.as_secs_f64() * 1000.);
+            self.gpu_ms = ms(Some(sample.render_span));
+            // Renderlab's own split of that span; what is left over is its GI cache.
+            self.passes = [
+                ("Shading", Some(sample.mesh_pass)),
+                ("Receivers", sample.receiver_pass),
+                ("Visibility", sample.visibility_compute),
+                ("Shadows", sample.shadow_generation),
+                ("Reconstruction", sample.reconstruction_pass),
+                ("Present", sample.present_pass),
+            ]
+            .map(|(name, pass)| ms(pass).map_or(("", 0.), |ms| (name, ms)));
         }
+        if let Some(pending) = &mut self.pending
+            && events
+                .completed
+                .iter()
+                .any(|c| c.frame == Some(pending.frame))
+        {
+            pending.done = true;
+        }
+        Ok(events)
+    }
+
+    /// Takes the frame [`Self::begin`] started if the GPU has finished it: `None` while it is
+    /// still drawing (without waiting), or when none is in flight. A frame the engine never
+    /// reports done is taken after `FRAME_WAIT`: the handoff waits for it itself.
+    pub fn finish(&mut self, gpu: &mut GpuDevice) -> Result<Option<ExternalFrame>> {
+        if self.pending.is_none() {
+            return Ok(None);
+        }
+        self.pump()?;
+        let Some(pending) = &self.pending else {
+            return Ok(None);
+        };
+        if !pending.done && pending.since.elapsed() <= FRAME_WAIT {
+            return Ok(None);
+        }
+        let view_id = pending.view;
+        self.pending = None;
+        let target = self
+            .target
+            .as_mut()
+            .context("a frame is in flight without a target")?;
 
         // The handoff onto the presenter's device, timed: the shared ring's delivery,
         // or the CPU copy's readback and upload.
@@ -472,14 +539,14 @@ impl Bridge {
         };
         let handoff_ms = started.elapsed().as_secs_f64() * 1000.;
 
-        Ok(ExternalFrame {
+        Ok(Some(ExternalFrame {
             image,
             id: target.id.as_ref().map(crate::shared::PresentedId::output),
             id_texels,
             gpu_ms: self.gpu_ms,
             passes: self.passes,
             handoff_ms,
-        })
+        }))
     }
 
     /// The presenter-device image for `size` (recreated on a resize), with the
@@ -556,6 +623,8 @@ impl Bridge {
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
+        // A frame in flight draws into the target: it goes with it.
+        self.pending = None;
         if let Some(target) = self.target.take() {
             // The import hands its slots back on this device before the image goes.
             drop(target.shared);

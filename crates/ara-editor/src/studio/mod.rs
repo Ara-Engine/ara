@@ -517,6 +517,12 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 let shown = rt.touch(|s| {
                     let gizmo = gizmo_state(s);
                     let changed = s.editor.agent_tints();
+                    // The overlays draw from the camera of the frame on screen, so the grid,
+                    // gizmos and outlines agree with its picture while a newer frame is drawing.
+                    let live = s.editor.state.camera;
+                    if let Some(shown) = scene_view.shown_camera() {
+                        s.editor.state.camera = shown;
+                    }
                     // SAFETY: the layer is the Scene view's own, alive while the window is.
                     let done = unsafe {
                         compositor.frame(
@@ -533,6 +539,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         )
                     };
                     drop(changed);
+                    s.editor.state.camera = live;
                     done
                 })?;
                 if !shown {

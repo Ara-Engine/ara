@@ -64,6 +64,10 @@ pub(crate) struct SceneView {
     scene_drawn: Option<scene_frame::Drawn>,
     /// Passes Renderlab still draws after the last change (`scene_frame`).
     scene_settle: u32,
+    /// The Scene view's size as of the last pass: a click is in this size, the ids may not be.
+    live_size: [u32; 2],
+    /// The Renderlab image `published` was last copied from.
+    published_from: Option<ara_gpu::Image>,
     /// The Scene has drawn a frame the compositor can show.
     active: bool,
     revision: Option<(u64, u64, u64, u64)>,
@@ -142,7 +146,15 @@ impl SceneView {
     }
     /// Whether the next pass has work: a frame being extracted, or Renderlab still settling.
     pub fn needs_frame(&self) -> bool {
-        self.scene_settle > 0 || self.content_job.is_some() || self.content_ready.is_some()
+        self.scene_settle > 0
+            || self.content_job.is_some()
+            || self.content_ready.is_some()
+            || self.renderlab.as_ref().is_some_and(|r| r.in_flight())
+    }
+    /// The camera the Scene image on screen was drawn from. The overlays draw from it, so the
+    /// grid, gizmos and icons agree with the picture while a newer frame is still drawing.
+    pub(super) fn shown_camera(&self) -> Option<crate::state::Camera> {
+        self.renderlab.as_ref().and_then(|r| r.shown_camera())
     }
     /// Why Renderlab could not draw the Scene, once it failed: the Scene panel shows it.
     pub(super) fn renderlab_error(&self) -> Option<&str> {
@@ -156,9 +168,12 @@ impl SceneView {
     }
     /// The engine's own id under `pixel` for a click, when Renderlab shows the Scene.
     pub(super) fn pick_front(&mut self, pixel: [u32; 2]) -> Option<u32> {
+        let live = self.live_size;
         self.renderlab
             .as_mut()
-            .filter(|r| r.image().is_some())
+            // The engine answers for the size it last drew: after a resize the frame on screen is
+            // the old one, and the texels (scaled) answer instead.
+            .filter(|r| r.image().is_some() && r.shown_size() == Some(live))
             .and_then(|r| r.pick_id(pixel))
     }
     pub(super) fn id_host(&self) -> Option<ids::IdHost<'_>> {
@@ -166,6 +181,7 @@ impl SceneView {
             .as_ref()
             .filter(|r| r.image().is_some())
             .and_then(renderlab::RenderlabScene::id_host)
+            .map(|host| host.in_view(self.live_size))
     }
     /// The channels (draw `n` is `n + 1`) the Scene's ids name.
     pub(super) fn entities(&self) -> &[(u64, String)] {
