@@ -1,7 +1,9 @@
 //! Terrain and foliage on the Renderlab path: ordinary meshes.
 //!
 //! Each resident terrain tile is the world-space mesh `ara_runtime_render::terrain_mesh`
-//! builds, at full resolution. Its surface is the splat
+//! builds, at full resolution; tiles merge into chunks of `CHUNK` by `CHUNK` (one Renderlab
+//! object, mesh, weights texture and material per chunk, ids per tile as ranges of its
+//! triangles). Its surface is the splat
 //! program (`splat`): the terrain's layer materials' colour, roughness and normal maps
 //! blended by the tile's splat weights as Ara's renderer shades them, with side
 //! projections and detail maps to the user's detail distance. Without the program each
@@ -62,6 +64,92 @@ fn fnv(hash: u64, bytes: &[u8]) -> u64 {
     })
 }
 
+/// Tiles per chunk side: resident tiles merge into chunks of this many by this many.
+const CHUNK: i32 = 4;
+
+/// A resident tile of a chunk, as the merge reads it.
+struct Member<'a> {
+    coord: (i32, i32),
+    mesh: std::sync::Arc<TileMesh>,
+    /// One splat weight per height sample.
+    weights: &'a [[u8; 4]],
+    /// The tile's index among the frame's sorted resident coordinates (its editor id).
+    index: u32,
+}
+
+/// The triangles of a chunk's mesh that one tile owns, and the tile's index.
+struct TagRange {
+    first_triangle: u32,
+    triangles: u32,
+    index: u32,
+}
+
+/// A chunk's merged geometry and weights, as `place` uploads them.
+struct Merged {
+    vertices: Vec<ara_runtime::model::ModelVertex>,
+    indices: Vec<u32>,
+    /// The weights texture's size: `CHUNK` blocks of one tile's samples per side.
+    size: [u32; 2],
+    weights: Vec<[u8; 4]>,
+}
+
+/// Merges the tiles of chunk `chunk` into one mesh and one weights texture. Each tile's
+/// weights fill a block of the texture (blocks of absent tiles read the first layer), and its
+/// texture coordinates move into that block: a tile's own sampling is kept (its mesh addressed
+/// its texture's `side` texels over [0, 1]; the block is `side` texels of `CHUNK * side`).
+fn merge(chunk: (i32, i32), members: &[Member<'_>]) -> Merged {
+    let side = members
+        .first()
+        .map_or(1, |m| m.mesh.texture.size[0] as usize);
+    let wide = CHUNK as usize * side;
+    let mut weights = vec![[255, 0, 0, 0]; wide * wide];
+    let (mut vertices, mut indices) = (Vec::new(), Vec::new());
+    let n = CHUNK as f32;
+    for member in members {
+        let (bx, bz) = (
+            (member.coord.0 - chunk.0 * CHUNK) as usize,
+            (member.coord.1 - chunk.1 * CHUNK) as usize,
+        );
+        if member.weights.len() == side * side {
+            for z in 0..side {
+                let row = (bz * side + z) * wide + bx * side;
+                weights[row..row + side].copy_from_slice(&member.weights[z * side..(z + 1) * side]);
+            }
+        }
+        let base = vertices.len() as u32;
+        vertices.extend(member.mesh.source.vertices.iter().map(|v| {
+            let mut v = *v;
+            v.uv = [(bx as f32 + v.uv[0]) / n, (bz as f32 + v.uv[1]) / n];
+            v
+        }));
+        indices.extend(member.mesh.source.indices.iter().map(|i| i + base));
+    }
+    Merged {
+        vertices,
+        indices,
+        size: [wide as u32; 2],
+        weights,
+    }
+}
+
+/// Which triangles of the merged mesh each member tile owns, in `merge`'s order.
+fn merge_ranges(members: &[Member<'_>]) -> Vec<TagRange> {
+    let mut first = 0u32;
+    members
+        .iter()
+        .map(|m| {
+            let triangles = (m.mesh.source.indices.len() / 3) as u32;
+            let range = TagRange {
+                first_triangle: first,
+                triangles,
+                index: m.index,
+            };
+            first += triangles;
+            range
+        })
+        .collect()
+}
+
 /// One tile's Renderlab resources.
 struct Tile {
     object: ObjectId,
@@ -78,8 +166,8 @@ pub(crate) struct Terrain {
     tiles: HashMap<u64, Tile>,
     /// The placed tiles' objects with their index among the frame's sorted resident tile
     /// coordinates, and the ids last set from them (`Terrain::tag`).
-    tagged: Vec<(ObjectId, u32)>,
-    applied: Vec<(ObjectId, u32)>,
+    tagged: Vec<(ObjectId, Vec<TagRange>)>,
+    applied: Vec<(ObjectId, Vec<(u32, u32, u32)>)>,
     /// Foliage part draws of the resident tiles, for `Scene::sync`.
     foliage: Vec<Draw>,
     /// What `foliage` was built from; a new value means every draw may have changed.
@@ -157,30 +245,48 @@ impl Terrain {
             self.splat = Some((layers.key, built));
         }
         let splat = program.zip(self.splat.as_ref().and_then(|(_, s)| s.as_ref()));
-        let wanted: Vec<_> = coords
-            .iter()
-            .enumerate()
-            .filter_map(|(index, coord)| {
-                let mesh = self.meshes.tile(&terrain.data, *coord)?;
-                Some((
-                    mesh.key ^ layers.key,
+        // Resident tiles merge into chunks of `CHUNK` by `CHUNK` tiles: one mesh, one weights
+        // texture and one group each, as the tiles' per-collection cost in Renderlab's frame
+        // is the same for a tile as for any object.
+        let mut by_chunk: std::collections::BTreeMap<(i32, i32), Vec<Member>> = Default::default();
+        for (index, coord) in coords.iter().enumerate() {
+            let (Some(mesh), Some(tile)) = (
+                self.meshes.tile(&terrain.data, *coord),
+                terrain.data.tiles.get(coord),
+            ) else {
+                continue;
+            };
+            by_chunk
+                .entry((coord.x.div_euclid(CHUNK), coord.z.div_euclid(CHUNK)))
+                .or_default()
+                .push(Member {
+                    coord: (coord.x, coord.z),
                     mesh,
-                    terrain.data.tiles.get(coord)?,
-                    index as u32,
-                ))
+                    weights: &tile.weights,
+                    index: index as u32,
+                });
+        }
+        let wanted: Vec<_> = by_chunk
+            .into_iter()
+            .map(|(chunk, members)| {
+                let key = members.iter().fold(
+                    fnv(fnv(FNV, &chunk.0.to_le_bytes()), &chunk.1.to_le_bytes()),
+                    |h, m| fnv(h, &(m.mesh.key ^ layers.key).to_le_bytes()),
+                );
+                (key, chunk, members)
             })
             .collect();
         if wanted.len() > budget {
             gaps.limit(
-                "mesh-material groups per frame (terrain tiles)",
+                "mesh-material groups per frame (terrain chunks)",
                 &format!(
-                    "{} of {} resident terrain tiles are not drawn",
+                    "{} of {} resident terrain chunks are not drawn",
                     wanted.len() - budget,
                     wanted.len()
                 ),
             );
         }
-        let keep: HashSet<u64> = wanted.iter().take(budget).map(|tile| tile.0).collect();
+        let keep: HashSet<u64> = wanted.iter().take(budget).map(|chunk| chunk.0).collect();
         let gone: Vec<u64> = self
             .tiles
             .keys()
@@ -192,15 +298,18 @@ impl Terrain {
                 release(engine, tile)?;
             }
         }
-        for (key, mesh, tile, _) in wanted.iter().take(budget) {
+        for (key, chunk, members) in wanted.iter().take(budget) {
             if let std::collections::hash_map::Entry::Vacant(slot) = self.tiles.entry(*key) {
-                slot.insert(place(engine, mesh, &tile.weights, &layers, splat)?);
+                let merged = merge(*chunk, members);
+                slot.insert(place(engine, &merged, &layers, splat)?);
             }
         }
         self.tagged = wanted
             .iter()
             .take(budget)
-            .filter_map(|(key, _, _, index)| Some((self.tiles.get(key)?.object, *index)))
+            .filter_map(|(key, _, members)| {
+                Some((self.tiles.get(key)?.object, merge_ranges(members)))
+            })
             .collect();
         for texture in old_textures {
             engine.remove_texture(texture)?;
@@ -224,7 +333,12 @@ impl Terrain {
         let largest = packed_ids.map_or(0, |uploaded| {
             wanted
                 .iter()
-                .map(|(_, mesh, _, _)| mesh.source.indices.len() / 3)
+                .map(|(_, _, members)| {
+                    members
+                        .iter()
+                        .map(|m| m.mesh.source.indices.len() / 3)
+                        .sum()
+                })
                 .chain(view.frame.draws.iter().map(triangles_of))
                 .chain(view.foliage_parts.values().flatten().map(triangles_of))
                 .fold(uploaded, usize::max)
@@ -258,18 +372,24 @@ impl Terrain {
         Ok((self.tiles.len(), largest))
     }
 
-    /// Gives the placed tiles the editor's ids: tile `n` of the frame's sorted resident
-    /// coordinates is `first + n` (the editor lists them after the frame's draws). Sets only
-    /// what changed.
+    /// Gives the placed chunks the editor's ids: tile `n` of the frame's sorted resident
+    /// coordinates is `first + n` (the editor lists them after the frame's draws), one range of
+    /// a chunk's triangles per member tile. Sets only what changed.
     pub fn tag(&mut self, engine: &mut Engine, first: u32) -> Result<()> {
-        let wanted: Vec<(ObjectId, u32)> = self
+        let wanted: Vec<(ObjectId, Vec<(u32, u32, u32)>)> = self
             .tagged
             .iter()
-            .map(|(object, index)| (*object, first + index))
+            .map(|(object, members)| {
+                let ranges = members
+                    .iter()
+                    .map(|m| (m.first_triangle, m.triangles, first + m.index))
+                    .collect();
+                (*object, ranges)
+            })
             .collect();
         if wanted != self.applied {
-            for (object, id) in &wanted {
-                engine.set_object_ids(*object, &[(0, u32::MAX, *id)])?;
+            for (object, ranges) in &wanted {
+                engine.set_object_ids(*object, ranges)?;
             }
             self.applied = wanted;
         }
@@ -485,17 +605,17 @@ fn splat_tangents(vertices: &[Vertex]) -> TangentStream {
 /// Uploads one tile: its mesh and a material coloured by its splat layers.
 fn place(
     engine: &mut Engine,
-    tile: &TileMesh,
-    weights: &[[u8; 4]],
+    tile: &Merged,
     layers: &Layers<'_>,
     splat: Option<(ProgramId, &crate::splat::Splat)>,
 ) -> Result<Tile> {
-    let vertices: Vec<Vertex> = tile.source.vertices.iter().map(scene::vertex).collect();
+    let weights = &tile.weights[..];
+    let vertices: Vec<Vertex> = tile.vertices.iter().map(scene::vertex).collect();
     let data = MeshData {
         vertices: &vertices,
-        indices: &tile.source.indices,
+        indices: &tile.indices,
     };
-    let fits = weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1];
+    let fits = weights.len() as u32 == tile.size[0] * tile.size[1];
     // Layer normal maps need a tangent frame: the splat's (+X along the ground, the
     // bitangent toward +Z, as the layers' world X/Z coordinates run).
     let normals = splat.filter(|_| fits).and_then(|(_, s)| s.normals);
@@ -513,7 +633,7 @@ fn place(
     if let Some((program, splat)) = splat.filter(|_| fits) {
         let rgba = weights.iter().flatten().copied().collect();
         let weights = engine.create_texture(texture::chain(
-            tile.texture.size,
+            tile.size,
             rgba,
             TextureRole::MetallicRoughnessLinear,
         ))?;
@@ -548,7 +668,7 @@ fn place(
     }
     // One texel per height sample, as the tile mesh's coordinates address them.
     let texture = match layers.colours {
-        Some(colours) if weights.len() as u32 == tile.texture.size[0] * tile.texture.size[1] => {
+        Some(colours) if weights.len() as u32 == tile.size[0] * tile.size[1] => {
             let mut rgba = Vec::with_capacity(weights.len() * 4);
             for sample in weights {
                 let total = sample.iter().map(|w| f32::from(*w)).sum::<f32>().max(1.);
@@ -563,7 +683,7 @@ fn place(
                 rgba.push(255);
             }
             Some(engine.create_texture(texture::chain(
-                tile.texture.size,
+                tile.size,
                 rgba,
                 TextureRole::BaseColorSrgb,
             ))?)
@@ -614,5 +734,78 @@ mod tests {
         // 32,768 triangles, doubled: 17 bits, so 15 bits of instances.
         assert_eq!(packed_instances(32_768), (1 << 15) - 2);
         assert_eq!(packed_instances(1), (1 << 30) - 2);
+    }
+    /// A tile of `side` by `side` samples whose two triangles and weights are marked by `mark`.
+    fn tile(mark: u8, side: u32) -> (std::sync::Arc<TileMesh>, Vec<[u8; 4]>) {
+        use ara_runtime::model::ModelVertex;
+        let vertex = |u: f32, v: f32| ModelVertex {
+            uv: [u, v],
+            ..Default::default()
+        };
+        let mesh = TileMesh {
+            entity: 0,
+            label: String::new(),
+            key: u64::from(mark),
+            source: std::sync::Arc::new(ara_runtime_render::geometry::Source {
+                vertices: vec![
+                    vertex(0., 0.),
+                    vertex(1., 0.),
+                    vertex(0., 1.),
+                    vertex(1., 1.),
+                ],
+                indices: vec![0, 2, 1, 1, 2, 3],
+            }),
+            texture: std::sync::Arc::new(ara_frame::scene::Texture {
+                size: [side, side],
+                rgba: Vec::new(),
+                srgb: true,
+            }),
+        };
+        (
+            std::sync::Arc::new(mesh),
+            vec![[mark, 0, 0, 0]; (side * side) as usize],
+        )
+    }
+
+    /// Each tile's weights land in its block, its texture coordinates move into that block,
+    /// and its triangles are the range its id is set on.
+    #[test]
+    fn a_chunk_keeps_each_tiles_block_coordinates_and_triangles() {
+        let side = 3;
+        let ((a, wa), (b, wb)) = (tile(7, side), tile(9, side));
+        let members = [
+            Member {
+                coord: (4, 4),
+                mesh: a,
+                weights: &wa,
+                index: 10,
+            },
+            Member {
+                coord: (5, 4),
+                mesh: b,
+                weights: &wb,
+                index: 11,
+            },
+        ];
+        let merged = merge((1, 1), &members);
+        let wide = 4 * side as usize;
+        assert_eq!(merged.size, [wide as u32; 2]);
+        // Block (0, 0) holds the first tile's weights and block (1, 0) the second's;
+        // everything else reads the first layer.
+        assert_eq!(merged.weights[0], [7, 0, 0, 0]);
+        assert_eq!(merged.weights[side as usize], [9, 0, 0, 0]);
+        assert_eq!(merged.weights[2 * side as usize], [255, 0, 0, 0]);
+        // The second tile's far corner is at the end of its block of four.
+        assert_eq!(merged.vertices.len(), 8);
+        assert_eq!(merged.vertices[7].uv, [2. / 4., 1. / 4.]);
+        assert_eq!(merged.indices[6..9], [4, 6, 5]);
+        let ranges = merge_ranges(&members);
+        assert_eq!(
+            ranges
+                .iter()
+                .map(|r| (r.first_triangle, r.triangles, r.index))
+                .collect::<Vec<_>>(),
+            [(0, 2, 10), (2, 2, 11)]
+        );
     }
 }
