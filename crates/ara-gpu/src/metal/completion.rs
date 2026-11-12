@@ -235,8 +235,8 @@ impl MetalDevice {
         }
         Ok(())
     }
-    /// Make one completed graphics submission visible to the UI. Scene and UI share
-    /// one Metal graphics queue, so this is a no-op. On Vulkan,
+    /// Make one completed graphics submission visible to the UI. A no-op on Metal: the UI
+    /// adapter orders itself after the point with `MetalDevice::wait_for_point`. On Vulkan,
     /// [`Self::publish_completed_to_ui`] waits for every queue at a frame boundary
     /// and refuses unfinished frames; this waits for `point` alone.
     pub fn publish_submission_to_ui(&self, _point: TimelinePoint) -> Result<()> {

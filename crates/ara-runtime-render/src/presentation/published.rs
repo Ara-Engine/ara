@@ -12,6 +12,12 @@ impl PresentationImage {
         self.size
     }
 
+    /// The submission that last copied into [`Self::output`]. On Apple the copy is not
+    /// waited for: a device that samples the image orders itself after this point.
+    pub fn point(&self) -> Option<ara_gpu::TimelinePoint> {
+        self.point
+    }
+
     /// Reads completed color into a capture while preserving its entity IDs,
     /// metadata and numbered overlays. Used only at an explicit capture boundary.
     /// `gpu` is the device that published this image.
@@ -35,7 +41,7 @@ impl PresentationImage {
         source: Image,
         size: [u32; 2],
     ) -> Result<f64> {
-        if let Some(published) = slot
+        if let Some(published) = slot.as_mut()
             && published.size == size
         {
             return published.copy(gpu, source, false);
@@ -48,7 +54,11 @@ impl PresentationImage {
                 | vk::ImageUsageFlags::TRANSFER_DST
                 | vk::ImageUsageFlags::SAMPLED,
         )?;
-        let next = Self { image, size };
+        let mut next = Self {
+            image,
+            size,
+            point: None,
+        };
         let elapsed = match next.copy(gpu, source, true) {
             Ok(time) => time,
             Err(error) => {
@@ -69,7 +79,11 @@ impl PresentationImage {
         Ok(())
     }
 
-    pub(super) fn copy(&self, gpu: &mut GpuDevice, source: Image, fresh: bool) -> Result<f64> {
+    /// Copies `source` into the retained image and returns the copy's GPU milliseconds. On
+    /// Apple the copy is not waited for (0 is returned): the scene's next frame may already
+    /// be drawing on the same device, and the UI that samples the image orders itself after
+    /// the copy's point (`Self::point`). Elsewhere it waits, as the UI shares the queue.
+    pub(super) fn copy(&mut self, gpu: &mut GpuDevice, source: Image, fresh: bool) -> Result<f64> {
         let mut commands = gpu.begin(Queue::Graphics);
         commands.push(Command::BeginPass("Presentation.Publish".into()));
         commands.barriers([Barrier {
@@ -94,6 +108,10 @@ impl PresentationImage {
         }]);
         commands.push(Command::EndPass);
         let point = gpu.submit(commands.finish(), &[])?;
+        self.point = Some(point);
+        #[cfg(target_vendor = "apple")]
+        let elapsed = 0.;
+        #[cfg(not(target_vendor = "apple"))]
         let elapsed = gpu
             .resolve(point)?
             .iter()

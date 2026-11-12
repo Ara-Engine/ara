@@ -363,6 +363,11 @@ impl NativeUi {
     pub fn order_after(&mut self, gpu: &ara_gpu::GpuDevice) {
         self.device.wait_for(gpu);
     }
+    /// Order the next UI submission after `point` of `gpu` alone: the copy that published
+    /// the image this UI composites, not the scene's later frames still drawing.
+    pub fn order_after_point(&mut self, gpu: &ara_gpu::GpuDevice, point: ara_gpu::TimelinePoint) {
+        self.device.wait_for_point(gpu, point);
+    }
     /// Order `gpu`'s next work after this adapter's submissions: the next frame
     /// rewrites the scene image this UI may still be compositing.
     pub fn order_before(&self, gpu: &mut ara_gpu::GpuDevice) {

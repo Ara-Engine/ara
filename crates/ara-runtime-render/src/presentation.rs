@@ -11,6 +11,9 @@ use fidelity::native::Content;
 pub struct PresentationImage {
     pub(super) image: Image,
     size: [u32; 2],
+    /// The submission of the last copy into `image`: a device that reads the image orders
+    /// itself after it (`MetalDevice::wait_for_point`).
+    point: Option<ara_gpu::TimelinePoint>,
 }
 
 mod capture;

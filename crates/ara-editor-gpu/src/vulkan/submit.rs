@@ -92,6 +92,9 @@ impl NativeUi {
     /// Metal's adapter has its own queues and orders its next submission after the
     /// renderer's; this one shares the renderer's queue, so nothing is needed.
     pub fn order_after(&mut self, _gpu: &ara_gpu::GpuDevice) {}
+    /// Metal's counterpart waits one published copy; one shared queue already orders it.
+    pub fn order_after_point(&mut self, _gpu: &ara_gpu::GpuDevice, _point: ara_gpu::TimelinePoint) {
+    }
     /// Metal's counterpart orders the renderer's next work after this adapter's;
     /// one shared queue already does here.
     pub fn order_before(&self, _gpu: &mut ara_gpu::GpuDevice) {}
