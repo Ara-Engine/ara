@@ -213,6 +213,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         s.local.scene = state::SceneStatus {
             ready: true,
             message: String::new(),
+            failed: false,
             fps: None,
         };
         s.local.device = device;
@@ -557,6 +558,20 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             } else {
                 "scene check"
             });
+            // Renderlab is the Scene view and has no fallback: its error is the panel's.
+            if let Some(error) = scene_view.renderlab_error()
+                && !rt.state().local.scene.failed
+            {
+                let message = format!("Renderlab could not draw the Scene: {error}");
+                rt.update(|s| {
+                    s.local.scene = state::SceneStatus {
+                        ready: false,
+                        message,
+                        failed: true,
+                        fps: None,
+                    }
+                });
+            }
             pass.phase("studio.composite");
             // An asynchronous Scene frame lands passes after it was submitted: show it then.
             let landed = renderer.shown_frame_tag() != shown_tag;

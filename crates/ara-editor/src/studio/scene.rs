@@ -191,16 +191,40 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .align(Align::Center)
                 .justify(Justify::Center)
                 .child(
-                    glass_group(l)
-                        .h(36.0)
-                        .pad_x(14.0)
-                        .gap(10.0)
-                        .child(spinner(l, 16.0))
-                        .child(
-                            text(s.local.scene.message.clone())
-                                .text_size(12.5)
-                                .color(l.c.foreground.0),
-                        ),
+                    // A failed renderer is an error, not progress: no spinner, and room for the
+                    // whole message.
+                    if s.local.scene.failed {
+                        glass_group(l)
+                            .key("scene/error")
+                            .min_h(36.0)
+                            .w(460.0)
+                            .pad(14.0)
+                            .gap(10.0)
+                            .child(
+                                icon(icons::CIRCLE_ALERT)
+                                    .size(16.0)
+                                    .color(l.c.destructive_foreground.0),
+                            )
+                            .child(
+                                text(s.local.scene.message.clone())
+                                    .text_size(12.0)
+                                    .wrap(6)
+                                    .min_w(0.0)
+                                    .grow(1.0)
+                                    .color(l.c.foreground.0),
+                            )
+                    } else {
+                        glass_group(l)
+                            .h(36.0)
+                            .pad_x(14.0)
+                            .gap(10.0)
+                            .child(spinner(l, 16.0))
+                            .child(
+                                text(s.local.scene.message.clone())
+                                    .text_size(12.5)
+                                    .color(l.c.foreground.0),
+                            )
+                    },
                 ),
         );
     }

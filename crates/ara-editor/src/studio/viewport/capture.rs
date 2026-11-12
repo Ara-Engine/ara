@@ -54,10 +54,10 @@ impl SceneView {
         let scene = self
             .renderlab
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet"))?;
+            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet (ARA_SCENE_RENDERER=raster draws none)"))?;
         let image = scene
             .image()
-            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet"))?;
+            .ok_or_else(|| anyhow::anyhow!("the Scene has not drawn a Renderlab frame yet (ARA_SCENE_RENDERER=raster draws none)"))?;
         anyhow::ensure!(
             renderer.size() == request.size,
             "the capture is {:?} but the Scene view is {:?}",
@@ -108,8 +108,8 @@ impl SceneView {
         self.capture_forced = true;
         loop {
             self.render_scene_frame(renderer, editor, view)?;
-            if self.renderlab_failed {
-                return Err("Renderlab could not draw the Scene".into());
+            if let Some(error) = &self.renderlab_error {
+                return Err(format!("Renderlab could not draw the Scene: {error}").into());
             }
             let drawn = self.raster_frame.is_some()
                 && self.content_job.is_none()

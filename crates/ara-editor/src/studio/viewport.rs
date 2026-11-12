@@ -101,7 +101,7 @@ pub(crate) struct SceneView {
     /// The Scene's frame drawn by Renderlab, when `ARA_SCENE_RENDERER=renderlab` (`renderlab`).
     renderlab: Option<renderlab::RenderlabScene>,
     /// Renderlab failed to start or draw: reported once, and `ara-render` shows the Scene.
-    renderlab_failed: bool,
+    renderlab_error: Option<String>,
     /// The frame is the Scene view's own (`scene_frame`), not the old raster path's.
     scene_only: bool,
     /// What the Renderlab image last drawn was drawn from (`scene_frame`).
@@ -304,7 +304,12 @@ impl SceneView {
         let mode = view_mode(&editor.state.view_mode);
         self.lit = matches!(mode, ViewMode::Lit);
         // Renderlab draws the Scene from the frame the editor extracts itself: no raster view.
-        if renderlab::requested() && !self.renderlab_failed && std::env::var_os("ARA_SCENE_RASTER_FRAME").is_none() {
+        if renderlab::requested() && std::env::var_os("ARA_SCENE_RASTER_FRAME").is_none() {
+            // Renderlab is the Scene view. If it failed there is no other renderer to fall back
+            // to: the panel shows the error (`renderlab_error`).
+            if self.renderlab_error.is_some() {
+                return Ok(());
+            }
             return self.render_scene_frame(renderer, editor, view);
         }
         let settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
@@ -497,11 +502,11 @@ impl SceneView {
         }
         Ok(())
     }
-    /// Draws the Scene's frame with the editor-hosted Renderlab engine when
-    /// `ARA_SCENE_RENDERER=renderlab`, from the editor's camera; its image is what the
-    /// compositor shows. A failure is reported once and `ara-render` keeps showing the Scene.
+    /// Draws the Scene's frame with the editor-hosted Renderlab engine from the editor's
+    /// camera; its image is what the compositor shows. A failure (the engine did not start, or
+    /// could not draw) is kept in `renderlab_error` for the Scene panel to show.
     fn draw_renderlab(&mut self, renderer: &mut Renderer, editor: &Editor) {
-        if !(renderlab::requested() || self.capture_forced) || self.renderlab_failed {
+        if !(renderlab::requested() || self.capture_forced) || self.renderlab_error.is_some() {
             return;
         }
         let Some(content) = self.content.as_mut() else {
@@ -537,12 +542,10 @@ impl SceneView {
                 )
         })();
         if let Err(error) = drawn {
-            eprintln!(
-                "ARA_SCENE_RENDERER: Renderlab could not draw the Scene view ({error:#}); ara-render shows it"
-            );
-            self.renderlab_failed = true;
-            // A failed engine (a lost device, say) shows nothing: its last image goes, so
-            // the Scene is the error, not a stale or black frame.
+            eprintln!("Renderlab could not draw the Scene view: {error:#}");
+            self.renderlab_error = Some(format!("{error:#}"));
+            // A failed engine (a lost device, say) shows nothing: its last image goes, so the
+            // Scene is the error, not a stale or black frame.
             if let Some(scene) = self.renderlab.take() {
                 let _ = scene.release(renderer.gpu_mut());
             }
@@ -1115,6 +1118,10 @@ impl SceneView {
     /// The ids and channels of the Renderlab frame on screen: the click and the overlays
     /// read them (`IdSource::Packed`) in place of the renderer's.
     /// A Scene frame reached the screen: earlier render errors no longer matter.
+    /// Why Renderlab could not draw the Scene, once it failed: the Scene panel shows it.
+    pub(super) fn renderlab_error(&self) -> Option<&str> {
+        self.renderlab_error.as_deref()
+    }
     pub(super) fn presented(&mut self) {
         self.failure = None;
     }
