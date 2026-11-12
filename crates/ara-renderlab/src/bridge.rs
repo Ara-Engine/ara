@@ -696,8 +696,18 @@ impl Bridge {
     }
 
     pub fn release(&mut self, gpu: &mut GpuDevice) -> Result<()> {
-        // Frames in flight draw into the target: they go with it.
-        self.pending.clear();
+        // Frames in flight draw into the target and queue their copy into its shared slots: wait
+        // for Renderlab's queue to go idle before they go with it (a resize, Play, shutdown).
+        if !self.pending.is_empty() {
+            self.pending.clear();
+            let idle = wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(FRAME_WAIT),
+            };
+            if let Err(error) = self.engine.device().poll(idle) {
+                eprintln!("Ara presentation: Renderlab did not go idle before its target was released ({error})");
+            }
+        }
         if let Some(target) = self.target.take() {
             // The import hands its slots back on this device before the image goes.
             drop(target.shared);
