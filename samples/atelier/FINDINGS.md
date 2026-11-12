@@ -32,6 +32,18 @@ No engine code was changed for any of these.
      in Renderlab's wgpu engine (`src/engine/mod.rs`) and I found no call to it in `backend_ara`. Whether the
      blotches vanish with GI off (so are the indirect light) is a question for the PC's
      RT and non-RT paths: render `e_camstill0` with `RENDERLAB_ABLATE=gi`.
+   - **It does not converge away.** `ara capture --stability N` plays N live frames and writes
+     `<name>.live.png` (N is capped at 600; the plain capture settles 48). The ceiling crop at
+     48, 60, 300 and 600 frames ([`ceiling_settle_2x.jpg`](preview/defects/ceiling_settle_2x.jpg))
+     has the same blotches; their amplitude (std of the luminance minus a 12 px blur, 0 to 255)
+     is 3.74, 3.75, 3.83, 3.85. Frame-to-frame flicker does fall (mean change 0.042 at 60 frames,
+     0.010 at 300, 0.007 at 600; 0.1% of 16 x 16 blocks flicker), so the picture is stable
+     but the mottle is permanent. GPU 120 ms a frame throughout.
+   - **It sticks to the surface, not the screen.** The same 1.5 x 1.35 m patch of the back wall,
+     projected from the still camera and from the dolly-end camera and rectified
+     ([`wall_two_angles_2x.jpg`](preview/defects/wall_two_angles_2x.jpg)), shows the same blotch
+     layout in both. It is a spatial pattern of the world-space indirect light, roughly 10 to
+     30 cm across, elongated along the wall.
    - Brightness: at EV100 11.5 the ceiling's display luminance is 0.20 (sRGB 152/118/86) against
      0.76 (250/222/181, partly clipped by the display transform) for the sunlit floor patch,
      about 1:3.7; as scene luminance about 700 against 2,600 cd/m2 or more. The far wall in
