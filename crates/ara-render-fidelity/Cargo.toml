@@ -30,4 +30,3 @@ image = { workspace = true, features = ["png"] }
 [dev-dependencies]
 blake3 = { workspace = true, default-features = true }
 ara-asset-format = { path = "../ara-asset-format" }
-ara-render = { path = "../ara-render", features = ["fidelity-lab"] }
