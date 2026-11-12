@@ -81,8 +81,14 @@ pub(crate) struct Foliage<'a> {
     pub key: u64,
 }
 
-/// Foliage draws that may change level (or appear or vanish) in one frame.
-const LOD_SWAPS_PER_FRAME: usize = 96;
+/// Frames between two bursts of foliage level changes.
+const LOD_BURST_FRAMES: u32 = 16;
+/// Foliage draws that may change level (or appear or vanish) in one burst, nearest first.
+const LOD_SWAPS_PER_BURST: usize = 768;
+/// Frames between bursts: every respawned draw changes the scene Renderlab lights (its GI cache
+/// relights on any change), so a steady trickle of swaps, which a moving camera produces every
+/// frame, costs far more than the same swaps in one burst now and then (measured: 96 draws a
+/// frame took the Outpost orbit from 10 to 1.7 frames a second).
 
 /// What a foliage draw needs to pick its level of detail: where it is and how big it is.
 struct Instance {
@@ -161,12 +167,14 @@ pub(crate) struct Terrain {
     /// Each foliage draw's cooked level of detail for the camera it was last chosen for
     /// (`Self::choose_lods`), or `scene::CULLED`; parallel to `foliage`.
     foliage_lods: Vec<u8>,
-    /// The levels `choose_lods` wants, which `foliage_lods` reaches `LOD_SWAPS_PER_FRAME` draws a
+    /// The levels `choose_lods` wants, which `foliage_lods` reaches `LOD_SWAPS_PER_BURST` draws a
     /// frame at a time, nearest first: a draw that changes level is respawned in Renderlab, and
     /// thousands of respawns in one frame (a cut re-chooses every level) cost several frames.
     lod_desired: Vec<u8>,
     /// Draws whose level differs from `lod_desired`, farthest first (popped from the end).
     lod_queue: Vec<u32>,
+    /// Frames until the next burst of level changes may be applied.
+    lod_cooldown: u32,
     /// Changes whenever `foliage_lods` does: the key of what `Scene::sync` places.
     lod_epoch: u64,
     /// The view `foliage_lods` was chosen for: eye, vertical field of view, height in pixels
@@ -381,7 +389,7 @@ impl Terrain {
     /// Chooses each foliage draw's level of detail for the frame's camera, as Ara's renderer
     /// does: the coarsest cooked level whose error projects under `view.lod_pixels`, and no
     /// draw at all once its bound projects under `view.min_pixels`. Chosen again only when the
-    /// eye moves 2 m, the lens or size changes or the foliage is rebuilt; a draw near a
+    /// eye moves 6 m, the lens or size changes or the foliage is rebuilt; a draw near a
     /// threshold keeps the level it has (a margin of 15 % either way), so the placed objects do
     /// not swap while the camera hovers. On the non-RT path the farthest instances beyond the
     /// triangle budget are left out.
@@ -410,7 +418,7 @@ impl Terrain {
                     .zip(camera.position)
                     .map(|(a, b)| (a - b) * (a - b))
                     .sum::<f32>()
-                    < 4.
+                    < 36.
         });
         if unchanged {
             self.swap_levels();
@@ -482,7 +490,7 @@ impl Terrain {
             self.lod_queue.clear();
             return;
         }
-        // Later choices are reached a few draws a frame, nearest first.
+        // Later choices are reached in bursts (`swap_levels`), nearest first.
         let mut queue: Vec<u32> = (0..chosen.len() as u32)
             .filter(|i| chosen[*i as usize] != previous[*i as usize])
             .collect();
@@ -493,10 +501,15 @@ impl Terrain {
         self.swap_levels();
     }
 
-    /// Moves `foliage_lods` toward `lod_desired` by at most `LOD_SWAPS_PER_FRAME` draws.
+    /// Moves `foliage_lods` toward `lod_desired` by at most `LOD_SWAPS_PER_BURST` draws, at most
+    /// once every `LOD_BURST_FRAMES` frames.
     fn swap_levels(&mut self) {
+        self.lod_cooldown = self.lod_cooldown.saturating_sub(1);
+        if self.lod_cooldown > 0 {
+            return;
+        }
         let mut swapped = 0;
-        while swapped < LOD_SWAPS_PER_FRAME
+        while swapped < LOD_SWAPS_PER_BURST
             && let Some(i) = self.lod_queue.pop()
         {
             let i = i as usize;
@@ -510,6 +523,7 @@ impl Terrain {
         }
         if swapped > 0 {
             self.lod_epoch += 1;
+            self.lod_cooldown = LOD_BURST_FRAMES;
         }
     }
 
@@ -888,11 +902,12 @@ mod tests {
         assert_eq!(packed_instances(32_768), (1 << 15) - 2);
         assert_eq!(packed_instances(1), (1 << 30) - 2);
     }
-    /// Level changes are applied in the queue's order (nearest first) and at most
-    /// `LOD_SWAPS_PER_FRAME` a frame, so a cut does not respawn every foliage draw at once.
+    /// Level changes are applied in the queue's order (nearest first), in bursts of at most
+    /// `LOD_SWAPS_PER_BURST` and not more often than every `LOD_BURST_FRAMES` frames, so a
+    /// moving camera does not respawn foliage draws every frame and a cut not all at once.
     #[test]
-    fn level_swaps_are_spread_over_frames_nearest_first() {
-        let count = LOD_SWAPS_PER_FRAME * 2 + 5;
+    fn level_swaps_come_in_bursts_nearest_first() {
+        let count = LOD_SWAPS_PER_BURST * 2 + 5;
         let mut terrain = Terrain {
             foliage_lods: vec![0; count],
             lod_desired: vec![1; count],
@@ -901,23 +916,33 @@ mod tests {
             ..Terrain::default()
         };
         terrain.swap_levels();
-        assert_eq!(
-            terrain.foliage_lods.iter().filter(|l| **l == 1).count(),
-            LOD_SWAPS_PER_FRAME
-        );
+        let swapped = |t: &Terrain| t.foliage_lods.iter().filter(|l| **l == 1).count();
+        assert_eq!(swapped(&terrain), LOD_SWAPS_PER_BURST);
         assert!(
-            terrain.foliage_lods[count - LOD_SWAPS_PER_FRAME..]
+            terrain.foliage_lods[count - LOD_SWAPS_PER_BURST..]
                 .iter()
                 .all(|l| *l == 1)
         );
+        // Nothing moves until the burst interval has passed.
         let epoch = terrain.lod_epoch;
+        for _ in 0..LOD_BURST_FRAMES - 1 {
+            terrain.swap_levels();
+        }
+        assert_eq!(
+            (swapped(&terrain), terrain.lod_epoch),
+            (LOD_SWAPS_PER_BURST, epoch)
+        );
         terrain.swap_levels();
-        terrain.swap_levels();
+        assert_eq!(swapped(&terrain), 2 * LOD_SWAPS_PER_BURST);
+        for _ in 0..LOD_BURST_FRAMES {
+            terrain.swap_levels();
+        }
         assert!(terrain.foliage_lods.iter().all(|l| *l == 1));
-        assert!(terrain.lod_epoch > epoch);
         // Settled: nothing changes, so the placed objects are left alone.
         let settled = terrain.lod_epoch;
-        terrain.swap_levels();
+        for _ in 0..2 * LOD_BURST_FRAMES {
+            terrain.swap_levels();
+        }
         assert_eq!(terrain.lod_epoch, settled);
     }
 }
