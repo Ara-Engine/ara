@@ -34,7 +34,6 @@ mod grade;
 mod id_slot;
 #[cfg(not(target_vendor = "apple"))]
 mod id_target;
-#[cfg(not(target_vendor = "apple"))]
 mod lighting;
 mod meter;
 mod scene;
