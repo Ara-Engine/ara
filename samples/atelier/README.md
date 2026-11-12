@@ -17,7 +17,7 @@ ara capture --root samples/atelier --scene levels/atelier.scene --camera e_camst
 ```
 
 Camera entities: `e_camstill0`, `e_camdolly0`/`1`, `e_camcut0`..`3` (one per clip key).
-`preview/` holds the current stills (JPEG, replaced as the scene changes).
+Export notes (what the Unity/Unreal export carries and cannot): [`compare/EXPORT.md`](compare/EXPORT.md). `preview/` holds the current stills (JPEG, replaced as the scene changes).
 
 ## Conventions
 
@@ -43,7 +43,7 @@ direction the light moves, not where it comes from.
 
 ## Local lights
 
-All in lumens, all with an explicit source radius (Ara's default of 0 is an ideal point).
+All in lumens, all spheres with an explicit source radius (Ara's default of 0 is an ideal point; the two tube lights were made spheres because Renderlab cannot draw tubes).
 Spots: cone half-angles in degrees. "Shadow" is the intended choice; Ara's `Light` has no
 shadow flag yet (see FINDINGS).
 
@@ -51,8 +51,8 @@ shadow flag yet (see FINDINGS).
 |---|---|---|---|---|---|---|---|---|
 | Pendant over the table | point | 0.2, 2.5, -6.0 | 900 | 1.0, 0.82, 0.6 | 0.10 | 9 | | yes |
 | Floor lamp reading spot | spot | -3.4, 1.7, -5.7 | 450 | 1.0, 0.8, 0.58 | 0.04 | 6 | 25 / 45 | yes |
-| Picture light | spot | 1.6, 2.65, -8.7 | 350 | 1.0, 0.9, 0.75 | 0.02 / 0.6 tube | 3.5 | 30 / 55 | no |
-| Shelf LED strip | point | -2.4, 1.2, -8.65 | 300 | 1.0, 0.93, 0.8 | 0.01 / 1.4 tube | 3 | | no |
+| Picture light | spot | 1.6, 2.65, -8.7 | 350 | 1.0, 0.9, 0.75 | 0.02 | 3.5 | 30 / 55 | no |
+| Shelf LED strip | point | -2.4, 1.2, -8.65 | 300 | 1.0, 0.93, 0.8 | 0.01 | 3 | | no |
 | Courtyard wall lantern | point | 3.3, 2.4, 0.68 | 600 | 1.0, 0.78, 0.5 | 0.07 | 8 | | no |
 | Table lamp glow | point | 0.75, 0.98, -6.0 | 120 | 1.0, 0.8, 0.55 | 0.03 | 3 | | no |
 
