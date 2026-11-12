@@ -5,8 +5,9 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use support::{Agent, demo_copy};
 
-/// Exposure lock (EV100) asked of every capture here. Renderlab meters the displayed image
-/// instead (see the bridge's gap table), so the captures' means are not compared.
+/// Exposure lock (EV100) asked of every capture here. It holds on Renderlab, but the captures'
+/// means are not compared: a lamp's emissive factor does not change the picture (see the
+/// bridge's gap table).
 const EV100: f32 = 9.;
 
 fn capture(agent: &mut Agent, world: &Value, root: &Path, name: &str) -> [f64; 3] {
