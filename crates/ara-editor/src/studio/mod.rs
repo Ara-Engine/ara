@@ -395,7 +395,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }
         pass.mark("assets+logs");
         pass.phase("studio.scene_sync");
-                if changed {
+        if changed {
             let next = rt.touch(|s| {
                 revision = s.editor.host.store().revision();
                 s.editor.view()
@@ -482,10 +482,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let key = rt.touch(|s| overlays_key(s));
             let restyled = key != overlay_key;
             overlay_key = key;
-            let render = camera_moved
-                || scene_dirty
-                || scene_view.needs_frame()
-                || shown_extent != extent;
+            let render =
+                camera_moved || scene_dirty || scene_view.needs_frame() || shown_extent != extent;
             if render {
                 renderer.resize(extent);
                 agent_work::render(&mut rt, &mut scene_view, &mut renderer, &view);
@@ -769,8 +767,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         // The Game view has a layer to present into this pass: it is what the view area
         // shows when the Game tab is in front.
         let game_shown = game_layer.is_some();
-        if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor))
-        {
+        if game_layer.is_some() || rt.touch(|s| game.wants_frame(&s.editor)) {
             let scale = rt.scale();
             // Input goes to the client Play's controls act on.
             game.client = rt.state().play.client;
@@ -919,7 +916,9 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         if frame_limit.is_some()
             && let Some(error) = scene_view.renderlab_error()
         {
-            anyhow::bail!("Renderlab could not draw the Scene and a bounded run cannot finish: {error}");
+            anyhow::bail!(
+                "Renderlab could not draw the Scene and a bounded run cannot finish: {error}"
+            );
         }
         if let Some(limit) = frame_limit {
             // A frame counts when whichever view the view area shows (the Scene or the Game)

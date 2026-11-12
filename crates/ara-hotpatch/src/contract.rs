@@ -195,12 +195,9 @@ impl Bodies<'_> {
         // work ends. Their iterator/memoization closures are fresh frame locals;
         // none is the persisted function environment passed through HotFn.
         let scoped = (sig.ident == "record_frame"
-            && [
-                "crates/ara-render/src/renderer/passes.rs",
-                "crates/ara-render-fidelity/src/render.rs",
-            ]
-            .iter()
-            .any(|path| self.source.ends_with(*path)))
+            && self
+                .source
+                .ends_with("crates/ara-render-fidelity/src/render.rs"))
             || (sig.ident == "record_post_process"
                 && self
                     .source
@@ -359,21 +356,6 @@ mod tests {
         fingerprint_bytes(Path::new("a.rs"), text.as_bytes())
             .unwrap()
             .shape
-    }
-    #[test]
-    fn real_fidelity_recording_body_is_live_with_its_literal_macros_and_local_closures() {
-        let path = Path::new("crates/ara-render-fidelity/src/render.rs");
-        let source = include_str!("../../ara-render-fidelity/src/render.rs");
-        let anchor = "let (frame, vp, camera) = self.frame(input)?;";
-        assert!(source.contains(anchor));
-        let edited = source.replace(
-            anchor,
-            "let (frame, vp, camera) = self.frame(input)?; let _proof = 7;",
-        );
-        assert_eq!(
-            fingerprint_bytes(path, source.as_bytes()).unwrap().shape,
-            fingerprint_bytes(path, edited.as_bytes()).unwrap().shape,
-        );
     }
     #[test]
     fn reviewed_recording_locals_can_change_but_persisted_layouts_cannot() {

@@ -92,4 +92,4 @@ the same commands as agents. Show `Effect::diagnostics` and GPU stats beside it.
 Compile `generate` away from the editor in a below-normal-priority worker, cook
 Slang to SPIR-V/DXIL, and swap only a complete matching cohort at a frame boundary
 under the human's D20 application policy. Failed cooks retain the last good
-cohort. See [`ara-vfx-gpu`](../ara-vfx-gpu/README.md) for preview/integration.
+cohort.

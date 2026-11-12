@@ -439,17 +439,10 @@ report marks reuse and retains the original timestamp and per-block artifacts.
 A changed generation or missing artifact triggers a fresh temporal sequence;
 `lab capture` always performs its requested fresh quality checks.
 
-`lab set` discovers typed parameters; `--values` accepts a JSON object of
-`name: {"type":"f32"|"int"|"bool"|"vec", "value":...}` entries. Updates validate
-the whole batch before applying anything. `--camera stage|materials|props` changes
-the fixed Showcase view. Parameters and the camera survive Rust warm restarts.
-The `ara-player/fidelity-lab` feature supplies the registry and render hooks;
-shipping builds contain neither. Render code declares typed keys once and reads
-owned slots without locks, clones, allocation or string lookup per frame. Changes
-upload a bounded uniform table once; `shaders/lab-params.slangh` documents optional
-compile-time access for experimental passes. `post.exposure_stops`, `post.curve`,
-`post.bloom_enabled`, `post.gain_scale`, `post.saturation_scale`, `post.manual_exposure`,
-`post.ev100`, `ao.intensity_scale` and `ssr.intensity_scale` are available initially.
+`lab set` (typed live parameters), the reference comparison metrics and the temporal checks
+read the old renderer's parameter registry, which went with it. They return when Renderlab
+exposes parameter keys (a gap-table row in `crates/ara-renderlab/AGENTS.md`). `lab capture`
+takes shots through the installed renderer and writes them as PNGs.
 
 Timing uses the existing machine GPU FIFO, with GPU **and CPU** foreign-load
 monitoring. CPU occupancy is normalized over all logical processors and subtracts
@@ -1220,7 +1213,7 @@ the lockfile, stage all resolutions including Cargo.lock, then run the gate.
 ## GPU timing queue
 
 ```
-cargo run -p ara-dev -- gpu -- cargo run -p ara-render --example benchmark
+cargo run -p ara-dev -- gpu -- cargo test -p ara-renderlab --test render
 cargo run -p ara-dev -- gpu --timeout 600 -- capture-tool --output target/capture.png
 ```
 

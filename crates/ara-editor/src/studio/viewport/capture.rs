@@ -1,9 +1,8 @@
 //! Captures of the Scene read back from Renderlab: the completed colour image and the packed id
 //! image beside it (`ids`), assembled with `Capture::from_render`, so numbered marks, the
-//! legend and the entity lookup are the ones agents already read. Nothing here builds a
-//! `RasterView`. Only the Lit view exists (the other view modes are not available yet).
+//! legend and the entity lookup are the ones agents already read. Only the Lit view exists (the other view modes are not available yet).
 use super::*;
-use crate::gpu::IdPick as _;
+use crate::gpu::IdHit;
 use ara_frame::capture::{Capture, CaptureContext, ShaderMetadata};
 use ara_gpu::{Access, Barrier, Device, Image, Queue, Resource, commands::Command, vk};
 
@@ -40,7 +39,7 @@ fn read_rgba8(
 impl SceneView {
     /// The Scene as Renderlab last drew it, as a capture of `request`'s size: the display image,
     /// the numbered one when marks are asked for, the legend, and each pixel's entity (from the
-    /// ids rasterised beside the image). The Scene must have drawn a frame (`render_capture`).
+    /// ids the engine wrote beside the image). The Scene must have drawn a frame (`render_capture`).
     pub(crate) fn capture(
         &self,
         device: &mut SceneDevice,
@@ -64,17 +63,27 @@ impl SceneView {
             request.size,
             device.size()
         );
-        let mut host = scene
+        let host = scene
             .id_host()
             .ok_or_else(|| anyhow::anyhow!("the Scene has no object ids yet"))?;
         let names = host.entities.to_vec();
-        let [width, height] = request.size;
-        let mut ids = Vec::with_capacity(width as usize * height as usize);
-        for y in 0..height {
-            for x in 0..width {
-                ids.push(host.id_at([x, y])?.id().unwrap_or(0));
+        // The ids per pixel: the texels the engine delivered by CPU copy, or its id image read
+        // back (the shared ring and Apple's device hand across an image).
+        let packed = match host.texels() {
+            Some(texels) => texels.to_vec(),
+            None => {
+                let ids = scene
+                    .id_image()
+                    .ok_or_else(|| anyhow::anyhow!("the Scene has no object ids yet"))?;
+                read_rgba8(device.gpu_mut(), ids, request.size)?
             }
-        }
+        };
+        let ids: Vec<u32> = packed
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|t| IdHit::from_packed(*t).id().unwrap_or(0))
+            .collect();
         let rgba = read_rgba8(device.gpu_mut(), image, request.size)?;
         let hash = format!("{:?}", self.revision);
         let shaders = ShaderMetadata {

@@ -58,19 +58,19 @@ are served by the studio's loop (`studio/capture.rs`, written by `capture::Work`
 worker); probe jobs (`render.probe.*`) by `studio/probes.rs`.
 
 Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
-The Scene's ids (packed RGBA8, rasterised from the frame beside Renderlab's image) drive picking and
+The Scene's ids (packed RGBA8, written by Renderlab beside its image) drive picking and
 hover through `world/channels.rs` (channel → entity; terrain is one object); the overlays read
 them through `gpu::IdSource::Packed` and draw the selection outlines from them.
 `ARA_SCENE_DUMP=<file.png>` writes each composed
 Scene frame (image + overlays, the compositor's target) to a PNG: window captures and `--headless`
 never include the overlays, so use it to see them.
-`ARA_SCENE_RENDERER=renderlab` (off by default) draws the Scene with an engine hosted in the
-editor (`viewport/renderlab.rs`, `ara-renderlab`'s bridge). Its ids are made beside the image:
-`viewport/ids.rs` rasterises the frame's draws (draw `n` = id `n + 1`, depth tested, skinned on
-the CPU; terrain has none yet) into the packed RGBA8 image the overlays sample
-(`IdSource::Packed`) and the click reads bit-exact from the same CPU texels (`IdHost`); an
-engine that delivers ids (`ExternalFrame::id`) replaces the overlays' copy. A bounded run
-(`--frames`, `--screenshot`) whose Scene fails and presents nothing for 10 s ends with the error.
+The Scene is an engine hosted in the editor (`viewport/renderlab.rs`, `ara-renderlab`'s bridge; no
+other renderer, D40). Its ids come from the engine: a draw is `n + 1` for its index in the frame's
+draws, then each resident terrain tile (`viewport/ids.rs`, `entities`). The engine hands them across
+as CPU texels (Linux: `ExternalFrame::id_texels`, uploaded for the overlays) or as an image (the
+shared ring, Apple: `ExternalFrame::id`, bound as is); a click asks the engine (`pick_id`, through
+`request_ids`, glass included) and falls back to the texels; a capture reads the texels or the image
+back. A bounded run (`--frames`, `--screenshot`) whose Scene fails ends with the error.
 
 Panel authoring: asset_tools owns isolated import jobs, cached off-thread thumbnails
 (models, material spheres, VFX) and material node previews (`node_preview.rs`). authoring

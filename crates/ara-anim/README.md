@@ -67,7 +67,7 @@ applying a root delta. Root delta consumption and gameplay event deduplication
 belong to the same simulation snapshot. Replay is bit-exact for the same
 binary/platform/configuration, not promised across different floating-point ISAs.
 
-**ara-render:** after procedural pose edits, call `pose::model_matrices` and
+**Renderers:** after procedural pose edits, call `pose::model_matrices` and
 `pose::skinning_palette` with preallocated `Mat4` slices. The palette is
 `joint_model * imported_inverse_bind`, column-major. Mesh/world-space conventions
 and the skinned mesh's model transform are the renderer/importer's responsibility.

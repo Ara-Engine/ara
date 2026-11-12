@@ -7,12 +7,15 @@ not start/restart a lab daemon, change a renderer default, or build another chec
 and A3's `ARACHG01` binary stream (`changes.bin`). The 57 recipes include all five
 R5-5 contact heights, the pole sweep and eight separate shadowed sources.
 
-Build the worker and lab in your own target directory, after checking the overnight
-quiet-window lock. The task coordinator's builder rules govern admission.
+The worker was the old renderer's `render_v3` example, deleted with `ara-render`. A gate
+needs a Renderlab worker that implements the contract below: `--runner` takes it, and
+until one exists the gates have nothing to run.
+
+Build the lab in your own target directory, after checking the overnight quiet-window
+lock. The task coordinator's builder rules govern admission.
 
 ```powershell
 cargo build -p ara-dev
-cargo build --release -p ara-render-fidelity --example render_v3
 .\target\debug\ara-dev.exe lab gate --list
 .\target\debug\ara-dev.exe lab gate --gate G1 --runner .\target\release\examples\render_v3.exe --width 2560 --height 1440
 .\target\debug\ara-dev.exe lab gate --gate all --report-only
@@ -156,7 +159,6 @@ Use `-Cases case-a,case-b` to generate only the next inspection batch.
 ```powershell
 cargo clippy -p ara-dev -p ara-render-fidelity -p ara-pathtrace --all-targets -- -D warnings
 cargo test -p ara-dev lab::stress
-cargo test -p ara-render-fidelity --example render_v3
 ```
 
 The tests exercise percentile/average/peak boundaries, missing evidence, catalogue

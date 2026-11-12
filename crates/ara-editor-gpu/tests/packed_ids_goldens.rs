@@ -1,11 +1,11 @@
 //! The Scene overlays over a packed id image the test writes itself (a ground, two boxes
 //! and an id-less pane: ids by construction), checked against committed goldens. No
-//! renderer is involved, so it runs on either backend and outlives ara-render.
+//! renderer is involved, so it runs on either backend.
 //!
-//! The goldens were generated from the direct path (ara-render's R32F id image) after
-//! `tests/packed_ids_scene.rs` proved it pixel-identical to the packed path; on Metal,
-//! `direct_and_packed_frames_agree_and_write_goldens` re-proves that on this image
-//! and, with `ARA_UPDATE_GOLDENS=1`, rewrites the goldens from the direct frames.
+//! The goldens were generated from the direct path (the removed raster renderer's R32F id
+//! image) after a test proved it pixel-identical to the packed path (that test went with the
+//! renderer); on Metal, `direct_and_packed_frames_agree_and_write_goldens` re-proves that on
+//! this image and, with `ARA_UPDATE_GOLDENS=1`, rewrites the goldens from the direct frames.
 //! Compared on another GPU, derivative-based antialiasing may differ by a level or two,
 //! so the check is: no pixel off by more than 8, at most 0.5% off by more than 2.
 //! Captures of every run go under `target/tmp/ara-editor-gpu-packed-ids-goldens`.

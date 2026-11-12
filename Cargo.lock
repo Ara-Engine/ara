@@ -970,7 +970,6 @@ dependencies = [
  "ara-frame",
  "ara-gpu",
  "ara-platform",
- "ara-render",
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
@@ -1410,32 +1409,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-landscape"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-asset-format",
- "ara-doc",
- "ara-foliage",
- "ara-frame",
- "ara-gpu",
- "ara-json",
- "ara-material",
- "ara-render",
- "ara-schema",
- "ara-shader-cook",
- "ara-terrain",
- "ara-texture-stream",
- "blake3",
- "bytemuck",
- "glam 0.30.10",
- "half",
- "image",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ara-material"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1748,7 +1721,6 @@ dependencies = [
  "ara-play",
  "ara-play-host",
  "ara-profile",
- "ara-render",
  "ara-render-fidelity",
  "ara-renderlab",
  "ara-runtime",
@@ -1818,49 +1790,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "ara-render"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-bvh",
- "ara-frame",
- "ara-gpu",
- "ara-hotpatch",
- "ara-json",
- "ara-patch-charts",
- "ara-platform",
- "ara-profile",
- "ara-vsm",
- "ash 0.38.0+1.4.352",
- "bytemuck",
- "glam 0.30.10",
- "gltf",
- "image",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
 name = "ara-render-fidelity"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
- "ara-asset-format",
  "ara-components",
  "ara-frame",
  "ara-gpu",
- "ara-hotpatch",
- "ara-render",
  "ara-schema",
- "ara-texture-stream",
- "blake3",
- "bytemuck",
  "glam 0.30.10",
- "image",
  "serde",
- "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1879,7 +1818,6 @@ dependencies = [
  "ara-json",
  "ara-ops",
  "ara-physics2d",
- "ara-render",
  "ara-schema",
  "ara-sim",
  "blake3",
@@ -1901,7 +1839,6 @@ dependencies = [
  "ara-frame",
  "ara-gpu",
  "ara-material",
- "ara-render",
  "ara-render-fidelity",
  "ara-runtime",
  "ara-runtime-render",
@@ -2028,9 +1965,7 @@ dependencies = [
  "ara-graphics-settings",
  "ara-importers",
  "ara-input",
- "ara-landscape",
  "ara-material",
- "ara-render",
  "ara-render-fidelity",
  "ara-render2d",
  "ara-runtime",
@@ -2039,7 +1974,6 @@ dependencies = [
  "ara-terrain",
  "ara-texture-stream",
  "ara-vfx",
- "ara-vfx-gpu",
  "bevy_ecs",
  "bytemuck",
  "glam 0.30.10",
@@ -2299,7 +2233,6 @@ dependencies = [
  "ara-asset-format",
  "ara-frame",
  "ara-gpu",
- "ara-render",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "glam 0.30.10",
@@ -2420,27 +2353,6 @@ dependencies = [
  "bevy_ecs",
  "blake3",
  "glam 0.30.10",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ara-vfx-gpu"
-version = "0.0.1-alpha"
-dependencies = [
- "anyhow",
- "ara-frame",
- "ara-gpu",
- "ara-json",
- "ara-material",
- "ara-render",
- "ara-render-fidelity",
- "ara-shader-cook",
- "ara-vfx",
- "blake3",
- "bytemuck",
- "glam 0.30.10",
- "image",
  "serde",
  "serde_json",
 ]

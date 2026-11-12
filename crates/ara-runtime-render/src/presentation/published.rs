@@ -106,19 +106,3 @@ impl PresentationImage {
         Ok(elapsed)
     }
 }
-
-impl Presenter {
-    pub(super) fn publish(&mut self, source: Image) -> Result<()> {
-        let gpu = self
-            .renderer
-            .as_mut()
-            .context("presentation device")?
-            .gpu_mut();
-        let elapsed = Published::publish(&mut self.published, gpu, source, self.size)?;
-        self.stats.gpu_ms += elapsed;
-        if let Some(costs) = &mut self.stats.gpu {
-            costs.publication_ms = elapsed;
-        }
-        Ok(())
-    }
-}

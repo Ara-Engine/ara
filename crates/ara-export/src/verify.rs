@@ -123,7 +123,7 @@ pub fn desktop(dist: &Path, executable: &Path, report: &Path) -> Result<VerifyRe
             Vec::new(),
         )
     } else {
-        (result.get("tick").cloned().unwrap_or(Value::Null), vec!["ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template".into(),"ARA-EXP-BRG-015: GPU timing hook requires ara-render".into()])
+        (result.get("tick").cloned().unwrap_or(Value::Null), vec!["ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template".into(),"ARA-EXP-BRG-015: GPU timing hook requires a renderer".into()])
     };
     Ok(VerifyReport {
         method: "desktop_smoke".into(),

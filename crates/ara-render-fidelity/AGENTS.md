@@ -1,113 +1,35 @@
 # ara-render-fidelity
-Native entry: FidelityView::new_native consumes ara-render::instanced::Scene and
-NativeResidency. Model-space pools/LODs build once; TLAS carries real transforms.
-Native scene count bit31 selects 64B header / 16B mesh / 192B instance records;
-material stride is 320B and geometry rows are 32B. Never add world-space copies.
-The native helper include must exactly match ara-texture-stream's sampling source.
-Raw graph views decode colors after filtering; glTF retains hardware sRGB views.
-`update_native_scene` streams rigid matrices/materials/lights and changed skin
-revisions; unchanged frames perform no GPU upload. Layout/generation changes need
-a replacement view. Rejected poses retain published resources. Native Frame.scene.w
-is a motion-pending boolean (legacy uses a previous-table index); successful render
-commits presented world/skin history. Repeated renders must not repeat stale motion.
 
-M3 lighting and post extension over ara-render's Graph and ara-gpu's device.
-Scene snapshots and physical units are exactly ara-render::scene's contract.
-No authoritative gameplay or authoring state lives here.
+The authored look as numbers a renderer consumes. No GPU work happens here: Renderlab draws
+(`ara-renderlab`), the editor and the player hand it what this crate resolves. The ray-traced
+fidelity view that used to live here (and its cooked shaders) is deleted.
 
-## API
-- `FidelityView`: per-view resources; takes a borrowed device at frame boundaries.
-- `Settings`, `FrameInput`, `UpscalerInput`: validated temporal/physical contracts.
-- `ProbeVolume`, `BakedProbes`: automatic DDGI volume (`automatic_within` sizes one to a probe count) and offline fallback data.
-- `scene::GpuScene`: stable instance IDs, masked ray-query material inputs, AS cache.
-- `Reference`: high-sample, undenoised reference transport, shared shader semantics. Fog and
-  atmosphere are traced per pixel on camera-visible segments (`shaders/medium.slangh`: jittered
-  strata with sun shadow rays, one ambient ray, one equiangular sample per local light), not
-  composited from the 64x36 froxel grid; post and the froxel pass skip reference frames.
-- `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
-- `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
-- `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
-  Spatial reuse and visibility resolve one reservoir per 2x2 grid block
-  (`ReSTIR.Spatial.Visibility`); `ReSTIR.Shade` lights every pixel with its own BRDF
-  from the four nearest blocks.
-- `set_bounded_reservoirs`: presets below Epic end reservoir paths in the DDGI
-  terminal, trace glossy specular at half rate, use 4 DI candidates and skip the
-  finest wavelet (frame bit 6, transport.z).
-- `set_deferred_post`: live views with particles leave bloom/post/upscale/output to
-  `post_process` (otherwise the chain ran twice per frame).
-- `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
-- Local lights (`shaders/local-lights.slangh`): every `scene::Light` kind sampled exactly (sphere cones,
-  tube surfaces, rect areas through their barn doors, discs); the reference adds MIS-weighted area-light
-  hits for small exact-estimator scenes. `set_light_tables` (profiles, frame row 9), `set_sun_radius`.
-- `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
-  `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
-  `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
-  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TSR/TAAU (`raster_scale_for`: the 1440p pixel budget, for editor Game views); D29: High/Epic keep
-  `quality.ray_queries` only on RT devices, `RasterPlan::hybrid`) or, with `RenderOptions::ray_tracing` on an RT device,
-  `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
-  creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
-  High 0.5, Epic 2/3 transport scale.
-- `bake_probe_surfaces`: one-time ray-traced probe surface caches for the raster
-  renderer's GI (`ara_render::look::gi`); needs one rendered RT frame.
+## Public API
 - `environment::FrameEnvironment::resolve(&frame.look, camera, env.exposure)`: the scene's
-  `SkyAtmosphere`/`HeightFog` and the post-process volumes blended at `camera` →
-  `view.set_environment`; `raster()` gives the raster renderer's `Look` (grading, lens,
-  AO/SSR tuning; `lut` indexes `SceneLook::luts`), `manual_exposure()` its exposure, and
-  `ground_sun()` the attenuated sun. Volume DoF and motion blur switch the fidelity view to
-  `Quality::Cinematic` (`PostSettings::f_number`: the thin lens for the camera's FOV);
-  lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
-  `HeightFog`'s volumetric fields map onto both renderers' fog (the fidelity froxel fog takes
-  emission, extinction scale and per-light `parameters.w`); `fog_volumes()` sorts the scene's
-  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now). `sky_model` maps `SkyAtmosphere`
-  (Unreal units) onto `ara_render::look::atmosphere::Atmosphere`; `set_atmosphere_lights` takes the sun's and the
-  second light's settings. `shaders/atmosphere-model.slangh` is a byte copy of ara-render's (a test checks it):
-  edit the root `shaders/` one, copy it here and cook both cohorts.
+  `SceneLook` (sky atmosphere, height fog, post-process volumes blended at the camera, colour LUT)
+  as one value: sky and atmosphere lights (`set_atmosphere_lights`), fog, exposure (manual EV100
+  or automatic metering limits), compensation and its curve, bloom, lens (depth of field, motion
+  blur), grading and tone mapper. `post()` gives the `PostSettings`; `manual_exposure` the linear
+  multiplier; `fog_volumes()` sorts local fog volumes (priority, then distance, at most
+  `ara_frame::look::MAX_FOG_VOLUMES`). `raster()` is the look record other renderers read.
+- `colour`: `ToneMapper` (PBR Neutral, Hill's Filmic, AgX and its looks, the ACES fit), `Grading`
+  (white balance, contrast, saturation, lift/gamma/gain), `AutoExposure` and `ExposureState`.
+- `settings::{PostSettings, Quality, exposure_from_ev100}`: exposure and display processing in
+  physical units; `exposure_from_ev100` uses the saturation-based calibration Lmax = 1.2 * 2^EV100.
+- `atmosphere::Atmosphere`: the `SkyAtmosphere` component's parameters in SI units;
+  `validate` checks every field.
+- `material::MaterialDetail`: typed coat, cloth and thin-leaf parameters over the reserved
+  `ara_frame::scene::Material` flag words.
+- `presets`: `QualityChoice`, `QualityPreset` (Low, Medium, High, Epic; `raster_quality` is its
+  `ara_frame::look::Quality`, `raster_scale` its render scale), `Capabilities::of(gpu)`,
+  `RenderOptions { ray_tracing }`, and `Plan::resolve(choice, caps, display, options)` giving the
+  preset that runs, the one asked for, the `RasterPlan` (resolutions and quality) and
+  `rt_fallback` (ray tracing asked for on a GPU without verified ray queries).
+
+## Gotchas
+- Physical units throughout: look values are linear until the SDR transfer.
+- No authoritative gameplay or authoring state lives here.
 
 ## Gates
-Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
-`cargo clippy -p ara-render-fidelity --all-targets -- -D warnings`,
+`cargo test -p ara-render-fidelity`, `cargo clippy -p ara-render-fidelity --all-targets -- -D warnings`,
 `cargo fmt -p ara-render-fidelity -- --check`.
-Cook offline with `cargo run -p ara-shader-cook --
-crates/ara-render-fidelity/shaders/pipelines.json crates/ara-render-fidelity/cooked`.
-GPU sequence/golden/performance gates lived in ara-pathtrace, which is deleted.
-`cargo run --release -p ara-render-fidelity --example native_motion -- native`
-measures shared rigid motion; `native-skin` measures one changed skin, and no
-argument measures the legacy world-vertex update. JSON goes under target/.
-Use run.ps1 there for process-local Vulkan implicit-layer isolation.
-
-## Contracts
-Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
-The opaque GGX lobe is energy-compensated for multiple scattering (`ggxMultipleScale`, Kulla-Conty as Cycles'
-Principled v2 and the raster's `specularLobes`, the same fits); keep the two in step.
-Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassReflection`),
-absorbing over each stretch inside a volume; transmissive instances take TLAS masks
-16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
-ara-render's `look-glass.slangh`); BSDF paths through glass count no light hits.
-Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance. Texels
-record emissive as RGB9E5 and a mask of the sub-rays on the relit hit's plane, exactly as
-`ara-runtime-render`'s `gi_cpu` (surface version 14).
-Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
-history. Light edits retain geometric history, use responsive radiance weights,
-and update more probes with 16 rays each inside the same per-frame ray budget.
-Direct radiance has separate temporal history; incident radiance uses a wavelet
-filter without luminance rejection on rough surfaces. Checkerboard transport must
-repair invalid history before temporal resolve. Reference targets stay RGBA32F.
-Exposure is applied once after reconstruction; grading (white balance, contrast,
-saturation, vignette) follows it in scene-linear, then the tone mapper (AcesFit,
-PbrNeutral, Filmic, AgX with Blender's looks: `colour::agx`, fitted to Blender 5.1) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
-frames never read back image data. GPU pipelines only consume cooked artifacts.
-Every bindless input is declared to the graph, including masked textures.
-After merging shader changes, recook the merged source tree: neither parent's
-cooked cohort represents their combined scene/frame ABI. Keep the native
-shared-transform/emissive-UV GPU assertion enabled when checking the new cohort.
-Feature inputs remain owned by the view; consume them at a completed boundary.
-External HDR post input returns Graphics/ShaderRead; output remains CopySource.
-Keep the first 28 target slots, FILTER0=12 and the frame's seven read/write rows
-stable for features/VFX. Reservoir guides and histories append private slots.
-Reference transport remains independent; never enable reservoirs in Reference mode.
-Frames currently serialize because the merged GPU API serializes diagnostics.
-After changing the sheen BRDF, the 16 KiB directional-albedo asset still
-participates in the shader cohort. `ara-pathtrace`'s `bake_sheen` example is gone.
-Release resources using `destroy` before dropping the external device.
-See README for unsupported backend contracts and measured gates; do not claim
-unmeasured refit, NRD, FSR2, DLSS, or async overlap.

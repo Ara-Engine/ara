@@ -1,4 +1,4 @@
-//! The editor's native UiGpu adapter, sharing ara-render's device and offscreen scene
+//! The editor's native UiGpu adapter, sharing the presentation device and offscreen scene
 //! images: Vulkan everywhere except macOS, where it draws through the Metal backend's
 //! portable API (`metal`). Both expose the same `NativeUi` and `PlaySurface` API,
 //! plus `UiDevice`, `ui_device`, `open_presentation` and the `NativeUi` window

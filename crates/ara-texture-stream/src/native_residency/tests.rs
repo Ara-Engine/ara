@@ -7,7 +7,6 @@ use std::time::Instant;
 #[cfg(not(target_os = "macos"))]
 mod ordering;
 mod preparation;
-mod raster;
 mod reuse;
 mod views;
 

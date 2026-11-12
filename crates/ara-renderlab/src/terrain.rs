@@ -1,13 +1,13 @@
 //! Terrain and foliage on the Renderlab path: ordinary meshes.
 //!
-//! Each resident terrain tile is the world-space mesh Ara's presenter already builds
-//! (`ara_runtime_render::terrain_mesh`), at full resolution. Its surface is the splat
+//! Each resident terrain tile is the world-space mesh `ara_runtime_render::terrain_mesh`
+//! builds, at full resolution. Its surface is the splat
 //! program (`splat`): the terrain's layer materials' colour, roughness and normal maps
 //! blended by the tile's splat weights as Ara's renderer shades them, with side
 //! projections and detail maps to the user's detail distance. Without the program each
 //! layer's base colour factor is blended into one texture; a terrain without layer
 //! materials has Ara's default white surface. Each foliage instance of a resident tile
-//! draws the parts of its rule's model. What that leaves out against `ara-landscape`:
+//! draws the parts of its rule's model. What that leaves out (a gap-table row):
 //! distance levels of detail, the virtual texture, and wind. Tiles and foliage follow
 //! tile residency, so streaming still decides what exists.
 use crate::rl::Engine;

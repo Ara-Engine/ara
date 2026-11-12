@@ -114,7 +114,7 @@ impl ParticleSoa {
         self.size_seed_birth[slot] = [p.size.to_bits(), p.seed, p.birth, 0];
     }
 }
-/// Agent-readable deterministic counts; GPU timing data is added by ara-vfx-gpu.
+/// Agent-readable deterministic counts.
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize)]
 pub struct SimulationStats {
     /// Completed fixed ticks.

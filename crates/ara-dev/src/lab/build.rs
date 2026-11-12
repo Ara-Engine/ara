@@ -82,7 +82,6 @@ impl ReloadStrategy for WarmRestart {
             "--message-format=json",
             "--timings",
         ]);
-        cmd.args(["--features", "ara-player/fidelity-lab"]);
         for package in ["ara-player", "ara-export", "ara-import-worker"] {
             cmd.args(["-p", package]);
         }

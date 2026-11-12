@@ -14,8 +14,8 @@
 //! scene/pose payloads by content key/revision before tracing or rendering the replay.
 
 use super::Changes;
-use crate::instanced::Scene;
 pub use crate::change_feed::*;
+use crate::instanced::Scene;
 use anyhow::{Result, ensure};
 
 /// Additional producer data absent from the legacy row-only update contract.

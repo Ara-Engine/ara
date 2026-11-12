@@ -10,7 +10,6 @@ publish.workspace = true
 ara-2d = { path = "../ara-2d" }
 ara-gpu = { path = "../ara-gpu" }
 ara-frame = { path = "../ara-frame" }
-ara-render = { path = "../ara-render" }
 ara-sim = { path = "../ara-sim" }
 ara-components = { path = "../ara-components" }
 ara-physics2d = { path = "../ara-physics2d" }

@@ -146,7 +146,7 @@ pub(crate) fn run(args: Args) -> Result<()> {
         )?);
         (Some(window), presenter)
     };
-    crate::renderer::install(&mut presenter, &args.gpu_cache);
+    crate::renderer::install(&mut presenter, &args.gpu_cache)?;
     let headless_ui = if window.is_none() {
         Some(Surface::plain(&ui, settings.size(), 1.)?)
     } else {
@@ -408,9 +408,6 @@ impl App {
         }
         if let Some(window) = &mut self.window {
             if let Some(world) = &self.world {
-                if let Some((doc, cache)) = world.probe_scene() {
-                    self.presenter.set_probe_scene(doc, cache);
-                }
                 window.present(&mut self.presenter, &self.frame, || {
                     world.fidelity_content(&self.frame)
                 })?;

@@ -4,6 +4,7 @@ mod build;
 pub(crate) mod hub_replay;
 mod hub_upgrade;
 mod installation;
+mod paths;
 #[cfg(feature = "rehearsal")]
 pub(crate) mod rehearsal;
 use crate::support::{self, run};
@@ -102,14 +103,20 @@ pub fn smoke(dist: &Path, version: &str) -> Result<()> {
     // canonicalize introduces verbatim prefixes that Windows PowerShell 5.1
     // cannot use. Also accept an explicitly supplied verbatim drive/UNC path.
     let dist = dunce::simplified(&absolute);
-    let directory = dist.join(format!(
-        "smoke-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs()
-    ));
-    fs::create_dir(&directory)?;
+    // A folder name of fixed length, and the longest installed path checked against
+    // Windows' limit before anything is installed: a package that cannot be uninstalled
+    // is reported at once, not at the last step.
+    let root = paths::root(dist);
+    let probe = root.join("0000");
+    let hub = format!("ara-hub-{version}-windows-x64");
+    for (install, package) in [
+        (probe.join("installed engine"), support::name(version)),
+        (probe.join("standalone Hub"), hub.clone()),
+        (probe.join("local/Programs/Ara Hub"), hub),
+    ] {
+        paths::ensure_fits(&install, &dist.join(package))?;
+    }
+    let directory = paths::scratch(&root)?;
     fs::create_dir(directory.join("empty-layers"))?;
     let env = Environment {
         installed: directory.join("installed engine"),

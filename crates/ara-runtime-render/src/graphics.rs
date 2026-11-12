@@ -2,7 +2,7 @@
 use crate::Presenter;
 use ara_graphics_settings::{Capabilities as UserCapabilities, Preset, Settings, Tier, Upscaler};
 use ara_render_fidelity::presets::{
-    Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath,
+    Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions,
 };
 
 /// Compose scalability groups without changing authored look or the device RT opt-in.
@@ -12,9 +12,7 @@ pub fn plan(
     size: [u32; 2],
     options: RenderOptions,
 ) -> anyhow::Result<Plan> {
-    // Production user settings retain the raster scalability groups. RT opt-in
-    // adds D29 hybrid queries; the experimental fidelity renderer remains available
-    // through the existing explicit presenter API for development/reference work.
+    // User settings compose the scalability groups; the RT opt-in adds D29 hybrid queries.
     let mut plan = Plan::resolve(
         choice(settings.preset),
         caps,
@@ -25,55 +23,49 @@ pub fn plan(
     let base = plan.preset;
     let group = |tier: Option<Tier>| tier.map_or(base, preset).raster_quality();
     let groups = settings.groups;
-    match &mut plan.path {
-        RenderPath::Raster(raster) => {
-            let shadows = group(groups.shadows);
-            let view = group(groups.view_distance);
-            let reflections = group(groups.reflections);
-            let post = group(groups.post_processing);
-            let gi = group(groups.global_illumination);
-            let quality = &mut raster.quality;
-            quality.shadows = shadows.shadows;
-            quality.local_shadows = shadows.local_shadows;
-            quality.virtual_shadows = shadows.virtual_shadows;
-            quality.horizon = shadows.horizon;
-            quality.lod_pixels = view.lod_pixels;
-            quality.min_pixels = view.min_pixels;
-            quality.terrain_detail = view.terrain_detail;
-            quality.gi_budget = gi.gi_budget;
-            quality.screen_gi = gi.screen_gi;
-            quality.reflections = reflections.reflections;
-            quality.reflection_captures = reflections.reflection_captures;
-            quality.ray_queries = reflections
-                .ray_queries
-                .filter(|_| options.ray_tracing && caps.ray_tracing);
-            quality.ambient_occlusion = post
-                .ambient_occlusion
-                .filter(|_| settings.ambient_occlusion);
-            quality.depth_of_field = post.depth_of_field.filter(|_| settings.depth_of_field);
-            quality.motion_blur = post.motion_blur.filter(|_| settings.motion_blur);
-            quality.bloom = post.bloom && settings.bloom;
-            let effects = group(groups.effects);
-            quality.emitter_lights = effects.emitter_lights;
-            // Unreal scalability keeps volumetric fog under Effects.
-            quality.volumetric_fog = effects.volumetric_fog;
-            quality.high_tier =
-                reflections.high_tier || post.high_tier || shadows.high_tier || gi.high_tier;
-            quality.upscaler = match settings.upscaler {
-                Upscaler::Preset => group(groups.anti_aliasing).upscaler,
-                Upscaler::Taau => ara_frame::look::Upscaler::Taau,
-                Upscaler::Tsr => ara_frame::look::Upscaler::Tsr,
-            };
-            if let Some(scale) = settings.resolution_scale {
-                raster.render_size =
-                    size.map(|v| ((v as f32 * scale.clamp(0.1, 1.)).round() as u32).clamp(1, v));
-            }
-            quality.validate()?;
-        }
-        RenderPath::Fidelity(_) => {
-            anyhow::bail!("production user settings require the raster/hybrid preset path")
-        }
+    let raster = &mut plan.raster;
+    let shadows = group(groups.shadows);
+    let view = group(groups.view_distance);
+    let reflections = group(groups.reflections);
+    let post = group(groups.post_processing);
+    let gi = group(groups.global_illumination);
+    let quality = &mut raster.quality;
+    quality.shadows = shadows.shadows;
+    quality.local_shadows = shadows.local_shadows;
+    quality.virtual_shadows = shadows.virtual_shadows;
+    quality.horizon = shadows.horizon;
+    quality.lod_pixels = view.lod_pixels;
+    quality.min_pixels = view.min_pixels;
+    quality.terrain_detail = view.terrain_detail;
+    quality.gi_budget = gi.gi_budget;
+    quality.screen_gi = gi.screen_gi;
+    quality.reflections = reflections.reflections;
+    quality.reflection_captures = reflections.reflection_captures;
+    quality.ray_queries = reflections
+        .ray_queries
+        .filter(|_| options.ray_tracing && caps.ray_tracing);
+    quality.ambient_occlusion = post
+        .ambient_occlusion
+        .filter(|_| settings.ambient_occlusion);
+    quality.depth_of_field = post.depth_of_field.filter(|_| settings.depth_of_field);
+    quality.motion_blur = post.motion_blur.filter(|_| settings.motion_blur);
+    quality.bloom = post.bloom && settings.bloom;
+    let effects = group(groups.effects);
+    quality.emitter_lights = effects.emitter_lights;
+    // Unreal scalability keeps volumetric fog under Effects.
+    quality.volumetric_fog = effects.volumetric_fog;
+    quality.high_tier =
+        reflections.high_tier || post.high_tier || shadows.high_tier || gi.high_tier;
+    quality.upscaler = match settings.upscaler {
+        Upscaler::Preset => group(groups.anti_aliasing).upscaler,
+        Upscaler::Taau => ara_frame::look::Upscaler::Taau,
+        Upscaler::Tsr => ara_frame::look::Upscaler::Tsr,
+    };
+    if let Some(scale) = settings.resolution_scale {
+        raster.render_size =
+            size.map(|v| ((v as f32 * scale.clamp(0.1, 1.)).round() as u32).clamp(1, v));
     }
+    quality.validate()?;
     Ok(plan)
 }
 
@@ -107,7 +99,7 @@ impl Presenter {
     /// replace residency/foliage on the next frame, retaining completed last-good output.
     pub fn set_graphics_settings(&mut self, settings: &Settings) {
         if self.graphics.as_ref() != Some(settings) {
-            self.graphics_plan_key = None;
+            self.preset = None;
             self.choice = choice(settings.preset);
             self.graphics = Some(settings.clone());
         }
@@ -115,10 +107,10 @@ impl Presenter {
 
     /// Query physical GPU support without creating a device or enabling ray tracing.
     pub fn graphics_capabilities(&self) -> UserCapabilities {
-        let Some(renderer) = &self.renderer else {
+        let Some(gpu) = self.gpu() else {
             return UserCapabilities::default();
         };
-        let info = renderer.gpu().info();
+        let info = gpu.info();
         UserCapabilities {
             device_known: true,
             ray_tracing_supported: info.ray_tracing_supported,
@@ -186,24 +178,17 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let RenderPath::Raster(raster) =
-                plan(&settings, &caps, [320, 180], RenderOptions::default())?.path
-            else {
-                panic!("raster production plan");
-            };
+            let raster = plan(&settings, &caps, [320, 180], RenderOptions::default())?.raster;
             let mut expected = preset(tier).raster_quality();
             expected.ray_queries = None;
             assert_eq!(raster.quality, expected);
-            let RenderPath::Raster(hybrid) = plan(
+            let hybrid = plan(
                 &settings,
                 &caps,
                 [320, 180],
                 RenderOptions { ray_tracing: true },
             )?
-            .path
-            else {
-                panic!("deterministic hybrid");
-            };
+            .raster;
             assert_eq!(hybrid.hybrid(), matches!(tier, Tier::High | Tier::Epic));
             let no_rt = Capabilities {
                 ray_tracing: false,
@@ -216,7 +201,7 @@ mod tests {
                 RenderOptions { ray_tracing: true },
             )?;
             assert!(fallback.rt_fallback);
-            assert!(matches!(fallback.path, RenderPath::Raster(raster) if !raster.hybrid()));
+            assert!(!fallback.raster.hybrid());
         }
         Ok(())
     }
@@ -239,9 +224,7 @@ mod tests {
                 ..Default::default()
             };
             let resolved = plan(&settings, &caps, [1280, 720], RenderOptions::default())?;
-            let RenderPath::Raster(raster) = resolved.path else {
-                panic!("raster default");
-            };
+            let raster = resolved.raster;
             assert_eq!(
                 raster.quality.shadows,
                 preset(tier).raster_quality().shadows

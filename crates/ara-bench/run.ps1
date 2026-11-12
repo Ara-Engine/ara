@@ -47,10 +47,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Tracy profiler tests failed' }
         cargo test -p ara-profile --features gpu --test gpu -- --ignored
         if ($LASTEXITCODE -ne 0) { throw 'Vulkan correlation test failed' }
-        $packages = @('ara-profile','ara-bench','ara-host','ara','ara-sim','ara-anim','ara-physics','ara-nav','ara-audio','ara-asset','ara-render','ara-script')
+        $packages = @('ara-profile','ara-bench','ara-host','ara','ara-sim','ara-anim','ara-physics','ara-nav','ara-audio','ara-asset','ara-script')
         $packageArgs = @()
         foreach ($package in $packages) { $packageArgs += @('-p', $package) }
-        $features = 'ara-profile/allocation,ara-profile/gpu,ara-bench/scenario,ara-sim/profiling,ara-anim/profiling,ara-physics/profiling,ara-nav/profiling,ara-audio/profiling,ara-asset/profiling,ara-render/profiling,ara-script/profiling'
+        $features = 'ara-profile/allocation,ara-profile/gpu,ara-bench/scenario,ara-sim/profiling,ara-anim/profiling,ara-physics/profiling,ara-nav/profiling,ara-audio/profiling,ara-asset/profiling,ara-script/profiling'
         & cargo test @packageArgs --features $features
         if ($LASTEXITCODE -ne 0) { throw 'subsystem tests failed' }
         & cargo clippy @packageArgs --features "$features,ara-profile/tracy,ara-bench/tracy" --all-targets -- -D warnings

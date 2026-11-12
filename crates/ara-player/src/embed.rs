@@ -158,20 +158,14 @@ impl Embedded {
             }
             None => Presenter::new(size, Vec::new(), cache),
         };
-        crate::renderer::install(&mut presenter, cache);
+        crate::renderer::install(&mut presenter, cache)?;
         presenter.set_quality(quality);
         presenter.set_render_options(options);
-        // An editor Game view: sharp at the panel's size within a 1440p frame's cost.
-        presenter.set_pixel_budget(true);
-        presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
-        presenter.set_probe_gi(true);
-        let renderer = presenter
-            .renderer()
-            .context("renderer missing after warm-up")?;
+        let gpu = presenter.gpu().context("renderer missing after warm-up")?;
         // SAFETY: The presenter (and its device) outlives the ring: `Player` declares
         // `embed` before `presenter`, and this thread owns the device's queues.
-        let ring = unsafe { ExportRing::create(renderer.gpu(), size)? };
+        let ring = unsafe { ExportRing::create(gpu, size)? };
         let fps = params.max_fps.unwrap_or(60).clamp(1, 1000);
         Ok((
             Self {
@@ -225,9 +219,9 @@ impl Embedded {
         check(size)?;
         self.pending = None;
         presenter.resize(size)?;
-        let renderer = presenter.renderer().context("renderer missing")?;
+        let gpu = presenter.gpu().context("renderer missing")?;
         // SAFETY: Same device as the ring's; this thread owns its queues.
-        unsafe { self.ring.recreate(renderer.gpu(), size)? };
+        unsafe { self.ring.recreate(gpu, size)? };
         self.dirty = true;
         Ok(self.ring.desc())
     }
@@ -295,21 +289,14 @@ impl Embedded {
         if self.ring.free() == 0 {
             return Ok(None);
         }
-        if let Some(renderer) = presenter.renderer_mut() {
-            renderer.set_unseen(self.entering());
-        }
         presenter.present_with(frame, resolve)?;
-        // A stalled frame (Presenter::STALL_WAIT): nothing new to publish yet.
-        if presenter.stats().skipped {
-            return Ok(None);
-        }
         let entering = self.entering();
         if !self.admit(presenter) {
             return Ok(None);
         }
         let rendered_at_us = now_us();
         let copy = Instant::now();
-        let renderer = presenter.renderer().context("renderer missing")?;
+        let gpu = presenter.gpu().context("renderer missing")?;
         let published = match &mut self.game_ui {
             Some(ui) => {
                 if !ui.render(presenter)? {
@@ -317,7 +304,7 @@ impl Embedded {
                 }
                 // SAFETY: the game UI completed its composite of this presenter's scene on
                 // the ring's GPU; this thread owns its queues.
-                unsafe { ui.publish(renderer.gpu(), &mut self.ring, frame.tick)? }
+                unsafe { ui.publish(gpu, &mut self.ring, frame.tick)? }
             }
             None => {
                 let source = presenter
@@ -326,12 +313,8 @@ impl Embedded {
                 // SAFETY: the presenter completed this RGBA8 CopySource image at output_size
                 // on the ring's device; this thread owns its queues.
                 unsafe {
-                    self.ring.publish_image(
-                        renderer.gpu(),
-                        source,
-                        presenter.output_size(),
-                        frame.tick,
-                    )?
+                    self.ring
+                        .publish_image(gpu, source, presenter.output_size(), frame.tick)?
                 }
             }
         };
@@ -340,7 +323,7 @@ impl Embedded {
         };
         let publish_us = copy.elapsed().as_micros() as u64;
         if entering && let Some(dir) = std::env::var_os("ARA_PLAY_FIRST_FRAME") {
-            save_first_frame(presenter, frame, Path::new(&dir))?;
+            save_first_frame(presenter, Path::new(&dir))?;
         }
         let cost = started.elapsed();
         self.dirty = false;
@@ -393,31 +376,15 @@ impl Embedded {
 }
 
 /// Saves the presentation just published as `play-entry-<pid>.png` in `dir`.
-fn save_first_frame(presenter: &mut Presenter, frame: &RenderFrame, dir: &Path) -> Result<()> {
-    let request = ara_frame::capture::CaptureRequest {
-        camera: ara_runtime_render::camera(frame)?,
-        size: presenter.output_size(),
-        mode: ara_frame::capture::ViewMode::Lit,
-        deterministic: false,
-        exposure: frame.environment.exposure,
-        settle_frames: 1,
-        tick: frame.tick,
-        seed: 0,
-        marks: None,
-    };
-    let capture = presenter
-        .renderer_mut()
-        .context("renderer missing")?
-        .capture_completed(&request)?;
+fn save_first_frame(presenter: &mut Presenter, dir: &Path) -> Result<()> {
+    let image = presenter.live_image()?;
     std::fs::create_dir_all(dir)?;
-    capture
-        .image
-        .save(dir.join(format!("play-entry-{}.png", std::process::id())))?;
+    image.save(dir.join(format!("play-entry-{}.png", std::process::id())))?;
     Ok(())
 }
 
 /// Warm device and pipelines without a window or shared ring. The idle view is
-/// bounded to 64x64 Low with one procedural box and no probe acquisition.
+/// bounded to 64x64 Low with one procedural box.
 pub(crate) fn prewarm(
     cache: &Path,
     options: ara_runtime_render::RenderOptions,
@@ -428,7 +395,6 @@ pub(crate) fn prewarm(
         ara_runtime_render::QualityPreset::Low,
     ));
     presenter.set_render_options(options);
-    presenter.set_probe_gi(false);
     presenter.prepare(&device::warm_frame())?;
     Ok(presenter)
 }
@@ -542,104 +508,9 @@ mod tests {
         assert!(!session.ring.entering());
         session
             .presenter
-            .renderer()
-            .context("embedded renderer")?
             .gpu()
+            .context("embedded renderer")?
             .assert_clean()?;
-        Ok(())
-    }
-
-    #[test]
-    fn embedded_gpu_defaults_to_raster_and_honours_the_rt_opt_in() -> Result<()> {
-        // This asserts on ara-render's presenter (native raster geometry, its quality preset),
-        // so it names that renderer; the player's own default is Renderlab.
-        crate::renderer::configure(crate::renderer::RendererChoice::Ara);
-        // Field order also protects assertion/error unwinding: the ring borrows
-        // native device objects and must be dropped before the owning presenter.
-        struct Session {
-            _ring: Embedded,
-            presenter: Presenter,
-        }
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ara-player/embedded-render-options")
-            .join(std::process::id().to_string());
-        let params = EmbedParams {
-            width: 128,
-            height: 72,
-            max_fps: Some(144),
-            scale: None,
-        };
-        for (name, options) in [
-            ("raster", RenderOptions::default()),
-            ("rt-opt-in", RenderOptions { ray_tracing: true }),
-        ] {
-            let prepared = prewarm(&root.join(name), options)?;
-            assert_eq!(prepared.size(), [64, 64]);
-            assert!(!prepared.probe_gi_pending());
-            let device = prepared
-                .renderer()
-                .context("prewarmed renderer")?
-                .gpu()
-                .context()
-                .device
-                .handle();
-            let (embedded, presenter) = Embedded::open(
-                &params,
-                &root.join(name),
-                QualityChoice::Preset(QualityPreset::High),
-                options,
-                Some(prepared),
-            )?;
-            assert_eq!(
-                presenter
-                    .renderer()
-                    .context("embedded renderer")?
-                    .gpu()
-                    .context()
-                    .device
-                    .handle(),
-                device,
-                "embedding reuses the presenter's logical device"
-            );
-            let mut session = Session {
-                _ring: embedded,
-                presenter,
-            };
-            let presenter = &mut session.presenter;
-            let renderer = presenter.renderer().context("warmed embedded renderer")?;
-            let rt = renderer.gpu().info().ray_tracing;
-            if !options.ray_tracing {
-                // The default device keeps optional ray tracing for the opt-in;
-                // without it every preset renders native raster geometry.
-                assert!(
-                    renderer.is_native(),
-                    "default embedding must use native raster geometry"
-                );
-            } else if rt {
-                assert!(
-                    !renderer.is_native(),
-                    "supported explicit RT uses the fidelity view"
-                );
-            } else {
-                assert!(renderer.is_native(), "unsupported RT keeps the raster path");
-            }
-            assert_eq!(presenter.quality(), Some(QualityPreset::High));
-            renderer.gpu().assert_clean()?;
-            for preset in [
-                QualityPreset::Low,
-                QualityPreset::Medium,
-                QualityPreset::High,
-            ] {
-                presenter.set_quality(QualityChoice::Preset(preset));
-                presenter.prepare(&device::warm_frame())?;
-                let renderer = presenter.renderer().context("embedded preset renderer")?;
-                assert_eq!(
-                    renderer.is_native(),
-                    !(options.ray_tracing && rt && preset != QualityPreset::Low)
-                );
-                renderer.gpu().assert_clean()?;
-            }
-        }
         Ok(())
     }
 }
