@@ -37,19 +37,17 @@ impl Compositor {
     /// Release Scene images before reuse, waiting at most 1 ms for the whole gate.
     /// A persistent stall skips Scene passes and logs once while events keep pumping.
     #[cfg(any(windows, target_os = "linux"))]
-    pub fn scene_ready(&mut self, renderer: &ara_render::Renderer) -> Result<bool> {
+    pub fn scene_ready(&mut self, device: &ara_gpu::GpuDevice) -> Result<bool> {
         let started = std::time::Instant::now();
         let budget = std::time::Duration::from_millis(1);
         let mut ready = self.ui.wait_previous_for(budget)?;
         // A bounded present can return with its blit still reading the UI target.
         if ready && let Some((present, _)) = &mut self.present {
             // SAFETY: this compositor retains the presentation and its creating device.
-            ready = unsafe {
-                present.settled(renderer.gpu(), budget.saturating_sub(started.elapsed()))?
-            };
+            ready = unsafe { present.settled(device, budget.saturating_sub(started.elapsed()))? };
         }
         if ready {
-            self.ui.order_before_scene(ui_device(renderer.gpu()))?;
+            self.ui.order_before_scene(ui_device(device))?;
             self.scene_stall = None;
         } else {
             let (since, reported) = self.scene_stall.get_or_insert((started, false));
@@ -63,12 +61,13 @@ impl Compositor {
         Ok(ready)
     }
 
-    /// An adapter on the renderer's GPU, themed for `light`.
+    /// An adapter on `device`, themed for `light`.
     /// # Safety
-    /// The renderer outlives the compositor; one thread submits for both.
-    pub unsafe fn new(renderer: &ara_render::Renderer, light: bool) -> Result<Self> {
+    /// `device` outlives the compositor; one thread submits for both. Pass the
+    /// scene `PresentationDevice`, which the scene renderer also borrows.
+    pub unsafe fn new(device: &ara_gpu::GpuDevice, light: bool) -> Result<Self> {
         // SAFETY: forwarded caller contract.
-        let mut ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
+        let mut ui = unsafe { NativeUi::new(ui_device(device))? };
         // Submissions return at once; the next frame checks the last one finished (the
         // UI thread never waits on the GPU).
         ui.set_deferred_completion(true)?;
@@ -356,7 +355,7 @@ mod tests {
         renderer.submit_scene_frame(|_| Ok(()))?;
         renderer.wait_scene_frame()?;
         // SAFETY: the renderer outlives its compositor on this owner thread.
-        let mut compositor = unsafe { Compositor::new(&renderer, false)? };
+        let mut compositor = unsafe { Compositor::new(renderer.gpu(), false)? };
         let image = renderer.output();
         // SAFETY: this retained, completed image stays live through the UI read.
         unsafe {
@@ -393,16 +392,16 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         let started = std::time::Instant::now();
         assert!(
-            !compositor.scene_ready(&renderer)?,
+            !compositor.scene_ready(renderer.gpu())?,
             "a pending external read must prevent recycling and resize"
         );
         assert!(started.elapsed() < std::time::Duration::from_millis(50));
         compositor.scene_stall = Some((started - std::time::Duration::from_secs(1), false));
-        assert!(!compositor.scene_ready(&renderer)?);
+        assert!(!compositor.scene_ready(renderer.gpu())?);
         assert!(compositor.scene_stall.is_some_and(|(_, reported)| reported));
         gate.open()?;
         compositor.ui.wait_previous()?;
-        assert!(compositor.scene_ready(&renderer)?);
+        assert!(compositor.scene_ready(renderer.gpu())?);
         // Two publications recycle the pair that the compositor just released.
         for _ in 0..2 {
             renderer.submit_scene_frame(|_| Ok(()))?;
