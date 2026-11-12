@@ -16,7 +16,6 @@ fn no_present_renders_loading_and_game_without_a_swapchain() -> Result<()> {
     assert!(window.present_loading(&mut loading, 0.5)?);
     assert!(loading.swapchain().is_none());
     let mut presenter = Presenter::with_device(size, root.join("game"), gpu);
-    presenter.set_probe_gi(false);
     presenter.prepare(&device::warm_frame())?;
     window.finish_loading(loading);
     window.present(&mut presenter, &device::warm_frame(), || {
@@ -25,11 +24,7 @@ fn no_present_renders_loading_and_game_without_a_swapchain() -> Result<()> {
     assert!(presenter.output().is_some());
     assert!(window.swapchain().is_none());
     window.shutdown(&presenter)?;
-    presenter
-        .renderer()
-        .context("renderer")?
-        .gpu()
-        .assert_clean()?;
+    presenter.gpu().context("renderer")?.assert_clean()?;
     Ok(())
 }
 
@@ -49,7 +44,6 @@ fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_
         started.send(thread::current().id())?;
         wait_release.recv()?;
         let mut presenter = Presenter::with_device(size, cache, gpu);
-        presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
         Ok(presenter)
     })?;
@@ -70,9 +64,8 @@ fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_
     let (mut presenter, _) = worker.finish()?;
     assert_eq!(
         presenter
-            .renderer()
-            .context("renderer")?
             .gpu()
+            .context("renderer")?
             .context()
             .device
             .handle(),
@@ -84,11 +77,7 @@ fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_
     })?;
     assert_eq!(window.swapchain(), Some(swapchain));
     window.shutdown(&presenter)?;
-    presenter
-        .renderer()
-        .context("warmed renderer")?
-        .gpu()
-        .assert_clean()?;
+    presenter.gpu().context("warmed renderer")?.assert_clean()?;
     assert!(presenter.output().is_some());
     Ok(())
 }
