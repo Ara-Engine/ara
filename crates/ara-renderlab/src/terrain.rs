@@ -81,6 +81,9 @@ pub(crate) struct Foliage<'a> {
     pub key: u64,
 }
 
+/// Foliage draws that may change level (or appear or vanish) in one frame.
+const LOD_SWAPS_PER_FRAME: usize = 96;
+
 /// What a foliage draw needs to pick its level of detail: where it is and how big it is.
 struct Instance {
     /// World position of the foliage instance.
@@ -158,6 +161,12 @@ pub(crate) struct Terrain {
     /// Each foliage draw's cooked level of detail for the camera it was last chosen for
     /// (`Self::choose_lods`), or `scene::CULLED`; parallel to `foliage`.
     foliage_lods: Vec<u8>,
+    /// The levels `choose_lods` wants, which `foliage_lods` reaches `LOD_SWAPS_PER_FRAME` draws a
+    /// frame at a time, nearest first: a draw that changes level is respawned in Renderlab, and
+    /// thousands of respawns in one frame (a cut re-chooses every level) cost several frames.
+    lod_desired: Vec<u8>,
+    /// Draws whose level differs from `lod_desired`, farthest first (popped from the end).
+    lod_queue: Vec<u32>,
     /// Changes whenever `foliage_lods` does: the key of what `Scene::sync` places.
     lod_epoch: u64,
     /// The view `foliage_lods` was chosen for: eye, vertical field of view, height in pixels
@@ -382,6 +391,7 @@ impl Terrain {
                 self.foliage_lods.iter_mut().for_each(|lod| *lod = 0);
                 self.lod_epoch += 1;
             }
+            self.lod_queue.clear();
             self.lod_view = None;
             return;
         };
@@ -403,6 +413,7 @@ impl Terrain {
                     < 4.
         });
         if unchanged {
+            self.swap_levels();
             return;
         }
         self.lod_view = Some(current);
@@ -413,6 +424,7 @@ impl Terrain {
         let reuse = previous.len() == self.foliage_info.len();
         let mut chosen = Vec::with_capacity(self.foliage_info.len());
         let mut distances = Vec::new();
+        let mut away = vec![0f32; self.foliage_info.len()];
         for (i, instance) in self.foliage_info.iter().enumerate() {
             let Some(part) = self.parts.get(&instance.part) else {
                 chosen.push(0);
@@ -425,6 +437,7 @@ impl Terrain {
                 .map(|(a, b)| (a - b) * (a - b))
                 .sum::<f32>()
                 .sqrt();
+            away[i] = d;
             // The nearest point of the instance's bound, not its centre.
             let near = (d - part.radius * instance.scale).max(0.05);
             let per_metre = one_metre / near;
@@ -459,10 +472,45 @@ impl Terrain {
                 }
             }
         }
-        if chosen != previous {
+        if !reuse {
+            // The first choice (or after a rebuild) places everything: nothing is on screen yet
+            // to respawn.
+            if chosen != previous {
+                self.lod_epoch += 1;
+            }
+            self.foliage_lods = chosen;
+            self.lod_queue.clear();
+            return;
+        }
+        // Later choices are reached a few draws a frame, nearest first.
+        let mut queue: Vec<u32> = (0..chosen.len() as u32)
+            .filter(|i| chosen[*i as usize] != previous[*i as usize])
+            .collect();
+        queue.sort_by(|a, b| away[*b as usize].total_cmp(&away[*a as usize]));
+        self.foliage_lods = previous;
+        self.lod_desired = chosen;
+        self.lod_queue = queue;
+        self.swap_levels();
+    }
+
+    /// Moves `foliage_lods` toward `lod_desired` by at most `LOD_SWAPS_PER_FRAME` draws.
+    fn swap_levels(&mut self) {
+        let mut swapped = 0;
+        while swapped < LOD_SWAPS_PER_FRAME
+            && let Some(i) = self.lod_queue.pop()
+        {
+            let i = i as usize;
+            if let (Some(have), Some(want)) =
+                (self.foliage_lods.get_mut(i), self.lod_desired.get(i))
+                && have != want
+            {
+                *have = *want;
+                swapped += 1;
+            }
+        }
+        if swapped > 0 {
             self.lod_epoch += 1;
         }
-        self.foliage_lods = chosen;
     }
 
     fn clear(&mut self, engine: &mut Engine) -> Result<()> {
@@ -475,6 +523,8 @@ impl Terrain {
             self.foliage.clear();
             self.foliage_info.clear();
             self.foliage_lods.clear();
+            self.lod_desired.clear();
+            self.lod_queue.clear();
             self.foliage_key = 0;
         }
         Ok(())
@@ -490,6 +540,8 @@ impl Terrain {
         self.foliage.clear();
         self.foliage_info.clear();
         self.foliage_lods.clear();
+        self.lod_desired.clear();
+        self.lod_queue.clear();
         let Some(terrain) = view.frame.terrain.as_ref() else {
             return;
         };
@@ -835,5 +887,37 @@ mod tests {
         // 32,768 triangles, doubled: 17 bits, so 15 bits of instances.
         assert_eq!(packed_instances(32_768), (1 << 15) - 2);
         assert_eq!(packed_instances(1), (1 << 30) - 2);
+    }
+    /// Level changes are applied in the queue's order (nearest first) and at most
+    /// `LOD_SWAPS_PER_FRAME` a frame, so a cut does not respawn every foliage draw at once.
+    #[test]
+    fn level_swaps_are_spread_over_frames_nearest_first() {
+        let count = LOD_SWAPS_PER_FRAME * 2 + 5;
+        let mut terrain = Terrain {
+            foliage_lods: vec![0; count],
+            lod_desired: vec![1; count],
+            // Farthest first: index `count - 1` is the nearest.
+            lod_queue: (0..count as u32).collect(),
+            ..Terrain::default()
+        };
+        terrain.swap_levels();
+        assert_eq!(
+            terrain.foliage_lods.iter().filter(|l| **l == 1).count(),
+            LOD_SWAPS_PER_FRAME
+        );
+        assert!(
+            terrain.foliage_lods[count - LOD_SWAPS_PER_FRAME..]
+                .iter()
+                .all(|l| *l == 1)
+        );
+        let epoch = terrain.lod_epoch;
+        terrain.swap_levels();
+        terrain.swap_levels();
+        assert!(terrain.foliage_lods.iter().all(|l| *l == 1));
+        assert!(terrain.lod_epoch > epoch);
+        // Settled: nothing changes, so the placed objects are left alone.
+        let settled = terrain.lod_epoch;
+        terrain.swap_levels();
+        assert_eq!(terrain.lod_epoch, settled);
     }
 }
