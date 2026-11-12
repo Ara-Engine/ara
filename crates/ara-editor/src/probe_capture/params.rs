@@ -3,10 +3,7 @@ use serde::Deserialize;
 
 /// Queues derived captures for authored probes without changing their components.
 #[derive(Debug, Schema, Deserialize)]
-#[allow(
-    dead_code,
-    reason = "the schema documents the request; nothing reads it until probe capture returns"
-)]
+#[allow(dead_code, reason = "the schema documents the request; nothing reads it until probe capture returns")]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct RenderProbeRecaptureParams {
@@ -22,10 +19,7 @@ pub(crate) struct RenderProbeRecaptureParams {
 
 /// Requests cancellation of a probe job owned by this session.
 #[derive(Debug, Schema, Deserialize)]
-#[allow(
-    dead_code,
-    reason = "the schema documents the request; nothing reads it until probe capture returns"
-)]
+#[allow(dead_code, reason = "the schema documents the request; nothing reads it until probe capture returns")]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct RenderProbeCancelParams {
@@ -37,10 +31,7 @@ pub(crate) struct RenderProbeCancelParams {
 
 /// Reads the last owner-validated snapshot without touching the GPU.
 #[derive(Debug, Schema, Deserialize)]
-#[allow(
-    dead_code,
-    reason = "the schema documents the request; nothing reads it until probe capture returns"
-)]
+#[allow(dead_code, reason = "the schema documents the request; nothing reads it until probe capture returns")]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct RenderProbesQueryParams {

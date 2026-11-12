@@ -18,11 +18,7 @@ pub(crate) struct SceneDevice {
 
 impl SceneDevice {
     /// Creates the device at `size` on this thread (the windowed studio uses [`prepare`]).
-    pub(crate) fn new(
-        extensions: &[CString],
-        cache: PathBuf,
-        size: [u32; 2],
-    ) -> anyhow::Result<Self> {
+    pub(crate) fn new(extensions: &[CString], cache: PathBuf, size: [u32; 2]) -> anyhow::Result<Self> {
         Ok(Self {
             device: PresentationDevice::open(extensions, cache)?,
             size,

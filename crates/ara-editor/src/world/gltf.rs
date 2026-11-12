@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 mod pending;
 mod prepare;
+pub(crate) use prepare::{PreparedScene, SnapshotInput, camera_view};
 #[cfg(test)]
 pub(crate) use prepare::{FrameInputs, extract_frame};
-pub(crate) use prepare::{PreparedScene, SnapshotInput, camera_view};
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.

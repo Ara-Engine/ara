@@ -1,7 +1,7 @@
 //! `--headless`: render the project's scene offscreen and write `editor-scene.png` to the
 //! output folder, with no window (release smoke tests, `ara hub open --headless`).
-use super::device::SceneDevice;
 use ara_frame::capture::{CaptureRequest, ViewMode};
+use super::device::SceneDevice;
 
 use super::setup::{self, Options};
 use super::viewport::SceneView;
@@ -33,7 +33,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     })
     .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
-    let mut renderer = SceneDevice::new(&[], editor.host.root().join(".ara/gpu"), options.size)?;
+    let mut renderer = SceneDevice::new(
+        &[],
+        editor.host.root().join(".ara/gpu"),
+        options.size,
+    )?;
     detect_quality(&mut editor, &renderer);
     let mut scene_view = SceneView::default();
     scene_view.render_capture(&mut renderer, &editor, &view, 64)?;
