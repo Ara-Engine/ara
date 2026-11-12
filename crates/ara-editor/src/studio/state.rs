@@ -36,6 +36,8 @@ pub struct SceneStatus {
     pub ready: bool,
     /// Why it isn't, or what it is doing ("Preparing the scene renderer…").
     pub message: String,
+    /// The renderer failed (`message` says why): the panel shows the error, not a spinner.
+    pub failed: bool,
     /// Smoothed frames per second and frame time in ms, while frames run.
     pub fps: Option<(f32, f32)>,
 }

@@ -7706,3 +7706,28 @@ fn the_scene_frame_is_extracted_from_the_world_without_a_renderer() {
     );
     assert!(frame.camera.is_some(), "the editor's camera is the frame's");
 }
+
+/// With no other renderer to fall back to, a Renderlab failure is the Scene panel's content: the
+/// reason, in full, and no spinner.
+#[test]
+fn a_renderlab_failure_is_shown_in_the_scene_panel() {
+    let mut rt = open();
+    settle(&mut rt);
+    rt.update(|s| {
+        s.local.scene = super::state::SceneStatus {
+            ready: false,
+            message: "Renderlab could not draw the Scene: no Metal device".into(),
+            failed: true,
+            fps: None,
+        }
+    });
+    settle(&mut rt);
+    assert!(rt.find("scene/error").is_some(), "the error shows");
+    assert!(
+        rt.tree().iter().any(|n| n
+            .text
+            .as_deref()
+            .is_some_and(|t| t.contains("no Metal device"))),
+        "with its reason"
+    );
+}

@@ -21,9 +21,10 @@ pub(super) type Revision = Option<(u64, u64, u64, u64)>;
 /// Distance in metres to which terrain layers use their detail maps: the High preset's.
 const TERRAIN_DETAIL: f32 = 150.;
 
-/// Whether the Scene view should draw with Renderlab (`ARA_SCENE_RENDERER=renderlab`).
+/// Whether the Scene view draws with Renderlab: always, unless `ARA_SCENE_RENDERER=raster` keeps
+/// the old raster view while it still exists.
 pub(super) fn requested() -> bool {
-    std::env::var("ARA_SCENE_RENDERER").is_ok_and(|value| value == "renderlab")
+    std::env::var("ARA_SCENE_RENDERER").map_or(true, |value| value != "raster")
 }
 
 /// The editor-hosted Renderlab engine and the last image it drew.
